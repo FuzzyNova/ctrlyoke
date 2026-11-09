@@ -40,7 +40,7 @@ import type {
 } from "./types/CtrlYokeTypes";
 import { projectWorktreeRuntime } from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
-import { inheritsWorkflowHarnessScopedValues } from "./types/ExecutionPropertyResolver";
+import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import {
   isScriptStep,
   type PromptFile,
@@ -758,19 +758,12 @@ function getCliPromptExecutionDetails(
   const workflow = instance.promptQueue.getWorkflowFile();
   const step = instance.promptQueue.getState().steps[stepIndex];
   const promptStep = step && !isScriptStep(step) ? step : undefined;
-  const workflowHarness = workflow.harness ?? defaults.harness;
-  const harness =
-    step?._runtime?.harness ?? promptStep?.harness ?? workflowHarness;
-  const inheritedModel = inheritsWorkflowHarnessScopedValues(
-    harness,
-    workflowHarness
-  )
-    ? (workflow.model ?? defaults.model)
-    : ConfigurationUtils.getModelForHarness(harness) || undefined;
-  return {
-    harness,
-    model: step?._runtime?.model ?? promptStep?.model ?? inheritedModel,
-  };
+  const resolved = resolveStepHarnessAndModel(promptStep ?? {}, workflow, {
+    ...defaults,
+    modelForHarness: (harness) =>
+      ConfigurationUtils.getModelForHarness(harness) || undefined,
+  });
+  return resolved;
 }
 
 function getCliOutputStepName(

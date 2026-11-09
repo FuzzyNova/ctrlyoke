@@ -42,6 +42,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   resolution in MCP/CLI/OutputHistoryManager).
   The six regex-escaping copies now use the import-free `src/utils/TextUtils.ts` helper.
   Per-prompt statusline registration now lives in one shared harness helper, and declined installs no longer start idle sidecars.
+  The drifted effective step harness/model calculations in `src/cli.ts`,
+  `src/mcp-server.ts` and `OutputHistoryManager.ts` now use
+  `resolveStepHarnessAndModel` from `src/types/ExecutionPropertyResolver.ts`.
 
 ## Deferred
 

@@ -41,8 +41,10 @@ import type {
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
+import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import { configService } from "./config/CtrlYokeConfigService";
 import { PropertyResolver } from "./utils/PropertyResolver";
+import { ConfigurationUtils } from "./utils/ConfigurationUtils";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
@@ -473,13 +475,14 @@ function resolveEffectiveStepSettings(
 } {
   const workflowResumeSession =
     workflow.resumeSession ?? CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
+  const resolved = resolveStepHarnessAndModel(step, workflow, {
+    harness: PropertyResolver.resolveHarnessValue(undefined, undefined),
+    modelForHarness: (harness) =>
+      ConfigurationUtils.getModelForHarness(harness) || undefined,
+  });
   return {
-    harness:
-      step._runtime?.harness ??
-      step.harness ??
-      workflow.harness ??
-      PropertyResolver.resolveHarnessValue(undefined, undefined),
-    model: step.model ?? workflow.model ?? null,
+    harness: resolved.harness,
+    model: resolved.model ?? null,
     executionMode:
       step._runtime?.executionMode ??
       step.executionMode ??

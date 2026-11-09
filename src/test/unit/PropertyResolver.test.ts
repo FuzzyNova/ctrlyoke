@@ -3,6 +3,7 @@ import { teardown } from "mocha";
 import { PropertyResolver } from "../../utils/PropertyResolver";
 import {
   resolveExecutionProperties,
+  resolveStepHarnessAndModel,
   type ResolutionSource,
 } from "../../types/ExecutionPropertyResolver";
 import { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
@@ -27,6 +28,76 @@ suite("PropertyResolver Tests", () => {
   });
 
   suite("pure/backend conformance", () => {
+    test("resolves a step harness and its harness-scoped model", () => {
+      const workflow: PromptFile = {
+        steps: [],
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+      };
+      const defaults = {
+        harness: HARNESS_IDS.COPILOT_CLI,
+        modelForHarness: (
+          harness: (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS]
+        ) =>
+          harness === HARNESS_IDS.CODEX_CLI ? "codex-default" : "other-default",
+      };
+
+      assert.deepStrictEqual(
+        resolveStepHarnessAndModel({}, workflow, defaults),
+        { harness: HARNESS_IDS.CLAUDE_CLI, model: "workflow-model" }
+      );
+      assert.strictEqual(
+        resolveStepHarnessAndModel(
+          {},
+          { harness: HARNESS_IDS.CLAUDE_CLI },
+          { ...defaults, model: "same-harness-default" }
+        ).model,
+        "same-harness-default"
+      );
+      assert.deepStrictEqual(
+        resolveStepHarnessAndModel(
+          { harness: HARNESS_IDS.CODEX_CLI },
+          workflow,
+          defaults
+        ),
+        { harness: HARNESS_IDS.CODEX_CLI, model: "codex-default" }
+      );
+      assert.strictEqual(
+        resolveStepHarnessAndModel(
+          {
+            harness: HARNESS_IDS.CODEX_CLI,
+            model: "step-model",
+          },
+          workflow,
+          defaults
+        ).model,
+        "step-model"
+      );
+      assert.deepStrictEqual(
+        resolveStepHarnessAndModel(
+          {
+            harness: HARNESS_IDS.CODEX_CLI,
+            model: "step-model",
+            _runtime: {
+              harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+              model: "runtime-model",
+            },
+          },
+          workflow,
+          defaults
+        ),
+        { harness: HARNESS_IDS.ANTIGRAVITY_CLI, model: "runtime-model" }
+      );
+      assert.strictEqual(
+        resolveStepHarnessAndModel(
+          { harness: HARNESS_IDS.CODEX_CLI },
+          { harness: HARNESS_IDS.CLAUDE_CLI },
+          { ...defaults, modelForHarness: () => undefined }
+        ).model,
+        undefined
+      );
+    });
+
     test("resolves every property from every source tier with matching provenance", () => {
       configService.setCliOverlay({
         defaults: {

@@ -12,6 +12,7 @@ import {
 } from "../../mcp-server";
 import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS } from "../../utils/TextUtils";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import { removeTempDir } from "../helpers/tempWorkspace";
@@ -1352,7 +1353,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.ok(!("gitOutcome" in status.steps[2]));
   });
 
-  test("workflow_status reports each step's harness and executionMode", async () => {
+  test("workflow_status reports each step's harness, model, and executionMode", async () => {
     const server = await setup();
     const run = await createRun("modes", "2026-01-01T00-00-00-000Z", {
       stepCount: 4,
@@ -1361,6 +1362,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     workingFile.harness = HARNESS_IDS.CODEX_CLI;
+    workingFile.model = "workflow-model";
     workingFile.executionMode = EXECUTION_MODES.HEADLESS;
     workingFile.steps = [
       {
@@ -1376,6 +1378,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         executionMode: EXECUTION_MODES.INTERACTIVE,
         _runtime: {
           harness: HARNESS_IDS.QWEN_CLI,
+          model: "runtime-model",
           executionMode: EXECUTION_MODES.HEADLESS,
         },
       },
@@ -1388,15 +1391,22 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     assert.strictEqual(status.metadata.executionMode, EXECUTION_MODES.HEADLESS);
     assert.deepStrictEqual(
-      status.steps.map((step: { harness?: string; executionMode: string }) => [
-        step.harness,
-        step.executionMode,
-      ]),
+      status.steps.map(
+        (step: {
+          harness?: string;
+          model?: string | null;
+          executionMode: string;
+        }) => [step.harness, step.model, step.executionMode]
+      ),
       [
-        [HARNESS_IDS.CLAUDE_CLI, EXECUTION_MODES.INTERACTIVE],
-        [HARNESS_IDS.CODEX_CLI, EXECUTION_MODES.HEADLESS],
-        [HARNESS_IDS.QWEN_CLI, EXECUTION_MODES.HEADLESS],
-        [undefined, undefined],
+        [
+          HARNESS_IDS.CLAUDE_CLI,
+          ConfigurationUtils.getModelForHarness(HARNESS_IDS.CLAUDE_CLI),
+          EXECUTION_MODES.INTERACTIVE,
+        ],
+        [HARNESS_IDS.CODEX_CLI, "workflow-model", EXECUTION_MODES.HEADLESS],
+        [HARNESS_IDS.QWEN_CLI, "runtime-model", EXECUTION_MODES.HEADLESS],
+        [undefined, undefined, undefined],
       ]
     );
 

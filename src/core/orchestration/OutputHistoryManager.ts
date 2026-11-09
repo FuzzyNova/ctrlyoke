@@ -7,6 +7,7 @@ import {
   frozenActiveExecutionMs,
   projectWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
+import { resolveStepHarnessAndModel } from "../../types/ExecutionPropertyResolver";
 import type {
   ExecutionTiming,
   RunRef,
@@ -1539,7 +1540,7 @@ export class OutputHistoryManager {
     try {
       const content = await fs.promises.readFile(runFilePath, "utf8");
       const workingFile = JSON.parse(content) as {
-        harness?: string;
+        harness?: HarnessId;
         model?: string;
         _runtime?: ExecutionTiming & {
           executionState?: ExecutionState;
@@ -1552,10 +1553,10 @@ export class OutputHistoryManager {
         };
         steps?: Array<{
           type?: string;
-          harness?: string;
+          harness?: HarnessId;
           model?: string;
           _runtime?: {
-            harness?: string;
+            harness?: HarnessId;
             model?: string;
             startedAt?: number;
             completedAt?: number;
@@ -1568,13 +1569,17 @@ export class OutputHistoryManager {
       // most-used value wins and ties go to the earliest step.
       const harnesses = new Map<string, number>();
       const models = new Map<string, number>();
+      const defaultHarness = ConfigurationUtils.getIntegrationMode();
       for (const step of workingFile.steps ?? []) {
         if (step.type === STEP_TYPES.SCRIPT) {
           continue;
         }
-        const harness =
-          step._runtime?.harness ?? step.harness ?? workingFile.harness;
-        const model = step._runtime?.model ?? step.model ?? workingFile.model;
+        const resolved = resolveStepHarnessAndModel(step, workingFile, {
+          harness: defaultHarness,
+          modelForHarness: (harness) =>
+            ConfigurationUtils.getModelForHarness(harness) || undefined,
+        });
+        const { harness, model } = resolved;
         if (harness) {
           harnesses.set(harness, (harnesses.get(harness) ?? 0) + 1);
         }

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MCP `workflow_status` and `append_step` now report a step's configured model when it runs on a different harness from the workflow, and its recorded runtime model when available.
 - The terminal control bar's **...** button now opens its shortcut menu. Before, the menu opened but was cut off by the bar, so nothing appeared. You also can no longer drag-select the bar's buttons as text.
 - On a phone, tapping a terminal control bar key or a shortcut in its **...** menu no longer closes the on-screen keyboard. The terminal keeps focus, so the layout stays put. If the keyboard closes anyway, the menu closes too, instead of being left where the bar used to be.
 - On a phone, tapping a terminal control bar key while the keyboard is closed no longer collapses the prompt editor. Only tapping into the terminal itself, which opens the keyboard, collapses it.
