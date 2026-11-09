@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import {
-  HARNESS_INFO,
+  getHarnessDisplayName,
   MESSAGE_TYPES,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_SCOPES,
@@ -690,7 +690,7 @@ function SummaryPanel({
           entries={[
             [
               "Harness",
-              HARNESS_INFO[properties.harnessId]?.name ?? properties.harnessId,
+              getHarnessDisplayName(properties.harnessId),
             ],
             ["Harness version", properties.harnessVersion ?? "Not reported"],
             ["Model", properties.model ?? "Default"],
@@ -1198,8 +1198,7 @@ function StepDetail({
               size={14}
             />
             <span>
-              {HARNESS_INFO[step.resolvedProperties.harnessId]?.name ??
-                step.resolvedProperties.harnessId}
+              {getHarnessDisplayName(step.resolvedProperties.harnessId)}
             </span>
           </div>
         </div>
@@ -1431,8 +1430,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
       value: String(step.stepIndex),
       label: `${step.stepIndex + 1}. ${stepLabel(step)}`,
       description:
-        HARNESS_INFO[step.resolvedProperties.harnessId]?.name ??
-        step.resolvedProperties.harnessId,
+        getHarnessDisplayName(step.resolvedProperties.harnessId),
     })) ?? []),
   ];
 

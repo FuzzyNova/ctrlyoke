@@ -1,7 +1,7 @@
 import React from "react";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
-  HARNESS_INFO,
+  getHarnessDisplayName,
 } from "@root/types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import type { FieldDiagnostic as FieldDiagnosticItem } from "@utils/fieldValidation";
@@ -80,7 +80,7 @@ export const CompatibilitySummary: React.FC<CompatibilitySummaryProps> = ({
   const warningLabel = `compatibility warning${count === 1 ? "" : "s"}`;
   const harnessLabel =
     harnesses.length === 1
-      ? `for ${HARNESS_INFO[harnesses[0]]?.name ?? harnesses[0]}`
+      ? `for ${getHarnessDisplayName(harnesses[0])}`
       : `across ${harnesses.length} harnesses`;
 
   return (

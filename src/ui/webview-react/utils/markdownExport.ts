@@ -25,7 +25,7 @@ import type {
 } from "../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import {
-  HARNESS_INFO,
+  getHarnessDisplayName,
   FINAL_STEP_PHASES,
   type FinalStepPhase,
 } from "../types/messages";
@@ -620,8 +620,7 @@ export function generateMarkdownExport(
         const sessionId = output.structured?.metadata?.sessionId;
         const harnessId = output.structured?.metadata?.harness;
         const harnessName = harnessId
-          ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ??
-            harnessId)
+          ? getHarnessDisplayName(harnessId)
           : undefined;
 
         if (output.tokens) {

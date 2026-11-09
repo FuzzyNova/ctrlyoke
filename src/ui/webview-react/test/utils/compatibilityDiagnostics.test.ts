@@ -120,6 +120,19 @@ const claudePartialSnapshot: HarnessCapabilityRegistrySnapshot = {
 };
 
 describe("workflowPermissionDiagnostic", () => {
+  it.each([
+    [HARNESS_IDS.CODEX_CLI, "Codex"],
+    ["unknown-cli" as HarnessId, "unknown-cli"],
+  ])("uses the shared short label for %s", (harnessId, label) => {
+    const result = workflowPermissionDiagnostic(
+      "allowedTools",
+      [target("custom", ["shell(git:*)"], [], harnessId)],
+      unsupportedSnapshot
+    );
+
+    expect(result?.message).toContain(`Ignored by 1 ${label} step`);
+  });
+
   it("ignores leftover lists on a target whose resolved mode is dangerouslyAllowAll", () => {
     const targets = [
       target("dangerouslyAllowAll", ["shell(git:*)"], ["shell(rm:*)"]),

@@ -86,7 +86,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   trimmed from the query but not the body; page-size parsers beside
   `WorkspaceTreeRoute`'s strict ones); `src/license/LemonSqueezyConstants.ts` reported
   as an unused file by knip. Removed the ten pure aliases reported by knip and updated
-  all source and test callers to use the canonical names.
+  all source and test callers to use the canonical names. Replaced the inline harness
+  display-name fallbacks across the dashboard with the shared display/short-name
+  helpers, with known and unknown ID coverage.
 
 ## Deferred
 

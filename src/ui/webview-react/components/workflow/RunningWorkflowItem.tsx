@@ -1,7 +1,7 @@
 import React from "react";
 import {
   EXECUTION_STATES,
-  HARNESS_INFO,
+  getHarnessDisplayName,
   hasWorkflowStepProgress,
   workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
@@ -172,7 +172,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         }
         harnessTitle={
           workflow.harness
-            ? (HARNESS_INFO[workflow.harness]?.name ?? workflow.harness)
+            ? getHarnessDisplayName(workflow.harness)
             : undefined
         }
         label={<span className="text-sm">{workflow.workflowName}</span>}

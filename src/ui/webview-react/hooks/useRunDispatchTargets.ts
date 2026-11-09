@@ -3,9 +3,8 @@ import {
   EDITOR_TARGET_KINDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
-  HARNESS_INFO,
+  getHarnessDisplayName,
   STEP_TYPES,
-  type HarnessId,
 } from "@root/types/DashboardConstants";
 import { useActiveInteractiveSession } from "@hooks/useActiveInteractiveSession";
 import { useEditorStore } from "@store/editorStore";
@@ -99,8 +98,7 @@ export function useRunDispatchTargets(
     const steerStepNumber =
       (activeInteractiveSession?.stepIndex ?? runningStepIndex) + 1;
     const harnessLabel = activeInteractiveSession?.harnessId
-      ? (HARNESS_INFO[activeInteractiveSession.harnessId as HarnessId]?.name ??
-        activeInteractiveSession.harnessId)
+      ? getHarnessDisplayName(activeInteractiveSession.harnessId)
       : "harness";
     const steerEnabledTitle = `Sends to the live ${harnessLabel} session (step ${steerStepNumber}). Prompt overrides are ignored.`;
 

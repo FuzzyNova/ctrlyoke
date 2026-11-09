@@ -4,7 +4,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
-  HARNESS_INFO,
+  getHarnessDisplayName,
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import {
@@ -50,10 +50,6 @@ const SOURCE_LABELS: Record<string, string> = {
   [COMPATIBILITY_SOURCE_TIERS.WORKFLOW]: "Workflow properties",
   [COMPATIBILITY_SOURCE_TIERS.DEFAULTS]: "Global defaults",
 };
-
-function harnessLabel(harnessId: HarnessId): string {
-  return HARNESS_INFO[harnessId]?.name ?? harnessId;
-}
 
 function compatibilityDetailsId(harnessId: HarnessId): string {
   return `harness-compatibility-details-${harnessId}`;
@@ -175,7 +171,7 @@ function ReportDetails({
           id={`${compatibilityDetailsId(row.harnessId)}-title`}
           className="text-sm font-semibold"
         >
-          {harnessLabel(row.harnessId)} details
+          {getHarnessDisplayName(row.harnessId)} details
         </h4>
         <span className="text-xxs text-description-fg" aria-live="polite">
           {findingCount} {findingCount === 1 ? "finding" : "findings"}
@@ -188,7 +184,7 @@ function ReportDetails({
       ) : (
         <ul
           className="mt-3 flex flex-col gap-2 text-xs"
-          aria-label={`${harnessLabel(row.harnessId)} findings`}
+          aria-label={`${getHarnessDisplayName(row.harnessId)} findings`}
         >
           {row.diagnostics.map((diagnostic) => (
             <Finding key={diagnostic.identity} diagnostic={diagnostic} />
@@ -269,7 +265,7 @@ function ReportBody({
                     >
                       <HarnessIcon harnessId={row.harnessId} size={20} />
                       <span className="min-w-0 wrap-break-word">
-                        {harnessLabel(row.harnessId)}
+                        {getHarnessDisplayName(row.harnessId)}
                       </span>
                     </button>
                   </th>
@@ -294,7 +290,7 @@ function ReportBody({
                     <button
                       type="button"
                       className="rounded-sm px-2 py-1 text-link-fg hover:underline focus:outline-hidden focus:ring-1 focus:ring-focus-border"
-                      aria-label={`${expanded ? "Hide" : "Show"} ${harnessLabel(row.harnessId)} details`}
+                      aria-label={`${expanded ? "Hide" : "Show"} ${getHarnessDisplayName(row.harnessId)} details`}
                       aria-controls={detailsId}
                       aria-expanded={expanded}
                       onClick={() => onToggle(row.harnessId)}
