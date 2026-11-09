@@ -64,21 +64,6 @@ export class RunMaterializer {
   ) {}
 
   async materialize(input: RunMaterializationInput): Promise<MaterializedRun> {
-    // History-only bundles predate (and intentionally omit) the live working
-    // file. Preserve their step state by projecting it from the durable attempt
-    // events before the working file and its initial definition are written.
-    let events = input.events;
-    if (!input.workingFile) {
-      const buffered: WorkflowTimelineEventDraft[] = [];
-      for await (const event of input.events) buffered.push(event);
-      events = (async function* () {
-        yield* buffered;
-      })();
-      input = {
-        ...input,
-        definition: projectAttemptRuntime(input.definition, buffered),
-      };
-    }
     const executionState =
       input.runtimeState?.executionState ??
       input.workingFile?._runtime?.executionState ??
@@ -166,7 +151,7 @@ export class RunMaterializer {
         throw new Error("Could not initialize imported run history.");
       let batch: WorkflowTimelineEventDraft[] = [];
       let terminalTimestamp: number | undefined;
-      for await (const event of events) {
+      for await (const event of input.events) {
         if (event.eventType === TIMELINE_EVENT_TYPES.RUN_TERMINATED) {
           terminalTimestamp = event.timestampMs;
         }
@@ -243,9 +228,20 @@ export class RunMaterializer {
   }
 }
 
-function projectAttemptRuntime(
+/** Event types {@link projectAttemptRuntime} reads; callers collect only these. */
+export const ATTEMPT_RUNTIME_EVENT_TYPES: ReadonlySet<string> = new Set([
+  TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+  TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+]);
+
+/**
+ * Rebuilds per-step `_runtime` for a history-only bundle (which carries no
+ * working file) from its durable attempt events. Callers pass only events in
+ * {@link ATTEMPT_RUNTIME_EVENT_TYPES} so a large timeline is never buffered.
+ */
+export function projectAttemptRuntime(
   definition: Record<string, unknown>,
-  events: WorkflowTimelineEventDraft[]
+  events: Iterable<WorkflowTimelineEventDraft>
 ): Record<string, unknown> {
   const queue = Array.isArray(definition.steps)
     ? (definition.steps as Array<Record<string, unknown>>)
