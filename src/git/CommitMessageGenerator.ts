@@ -438,8 +438,13 @@ export class CommitMessageGenerator {
           sample.length
         );
         const contentBuffer = Buffer.concat([sample, restBuffer]);
-        const content = contentBuffer.toString("utf8");
         const isTruncatedPrefix = contentBuffer.length < stat.size;
+        if (contentBuffer.length === 0 && !isTruncatedPrefix) {
+          // Git lists an empty new file with no hunk at all.
+          append(`${header}new file mode 100644\n`);
+          continue;
+        }
+        const content = contentBuffer.toString("utf8");
         const endsWithNewline = content.endsWith("\n");
         const lines = content.split("\n");
         if (endsWithNewline) {

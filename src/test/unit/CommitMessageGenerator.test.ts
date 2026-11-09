@@ -439,6 +439,28 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
+  test("lists an empty untracked file without a hunk", async () => {
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-commit-empty-untracked-")
+    );
+    try {
+      await execFileAsync("git", ["init"], { cwd });
+      await fs.writeFile(path.join(cwd, "empty.txt"), "");
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.strictEqual(
+        result.diff,
+        "diff --git a/empty.txt b/empty.txt\nnew file mode 100644\n"
+      );
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
   test("lists untracked files from the repository root when cwd is a subdirectory", async () => {
     const repositoryRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "cy-commit-subdirectory-")

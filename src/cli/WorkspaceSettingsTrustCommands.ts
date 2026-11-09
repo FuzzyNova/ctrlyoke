@@ -27,11 +27,15 @@ function decisionTag(state: WorkspaceSensitiveSettingState): string {
   return "";
 }
 
-function formatRequest(state: WorkspaceSensitiveSettingState): string {
-  return `${state.request.summary}\n${state.request.detail
+function formatDetail(state: WorkspaceSensitiveSettingState): string {
+  return state.request.detail
     .split("\n")
     .map((line) => `    ${line}`)
-    .join("\n")}`;
+    .join("\n");
+}
+
+function formatRequest(state: WorkspaceSensitiveSettingState): string {
+  return `${state.request.summary}\n${formatDetail(state)}`;
 }
 
 /**
@@ -48,7 +52,7 @@ async function askAndRecord(
   const denied: WorkspaceSensitiveSettingRequest[] = [];
   for (const state of states) {
     const allow = await io.confirm(
-      `Allow ${state.request.summary}${decisionTag(state)}? [y/N]\n${formatRequest(state)}\n> `
+      `Allow ${state.request.summary}${decisionTag(state)}? [y/N]\n${formatDetail(state)}\n> `
     );
     (allow ? approved : denied).push(state.request);
   }
@@ -126,7 +130,7 @@ export async function trustWorkspaceSettingsCommand(
     );
     states.forEach((state) =>
       io.writeErr(
-        `  - ${state.request.summary}${decisionTag(state)}\n${formatRequest(state)}`
+        `  - ${state.request.summary}${decisionTag(state)}\n${formatDetail(state)}`
       )
     );
     return 2;
