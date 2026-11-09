@@ -1393,10 +1393,7 @@ function historyFinalPassRows(
       attempts: entry.attempts,
       startedAt: entry.firstStartedAt,
       completedAt,
-      elapsedSeconds:
-        completedAt === null
-          ? null
-          : entry.elapsedMs / 1000,
+      elapsedSeconds: completedAt === null ? null : entry.elapsedMs / 1000,
     });
   }
   return passes.sort((a, b) => a.pass - b.pass);

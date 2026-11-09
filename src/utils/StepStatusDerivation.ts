@@ -53,7 +53,8 @@ export function getProtectedTerminalFailureIndex(state: {
   const terminalIndex = getResumableTerminalFailureIndex(state);
   if (terminalIndex !== undefined) return terminalIndex;
   const index = state.currentIndex ?? -1;
-  return state.executionState === EXECUTION_STATES.ERROR && index >= 0 &&
+  return state.executionState === EXECUTION_STATES.ERROR &&
+    index >= 0 &&
     state.steps[index]?._runtime?.rewoundFailure === true
     ? index
     : undefined;

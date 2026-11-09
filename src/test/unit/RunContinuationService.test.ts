@@ -1530,7 +1530,10 @@ suite("RunContinuationService addressed step mutations", () => {
       edited.definitionRevision,
       repository
     );
-    assert.strictEqual(stillFirst.workingFile.steps![1]._runtime?.rewoundFailure, true);
+    assert.strictEqual(
+      stillFirst.workingFile.steps![1]._runtime?.rewoundFailure,
+      true
+    );
     const claimed = await RunContinuationService.claimStepAtRun(
       workspace,
       workflowKey,
@@ -1565,7 +1568,10 @@ suite("RunContinuationService addressed step mutations", () => {
       1,
       repository
     );
-    assert.strictEqual(toggled.workingFile.steps![1]._runtime?.rewoundFailure, true);
+    assert.strictEqual(
+      toggled.workingFile.steps![1]._runtime?.rewoundFailure,
+      true
+    );
     await assert.rejects(
       RunContinuationService.removeStepsAtRun(
         workspace,
