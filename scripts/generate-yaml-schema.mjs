@@ -122,7 +122,10 @@ function main() {
     if (CHECK_MODE) {
       if (
         !fs.existsSync(yamlSchemaPath) ||
-        !isYamlSchemaCurrent(yamlSchema, fs.readFileSync(yamlSchemaPath, "utf8"))
+        !isYamlSchemaCurrent(
+          yamlSchema,
+          fs.readFileSync(yamlSchemaPath, "utf8")
+        )
       ) {
         console.error(
           "schemas/workflow-schema.yaml is out of date. Run npm run generate-schema."
