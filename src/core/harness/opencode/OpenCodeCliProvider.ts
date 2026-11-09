@@ -1038,21 +1038,35 @@ export class OpenCodeCliProvider implements ICliProvider {
       return resolvedModel;
     }
 
-    // If resolved model is set but wrong format, warn and fall back to configured default
-    if (resolvedModel) {
-      Log.warn(
-        `[OpenCodeCliProvider] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
-          `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). Using configured default.`
-      );
-    }
-
-    // Fall back to user-configured default
+    // Fall back to user-configured default. None means OpenCode should use its
+    // own configuration, and an unset default should not invent a model.
     const configuredDefault = ConfigurationUtils.getOpenCodeCliModel();
     if (configuredDefault?.includes("/")) {
+      if (resolvedModel) {
+        Log.warn(
+          `[OpenCodeCliProvider] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
+            `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). Using configured default "${configuredDefault}".`
+        );
+      }
       return configuredDefault;
     }
 
-    return DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI];
+    if (resolvedModel) {
+      Log.warn(
+        `[OpenCodeCliProvider] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
+          `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). ` +
+          (configuredDefault === MODEL_NONE
+            ? "No model flag will be passed; OpenCode will use its configured model."
+            : configuredDefault
+              ? "Using the built-in default model."
+              : "No model flag will be passed.")
+      );
+    }
+
+    if (configuredDefault === MODEL_NONE) return undefined;
+    return configuredDefault
+      ? DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI]
+      : undefined;
   }
 
   private serializeUserHooks(userHooks?: UserHookConfig[]): string | undefined {

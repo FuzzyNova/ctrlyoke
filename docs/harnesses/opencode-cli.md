@@ -71,7 +71,8 @@ Models use OpenCode's `provider/model` form. Set `model` on the workflow or on a
 ctrlyoke uses [`defaults.models["opencode-cli"]`](/reference/settings#defaults-models), which is
 `opencode/big-pickle`, OpenCode's free model, out of the box. Any `provider/model` value is passed
 to OpenCode as is, even one the list doesn't show. A value without a `/` is replaced by your
-default, with a warning in the log.
+default, with a warning in the log. If your default is `none`, no model flag is passed and
+OpenCode uses the model from its own configuration.
 
 `model: none` leaves the model unset, so OpenCode uses the model from its own configuration. See
 [How step properties inherit](/workflows/yaml-format#property-inheritance).

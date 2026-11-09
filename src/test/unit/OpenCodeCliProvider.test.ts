@@ -16,6 +16,7 @@ import {
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { Log } from "../../utils/Log";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   RunSecretRedactor,
   secretRedactionService,
@@ -26,6 +27,30 @@ import {
 } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
+  test("does not pass a fallback model when the OpenCode default is none", async () => {
+    const original = ConfigurationUtils.getOpenCodeCliModel;
+    ConfigurationUtils.getOpenCodeCliModel = () => "none";
+    try {
+      for (const model of ["claude-sonnet-4-6", undefined, ""]) {
+        const preparation = await new OpenCodeCliProvider().planCliArgs(
+          {} as never,
+          false,
+          process.cwd(),
+          process.cwd(),
+          undefined,
+          {
+            promptIndex: 0,
+            allPrompts: [],
+            resolvedProperties: { model } as never,
+          }
+        );
+        assert.ok(!preparation.cliArgs.includes("-m"), String(model));
+      }
+    } finally {
+      ConfigurationUtils.getOpenCodeCliModel = original;
+    }
+  });
+
   test("uses bracketed paste and avoids terminal reuse for any exclamation mark", () => {
     const provider = new OpenCodeCliProvider();
 
