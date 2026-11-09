@@ -57,7 +57,11 @@ import {
 } from "./outputUtils";
 import { getCliCommandDisplayParts } from "../../../utils/outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
-import { formatTokenCount } from "@root/utils/TokenFormatting";
+import {
+  formatTokenCount,
+  resolveTokenTotal,
+} from "@root/utils/TokenFormatting";
+import { calcContextPct } from "@utils/tokenUtils";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { formatCreatedFileDiff } from "@root/utils/CliEventDiff";
@@ -515,6 +519,7 @@ export function generateMarkdownExport(
         tokens?: {
           prompt: number;
           completion: number;
+          total?: number;
           cached?: number;
           contextWindowUsed?: number;
           contextWindowSize?: number;
@@ -626,16 +631,15 @@ export function generateMarkdownExport(
             cached,
             contextWindowUsed,
             contextWindowSize,
+            total: reportedTotal,
           } = output.tokens;
-          if (contextWindowUsed !== undefined && contextWindowSize) {
-            const pct = Math.round(
-              (contextWindowUsed / contextWindowSize) * 100
-            );
+          const pct = calcContextPct(contextWindowUsed, contextWindowSize);
+          if (pct !== undefined) {
             stats.push(
               `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`
             );
           }
-          const total = prompt + completion;
+          const total = resolveTokenTotal(reportedTotal, prompt, completion);
           const cachedSuffix = cached ? ` / ${cached} cached` : "";
           stats.push(
             `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`

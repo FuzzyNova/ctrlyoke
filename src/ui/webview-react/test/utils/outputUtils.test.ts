@@ -533,6 +533,24 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("3.5s");
   });
 
+  it("uses the provider-reported total in token stats", () => {
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: {
+          tokens: { prompt: 8_000, completion: 2_000, total: 410_000 },
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    expect(md).toContain("Tokens: 8000 in / 2000 out / 410000 total");
+    expect(md).not.toContain("Tokens: 8000 in / 2000 out / 10000 total");
+  });
+
   it.each([1_000_000, 999_960])(
     "formats a %i-token context window using the shared token units",
     (contextWindowUsed) => {

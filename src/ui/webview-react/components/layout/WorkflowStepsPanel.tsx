@@ -1429,6 +1429,8 @@ const WorkflowStepsPanelInner: React.FC<{
       latestOutput: finalStepLatestOutput,
       runtimeMeta:
         finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
+      status: finalStepStatus,
+      phase: finalStepPhase,
     });
 
   // Compute resolved harness/model for the final step using the same

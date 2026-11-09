@@ -1,6 +1,7 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
+import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import type { PriorContext } from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
 import {
@@ -72,6 +73,8 @@ export interface StepMetadataClipboardInput {
   isFinalStep?: boolean;
   latestOutput?: CliOutput | null;
   runtimeMeta?: StepRuntimeMetaSnapshot;
+  /** True while this step is executing, so live telemetry takes precedence. */
+  isCurrent?: boolean;
   /** Live context-window telemetry while this step is the one currently running. */
   liveContextWindow?: { used: number; size: number };
 }
@@ -168,6 +171,7 @@ export function buildStepMetadataClipboardText({
   isFinalStep = false,
   latestOutput,
   runtimeMeta,
+  isCurrent = false,
   liveContextWindow,
 }: StepMetadataClipboardInput): string {
   const {
@@ -320,18 +324,12 @@ export function buildStepMetadataClipboardText({
   if (elapsed !== undefined)
     runtimeLines.push(`Duration: ${elapsed.toFixed(1)}s`);
 
-  const completedContext = latestOutput?.tokens?.contextWindowSize
-    ? {
-        used: latestOutput.tokens.contextWindowUsed ?? 0,
-        size: latestOutput.tokens.contextWindowSize,
-      }
-    : runtimeMeta?.contextWindowSize
-      ? {
-          used: runtimeMeta.contextWindowUsed ?? 0,
-          size: runtimeMeta.contextWindowSize,
-        }
-      : undefined;
-  const contextWindow = completedContext ?? liveContextWindow;
+  const contextWindow = resolveEffectiveContextWindow({
+    isCurrent,
+    liveContextWindow,
+    latestOutputTokens: latestOutput?.tokens,
+    runtimeContextWindow: runtimeMeta,
+  });
   const showCostEstimates =
     fullGlobalSettings?.settings.ui.showCostEstimates !== false;
   runtimeLines.push(

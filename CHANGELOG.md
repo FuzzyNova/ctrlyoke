@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Copy Metadata now shows live context-window usage while a step is rerunning, and Markdown exports preserve provider-reported token totals.
 - Language servers now find the nearest project root marker when a Windows file URI uses a lowercase drive letter, so language features start from the correct folder.
 - MCP `workflow_status` and `append_step` now report a step's configured model when it runs on a different harness from the workflow, and its recorded runtime model when available.
 - The terminal control bar's **...** button now opens its shortcut menu. Before, the menu opened but was cut off by the bar, so nothing appeared. You also can no longer drag-select the bar's buttons as text.

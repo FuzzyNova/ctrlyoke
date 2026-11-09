@@ -64,6 +64,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   Added shared hosted workspace-viewer route error mapping and corrected reachable 403/`WorkspaceTreeHttpError` statuses.
   The viewer's file-history, commit-log, and git-ref-diff caches now share `IdleLruSnapshotStore` while retaining their existing refresh and eviction behavior.
   Fixed the LSP root-marker drive-letter casing regression and shared the server's realpath-with-fallback helper in `PathSecurity`.
+  Dashboard token tooltips now share `buildAttemptTokenTooltipLines`, metadata follows live context telemetry during reruns, and Markdown exports preserve reported totals.
   Candidates for a later pass: inline `HARNESS_INFO[id]?.name ?? id` lookups in about
   ten webview files instead of `getHarnessDisplayName`/`getHarnessShortName`;
   "Parallel steps X–Y" labels retyped beside `parallelGroupHeaderTitle` in

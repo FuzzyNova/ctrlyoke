@@ -513,6 +513,7 @@ export function useStepContextMenu({
             latestOutput,
             latestPrompt: latestPrompt ?? getLatestPrompt(deleteIndex),
             runtimeMeta,
+            isCurrent: isCurrentStep,
             liveContextWindow,
           }),
           { type: "divider" },
