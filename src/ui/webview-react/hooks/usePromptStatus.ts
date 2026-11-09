@@ -6,6 +6,7 @@ import {
 } from "../types/messages";
 import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning } from "../utils/status";
+import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
 
 /**
  * Returns a `getPromptStatus(prompt, index)` helper that derives the display
@@ -24,6 +25,12 @@ export function usePromptStatus() {
   const isRunning =
     isWorkflowRunning(executionState) &&
     finalStepPhase !== FINAL_STEP_PHASES.FINAL_STEP;
+  const protectedFailure = getProtectedTerminalFailure({
+    executionState,
+    currentIndex: currentStep,
+    steps,
+    parallelGroups,
+  });
 
   return function getPromptStatus(
     prompt: WorkflowStep | { status?: StepStatus },
@@ -82,7 +89,11 @@ export function usePromptStatus() {
     ) {
       return STEP_STATUS.CANCELLED;
     }
-    if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
+    if (
+      executionState === EXECUTION_STATES.ERROR &&
+      index === currentStep &&
+      protectedFailure.indices.length === 0
+    ) {
       // An in-flight failure advances currentStep past the step that actually
       // failed (see WorkflowStepRow's workflowContinuedAfterFailure), and that
       // step's own FAILED status is sent before executionState flips to ERROR.

@@ -725,6 +725,57 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("labels a failed parallel member as the terminal failure after the group", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "parallel-failure.prompt.md",
+      steps: [
+        {
+          prompt: "Failed member",
+          _runtime: {
+            startedAt: Date.now(),
+            completedAt: Date.now(),
+            failureMessage: "member failed",
+            terminalStatus: STEP_STATUS.FAILED,
+          },
+        } as any,
+        {
+          prompt: "Completed member",
+          _runtime: {
+            startedAt: Date.now(),
+            terminalStatus: STEP_STATUS.COMPLETED,
+            completedAt: Date.now(),
+          },
+        } as any,
+        { prompt: "Pending step" },
+        { prompt: "Never executed step" },
+      ],
+      executionState: EXECUTION_STATES.ERROR,
+      currentStep: 2,
+      parallelGroups: [
+        { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+    useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.FAILED);
+    useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.COMPLETED);
+
+    render(<WorkflowStepsPanel />);
+
+    expect(screen.getByText("member failed")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Workflow continued after failure/)
+    ).not.toBeInTheDocument();
+    const stepRows = screen
+      .getByRole("listbox")
+      .querySelectorAll<HTMLElement>("[data-workflow-step-index]");
+    expect(
+      [...stepRows].filter((row) =>
+        within(row).queryByLabelText(STEP_STATUS.FAILED)
+      )
+    ).toHaveLength(1);
+    expect(within(stepRows[3]).getByLabelText(STEP_STATUS.PENDING)).toBeInTheDocument();
+  });
+
   it("only shows the failed icon on the step that errored, not the next pending step", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({

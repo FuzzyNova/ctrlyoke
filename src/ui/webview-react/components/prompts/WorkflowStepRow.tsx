@@ -1,4 +1,5 @@
 import React, { useCallback } from "react";
+import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
 import { useSortable } from "@dnd-kit/sortable";
 import { EXECUTION_STATES, STEP_STATUS } from "@root/types/DashboardConstants";
 import { isScriptStep } from "@root/types/CtrlYokeTypes";
@@ -60,6 +61,8 @@ export type WorkflowStepRowProps = {
   slotNumber: number;
   currentStep: number;
   executionState: ExecutionState;
+  parallelGroups?: readonly ParallelGroupDefinition[];
+  allSteps?: readonly WorkflowStep[];
   status: StepStatus;
   retryState?: WorkflowStepComponentProps["retryState"];
   latestOutput?: WorkflowStepComponentProps["latestOutput"];
@@ -106,6 +109,8 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     slotNumber,
     currentStep,
     executionState,
+    parallelGroups = [],
+    allSteps,
     status,
     retryState,
     latestOutput,
@@ -132,10 +137,24 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     if (latestOutput?.elapsed) {
       details.duration = latestOutput.elapsed;
     }
+    const protectedFailure = getProtectedTerminalFailure({
+      executionState,
+      currentIndex: currentStep,
+      steps: allSteps ?? [],
+      parallelGroups,
+    });
+    const continuedFailure =
+      step._runtime !== undefined &&
+      "terminalFailure" in step._runtime &&
+      step._runtime.terminalFailure === false;
     const workflowContinuedAfterFailure =
       status === STEP_STATUS.FAILED &&
       index < currentStep &&
-      (executionState !== EXECUTION_STATES.ERROR || index < currentStep - 1);
+      (continuedFailure ||
+        (executionState !== EXECUTION_STATES.ERROR && index < currentStep) ||
+        (executionState === EXECUTION_STATES.ERROR &&
+          index < currentStep - 1 &&
+          !protectedFailure.indices.includes(index)));
     if (status === STEP_STATUS.FAILED) {
       const failureMessage = step._runtime?.failureMessage;
       details.message = failureMessage

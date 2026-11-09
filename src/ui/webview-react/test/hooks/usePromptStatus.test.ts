@@ -123,6 +123,77 @@ describe("usePromptStatus", () => {
     );
   });
 
+  it("keeps a failed parallel member as the only failed row after the group", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "group-failed.ctrlyoke.yaml",
+      steps: [
+        {
+          prompt: "failed",
+          _runtime: {
+            startedAt: Date.now(),
+            completedAt: Date.now(),
+            terminalStatus: STEP_STATUS.FAILED,
+          },
+        } as any,
+        {
+          prompt: "completed",
+          _runtime: {
+            startedAt: Date.now(),
+            completedAt: Date.now(),
+            terminalStatus: STEP_STATUS.COMPLETED,
+          },
+        } as any,
+        { prompt: "pending" },
+        { prompt: "never executed" },
+      ],
+      executionState: EXECUTION_STATES.ERROR,
+      currentStep: 2,
+      parallelGroups: [
+        { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+    useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.FAILED);
+    useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.COMPLETED);
+
+    const { result } = renderHook(() => usePromptStatus());
+    const getStatus = result.current;
+    const steps = useWorkflowStore.getState().steps;
+
+    expect(steps.map((step, index) => getStatus(step, index))).toEqual([
+      STEP_STATUS.FAILED,
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.PENDING,
+      STEP_STATUS.PENDING,
+    ]);
+  });
+
+  it("does not mark a completed group member failed after the group is rewound", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "rewound-group-failure.ctrlyoke.yaml",
+      steps: [
+        {
+          prompt: "completed",
+          _runtime: {
+            terminalStatus: STEP_STATUS.COMPLETED,
+            completedAt: Date.now(),
+          },
+        } as any,
+        { prompt: "rewound", _runtime: { rewoundFailure: true } } as any,
+      ],
+      executionState: EXECUTION_STATES.ERROR,
+      currentStep: 0,
+      parallelGroups: [
+        { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+    useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
+
+    const { result } = renderHook(() => usePromptStatus());
+    expect(
+      result.current(useWorkflowStore.getState().steps[0], 0)
+    ).toBe(STEP_STATUS.COMPLETED);
+  });
+
   // While the final step runs, currentStep sits one past the last queue step,
   // so a step the final step appends (append_step) lands on exactly that
   // index. It used to show the running play icon and highlight before the

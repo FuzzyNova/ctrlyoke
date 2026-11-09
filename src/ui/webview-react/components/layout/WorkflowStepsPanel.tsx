@@ -1754,6 +1754,8 @@ const WorkflowStepsPanelInner: React.FC<{
             slotNumber={slotNumber}
             currentStep={currentStep}
             executionState={executionState}
+            parallelGroups={parallelGroups}
+            allSteps={steps}
             status={status}
             retryState={retryStates[index]}
             latestOutput={getLatestOutput(index)}
@@ -2045,6 +2047,8 @@ const WorkflowStepsPanelInner: React.FC<{
                       slotNumber={slotNumber}
                       currentStep={currentStep}
                       executionState={executionState}
+                      parallelGroups={parallelGroups}
+                      allSteps={steps}
                       status={status}
                       retryState={retryState}
                       latestOutput={latestOutput}
