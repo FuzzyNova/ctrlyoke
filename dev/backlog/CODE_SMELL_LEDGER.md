@@ -112,6 +112,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   Shared JSONC object-file reads and hardened atomic writes across settings, trust stores and the MCP registry; corrected empty and invalid-root trust-store handling.
   Single-sourced native `path.relative` escape checks and fixed `..`-prefixed child paths.
   Single-sourced persisted output-target and attempt keys; the CLI terminal fallback still assumes queue targets and would mislabel a final target if one reaches it, for a later pass.
+  Single-sourced hosted viewer optional query strings and file-history/git-ref-diff paging parameters, preserving their route-specific parsing behavior.
   Candidates for a later pass: win32-only `toLowerCase()` path keys re-derived beside
   `PathCasing` (`RunSummaryCache.cacheKey`, `WorkspaceRepoDiscovery.pathKey` whose comment
   claims macOS folding too, `ExecutionPreviewService.normalizeComparisonPath`,

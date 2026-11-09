@@ -1698,6 +1698,27 @@ suite("CtrlYokeHostedServer workspace viewer route errors", () => {
     );
   });
 
+  test("trims the repo query value before calling the status service", async () => {
+    let receivedRepo: unknown;
+    await withStubbedViewerService(
+      {
+        getStatus: async (repo) => {
+          receivedRepo = repo;
+          return {};
+        },
+      },
+      async (port, token) => {
+        const response = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/status?repo=%20repo-id%20&token=${token}`
+        );
+
+        assert.strictEqual(response.statusCode, 200);
+        assert.strictEqual(receivedRepo, "repo-id");
+      }
+    );
+  });
+
   test("keeps GET file ordinary errors as generic 500 responses", async () => {
     await withStubbedViewerService(
       {

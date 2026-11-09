@@ -106,6 +106,11 @@ import {
   parseHttpByteRange,
 } from "./HttpByteRange";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
+import {
+  optionalNonEmptyQueryString,
+  optionalTrimmedQueryString,
+  parseHostedRoutePagingParams,
+} from "./HostedRouteParams";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
 import type {
   WorkspaceDeleteRequest,
@@ -1547,10 +1552,7 @@ export class CtrlYokeHostedServer
             : WORKSPACE_SEARCH_SCOPES.BOTH;
         const includeGitIgnored =
           req.query.includeGitIgnored === BOOLEAN_STRING_VALUES.TRUE;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         const rawLimit =
           typeof req.query.limit === "string"
             ? Number.parseInt(req.query.limit, 10)
@@ -1563,10 +1565,7 @@ export class CtrlYokeHostedServer
             : NaN;
         const offset =
           Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : undefined;
-        const searchId =
-          typeof req.query.searchId === "string" && req.query.searchId
-            ? req.query.searchId
-            : undefined;
+        const searchId = optionalNonEmptyQueryString(req.query.searchId);
 
         try {
           res.json(
@@ -1955,10 +1954,7 @@ export class CtrlYokeHostedServer
       "/api/workspace-viewer/status",
       requireToken,
       async (req, res) => {
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(await this.viewerService.getStatus(repo));
         } catch (err) {
@@ -2003,13 +1999,10 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "path is required" });
           return;
         }
-        const rawOffset =
-          typeof req.query.offset === "string" ? req.query.offset : "0";
-        const rawPageSize =
-          typeof req.query.pageSize === "string"
-            ? req.query.pageSize
-            : undefined;
-        const offset = Number.parseInt(rawOffset, 10);
+        const { offset, pageSize } = parseHostedRoutePagingParams(
+          req.query.offset,
+          req.query.pageSize
+        );
         const rawNextOffset =
           typeof req.query.nextOffset === "string"
             ? Number.parseInt(req.query.nextOffset, 10)
@@ -2018,18 +2011,8 @@ export class CtrlYokeHostedServer
           typeof req.query.nextCursor === "string"
             ? req.query.nextCursor
             : undefined;
-        const pageSize =
-          rawPageSize === undefined
-            ? undefined
-            : Number.parseInt(rawPageSize, 10);
-        const historyId =
-          typeof req.query.historyId === "string" && req.query.historyId
-            ? req.query.historyId
-            : undefined;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const historyId = optionalNonEmptyQueryString(req.query.historyId);
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(
             await this.viewerService.getFileHistory(
@@ -2065,10 +2048,7 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "commit is required" });
           return;
         }
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           const result = await this.viewerService.getFileHistoryDiff(
             filePath,
@@ -2229,18 +2209,9 @@ export class CtrlYokeHostedServer
       async (req, res) => {
         const skip = parseInt(String(req.query.skip ?? "0"), 10);
         const limit = parseInt(String(req.query.limit ?? "30"), 10);
-        const branch =
-          typeof req.query.branch === "string" && req.query.branch.trim()
-            ? req.query.branch.trim()
-            : undefined;
-        const historyId =
-          typeof req.query.historyId === "string" && req.query.historyId
-            ? req.query.historyId
-            : undefined;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const branch = optionalTrimmedQueryString(req.query.branch);
+        const historyId = optionalNonEmptyQueryString(req.query.historyId);
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(
             await this.viewerService.getCommitLog(
@@ -2267,25 +2238,12 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "ref is required" });
           return;
         }
-        const rawOffset =
-          typeof req.query.offset === "string" ? req.query.offset : "0";
-        const rawPageSize =
-          typeof req.query.pageSize === "string"
-            ? req.query.pageSize
-            : undefined;
-        const offset = Number.parseInt(rawOffset, 10);
-        const pageSize =
-          rawPageSize === undefined
-            ? undefined
-            : Number.parseInt(rawPageSize, 10);
-        const diffId =
-          typeof req.query.diffId === "string" && req.query.diffId
-            ? req.query.diffId
-            : undefined;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const { offset, pageSize } = parseHostedRoutePagingParams(
+          req.query.offset,
+          req.query.pageSize
+        );
+        const diffId = optionalNonEmptyQueryString(req.query.diffId);
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(
             (await this.viewerService.getGitRefDiffPage(
@@ -2312,10 +2270,7 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "ref is required" });
           return;
         }
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           const download = await this.viewerService.spawnGitRefDiffDownload(
             ref,
@@ -2392,10 +2347,7 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "ref is required" });
           return;
         }
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           const result = await this.viewerService.getGitRefDiff(ref, repo);
           res.json(result satisfies WorkspaceGitRefDiffResponse);
