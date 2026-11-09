@@ -1057,7 +1057,8 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(summary).toHaveTextContent("exit code == 0");
     expect(summary).toHaveTextContent("actual 1");
     expect(summary).toHaveTextContent("stopWorkflow");
-    expect(summary).toHaveTextContent("130.6s");
+    expect(summary).toHaveTextContent("2:10");
+    expect(summary).toHaveAccessibleName(/2 minutes 10 seconds$/);
     expect(summary.querySelector(".truncate")).toBeNull();
   });
 

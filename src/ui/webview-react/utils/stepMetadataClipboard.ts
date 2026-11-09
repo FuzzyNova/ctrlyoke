@@ -12,6 +12,7 @@ import {
   sandboxValueLabel,
 } from "@root/types/DashboardConstants";
 import { isScriptWorkflowStep } from "./stepClipboard";
+import { formatClockDuration } from "./time";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
 export interface StepRuntimeMetaSnapshot {
@@ -341,7 +342,7 @@ export function buildStepMetadataClipboardText({
   const runtimeLines: string[] = [];
   if (sessionId) runtimeLines.push(`Session ID: ${sessionId}`);
   if (elapsed !== undefined)
-    runtimeLines.push(`Duration: ${elapsed.toFixed(1)}s`);
+    runtimeLines.push(`Duration: ${formatClockDuration(elapsed * 1000)}`);
 
   const contextWindow = resolveEffectiveContextWindow({
     isCurrent,

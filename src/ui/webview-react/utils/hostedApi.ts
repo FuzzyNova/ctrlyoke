@@ -1,4 +1,5 @@
 import { WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
+import { HOSTED_TOKEN_HEADER } from "@root/types/DashboardConstants";
 import type {
   WorkspaceTreePageRequest,
   WorkspaceTreeRangeRequest,
@@ -138,7 +139,7 @@ function buildHostedHeaders(options?: Pick<RequestInit, "method" | "headers">) {
     }
   }
   if (token) {
-    headers["x-ctrlyoke-token"] = token;
+    headers[HOSTED_TOKEN_HEADER] = token;
   }
   if (method === "PUT" || method === "POST") {
     headers["Content-Type"] = "application/json";

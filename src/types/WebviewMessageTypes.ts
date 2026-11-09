@@ -611,6 +611,15 @@ export interface InitMessageData {
   dev?: DevStatus;
 }
 
+/** Extension → Webview: live output from a CLI-managed workflow's step. */
+export interface CliWatchOutputMessage {
+  type: typeof MESSAGE_TYPES.CLI_WATCH_OUTPUT;
+  workflowId: string;
+  stepIndex: number;
+  output: CliOutput;
+  prompt?: string;
+}
+
 /** Extension → Webview: refreshed execution-root coordination activity. */
 export interface CoordinationScopeUpdatedMessage {
   type: typeof MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED;
@@ -956,6 +965,8 @@ export interface StatusMessageMessage {
  */
 export interface StepsExtendedMessage {
   type: typeof MESSAGE_TYPES.STEPS_EXTENDED;
+  /** Set for a CLI-managed workflow's queue, so inactive workflows ignore it. */
+  workflowId?: string;
   steps: WorkflowStep[];
   parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep | null;

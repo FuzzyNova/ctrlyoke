@@ -20,6 +20,14 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { HarnessId } from "../types/DashboardConstants";
 import { MESSAGE_TYPES, PANEL_CLIENT_ID } from "../types/DashboardConstants";
+import {
+  cliPromptsExtendedMessage,
+  cliWatchOutputMessage,
+  coordinationScopeUpdatedMessage,
+  workflowAddedMessage,
+  workflowDismissedMessage,
+  workflowSummaryUpdatedMessage,
+} from "./DashboardProviderMessages";
 import type { DashboardClientEndpoint } from "./DashboardClientEndpoint";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
@@ -261,15 +269,15 @@ export class DashboardApplication
   }
 
   notifyWorkflowAdded(summary: WorkflowSummary): void {
-    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
+    this.postMessage(workflowAddedMessage(summary));
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
-    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
+    this.postMessage(workflowDismissedMessage(workflowId));
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
-    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+    this.postMessage(workflowSummaryUpdatedMessage(summary));
   }
 
   notifyActiveWorkflowChanged(workflowId: string): void {
@@ -277,7 +285,7 @@ export class DashboardApplication
   }
 
   notifyCoordinationScopeUpdated(scope: CoordinationScopeSnapshot): void {
-    this.postMessage({ type: MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED, scope });
+    this.postMessage(coordinationScopeUpdatedMessage(scope));
   }
 
   notifyCliWatchOutput(
@@ -286,13 +294,9 @@ export class DashboardApplication
     output: CliOutput,
     prompt?: string
   ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
-      workflowId,
-      stepIndex,
-      output,
-      ...(prompt ? { prompt } : {}),
-    });
+    this.postMessage(
+      cliWatchOutputMessage(workflowId, stepIndex, output, prompt)
+    );
   }
 
   notifyCliPromptsExtended(
@@ -301,13 +305,14 @@ export class DashboardApplication
     definitionRevision?: number,
     parallelGroups?: ParallelGroupDefinition[]
   ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.STEPS_EXTENDED,
-      workflowId,
-      steps,
-      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
-      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
-    });
+    this.postMessage(
+      cliPromptsExtendedMessage(
+        workflowId,
+        steps,
+        definitionRevision,
+        parallelGroups
+      )
+    );
   }
 
   notifyHarnessAvailability(

@@ -153,7 +153,17 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   (`src/completions/PromptTriggerContext.ts`), which both editors call. That last one
   removes the completion-trigger entry from Deferred. Then the model fallback
   (`resolveCliModelFlag`), which shrinks the `validateAndGetModel` entry to its one open
-  product question.
+  product question. Then the duration formats and the three cleanups, which remove the
+  dashboard-message, duration-format and access-token entries from Deferred:
+  - Copy Metadata, Markdown export and `ScriptVerdict` use `formatClockDuration`
+    (`ScriptVerdict`'s accessible name uses `formatSpokenDuration`).
+  - The dead `notify*` copies in `CtrlYokeWebviewProvider` are gone. `DashboardApplication`
+    and `CtrlYokeHostedServer` build their messages with `src/ui/DashboardProviderMessages.ts`.
+  - The WebSocket `connection` handler's dead 4401 check is gone. HTTP routes and the
+    upgrade share `tokenMatches`, so the upgrade also accepts `HOSTED_TOKEN_HEADER`.
+  - Qwen and OpenCode share `splitDescriptionPreview`
+    (`src/core/harness/shared/AskUserQuestionPreview.ts`), the first piece of the shared
+    ask-user-question parser.
 
 ## Deferred
 
@@ -175,9 +185,8 @@ still deferred.
     (Copilot, Antigravity) and the description splitters (Qwen, OpenCode) stay
     per-harness. That saves about 120 lines.
   - **Before merging.** Add a characterization test per harness for every alias key.
-  - **Decided, small fix.** OpenCode renders every paragraph after the first as a
-    preview block (`OpenCodeEventMapper.ts:540-575`); switch it to Qwen's ASCII-art
-    check.
+  - **Already shared.** The description splitter: Qwen and OpenCode both call
+    `splitDescriptionPreview` (`shared/AskUserQuestionPreview.ts`).
 - Claude's model-name matching (`getClaudeModelName` in `src/utils/ModelConstants.ts`)
   turns any ID containing `sonnet`/`opus`/`fable`/`haiku` (for example a Bedrock
   `us.anthropic.claude-sonnet-…` ID) into the bare alias with no warning, losing the
@@ -221,47 +230,13 @@ still deferred.
     literals, add a test asserting they match the constants. About 25 files; do it
     later.
 
-- Dashboard message payloads (`WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`,
-  `WORKFLOW_SUMMARY_UPDATED`, `COORDINATION_SCOPE_UPDATED`, `CLI_WATCH_OUTPUT`,
-  `STEPS_EXTENDED`) built separately in `src/server/CtrlYokeHostedServer.ts`,
-  `src/ui/CtrlYokeWebviewProvider.ts` and `src/ui/DashboardApplication.ts`, plus the
-  harness snapshot publish in `CtrlYokeHostedServer` vs `src/ui/WebviewSettingsSync.ts`
-  (delta vs full map, missing-registry guard).
-  _2026-11-09: **Decided** as a cleanup, no bug._
-  - **Wrong interface named.** These methods belong to `IDashboardProvider`, not
-    `IDashboardSink`.
-  - **Identical payloads.** All three sites build the same messages. The webview store
-    merges both forms of the harness snapshot.
-  - **Dead copies.** `CtrlYokeWebviewProvider`'s copies look unreachable: the class
-    doesn't implement `IDashboardProvider`, and the orchestrator is given
-    `DashboardApplication`.
-  - **Fix.** Delete the dead copies and add pure message builders next to
-    `HostedServerMessageFactory.ts`. Neither interface changes.
-- Duration formats in the dashboard: `formatClockDuration` (`ui/webview-react/utils/time.ts`)
-  is documented as the one format, but Copy Metadata (`stepMetadataClipboard.ts`,
-  `7.4s`), Markdown export (`markdownExport.ts`, raw float), `ScriptVerdict.tsx`
-  (`130.6s`) and `outputRowTiming.ts` (`1m 30s`) each use their own, with tests pinning
-  them.
-  _2026-11-09: **Decided.**_
-  - **No contract involved.** Only the numeric `_runtime.elapsed` is persisted; every
-    format is display or export text.
-  - **Fix.** Switch Copy Metadata, Markdown export and `ScriptVerdict` to
-    `formatClockDuration`. Give `ScriptVerdict`'s aria-label `formatSpokenDuration`.
-  - **Keep `outputRowTiming` as it is.** Its sub-second tooltips need ms precision.
-  - Add a **Changed** entry in `CHANGELOG.md`.
-- Access-token checks in `src/server/CtrlYokeHostedServer.ts`: `requestHasValidToken`
-  accepts the `x-ctrlyoke-token` header or `?token=`, while the WebSocket upgrade and
-  connection handlers accept only `?token=` (the latter closes with 4401).
-  _2026-11-09: **Decided** as a cleanup, no security issue._
-  - **WebSocket clients can only use `?token=`.** Browsers can't set headers on a
-    WebSocket, and every client (the standalone shim, the LSP bridge, tests) uses the
-    query.
-  - **Constant-time already.** Every comparison goes through `timingSafeStringEqual`.
-  - **Dead branch.** The connection-handler check can never fail: `noServer: true`,
-    and `connection` is only emitted after the upgrade check passes.
-  - **Fix.** Delete the dead check, and share one token helper between HTTP and the
-    upgrade; accepting the header there too is additive.
-  - Optional hardening: a `Referrer-Policy: no-referrer` header.
+- Hosted harness snapshot publish in `CtrlYokeHostedServer` vs
+  `src/ui/WebviewSettingsSync.ts` (delta vs full map, missing-registry guard).
+  _2026-11-09: no bug; the webview store merges both forms. Left over from the
+  dashboard-message cleanup, which shared the registry messages only._
+- Optional hosted-server hardening: a `Referrer-Policy: no-referrer` header, so the
+  `?token=` in a page URL can't leak through a referrer. Left over from the
+  access-token cleanup.
 
 - Git invoked outside `execGit`: `GitCommitter.ts` (own spawn, no timeout),
   `GitUtils.commitAll` (5-minute mutation timeout, contradicting the `GIT_NO_TIMEOUT`

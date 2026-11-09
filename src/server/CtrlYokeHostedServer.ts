@@ -37,6 +37,14 @@ import type {
 } from "../types/WebviewMessageTypes";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import {
+  cliPromptsExtendedMessage,
+  cliWatchOutputMessage,
+  coordinationScopeUpdatedMessage,
+  workflowAddedMessage,
+  workflowDismissedMessage,
+  workflowSummaryUpdatedMessage,
+} from "../ui/DashboardProviderMessages";
+import {
   BROWSER_NOTIFICATION_MODES,
   LICENSE_UI,
   HOSTED_ICON_FILES,
@@ -66,6 +74,7 @@ import {
   WORKSPACE_MEDIA_GIT_INDEX_REF,
   WORKSPACE_MEDIA_KINDS,
   NODE_ERROR_CODES,
+  HOSTED_TOKEN_HEADER,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -481,7 +490,12 @@ export class CtrlYokeHostedServer
           socket.destroy();
           return;
         }
-        if (!timingSafeStringEqual(url.searchParams.get("token"), this.token)) {
+        if (
+          !this.tokenMatches(
+            req.headers[HOSTED_TOKEN_HEADER],
+            url.searchParams.get("token")
+          )
+        ) {
           socket.write(
             "HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n"
           );
@@ -732,17 +746,17 @@ export class CtrlYokeHostedServer
 
   notifyWorkflowAdded(summary: WorkflowSummary): void {
     this.completionTracker.workflowAdded(summary);
-    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
+    this.broadcast(workflowAddedMessage(summary));
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
     this.completionTracker.workflowDismissed(workflowId);
-    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
+    this.broadcast(workflowDismissedMessage(workflowId));
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
     const previousSummary = this.completionTracker.summaryUpdated(summary);
-    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+    this.broadcast(workflowSummaryUpdatedMessage(summary));
 
     if (!isWorkflowCompletionTransition(previousSummary, summary)) {
       return;
@@ -765,7 +779,7 @@ export class CtrlYokeHostedServer
   }
 
   notifyCoordinationScopeUpdated(scope: CoordinationScopeSnapshot): void {
-    this.broadcast({ type: MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED, scope });
+    this.broadcast(coordinationScopeUpdatedMessage(scope));
   }
 
   notifyCliWatchOutput(
@@ -774,13 +788,9 @@ export class CtrlYokeHostedServer
     output: CliOutput,
     prompt?: string
   ): void {
-    this.broadcast({
-      type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
-      workflowId,
-      stepIndex,
-      output,
-      ...(prompt ? { prompt } : {}),
-    });
+    this.broadcast(
+      cliWatchOutputMessage(workflowId, stepIndex, output, prompt)
+    );
   }
 
   notifyCliPromptsExtended(
@@ -789,13 +799,14 @@ export class CtrlYokeHostedServer
     definitionRevision?: number,
     parallelGroups?: ParallelGroupDefinition[]
   ): void {
-    this.broadcast({
-      type: MESSAGE_TYPES.STEPS_EXTENDED,
-      workflowId,
-      steps,
-      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
-      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
-    });
+    this.broadcast(
+      cliPromptsExtendedMessage(
+        workflowId,
+        steps,
+        definitionRevision,
+        parallelGroups
+      )
+    );
   }
 
   notifyHarnessAvailability(
@@ -2713,11 +2724,19 @@ export class CtrlYokeHostedServer
   }
 
   private requestHasValidToken(req: express.Request): boolean {
-    const headerToken = req.get("x-ctrlyoke-token");
-    if (timingSafeStringEqual(headerToken, this.token)) {
-      return true;
-    }
-    return timingSafeStringEqual(req.query["token"], this.token);
+    return this.tokenMatches(req.get(HOSTED_TOKEN_HEADER), req.query["token"]);
+  }
+
+  /**
+   * The one access-token check for HTTP routes and WebSocket upgrades: the
+   * `x-ctrlyoke-token` header or the `?token=` query. Browsers cannot set
+   * headers on a WebSocket, so dashboard sockets always use the query.
+   */
+  private tokenMatches(headerToken: unknown, queryToken: unknown): boolean {
+    return (
+      timingSafeStringEqual(headerToken, this.token) ||
+      timingSafeStringEqual(queryToken, this.token)
+    );
   }
 
   private buildManifest(): Record<string, unknown> {
@@ -2860,12 +2879,10 @@ export class CtrlYokeHostedServer
   // ── WebSocket ─────────────────────────────────────────────────────────────
 
   private setupWebSocket(): void {
+    // Only the upgrade handler emits `connection`, after it has checked the
+    // token and the client allowlist, so no auth check is repeated here.
     this.wss.on("connection", (ws, req) => {
       const url = new URL(req.url ?? "", `http://localhost`);
-      if (!timingSafeStringEqual(url.searchParams.get("token"), this.token)) {
-        ws.close(4401, "Unauthorized");
-        return;
-      }
       const clientTag = this.resolveClientTag(url);
       const connectedAt = Date.now();
       this.connections.add(ws);

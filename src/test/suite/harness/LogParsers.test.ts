@@ -8973,6 +8973,39 @@ suite("OpenCodeLogParser", () => {
       assert.strictEqual(data.questions[0].answerPreview, " /\\_/\\\n( o.o )");
     });
 
+    test("keeps a multi-paragraph OpenCode option description as prose", () => {
+      const description =
+        "Rewrite the parser.\n\nThis touches every harness, so it needs a test per alias key.";
+      const event = {
+        type: "tool_use",
+        sessionID: "ses_question",
+        timestamp: 1000,
+        part: {
+          tool: "question",
+          callID: "call_question_prose",
+          state: {
+            status: "running",
+            input: {
+              questions: [
+                {
+                  question: "Which approach?",
+                  options: [{ label: "Rewrite", description }],
+                },
+              ],
+            },
+          },
+        },
+      } as unknown as BaseCliEvent;
+
+      const response = parser.extractResponse([event]);
+      const data = response.events[0].data as AskUserQuestionData;
+      assert.deepStrictEqual(data.questions[0].options[0], {
+        label: "Rewrite",
+        description,
+        preview: undefined,
+      });
+    });
+
     test("uses the same question mapping for streaming events", () => {
       const event = {
         type: "tool_use",

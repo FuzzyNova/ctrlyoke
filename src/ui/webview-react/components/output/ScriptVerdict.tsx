@@ -15,6 +15,7 @@ import {
   buildCollapsedOutputPreview,
 } from "@utils/outputTruncation";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
+import { formatClockDuration, formatSpokenDuration } from "@utils/time";
 
 interface ScriptVerdictProps {
   verdict: ScriptVerdictData;
@@ -54,10 +55,6 @@ function getOutcomePresentation(outcome: ScriptVerdictData["outcome"]): {
         className: "text-warning-fg",
       };
   }
-}
-
-function formatDuration(durationMs: number): string {
-  return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
 function buildActualPreview(actual: string, expanded: boolean) {
@@ -128,7 +125,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
           type="button"
           className="block min-h-8 w-full min-w-0 whitespace-normal rounded-sm px-1 py-1 text-left text-(length:--cy-output-font-size-sm) wrap-anywhere"
           aria-expanded={false}
-          aria-label={`${presentation.label} · ${getCompareLabel(verdict)} · ${actualLabel} · ${action} · ${formatDuration(verdict.durationMs)}`}
+          aria-label={`${presentation.label} · ${getCompareLabel(verdict)} · ${actualLabel} · ${action} · ${formatSpokenDuration(verdict.durationMs)}`}
           onClick={() => onExpansionChange?.(true)}
         >
           <span className={`font-semibold ${presentation.className}`}>
@@ -167,7 +164,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
             · {highlightText(action, actionFindMatches)}
           </span>{" "}
           <span className="text-description-fg">
-            · {formatDuration(verdict.durationMs)}
+            · {formatClockDuration(verdict.durationMs)}
           </span>
         </button>
       );
@@ -185,7 +182,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
             {presentation.icon} {presentation.label}
           </span>
           <span className="text-description-fg">
-            · {formatDuration(verdict.durationMs)}
+            · {formatClockDuration(verdict.durationMs)}
           </span>
         </button>
         <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">

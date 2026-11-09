@@ -42,6 +42,7 @@ import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
 import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
+import { splitDescriptionPreview } from "../shared/AskUserQuestionPreview";
 import {
   QWEN_AGENT_ARGUMENTS,
   QWEN_BACKGROUND_LAUNCH_RESULTS,
@@ -1510,8 +1511,8 @@ export class QwenLogParser extends BaseLogParser {
       const rawDescription =
         typeof option.description === "string" ? option.description : undefined;
       const inferred = rawDescription
-        ? this.splitQwenDescription(rawDescription)
-        : {};
+        ? splitDescriptionPreview(rawDescription)
+        : { description: undefined, preview: undefined };
       return {
         label: typeof option.label === "string" ? option.label : "",
         description: inferred.description,
@@ -1521,29 +1522,6 @@ export class QwenLogParser extends BaseLogParser {
             : inferred.preview,
       };
     });
-  }
-
-  private splitQwenDescription(description: string): {
-    description?: string;
-    preview?: string;
-  } {
-    const paragraphs = description.split(/\r?\n\s*\r?\n/);
-    if (paragraphs.length < 2) {
-      return { description };
-    }
-
-    const preview = paragraphs.slice(1).join("\n\n").trimEnd();
-    const asciiLines = preview
-      .split(/\r?\n/)
-      .filter((line) => /[\\/|()<>^~_=]/.test(line));
-    if (asciiLines.length < 2) {
-      return { description };
-    }
-
-    return {
-      description: paragraphs[0].trim(),
-      preview,
-    };
   }
 
   private parseQwenAnswers(resultText: string): Map<string, string> {

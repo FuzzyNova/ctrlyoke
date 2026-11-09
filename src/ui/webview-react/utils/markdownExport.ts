@@ -71,6 +71,7 @@ import {
 } from "@root/utils/StepOutputText";
 import { StepOutputTextMode } from "@root/types/DashboardConstants";
 import type { OutputMessageTarget } from "./outputProjection";
+import { formatClockDuration } from "./time";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -650,7 +651,7 @@ export function generateMarkdownExport(
           );
         }
         if (output.elapsed !== undefined) {
-          stats.push(`${output.elapsed}s`);
+          stats.push(`Duration: ${formatClockDuration(output.elapsed * 1000)}`);
         }
 
         if (stats.length > 0) {

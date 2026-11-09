@@ -1273,6 +1273,12 @@ export const HOSTED_ICON_PATHS = {
   APPLE_TOUCH_ICON_PNG: `/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
 } as const;
 
+/**
+ * Request header carrying the hosted server's access token, as an alternative
+ * to `?token=`. Lower-case because Node lower-cases incoming header names.
+ */
+export const HOSTED_TOKEN_HEADER = "x-ctrlyoke-token";
+
 /** The hosted server's public TLS-certificate download (no token required). */
 export const HOSTED_CERT_DOWNLOAD = {
   PATH: "/cert",

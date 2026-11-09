@@ -4,6 +4,7 @@ import {
   DOCUMENT_VISIBILITY_STATES,
   COMPLETION_NOTIFICATION_SEVERITY,
   HOSTED_ICON_PATHS,
+  HOSTED_TOKEN_HEADER,
   SERVICE_WORKER_BADGE_MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
   type BrowserNotificationMode,
@@ -342,7 +343,7 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const token = new URLSearchParams(window.location.search).get("token");
   if (token) {
-    headers.set("x-ctrlyoke-token", token);
+    headers.set(HOSTED_TOKEN_HEADER, token);
   }
   if (init?.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");

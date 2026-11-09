@@ -42,6 +42,16 @@ describe("buildStepMetadataClipboardText prior context", () => {
     expect(text).not.toContain("Current context window: 20k/100k (20%)");
   });
 
+  it("formats the duration like the step header", () => {
+    const text = buildStepMetadataClipboardText({
+      step: { prompt: "prompt" } as WorkflowStep,
+      slotNumber: 1,
+      latestOutput: { elapsed: 150 } as never,
+    });
+
+    expect(text).toContain("Duration: 2:30");
+  });
+
   it("keeps workflow None when global sandbox is On", () => {
     const state = useSettingsStore.getState();
     useSettingsStore.setState({

@@ -572,7 +572,7 @@ describe("generateMarkdownExport", () => {
     const md = generateMarkdownExport(outputs, metadata);
     expect(md).toContain("100 in / 50 out / 150 total");
     expect(md).toContain("20 cached");
-    expect(md).toContain("3.5s");
+    expect(md).toContain("Duration: 0:03.5");
   });
 
   it("uses the provider-reported total in token stats", () => {

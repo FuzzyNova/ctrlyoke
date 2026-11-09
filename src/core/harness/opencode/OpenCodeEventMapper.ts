@@ -22,6 +22,7 @@ import {
   SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import { CliParseUtils } from "../shared/CliParseUtils";
+import { splitDescriptionPreview } from "../shared/AskUserQuestionPreview";
 import { CliEventMapper, type McpToolHint } from "../shared/CliEventMapper";
 import {
   OPENCODE_SHELL_TOOL_NAMES,
@@ -563,13 +564,13 @@ function parseOpenCodeOptions(rawOptions: unknown): AskUserQuestionOption[] {
     const option = (rawOption ?? {}) as Record<string, unknown>;
     const rawDescription =
       typeof option.description === "string" ? option.description : undefined;
-    const [description, ...previewLines] = rawDescription
-      ? rawDescription.split(/\r?\n\s*\r?\n/)
-      : [];
+    const { description, preview } = rawDescription
+      ? splitDescriptionPreview(rawDescription)
+      : { description: undefined, preview: undefined };
     return {
       label: typeof option.label === "string" ? option.label : "",
       description,
-      preview: previewLines.length ? previewLines.join("\n\n") : undefined,
+      preview,
     };
   });
 }

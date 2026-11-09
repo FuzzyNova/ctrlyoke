@@ -19,6 +19,7 @@ import {
   HARNESS_IDS,
   HOST_KINDS,
   HOSTED_CONNECTION_LIVENESS,
+  HOSTED_TOKEN_HEADER,
   HARNESS_STATUS_STRINGS,
   HARNESS_VERSION_STATUSES,
   MESSAGE_TYPES,
@@ -1181,6 +1182,19 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
       });
       assert.strictEqual(wasConnectionObserved(), true);
       valid.close();
+    });
+  });
+
+  test("accepts the token header on WebSocket upgrades, like HTTP routes", async () => {
+    await withServer(async (port, token) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, {
+        headers: { [HOSTED_TOKEN_HEADER]: token },
+      });
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", resolve);
+        ws.once("error", reject);
+      });
+      ws.close();
     });
   });
 

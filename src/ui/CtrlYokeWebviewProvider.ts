@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import * as fsSync from "fs";
 import {
   DEFAULT_WORKFLOW_NAME,
@@ -35,9 +34,7 @@ import type {
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
-import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
-import { workflowDisplayStep } from "../types/CtrlYokeTypes";
 import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import type { WebviewSettingsSync } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
@@ -51,7 +48,6 @@ import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
   WorkflowViewAddress,
   WorktreeRunProjection,
-  CoordinationScopeSnapshot,
 } from "../types/CtrlYokeTypes";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import type { DashboardBroadcastHub } from "./DashboardBroadcastHub";
@@ -799,25 +795,6 @@ export class CtrlYokeWebviewProvider
     this.sink.notifyUndoRedoSynced();
   }
 
-  /**
-   * Called when a CLI-managed workflow dynamically extends its queue.
-   * Includes the workflowId so the webview can ignore updates for inactive workflows.
-   */
-  public notifyCliPromptsExtended(
-    workflowId: string,
-    steps: any[],
-    definitionRevision?: number,
-    parallelGroups?: ParallelGroupDefinition[]
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.STEPS_EXTENDED,
-      workflowId,
-      steps,
-      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
-      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
-    });
-  }
-
   /** @keep The webview warning receiver is a future protocol endpoint; no sender route exists for the checker to trace. */
   public notifyStepLimitReached(currentSteps: number, maxSteps: number): void {
     this.postMessage({
@@ -851,44 +828,8 @@ export class CtrlYokeWebviewProvider
     this.sink.updateWorkflowName(name, workflowId, definitionRevision);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Multi-workflow coordination notifications (called by WorkflowOrchestrator)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Send a live CLI output update to the webview for a CLI-managed workflow.
-   * Called by WorkflowOrchestrator when ExternalRunWatchSession.onOutput fires.
-   */
-  public notifyCliWatchOutput(
-    workflowId: string,
-    stepIndex: number,
-    output: CliOutput,
-    prompt?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
-      workflowId,
-      stepIndex,
-      output,
-      ...(prompt ? { prompt } : {}),
-    });
-  }
-
-  /** Notify webview that a new workflow was loaded into the registry. */
-  public notifyWorkflowAdded(summary: WorkflowSummary): void {
-    Log.debug(
-      `[notifyWorkflowAdded] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
-        `step=${workflowDisplayStep(summary)}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"} ` +
-        `wfp=${summary.workingFilePath ? path.basename(summary.workingFilePath) : "?"}`
-    );
-    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
-  }
-
-  /** Notify webview that a workflow was dismissed from the registry. */
-  public notifyWorkflowDismissed(workflowId: string): void {
-    Log.debug(`[notifyWorkflowDismissed] inst:${workflowId.slice(0, 8)}`);
-    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
-  }
+  // Workflow-registry notifications reach the panel through
+  // `DashboardApplication` (the orchestrator's `IDashboardProvider`), not here.
 
   /** Notify webview that the active (displayed) workflow changed. */
   public notifyActiveWorkflowChanged(workflowId: string): void {
@@ -901,20 +842,6 @@ export class CtrlYokeWebviewProvider
     this.postMessage({
       type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
       workflowId,
-    });
-  }
-
-  /** Notify webview that a workflow's execution summary was updated (state/progress changed). */
-  public notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
-    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
-  }
-
-  public notifyCoordinationScopeUpdated(
-    scope: CoordinationScopeSnapshot
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED,
-      scope,
     });
   }
 
