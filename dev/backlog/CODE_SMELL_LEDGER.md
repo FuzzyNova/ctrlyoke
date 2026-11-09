@@ -113,6 +113,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   Single-sourced native `path.relative` escape checks and fixed `..`-prefixed child paths.
   Single-sourced persisted output-target and attempt keys; the CLI terminal fallback still assumes queue targets and would mislabel a final target if one reaches it, for a later pass.
   Single-sourced hosted viewer optional query strings and file-history/git-ref-diff paging parameters, preserving their route-specific parsing behavior.
+  Final review (workflow stopped after pass 6): all five steps preserved behavior; removed
+  a leftover private `isExecutionOwnerState` wrapper, the `queueTargetKey` re-export
+  from `RunOutputResolver`, and the now-dead `src/config/AtomicFileWrite.ts`.
   Candidates for a later pass: win32-only `toLowerCase()` path keys re-derived beside
   `PathCasing` (`RunSummaryCache.cacheKey`, `WorkspaceRepoDiscovery.pathKey` whose comment
   claims macOS folding too, `ExecutionPreviewService.normalizeComparisonPath`,
