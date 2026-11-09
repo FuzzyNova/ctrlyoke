@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Single-step workflows now suggest unknown-property corrections for the authored step kind and warn when a key belongs to the other kind.
 - Dashboard undo and redo now preserve executed steps after a run stops.
 - Concurrent MCP coordination calls now share one participant registration, so parallel claims and notes use the same identity and claims can be released.
 - Split project history is now recovered when a repository is opened through a differently named symlink, and workspace-mode definition anchors from older path keys are merged without replacing newer anchors.

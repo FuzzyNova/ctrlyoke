@@ -653,7 +653,7 @@ export class PromptFileParser {
 
     let scratch = structuredClone(parsed);
     const warnings: WorkflowValidationWarning[] = [];
-    const validRootKeys = this.getValidKeysAtPointer(parsed, "");
+    const validRootKeys = this.getValidKeysAtPointer(parsed, "", true);
     while (!this.strictValidator(scratch)) {
       const errors = [...(this.strictValidator.errors ?? [])];
       const candidates = new Map<string, ErrorObject>();
@@ -745,14 +745,24 @@ export class PromptFileParser {
     const defs = this.promptSchema?.$defs ?? {};
     let schemas: unknown[];
     if (instancePointer === "") {
-      schemas =
-        isObject(target) && hasOwn(target, "steps")
-          ? [
-              defs.executionProperties,
-              defs.workflowOnlyProperties,
-              this.promptSchema?.oneOf?.[1]?.allOf?.[2],
-            ]
-          : [defs.singleStepRoot];
+      if (isObject(target) && hasOwn(target, "steps")) {
+        schemas = [
+          defs.executionProperties,
+          defs.workflowOnlyProperties,
+          this.promptSchema?.oneOf?.[1]?.allOf?.[2],
+        ];
+      } else if (suggestionCandidatesOnly) {
+        const rootAlternatives = defs.singleStepRoot?.oneOf;
+        schemas = [
+          Array.isArray(rootAlternatives)
+            ? rootAlternatives[
+                isObject(target) && target.type === STEP_TYPES.SCRIPT ? 1 : 0
+              ]
+            : defs.singleStepRoot,
+        ];
+      } else {
+        schemas = [defs.singleStepRoot];
+      }
     } else if (instancePointer.endsWith("/_runtime")) {
       schemas = [defs.promptRuntimeMetadata];
     } else if (instancePointer.endsWith("/endCondition")) {

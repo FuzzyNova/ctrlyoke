@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, failing Mocha repro)
 - **Area:** `src/core/PromptFileParser.ts` (`getValidKeysAtPointer`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

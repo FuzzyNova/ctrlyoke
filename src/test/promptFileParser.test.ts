@@ -137,6 +137,46 @@ suite("PromptFileParser Tests", () => {
       assert.ok(promptTypo?.message.includes("Did you mean 'harness'?"));
       assert.ok(scriptTypo?.message.includes("Did you mean 'shell'?"));
     });
+
+    test("uses the authored kind for single-step root suggestions", () => {
+      const scriptWrongKind = parser.getSchemaWarnings({
+        type: "script",
+        script: "echo hi",
+        harnes: "claude-cli",
+      }).find((warning) => warning.propertyPointer === "/harnes");
+      const promptWrongKind = parser.getSchemaWarnings({
+        prompt: "hello",
+        shel: "bash",
+      }).find((warning) => warning.propertyPointer === "/shel");
+      const promptTypo = parser.getSchemaWarnings({
+        prompt: "hi",
+        harnes: "claude-cli",
+      }).find((warning) => warning.propertyPointer === "/harnes");
+      const scriptTypo = parser.getSchemaWarnings({
+        type: "script",
+        script: "x",
+        shel: "bash",
+      }).find((warning) => warning.propertyPointer === "/shel");
+
+      assert.ok(scriptWrongKind);
+      assert.ok(!scriptWrongKind.message.includes("Did you mean 'harness'?"));
+      assert.ok(promptWrongKind);
+      assert.ok(!promptWrongKind.message.includes("Did you mean 'shell'?"));
+      assert.ok(promptTypo?.message.includes("Did you mean 'harness'?"));
+      assert.ok(scriptTypo?.message.includes("Did you mean 'shell'?"));
+    });
+
+    test("warns for an other-kind key on a single-step root", () => {
+      const warnings = parser.getSchemaWarnings({
+        prompt: "hello",
+        shell: "bash",
+      });
+
+      assert.deepStrictEqual(
+        warnings.map((warning) => warning.propertyPointer),
+        ["/shell"]
+      );
+    });
   });
 
   suite("parsePromptFile - JSON Format", () => {
