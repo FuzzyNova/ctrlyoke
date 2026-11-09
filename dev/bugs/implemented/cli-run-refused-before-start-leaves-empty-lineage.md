@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/cli.ts` (`run` operation, around lines 1459–1517; `mergeCliVarsIntoWorkflow`), `src/core/WorkflowInstance.ts` (`loadPromptFile`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

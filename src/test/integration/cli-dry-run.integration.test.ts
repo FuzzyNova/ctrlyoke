@@ -18,6 +18,78 @@ suite("CLI dry-run process", () => {
     }
   });
 
+  test("case-colliding --var refusal creates no lineage", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-var-refusal-")
+    );
+    const stateHome = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-var-refusal-state-")
+    );
+    temporaryRoots.push(root, stateHome);
+    const workflow = path.join(root, "vars.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        vars: { module: "src/parser" },
+        steps: [{ type: "script", script: "echo hi" }],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["run", workflow, "--var", "MODULE=x", "--cwd", root],
+      root,
+      { CTRLYOKE_HOME: stateHome }
+    );
+
+    assert.strictEqual(result.code, 2, result.stderr);
+    const runsRoot = path.join(
+      stateHome,
+      "projects",
+      projectKey(root),
+      ".runs"
+    );
+    await assert.rejects(fs.access(runsRoot), { code: "ENOENT" });
+  });
+
+  test("unapproved secret-grant refusal creates no lineage", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-grant-refusal-")
+    );
+    const stateHome = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-grant-refusal-state-")
+    );
+    temporaryRoots.push(root, stateHome);
+    const workflow = path.join(root, "grant.ctrlyoke.json");
+    const grantName = `PENDING_${path
+      .basename(root)
+      .replace(/[^A-Za-z0-9]/g, "_")
+      .toUpperCase()}`;
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        steps: [{ type: "script", script: "echo hi", secrets: [grantName] }],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(["run", workflow, "--cwd", root], root, {
+      CTRLYOKE_HOME: stateHome,
+    });
+
+    assert.strictEqual(result.code, 2, result.stderr);
+    assert.match(result.stderr, new RegExp(grantName));
+    const runsRoot = path.join(
+      stateHome,
+      "projects",
+      projectKey(root),
+      ".runs"
+    );
+    await assert.rejects(fs.access(runsRoot), { code: "ENOENT" });
+  });
+
   test("returns the preview without running scripts or writing harness artifacts", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-dry-run-"));

@@ -1458,20 +1458,47 @@ async function runCommand(
 
   try {
     if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN) {
+      // Run file-based pre-dispatch checks before loadPromptFile creates a
+      // persisted draft lineage. Keep the checks in the same order as the
+      // normal run path; loading below still owns defaults and working-file
+      // creation once all refusals have passed.
+      let preflightWorkflow:
+        Awaited<ReturnType<PromptFileParser["parsePromptFile"]>> | undefined;
+      if (!options.prompt && resolvedFile) {
+        const preflightParser = new PromptFileParser(
+          platform,
+          userFeedbackSink
+        );
+        preflightWorkflow = await preflightParser.parsePromptFile(resolvedFile);
+        if (preflightWorkflow) {
+          await exitUnlessTrustDecided(
+            workflowExternalRootsTrustRequest(
+              preflightWorkflow,
+              workingDir,
+              resolvedFile
+            )
+          );
+          mergeCliVarsIntoWorkflow(preflightWorkflow, config.vars);
+          await exitUnlessTrustDecided(
+            secretGrantsTrustRequest(
+              preflightWorkflow,
+              workingDir,
+              resolvedFile
+            )
+          );
+        }
+      }
+
       if (options.prompt) {
         instance.loadPromptString(options.prompt);
       } else {
-        const loaded = await instance.loadPromptFile(resolvedFile!);
+        const loaded = await instance.loadPromptFile(
+          resolvedFile!,
+          preflightWorkflow
+        );
         if (!loaded) {
           throw new Error(`Failed to load workflow file: ${resolvedFile}`);
         }
-        await exitUnlessTrustDecided(
-          workflowExternalRootsTrustRequest(
-            instance.promptQueue.getWorkflowFile(),
-            workingDir,
-            resolvedFile!
-          )
-        );
       }
 
       const overrides = buildCliPropertyOverrides(options, harness);
@@ -1503,14 +1530,6 @@ async function runCommand(
         instance.promptQueue.updateWorkflowProperty("vars", workflowFile.vars);
         await instance.promptQueue.updateWorkingFile(true);
       }
-
-      await exitUnlessTrustDecided(
-        secretGrantsTrustRequest(
-          instance.promptQueue.getWorkflowFile(),
-          workingDir,
-          resolvedFile
-        )
-      );
 
       if (interrupted) {
         await instance.stop();

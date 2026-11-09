@@ -8,6 +8,7 @@ import {
   EXECUTION_STATES,
   type WorkflowValidationWarning,
 } from "../../types/CtrlYokeTypes";
+import type { ParsedPromptFile } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
@@ -75,13 +76,17 @@ export class PromptFileLoader {
    */
   async loadPromptFile(
     filePath: string,
-    workspaceFolderPath?: string
+    workspaceFolderPath?: string,
+    parsedPromptFile?: ParsedPromptFile | null
   ): Promise<string | undefined> {
     try {
       Log.debug(`[PromptFileLoader] Loading prompt file: ${filePath}`);
 
       // Parse prompt file (parser handles all formats including .prompt.md)
-      const promptFile = await this.promptFileParser.parsePromptFile(filePath);
+      const promptFile =
+        parsedPromptFile === undefined
+          ? await this.promptFileParser.parsePromptFile(filePath)
+          : parsedPromptFile;
 
       if (!promptFile || !promptFile.steps) {
         notifyUserFeedback(

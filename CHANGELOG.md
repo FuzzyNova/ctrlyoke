@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ctrlyoke run` now checks workflow variables and trust grants before creating
+  a workflow lineage, so a refusal leaves no empty history entry.
 - Script verdicts now show the effective expected and actual values for valueless comparisons and exit-code fallbacks.
 - Unknown-property suggestions now use keys valid for the affected step kind.
 - `ctrlyoke history steps` now excludes idle time between retries from

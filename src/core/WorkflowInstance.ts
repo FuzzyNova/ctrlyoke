@@ -49,6 +49,7 @@ import {
   DynamicQueueConfig,
   deriveWorkflowFinalStepSummary,
   type RunRef,
+  type ParsedPromptFile,
   type WorkflowKey,
   type WorkflowLineageCreationOptions,
   type RunnerHostIdentity,
@@ -1566,7 +1567,10 @@ export class WorkflowInstance
   /**
    * Load a prompt file into the dashboard without executing.
    */
-  async loadPromptFile(filePath: string): Promise<boolean> {
+  async loadPromptFile(
+    filePath: string,
+    parsedPromptFile?: ParsedPromptFile | null
+  ): Promise<boolean> {
     // Clear queue to reset cached workflow name — ensures fresh name from filename
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
@@ -1575,7 +1579,8 @@ export class WorkflowInstance
 
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,
-      this.workspaceFolderPath
+      this.workspaceFolderPath,
+      parsedPromptFile
     );
 
     if (!workingFilePath) {
@@ -1583,7 +1588,10 @@ export class WorkflowInstance
       return false;
     }
 
-    const promptFile = await this.promptFileParser.parsePromptFile(filePath);
+    const promptFile =
+      parsedPromptFile === undefined
+        ? await this.promptFileParser.parsePromptFile(filePath)
+        : parsedPromptFile;
     if (!promptFile) {
       this.propagateWorkflowNameToIntegrations();
       return false;
