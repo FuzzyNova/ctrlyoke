@@ -513,5 +513,17 @@ suite("PromptCompletionProvider", () => {
         "a token at the start of a quoted string completes"
       );
     });
+
+    test("~ opens only for git change references, not a home path", async () => {
+      assert.strictEqual(
+        await completeAt(
+          "p.prompt.md",
+          "markdown",
+          "open ~/Documents",
+          "~/Documents"
+        ),
+        undefined
+      );
+    });
   });
 });

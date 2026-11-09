@@ -14,7 +14,7 @@ import {
   type CompletionTrigger,
 } from "@root/types/DashboardConstants";
 import { COMPLETION_KIND_ICONS } from "@root/types/SymbolKindConstants";
-import { findWordStartTriggerIndex } from "@root/utils/ReferenceBoundary";
+import { findPromptTriggerContext } from "@root/completions/PromptTriggerContext";
 import {
   DEFAULT_COMPLETION_ICON,
   findContextReferenceMatches,
@@ -357,71 +357,30 @@ export function findSlashCompletionContext(
   textBefore: string,
   lineFrom = 0
 ): { from: number; query: string } | null {
-  const slashIndex = findWordStartTriggerIndex(textBefore, "/");
-  if (slashIndex === -1) return null;
-
-  const query = textBefore.slice(slashIndex + 1);
-  if (!/^[a-zA-Z0-9:._-]*$/.test(query)) return null;
-
-  return { from: lineFrom + slashIndex, query };
+  const context = findPromptTriggerContext(textBefore);
+  return context?.trigger === COMPLETION_TRIGGERS.SLASH
+    ? { from: lineFrom + context.index, query: context.query }
+    : null;
 }
 
-/** Resolve the trigger/query immediately before a CodeMirror completion cursor. */
+/**
+ * Resolve the trigger/query immediately before a CodeMirror completion cursor,
+ * using the same rules as the VS Code completion provider. Pass the escape of
+ * the string being edited so an `@` path opened with `\"` is recognised.
+ */
 export function findCustomCompletionContext(
   textBefore: string,
-  lineFrom = 0
+  lineFrom = 0,
+  escape?: InsertTextEscape
 ): { trigger: CompletionTrigger; query: string; from: number } | null {
-  const lastAtIndex = findWordStartTriggerIndex(textBefore, "@");
-  const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
-  const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
-  const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
-  const lastBangIndex = findWordStartTriggerIndex(textBefore, "!");
-  const slashContext = findSlashCompletionContext(textBefore, lineFrom);
-  const lastSlashIndex = slashContext ? slashContext.from - lineFrom : -1;
-
-  const maxIndex = Math.max(
-    lastSlashIndex,
-    lastAtIndex,
-    lastHashIndex,
-    lastTildeIndex,
-    lastDollarIndex,
-    lastBangIndex
-  );
-  if (maxIndex === -1) return null;
-
-  let trigger: CompletionTrigger;
-  let query: string;
-  if (maxIndex === lastSlashIndex) {
-    trigger = "/";
-    query = slashContext!.query;
-  } else if (maxIndex === lastAtIndex) {
-    trigger = "@";
-    query = textBefore.slice(lastAtIndex + 1);
-  } else if (maxIndex === lastHashIndex) {
-    trigger = "#";
-    query = textBefore.slice(lastHashIndex + 1);
-  } else if (maxIndex === lastTildeIndex) {
-    trigger = "~";
-    query = textBefore.slice(lastTildeIndex + 1);
-  } else if (maxIndex === lastDollarIndex) {
-    trigger = "$";
-    query = textBefore.slice(lastDollarIndex + 1);
-  } else {
-    trigger = "!";
-    query = textBefore.slice(lastBangIndex + 1);
-  }
-
-  const isInsideQuotedPath =
-    trigger === "@" && query.startsWith('"') && !query.slice(1).includes('"');
-  if (query.includes(" ") && !isInsideQuotedPath) return null;
-  if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(query)) return null;
-  if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(query)) return null;
-  if (trigger === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(query)) return null;
-  // Secret names intentionally stay uppercase-only. This also rejects `![` so
-  // Markdown image syntax never opens the secret dropdown.
-  if (trigger === "!" && !/^[A-Z0-9_]*$/.test(query)) return null;
-
-  return { trigger, query, from: lineFrom + maxIndex };
+  const context = findPromptTriggerContext(textBefore, escape);
+  return context
+    ? {
+        trigger: context.trigger,
+        query: context.query,
+        from: lineFrom + context.index,
+      }
+    : null;
 }
 
 // Stable identity for a #sym: reference, independent of its position in the

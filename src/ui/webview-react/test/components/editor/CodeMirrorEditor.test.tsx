@@ -719,6 +719,18 @@ describe("CodeMirrorEditor external reference completions", () => {
     expect(findCustomCompletionContext("Done!token")).toBeNull();
   });
 
+  it("matches the VS Code trigger rules for paths, URLs and escaped quotes", () => {
+    expect(findCustomCompletionContext("see ./x")).toBeNull();
+    expect(findSlashCompletionContext("open https://host")).toBeNull();
+    expect(findCustomCompletionContext("open https://host")).toBeNull();
+    expect(findCustomCompletionContext("see #src/über.ts")?.trigger).toBe("#");
+    expect(
+      findCustomCompletionContext('read @\\"my dir/', 10, (text) =>
+        text.replace(/"/g, '\\"')
+      )
+    ).toEqual({ trigger: "@", query: '"my dir/', from: 15 });
+  });
+
   it("finds slash-token completion contexts and allows namespace punctuation", () => {
     expect(findSlashCompletionContext("/", 4)).toEqual({ from: 4, query: "" });
     expect(findSlashCompletionContext(" /", 0)).toEqual({ from: 1, query: "" });

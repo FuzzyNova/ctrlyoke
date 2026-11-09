@@ -166,7 +166,8 @@ function createPromptTokenSource(
       const line = context.state.doc.lineAt(context.pos);
       const trigger = findCustomCompletionContext(
         line.text.slice(0, context.pos - line.from),
-        line.from
+        line.from,
+        getWorkflowInsertEscape(located.location)
       );
       if (trigger && trigger.from < valueStart) return null;
     }

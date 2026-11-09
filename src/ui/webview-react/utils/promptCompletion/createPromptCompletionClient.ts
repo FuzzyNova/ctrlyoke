@@ -135,7 +135,8 @@ export class PromptCompletionClient {
 
     const completionContext = findCustomCompletionContext(
       textBefore,
-      lineObj.from
+      lineObj.from,
+      escapeInsertText
     );
     if (!completionContext) {
       this.cache = null;

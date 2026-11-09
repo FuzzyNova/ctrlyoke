@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
-import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
 import { toVSCodeCompletionItem } from "./CompletionHelpers";
 import { getCompletionCore } from "./CompletionHelpers";
 import type { PlainCompletionItem } from "./CompletionCore";
@@ -16,16 +15,12 @@ import {
   type InsertTextEscape,
 } from "./WorkflowInsertEscape";
 import { getCtrlYokeSlashCompletions } from "./SlashTokenCompletionHelpers";
-import { findPartialSlashTokenStart } from "../utils/CtrlYokeSlashTokens";
+import { findPromptTriggerContext } from "./PromptTriggerContext";
+import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
 import {
   getDocumentPromptCodeRanges,
   isCursorInPromptCode,
 } from "./PromptCodeRanges";
-
-/**
- * Trigger character types for context-aware completions
- */
-type TriggerChar = "@" | "#" | "~" | "$" | "!" | "/";
 
 /**
  * Provides context-aware completions for ctrlyoke prompt files
@@ -58,31 +53,13 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     token: vscode.CancellationToken,
     _context: vscode.CompletionContext
   ): Promise<vscode.CompletionList | undefined> {
-    // Determine which trigger character is active
     const line = document.lineAt(position.line).text;
     const textBeforeCursor = line.substring(0, position.character);
-    const lastAtIndex = findWordStartTriggerIndex(textBeforeCursor, "@");
-    const lastHashIndex = findWordStartTriggerIndex(textBeforeCursor, "#");
-    const lastTildeIndex = findWordStartTriggerIndex(textBeforeCursor, "~");
-    const lastDollarIndex = findWordStartTriggerIndex(textBeforeCursor, "$");
-    const lastBangIndex = findWordStartTriggerIndex(textBeforeCursor, "!");
-    const lastSlashIndex = findPartialSlashTokenStart(textBeforeCursor);
-
-    // Determine which trigger is most recent (closest to cursor)
-    let triggerChar: TriggerChar | undefined;
-    let afterTrigger: string;
-
-    const maxIndex = Math.max(
-      lastAtIndex,
-      lastHashIndex,
-      lastTildeIndex,
-      lastDollarIndex,
-      lastBangIndex,
-      lastSlashIndex
-    );
-
-    if (maxIndex === -1) {
-      return undefined; // No trigger found
+    // A cheap check first, so ordinary typing never parses the document. Any
+    // escape makes it the most permissive form of the check below, so it never
+    // rejects a context the located check would accept.
+    if (!findPromptTriggerContext(textBeforeCursor, (text) => text)) {
+      return undefined;
     }
 
     const promptText = this.locatePromptText(document, position);
@@ -90,6 +67,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return undefined;
     }
     const { escape } = promptText;
+    const triggerContext = findPromptTriggerContext(textBeforeCursor, escape);
+    if (!triggerContext) {
+      return undefined;
+    }
 
     // References inside code are sent literally, so don't offer to build one.
     if (
@@ -101,48 +82,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return undefined;
     }
 
-    if (maxIndex === lastAtIndex) {
-      triggerChar = "@";
-      afterTrigger = textBeforeCursor.substring(lastAtIndex + 1);
-    } else if (maxIndex === lastHashIndex) {
-      triggerChar = "#";
-      afterTrigger = textBeforeCursor.substring(lastHashIndex + 1);
-    } else if (maxIndex === lastTildeIndex) {
-      triggerChar = "~";
-      afterTrigger = textBeforeCursor.substring(lastTildeIndex + 1);
-    } else if (maxIndex === lastDollarIndex) {
-      triggerChar = "$";
-      afterTrigger = textBeforeCursor.substring(lastDollarIndex + 1);
-    } else if (maxIndex === lastBangIndex) {
-      triggerChar = "!";
-      afterTrigger = textBeforeCursor.substring(lastBangIndex + 1);
-    } else {
-      triggerChar = "/";
-      afterTrigger = textBeforeCursor.substring(lastSlashIndex + 1);
-    }
-
-    // Don't provide completions if there's a space after trigger
-    // (except for @ inside a quoted path: @"path with spaces/...")
-    const atQuery =
-      triggerChar === "@" && escape && afterTrigger.startsWith('\\"')
-        ? afterTrigger.slice(1)
-        : afterTrigger;
-    const isInsideQuotedPath =
-      triggerChar === "@" &&
-      atQuery.startsWith('"') &&
-      !atQuery.slice(1).includes('"');
-    if (afterTrigger.includes(" ") && !isInsideQuotedPath) {
-      return undefined;
-    }
-    if (triggerChar === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(afterTrigger)) {
-      return undefined;
-    }
-    if (triggerChar === "!" && !/^[A-Z0-9_]*$/.test(afterTrigger)) {
-      return undefined;
-    }
-    if (triggerChar === "/" && !/^[\w:.-]*$/.test(afterTrigger)) {
-      return undefined;
-    }
+    const triggerChar = triggerContext.trigger;
+    // Handlers get the text as typed; the `@` handler reads an escaped quote
+    // opener itself to keep it in the filter text.
+    const afterTrigger = textBeforeCursor.substring(triggerContext.index + 1);
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {

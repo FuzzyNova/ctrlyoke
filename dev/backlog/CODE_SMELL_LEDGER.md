@@ -148,6 +148,11 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   Recommended order: the four bugs (MCP location, paged hooks, completion triggers,
   model fallback), then the duration formats with the cleanups.
 
+  Landed so far: the MCP location fix; the paged git hooks' expiry recovery; and the
+  completion triggers, now decided once in `findPromptTriggerContext`
+  (`src/completions/PromptTriggerContext.ts`), which both editors call. That last one
+  removes the completion-trigger entry from Deferred.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -194,7 +199,8 @@ still deferred.
     process, and still carries the parent's frozen value.
   - **The bug.** No fallback to settings when the variable is absent (skill mode,
     standalone registration); see
-    `dev/bugs/backlog/mcp-skill-mode-ignores-workspace-run-history-location.md`.
+    `dev/bugs/implemented/mcp-skill-mode-ignores-workspace-run-history-location.md`
+    (fixed).
   - **The missing warning is harmless.** It only fires when `CTRLYOKE_HOME` is inside
     the repo, and `ctrlyoke run` already logs it. Fold it in only if a shared
     bootstrap helper gets written.
@@ -278,17 +284,26 @@ still deferred.
     `GIT_NO_TIMEOUT` with `stdin: "ignore"`. Queries: 10 s. Whole-repo reads: 5 min.
     Large diffs: stream to the cap instead of a 100 MB buffer.
   - **Awaiting a decision on the `commitAll` timeout.** The rest is deferred.
-- Prompt completion trigger detection in `src/completions/PromptCompletionProvider.ts`
-  vs `src/ui/webview-react/utils/promptCompletion/promptCompletionResult.ts`: drifted
-  (`#`/`~` query validation, slash-token rules, escaped-quote `@` paths exist on only one
-  side).
-  _2026-11-09: **Decided.**_
-  - **The drift causes visible bugs**; see
-    `dev/bugs/backlog/prompt-completion-triggers-drift-between-editor-and-dashboard.md`.
-  - **A shared home exists.** The webview already imports pure `@root/completions/*`
-    and `@root/utils/*` modules, and `CtrlYokeSlashTokens.ts` has no VS Code imports.
-  - **Fix.** A new `src/completions/PromptTriggerContext.ts` that takes the
-    runtime-matching rule from each side.
+- Cancelled hosted-viewer page requests keep running on the server. The three git
+  fetchers in `src/ui/webview-react/utils/hostedApi.ts` (`workspaceCommitLog`,
+  `workspaceFileHistory`, `workspaceGitRefDiffPage`) take no cancel signal, so the
+  paged hooks' default fetchers drop theirs (`_signal`). _2026-11-09: deferred; no
+  user-visible bug._
+  - **A browser-only fix is pointless.** Passing the signal to `hostedFetch` (as
+    `workspaceTree` already does) only frees browser connections. No hosted viewer
+    route notices a client disconnect, including the directory listing, so the
+    server's git work runs to completion either way.
+  - **Pages cost real work.** Each commit-history page runs its own git command
+    (`getRecentCommits` in `materializeCommitLogPage`).
+  - **The real fix spans four layers:** an `AbortController` per route in
+    `CtrlYokeHostedServer.ts`, aborted when the response closes early; the signal
+    passed through the `HostedWorkspaceViewerService` page methods and their helpers;
+    a `signal` option on `execGit` (`src/utils/GitUtils.ts`) that reports a
+    cancelled call as aborted, not failed or timed out; then the browser half.
+  - **Size.** About 100–150 lines plus tests. Medium risk, because `execGit` is
+    shared by everything.
+  - **Value.** Low: each page is one bounded git command (10 s timeout), and the
+    waste only happens during fast scrolling.
 
 ## Ruled out
 

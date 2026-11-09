@@ -75,7 +75,11 @@ export function createWorkflowContextCompletionSource(
         })),
       };
     }
-    const trigger = findCustomCompletionContext(before, line.from);
+    const trigger = findCustomCompletionContext(
+      before,
+      line.from,
+      getEscape?.(context)
+    );
     if (trigger?.trigger === "$") {
       const workflowContext = getContext(context);
       if (!workflowContext) {

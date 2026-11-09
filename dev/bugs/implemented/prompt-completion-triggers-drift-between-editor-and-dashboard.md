@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by deferred code-smell review, claude-cli
 - **Area:** `src/completions/PromptCompletionProvider.ts`, `src/ui/webview-react/utils/promptCompletion/promptCompletionResult.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -37,7 +37,7 @@ Prompt-file completion and navigation layer. This directory owns VS Code complet
 If you add a new trigger or reference form, update all of these together:
 
 - `extension.ts` registration
-- `PromptCompletionProvider` trigger routing/context checks
+- `PromptTriggerContext.ts` trigger detection (shared by both editors) and `PromptCompletionProvider` routing
 - `CompletionHelpers` / `ContextReferenceBuilder`
 - `PromptLinkProvider`
 - `src/ui/PromptEditorSupportService.ts` if the dashboard should support it too
@@ -74,7 +74,9 @@ Multi-line key inserts are re-indented to the key's column in the core, because 
 
 For YAML, explicit replacement ranges are required; without them the YAML extension suppresses completions. Keep `CompletionList(..., true)` for trigger-based completions even though VS Code may visually duplicate entries; `false` breaks live refresh for symbol filtering.
 
-`/` opens the ctrlyoke `/skill:` and `/mcp:` tokens (`getCtrlYokeSlashCompletions`, the same source as the dashboard). Unlike the other triggers its item text includes the trigger, so its range starts on the `/`, and it only fires at a line start or after whitespace (`findSlashTokenStart`), so `./` and `src/` never open the list.
+`/` opens the ctrlyoke `/skill:` and `/mcp:` tokens (`getCtrlYokeSlashCompletions`, the same source as the dashboard). Unlike the other triggers its item text includes the trigger, so its range starts on the `/`, and it only fires where the runtime parser would resolve a token (`findPartialSlashTokenStart`), so `./`, `src/` and URLs never open the list.
+
+**Which trigger is active is decided once, in `findPromptTriggerContext` (`PromptTriggerContext.ts`).** The dashboard's CodeMirror editor (`findCustomCompletionContext`) and this provider both call it, so they open the same list in the same places. Before it existed the two copies drifted: the dashboard opened `/` inside `./x` and URLs, VS Code opened `~` on `~/Documents`, and the dashboard missed JSON-escaped `@\"` paths. Change a trigger's query rule there, never in a caller, and pass the string's insert escape so an escaped quote opener is recognised.
 </promptCompletionProvider>
 
 <completionHelpers>
