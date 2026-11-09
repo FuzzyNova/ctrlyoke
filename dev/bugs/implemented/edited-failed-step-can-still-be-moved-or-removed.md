@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`rewindTargetedFailure`, `removeStepsAtRun`, the reorder path), `src/core/PromptQueue.ts` (`rewindTerminalFailureForContinuation`, `updatePrompt`/`updateSteps`/`replaceStep`, `deletePrompts`, `reorderPendingPrompts`, insert paths), `src/core/WorkingFileManager.ts`, `src/utils/StepStatusDerivation.ts` (`getResumableTerminalFailureIndex`), `src/ui/webview-react/utils/stepCapabilities.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

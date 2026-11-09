@@ -71,6 +71,7 @@ import {
 } from "../StepIdentity";
 import {
   getResumableTerminalFailureIndex,
+  getProtectedTerminalFailureIndex,
   hasInFlightStep,
   hasStarted,
   terminalFailureMutationMessage,
@@ -893,6 +894,7 @@ export class RunContinuationService {
           _runtime: {
             ...step._runtime,
             startedAt,
+            rewoundFailure: undefined,
           },
         };
         const workingFile: WorkingFile = {
@@ -1020,7 +1022,7 @@ export class RunContinuationService {
         }
         for (const index of unique) {
           assertStepIndex(topology.steps.length, index, "remove");
-          const failureIndex = getResumableTerminalFailureIndex({
+          const failureIndex = getProtectedTerminalFailureIndex({
             executionState: source._runtime?.executionState,
             currentIndex: source._runtime?.currentIndex,
             steps: topology.steps,
@@ -1097,7 +1099,7 @@ export class RunContinuationService {
       runRef,
       expectedDefinitionRevision,
       (source, topology, currentIndex) => {
-        const failureIndex = getResumableTerminalFailureIndex({
+        const failureIndex = getProtectedTerminalFailureIndex({
           executionState: source._runtime?.executionState,
           currentIndex,
           steps: topology.steps,
@@ -1378,6 +1380,7 @@ export function rewindTargetedFailure(
   if (failureIndex !== index || !source._runtime) return;
   source._runtime = { ...source._runtime, currentIndex: index };
   steps[index] = resetStepRuntimeForRewind(steps[index]);
+  steps[index]._runtime = { ...steps[index]._runtime, rewoundFailure: true };
 }
 
 function isExecutionActiveState(state: ExecutionState | undefined): boolean {

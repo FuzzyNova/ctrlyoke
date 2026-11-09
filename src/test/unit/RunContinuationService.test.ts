@@ -15,6 +15,7 @@ import {
   assertEditableDuringExecution,
   RunContinuationService,
 } from "../../core/orchestration/RunContinuationService";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
 import type { ParallelGroupTopology } from "../../core/ParallelGroupTopology";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -1452,6 +1453,129 @@ suite("RunContinuationService addressed step mutations", () => {
     assert.deepStrictEqual(
       (JSON.parse(await fs.readFile(runFilePath, "utf8")) as WorkingFile).steps,
       before.steps
+    );
+  });
+
+  test("editing a rewound failure preserves its protected queue index", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-rewound-failure-")
+    );
+    await seedRun(EXECUTION_STATES.ERROR, 2, [
+      { prompt: "done", _runtime: { completedAt: 5 } },
+      {
+        prompt: "failed",
+        _runtime: {
+          stepId: "terminal-failure",
+          startedAt: 10,
+          completedAt: 20,
+          terminalStatus: "failed",
+          terminalFailure: true,
+        },
+      },
+      { prompt: "pending" },
+    ]);
+    const repository = new WorkflowLineageRepository();
+    const edited = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      { updates: { prompt: "edited failed" } },
+      1,
+      repository
+    );
+    assert.strictEqual(
+      edited.workingFile.steps![1]._runtime?.rewoundFailure,
+      true
+    );
+    await assert.rejects(
+      RunContinuationService.removeStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [1],
+        edited.definitionRevision,
+        repository
+      ),
+      /recorded history/i
+    );
+    await assert.rejects(
+      WorkingFileManager.insertStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { prompt: "inserted at failed index" },
+        edited.definitionRevision,
+        repository
+      ),
+      /recorded history/i
+    );
+    await assert.rejects(
+      RunContinuationService.reorderStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [2, 1],
+        edited.definitionRevision,
+        repository
+      ),
+      /recorded history/i
+    );
+    const stillFirst = await RunContinuationService.reorderStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [1, 2],
+      edited.definitionRevision,
+      repository
+    );
+    assert.strictEqual(stillFirst.workingFile.steps![1]._runtime?.rewoundFailure, true);
+    const claimed = await RunContinuationService.claimStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      "terminal-failure",
+      30,
+      repository
+    );
+    assert.strictEqual(claimed.stepIndex, 1);
+    assert.strictEqual(claimed.step?._runtime?.rewoundFailure, undefined);
+
+    await seedRun(EXECUTION_STATES.ERROR, 2, [
+      { prompt: "done", _runtime: { completedAt: 5 } },
+      {
+        prompt: "failed",
+        _runtime: {
+          stepId: "terminal-failure",
+          startedAt: 10,
+          completedAt: 20,
+          terminalStatus: "failed",
+          terminalFailure: true,
+        },
+      },
+      { prompt: "pending" },
+    ]);
+    const toggled = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      { updates: { enabled: false } },
+      1,
+      repository
+    );
+    assert.strictEqual(toggled.workingFile.steps![1]._runtime?.rewoundFailure, true);
+    await assert.rejects(
+      RunContinuationService.removeStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [1],
+        toggled.definitionRevision,
+        repository
+      ),
+      /recorded history/i
     );
   });
 

@@ -7,7 +7,7 @@ import {
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import { isWorkflowActive } from "./status";
-import { getResumableTerminalFailureIndex } from "@root/utils/StepStatusDerivation";
+import { getProtectedTerminalFailureIndex } from "@root/utils/StepStatusDerivation";
 
 export interface StepCapabilities {
   canEditColor: boolean;
@@ -75,7 +75,7 @@ export function getStepCapabilities(
     (("terminalStatus" in runtime && runtime.terminalStatus !== undefined) ||
       runtime.completedAt !== undefined);
   const editableFailure =
-    getResumableTerminalFailureIndex({
+    getProtectedTerminalFailureIndex({
       executionState: ctx.executionState,
       currentIndex: ctx.currentStep,
       steps: Array.from({ length: index + 1 }, (_, itemIndex) =>

@@ -109,6 +109,7 @@ import {
   hasInFlightStep as isStepInFlight,
   hasStarted,
   getResumableTerminalFailureIndex,
+  getProtectedTerminalFailureIndex,
   terminalFailureMutationMessage,
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
@@ -980,6 +981,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         ...remainingRuntime
       } = step._runtime;
       step._runtime = remainingRuntime;
+      step._runtime.rewoundFailure = true;
     }
     this.emitStateChange();
     await this.updateWorkingFile();
@@ -987,7 +989,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   private getResumableTerminalFailureIndex(): number | undefined {
-    return getResumableTerminalFailureIndex({
+    return getProtectedTerminalFailureIndex({
       executionState: this.stateMachine.status,
       currentIndex: this.state.currentIndex,
       steps: this.state.steps,
@@ -1716,7 +1718,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
         const claimedStep: WorkflowStep = {
           ...step,
-          _runtime: { ...step._runtime, startedAt },
+          _runtime: { ...step._runtime, startedAt, rewoundFailure: undefined },
         };
         state.steps[stepIndex] = claimedStep;
         if (this.workflowFile?.steps) {
@@ -2134,6 +2136,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         PARALLEL_GROUP_INSERT_POSITIONS.AFTER
       );
       const insertIndex = placement.insertedIndex;
+      const protectedFailureIndex = getProtectedTerminalFailureIndex({
+        executionState: this.stateMachine.status,
+        currentIndex: this.state.currentIndex,
+        steps: this.state.steps,
+      });
+      if (protectedFailureIndex === insertIndex) {
+        throw new Error(terminalFailureMutationMessage("reorder"));
+      }
 
       // Insert steps at the specified position
       const identifiedTopology = insertParallelGroupTopology(
@@ -2415,6 +2425,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       const insertIndex = placement.insertedIndex;
       this.assertPendingRewindSuffixIndex(insertIndex, "insert");
+      const protectedFailureIndex = getProtectedTerminalFailureIndex({
+        executionState: this.stateMachine.status,
+        currentIndex: this.state.currentIndex,
+        steps: this.state.steps,
+      });
+      if (protectedFailureIndex === insertIndex) {
+        throw new Error(terminalFailureMutationMessage("reorder"));
+      }
       // Validate the resolved destination: a request inside a live parallel
       // group is relocated after the group before it can shift started steps.
       this.assertEditableDuringExecution(insertIndex, "insert");

@@ -1803,6 +1803,32 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("editing a failed step keeps its history position protected", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+      await queue.updatePrompt(0, { prompt: "edited failed prompt" });
+
+      await assert.rejects(() => queue.deletePrompts([0]), /recorded history/i);
+      await assert.rejects(
+        () => queue.reorderPendingPrompts([1, 0, 2]),
+        /recorded history/i
+      );
+      assert.strictEqual(
+        (queue.getState().steps[0] as PromptStep).prompt,
+        "edited failed prompt"
+      );
+      assert.strictEqual(queue.getState().steps[0]._runtime?.rewoundFailure, true);
+    });
+
+    test("toggling a failed step keeps its history position protected", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+      await queue.updateSteps([0], { enabled: false });
+
+      await assert.rejects(() => queue.deletePrompts([0]), /recorded history/i);
+      assert.strictEqual(queue.getState().steps[0]._runtime?.rewoundFailure, true);
+    });
+
     test("does not rewind a non-terminal failure", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);

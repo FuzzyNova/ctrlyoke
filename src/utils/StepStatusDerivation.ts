@@ -39,7 +39,24 @@ export interface StepWithRuntimeStatus {
     completedAt?: number;
     terminalStatus?: PromptTerminalStatus;
     terminalFailure?: boolean;
+    rewoundFailure?: boolean;
   };
+}
+
+/** Queue index whose attempt history must remain attached to the failed step. */
+export function getProtectedTerminalFailureIndex(state: {
+  executionState: string | undefined;
+  currentIndex: number | undefined;
+  steps: readonly StepWithRuntimeStatus[];
+  resultStatus?: string;
+}): number | undefined {
+  const terminalIndex = getResumableTerminalFailureIndex(state);
+  if (terminalIndex !== undefined) return terminalIndex;
+  const index = state.currentIndex ?? -1;
+  return state.executionState === EXECUTION_STATES.ERROR && index >= 0 &&
+    state.steps[index]?._runtime?.rewoundFailure === true
+    ? index
+    : undefined;
 }
 
 /** Queue index of the failed step that continuation will run again. */

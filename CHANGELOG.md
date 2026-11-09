@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ctrlyoke step edit --prompt` and MCP `edit_step` now reject prompt updates on script steps instead of silently converting them to prompt steps.
 - Headless slash commands with arguments are now passed intact instead of having their arguments moved into a prompt file.
 - `ctrlyoke run` no longer reports streamed script output as truncated just because the script also wrote to stderr.
-- The failed queue step in an errored run can now be edited or enabled before continuing; it stays in place so its recorded history remains attached to it.
+- Editing or enabling the failed queue step before continuing no longer lets it be moved, removed or displaced by an inserted step, so its recorded history stays attached to it.
 - Exporting a pending run without a Git repository or first commit now creates a view-only bundle instead of failing.
 - Script stderr no longer appears as a verdict error; failed worktree setup still includes its stderr.
 - `ctrlyoke run` now prints script and condition stdout and stderr as the scripts run.

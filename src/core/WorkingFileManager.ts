@@ -80,7 +80,7 @@ import {
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 import {
-  getResumableTerminalFailureIndex,
+  getProtectedTerminalFailureIndex,
   terminalFailureMutationMessage,
 } from "../utils/StepStatusDerivation";
 import {
@@ -1720,6 +1720,14 @@ export class WorkingFileManager {
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
         const insertIndex = placement.insertedIndex;
+        const protectedFailureIndex = getProtectedTerminalFailureIndex({
+          executionState: source._runtime?.executionState,
+          currentIndex: source._runtime?.currentIndex,
+          steps,
+        });
+        if (protectedFailureIndex === insertIndex) {
+          throw new Error(terminalFailureMutationMessage("reorder"));
+        }
         const nextTopology = insertParallelGroupSteps(
           topology,
           requestedIndex,
@@ -1990,7 +1998,7 @@ export class WorkingFileManager {
           if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
             throw new Error(`Invalid prompt index: ${index}`);
           }
-          const failureIndex = getResumableTerminalFailureIndex({
+          const failureIndex = getProtectedTerminalFailureIndex({
             executionState: source._runtime?.executionState,
             currentIndex: source._runtime?.currentIndex,
             steps,
@@ -2112,7 +2120,7 @@ export class WorkingFileManager {
           parallelGroups: source.parallelGroups,
         });
         const currentIndex = source._runtime?.currentIndex ?? 0;
-        const failureIndex = getResumableTerminalFailureIndex({
+        const failureIndex = getProtectedTerminalFailureIndex({
           executionState: source._runtime?.executionState,
           currentIndex,
           steps: topology.steps,
