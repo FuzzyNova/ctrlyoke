@@ -33,13 +33,20 @@ export class ClaudeNotificationMonitor
   implements INotificationMonitor
 {
   describeHookError(rawHookData: unknown): string | undefined {
-    const data = rawHookData as {
-      error?: unknown;
-      error_details?: unknown;
-      last_assistant_message?: unknown;
-    } | undefined;
+    const data = rawHookData as
+      | {
+          error?: unknown;
+          error_details?: unknown;
+          last_assistant_message?: unknown;
+        }
+      | undefined;
     const error = data?.error as { message?: unknown } | undefined;
-    for (const value of [error?.message, data?.error, data?.error_details, data?.last_assistant_message]) {
+    for (const value of [
+      error?.message,
+      data?.error_details,
+      data?.last_assistant_message,
+      data?.error,
+    ]) {
       if (typeof value === "string" && value.trim()) return value.trim();
     }
     return undefined;

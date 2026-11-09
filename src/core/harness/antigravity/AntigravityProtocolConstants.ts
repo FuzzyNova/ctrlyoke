@@ -11,6 +11,16 @@ export const ANTIGRAVITY_WIRE_VALUES = {
 } as const;
 
 /**
+ * `terminationReason` values in the Stop hook's stdin (agy 1.5.3 capture in
+ * src/test/fixtures/harness-errors/antigravity/). A failed API turn still fires
+ * Stop, so ERROR is the only signal that the turn did not complete.
+ */
+export const ANTIGRAVITY_TERMINATION_REASONS = {
+  ERROR: "ERROR",
+  NO_TOOL_CALL: "NO_TOOL_CALL",
+} as const;
+
+/**
  * `entry.type` values from Antigravity's transcript protocol (SCREAMING_SNAKE_CASE).
  * Distinct vocabulary from `ANTIGRAVITY_TOOL_NAMES` below: a planner tool call's
  * `name` (e.g. "call_mcp_tool", "list_dir") is not a case-folded version of its

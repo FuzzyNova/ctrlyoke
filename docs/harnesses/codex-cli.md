@@ -95,6 +95,7 @@ separate harness policy and does not reduce that declaration.
 - With containment on, network access is off unless `sandbox_workspace_write.network_access` in your Codex `config.toml` turns it on. **On Windows it stays on regardless**: Codex's Windows sandbox blocks writes outside the writable roots, but does not block network access, even with `network_access = false` (checked with Codex 0.167.0). The writable roots include the workspace and approved external roots, temp directories, harness caches, the Git common directory, and for linked worktrees their own Git directory. Granting both Git directories lets contained steps stage and commit changes.
 - Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
 - In a headless run, ctrlyoke reads the step's output, including file diffs, from Codex's session log under `~/.codex/sessions` (or `$CODEX_HOME/sessions`). `codex exec --json` reports a changed file without its contents, so stdout supplies only the session ID and request errors such as an unknown model.
+- An interactive turn that fails with an API error fails the step with Codex's error text, read from the session log, although Codex fires no Stop hook for it.
 - Before resuming, ctrlyoke checks the local rollout store by thread ID. If the
   rollout is missing, or Codex reports `thread <id> not found`, it starts a new
   session and shows a warning in the step output.

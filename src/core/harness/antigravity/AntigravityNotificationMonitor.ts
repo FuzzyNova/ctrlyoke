@@ -6,6 +6,7 @@ import {
   buildHookTimeoutOptions,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
+import { ANTIGRAVITY_TERMINATION_REASONS } from "./AntigravityProtocolConstants";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {
   HOOK_CAVEAT_CODES,
@@ -42,6 +43,16 @@ export class AntigravityNotificationMonitor
   implements INotificationMonitor
 {
   readonly supportsSessionStart = true;
+
+  /** agy fires Stop after an API error, reporting it through terminationReason. */
+  override describeStopFailure(rawHookData: unknown): string | undefined {
+    const data = rawHookData as
+      { terminationReason?: unknown; error?: unknown } | undefined;
+    if (data?.terminationReason !== ANTIGRAVITY_TERMINATION_REASONS.ERROR) {
+      return undefined;
+    }
+    return typeof data.error === "string" ? data.error.trim() : "";
+  }
 
   static readonly EVENT_MAP: Partial<Record<HookEvent, AntigravityHookKey>> = {
     sessionStart: "PreInvocation",

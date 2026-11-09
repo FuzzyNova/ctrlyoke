@@ -13,6 +13,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   type InteractiveTerminalMode,
 } from "../../../types/DashboardConstants";
+import { HARNESS_REPORTED_ERROR } from "./interfaces/INotificationMonitor";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
@@ -1079,7 +1080,7 @@ export class CliExecutionRunner {
     } else if (result.failureKind === FAILURE_KINDS.HARNESS_ERROR) {
       this.deps.runtimeState.setFailureReason(
         this.deps.failureTracker.markHarnessError(
-          result.failureMessage ?? "Harness reported an error",
+          result.failureMessage ?? HARNESS_REPORTED_ERROR,
           result.failureDetail,
           result.failureSource
         )
@@ -1176,7 +1177,7 @@ export class CliExecutionRunner {
             this.deps.failureTracker.markHarnessError(
               collected.failureMessage ||
                 collected.cliResult.error ||
-                "Harness reported an error"
+                HARNESS_REPORTED_ERROR
             )
           );
         } else if (collected.failureKind === FAILURE_KINDS.TIMEOUT) {

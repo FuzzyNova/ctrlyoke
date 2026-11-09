@@ -42,6 +42,58 @@ suite("AntigravityNotificationMonitor", () => {
     }
   });
 
+  for (const { fixture, completed } of [
+    { fixture: "interactive-stop-hook-error.json", completed: false },
+    { fixture: "interactive-stop-hook-success.json", completed: true },
+  ]) {
+    test(`classifies the captured Stop payload ${fixture}`, async () => {
+      const monitor = new AntigravityNotificationMonitor();
+      const tempDir = makeTempDir("ctrlyoke-antigravity-stop-");
+      const rawHookData = JSON.parse(
+        fs.readFileSync(
+          path.resolve(
+            __dirname,
+            "../../../src/test/fixtures/harness-errors/antigravity",
+            fixture
+          ),
+          "utf8"
+        )
+      );
+      const sessionId = "conversation-123";
+      const stopFile = path.join(tempDir, `${sessionId}-stop.json`);
+
+      try {
+        await fs.promises.writeFile(
+          stopFile,
+          JSON.stringify({
+            hookEvent: "Stop",
+            sessionId,
+            status: "completed",
+            rawHookData,
+          }),
+          "utf8"
+        );
+
+        const result = await monitor.monitorForCompletion(
+          { directory: tempDir, timeoutMs: 200, pollMs: 25 },
+          sessionId,
+          new Date(Date.now() - 50)
+        );
+
+        assert.strictEqual(result.completed, completed);
+        if (completed) {
+          assert.strictEqual(result.kind, "completion");
+        } else {
+          assert.strictEqual(result.kind, "error");
+          assert.strictEqual(result.error, rawHookData.error);
+        }
+        assert.strictEqual(fs.existsSync(stopFile), false);
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+  }
+
   test("buildHookConfig registers PreInvocation for sessionStart", () => {
     const monitor = new AntigravityNotificationMonitor();
     const config = monitor.buildHookConfig(

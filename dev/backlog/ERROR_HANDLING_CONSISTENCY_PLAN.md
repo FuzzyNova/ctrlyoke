@@ -117,7 +117,7 @@ captured live (see §6).
   - **Qwen 0.26.7** hangs. Stop does not fire after a 401. The chat JSONL records
     `qwen-code.api_error` and a `request_lifecycle` ending `outcome: "error"`. ~558ef85
     consumes the `api_error`, but a turn that Qwen's retry recovers then fails
-    (`dev/bugs/backlog/qwen-retried-api-error-fails-recovered-turn.md`).
+    (`dev/bugs/implemented/qwen-retried-api-error-fails-recovered-turn.md`).
   - **Antigravity 1.5.3** succeeds silently. Stop **does** fire, with
     `terminationReason: "ERROR"` and the text in `error`, and `ctrlyoke-antigravity-hook.js`
     writes a normal stop file.
@@ -289,8 +289,8 @@ field:
 | Antigravity | n/a (but its Stop payload carries `terminationReason: "ERROR"` + `error`; see R4) ✅                                                                                             | stream-json `result` with `status: "ERROR"` → `error` ✅ (SYSTEM `ERROR_MESSAGE` is not written) |
 
 The Claude, OpenCode and Antigravity rows now rest on real captures (§6). The Claude
-monitor currently prefers the `error` category over `last_assistant_message`
-(`dev/bugs/backlog/claude-stopfailure-reports-error-category-instead-of-text.md`). The
+monitor now prefers `last_assistant_message` over the `error` category (fixed in Phase 7;
+`dev/bugs/implemented/claude-stopfailure-reports-error-category-instead-of-text.md`). The
 Copilot `session.error` capture confirms a session-level event with `data.message` and
 `data.errorType`. All of these fit the detection rules, and tool failures stay out.
 
@@ -503,9 +503,27 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
    `server --port`; `1e3`, `0x10`, whitespace-padded and blank values are rejected with
    Commander argument errors. The broader command-wide baseline snapshots and direct-exit
    sweep remain open.
-7. **Phase 7: R4 per-harness interactive coverage.** Depends on the live captures; one
+7. **Phase 7: R4 per-harness interactive coverage.** **Complete (2026-11-09)** for Codex,
+   Qwen and Antigravity. Depends on the live captures; one
    commit per harness. Update `docs/harnesses/compatibility.md` through
    `npm run check:docs`/`scripts/generate-compatibility-docs.mjs`.
+   - `ILogParser.getSessionError` returns a `SessionErrorSignal` `{ message, graceMs? }`.
+     With `graceMs`, `CliLogMonitor` waits that long and fails unless a record matching
+     `cancelsPendingSessionError` arrives first.
+   - Codex: a rollout `task_complete` with `error` fails the step at once.
+   - Qwen: a main-turn `request_lifecycle` ending `outcome: "error"` fails the step. Non-retryable
+     statuses fail at once. 429/5xx (and unknown statuses) wait
+     `QWEN_RETRYABLE_ERROR_GRACE_MS` (45 s, covering Qwen's 30 s retry cap plus jitter), and a
+     new main-turn lifecycle or `api_response` cancels the wait. Subagent requests are
+     ignored.
+   - Antigravity: `NotificationMonitorBase` asks the monitor's `describeStopFailure`. A Stop
+     with `terminationReason: "ERROR"` resolves as a harness error carrying agy's `error` text.
+   - Claude: StopFailure extraction prefers `last_assistant_message` over the `error`
+     category.
+   - The compatibility table is unchanged: `hooks.error` remains unsupported for all three,
+     because detection comes from the session log or the Stop payload, not an error hook.
+   - Still open: Antigravity headless extraction
+     (`dev/bugs/backlog/antigravity-headless-error-not-parsed-from-stream-json.md`).
 
 When this plan ships, move the ledger's "CLI error reporting" Deferred entry into the pass log.
 
@@ -528,7 +546,7 @@ turn in the same setup.
   - In the payload, `error` is a category string (`"unknown"`), and the provider text is in
     `last_assistant_message` (`"API Error: 400 …"`). There is no `error_details` field.
   - The current `describeHookError` returns the category
-    (`dev/bugs/backlog/claude-stopfailure-reports-error-category-instead-of-text.md`).
+    (`dev/bugs/implemented/claude-stopfailure-reports-error-category-instead-of-text.md`).
   - A 401 is retried (`attempt N/10`, with backoff), which is why the earlier probe never saw
     `StopFailure`.
   - Fixture: `src/test/fixtures/harness-errors/claude/stopfailure-hook-input.json`.
@@ -580,7 +598,7 @@ responseHeaders, responseBody, metadata } }`. `getOpenCodeErrorMessage`'s
     Fixture: `qwen/interactive-outer-retried-429-session-log.jsonl`.
   - So `api_error` marks one failed attempt, not the turn's outcome, and the detection added
     in ~558ef85 fails such a recovered turn
-    (`dev/bugs/backlog/qwen-retried-api-error-fails-recovered-turn.md`).
+    (`dev/bugs/implemented/qwen-retried-api-error-fails-recovered-turn.md`).
   - The original DashScope fixtures (`qwen/interactive-session-log.jsonl`, `…-pty-excerpt.txt`)
     are unchanged.
 - **Antigravity headless error — captured; Phase 2.** agy 1.5.3 is installed as `agy`; the

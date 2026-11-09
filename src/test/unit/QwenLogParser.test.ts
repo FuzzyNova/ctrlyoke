@@ -9,27 +9,98 @@ import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 
 const FIXTURE_ROOT = path.resolve(__dirname, "../../../src/test/fixtures/qwen");
-const ERROR_FIXTURE = path.resolve(
+const HARNESS_ERROR_ROOT = path.resolve(
   __dirname,
-  "../../../src/test/fixtures/harness-errors/qwen/interactive-session-log.jsonl"
+  "../../../src/test/fixtures/harness-errors/qwen"
 );
 
+function readHarnessErrorFixture(name: string): BaseCliEvent[] {
+  return fs
+    .readFileSync(path.join(HARNESS_ERROR_ROOT, name), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as BaseCliEvent);
+}
+
+/** Replay records as CliLogMonitor does: cancel a pending error, then check. */
+function replaySessionErrors(parser: QwenLogParser, events: BaseCliEvent[]) {
+  const signals: Array<{ index: number; message: string; graceMs?: number }> =
+    [];
+  const cancellations: number[] = [];
+  events.forEach((event, index) => {
+    if (parser.cancelsPendingSessionError(event)) cancellations.push(index);
+    const signal = parser.getSessionError(event);
+    if (signal) signals.push({ index, ...signal });
+  });
+  return { signals, cancellations };
+}
+
 suite("Qwen session API errors", () => {
-  test("emits a typed session error from captured API telemetry", async () => {
-    const tempDir = makeTempDir("qwen-api-error");
-    const filePath = path.join(tempDir, "session.jsonl");
-    fs.copyFileSync(ERROR_FIXTURE, filePath);
-    const events = await new QwenLogParser().readNewLines(filePath);
-    assert.deepStrictEqual(events, [
-      {
-        type: "ctrlyoke.session-error",
-        error:
-          "401 Invalid API-key provided. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#apikey-error",
-        errorType: "AuthenticationError",
-        statusCode: 401,
-      },
+  test("fails a non-retryable 401 when its request lifecycle ends in error", () => {
+    const events = readHarnessErrorFixture(
+      "interactive-401-lifecycle-session-log.jsonl"
+    );
+    const { signals } = replaySessionErrors(new QwenLogParser(), events);
+    assert.deepStrictEqual(signals, [
+      { index: 2, message: "401 stub: Incorrect API key provided" },
     ]);
-    removeTempDir(tempDir);
+  });
+
+  test("defers a retryable 429 and cancels it when Qwen's outer retry starts", () => {
+    const events = readHarnessErrorFixture(
+      "interactive-outer-retried-429-session-log.jsonl"
+    );
+    const { signals, cancellations } = replaySessionErrors(
+      new QwenLogParser(),
+      events
+    );
+    assert.strictEqual(signals.length, 1);
+    assert.strictEqual(
+      signals[0].message,
+      "429 stub: Rate limit reached (4/4)"
+    );
+    assert.ok(signals[0].graceMs && signals[0].graceMs > 30_000);
+    // The retry's own lifecycle start comes right after the failed attempt.
+    assert.ok(cancellations.some((index) => index > signals[0].index));
+  });
+
+  test("ignores an SDK-internal retry that never surfaces an api_error", () => {
+    const events = readHarnessErrorFixture(
+      "interactive-sdk-retried-429-session-log.jsonl"
+    );
+    assert.deepStrictEqual(
+      replaySessionErrors(new QwenLogParser(), events).signals,
+      []
+    );
+  });
+
+  test("ignores internal subagent requests", () => {
+    const parser = new QwenLogParser();
+    const internal = (uiEvent: Record<string, unknown>): BaseCliEvent => ({
+      type: "system",
+      subtype: "ui_telemetry",
+      systemPayload: { uiEvent },
+    });
+    parser.getSessionError(
+      internal({
+        "event.name": "qwen-code.api_error",
+        prompt_id: "session#managed-agent#0",
+        error_message: "internal failure",
+        status_code: 401,
+      })
+    );
+    assert.strictEqual(
+      parser.getSessionError(
+        internal({
+          "event.name": "request_lifecycle",
+          promptId: "session#managed-agent#0",
+          subagentId: "managed-agent",
+          phase: "ended",
+          outcome: "error",
+        })
+      ),
+      undefined
+    );
   });
 });
 

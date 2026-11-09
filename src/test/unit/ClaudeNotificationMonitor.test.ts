@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   buildHookTimeoutOptions,
@@ -9,8 +11,19 @@ import { ClaudeNotificationMonitor } from "../../core/harness/claude/ClaudeNotif
 suite("ClaudeNotificationMonitor", () => {
   test("extracts StopFailure error details and keeps synthetic messages", () => {
     const monitor = new ClaudeNotificationMonitor();
-    assert.strictEqual(monitor.describeHookError({ error: "rate limited" }), "rate limited");
-    assert.strictEqual(monitor.describeHookError({ message: "resume failed" }), undefined);
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../src/test/fixtures/harness-errors/claude/stopfailure-hook-input.json"
+    );
+    const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+    assert.strictEqual(
+      monitor.describeHookError(fixture),
+      fixture.last_assistant_message
+    );
+    assert.strictEqual(
+      monitor.describeHookError({ message: "resume failed" }),
+      undefined
+    );
   });
   test("builds native timeout options in typed units", () => {
     assert.deepStrictEqual(buildHookTimeoutOptions(undefined), {});

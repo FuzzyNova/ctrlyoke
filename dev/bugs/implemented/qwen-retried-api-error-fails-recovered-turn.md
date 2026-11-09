@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (Qwen Code 0.26.7)
 - **Area:** `src/core/harness/qwen/QwenLogParser.ts`, `src/core/harness/CliLogMonitor.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

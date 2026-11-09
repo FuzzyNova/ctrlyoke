@@ -21,7 +21,10 @@ import type {
   INotificationMonitor,
   NotificationResult,
 } from "./shared/interfaces/INotificationMonitor";
-import { describeHookErrorFallback } from "./shared/interfaces/INotificationMonitor";
+import {
+  describeHookErrorFallback,
+  HARNESS_REPORTED_ERROR,
+} from "./shared/interfaces/INotificationMonitor";
 import { mergeSubagentOutput } from "./shared/mergeSubagentOutput";
 import { InteractiveTurnStartWatchdog } from "./shared/InteractiveTurnStartWatchdog";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
@@ -230,6 +233,7 @@ export class CliLogMonitor {
       let draining = false;
       let timeoutHandle: NodeJS.Timeout | undefined;
       let cancellationInterval: NodeJS.Timeout | undefined;
+      let pendingSessionErrorHandle: NodeJS.Timeout | undefined;
       let watcher: fs.FSWatcher | undefined;
 
       const claimSettlement = (): boolean => {
@@ -246,6 +250,10 @@ export class CliLogMonitor {
         if (cancellationInterval) {
           clearInterval(cancellationInterval);
           cancellationInterval = undefined;
+        }
+        if (pendingSessionErrorHandle) {
+          clearTimeout(pendingSessionErrorHandle);
+          pendingSessionErrorHandle = undefined;
         }
       };
 
@@ -684,17 +692,32 @@ export class CliLogMonitor {
       // ──────────────────────────────────────────────────────
       const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
-        if (event.type === "ctrlyoke.session-error") {
-          const message =
-            typeof event.error === "string"
-              ? event.error
-              : "Harness reported an error";
-          void resolveFailure({
-            failureKind: FAILURE_KINDS.HARNESS_ERROR,
-            failureSource: FAILURE_SOURCES.SESSION_LOG,
-            failureMessage: message,
-          });
-          return;
+        if (
+          pendingSessionErrorHandle &&
+          this.deps.logParser.cancelsPendingSessionError?.(event)
+        ) {
+          clearTimeout(pendingSessionErrorHandle);
+          pendingSessionErrorHandle = undefined;
+        }
+        const sessionError = this.deps.logParser.getSessionError?.(event);
+        if (sessionError) {
+          const fail = () =>
+            void resolveFailure({
+              failureKind: FAILURE_KINDS.HARNESS_ERROR,
+              failureSource: FAILURE_SOURCES.SESSION_LOG,
+              failureMessage: sessionError.message,
+            });
+          if (sessionError.graceMs === undefined) {
+            fail();
+            return;
+          }
+          // The harness may retry; a later cancelling record clears this.
+          if (pendingSessionErrorHandle)
+            clearTimeout(pendingSessionErrorHandle);
+          pendingSessionErrorHandle = setTimeout(() => {
+            pendingSessionErrorHandle = undefined;
+            fail();
+          }, sessionError.graceMs);
         }
         if (
           this.deps.logParser.isTurnStartLogEvent?.(event, {
@@ -871,8 +894,7 @@ export class CliLogMonitor {
                       this.deps.notificationMonitor,
                       result.data
                     ) ||
-                    (result.error &&
-                    result.error !== "Harness reported an error"
+                    (result.error && result.error !== HARNESS_REPORTED_ERROR
                       ? result.error
                       : describeHookErrorFallback(result.data?.rawHookData)),
                   sessionIdOverride: sessionIdFromNotification,

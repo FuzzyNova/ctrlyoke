@@ -14,13 +14,16 @@ import type {
 } from "../../../../types/CtrlYokeTypes";
 
 /** Keep an error artifact actionable even when a harness omits its error text. */
+export const HARNESS_REPORTED_ERROR = "Harness reported an error";
 export function describeHookErrorFallback(rawHookData: unknown): string {
   const data = rawHookData as { message?: unknown } | undefined;
   if (typeof data?.message === "string" && data.message.trim()) {
     return data.message;
   }
-  Log.warn("[NotificationMonitorBase] Harness error hook contained no error text");
-  return "Harness reported an error";
+  Log.warn(
+    "[NotificationMonitorBase] Harness error hook contained no error text"
+  );
+  return HARNESS_REPORTED_ERROR;
 }
 
 export const HOOK_TIMEOUT_UNITS = {
@@ -110,6 +113,12 @@ export type HookConfig =
 export interface INotificationMonitor {
   /** Extract the harness's own error text from a native error-hook payload. */
   describeHookError?(rawHookData: unknown): string | undefined;
+  /**
+   * Return the failure text when a native Stop payload itself reports that the
+   * turn failed (Antigravity's `terminationReason: "ERROR"`); undefined means
+   * the Stop is a normal completion.
+   */
+  describeStopFailure?(rawHookData: unknown): string | undefined;
   /**
    * Whether this harness includes session IDs in notification filenames.
    *
@@ -257,6 +266,23 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     return HOOK_EVENT_NAMES.USER_PROMPT_SUBMIT;
   }
 
+  describeStopFailure?(rawHookData: unknown): string | undefined;
+
+  /** A Stop file is a completion unless the harness says its turn failed. */
+  private stopOutcome(data: { rawHookData?: unknown }): NotificationResult {
+    const failure = this.describeStopFailure?.(data.rawHookData);
+    if (failure !== undefined) {
+      Log.warn("[NotificationMonitorBase] Stop hook reported a failed turn");
+      return {
+        completed: false,
+        kind: NOTIFICATION_OUTCOME_KINDS.ERROR,
+        error: failure || HARNESS_REPORTED_ERROR,
+        data,
+      };
+    }
+    return { completed: true, kind: "completion", data };
+  }
+
   // ── Abstract (CLI-specific) ──────────────────────────────────────────────
 
   abstract buildHookConfig(
@@ -382,7 +408,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                   `[NotificationMonitorBase] Failed to cleanup Stop file: ${error}`
                 );
               }
-              return { completed: true, kind: "completion", data };
+              return this.stopOutcome(data);
             }
           }
         } else {
@@ -449,7 +475,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                     `[NotificationMonitorBase] Failed to cleanup Stop file: ${error}`
                   );
                 }
-                return { completed: true, kind: "completion", data };
+                return this.stopOutcome(data);
               }
             }
           }

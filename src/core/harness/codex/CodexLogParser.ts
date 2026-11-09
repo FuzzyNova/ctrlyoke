@@ -3,6 +3,7 @@ import * as path from "path";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
+  SessionErrorSignal,
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
@@ -182,6 +183,21 @@ function createCodexStreamState(): CodexStreamState {
 }
 
 export class CodexLogParser extends BaseLogParser {
+  /** A rollout `task_complete` carrying `error` ends the turn without a Stop hook. */
+  getSessionError(entry: BaseCliEvent): SessionErrorSignal | undefined {
+    if (entry.type !== CODEX_EVENT_TYPES.EVENT_MSG) return undefined;
+    const payload = entry.payload as
+      { type?: unknown; error?: { message?: unknown } } | undefined;
+    if (
+      payload?.type !== CODEX_PAYLOAD_TYPES.TASK_COMPLETE ||
+      typeof payload.error?.message !== "string" ||
+      !payload.error.message.trim()
+    ) {
+      return undefined;
+    }
+    return { message: payload.error.message.trim() };
+  }
+
   /** Check the Codex rollout store by ID without prompt matching. */
   probeSessionId(sessionId: string): SessionProbeResult {
     return this.findSessionFileRecursive(

@@ -117,6 +117,7 @@ files instead. See [Permissions](/workflows/permissions) for the modes, the patt
 
 - ctrlyoke registers its completion hooks in the workspace `.qwen/settings.json` for the duration of a run, then restores the file. MCP servers are passed per process with `--mcp-config`. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#qwen-code).
 - `error` hooks do not fire. See the [compatibility matrix](/harnesses/compatibility).
+- An interactive turn that fails with an API error fails the step with Qwen's error text, although Qwen fires no Stop hook for it. An error Qwen does not retry (such as a 401) fails at once. A rate limit or server error waits up to 45 seconds for Qwen's own retry, and a retry that succeeds does not fail the step.
 - `permissions.trustedExternalRoots` is not passed to Qwen; it has no `--add-dir` equivalent.
 - File references containing spaces are escaped on macOS and Linux. On Windows, ctrlyoke gives Qwen the quoted path and asks it to read generated prompt, agent, and skill files with its file tools.
 

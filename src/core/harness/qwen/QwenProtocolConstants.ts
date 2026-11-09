@@ -80,3 +80,28 @@ export const QWEN_AGENT_ARGUMENTS = {
  * sets it as well as passing `--sandbox=false`.
  */
 export const QWEN_SANDBOX_ENV = "QWEN_SANDBOX";
+
+/** `systemPayload.uiEvent["event.name"]` values in Qwen's chat JSONL telemetry. */
+export const QWEN_TELEMETRY_EVENTS = {
+  API_ERROR: "qwen-code.api_error",
+  API_RESPONSE: "qwen-code.api_response",
+  REQUEST_LIFECYCLE: "request_lifecycle",
+} as const;
+
+export const QWEN_REQUEST_LIFECYCLE_PHASES = {
+  STARTED: "started",
+  ENDED: "ended",
+} as const;
+
+export const QWEN_REQUEST_OUTCOMES = {
+  SUCCESS: "success",
+  ERROR: "error",
+} as const;
+
+/**
+ * How long a retryable API failure waits for Qwen's outer retry before the
+ * step fails. Qwen 0.26.7 retries 429/5xx up to 7 times with a 30 s delay cap
+ * plus jitter, and a retry starts a new request lifecycle with the same
+ * `promptId` (captured in src/test/fixtures/harness-errors/qwen/).
+ */
+export const QWEN_RETRYABLE_ERROR_GRACE_MS = 45_000;
