@@ -14,6 +14,7 @@ import type {
   WorkingFile,
   WorkingFileWorktreeRuntime,
   WorkflowKey,
+  WorkflowStep,
   WorkflowTokenTotals,
 } from "../../types/CtrlYokeTypes";
 import {
@@ -2162,6 +2163,65 @@ suite("WorkingFileManager", () => {
         await fs.readFile(runFilePath, "utf8")
       ) as WorkingFile;
       assert.strictEqual(after.definitionRevision, 2);
+    });
+
+    test("deleteStepsAtRun and updateStepsAtRun accept the terminal failure of an errored run", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun(
+        EXECUTION_STATES.IDLE,
+        true
+      );
+      const seedErroredRun = async () => {
+        const seeded = JSON.parse(
+          await fs.readFile(runFilePath, "utf8")
+        ) as WorkingFile;
+        seeded.definitionRevision = 1;
+        seeded._runtime = {
+          ...seeded._runtime!,
+          executionState: EXECUTION_STATES.ERROR,
+          currentIndex: 1,
+        };
+        seeded.steps![0] = {
+          ...seeded.steps![0],
+          _runtime: {
+            ...seeded.steps![0]._runtime,
+            startedAt: 1,
+            completedAt: 2,
+            terminalStatus: STEP_STATUS.FAILED,
+            terminalFailure: true,
+          },
+        } as WorkflowStep;
+        await writeTrustedRunFile(runFilePath, seeded);
+      };
+
+      await seedErroredRun();
+      const disabled = await WorkingFileManager.updateStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [0],
+        { enabled: false },
+        1
+      );
+      assert.strictEqual(disabled.workingFile.steps![0].enabled, false);
+      assert.strictEqual(disabled.workingFile._runtime?.currentIndex, 0);
+      assert.strictEqual(
+        disabled.workingFile.steps![0]._runtime?.startedAt,
+        undefined
+      );
+
+      await seedErroredRun();
+      const deleted = await WorkingFileManager.deleteStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [0],
+        1
+      );
+      assert.deepStrictEqual(
+        deleted.workingFile.steps!.map((step) => (step as PromptStep).prompt),
+        ["second"]
+      );
+      assert.strictEqual(deleted.workingFile._runtime?.currentIndex, 0);
     });
 
     test("deleteStepsAtRun validates atomically and writes one revision", async () => {

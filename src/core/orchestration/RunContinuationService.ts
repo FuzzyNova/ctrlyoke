@@ -1343,7 +1343,13 @@ function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
   return state !== undefined && IN_FLIGHT_EXECUTION_STATES.has(state);
 }
 
-function rewindTargetedFailure(
+/**
+ * When `index` is the resumable terminal failure of a settled ERROR run,
+ * rewind the run head to it and reset its runtime (keeping its step id), so the
+ * mutation guards treat it as the pending step continuation will run again.
+ * Mutates `source._runtime` and `steps` in place.
+ */
+export function rewindTargetedFailure(
   source: WorkingFile,
   steps: WorkflowStep[],
   index: number

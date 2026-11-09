@@ -69,7 +69,10 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
-import { assertEditableDuringExecution } from "./orchestration/RunContinuationService";
+import {
+  assertEditableDuringExecution,
+  rewindTargetedFailure,
+} from "./orchestration/RunContinuationService";
 import {
   assertDefinitionRevision,
   assertDescriptorRevision,
@@ -1845,7 +1848,7 @@ export class WorkingFileManager {
       runRef,
       expectedDefinitionRevision,
       (source) => {
-        const steps = source.steps ?? [];
+        const steps = [...(source.steps ?? [])];
         const unique = [...new Set(indices)];
         if (unique.length !== indices.length || unique.length === 0) {
           throw new Error(
@@ -1862,6 +1865,7 @@ export class WorkingFileManager {
               `Cannot update step ${index + 1} before pending rewind boundary ${rewindBoundary + 1}`
             );
           }
+          rewindTargetedFailure(source, steps, index);
           assertEditableDuringExecution(source, steps, index, "update");
           assertBulkWorkflowStepUpdateAllowed(
             steps[index],
@@ -1982,6 +1986,7 @@ export class WorkingFileManager {
           if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
             throw new Error(`Invalid prompt index: ${index}`);
           }
+          rewindTargetedFailure(source, steps, index);
           assertEditableDuringExecution(source, steps, index, "delete");
         }
         const nextTopology = deleteParallelGroupSteps(topology, unique);
