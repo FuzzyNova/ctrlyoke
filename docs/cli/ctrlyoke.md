@@ -700,6 +700,8 @@ facts come from streamed attempt lifecycle records, not output payloads.
 `finalStep.elapsedSeconds` is the sum of finished passes' elapsed time, or
 `null` when none have finished. A pending next final-step pass is reported as
 `finalStep.nextPass` (otherwise `null`); text output marks it as next too.
+Each pass's elapsed time sums its finished step-attempt durations, excluding
+time between attempts; `startedAt` and `completedAt` still bound the whole pass.
 
 ## `ctrlyoke history show`
 

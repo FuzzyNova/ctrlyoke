@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (`historyFinalPassRows`, `collectHistoryAttemptIndex`, `historyFinishedPassElapsedSeconds`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -68,3 +68,13 @@ meaning. Add a `src/test/unit` case for `history steps` (see the existing
 final-pass elapsed tests for `cli-history-steps-final-row-elapsed-always-blank.md`).
 The case should have two attempts in one pass separated by a gap and assert
 the gap is excluded. Add a **Fixed** entry to `CHANGELOG.md`.
+
+## Elapsed-Time Semantics
+
+Queue-step `_runtime.elapsed` is written from the completed prompt or script
+duration for the current attempt. When an end-condition retry starts another
+whole-step attempt, that attempt writes a new value, so the queue runtime field
+reflects the latest attempt rather than the sum of retries. Final-pass history
+uses lifecycle timestamps to measure active step-attempt time across the pass:
+it sums each completed attempt and excludes time between attempts. The pass's
+`startedAt` and `completedAt` continue to describe its full wall-clock span.

@@ -400,6 +400,8 @@ interface HistoryTargetAttempts {
   maxAttemptNumber: number;
   latest: HistoryAttemptIdentity;
   firstStartedAt: number;
+  /** Sum of completed step-attempt durations, excluding gaps between them. */
+  elapsedMs: number;
   /** Terminal state of `latest`'s own attempt, once it has one. */
   latestTerminalState?: TimelineAttemptTerminalState;
   latestTerminatedAt?: number;
@@ -426,6 +428,7 @@ async function collectHistoryAttemptIndex(
 ): Promise<HistoryAttemptIndex> {
   const targets = new Map<string, HistoryTargetAttempts>();
   const openPhases = new Map<string, string>();
+  const stepAttemptStarts = new Map<string, number>();
   const stepAttemptPhases = new Set<string>();
   let latest: HistoryAttemptIdentity | undefined;
   let finalPassCount = 0;
@@ -446,6 +449,7 @@ async function collectHistoryAttemptIndex(
       if (event.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         finalPassCount = Math.max(finalPassCount, event.target.loopIndex + 1);
       }
+      stepAttemptStarts.set(phaseKey, event.timestampMs);
       const existing = targets.get(targetKey);
       if (!existing) {
         targets.set(targetKey, {
@@ -454,6 +458,7 @@ async function collectHistoryAttemptIndex(
           maxAttemptNumber: event.attemptIndex + 1,
           latest: identity,
           firstStartedAt: event.timestampMs,
+          elapsedMs: 0,
         });
         continue;
       }
@@ -471,6 +476,11 @@ async function collectHistoryAttemptIndex(
     }
     openPhases.delete(phaseKey);
     const entry = targets.get(targetKey);
+    const attemptStartedAt = stepAttemptStarts.get(phaseKey);
+    stepAttemptStarts.delete(phaseKey);
+    if (attemptStartedAt !== undefined && entry) {
+      entry.elapsedMs += Math.max(0, event.timestampMs - attemptStartedAt);
+    }
     if (
       entry &&
       stepAttemptPhases.has(phaseKey) &&
@@ -1386,7 +1396,7 @@ function historyFinalPassRows(
       elapsedSeconds:
         completedAt === null
           ? null
-          : Math.max(0, (completedAt - entry.firstStartedAt) / 1000),
+          : entry.elapsedMs / 1000,
     });
   }
   return passes.sort((a, b) => a.pass - b.pass);

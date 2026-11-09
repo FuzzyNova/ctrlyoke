@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ctrlyoke history steps` now excludes idle time between retries from
+  final-step pass elapsed time.
 - Importing a history-only run bundle now flattens authored parallel groups before matching timeline attempts to steps, keeping imported step order, runtime state and history addressing aligned.
 - Importing a history-only run bundle now restores per-step completion and attempt timestamps from its timeline.
 - `ctrlyoke step edit --prompt` and MCP `edit_step` now reject prompt updates on script steps instead of silently converting them to prompt steps.
