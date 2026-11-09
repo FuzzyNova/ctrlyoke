@@ -926,9 +926,7 @@ async function runCommand(
     options.resumeSession === false
   ) {
     reportCliError(
-      new CliUsageError(
-        "--session-id cannot be used with --no-resume-session"
-      ),
+      new CliUsageError("--session-id cannot be used with --no-resume-session"),
       { json: options.json === true }
     );
   }
@@ -1611,31 +1609,29 @@ async function runCommand(
     process.exit(exitCode);
   } catch (err) {
     releaseLiveOutputState();
-    const message = getErrorMessage(err);
-    if (options.json) {
-      const state = instance.getQueueState();
-      const result = buildCliJsonResult({
-        state: undefined,
-        promptFile: instance.promptQueue.getWorkflowFile(),
-        ...resolveCliRunHarnessAndModel(
-          getCliReportingWorkflow(
-            instance.promptQueue.getWorkflowFile(),
-            operation,
-            options
+    reportCliError(err, {
+      json: options.json,
+      envelope: (message) => {
+        const state = instance.getQueueState();
+        return buildCliJsonResult({
+          state: undefined,
+          promptFile: instance.promptQueue.getWorkflowFile(),
+          ...resolveCliRunHarnessAndModel(
+            getCliReportingWorkflow(
+              instance.promptQueue.getWorkflowFile(),
+              operation,
+              options
+            ),
+            harness
           ),
-          harness
-        ),
-        workflowFileReference: file,
-        workspaceRoot: workingDir,
-        workflowKey: state.workflowKey,
-        runRef: state.runRef,
-        error: err,
-      });
-      process.stdout.write(JSON.stringify(result) + "\n");
-    } else {
-      console.error(chalk.red("Error: " + message));
-    }
-    process.exit(2);
+          workflowFileReference: file,
+          workspaceRoot: workingDir,
+          workflowKey: state.workflowKey,
+          runRef: state.runRef,
+          error: message,
+        });
+      },
+    });
   }
 }
 
@@ -2416,22 +2412,16 @@ async function validateCommand(
       strictPolicy = parseCliValidateStrictPolicy(options.strict);
     }
   } catch (error) {
-    const message = getErrorMessage(error);
-    if (options.json) {
-      process.stdout.write(
-        JSON.stringify(
-          buildCliValidationJsonResult({
-            success: false,
-            parsed: false,
-            workflowFile: resolvedFile,
-            error: message,
-          })
-        ) + "\n"
-      );
-    } else {
-      console.error(chalk.red(`Error: ${message}`));
-    }
-    process.exit(2);
+    reportCliError(error, {
+      json: options.json,
+      envelope: (message) =>
+        buildCliValidationJsonResult({
+          success: false,
+          parsed: false,
+          workflowFile: resolvedFile,
+          error: message,
+        }),
+    });
     return;
   }
 
@@ -2439,21 +2429,16 @@ async function validateCommand(
   try {
     await access(resolvedFile);
   } catch {
-    if (options.json) {
-      process.stdout.write(
-        JSON.stringify(
-          buildCliValidationJsonResult({
-            success: false,
-            parsed: false,
-            workflowFile: resolvedFile,
-            error: `File not found: ${resolvedFile}`,
-          })
-        ) + "\n"
-      );
-    } else {
-      console.error(chalk.red(`Error: File not found: ${resolvedFile}`));
-    }
-    process.exit(2);
+    reportCliError(new Error(`File not found: ${resolvedFile}`), {
+      json: options.json,
+      envelope: (message) =>
+        buildCliValidationJsonResult({
+          success: false,
+          parsed: false,
+          workflowFile: resolvedFile,
+          error: message,
+        }),
+    });
     return;
   }
 
@@ -2468,42 +2453,33 @@ async function validateCommand(
     if (!result) {
       const newerSchemaError = parser.lastNewerSchemaError;
       if (newerSchemaError) {
-        if (options.json) {
-          process.stdout.write(
-            JSON.stringify(
-              buildCliValidationJsonResult({
-                success: false,
-                parsed: false,
-                workflowFile: resolvedFile,
-                error: newerSchemaError.message,
-                errorCode: CLI_VALIDATE_ERROR_CODES.WORKFLOW_NEWER_FORMAT,
-              })
-            ) + "\n"
-          );
-        } else {
-          console.error(newerSchemaError.message);
-        }
-        process.exit(2);
-        return;
-      }
-      const message =
-        parser.lastParseError?.message ??
-        `${path.basename(resolvedFile)} failed validation`;
-      if (options.json) {
-        process.stdout.write(
-          JSON.stringify(
+        reportCliError(newerSchemaError, {
+          json: options.json,
+          envelope: (message) =>
             buildCliValidationJsonResult({
               success: false,
               parsed: false,
               workflowFile: resolvedFile,
               error: message,
-            })
-          ) + "\n"
-        );
-      } else {
-        console.error(chalk.red(`✗ ${message}`));
+              errorCode: CLI_VALIDATE_ERROR_CODES.WORKFLOW_NEWER_FORMAT,
+            }),
+        });
+        return;
       }
-      process.exit(2);
+      const message =
+        parser.lastParseError?.message ??
+        `${path.basename(resolvedFile)} failed validation`;
+      reportCliError(new Error(message), {
+        json: options.json,
+        envelope: (redacted) =>
+          buildCliValidationJsonResult({
+            success: false,
+            parsed: false,
+            workflowFile: resolvedFile,
+            error: redacted,
+          }),
+        writeErr: (redacted) => console.error(chalk.red(`✗ ${redacted}`)),
+      });
       return;
     }
 
@@ -2522,52 +2498,47 @@ async function validateCommand(
 
     if (options.strict !== undefined && result.warnings.length > 0) {
       const message = `Unknown workflow fields are errors in strict mode: ${result.warnings.map((warning) => warning.propertyPointer).join(", ")}`;
-      if (options.json) {
-        process.stdout.write(
-          JSON.stringify(
-            buildCliValidationJsonResult({
-              success: false,
-              parsed: true,
-              workflowFile: resolvedFile,
-              warnings,
-              error: message,
-            })
-          ) + "\n"
-        );
-      } else {
-        console.error(
-          chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
-        );
-        renderCliValidationWarnings(warnings);
-        console.error(chalk.red(`  ${message}`));
-      }
-      process.exit(2);
+      reportCliError(new Error(message), {
+        json: options.json,
+        envelope: (redacted) =>
+          buildCliValidationJsonResult({
+            success: false,
+            parsed: true,
+            workflowFile: resolvedFile,
+            warnings,
+            error: redacted,
+          }),
+        writeErr: () => {
+          console.error(
+            chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
+          );
+          renderCliValidationWarnings(warnings);
+          console.error(chalk.red(`  ${message}`));
+        },
+      });
       return;
     }
 
     if (!stepValidation.valid) {
       const message = stepValidation.errors.join("; ");
-      if (options.json) {
-        process.stdout.write(
-          JSON.stringify(
-            buildCliValidationJsonResult({
-              success: false,
-              parsed: true,
-              workflowFile: resolvedFile,
-              warnings,
-              error: message,
-            })
-          ) + "\n"
-        );
-      } else {
-        console.error(
-          chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
-        );
-        for (const error of stepValidation.errors) {
-          console.error(chalk.red(`  ${error}`));
-        }
-      }
-      process.exit(2);
+      reportCliError(new Error(message), {
+        json: options.json,
+        envelope: (redacted) =>
+          buildCliValidationJsonResult({
+            success: false,
+            parsed: true,
+            workflowFile: resolvedFile,
+            warnings,
+            error: redacted,
+          }),
+        writeErr: () => {
+          console.error(
+            chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
+          );
+          for (const error of stepValidation.errors)
+            console.error(chalk.red(`  ${error}`));
+        },
+      });
       return;
     }
 
@@ -2657,22 +2628,16 @@ async function validateCommand(
       capabilityRegistry.dispose();
     }
   } catch (err) {
-    const message = getErrorMessage(err);
-    if (options.json) {
-      process.stdout.write(
-        JSON.stringify(
-          buildCliValidationJsonResult({
-            success: false,
-            parsed: true,
-            workflowFile: resolvedFile,
-            error: message,
-          })
-        ) + "\n"
-      );
-    } else {
-      console.error(chalk.red("Error: " + message));
-    }
-    process.exit(2);
+    reportCliError(err, {
+      json: options.json,
+      envelope: (redacted) =>
+        buildCliValidationJsonResult({
+          success: false,
+          parsed: true,
+          workflowFile: resolvedFile,
+          error: redacted,
+        }),
+    });
   }
 }
 
@@ -2832,13 +2797,11 @@ async function trustWorkflowExternalRootsCommand(
   const parser = new PromptFileParser();
   const workflow = await parser.parsePromptFile(resolvedFile);
   if (!workflow) {
-    console.error(
-      chalk.red(
-        parser.lastNewerSchemaError?.message ??
-          `Error: Failed to load workflow file: ${resolvedFile}`
-      )
+    reportCliError(
+      parser.lastNewerSchemaError ??
+        new Error(`Failed to load workflow file: ${resolvedFile}`)
     );
-    process.exit(2);
+    return;
   }
 
   const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
