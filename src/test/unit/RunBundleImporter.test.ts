@@ -182,6 +182,107 @@ suite("RunBundleImporter", () => {
     assert.strictEqual(runFile.steps?.[2]._runtime, undefined);
   });
 
+  test("flattens authored parallel groups before projecting history runtime", async () => {
+    await fs.writeFile(
+      path.join(bundle, "workflow.ctrlyoke.json"),
+      JSON.stringify({
+        steps: [
+          { name: "one", prompt: "one" },
+          {
+            parallel: [
+              { name: "pa", prompt: "parallel a" },
+              { name: "pb", prompt: "parallel b" },
+            ],
+            failFast: true,
+          },
+          { name: "three", prompt: "three" },
+        ],
+      })
+    );
+    const attempts: Record<string, unknown>[] = [0, 1, 2, 3].flatMap(
+      (stepIndex) => [
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: 100 + stepIndex * 20,
+          target: { kind: "queue", stepIndex },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { kind: "prompt", startReason: "initial", prompt: "run" },
+        },
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+          timestampMs: 110 + stepIndex * 20,
+          target: { kind: "queue", stepIndex },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { terminalState: "completed" },
+        },
+      ]
+    ) as Record<string, unknown>[];
+    attempts.push({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs: 180,
+      target: { kind: "queue", stepIndex: 3 },
+      attemptIndex: 0,
+      definitionRevision: 1,
+      payload: {
+        cliOutput: {
+          cliCommand: "step three output",
+          elapsed: 1,
+          isStreaming: false,
+          workingDirectory: workspace,
+        },
+      },
+    });
+    await fs.writeFile(
+      path.join(bundle, "events.jsonl"),
+      attempts
+        .map((event, index) =>
+          JSON.stringify({ ...event, sequence: index + 1 })
+        )
+        .join("\n") + "\n"
+    );
+
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const runFile = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, result.workflowKey, result.runRef),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assert.deepStrictEqual(
+      runFile.steps?.map((step) => step.name),
+      ["one", "pa", "pb", "three"]
+    );
+    assert.deepStrictEqual(runFile.parallelGroups, [
+      {
+        id: runFile.parallelGroups?.[0].id,
+        startIndex: 1,
+        endIndex: 2,
+        failFast: true,
+      },
+    ]);
+    assert.ok(runFile.parallelGroups?.[0].id);
+    assert.deepStrictEqual(
+      runFile.steps?.map((step) => step._runtime?.startedAt),
+      [100, 120, 140, 160]
+    );
+    const attempt = await new RunOutputResolver().resolveAttempt(
+      WorkflowPaths.manifestPath(workspace, result.workflowKey, result.runRef),
+      { kind: "queue", stepIndex: 3 },
+      0,
+      0
+    );
+    assert.strictEqual(attempt?.output?.cliCommand, "step three output");
+  });
+
   test("preserves an existing terminal event and active duration when importing", async () => {
     const completedAt = 200;
     const activeExecutionMs = 115;

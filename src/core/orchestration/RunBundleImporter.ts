@@ -56,6 +56,7 @@ import type {
   WorkingFileRuntime,
 } from "../../types/CtrlYokeTypes";
 import { hasErrnoCode } from "../../utils/ErrorUtils";
+import { flattenParallelItems } from "../ParallelGroupTopology";
 
 export interface RunBundleImportOptions extends ReadRunBundleOptions {
   workspaceRoot: string;
@@ -194,6 +195,7 @@ export class RunBundleImporter {
     try {
       definition = rewriteAssets(header.definition) as Record<string, unknown>;
       if (!header.runtime) {
+        definition = flattenAuthoredParallelDefinition(definition);
         definition = projectAttemptRuntime(definition, attemptEvents);
       }
       runFile = header.runtime
@@ -448,6 +450,21 @@ export class RunBundleImporter {
       return rewritten;
     }
   }
+}
+
+/** History bundles store the authored form; timeline indices use flat steps. */
+function flattenAuthoredParallelDefinition(
+  definition: Record<string, unknown>
+): Record<string, unknown> {
+  if (!Array.isArray(definition.steps)) return definition;
+  const { topology } = flattenParallelItems(
+    definition.steps as Parameters<typeof flattenParallelItems>[0]
+  );
+  return {
+    ...definition,
+    steps: topology.steps,
+    parallelGroups: topology.parallelGroups,
+  };
 }
 
 function normalizeReferenceAssetPath(value: string): string {
