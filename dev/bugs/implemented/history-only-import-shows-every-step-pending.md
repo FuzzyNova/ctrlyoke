@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/orchestration/RunMaterializer.ts` (`materialize`), `src/core/orchestration/RunBundleImporter.ts`, `src/core/orchestration/RunBundleExporter.ts` (history-only bundles carry no `_runtime`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

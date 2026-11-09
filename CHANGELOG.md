@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Importing a history-only run bundle now restores per-step completion and attempt timestamps from its timeline.
 - `ctrlyoke step edit --prompt` and MCP `edit_step` now reject prompt updates on script steps instead of silently converting them to prompt steps.
 - Headless slash commands with arguments are now passed intact instead of having their arguments moved into a prompt file.
 - `ctrlyoke run` no longer reports streamed script output as truncated just because the script also wrote to stderr.

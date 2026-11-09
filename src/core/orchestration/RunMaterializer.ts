@@ -2,6 +2,9 @@ import * as fs from "fs";
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  NO_TURN_STARTED_STATUS,
+  PROMPT_TERMINAL_STATUS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import type {
@@ -12,8 +15,10 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   TIMELINE_EVENT_TYPES,
+  TIMELINE_ATTEMPT_TERMINAL_STATES,
   type WorkflowTimelineEventDraft,
   type WorkflowDefinitionSnapshot,
+  type TimelineAttemptTerminalState,
 } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
@@ -59,6 +64,21 @@ export class RunMaterializer {
   ) {}
 
   async materialize(input: RunMaterializationInput): Promise<MaterializedRun> {
+    // History-only bundles predate (and intentionally omit) the live working
+    // file. Preserve their step state by projecting it from the durable attempt
+    // events before the working file and its initial definition are written.
+    let events = input.events;
+    if (!input.workingFile) {
+      const buffered: WorkflowTimelineEventDraft[] = [];
+      for await (const event of input.events) buffered.push(event);
+      events = (async function* () {
+        yield* buffered;
+      })();
+      input = {
+        ...input,
+        definition: projectAttemptRuntime(input.definition, buffered),
+      };
+    }
     const executionState =
       input.runtimeState?.executionState ??
       input.workingFile?._runtime?.executionState ??
@@ -146,7 +166,7 @@ export class RunMaterializer {
         throw new Error("Could not initialize imported run history.");
       let batch: WorkflowTimelineEventDraft[] = [];
       let terminalTimestamp: number | undefined;
-      for await (const event of input.events) {
+      for await (const event of events) {
         if (event.eventType === TIMELINE_EVENT_TYPES.RUN_TERMINATED) {
           terminalTimestamp = event.timestampMs;
         }
@@ -221,4 +241,80 @@ export class RunMaterializer {
       throw error;
     }
   }
+}
+
+function projectAttemptRuntime(
+  definition: Record<string, unknown>,
+  events: WorkflowTimelineEventDraft[]
+): Record<string, unknown> {
+  const queue = Array.isArray(definition.steps)
+    ? (definition.steps as Array<Record<string, unknown>>)
+    : [];
+  const finalStep = definition.finalStep as Record<string, unknown> | undefined;
+  const projections = new Map<string, Record<string, unknown>>();
+  const keyOf = (target: unknown): string | undefined => {
+    if (!target || typeof target !== "object") return undefined;
+    const record = target as {
+      kind?: string;
+      stepIndex?: number;
+      loopIndex?: number;
+    };
+    if (
+      record.kind === FINAL_STEP_PHASES.QUEUE &&
+      Number.isInteger(record.stepIndex)
+    )
+      return `queue:${record.stepIndex}`;
+    if (
+      record.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+      Number.isInteger(record.loopIndex)
+    )
+      return FINAL_STEP_PHASES.FINAL_STEP;
+    return undefined;
+  };
+  const terminalStatus = (state: TimelineAttemptTerminalState) => {
+    switch (state) {
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED:
+        return PROMPT_TERMINAL_STATUS.COMPLETED;
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED:
+        return PROMPT_TERMINAL_STATUS.FAILED;
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED:
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.STOPPED:
+        return PROMPT_TERMINAL_STATUS.CANCELLED;
+      case NO_TURN_STARTED_STATUS:
+        return PROMPT_TERMINAL_STATUS.NO_TURN_STARTED;
+      default:
+        return undefined;
+    }
+  };
+  for (const event of events) {
+    const key = keyOf((event as { target?: unknown }).target);
+    if (!key) continue;
+    if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED) {
+      const projection = projections.get(key) ?? {};
+      projection.startedAt = event.timestampMs;
+      delete projection.completedAt;
+      delete projection.terminalStatus;
+      projections.set(key, projection);
+    } else if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED) {
+      const projection = projections.get(key) ?? {};
+      projection.completedAt = event.timestampMs;
+      if (typeof projection.startedAt === "number") {
+        projection.elapsed =
+          Math.max(0, event.timestampMs - projection.startedAt) / 1000;
+      }
+      projection.terminalStatus = terminalStatus(event.payload.terminalState);
+      projections.set(key, projection);
+    }
+  }
+  const withRuntime = (step: Record<string, unknown>, key: string) => {
+    const runtime = projections.get(key);
+    return runtime ? { ...step, _runtime: { ...runtime } } : step;
+  };
+  return {
+    ...definition,
+    steps: queue.map((step, index) => withRuntime(step, `queue:${index}`)),
+    ...(finalStep
+      ? { finalStep: withRuntime(finalStep, FINAL_STEP_PHASES.FINAL_STEP) }
+      : {}),
+  };
 }

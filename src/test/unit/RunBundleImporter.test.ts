@@ -103,6 +103,85 @@ suite("RunBundleImporter", () => {
     );
   });
 
+  test("rebuilds history-only step runtime from the latest attempts", async () => {
+    await fs.writeFile(
+      path.join(bundle, "workflow.ctrlyoke.json"),
+      JSON.stringify({
+        steps: [{ prompt: "one" }, { prompt: "rerun" }, { prompt: "not run" }],
+      })
+    );
+    const attempt = (
+      stepIndex: number,
+      attemptIndex: number,
+      started: number,
+      terminal?: string
+    ) => [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: started,
+        target: { kind: "queue", stepIndex },
+        runIndex: 0,
+        attemptIndex,
+        definitionRevision: 1,
+        payload: {
+          kind: "script",
+          startReason: attemptIndex ? "retry" : "initial",
+          prompt: "run",
+        },
+      },
+      ...(terminal
+        ? [
+            {
+              eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+              timestampMs: started + 10,
+              target: { kind: "queue", stepIndex },
+              runIndex: 0,
+              attemptIndex,
+              definitionRevision: 1,
+              payload: { terminalState: terminal },
+            },
+          ]
+        : []),
+    ];
+    await fs.writeFile(
+      path.join(bundle, "events.jsonl"),
+      [
+        ...attempt(0, 0, 100, "completed"),
+        ...attempt(1, 0, 110, "failed"),
+        ...attempt(1, 1, 130, "completed"),
+      ]
+        .map((event, index) =>
+          JSON.stringify({ ...event, sequence: index + 1 })
+        )
+        .join("\n") + "\n"
+    );
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const runFile = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, result.workflowKey, result.runRef),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assert.strictEqual(
+      runFile.steps?.[0]._runtime?.terminalStatus,
+      "completed"
+    );
+    assert.strictEqual(runFile.steps?.[0]._runtime?.startedAt, 100);
+    assert.strictEqual(runFile.steps?.[0]._runtime?.completedAt, 110);
+    assert.strictEqual(
+      runFile.steps?.[1]._runtime?.terminalStatus,
+      "completed"
+    );
+    assert.strictEqual(runFile.steps?.[1]._runtime?.startedAt, 130);
+    assert.strictEqual(runFile.steps?.[1]._runtime?.completedAt, 140);
+    assert.strictEqual(runFile.steps?.[2]._runtime, undefined);
+  });
+
   test("preserves an existing terminal event and active duration when importing", async () => {
     const completedAt = 200;
     const activeExecutionMs = 115;
