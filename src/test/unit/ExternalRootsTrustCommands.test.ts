@@ -84,4 +84,25 @@ suite("External roots trust command", () => {
       assert.strictEqual(io.questions.length, 1);
     }
   });
+
+  test("escapes displayed roots while recording the raw root", async () => {
+    const root = "/tmp/evil\u001b[2K\r/Users/me/\u202esafe";
+    const io = new RecordingCliTrustIo(true, [true]);
+    const { decisions, store } = createStore();
+
+    await trustExternalRootsCommand(
+      "workspace-id",
+      [root],
+      "This workspace requests external roots:",
+      "No pending roots.",
+      {},
+      io,
+      store
+    );
+
+    assert.ok(io.err.some((line) => line.includes("\\u001b[2K\\u000d")));
+    assert.ok(io.err.some((line) => line.includes("\\u202e")));
+    assert.ok(io.err.every((line) => !/[\u001b\r\u202e]/u.test(line)));
+    assert.deepStrictEqual(decisions[0]?.roots, [root]);
+  });
 });

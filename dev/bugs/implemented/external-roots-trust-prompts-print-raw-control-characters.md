@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (pass 28), claude-cli
 - **Area:** `src/cli/ExternalRootsTrustCommands.ts`, `src/ui/ExternalRootsApproval.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

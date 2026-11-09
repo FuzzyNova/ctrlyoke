@@ -7,6 +7,31 @@ import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import { evaluateFileAccess } from "../../utils/FileAccessPolicy";
 
 suite("ExternalRootsApproval — workspace state root", () => {
+  test("escapes displayed labels while keeping raw approval values", async () => {
+    const root = "/tmp/evil\u001b[2K\r/Users/me/\u202esafe";
+    let requestedItems: Array<{ value: string; label: string }> = [];
+    const port: UserInteractionPort = {
+      canPrompt: () => true,
+      requestChoice: async () => undefined,
+      requestBatchApproval: async (request) => {
+        requestedItems = request.items;
+        return { approvedValues: [], deniedValues: [] };
+      },
+    };
+
+    await promptBatchApprovalForPendingRoots(
+      "/workspace",
+      [root],
+      "Workspace requests an external root",
+      port,
+      { setDecisions: async () => {} }
+    );
+
+    assert.strictEqual(requestedItems[0]?.label, "/tmp/evil\\u001b[2K\\u000d/Users/me/\\u202esafe");
+    assert.strictEqual(requestedItems[0]?.value, root);
+    assert.ok(!/[\u001b\r\u202e]/u.test(requestedItems[0]?.label ?? ""));
+  });
+
   test("declining an outside state root records no access grant", async () => {
     const workspaceIdentity = path.resolve("/repos/project-state");
     const outsideRoot = path.resolve("/home/user");
