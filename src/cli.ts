@@ -77,6 +77,7 @@ import {
   type CliOutputTarget,
 } from "./cli/CliTerminalFormatter";
 import {
+  CLI_INTERRUPTED_EXIT_CODE,
   CLI_USAGE_EXIT_CODE,
   getExitCode as getTypedExitCode,
   handleCliError,
@@ -1404,6 +1405,7 @@ async function runCommand(
 
   // shutdown() requests a stop and waits for the execution to settle, which
   // guarantees the runner lock has been released before exit.
+  let interrupted = false;
   installTwoStageShutdown({
     signals: process,
     signalNames: [PROCESS_SIGNALS.INTERRUPT, PROCESS_SIGNALS.TERMINATE],
@@ -1433,9 +1435,13 @@ async function runCommand(
         console.log(chalk.yellow(message));
       }
     },
-    exitCodeForSignal: () => 5,
-    successExitCode: 5,
-    timeoutExitCode: 5,
+    exitCodeForSignal: () => CLI_INTERRUPTED_EXIT_CODE,
+    successExitCode: CLI_INTERRUPTED_EXIT_CODE,
+    timeoutExitCode: CLI_INTERRUPTED_EXIT_CODE,
+    exitOnSuccess: false,
+    onShutdownStarted: () => {
+      interrupted = true;
+    },
   });
 
   try {
@@ -1512,10 +1518,15 @@ async function runCommand(
 
     const state = instance.promptQueue.getState();
     const schemaRefusal = runStateRefusals.first();
-    const exitCode = applyRunStateRefusal(
+    let exitCode = applyRunStateRefusal(
       getExitCode(state, instance.promptQueue.getFinalStepRuntime()),
       schemaRefusal
     );
+    // Guardrail (6) and run-state refusal (2) retain precedence; interruption
+    // replaces only the generic workflow failure (1).
+    if (interrupted && exitCode === 1) {
+      exitCode = CLI_INTERRUPTED_EXIT_CODE;
+    }
     const completed = exitCode === 0;
 
     if (options.json) {

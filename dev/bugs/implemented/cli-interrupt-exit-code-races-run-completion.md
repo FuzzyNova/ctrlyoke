@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-08 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/cli.ts` (run signal handling around line 1404, run completion around lines 1513–1573), `src/cli/SignalShutdown.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
