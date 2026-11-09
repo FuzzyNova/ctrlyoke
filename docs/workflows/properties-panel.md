@@ -121,10 +121,8 @@ Field details: [`hooks`](/reference/workflow-schema#execution-properties-hooks).
 
 ![Permissions tab in Custom mode with allowed and denied tool lists](/screenshots/permissions-tab-800x1600.png){.panel-shot}
 
-- **Tool Permission Mode** — how much the harness may do without asking. In
-  **Custom** mode the harness gets the **Allowed Tools** and **Denied Tools**
-  lists, and a denied tool always wins. How strictly each harness applies them
-  differs; see [How each harness applies them](/workflows/permissions#how-each-harness-applies-them).
+Containment comes first, then approval:
+
 - **Sandbox** — terminal write containment, independent of approval. Choose
   **Inherit**, **On**, **Off** or **None**; Inherit names the value it resolves
   to (Off by default). Off turns each harness's sandbox off, and None passes no
@@ -132,12 +130,16 @@ Field details: [`hooks`](/reference/workflow-schema#execution-properties-hooks).
   the control when the harness can't sandbox. Steps can override the workflow
   value.
 - **Sandbox mode** — how strict On is: **Workspace write** or **Read-only**.
-  It has no effect unless Sandbox resolves to On. See
-  [Sandboxing](/workflows/permissions#sandboxing).
-- **Secrets** — secret environment variables this workflow may use.
+  It appears only while Sandbox resolves to On, because Off and None ignore it.
+  See [Sandboxing](/workflows/permissions#sandboxing).
 - **Trusted External Roots** — directories outside the workspace this workflow
   may use. **Inherit** keeps the roots from your settings. See
   [External file roots](/reference/settings#external-file-roots).
+- **Secrets** — secret environment variables this workflow may use.
+- **Tool Permission Mode** — how much the harness may do without asking. In
+  **Custom** mode the harness gets the **Allowed Tools** and **Denied Tools**
+  lists below it, and a denied tool always wins. How strictly each harness
+  applies them differs; see [How each harness applies them](/workflows/permissions#how-each-harness-applies-them).
 
 Not every harness enforces individual tool patterns. See
 [Permissions](/workflows/permissions) for the modes, the pattern syntax and what

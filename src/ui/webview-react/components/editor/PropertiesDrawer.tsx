@@ -27,6 +27,8 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
+  resolveSandboxRequest,
+  sandboxModeApplies,
   sandboxModeSelectOptions,
   sandboxModeSelectionFromValue,
   sandboxModeValueFromSelection,
@@ -413,6 +415,23 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
   const sandboxSupport = sandboxSupportDiagnostic(compatibility.diagnostics);
+  const inheritedSandbox = resolveSandboxRequest(
+    workflowProperties.sandbox,
+    globalSettings.sandbox
+  );
+  // A bulk selection whose steps disagree keeps the mode visible: some may be On.
+  const sandboxMixed =
+    multiSelection !== null &&
+    getBulkDisplayValue(
+      { multiSelection, bulkPatch },
+      steps,
+      PROMPT_PROPERTIES.SANDBOX
+    ) === MIXED_VALUE;
+  const sandboxModeVisible =
+    sandboxMixed ||
+    sandboxModeApplies(
+      resolveSandboxRequest(displayedProperties.sandbox, inheritedSandbox)
+    );
   const allowedDiagnostics = diagnosticsForPermissionField(
     permissionDiagnostics,
     "allowedTools"
@@ -1334,9 +1353,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       sandboxValueFromSelection(value)
                     )
                   }
-                  options={sandboxSelectOptions(
-                    workflowProperties.sandbox ?? globalSettings.sandbox
-                  )}
+                  options={sandboxSelectOptions(inheritedSandbox)}
                   disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
                 />
                 {sandboxSupport && (
@@ -1347,34 +1364,53 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   />
                 )}
               </div>
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="prop-sandbox-mode"
-                  className="text-xs font-semibold uppercase text-description-fg"
-                >
-                  {SANDBOX_UI_LABELS.MODE_FIELD}
-                </label>
-                <CustomSelect
-                  id="prop-sandbox-mode"
-                  schemaPath="sandboxMode"
-                  triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
-                  value={sandboxModeSelectionFromValue(
-                    displayedProperties.sandboxMode
-                  )}
-                  onChange={(value) =>
-                    setProperty(
-                      PROMPT_PROPERTIES.SANDBOX_MODE,
-                      sandboxModeValueFromSelection(value)
-                    )
+              {/* Mode only means something while the sandbox is On. */}
+              <AnimatedSection visible={sandboxModeVisible}>
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="prop-sandbox-mode"
+                    className="text-xs font-semibold uppercase text-description-fg"
+                  >
+                    {SANDBOX_UI_LABELS.MODE_FIELD}
+                  </label>
+                  <CustomSelect
+                    id="prop-sandbox-mode"
+                    schemaPath="sandboxMode"
+                    triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
+                    value={sandboxModeSelectionFromValue(
+                      displayedProperties.sandboxMode
+                    )}
+                    onChange={(value) =>
+                      setProperty(
+                        PROMPT_PROPERTIES.SANDBOX_MODE,
+                        sandboxModeValueFromSelection(value)
+                      )
+                    }
+                    options={sandboxModeSelectOptions(
+                      workflowProperties.sandboxMode ??
+                        globalSettings.sandboxMode
+                    )}
+                    disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX_MODE)}
+                  />
+                </div>
+              </AnimatedSection>
+
+              {/* Secrets — workflow grants plus locked inline !NAME references */}
+              <div className="flex flex-col gap-1 mt-2">
+                <SecretGrantsEditor
+                  value={displayedProperties.secrets}
+                  inheritedValue={resolvedSecrets}
+                  inlineSecretNames={inlineSecretNames}
+                  onChange={(secrets) =>
+                    setProperty(PROMPT_PROPERTIES.SECRETS, secrets)
                   }
-                  options={sandboxModeSelectOptions(
-                    workflowProperties.sandboxMode ?? globalSettings.sandboxMode
-                  )}
-                  disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX_MODE)}
+                  idPrefix="prop-secrets"
+                  title="Grant named credentials to this prompt. Inline !NAME references in prompt text are always granted. Reset all to inherit to remove the prompt override."
                 />
               </div>
-              {/* Permission Mode */}
-              <div className="flex flex-col gap-1">
+
+              {/* Permission Mode sits with the lists it governs. */}
+              <div className="flex flex-col gap-1 mt-2">
                 <label
                   htmlFor="prop-permission-mode"
                   className="text-xs font-semibold uppercase text-description-fg"
@@ -1434,20 +1470,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     harnessScopedOptionsDisabled
                   }
                   triggerTitle={harnessScopedTooltip ?? bulkEditDisabledReason}
-                />
-              </div>
-
-              {/* Secrets — workflow grants plus locked inline !NAME references */}
-              <div className="flex flex-col gap-1 mt-2">
-                <SecretGrantsEditor
-                  value={displayedProperties.secrets}
-                  inheritedValue={resolvedSecrets}
-                  inlineSecretNames={inlineSecretNames}
-                  onChange={(secrets) =>
-                    setProperty(PROMPT_PROPERTIES.SECRETS, secrets)
-                  }
-                  idPrefix="prop-secrets"
-                  title="Grant named credentials to this prompt. Inline !NAME references in prompt text are always granted. Reset all to inherit to remove the prompt override."
                 />
               </div>
 

@@ -353,7 +353,59 @@ describe("PropertiesDrawer sandbox", () => {
     );
   });
 
+  it("shows the sandbox mode only while the sandbox resolves to On", () => {
+    const mode = () => screen.queryByRole("button", { name: /^Sandbox mode,/ });
+    // resetSettings keeps globalSettings, so pin the default explicitly.
+    useSettingsStore.setState((state) => ({
+      globalSettings: { ...state.globalSettings, sandbox: false },
+    }));
+    const { unmount } = renderPermissionsDrawer();
+    // Inherit (Off) by default.
+    expect(mode()).not.toBeInTheDocument();
+    chooseSandbox("On");
+    expect(mode()).toBeInTheDocument();
+    unmount();
+
+    // None passes no sandbox flags, so the mode is meaningless there too.
+    useEditorStore.setState((state) => ({
+      properties: { ...state.properties, sandbox: null },
+    }));
+    const second = renderPermissionsDrawer();
+    expect(mode()).not.toBeInTheDocument();
+    second.unmount();
+
+    // Inheriting On from the workflow shows it.
+    useEditorStore.setState((state) => ({
+      properties: { ...state.properties, sandbox: undefined },
+    }));
+    useSettingsStore.setState((state) => ({
+      workflowProperties: { ...state.workflowProperties, sandbox: true },
+    }));
+    renderPermissionsDrawer();
+    expect(mode()).toBeInTheDocument();
+  });
+
+  it("places tool permission mode after the sandbox and secrets controls", () => {
+    renderPermissionsDrawer();
+    const sandbox = screen.getByRole("button", { name: /^Sandbox,/ });
+    const permissionMode = screen.getByRole("button", {
+      name: /^Tool Permission Mode/,
+    });
+    const allowed = screen.getByLabelText("Allowed Tools");
+    expect(
+      sandbox.compareDocumentPosition(permissionMode) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      permissionMode.compareDocumentPosition(allowed) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it("writes the sandbox mode and names the mode Inherit resolves to", () => {
+    useEditorStore.setState((state) => ({
+      properties: { ...state.properties, sandbox: true },
+    }));
     renderPermissionsDrawer();
     const mode = () => screen.getByRole("button", { name: /^Sandbox mode,/ });
     expect(mode()).toHaveTextContent("Inherit (Workspace write)");

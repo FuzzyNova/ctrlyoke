@@ -1060,6 +1060,38 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     ).toHaveTextContent("Inherit");
   });
 
+  it("shows sandbox mode only when the sandbox resolves to On, and groups permissions after containment", () => {
+    const mode = () => screen.queryByRole("button", { name: /^Sandbox mode/ });
+    useSettingsStore.setState((state) => ({
+      globalSettings: { ...state.globalSettings, sandbox: false },
+    }));
+    const { unmount } = render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+    expect(mode()).not.toBeInTheDocument();
+
+    const roots = screen.getByRole("button", {
+      name: /^Trusted External Roots/,
+    });
+    const permissionMode = screen.getByRole("button", {
+      name: /^Tool Permission Mode/,
+    });
+    expect(
+      roots.compareDocumentPosition(permissionMode) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    unmount();
+
+    useSettingsStore.setState((state) => ({
+      globalSettings: { ...state.globalSettings, sandbox: true },
+    }));
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+    expect(mode()).toBeInTheDocument();
+    useSettingsStore.setState((state) => ({
+      globalSettings: { ...state.globalSettings, sandbox: false },
+    }));
+  });
+
   it("keeps reset and collapse as sibling controls", () => {
     render(<WorkflowPropertiesPanel />);
 

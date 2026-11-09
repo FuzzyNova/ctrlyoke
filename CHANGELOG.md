@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A shell opened from a workflow's **Terminal** tab now starts in the worktree that workflow runs in, the same folder its steps and scripts use, so you can resolve a merge or check `git status` there without changing directory. Workflows without a worktree still open shells in the workspace folder.
 - The output copy commands now say what they copy. In the output pane's right-click menu, **Copy All** is now **Copy All Responses**, **Copy Step Output** is **Copy Step Response**, and **Copy Full Output** is **Copy Step Transcript**. In the step menu, **Copy Output** is now **Copy Response** and **Copy Full Output** is **Copy Transcript**. The **Copy output** button at the end of each step is now **Copy response**. On a script step, which has no assistant response, the same commands read **Copy Output**, **Copy Step Output** and **Copy output**. Hover any of them to see what it includes.
 - **Export Output** has a **Copy to Clipboard** button that copies the same markdown, with the options you chose, instead of saving it to a file.
+- The **Permissions** tab of the workflow and step properties is reordered: **Sandbox**, **Sandbox mode**, **Trusted External Roots** and **Secrets** come first, then **Tool Permission Mode** directly above the **Allowed Tools** and **Denied Tools** lists it controls. **Sandbox mode** now appears only while the sandbox resolves to On, since Off and None ignore it. Settings → Workflow Defaults → Permissions still always shows it.
 
 ### Fixed
 

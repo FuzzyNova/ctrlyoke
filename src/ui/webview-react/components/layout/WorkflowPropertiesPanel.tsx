@@ -86,6 +86,8 @@ import {
   WORKTREE_MODES,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
+  resolveSandboxRequest,
+  sandboxModeApplies,
   sandboxModeSelectOptions,
   sandboxModeSelectionFromValue,
   sandboxModeValueFromSelection,
@@ -544,6 +546,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
   const sandboxSupport = sandboxSupportDiagnostic(compatibility.diagnostics);
+  const sandboxModeVisible = sandboxModeApplies(
+    resolveSandboxRequest(workflowProperties.sandbox, globalSettings.sandbox)
+  );
   const allowedDiagnostics = diagnosticsForPermissionField(
     compatibility.diagnostics,
     "allowedTools"
@@ -2510,73 +2515,65 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   )}
                 </FormField>
-                <FormField
-                  label={SANDBOX_UI_LABELS.MODE_FIELD}
-                  schemaPath="sandboxMode"
-                  htmlFor="settings-sandbox-mode"
-                >
-                  <CustomSelect
-                    id="settings-sandbox-mode"
+                {/* Mode only means something while the sandbox is On. */}
+                <AnimatedSection visible={sandboxModeVisible}>
+                  <FormField
+                    label={SANDBOX_UI_LABELS.MODE_FIELD}
                     schemaPath="sandboxMode"
-                    triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
-                    value={sandboxModeSelectionFromValue(
-                      workflowProperties.sandboxMode
-                    )}
-                    onChange={(value) => {
-                      const sandboxMode = sandboxModeValueFromSelection(value);
-                      postWorkflowPropertiesUpdate({ sandboxMode });
-                    }}
-                    options={sandboxModeSelectOptions(
-                      globalSettings.sandboxMode
-                    )}
-                  />
-                </FormField>
-                {/* Permission Mode */}
-                <FormField
-                  label="Tool Permission Mode"
-                  schemaPath="toolPermissions.mode"
-                  htmlFor="settings-permission-mode"
-                  description="Tool permission mode for CLI harnesses"
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.TOOL_PERMISSIONS}
-                      show={isDifferentFromGlobal(
-                        PROMPT_PROPERTIES.TOOL_PERMISSIONS
+                    htmlFor="settings-sandbox-mode"
+                  >
+                    <CustomSelect
+                      id="settings-sandbox-mode"
+                      schemaPath="sandboxMode"
+                      triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
+                      value={sandboxModeSelectionFromValue(
+                        workflowProperties.sandboxMode
                       )}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-                          workflowProperties.toolPermissions
-                        )
-                      }
+                      onChange={(value) => {
+                        const sandboxMode =
+                          sandboxModeValueFromSelection(value);
+                        postWorkflowPropertiesUpdate({ sandboxMode });
+                      }}
+                      options={sandboxModeSelectOptions(
+                        globalSettings.sandboxMode
+                      )}
                     />
-                  }
+                  </FormField>
+                </AnimatedSection>
+
+                <FormField
+                  label="Trusted External Roots"
+                  schemaPath="trustedExternalRoots"
+                  htmlFor="settings-trusted-external-roots-mode"
+                  description="Restrict this workflow to selected external directories, inherit the user and workspace roots, or disable external-root access."
                 >
                   <CustomSelect
-                    id="settings-permission-mode"
-                    schemaPath="toolPermissions.mode"
-                    triggerAriaLabel="Tool Permission Mode"
-                    value={permMode}
-                    onChange={(mode) => {
-                      handleToolPermissionsChange({
-                        mode: mode as ToolPermissionMode,
-                        allowedTools: allowedToolsInput,
-                        deniedTools: deniedToolsInput,
-                      });
-                    }}
+                    id="settings-trusted-external-roots-mode"
+                    schemaPath="trustedExternalRoots"
+                    triggerAriaLabel="Trusted External Roots"
+                    value={trustedRootsMode}
+                    onChange={handleTrustedRootsModeChange}
                     options={toSelectOptions(
-                      PERMISSION_MODE_OPTIONS_META,
-                      "toolPermissions.mode"
+                      TRUSTED_ROOTS_SELECTION_OPTIONS_META,
+                      "trustedExternalRoots"
+                    ).map((option) =>
+                      option.value === TRUSTED_ROOTS_MODES.INHERIT
+                        ? {
+                            ...option,
+                            label: `Inherit (${liveTrustedExternalRoots.length > 0 ? "Custom" : "None"})`,
+                          }
+                        : option
                     )}
-                    warning={
-                      modeDiagnostics.find(
-                        (diagnostic) =>
-                          diagnostic.severity ===
-                          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
-                      )?.message
-                    }
-                    warningId="settings-permission-mode-diagnostic"
                   />
+                  {trustedRootsMode === TRUSTED_ROOTS_MODES.CUSTOM && (
+                    <TrustedRootsListEditor
+                      entries={trustedRootsInput.map((path) => ({ path }))}
+                      showDecisionStatus={false}
+                      onAdd={handleTrustedRootAdd}
+                      onBrowse={handleBrowseTrustedRoot}
+                      onRemove={handleTrustedRootRemove}
+                    />
+                  )}
                 </FormField>
 
                 <FormField
@@ -2622,39 +2619,52 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   />
                 </FormField>
 
+                {/* Permission Mode sits with the lists it governs. */}
                 <FormField
-                  label="Trusted External Roots"
-                  schemaPath="trustedExternalRoots"
-                  htmlFor="settings-trusted-external-roots-mode"
-                  description="Restrict this workflow to selected external directories, inherit the user and workspace roots, or disable external-root access."
+                  label="Tool Permission Mode"
+                  schemaPath="toolPermissions.mode"
+                  htmlFor="settings-permission-mode"
+                  description="Tool permission mode for CLI harnesses"
+                  setAsDefaultButton={
+                    <SetAsDefaultButton
+                      property={PROMPT_PROPERTIES.TOOL_PERMISSIONS}
+                      show={isDifferentFromGlobal(
+                        PROMPT_PROPERTIES.TOOL_PERMISSIONS
+                      )}
+                      onSetDefault={() =>
+                        handleSetAsDefault(
+                          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+                          workflowProperties.toolPermissions
+                        )
+                      }
+                    />
+                  }
                 >
                   <CustomSelect
-                    id="settings-trusted-external-roots-mode"
-                    schemaPath="trustedExternalRoots"
-                    triggerAriaLabel="Trusted External Roots"
-                    value={trustedRootsMode}
-                    onChange={handleTrustedRootsModeChange}
+                    id="settings-permission-mode"
+                    schemaPath="toolPermissions.mode"
+                    triggerAriaLabel="Tool Permission Mode"
+                    value={permMode}
+                    onChange={(mode) => {
+                      handleToolPermissionsChange({
+                        mode: mode as ToolPermissionMode,
+                        allowedTools: allowedToolsInput,
+                        deniedTools: deniedToolsInput,
+                      });
+                    }}
                     options={toSelectOptions(
-                      TRUSTED_ROOTS_SELECTION_OPTIONS_META,
-                      "trustedExternalRoots"
-                    ).map((option) =>
-                      option.value === TRUSTED_ROOTS_MODES.INHERIT
-                        ? {
-                            ...option,
-                            label: `Inherit (${liveTrustedExternalRoots.length > 0 ? "Custom" : "None"})`,
-                          }
-                        : option
+                      PERMISSION_MODE_OPTIONS_META,
+                      "toolPermissions.mode"
                     )}
+                    warning={
+                      modeDiagnostics.find(
+                        (diagnostic) =>
+                          diagnostic.severity ===
+                          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                      )?.message
+                    }
+                    warningId="settings-permission-mode-diagnostic"
                   />
-                  {trustedRootsMode === TRUSTED_ROOTS_MODES.CUSTOM && (
-                    <TrustedRootsListEditor
-                      entries={trustedRootsInput.map((path) => ({ path }))}
-                      showDecisionStatus={false}
-                      onAdd={handleTrustedRootAdd}
-                      onBrowse={handleBrowseTrustedRoot}
-                      onRemove={handleTrustedRootRemove}
-                    />
-                  )}
                 </FormField>
 
                 {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}

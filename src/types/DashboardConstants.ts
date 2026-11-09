@@ -2190,6 +2190,27 @@ export function sandboxValueFromSelection(
   }
 }
 
+/**
+ * Resolve `sandbox` through its levels, most specific first (step → workflow →
+ * `defaults.sandbox`). `null` (None) is a value and stops the walk; only
+ * `undefined` inherits.
+ */
+export function resolveSandboxRequest(
+  ...levels: (SandboxRequest | undefined)[]
+): SandboxRequest | undefined {
+  return levels.find((level) => level !== undefined);
+}
+
+/**
+ * Whether `sandboxMode` has any effect: the mappers read it only under
+ * `sandbox: true`. Off and None pass no mode at all.
+ */
+export function sandboxModeApplies(
+  resolved: SandboxRequest | undefined
+): boolean {
+  return resolved === true;
+}
+
 /** Whether a value is an authored sandbox request (`true`, `false` or `null`). */
 export function isSandboxRequest(value: unknown): value is SandboxRequest {
   return value === null || typeof value === "boolean";
