@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/orchestration/RunBundleExporter.ts` (`getContinuationInfo`, `getRunBundleExportPreview`, `exportRunBundle`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
