@@ -587,6 +587,8 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       workingFile._runtime?.finalStep
     );
     const failedRuntime = workingFile.steps?.[currentIndex]?._runtime;
+    const stopReason = workingFile._runtime?.stopReason;
+    const failureMessage = failedRuntime?.failureMessage ?? stopReason?.message;
     const summary: WorkflowSummary = {
       id: workflowId,
       workflowKey,
@@ -598,13 +600,14 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       filePath: workingFilePath,
       workingFilePath,
       executionState,
+      stopReason,
       ...(executionState === EXECUTION_STATES.ERROR &&
-      failedRuntime?.failureMessage
+      failureMessage
         ? {
             failure: {
               stepLabel: formatStepTargetLabel(false, currentIndex),
-              kind: failedRuntime.failureKind ?? FAILURE_KINDS.UNKNOWN,
-              message: failedRuntime.failureMessage,
+              kind: failedRuntime?.failureKind ?? FAILURE_KINDS.UNKNOWN,
+              message: failureMessage,
             },
           }
         : {}),

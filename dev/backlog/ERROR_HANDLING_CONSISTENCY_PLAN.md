@@ -416,8 +416,9 @@ governing user-feedback toasts only.
   (`WorkflowExecutor.ts:5638`, `unknown`/`sessionRejected`) and the guardrail warning
   (`:5882`), so a stop never produces two toasts.
   - Check first that the CLI still prints the reason on stderr without them, because
-    `ConsoleUserFeedbackSink` was one of their outputs. The CLI's status-message line and
-    `--json` `error` already carry it; pin that with a CLI snapshot test.
+    `ConsoleUserFeedbackSink` was one of their outputs. Pin text stderr and the `--json`
+    `error` field with a CLI integration test; make the CLI final-summary path own either
+    output if the toast was the only source.
   - Other `notifyUserFeedback` uses (settings, terminal, startup) are unaffected.
 - 🔎 Confirm every workflow-stopping failure ends in `EXECUTION_STATES.ERROR`, not
   `STOPPED`, so it triggers the notification:
@@ -434,10 +435,16 @@ governing user-feedback toasts only.
   Any path that ends elsewhere either moves to `ERROR` or is added to
   `isWorkflowCompletionTransition` explicitly. A user-requested stop stays toast-free.
 
+  **Phase 3b complete (2026-11-09):** pinned CLI stderr and JSON `error` output in a
+  test-first commit, then removed the executor stop toasts. The CLI final summary now
+  prints stop/failure reasons to stderr, and the JSON error carries the same reason;
+  guardrail summaries populate `WorkflowSummary.failure` so the single completion
+  notification includes it. Retry and continue paths remain toast-free.
+
 - Tests: `CompletionNotificationFactory.test.ts` (body with step and reason, redaction,
-  truncation, `none`/`failuresOnly` gating); an executor test asserting exactly one
-  notification per stop and none per retry or continue; a hosted-server test that the
-  browser notification body matches.
+  truncation, `none`/`failuresOnly` gating); `NotificationManager.test.ts` asserts one
+  completion notice per failure, while executor tests assert no feedback toast per stop,
+  retry or continue; a hosted-server test that the browser notification body matches.
 - Docs: `docs/guide/notifications.md` says a "Workflow Failed" notification names the
   failing step and reason, and which settings turn it off. CHANGELOG _Changed_: failure
   notifications now include the failing step and reason, and the duplicate error popup is

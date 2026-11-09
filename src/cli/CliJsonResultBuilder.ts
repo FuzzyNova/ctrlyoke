@@ -699,6 +699,14 @@ function selectTopLevelError(
   finalStep: CliJsonFinalStep | null,
   finalStepRuntime: FinalStepRuntimeState | undefined
 ): CliJsonError | null {
+  if (state.status === EXECUTION_STATES.ERROR && state.stopReason) {
+    return {
+      step: null,
+      pass: null,
+      message: state.stopReason.message,
+      attempt: null,
+    };
+  }
   const terminalFailure = selectTerminalFailure(state, finalStepRuntime);
   if (terminalFailure?.kind === "queue") {
     const failedStep = steps[terminalFailure.index];
@@ -720,11 +728,15 @@ function selectTopLevelError(
   if (state.status !== EXECUTION_STATES.ERROR) {
     return null;
   }
+  const failedStep = steps.find((step) => step.error !== null);
   return {
-    step: null,
+    step: failedStep?.index ?? null,
     pass: null,
-    message: "Workflow ended with an error",
-    attempt: null,
+    message:
+      state.stopReason?.message ??
+      failedStep?.error ??
+      "Workflow ended with an error",
+    attempt: failedStep?.lastAttempt?.number ?? null,
   };
 }
 

@@ -962,10 +962,13 @@ suite("WorkflowExecutor condition shell reporting", () => {
 
     const context = makeContext(integration);
     const statusMessages: string[] = [];
+    const feedback: string[] = [];
     context.onStatusMessage = (_stepIndex, message) => {
       statusMessages.push(message);
     };
-    await makeExecutor(queue).execute(integration, context);
+    await makeExecutor(queue, undefined, undefined, {
+      notify: (message) => feedback.push(message.message),
+    }).execute(integration, context);
 
     assert.strictEqual(
       queue.getState().results[0].failureKind,
@@ -978,6 +981,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
       ),
       "expected the headless status output to include the failure reason"
     );
+    assert.deepStrictEqual(feedback, []);
   });
 
   test("prints harness failure reason when the workflow stops", async () => {
@@ -990,10 +994,13 @@ suite("WorkflowExecutor condition shell reporting", () => {
 
     const context = makeContext(integration);
     const statusMessages: string[] = [];
+    const feedback: string[] = [];
     context.onStatusMessage = (_stepIndex, message) => {
       statusMessages.push(message);
     };
-    await makeExecutor(queue).execute(integration, context);
+    await makeExecutor(queue, undefined, undefined, {
+      notify: (message) => feedback.push(message.message),
+    }).execute(integration, context);
 
     assert.ok(
       statusMessages.some((message) =>
@@ -1001,9 +1008,10 @@ suite("WorkflowExecutor condition shell reporting", () => {
       ),
       "expected the headless status output to include the failure reason"
     );
+    assert.deepStrictEqual(feedback, []);
   });
 
-  test("prints non-harness prompt failure reason as user feedback", async () => {
+  test("does not raise user feedback for a stopping prompt failure", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     (integration as any).lastFailureReason = "prompt transport rejected";
@@ -1015,10 +1023,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
       notify: (message) => feedback.push(message.message),
     }).execute(integration, makeContext(integration));
 
-    assert.ok(
-      feedback.some((message) => message.includes("prompt transport rejected")),
-      "expected headless error feedback to include the failure reason"
-    );
+    assert.deepStrictEqual(feedback, []);
   });
 
   test("re-sends an end-condition retry after a retry harness failure on fresh attempt indices", async () => {
@@ -4413,7 +4418,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
   test("still enforces the configured execution time limit", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
-    const executor = makeExecutor(queue);
+    const feedback: string[] = [];
+    const executor = makeExecutor(queue, undefined, undefined, {
+      notify: (message) => feedback.push(message.message),
+    });
     const context = makeContext(integration);
     context.dynamicQueueConfig.maxWorkflowExecutionTime = 1;
     queue.getRuntimeStateMachine().getActiveExecutionTime = () => 2_000;
@@ -4429,6 +4437,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     assert.deepStrictEqual(integration.sentPrompts, []);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+    assert.deepStrictEqual(feedback, []);
   });
 
   test("reads the workflow time limit from live settings", async () => {
@@ -4495,7 +4504,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
   test("records a queue-size stop reason for an oversized run", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
-    const executor = makeExecutor(queue);
+    const feedback: string[] = [];
+    const executor = makeExecutor(queue, undefined, undefined, {
+      notify: (message) => feedback.push(message.message),
+    });
     const context = makeContext(integration);
     queue.loadPrompts({ steps: [{ prompt: "one" }, { prompt: "two" }] });
     configService.setCliOverlay({ queue: { maxSteps: 1 } });
@@ -4510,6 +4522,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(stopReason?.code, GUARDRAIL_STOP_CODES.QUEUE_SIZE_LIMIT);
     assert.strictEqual(stopReason?.threshold, 1);
     assert.strictEqual(stopReason?.observed, 2);
+    assert.deepStrictEqual(feedback, []);
   });
 
   const runTimedOutStep = async (maxPromptTimeoutSec: number) => {
@@ -5464,7 +5477,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
   test("retries the same step when errorBehavior.onError is retry", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
-    const executor = makeExecutor(queue);
+    const feedback: string[] = [];
+    const executor = makeExecutor(queue, undefined, undefined, {
+      notify: (message) => feedback.push(message.message),
+    });
     let firstStepAttempts = 0;
 
     integration.processExitFailure = true;
@@ -5524,6 +5540,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.getState().results[1].status,
       STEP_STATUS.COMPLETED
     );
+    assert.deepStrictEqual(feedback, []);
   });
 });
 

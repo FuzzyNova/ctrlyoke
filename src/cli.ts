@@ -27,6 +27,7 @@ import {
   CLI_VALIDATE_ERROR_CODES,
   getHarnessDisplayName,
   STATUS_MESSAGE_SEVERITY,
+  STEP_STATUS,
   RUN_DEFINITION_DECISIONS,
 } from "./types/DashboardConstants";
 import type {
@@ -1590,6 +1591,18 @@ async function runCommand(
     if (!completed && schemaRefusal) {
       // stderr in every mode: `--json` stdout stays one JSON document.
       console.error(chalk.red("Error: " + schemaRefusal.message));
+    } else if (!completed) {
+      const failureMessage =
+        state.stopReason?.message ??
+        state.results.find((result) => result?.status === STEP_STATUS.FAILED)
+          ?.error ??
+        state.steps.find((step) => step._runtime?.failureMessage)?._runtime
+          ?.failureMessage;
+      if (failureMessage) {
+        // The final summary owns CLI failure output; executor feedback toasts
+        // are reserved for non-stopping events.
+        console.error(chalk.red("Error: " + failureMessage));
+      }
     }
 
     process.exit(exitCode);

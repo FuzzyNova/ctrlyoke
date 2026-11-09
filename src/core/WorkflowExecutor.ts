@@ -4,7 +4,7 @@ import {
   requireWorkspaceRoot,
 } from "../platform/PlatformAdapter";
 import type { DashboardHostActions } from "./HostPorts";
-import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
+import type { UserFeedbackSink } from "./UserFeedbackSink";
 import {
   PromptStep,
   ScriptStep,
@@ -181,7 +181,6 @@ import {
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
 import {
-  formatFinalPassPhrase,
   formatParallelStepsLabel,
 } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
@@ -580,7 +579,7 @@ export class WorkflowExecutor {
     private readonly endConditionHandler: EndConditionHandler,
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly platform: PlatformAdapter,
-    private readonly userFeedbackSink?: UserFeedbackSink,
+    _userFeedbackSink?: UserFeedbackSink,
     private readonly secretGrantTrustStore: Pick<
       SecretGrantsTrustStore,
       "getDecision"
@@ -5486,7 +5485,6 @@ export class WorkflowExecutor {
         maxTimeSec,
         { completedCount, totalSteps, remainingCount }
       );
-      notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
       Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
 
       this.promptQueue.getRuntimeStateMachine().fail(stopReason);
@@ -5520,7 +5518,6 @@ export class WorkflowExecutor {
       effectiveMaxSteps,
       getEffectiveMaxStepsSource(workflowMaxSteps)
     );
-    notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
     Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
     this.promptQueue.getRuntimeStateMachine().fail(stopReason);
     await this.promptQueue.commitRuntimeTransition();
@@ -5691,16 +5688,6 @@ export class WorkflowExecutor {
     }
 
     const failureReason = integration.getLastFailureReason();
-    const stepLabel =
-      signedStepIndex >= 0
-        ? `prompt ${signedStepIndex + 1}`
-        : formatFinalPassPhrase(Math.abs(signedStepIndex));
-    notifyUserFeedback(
-      this.userFeedbackSink,
-      "error",
-      `Failed to execute ${stepLabel}: ${failureReason}`
-    );
-
     // Send FAILED status before markErrored() so the step icon updates
     // before the execution state transitions to ERROR (separate postMessages
     // arrive in the same render cycle this way).

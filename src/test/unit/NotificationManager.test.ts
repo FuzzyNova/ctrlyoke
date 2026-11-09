@@ -14,14 +14,16 @@ import { snapshotProperty } from "../helpers/propertySnapshot";
 suite("NotificationManager completion deduplication", () => {
   const makeSummary = (
     id: string,
-    executionState: WorkflowSummary["executionState"]
+    executionState: WorkflowSummary["executionState"],
+    failure?: WorkflowSummary["failure"]
   ): WorkflowSummary => ({
     id,
-    workflowKey: "lineage-1" as WorkflowSummary["workflowKey"],
-    runRef: "run-1" as WorkflowSummary["runRef"],
+    workflowKey: `lineage-${id}` as WorkflowSummary["workflowKey"],
+    runRef: `run-${id}` as WorkflowSummary["runRef"],
     workflowName: "workflow",
     filePath: "workflow.ctrlyoke.yaml",
     executionState,
+    ...(failure ? { failure } : {}),
     currentStep: 0,
     totalSteps: 1,
   });
@@ -33,8 +35,16 @@ suite("NotificationManager completion deduplication", () => {
       vscode.window,
       "showInformationMessage"
     );
+    const restoreErrorToast = snapshotProperty(vscode.window, "showErrorMessage");
     let toasts = 0;
     Object.defineProperty(vscode.window, "showInformationMessage", {
+      configurable: true,
+      value: () => {
+        toasts++;
+        return Promise.resolve(undefined);
+      },
+    });
+    Object.defineProperty(vscode.window, "showErrorMessage", {
       configurable: true,
       value: () => {
         toasts++;
@@ -60,6 +70,7 @@ suite("NotificationManager completion deduplication", () => {
       run(manager, () => toasts);
     } finally {
       restoreToast();
+      restoreErrorToast();
       configService.setCliOverlay({});
     }
   }
@@ -108,6 +119,30 @@ suite("NotificationManager completion deduplication", () => {
       );
 
       assert.strictEqual(toastCount(), 2);
+    });
+  });
+
+  test("shows one completion failure notice for each stopping reason", () => {
+    withManager((manager, toastCount) => {
+      const failures = [
+        ["harness", "Harness failed"],
+        ["time-limit", "Workflow time limit reached"],
+        ["step-limit", "Step limit reached"],
+      ] as const;
+      for (const [id, message] of failures) {
+        manager.notifyWorkflowAdded(
+          makeSummary(id, EXECUTION_STATES.RUNNING)
+        );
+        const failed = makeSummary(id, EXECUTION_STATES.ERROR, {
+          stepLabel: "prompt 1",
+          kind: "unknown",
+          message,
+        });
+        manager.notifyWorkflowSummaryUpdated(failed);
+        manager.notifyWorkflowSummaryUpdated(failed);
+      }
+
+      assert.strictEqual(toastCount(), failures.length);
     });
   });
 
