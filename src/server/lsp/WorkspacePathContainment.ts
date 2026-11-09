@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { isPathWithinAnyDirectory } from "../../utils/PathSecurity";
+import {
+  isPathWithinAnyDirectory,
+  realpathOrSelf,
+} from "../../utils/PathSecurity";
 import { fromViewerPath } from "../../platform/WorkspaceViewerPath";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 
@@ -29,16 +32,10 @@ export function safeResolveWorkspacePath(
     namedRoots: context.namedRoots,
   });
   if (!isPathWithinAnyDirectory(resolved, roots)) return null;
+  const realRoots = roots.map(realpathOrSelf);
 
   try {
     const realResolved = fs.realpathSync(resolved);
-    const realRoots = roots.map((root) => {
-      try {
-        return fs.realpathSync(root);
-      } catch {
-        return root;
-      }
-    });
     if (!isPathWithinAnyDirectory(realResolved, realRoots)) return null;
     return options.preserveLexicalPath ? resolved : realResolved;
   } catch {
@@ -48,13 +45,6 @@ export function safeResolveWorkspacePath(
     while (ancestor !== path.dirname(ancestor)) {
       try {
         const realAncestor = fs.realpathSync(ancestor);
-        const realRoots = roots.map((root) => {
-          try {
-            return fs.realpathSync(root);
-          } catch {
-            return root;
-          }
-        });
         if (!isPathWithinAnyDirectory(realAncestor, realRoots)) return null;
         return resolved;
       } catch {

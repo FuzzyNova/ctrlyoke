@@ -25,6 +25,10 @@ import {
 import type { KeyValueStore } from "../../core/HostPorts";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import {
+  isPathWithinDirectory,
+  realpathOrSelf,
+} from "../../utils/PathSecurity";
+import {
   createNodeLanguageServerResolverDependencies,
   getWorkspaceExecutionOptionEntries,
   resolveLanguageServer,
@@ -803,37 +807,23 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     roots: WorkspacePathContext
   ): Promise<string> {
     const resolveRealRoot = (rootPath: string): string => {
-      try {
-        return fs.realpathSync(rootPath);
-      } catch {
-        return path.resolve(rootPath);
-      }
+      return realpathOrSelf(path.resolve(rootPath));
     };
     const containingRoots = (
       roots.namedRoots.length
         ? roots.namedRoots.map((root) => resolveRealRoot(root.fsPath))
         : [resolveRealRoot(roots.workspaceRoot)]
     )
-      .filter((root) => {
-        const relative = path.relative(root, filePath);
-        return (
-          relative === "" ||
-          (!relative.startsWith(`..${path.sep}`) &&
-            relative !== ".." &&
-            !path.isAbsolute(relative))
-        );
-      })
+      .filter((root) => isPathWithinDirectory(filePath, root))
       .sort((a, b) => b.length - a.length);
     const workspaceRoot =
       containingRoots[0] ?? resolveRealRoot(roots.workspaceRoot);
     let current = path.dirname(filePath);
-    while (
-      current === workspaceRoot ||
-      current.startsWith(`${workspaceRoot}${path.sep}`)
-    ) {
+    while (isPathWithinDirectory(current, workspaceRoot)) {
       if (await this.hasRootMarker(current, markers)) return current;
-      if (current === workspaceRoot) break;
-      current = path.dirname(current);
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
     }
     return workspaceRoot;
   }

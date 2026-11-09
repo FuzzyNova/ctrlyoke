@@ -1,5 +1,5 @@
 import * as path from "path";
-import { promises as fs } from "fs";
+import { realpathSync, promises as fs } from "fs";
 import { foldPathForCompare } from "./PathCasing";
 import { NODE_ERROR_CODES } from "../types/DashboardConstants";
 import { hasErrnoCode } from "./ErrorUtils";
@@ -7,6 +7,15 @@ import { hasErrnoCode } from "./ErrorUtils";
 export interface RealpathContainmentResult {
   resolvedPath: string;
   allowed: boolean;
+}
+
+/** Resolve a path's physical location, falling back to its input if unavailable. */
+export function realpathOrSelf(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
 }
 
 /**

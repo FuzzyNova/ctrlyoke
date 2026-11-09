@@ -86,6 +86,7 @@ import {
 import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
+  realpathOrSelf,
 } from "../utils/PathSecurity";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
@@ -794,12 +795,7 @@ export class HostedWorkspaceViewerService {
       return true;
     }
 
-    let realResolved = resolved;
-    try {
-      realResolved = fs.realpathSync(resolved);
-    } catch {
-      // The lexical comparison above still protects roots that do not exist.
-    }
+    const realResolved = realpathOrSelf(resolved);
     return this.realpathsOf(trustedRoots).some((root) =>
       pathsEqual(root, realResolved)
     );
@@ -883,13 +879,7 @@ export class HostedWorkspaceViewerService {
   }
 
   private realpathsOf(directories: readonly string[]): string[] {
-    return directories.map((dir) => {
-      try {
-        return fs.realpathSync(dir);
-      } catch {
-        return dir;
-      }
-    });
+    return directories.map(realpathOrSelf);
   }
 
   // ── Path safety ──────────────────────────────────────────────────────────
@@ -978,13 +968,7 @@ export class HostedWorkspaceViewerService {
       (left, right) => right.length - left.length
     );
     for (const lexicalRoot of rootsBySpecificity) {
-      let realRoot: string;
-      try {
-        realRoot = fs.realpathSync(lexicalRoot);
-      } catch {
-        // Preserve paths for roots that do not exist yet.
-        realRoot = lexicalRoot;
-      }
+      const realRoot = realpathOrSelf(lexicalRoot);
       if (!isPathWithinDirectory(absolutePath, realRoot)) continue;
 
       const relative = path.relative(realRoot, absolutePath);

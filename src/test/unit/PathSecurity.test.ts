@@ -5,9 +5,27 @@ import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
   isSafePathSegment,
+  realpathOrSelf,
 } from "../../utils/PathSecurity";
 
 suite("PathSecurity", () => {
+  suite("realpathOrSelf", () => {
+    test("returns the real path when it exists", () => {
+      assert.strictEqual(
+        realpathOrSelf(process.cwd()),
+        path.resolve(process.cwd())
+      );
+    });
+
+    test("preserves the input when realpath fails", () => {
+      const missingPath = path.join(
+        process.cwd(),
+        "missing-path-security-test"
+      );
+      assert.strictEqual(realpathOrSelf(missingPath), missingPath);
+    });
+  });
+
   suite("isPathWithinDirectory", () => {
     test("accepts the directory itself and descendants", () => {
       const dir = path.join("C:", "dev", "ctrlyoke");
