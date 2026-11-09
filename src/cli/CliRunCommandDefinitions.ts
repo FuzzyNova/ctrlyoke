@@ -16,6 +16,7 @@ import {
 } from "../types/DashboardConstants";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import { FORCE_ALL_KEYWORD, ForceableFlag } from "./CliPropertyOverrides";
+import { parseStrictInteger } from "./CliIntegerParsing";
 
 const WORKFLOW_PROPERTY_SCOPE_DESCRIPTION =
   " (workflow level; add `--force <flag>` to apply to every step)";
@@ -350,26 +351,17 @@ function parsePermissionMode(value: string): PermissionMode {
 }
 
 function parseTimeoutSeconds(value: string): number {
-  const seconds = Number(value);
-  if (!Number.isInteger(seconds) || (seconds < 1 && seconds !== -1)) {
-    console.error(
-      chalk.red(
-        `Error: timeout "${value}" must be a whole number of seconds, or -1 for unlimited`
-      )
+  const seconds = parseStrictInteger(value, "--timeout");
+  if (seconds !== -1 && seconds < 1) {
+    throw new InvalidArgumentError(
+      `timeout "${value}" must be a whole number of seconds, or -1 for unlimited`
     );
-    process.exit(2);
   }
   return seconds;
 }
 
 function parseScriptTimeoutSeconds(value: string): number {
-  const seconds = Number(value);
-  if (!Number.isInteger(seconds) || seconds <= 0) {
-    throw new InvalidArgumentError(
-      `script-timeout "${value}" must be a whole number of seconds greater than 0`
-    );
-  }
-  return seconds;
+  return parseStrictInteger(value, "--script-timeout", { minimum: 1 });
 }
 
 function collectRepeatable(value: string, previous: string[]): string[] {

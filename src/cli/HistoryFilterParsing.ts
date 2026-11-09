@@ -1,5 +1,6 @@
 import { EXECUTION_STATES } from "../types/DashboardConstants";
 import { parseHistoryTime } from "./HistoryTime";
+import { parseStrictInteger } from "./CliIntegerParsing";
 
 /** Shared state and start-time parsing for history search and list filters. */
 export function parseHistoryStateFilter(
@@ -30,13 +31,10 @@ export function parseHistoryInteger(
   whenMissing: number
 ): number {
   if (value === undefined) return whenMissing;
-  if (!/^-?\d+$/.test(value)) {
-    throw new Error(
-      `Invalid ${optionName} value "${value}"; expected an integer.`
-    );
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+  let parsed: number;
+  try {
+    parsed = parseStrictInteger(value, optionName, { minimum });
+  } catch {
     throw new Error(
       `Invalid ${optionName} value "${value}"; expected an integer of at least ${minimum}.`
     );

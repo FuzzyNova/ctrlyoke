@@ -124,7 +124,7 @@ the old one from the **Activated machines** list on the License tab.
 | Option                  | Description                                                                              |
 | ----------------------- | ---------------------------------------------------------------------------------------- |
 | `-d, --cwd <path>`      | Workspace root; defaults to the current directory.                                       |
-| `-p, --port <n>`        | Port to use; defaults to `server.port` (4747).                                           |
+| `-p, --port <n>`        | Decimal integer port from 0 to 65535; defaults to `server.port` (4747).                 |
 | `--strict-port`         | Exit if the requested port is occupied instead of trying fallback ports.                 |
 | `--bind <addr>`         | Bind address; defaults to `127.0.0.1`. Non-loopback addresses require Pro remote access. |
 | `--https`, `--no-https` | Enable or disable HTTPS, overriding `server.tls.enabled`.                                |

@@ -472,12 +472,13 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
    no decision, log stderr, and emit a visible error artifact for the run timeline. No-decision
    exit codes live beside the future format normalizer in
    `src/scripts/ctrlyoke-hook-decision-format.js`.
-6. **CLI reporter (C1–C4).** Split into 6a and 6b. **Phase 6a started 2026-11-09**:
-   added the shared reporter and routed history/status/export/import, step, secret,
-   license and dry-run errors through it; documented the JSON error envelope. The
-   command-wide baseline snapshots and direct-exit sweep remain open. Phase 6b will
-   implement the strict integer parser. Do not move the ledger entry until both phases
-   and the required snapshots are complete.
+6. **CLI reporter (C1–C4).** Split into 6a and 6b. Phase 6a is complete: the shared
+   reporter routes history/status/export/import, step, secret, license and dry-run errors
+   through one path and documents the JSON error envelope. **Phase 6b complete
+   (2026-11-09):** added a shared strict safe-integer parser for timeout flags and
+   `server --port`; `1e3`, `0x10`, whitespace-padded and blank values are rejected with
+   Commander argument errors. The broader command-wide baseline snapshots and direct-exit
+   sweep remain open.
 7. **Phase 7: R4 per-harness interactive coverage.** Depends on the live captures; one
    commit per harness. Update `docs/harnesses/compatibility.md` through
    `npm run check:docs`/`scripts/generate-compatibility-docs.mjs`.

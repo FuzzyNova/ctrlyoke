@@ -3,10 +3,11 @@ import {
   SERVER_THEME_MODES,
   type ServerThemeMode,
 } from "../types/DashboardConstants";
+import { parseStrictInteger } from "./CliIntegerParsing";
 
 export interface ServerOptions {
   cwd?: string;
-  port?: string;
+  port?: number;
   strictPort?: boolean;
   bind?: string;
   https?: boolean;
@@ -30,7 +31,9 @@ export function registerServerCommand(
     .command("server")
     .description("Start the hosted ctrlyoke dashboard")
     .option("-d, --cwd <path>", "Workspace root (default: current directory)")
-    .option("-p, --port <n>", "Port to listen on")
+    .option("-p, --port <n>", "Port to listen on", (value: string) =>
+      parseStrictInteger(value, "--port", { minimum: 0, maximum: 65535 })
+    )
     .option("--strict-port", "Fail if the requested port is unavailable")
     .option("--bind <addr>", "Address to bind (default: 127.0.0.1)")
     .option("--https", "Enable HTTPS")

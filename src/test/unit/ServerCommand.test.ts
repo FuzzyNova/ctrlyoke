@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { Command } from "commander";
 import {
   checkHttpsRemoteAccess,
   formatServerBanner,
@@ -31,8 +32,8 @@ import {
 } from "../../platform/SecretStore";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import type { ShutdownSignal, ShutdownTimers } from "../../cli/SignalShutdown";
-import { reportCliError } from "../../cli/CliExitCode";
 import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
+import { registerServerCommand } from "../../cli/ServerCommandDefinitions";
 
 const settings = {
   autoStart: false,
@@ -164,7 +165,7 @@ suite("ServerCommand", () => {
     const resolved = resolveServerSettings(
       {
         cwd: "workspace",
-        port: "5010",
+        port: 5010,
         bind: "0.0.0.0",
         https: true,
         theme: "light",
@@ -192,27 +193,40 @@ suite("ServerCommand", () => {
     );
   });
 
-  test("maps invalid server ports to a clean CLI usage error", () => {
-    let error: unknown;
-    assert.throws(
-      () => resolveServerSettings({ port: "abc" }, "C:/repo", settings),
-      (caught: unknown) => {
-        error = caught;
-        return true;
-      }
+  test("uses a parsed port value directly", () => {
+    assert.strictEqual(
+      resolveServerSettings({ port: 5010 }, "C:/repo", settings).port,
+      5010
     );
+  });
 
-    const messages: string[] = [];
-    const exitCodes: number[] = [];
-    reportCliError(error, {
-      writeErr: (message) => messages.push(message),
-      exit: (code) => exitCodes.push(code),
-    });
-
-    assert.deepStrictEqual(messages, [
-      "Error: --port must be an integer between 0 and 65535.",
-    ]);
-    assert.deepStrictEqual(exitCodes, [2]);
+  test("server --port accepts only safe decimal ports and uses commander errors", async () => {
+    const calls: number[] = [];
+    const makeProgram = () => {
+      const program = new Command();
+      program.exitOverride();
+      program.configureOutput({ writeErr: () => undefined });
+      registerServerCommand(program, {
+        server: async (options) => {
+          if (options.port !== undefined) calls.push(options.port);
+        },
+      });
+      return program;
+    };
+    for (const value of ["1e3", "0x10", " 5 ", "", "-1", "65536", "9007199254740992"]) {
+      await assert.rejects(
+        makeProgram().parseAsync(["server", "--port", value], { from: "user" }),
+        (error: Error & { code?: string; exitCode?: number }) => {
+          assert.match(error.message, /--port/);
+          assert.strictEqual(error.code, "commander.invalidArgument");
+          assert.strictEqual(error.exitCode, 1);
+          return true;
+        },
+        `--port ${JSON.stringify(value)}`
+      );
+    }
+    await makeProgram().parseAsync(["server", "--port", "65535"], { from: "user" });
+    assert.deepStrictEqual(calls, [65535]);
   });
 
   test("prints the stop hint last in the banner", () => {

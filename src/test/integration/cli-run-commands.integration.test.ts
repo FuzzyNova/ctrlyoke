@@ -450,14 +450,14 @@ suite("CLI run command parser", () => {
     );
   });
 
-  test("requires --script-timeout to be a positive whole number", async () => {
+  test("requires --script-timeout to be a positive integer", async () => {
     await assert.rejects(
       createRunProgram({}).parseAsync(["run", "--script-timeout", "-1"], {
         from: "user",
       }),
       (error: Error) => {
         assert.match(error.message, /script-timeout/);
-        assert.match(error.message, /whole number/);
+        assert.match(error.message, /integer/);
         assert.doesNotMatch(error.message, /unlimited/);
         return true;
       }
@@ -467,8 +467,39 @@ suite("CLI run command parser", () => {
       createRunProgram({}).parseAsync(["run", "--script-timeout", "1.5"], {
         from: "user",
       }),
-      /script-timeout.*whole number/
+      /script-timeout.*integer/
     );
+  });
+
+  test("rejects non-decimal, blank, unsafe, and out-of-range timeout values", async () => {
+    for (const value of ["1e3", "0x10", " 5 ", "", "9007199254740992", "0"]) {
+      await assert.rejects(
+        createRunProgram({}).parseAsync(["run", "--timeout", value], {
+          from: "user",
+        }),
+        (error: Error & { code?: string; exitCode?: number }) => {
+          assert.match(error.message, /timeout/);
+          assert.strictEqual(error.code, "commander.invalidArgument");
+          assert.strictEqual(error.exitCode, 1);
+          return true;
+        },
+        `--timeout ${JSON.stringify(value)}`
+      );
+    }
+    for (const value of ["1e3", "0x10", " 5 ", "", "-1", "9007199254740992"]) {
+      await assert.rejects(
+        createRunProgram({}).parseAsync(["run", "--script-timeout", value], {
+          from: "user",
+        }),
+        (error: Error & { code?: string; exitCode?: number }) => {
+          assert.match(error.message, /script-timeout/);
+          assert.strictEqual(error.code, "commander.invalidArgument");
+          assert.strictEqual(error.exitCode, 1);
+          return true;
+        },
+        `--script-timeout ${JSON.stringify(value)}`
+      );
+    }
   });
 
   test("applies permission flags to a nullable workflow permission object", async () => {

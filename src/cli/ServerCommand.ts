@@ -77,11 +77,7 @@ export function resolveServerSettings(
   cwd = process.cwd(),
   settings: ServerSettingValues = configService.getAll().server
 ): ResolvedServerSettings {
-  const port =
-    options.port === undefined ? settings.port : Number(options.port);
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error("--port must be an integer between 0 and 65535.");
-  }
+  const port = options.port ?? settings.port;
   return {
     cwd: path.resolve(options.cwd ?? cwd),
     port,

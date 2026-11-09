@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A subagent's last output in Claude Code, OpenCode and Antigravity steps no longer goes missing from the output pane now and then. When the parent session reported the subagent finished while ctrlyoke was partway through reading the subagent's log, ctrlyoke stopped following it without reading what it had written just before finishing.
 - Looking up the Claude Code and Codex model lists no longer raises an uncaught `write after end` or `EPIPE` error in the extension host when the CLI answers after the lookup timed out, or exits before answering.
 - `--json` now returns a versioned JSON error for history, export/import, status, secret, license, and dry-run failures. CLI error messages are redacted and consistently prefixed with `Error: `.
+- CLI `--timeout`, `--script-timeout` and `server --port` now reject exponent, hexadecimal, whitespace-padded, blank and unsafe integer values through consistent Commander argument errors.
 
 ## [0.5.1] - 2026-11-08
 
