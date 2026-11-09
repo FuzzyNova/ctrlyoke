@@ -9,6 +9,29 @@ import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 
 const FIXTURE_ROOT = path.resolve(__dirname, "../../../src/test/fixtures/qwen");
+const ERROR_FIXTURE = path.resolve(
+  __dirname,
+  "../../../src/test/fixtures/harness-errors/qwen/interactive-session-log.jsonl"
+);
+
+suite("Qwen session API errors", () => {
+  test("emits a typed session error from captured API telemetry", async () => {
+    const tempDir = makeTempDir("qwen-api-error");
+    const filePath = path.join(tempDir, "session.jsonl");
+    fs.copyFileSync(ERROR_FIXTURE, filePath);
+    const events = await new QwenLogParser().readNewLines(filePath);
+    assert.deepStrictEqual(events, [
+      {
+        type: "ctrlyoke.session-error",
+        error:
+          "401 Invalid API-key provided. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#apikey-error",
+        errorType: "AuthenticationError",
+        statusCode: 401,
+      },
+    ]);
+    removeTempDir(tempDir);
+  });
+});
 
 function readFixture(name: string): BaseCliEvent[] {
   return fs

@@ -3652,6 +3652,7 @@ export const FAILURE_SOURCES = {
   SIGNAL: "signal",
   TIMEOUT: "timeout",
   SPAWN: "spawn",
+  SESSION_LOG: "sessionLog",
 } as const;
 
 export type FailureSource =

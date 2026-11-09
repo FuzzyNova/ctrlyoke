@@ -205,6 +205,33 @@ function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
 }
 
 export class QwenLogParser extends BaseLogParser {
+  /** Normalize Qwen's verified API telemetry into a monitor-level signal. */
+  override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
+    const entries = await super.readNewLines(filePath);
+    return entries.map((entry) => {
+      const payload = (entry as QwenProviderEvent).systemPayload as
+        | {
+            uiEvent?: {
+              "event.name"?: string;
+              error_message?: string;
+              error_type?: string;
+              status_code?: number;
+            };
+          }
+        | undefined;
+      const uiEvent = payload?.uiEvent;
+      if (uiEvent?.["event.name"] !== "qwen-code.api_error") return entry;
+      return {
+        type: "ctrlyoke.session-error",
+        error:
+          uiEvent.error_message ??
+          uiEvent.error_type ??
+          "Qwen API request failed",
+        errorType: uiEvent.error_type,
+        statusCode: uiEvent.status_code,
+      };
+    });
+  }
   probeSessionId(sessionId: string): SessionProbeResult {
     try {
       return this.findFirstSessionLogAcrossProjects(

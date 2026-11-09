@@ -684,6 +684,18 @@ export class CliLogMonitor {
       // ──────────────────────────────────────────────────────
       const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
+        if (event.type === "ctrlyoke.session-error") {
+          const message =
+            typeof event.error === "string"
+              ? event.error
+              : "Harness reported an error";
+          void resolveFailure({
+            failureKind: FAILURE_KINDS.HARNESS_ERROR,
+            failureSource: FAILURE_SOURCES.SESSION_LOG,
+            failureMessage: message,
+          });
+          return;
+        }
         if (
           this.deps.logParser.isTurnStartLogEvent?.(event, {
             dispatchedPromptText,
