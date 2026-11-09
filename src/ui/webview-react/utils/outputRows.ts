@@ -1911,10 +1911,7 @@ function estimateParallelGroupHeaderHeight(
         PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH
       : 0);
   const summaryItems = [
-    ...[
-      formatParallelStepsLabel(row),
-      parallelGroupHeaderSummaryText(row),
-    ].map(
+    ...[formatParallelStepsLabel(row), parallelGroupHeaderSummaryText(row)].map(
       parallelGroupHeaderTextWidth
     ),
     actionsWidth,

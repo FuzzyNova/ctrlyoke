@@ -171,9 +171,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           )
         }
         harnessTitle={
-          workflow.harness
-            ? getHarnessDisplayName(workflow.harness)
-            : undefined
+          workflow.harness ? getHarnessDisplayName(workflow.harness) : undefined
         }
         label={<span className="text-sm">{workflow.workflowName}</span>}
         count={

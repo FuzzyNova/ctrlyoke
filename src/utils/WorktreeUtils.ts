@@ -87,7 +87,6 @@ export function createWorktreeDirectoryName(
   return `${slugifyWorktreeName(readableName)}-${hash}`;
 }
 
-
 export function createRepositoryIdentity(
   repositoryName: string,
   canonicalCommonDirectory: string

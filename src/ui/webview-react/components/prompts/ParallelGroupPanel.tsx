@@ -278,9 +278,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
       )}
       <header className="flex flex-wrap items-center gap-2 border-b border-panel-border px-2 py-1.5 text-xs">
         <ParallelStepsIcon className="text-description-fg" />
-        <span className="font-semibold">
-          {formatParallelStepsLabel(group)}
-        </span>
+        <span className="font-semibold">{formatParallelStepsLabel(group)}</span>
         <span
           className="flex items-center"
           data-testid="parallel-group-status"

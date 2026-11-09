@@ -1376,10 +1376,7 @@ export class WorkingFileManager {
               `Invalid rewind index ${fromStepIndex}; expected a suffix within ${topology.steps.length} step(s)`
             );
           }
-          const boundary = snapParallelGroupIndex(
-            topology,
-            fromStepIndex
-          );
+          const boundary = snapParallelGroupIndex(topology, fromStepIndex);
 
           // Snapshot first. A crash after this point is recoverable; a crash before
           // it leaves the untouched run and descriptor without a pending marker.

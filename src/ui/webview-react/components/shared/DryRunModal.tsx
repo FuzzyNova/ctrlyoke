@@ -689,10 +689,7 @@ function SummaryPanel({
         </h3>
         <DefinitionList
           entries={[
-            [
-              "Harness",
-              getHarnessDisplayName(properties.harnessId),
-            ],
+            ["Harness", getHarnessDisplayName(properties.harnessId)],
             ["Harness version", properties.harnessVersion ?? "Not reported"],
             ["Model", properties.model ?? "Default"],
             ["Execution mode", properties.executionMode ?? "Default"],
@@ -1430,8 +1427,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
     ...(preview?.steps.map((step) => ({
       value: String(step.stepIndex),
       label: `${step.stepIndex + 1}. ${stepLabel(step)}`,
-      description:
-        getHarnessDisplayName(step.resolvedProperties.harnessId),
+      description: getHarnessDisplayName(step.resolvedProperties.harnessId),
     })) ?? []),
   ];
 

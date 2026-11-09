@@ -224,9 +224,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           )
         }
         harnessTitle={
-          workflow.harness
-            ? getHarnessDisplayName(workflow.harness)
-            : undefined
+          workflow.harness ? getHarnessDisplayName(workflow.harness) : undefined
         }
         label={
           <span className="workflow-menu-item-name">

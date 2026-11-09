@@ -403,26 +403,29 @@ describe("generateMarkdownExport", () => {
   it.each([
     ["claude-cli", "Claude Code"],
     ["unknown-cli", "unknown-cli"],
-  ])("uses the shared display label for %s harness metadata", (harness, label) => {
-    const md = generateMarkdownExport(
-      [
-        {
-          type: "cli",
-          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
-          timestamp: 1000,
-          data: {
-            structured: {
-              events: [],
-              metadata: { harness, sessionId: "session-1" },
+  ])(
+    "uses the shared display label for %s harness metadata",
+    (harness, label) => {
+      const md = generateMarkdownExport(
+        [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            data: {
+              structured: {
+                events: [],
+                metadata: { harness, sessionId: "session-1" },
+              },
             },
           },
-        },
-      ],
-      metadata
-    );
+        ],
+        metadata
+      );
 
-    expect(md).toContain(`Session (${label}): session-1`);
-  });
+      expect(md).toContain(`Session (${label}): session-1`);
+    }
+  );
 
   it("includes the header and metadata", () => {
     const md = generateMarkdownExport([], metadata);

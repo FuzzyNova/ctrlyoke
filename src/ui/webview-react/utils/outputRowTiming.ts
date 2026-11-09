@@ -2,7 +2,7 @@ import {
   FINAL_STEP_PHASES,
   OUTPUT_ROW_KINDS,
 } from "@root/types/DashboardConstants";
-import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { formatStepTargetLabel } from "@root/utils/FinalStepLabels";
 import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
 import { getHarnessDisplayName } from "../types/messages";
 import type { CliHeaderRow, OutputRenderRow } from "./outputRows";
@@ -44,9 +44,10 @@ export function describeRowTiming(row: OutputRenderRow): string | undefined {
     lines.push(`Took: ${formatElapsed(completedTimestamp - timestamp)}`);
   }
   lines.push(
-    row.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ? formatFinalPassLabel(row.target.index + 1)
-      : `Step ${row.target.index + 1}`
+    formatStepTargetLabel(
+      row.target.kind === FINAL_STEP_PHASES.FINAL_STEP,
+      row.target.index
+    )
   );
   return lines.join("\n");
 }

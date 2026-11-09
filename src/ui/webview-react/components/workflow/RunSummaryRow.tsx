@@ -96,9 +96,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     ? formatRelativeTimeVerbose(summary.completedAt ?? summary.startedAt)
     : undefined;
   const harness = summary?.primaryHarness as HarnessId | undefined;
-  const harnessLabel = harness
-    ? getHarnessDisplayName(harness)
-    : undefined;
+  const harnessLabel = harness ? getHarnessDisplayName(harness) : undefined;
   const harnessTitle = summary?.hasMixedHarnesses
     ? `Mixed harnesses (primary: ${harnessLabel ?? "unknown"})`
     : harnessLabel;
