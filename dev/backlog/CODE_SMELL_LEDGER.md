@@ -233,24 +233,26 @@ still deferred.
   access-token cleanup.
 
 - Git invoked outside `execGit`: `GitCommitter.ts` (own spawn, no timeout),
-  `GitUtils.commitAll` (5-minute mutation timeout, contradicting the `GIT_NO_TIMEOUT`
-  comment that commits run hooks), `CommitMessageGenerator`'s raw `execFileAsync` with
-  its own 100 MB buffer, three repo-toplevel lookups.
+  `CommitMessageGenerator`'s raw `execFileAsync` with its own 100 MB buffer, three
+  repo-toplevel lookups.
   _2026-11-09:_
   - **Correction.** The hosted viewer's commit already goes through `execGit` with
     `GIT_NO_TIMEOUT` (since 579d0ffa1). Its other calls use a private
     `promisify(execFile)` with 10 s / 1 MiB.
   - **Timeout-less reads.** `WorkspaceSnapshotService` reads also bypass `execGit`
     with no timeout; their 512 KB content cap fits the 1 MiB default buffer.
-  - **The bug in `commitAll`.** Its only caller, `WorktreeManager.completeManagedRun`,
-    kills a pre-commit hook slower than 5 minutes and blocks the landing (the timeout
-    is pinned in `GitUtils.test.ts:705-748`).
+  - **`commitAll` fixed.** Its commit had the 5-minute mutation timeout, so a slower
+    pre-commit hook blocked managed-worktree landing. It now uses `GIT_NO_TIMEOUT`.
+    `stdin: "ignore"` isn't needed: git gives commit hooks an empty stdin, and
+    `execFile` can't set `stdio` anyway.
+  - **Same limit on the landing merge.** `mergeNoFastForward` (the `merge: true`
+    fallback) still uses the 5-minute timeout, and `git merge` runs the
+    `pre-merge-commit` and `commit-msg` hooks.
   - **Toplevel lookups.** The three differ only in normalization and null-vs-throw.
     `RunChangesPlacer` and `GitCommitter` can become `repoToplevel` plus a throw.
-  - **Proposed policy.** Hook-running commands (commit, push, pull, checkout):
-    `GIT_NO_TIMEOUT` with `stdin: "ignore"`. Queries: 10 s. Whole-repo reads: 5 min.
-    Large diffs: stream to the cap instead of a 100 MB buffer.
-  - **Awaiting a decision on the `commitAll` timeout.** The rest is deferred.
+  - **Proposed policy.** Hook-running commands (commit, merge, push, pull, checkout):
+    `GIT_NO_TIMEOUT`. Queries: 10 s. Whole-repo reads: 5 min. Large diffs: stream to
+    the cap instead of a 100 MB buffer.
 - Cancelled hosted-viewer page requests keep running on the server. The three git
   fetchers in `src/ui/webview-react/utils/hostedApi.ts` (`workspaceCommitLog`,
   `workspaceFileHistory`, `workspaceGitRefDiffPage`) take no cancel signal, so the

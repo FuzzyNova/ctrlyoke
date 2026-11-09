@@ -62,7 +62,9 @@ Each run gets a new branch named `ctrlyoke/<workflow-name>/<run>` and a new
 worktree directory checked out from `base`. When the run ends:
 
 1. ctrlyoke commits everything the run changed on that branch with the message
-   `chore(ctrlyoke): auto-commit changes for "<workflow name>"`.
+   `chore(ctrlyoke): auto-commit changes for "<workflow name>"`. The commit runs
+   your repository's commit hooks, and ctrlyoke waits for them however long
+   they take.
 2. If the run changed nothing and the directory isn't kept, the branch is
    deleted.
 3. With `merge: true`, the branch is merged into your working checkout (see

@@ -702,13 +702,13 @@ suite("GitUtils worktree plumbing", function () {
     assert.strictEqual(await hasUncommittedChanges(workspaceRoot), false);
   });
 
-  test("allows a slow pre-commit hook to finish beyond the short Git timeout", async () => {
+  test("lets a pre-commit hook run past every Git timeout", async () => {
     await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "changed\n");
     await installSlowPreCommitHook(1_500);
 
     const restoreTimeouts = setGitTimeoutOverridesForTests({
       shortTimeoutMs: 1_000,
-      mutationTimeoutMs: 10_000,
+      mutationTimeoutMs: 1_000,
     });
     try {
       assert.strictEqual(
@@ -727,21 +727,16 @@ suite("GitUtils worktree plumbing", function () {
   test("describes a Git command timeout and suggests a slow hook", async () => {
     await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "changed\n");
     await installSlowPreCommitHook(5_000);
-    const restoreTimeouts = setGitTimeoutOverridesForTests({
-      shortTimeoutMs: 2_000,
-      mutationTimeoutMs: 2_000,
-    });
-    try {
-      await assert.rejects(
-        commitAll(workspaceRoot, "timeout hook commit"),
-        (error: unknown) =>
-          error instanceof Error &&
-          error.message.includes("git commit timed out after 2 seconds") &&
-          error.message.includes("slow Git hook")
-      );
-    } finally {
-      restoreTimeouts();
-    }
+    runGit(["add", "--all"]);
+    await assert.rejects(
+      execGit(["-C", workspaceRoot, "commit", "--message=timeout hook"], {
+        timeout: 2_000,
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("git commit timed out after 2 seconds") &&
+        error.message.includes("slow Git hook")
+    );
   });
 
   test("reports the existing checkout when a branch is already attached", async () => {

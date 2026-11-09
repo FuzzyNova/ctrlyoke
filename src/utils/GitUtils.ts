@@ -2416,7 +2416,14 @@ export async function abortMerge(dir: string): Promise<void> {
   await execGit(args, { timeout: getGitTimeoutMs(true) });
 }
 
-/** Stage and commit all changes. Returns false when there is nothing to commit. */
+/**
+ * Stage and commit all changes. Returns false when there is nothing to commit.
+ *
+ * The commit runs the repository's `pre-commit` and `commit-msg` hooks, so it
+ * has no timeout (`GIT_NO_TIMEOUT`): a hook may run a whole test suite. It
+ * cannot hang on input either. Git gives those hooks an empty stdin, and the
+ * env below rules out an editor or a credential prompt.
+ */
 export async function commitAll(
   dir: string,
   message: string
@@ -2426,7 +2433,7 @@ export async function commitAll(
   await execGit(addArgs, { timeout: getGitTimeoutMs(true) });
   const commitArgs = ["-C", dir, "commit", `--message=${message}`, "--"];
   await execGit(commitArgs, {
-    timeout: getGitTimeoutMs(true),
+    timeout: GIT_NO_TIMEOUT,
     env: {
       ...process.env,
       GIT_EDITOR: "true",
