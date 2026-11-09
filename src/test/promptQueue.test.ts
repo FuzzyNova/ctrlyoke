@@ -1755,19 +1755,52 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.results[0].status, STEP_STATUS.FAILED);
     });
 
-    test("a reorder that covers the terminal failure rewinds it into the pending steps", async () => {
+    test("a reorder that moves the terminal failure is rejected without rewinding it", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);
 
-      await queue.reorderPendingPrompts([1, 0, 2]);
+      await assert.rejects(
+        () => queue.reorderPendingPrompts([1, 0, 2]),
+        /recorded history and must stay first/i
+      );
 
       const state = queue.getState();
       assert.deepStrictEqual(
         state.steps.map((step) => (step as PromptStep).prompt),
-        ["Second prompt", "First prompt", "Third prompt"]
+        ["First prompt", "Second prompt", "Third prompt"]
+      );
+      assert.strictEqual(state.currentIndex, 1);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.FAILED);
+    });
+
+    test("a reorder that keeps the terminal failure first is accepted", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      await queue.reorderPendingPrompts([0, 2, 1]);
+
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["First prompt", "Third prompt", "Second prompt"]
       );
       assert.strictEqual(state.currentIndex, 0);
-      assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.PENDING);
+    });
+
+    test("cannot remove a terminal failure with recorded history", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      await assert.rejects(
+        () => queue.deletePrompts([0]),
+        /recorded history and must stay first.*disable it/i
+      );
+      assert.strictEqual(queue.getState().currentIndex, 1);
+      assert.strictEqual(
+        queue.getState().results[0].status,
+        STEP_STATUS.FAILED
+      );
     });
 
     test("does not rewind a non-terminal failure", async () => {

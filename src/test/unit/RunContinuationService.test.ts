@@ -1315,7 +1315,7 @@ suite("RunContinuationService addressed step mutations", () => {
     );
   });
 
-  test("reorders the terminal failure of an errored run with the pending steps", async () => {
+  test("keeps the terminal failure at its index when reordering an errored run", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-step-reorder-failure-")
     );
@@ -1335,11 +1335,34 @@ suite("RunContinuationService addressed step mutations", () => {
     ]);
     const repository = new WorkflowLineageRepository();
 
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const before = JSON.parse(
+      await fs.readFile(runFilePath, "utf8")
+    ) as WorkingFile;
+    await assert.rejects(
+      RunContinuationService.reorderStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [2, 1],
+        1,
+        repository
+      ),
+      /recorded history and must stay first/i
+    );
+    assert.deepStrictEqual(
+      (JSON.parse(await fs.readFile(runFilePath, "utf8")) as WorkingFile).steps,
+      before.steps
+    );
     const reordered = await RunContinuationService.reorderStepsAtRun(
       workspace,
       workflowKey,
       runRef,
-      [2, 1],
+      [1, 2],
       1,
       repository
     );
@@ -1347,15 +1370,15 @@ suite("RunContinuationService addressed step mutations", () => {
       reordered.workingFile.steps!.map(
         (step) => (step as { prompt: string }).prompt
       ),
-      ["done", "pending", "failed"]
+      ["done", "failed", "pending"]
     );
     assert.strictEqual(reordered.workingFile._runtime?.currentIndex, 1);
     assert.strictEqual(
-      reordered.workingFile.steps![2]._runtime?.stepId,
+      reordered.workingFile.steps![1]._runtime?.stepId,
       "terminal-failure"
     );
     assert.strictEqual(
-      reordered.workingFile.steps![2]._runtime?.startedAt,
+      reordered.workingFile.steps![1]._runtime?.startedAt,
       undefined
     );
 
@@ -1388,6 +1411,48 @@ suite("RunContinuationService addressed step mutations", () => {
       ["done", "failed", "pending-b", "pending-a"]
     );
     assert.strictEqual(suffixOnly.workingFile._runtime?.currentIndex, 2);
+  });
+
+  test("cannot remove the terminal failure of an errored run", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-remove-failure-")
+    );
+    await seedRun(EXECUTION_STATES.ERROR, 2, [
+      { prompt: "done", _runtime: { completedAt: 5 } },
+      {
+        prompt: "failed",
+        _runtime: {
+          startedAt: 10,
+          completedAt: 20,
+          terminalStatus: "failed",
+          terminalFailure: true,
+        },
+      },
+      { prompt: "pending" },
+    ]);
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const before = JSON.parse(
+      await fs.readFile(runFilePath, "utf8")
+    ) as WorkingFile;
+    await assert.rejects(
+      RunContinuationService.removeStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [1],
+        1,
+        new WorkflowLineageRepository()
+      ),
+      /recorded history and must stay first.*disable it/i
+    );
+    assert.deepStrictEqual(
+      (JSON.parse(await fs.readFile(runFilePath, "utf8")) as WorkingFile).steps,
+      before.steps
+    );
   });
 
   test("reorders only the pending suffix and keeps the in-flight step fixed", async () => {

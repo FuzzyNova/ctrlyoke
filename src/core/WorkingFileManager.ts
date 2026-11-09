@@ -80,6 +80,10 @@ import {
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 import {
+  getResumableTerminalFailureIndex,
+  terminalFailureMutationMessage,
+} from "../utils/StepStatusDerivation";
+import {
   ensureStepIds,
   findStepById,
   resetStepRuntimeForRewind,
@@ -1986,6 +1990,14 @@ export class WorkingFileManager {
           if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
             throw new Error(`Invalid prompt index: ${index}`);
           }
+          const failureIndex = getResumableTerminalFailureIndex({
+            executionState: source._runtime?.executionState,
+            currentIndex: source._runtime?.currentIndex,
+            steps,
+          });
+          if (failureIndex === index) {
+            throw new Error(terminalFailureMutationMessage("remove"));
+          }
           rewindTargetedFailure(source, steps, index);
           assertEditableDuringExecution(source, steps, index, "delete");
         }
@@ -2100,6 +2112,18 @@ export class WorkingFileManager {
           parallelGroups: source.parallelGroups,
         });
         const currentIndex = source._runtime?.currentIndex ?? 0;
+        const failureIndex = getResumableTerminalFailureIndex({
+          executionState: source._runtime?.executionState,
+          currentIndex,
+          steps: topology.steps,
+        });
+        if (
+          failureIndex !== undefined &&
+          newPendingOrder.length === topology.steps.length - failureIndex &&
+          newPendingOrder[0] !== 0
+        ) {
+          throw new Error(terminalFailureMutationMessage("reorder"));
+        }
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,
           currentIndex,

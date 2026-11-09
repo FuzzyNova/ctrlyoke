@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/PromptQueue.ts` (`reorderPendingPrompts`, `deletePrompts`, the `rewindTerminalFailureForContinuation` calls added in `26a5d7f88`), `src/core/orchestration/RunContinuationService.ts` (`rewindTargetedFailure`, the reorder path changed in `6dffedab7`), `src/core/StepIdentity.ts` (`assertStartedStepPositionsPreserved`), `src/ui/webview-react/utils/stepCapabilities.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -87,7 +87,7 @@ Keep the failed step fixed in place, but still let the user change it:
   and turn off Delete and drag-reorder again, using the same predicate
   (`getResumableTerminalFailureIndex`).
 - Check that a rejected mutation doesn't leave the run rewound. The live paths
-  call `rewindTerminalFailureForContinuation()` *before* validating, so a
+  call `rewindTerminalFailureForContinuation()` _before_ validating, so a
   mutation that then throws must not leave the failure stripped.
 - Update `docs/cli/ctrlyoke.md` (`step remove` / `step reorder`, which now say
   the failed step is reorderable) and the Unreleased `CHANGELOG.md` entry

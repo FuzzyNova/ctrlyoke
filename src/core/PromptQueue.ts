@@ -109,6 +109,7 @@ import {
   hasInFlightStep as isStepInFlight,
   hasStarted,
   getResumableTerminalFailureIndex,
+  terminalFailureMutationMessage,
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
 import {
@@ -983,6 +984,15 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.emitStateChange();
     await this.updateWorkingFile();
     return true;
+  }
+
+  private getResumableTerminalFailureIndex(): number | undefined {
+    return getResumableTerminalFailureIndex({
+      executionState: this.stateMachine.status,
+      currentIndex: this.state.currentIndex,
+      steps: this.state.steps,
+      resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
+    });
   }
 
   /**
@@ -3036,6 +3046,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @returns A warning naming steps whose references the removal affected, if any.
    */
   public async deletePrompts(indices: number[]): Promise<string | undefined> {
+    const failureIndex = this.getResumableTerminalFailureIndex();
+    if (failureIndex !== undefined && indices.includes(failureIndex)) {
+      throw new Error(terminalFailureMutationMessage("remove"));
+    }
     if (indices.includes(this.state.currentIndex - 1)) {
       await this.rewindTerminalFailureForContinuation();
     }
@@ -3165,20 +3179,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     newPendingOrder: number[],
     pendingGroups?: PendingParallelGroupRange[]
   ): Promise<string | undefined> {
-    // The order is relative to the current head. A payload that covers the
-    // resumable terminal failure is one entry longer than the slice after it;
-    // only then does the failure join the reorder. A payload for the steps
-    // after it must keep its meaning, so the failure stays where it is.
-    const failureIndex = getResumableTerminalFailureIndex({
-      executionState: this.stateMachine.status,
-      currentIndex: this.state.currentIndex,
-      steps: this.state.steps,
-      resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
-    });
-    if (
+    const failureIndex = this.getResumableTerminalFailureIndex();
+    const includesFailure =
       failureIndex !== undefined &&
-      newPendingOrder.length === this.state.steps.length - failureIndex
-    ) {
+      newPendingOrder.length === this.state.steps.length - failureIndex;
+    if (includesFailure && newPendingOrder[0] !== 0) {
+      throw new Error(terminalFailureMutationMessage("reorder"));
+    }
+    if (includesFailure) {
       await this.rewindTerminalFailureForContinuation();
     }
     if (

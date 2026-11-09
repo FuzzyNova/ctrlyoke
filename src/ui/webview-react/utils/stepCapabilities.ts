@@ -93,15 +93,17 @@ export function getStepCapabilities(
   const executingTarget = Boolean(ctx.isExecutionTargetLocked);
   const canMutate =
     index >= 0 && !ctx.isExternallyManaged && !hostLocked && !executingTarget;
+  const isResumableFailure = editableFailure;
   const isPrompt = step.type !== STEP_TYPES.SCRIPT;
 
   return {
     // Color has its own cosmetic update path and is allowed on locked steps.
     canEditColor: index >= 0,
     canToggleEnabled: canMutate,
-    canDelete: canMutate,
+    canDelete: canMutate && !isResumableFailure,
     canReorder:
       canMutate &&
+      !isResumableFailure &&
       index < (ctx.totalSteps ?? Number.POSITIVE_INFINITY) &&
       ctx.executionState !== EXECUTION_STATES.CANCELLING,
     canEditPromptProperties: canMutate && isPrompt,

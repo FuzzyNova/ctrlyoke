@@ -989,6 +989,10 @@ and in-flight step remain protected.
 
 ### `ctrlyoke step remove`
 
+The terminal failed step of a settled errored run cannot be removed because
+its recorded history stays at that queue index. Disable it to skip it when you
+continue the run.
+
 ```bash
 ctrlyoke step remove --workflow release --run 7 --index 3
 ```
@@ -996,8 +1000,9 @@ ctrlyoke step remove --workflow release --run 7 --index 3
 ### `ctrlyoke step reorder`
 
 Pass every not-yet-started step's absolute zero-based index exactly once, in
-the desired execution order. The failed step of a settled errored run is
-included among these pending steps. Never include a running or completed step:
+the desired execution order. The terminal failed step of a settled errored
+run has recorded history and must stay first among pending steps; edit or
+disable it instead. Never include a running or completed step:
 
 ```bash
 ctrlyoke step reorder --workflow release --run 7 --order 3,4,5

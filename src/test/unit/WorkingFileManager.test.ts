@@ -2165,7 +2165,7 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(after.definitionRevision, 2);
     });
 
-    test("deleteStepsAtRun and updateStepsAtRun accept the terminal failure of an errored run", async () => {
+    test("updateStepsAtRun accepts but deleteStepsAtRun rejects the terminal failure", async () => {
       const { workflowKey, runRef, runFilePath } = await makeIdleRun(
         EXECUTION_STATES.IDLE,
         true
@@ -2210,18 +2210,21 @@ suite("WorkingFileManager", () => {
       );
 
       await seedErroredRun();
-      const deleted = await WorkingFileManager.deleteStepsAtRun(
-        workspace,
-        workflowKey,
-        runRef,
-        [0],
-        1
+      await assert.rejects(
+        WorkingFileManager.deleteStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [0],
+          1
+        ),
+        /recorded history and must stay first.*disable it/i
       );
-      assert.deepStrictEqual(
-        deleted.workingFile.steps!.map((step) => (step as PromptStep).prompt),
-        ["second"]
-      );
-      assert.strictEqual(deleted.workingFile._runtime?.currentIndex, 0);
+      const afterRejectedDelete = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(afterRejectedDelete.steps!.length, 2);
+      assert.strictEqual(afterRejectedDelete._runtime?.currentIndex, 1);
     });
 
     test("deleteStepsAtRun validates atomically and writes one revision", async () => {

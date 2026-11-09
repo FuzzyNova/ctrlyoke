@@ -65,6 +65,17 @@ export function getResumableTerminalFailureIndex(state: {
     : undefined;
 }
 
+export function terminalFailureMutationMessage(
+  action: "remove" | "reorder"
+): string {
+  const operation = action === "remove" ? "remove" : "move";
+  const suggestion =
+    action === "remove"
+      ? "disable it to skip it on continue"
+      : "edit or disable it instead";
+  return `Cannot ${operation} the failed step because it has recorded history and must stay first among pending steps; ${suggestion}.`;
+}
+
 /**
  * A step has entered execution once dispatch claimed it (`startedAt`) or it
  * reached a terminal state (`completedAt`, which a skip also sets). The mere

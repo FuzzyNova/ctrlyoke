@@ -109,8 +109,8 @@ describe("stepCapabilities", () => {
       })
     ).toMatchObject({
       canToggleEnabled: true,
-      canDelete: true,
-      canReorder: true,
+      canDelete: false,
+      canReorder: false,
       canEditPromptProperties: true,
     });
   });

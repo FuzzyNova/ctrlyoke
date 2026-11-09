@@ -73,6 +73,7 @@ import {
   getResumableTerminalFailureIndex,
   hasInFlightStep,
   hasStarted,
+  terminalFailureMutationMessage,
 } from "../../utils/StepStatusDerivation";
 import {
   describeShiftedStepReferences,
@@ -1019,6 +1020,14 @@ export class RunContinuationService {
         }
         for (const index of unique) {
           assertStepIndex(topology.steps.length, index, "remove");
+          const failureIndex = getResumableTerminalFailureIndex({
+            executionState: source._runtime?.executionState,
+            currentIndex: source._runtime?.currentIndex,
+            steps: topology.steps,
+          });
+          if (failureIndex === index) {
+            throw new Error(terminalFailureMutationMessage("remove"));
+          }
           rewindTargetedFailure(source, topology.steps, index);
           assertEditableDuringExecution(
             source,
@@ -1093,6 +1102,13 @@ export class RunContinuationService {
           currentIndex,
           steps: topology.steps,
         });
+        if (
+          failureIndex !== undefined &&
+          absoluteOrder.includes(failureIndex) &&
+          absoluteOrder[0] !== failureIndex
+        ) {
+          throw new Error(terminalFailureMutationMessage("reorder"));
+        }
         if (
           failureIndex !== undefined &&
           absoluteOrder.includes(failureIndex)
