@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { uniqueAtomicTempPath } from "../config/AtomicFileWrite";
+import { writeFileAtomic } from "./AtomicFileUtils";
 import type { SettingWriteScope } from "../types/DashboardConstants";
 import {
   MCP_TRANSPORTS,
@@ -111,17 +111,7 @@ async function writeJsonFileAtomic(
   data: unknown
 ): Promise<void> {
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  const tempPath = uniqueAtomicTempPath(filePath);
-  try {
-    await fs.promises.writeFile(tempPath, JSON.stringify(data, null, 2), {
-      encoding: "utf-8",
-      flag: "wx",
-    });
-    await fs.promises.rename(tempPath, filePath);
-  } catch (error) {
-    await fs.promises.unlink(tempPath).catch(() => undefined);
-    throw error;
-  }
+  await writeFileAtomic(filePath, JSON.stringify(data, null, 2));
 }
 
 const mutationQueues = new Map<string, Promise<void>>();

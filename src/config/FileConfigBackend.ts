@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { parse, stripComments, type ParseError } from "jsonc-parser";
 import type { ConfigBackend } from "./CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 import {
@@ -13,9 +12,12 @@ import {
 } from "../utils/PersistedSchemaGuard";
 import { Log } from "../utils/Log";
 import { migrateToCurrent } from "../utils/FormatMigrations";
-import { stripLeadingBom } from "../utils/TextUtils";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { AsyncWriteQueue } from "./AsyncWriteQueue";
-import { uniqueAtomicTempPath } from "./AtomicFileWrite";
+import {
+  JSONC_OBJECT_FILE_RESULT_KIND,
+  readJsoncObjectFile,
+} from "./JsoncObjectFile";
 import { foldPathForCompare } from "../utils/PathCasing";
 
 const warnedNewerSettingsPaths = new Set<string>();
@@ -133,33 +135,23 @@ export class FileConfigBackend implements ConfigBackend {
   private load(): PartialCtrlYokeSettings {
     this.hasInvalidContent = false;
     this.newerSchemaVersion = undefined;
-    let content: string;
-    try {
-      content = fs.readFileSync(this.resolvedConfigPath, "utf-8");
-    } catch {
-      // File doesn't exist — return empty settings (expected on first use)
+    const result = readJsoncObjectFile(this.resolvedConfigPath);
+    if (
+      result.kind === JSONC_OBJECT_FILE_RESULT_KIND.MISSING ||
+      result.kind === JSONC_OBJECT_FILE_RESULT_KIND.EMPTY
+    ) {
       return {};
     }
-    const normalizedContent = stripLeadingBom(content);
-    if (stripComments(normalizedContent).trim() === "") {
+    if (result.kind === JSONC_OBJECT_FILE_RESULT_KIND.INVALID) {
+      this.hasInvalidContent = true;
+      console.warn(
+        `[ctrlyoke] Settings file has invalid JSON and will be treated as empty: ${this.configPath}`
+      );
       return {};
     }
+
     try {
-      const errors: ParseError[] = [];
-      const parsed: unknown = parse(normalizedContent, errors, {
-        allowTrailingComma: true,
-      });
-      if (errors.length > 0) {
-        throw new Error("Invalid JSONC syntax");
-      }
-      if (
-        parsed === null ||
-        typeof parsed !== "object" ||
-        Array.isArray(parsed)
-      ) {
-        throw new Error("Settings root must be an object");
-      }
-      const parsedSettings = parsed as PartialCtrlYokeSettings;
+      const parsedSettings = result.value as PartialCtrlYokeSettings;
       const version = readSchemaVersion(parsedSettings);
       if (isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
         this.newerSchemaVersion = version;
@@ -213,21 +205,17 @@ export class FileConfigBackend implements ConfigBackend {
     // extension's bundled `jsonValidation` association, so a remote URL would
     // break offline validation and pin dev builds to the published schema.
     data.schemaVersion = CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS];
-    const dir = path.dirname(this.resolvedConfigPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    await fs.promises.mkdir(path.dirname(this.resolvedConfigPath), {
+      recursive: true,
+    });
     // Atomic write: write to a temp file first, then rename over the target.
     // This prevents an interrupted write from leaving the settings file
     // empty/corrupt (which would cause the next set() call to silently
     // wipe all settings).
-    const tmpPath = uniqueAtomicTempPath(this.resolvedConfigPath);
-    await fs.promises.writeFile(
-      tmpPath,
-      JSON.stringify(data, null, 2),
-      "utf-8"
+    await writeFileAtomic(
+      this.resolvedConfigPath,
+      JSON.stringify(data, null, 2)
     );
-    await fs.promises.rename(tmpPath, this.resolvedConfigPath);
   }
 
   private setNestedValue(
