@@ -12,15 +12,18 @@ suite("CLI error contract baseline", () => {
     const cases = [
       {
         args: ["run", "--sandbox-mode", "invalid", "--prompt", "x"],
-        stderr: "error: option '--sandbox-mode <mode>' argument 'invalid' is invalid. --sandbox-mode must be one of: workspace-write, read-only\n",
+        stderr:
+          "error: option '--sandbox-mode <mode>' argument 'invalid' is invalid. --sandbox-mode must be one of: workspace-write, read-only\n",
       },
       {
         args: ["run", "--permission-mode", "invalid", "--prompt", "x"],
-        stderr: "error: option '--permission-mode <mode>' argument 'invalid' is invalid. --permission-mode must be one of: dangerouslyAllowAll, allowAll, custom, none\n",
+        stderr:
+          "error: option '--permission-mode <mode>' argument 'invalid' is invalid. --permission-mode must be one of: dangerouslyAllowAll, allowAll, custom, none\n",
       },
       {
         args: ["run", "--var", "invalid", "--prompt", "x"],
-        stderr: 'error: option \'--var <assignment>\' argument \'invalid\' is invalid. --var "invalid" must be in key=value format\n',
+        stderr:
+          "error: option '--var <assignment>' argument 'invalid' is invalid. --var \"invalid\" must be in key=value format\n",
       },
     ];
 
@@ -38,7 +41,10 @@ suite("CLI error contract baseline", () => {
     const text = await runCli(["run"], cwd);
     assert.strictEqual(text.code, 2, text.stderr);
     assert.strictEqual(text.stdout, "");
-    assert.strictEqual(text.stderr, "Error: Provide a file argument or --prompt <text>\n");
+    assert.strictEqual(
+      text.stderr,
+      "Error: Provide a file argument or --prompt <text>\n"
+    );
 
     const json = await runCli(["run", "--json"], cwd);
     assert.strictEqual(json.code, 2, json.stderr);
@@ -52,7 +58,9 @@ suite("CLI error contract baseline", () => {
 
   test("pins step and validate error text and JSON envelopes", async function () {
     this.timeout(60000);
-    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-errors-"));
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-errors-")
+    );
     try {
       const invalid = path.join(cwd, "invalid.yaml");
       const newer = path.join(cwd, "newer.yaml");
@@ -69,7 +77,11 @@ suite("CLI error contract baseline", () => {
         ["validate", path.join(cwd, "missing.yaml"), "--json"],
       ]) {
         const result = await runCli(args, cwd);
-        assert.strictEqual(result.code, 2, `${args.join(" ")}\n${result.stderr}`);
+        assert.strictEqual(
+          result.code,
+          2,
+          `${args.join(" ")}\n${result.stderr}`
+        );
         if (args.includes("--json")) {
           assert.doesNotThrow(() => JSON.parse(result.stdout), result.stdout);
           assert.ok(result.stdout.length > 0, args.join(" "));

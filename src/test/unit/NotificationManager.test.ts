@@ -35,7 +35,10 @@ suite("NotificationManager completion deduplication", () => {
       vscode.window,
       "showInformationMessage"
     );
-    const restoreErrorToast = snapshotProperty(vscode.window, "showErrorMessage");
+    const restoreErrorToast = snapshotProperty(
+      vscode.window,
+      "showErrorMessage"
+    );
     let toasts = 0;
     Object.defineProperty(vscode.window, "showInformationMessage", {
       configurable: true,
@@ -130,9 +133,7 @@ suite("NotificationManager completion deduplication", () => {
         ["step-limit", "Step limit reached"],
       ] as const;
       for (const [id, message] of failures) {
-        manager.notifyWorkflowAdded(
-          makeSummary(id, EXECUTION_STATES.RUNNING)
-        );
+        manager.notifyWorkflowAdded(makeSummary(id, EXECUTION_STATES.RUNNING));
         const failed = makeSummary(id, EXECUTION_STATES.ERROR, {
           stepLabel: "prompt 1",
           kind: "unknown",

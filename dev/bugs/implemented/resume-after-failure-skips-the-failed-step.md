@@ -9,7 +9,7 @@
 When a step fails and the workflow stops (`onFail: stopWorkflow`, the default
 for script steps and end conditions, or `onError: stopWorkflow`), the run ends
 in `error`. **Resume** in the dashboard, or `ctrlyoke continue`, then starts at
-the step *after* the failed one. The failed step is never re-run, and when
+the step _after_ the failed one. The failed step is never re-run, and when
 everything after it passes the run is reported as
 `✓ Workflow completed successfully` / `completed` with a `failed` step still
 in the middle.

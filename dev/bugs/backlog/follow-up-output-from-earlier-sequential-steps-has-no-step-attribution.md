@@ -81,7 +81,9 @@ another step's output:
 
 ```ts
 const resumesAfterOtherStep =
-  !isFirstForTarget && previousRowTargetKey !== targetKey && !emitsLeadingChrome;
+  !isFirstForTarget &&
+  previousRowTargetKey !== targetKey &&
+  !emitsLeadingChrome;
 const stampActivityFirst =
   activityFirst &&
   (getParallelGroupForStep(input.parallelGroups, target.index) !== undefined ||

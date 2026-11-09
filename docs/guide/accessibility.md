@@ -16,11 +16,11 @@ because it was off screen.
 ([`ui.accessibility.outputAnnouncements`](/reference/settings#ui-accessibility-outputannouncements))
 chooses how much you hear:
 
-| Value                                   | What is announced                                                                                                                                                                                                          |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Value                                   | What is announced                                                                                                                                                                                                                                          |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Step changes and finished responses** | A step starting, completing, failing, being cancelled or ending because no turn started; the workflow completing, stopping or pausing; a question the AI asks you; the harness waiting for input; and each response once it finishes. This is the default. |
-| **Also read responses as they stream**  | All of the above, plus the response a paragraph at a time while it arrives, at most once every few seconds.                                                                                                                |
-| **None**                                | Nothing.                                                                                                                                                                                                                   |
+| **Also read responses as they stream**  | All of the above, plus the response a paragraph at a time while it arrives, at most once every few seconds.                                                                                                                                                |
+| **None**                                | Nothing.                                                                                                                                                                                                                                                   |
 
 A finished response is read as a short summary of what the step did, such as
 "Changed 3 files, ran 2 commands", followed by the AI's last message. Thinking,

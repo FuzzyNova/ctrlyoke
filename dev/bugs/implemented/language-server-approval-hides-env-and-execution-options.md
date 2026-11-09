@@ -31,7 +31,9 @@ harmless `ts: typescript-language-server --stdio`:
     "definitions": {
       "ts": {
         "command": ["typescript-language-server", "--stdio"],
-        "languages": ["typescript"], "extensions": [".ts"], "rootMarkers": [],
+        "languages": ["typescript"],
+        "extensions": [".ts"],
+        "rootMarkers": [],
         "env": { "NODE_OPTIONS": "--require ./.ctrlyoke/x.js" }
       }
     }

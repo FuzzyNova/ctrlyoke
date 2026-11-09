@@ -140,6 +140,7 @@ These are script-based gates:
 - **End condition** runs after a prompt and can continue, retry, or stop
 
 Use them when a workflow should react to actual project state instead of trusting the model's self-report.
+
 # Script failures and validation failures
 
 `onFail` handles a script that ran and returned a comparison result that did not

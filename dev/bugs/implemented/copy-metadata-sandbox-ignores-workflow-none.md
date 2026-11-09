@@ -33,10 +33,19 @@ Vitest probe (in `src/ui/webview-react/test/utils/`):
 
 ```ts
 useSettingsStore.setState({
-  workflowProperties: { ...useSettingsStore.getState().workflowProperties, sandbox: null },
-  globalSettings: { ...useSettingsStore.getState().globalSettings, sandbox: true },
+  workflowProperties: {
+    ...useSettingsStore.getState().workflowProperties,
+    sandbox: null,
+  },
+  globalSettings: {
+    ...useSettingsStore.getState().globalSettings,
+    sandbox: true,
+  },
 } as never);
-const text = buildStepMetadataClipboardText({ step: { prompt: "p" } as WorkflowStep, slotNumber: 1 });
+const text = buildStepMetadataClipboardText({
+  step: { prompt: "p" } as WorkflowStep,
+  slotNumber: 1,
+});
 // text contains "sandbox: true (inherited)"
 ```
 

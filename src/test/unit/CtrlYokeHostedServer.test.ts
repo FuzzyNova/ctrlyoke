@@ -2168,7 +2168,10 @@ suite("CtrlYokeHostedServer feedback transport", () => {
       server.notifyWorkflowSummaryUpdated(summary(EXECUTION_STATES.ERROR));
 
       assert.strictEqual(notifications.length, 1);
-      assert.match(notifications[0]?.event?.body ?? "", /Step 2 - Rate limited/);
+      assert.match(
+        notifications[0]?.event?.body ?? "",
+        /Step 2 - Rate limited/
+      );
     } finally {
       configService.setCliOverlay({});
     }

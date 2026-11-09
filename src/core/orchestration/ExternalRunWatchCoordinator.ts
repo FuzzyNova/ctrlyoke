@@ -601,8 +601,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       workingFilePath,
       executionState,
       stopReason,
-      ...(executionState === EXECUTION_STATES.ERROR &&
-      failureMessage
+      ...(executionState === EXECUTION_STATES.ERROR && failureMessage
         ? {
             failure: {
               stepLabel: formatStepTargetLabel(false, currentIndex),

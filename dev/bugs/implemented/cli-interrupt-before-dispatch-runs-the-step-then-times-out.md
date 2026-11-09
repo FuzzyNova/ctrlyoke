@@ -29,18 +29,35 @@ A script that SIGINTs the CLI as soon as `Running:` appears on stdout
 ```js
 // node early-sigint.js <repo>/out/cli.js
 const { spawn } = require("child_process");
-const fs = require("fs"), path = require("path"), os = require("os");
+const fs = require("fs"),
+  path = require("path"),
+  os = require("os");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cy-early-"));
 const marker = path.join(root, "started");
 const wf = path.join(root, "w.ctrlyoke.yaml");
 const script = `node -e "require('fs').writeFileSync('${marker}','x'); setTimeout(()=>{},20000)"`;
-fs.writeFileSync(wf, `name: w\nsteps:\n  - type: script\n    script: ${JSON.stringify(script)}\n`);
-const child = spawn("node", [process.argv[2], "run", wf, "--headless", "--cwd", root], {
-  cwd: root, env: { ...process.env, CTRLYOKE_HOME: path.join(root, "state") },
-  stdio: ["ignore", "pipe", "pipe"] });
-let out = "", sent = false;
-child.stdout.on("data", (c) => { out += c;
-  if (!sent && out.includes("Running:")) { sent = true; child.kill("SIGINT"); } });
+fs.writeFileSync(
+  wf,
+  `name: w\nsteps:\n  - type: script\n    script: ${JSON.stringify(script)}\n`
+);
+const child = spawn(
+  "node",
+  [process.argv[2], "run", wf, "--headless", "--cwd", root],
+  {
+    cwd: root,
+    env: { ...process.env, CTRLYOKE_HOME: path.join(root, "state") },
+    stdio: ["ignore", "pipe", "pipe"],
+  }
+);
+let out = "",
+  sent = false;
+child.stdout.on("data", (c) => {
+  out += c;
+  if (!sent && out.includes("Running:")) {
+    sent = true;
+    child.kill("SIGINT");
+  }
+});
 child.on("close", (code) => console.log(code, fs.existsSync(marker), out));
 ```
 

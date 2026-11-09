@@ -213,7 +213,15 @@ suite("ServerCommand", () => {
       });
       return program;
     };
-    for (const value of ["1e3", "0x10", " 5 ", "", "-1", "65536", "9007199254740992"]) {
+    for (const value of [
+      "1e3",
+      "0x10",
+      " 5 ",
+      "",
+      "-1",
+      "65536",
+      "9007199254740992",
+    ]) {
       await assert.rejects(
         makeProgram().parseAsync(["server", "--port", value], { from: "user" }),
         (error: Error & { code?: string; exitCode?: number }) => {
@@ -225,7 +233,9 @@ suite("ServerCommand", () => {
         `--port ${JSON.stringify(value)}`
       );
     }
-    await makeProgram().parseAsync(["server", "--port", "65535"], { from: "user" });
+    await makeProgram().parseAsync(["server", "--port", "65535"], {
+      from: "user",
+    });
     assert.deepStrictEqual(calls, [65535]);
   });
 

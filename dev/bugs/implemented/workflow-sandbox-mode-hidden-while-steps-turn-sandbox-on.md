@@ -7,7 +7,7 @@
 ## Symptom
 
 Since 2024732ca the workflow Properties → Permissions tab shows **Sandbox mode**
-only while the *workflow's* sandbox resolves to On (workflow `sandbox`, then
+only while the _workflow's_ sandbox resolves to On (workflow `sandbox`, then
 `defaults.sandbox`). The CHANGELOG justifies this with "Off and None ignore
 it". That is true for a single step but not for the workflow level: a step
 that sets `sandbox: true` and omits `sandboxMode` inherits the workflow's
@@ -21,7 +21,7 @@ sandbox: false
 sandboxMode: read-only
 steps:
   - prompt: build it
-    sandbox: true      # runs sandboxed, read-only (inherited from the workflow)
+    sandbox: true # runs sandboxed, read-only (inherited from the workflow)
   - prompt: summarize
 ```
 

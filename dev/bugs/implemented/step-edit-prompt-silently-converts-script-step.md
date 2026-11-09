@@ -70,8 +70,8 @@ Refuse the implicit conversion rather than guessing:
 
 - CLI: in `editStepCommand`, when `--prompt` is used and the addressed step is
   a script step, fail with a clear error (exit 2), e.g. `step N is a script
-  step; --prompt only edits prompt steps. Pass a one-step file to change a
-  script step or its type`. The one-step file path keeps its documented
+step; --prompt only edits prompt steps. Pass a one-step file to change a
+script step or its type`. The one-step file path keeps its documented
   merge/replace behaviour. A file containing a full prompt step is an explicit
   replacement.
 - MCP: in `handleStepEdit`, reject `updates.prompt` when the existing step is

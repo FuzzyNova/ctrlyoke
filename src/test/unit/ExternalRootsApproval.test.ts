@@ -27,7 +27,10 @@ suite("ExternalRootsApproval — workspace state root", () => {
       { setDecisions: async () => {} }
     );
 
-    assert.strictEqual(requestedItems[0]?.label, "/tmp/evil\\u001b[2K\\u000d/Users/me/\\u202esafe");
+    assert.strictEqual(
+      requestedItems[0]?.label,
+      "/tmp/evil\\u001b[2K\\u000d/Users/me/\\u202esafe"
+    );
     assert.strictEqual(requestedItems[0]?.value, root);
     assert.ok(!/[\u001b\r\u202e]/u.test(requestedItems[0]?.label ?? ""));
   });

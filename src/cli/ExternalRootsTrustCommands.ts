@@ -25,7 +25,9 @@ export async function trustExternalRootsCommand(
 
   io.writeErr(heading);
   roots.forEach((root) =>
-    io.writeErr(`  - ${escapeUntrustedDisplayText(root, { escapeNewlines: true })}`)
+    io.writeErr(
+      `  - ${escapeUntrustedDisplayText(root, { escapeNewlines: true })}`
+    )
   );
 
   if (!options.yes && !io.isInteractive) {
