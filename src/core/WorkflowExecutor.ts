@@ -179,7 +179,10 @@ import {
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
-import { formatFinalPassPhrase } from "../utils/FinalStepLabels";
+import {
+  formatFinalPassPhrase,
+  formatParallelStepsLabel,
+} from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 import { getErrorMessage } from "../utils/ErrorUtils";
 
@@ -960,7 +963,7 @@ export class WorkflowExecutor {
     );
 
     Log.info(
-      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
+      `[WorkflowExecutor] ${formatParallelStepsLabel(group)}: effective width ${preflight.effectiveWidth}`
     );
     if (preflight.issues.length > 0) {
       await Promise.all(
@@ -1566,7 +1569,7 @@ export class WorkflowExecutor {
       outcome,
     };
     Log.info(
-      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: ` +
+      `[WorkflowExecutor] ${formatParallelStepsLabel(group)}: ` +
         `step ${memberIndex + 1} joined the promoted group beside running step ${anchorIndex + 1} ` +
         `(effective width ${effectiveWidth})`
     );

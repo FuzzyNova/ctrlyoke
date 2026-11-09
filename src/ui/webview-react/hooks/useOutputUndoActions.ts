@@ -55,7 +55,10 @@ import {
   useWorkspaceSnapshotContent,
 } from "@hooks/useWorkspaceSnapshotContent";
 import { WebviewLog } from "@utils/logger";
-import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import {
+  formatFinalPassLabel,
+  formatParallelStepsLabel,
+} from "@root/utils/FinalStepLabels";
 import { getQueueStepLabel } from "@utils/stepLabels";
 import { useWorkflowStore } from "@store/workflowStore";
 import { getErrorMessage } from "@root/utils/ErrorUtils";
@@ -224,7 +227,7 @@ export function useOutputUndoActions({
         const label = isFinalStep
           ? formatFinalPassLabel(stepIndex + 1)
           : concurrentGroup
-            ? `Parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
+            ? formatParallelStepsLabel(concurrentGroup)
             : getQueueStepLabel(stepIndex, workflowSteps[stepIndex]?.name);
 
         const redoInstructions =

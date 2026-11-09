@@ -34,6 +34,7 @@ import {
   useActiveWorkflowExternalOwner,
 } from "@hooks/index";
 import { getHarnessDisplayName } from "../../types/messages";
+import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
 import type { HarnessId } from "../../types/messages";
 import {
   type PromptOverride,
@@ -1686,7 +1687,7 @@ const WorkflowStepsPanelInner: React.FC<{
         <div className="flex items-center gap-2 rounded-sm border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs shadow-lg">
           <ParallelStepsIcon className="text-description-fg" />
           <span className="font-semibold">
-            Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
+            {formatParallelStepsLabel(group)}
           </span>
         </div>
       );

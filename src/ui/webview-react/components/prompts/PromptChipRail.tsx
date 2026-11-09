@@ -84,7 +84,10 @@ import {
   useFinalStepPassesInOutputView,
   useIsStepInOutputView,
 } from "./InOutputViewMarker";
-import { formatFinalPassRangeCompact } from "@root/utils/FinalStepLabels";
+import {
+  formatFinalPassRangeCompact,
+  formatParallelStepsLabel,
+} from "@root/utils/FinalStepLabels";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -658,7 +661,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
         )}
         <div
           className="flex items-center justify-center border-b border-panel-border py-0.5"
-          title={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
+          title={formatParallelStepsLabel(group)}
         >
           <ParallelStepsIcon size={14} className="text-description-fg" />
         </div>

@@ -75,7 +75,10 @@ import {
   isCacheInputSubset,
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
-import { formatFinalPassLabel } from "../utils/FinalStepLabels";
+import {
+  formatFinalPassLabel,
+  formatParallelStepsLabel,
+} from "../utils/FinalStepLabels";
 import { formatThinkingLabel } from "../utils/ThinkingBlockFormat";
 import { getToolResultText } from "../utils/toolResultText";
 import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
@@ -710,7 +713,7 @@ export class CliTerminalFormatter {
           group.endIndex - group.startIndex + 1;
         writeLine(
           chalk.bold(
-            `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}${group.failFast ? " (failFast)" : ""}`
+            `${formatParallelStepsLabel(group)}${group.failFast ? " (failFast)" : ""}`
           )
         );
         writeLine(

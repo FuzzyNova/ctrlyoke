@@ -89,6 +89,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   all source and test callers to use the canonical names. Replaced the inline harness
   display-name fallbacks across the dashboard with the shared display/short-name
   helpers, with known and unknown ID coverage.
+  Single-sourced "Parallel steps X–Y" in `formatParallelStepsLabel` across core, CLI
+  and dashboard callers; kept the screen-reader "to" wording unchanged.
 
 ## Deferred
 

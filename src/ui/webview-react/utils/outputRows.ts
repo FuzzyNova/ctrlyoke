@@ -112,6 +112,7 @@ import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 import {
   formatFinalPassLabel,
+  formatParallelStepsLabel,
   formatStepTargetLabel,
 } from "@root/utils/FinalStepLabels";
 import { subagentGroupKey } from "@root/utils/SubagentAttribution";
@@ -1867,12 +1868,6 @@ export function parallelGroupHeaderSummaryText(
   return `${row.running} running · ${row.complete} complete · ${row.failed} failed`;
 }
 
-export function parallelGroupHeaderTitle(
-  row: Pick<ParallelGroupHeaderRow, "startIndex" | "endIndex">
-): string {
-  return `Parallel steps ${row.startIndex + 1}–${row.endIndex + 1}`;
-}
-
 export function parallelGroupStepCount(
   group: Pick<ParallelGroupDefinition, "startIndex" | "endIndex">
 ): number {
@@ -1916,7 +1911,10 @@ function estimateParallelGroupHeaderHeight(
         PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH
       : 0);
   const summaryItems = [
-    ...[parallelGroupHeaderTitle(row), parallelGroupHeaderSummaryText(row)].map(
+    ...[
+      formatParallelStepsLabel(row),
+      parallelGroupHeaderSummaryText(row),
+    ].map(
       parallelGroupHeaderTextWidth
     ),
     actionsWidth,

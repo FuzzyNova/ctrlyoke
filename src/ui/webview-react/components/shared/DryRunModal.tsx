@@ -70,6 +70,7 @@ import { PortabilityReportSection } from "./PortabilityReportSection";
 import { SegmentedTabBar, type SegmentedTab } from "./SegmentedTabBar";
 import { getPermissionModeBadge, type TabIconOverride } from "./tabBadgeUtils";
 import { Icon } from "./Icon";
+import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
 
 const DRY_RUN_TABS = {
   SUMMARY: "summary",
@@ -633,11 +634,11 @@ function OverviewPanel({
               <section
                 key={group.id}
                 className="flex flex-col gap-2 rounded-sm border border-panel-border p-2"
-                aria-label={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
+                aria-label={formatParallelStepsLabel(group)}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="font-semibold text-foreground">
-                    Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
+                    {formatParallelStepsLabel(group)}
                   </span>
                   <span className="text-description-fg">
                     failFast: {String(group.failFast)} · {executionSummary}
