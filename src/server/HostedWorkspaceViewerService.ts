@@ -170,6 +170,7 @@ export interface GitRefDiffDownload {
 export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 export const MAX_MEDIA_FILE_SIZE = 512 * 1024 * 1024;
 export const MAX_MEDIA_BLOB_SIZE = 50 * 1024 * 1024;
+export const WORKSPACE_VIEWER_PATH_NOT_ALLOWED = "Path not allowed";
 const DIFF_SIDE_TOO_LARGE = Symbol("diff-side-too-large");
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
@@ -577,7 +578,7 @@ export class HostedWorkspaceViewerService {
         ? this.safeResolveForSettingsEdit(requestedPath)
         : this.safeResolve(requestedPath, { preserveLexicalPath: true });
     if (!resolved) {
-      throw new WorkspaceMediaError("Path not allowed", 403);
+      throw new WorkspaceMediaError(WORKSPACE_VIEWER_PATH_NOT_ALLOWED, 403);
     }
 
     const mediaInfo = workspaceMediaInfoForPath(resolved);
@@ -607,7 +608,7 @@ export class HostedWorkspaceViewerService {
     }
 
     if (!isPathWithinAnyDirectory(resolved, this.trustedRoots)) {
-      throw new WorkspaceMediaError("Path not allowed", 403);
+      throw new WorkspaceMediaError(WORKSPACE_VIEWER_PATH_NOT_ALLOWED, 403);
     }
 
     let repoPath: Awaited<ReturnType<typeof this.requireRepoRootForPath>>;
@@ -1544,7 +1545,10 @@ export class HostedWorkspaceViewerService {
   async readFile(requestedPath: string): Promise<WorkspaceFileResponse> {
     const resolved = this.safeResolveForSettingsEdit(requestedPath);
     if (!resolved) {
-      return this.rejectedFileResponse(requestedPath, "Path not allowed");
+      return this.rejectedFileResponse(
+        requestedPath,
+        WORKSPACE_VIEWER_PATH_NOT_ALLOWED
+      );
     }
 
     let stat: fs.Stats;
@@ -1641,7 +1645,7 @@ export class HostedWorkspaceViewerService {
   async saveFile(req: WorkspaceFileSaveRequest): Promise<number> {
     const resolved = this.safeResolveForSettingsEdit(req.path);
     if (!resolved) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     // Check if existing file is binary — refuse to overwrite
@@ -1712,7 +1716,7 @@ export class HostedWorkspaceViewerService {
       preserveLexicalPath: true,
     });
     if (!resolved || this.isExactRoot(resolved)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     await fs.promises.rm(resolved, { recursive: true, force: false });
@@ -1747,7 +1751,7 @@ export class HostedWorkspaceViewerService {
       preserveLexicalPath: true,
     });
     if (!resolvedSource || this.isExactRoot(resolvedSource)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
     await fs.promises.lstat(resolvedSource);
 
@@ -1756,13 +1760,13 @@ export class HostedWorkspaceViewerService {
       !destinationName ||
       path.basename(destinationName) !== destinationName
     ) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     const trustedRoots = this.trustedRoots;
     const resolvedDestDir = this.resolveAgainstRoots(requestedDestDir);
     if (!isPathWithinAnyDirectory(resolvedDestDir, trustedRoots)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     let existingAncestor = resolvedDestDir;
@@ -1778,12 +1782,12 @@ export class HostedWorkspaceViewerService {
     if (
       !isPathWithinAnyDirectory(realAncestor, this.realpathsOf(trustedRoots))
     ) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     const destPath = path.resolve(resolvedDestDir, destinationName);
     if (!isPathWithinAnyDirectory(destPath, trustedRoots)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     return { resolvedSource, destPath };
@@ -2134,7 +2138,7 @@ export class HostedWorkspaceViewerService {
   async getDiff(requestedPath: string): Promise<WorkspaceScmDiffResponse> {
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
@@ -2302,7 +2306,7 @@ export class HostedWorkspaceViewerService {
 
   async stageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
@@ -2314,7 +2318,7 @@ export class HostedWorkspaceViewerService {
 
   async unstageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
@@ -2327,7 +2331,7 @@ export class HostedWorkspaceViewerService {
   async discardFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved || this.isExactRoot(resolved)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
@@ -2343,7 +2347,7 @@ export class HostedWorkspaceViewerService {
       const lexicalPath = this.safeResolve(filePath, {
         preserveLexicalPath: true,
       });
-      if (!lexicalPath) throw new Error("Path not allowed");
+      if (!lexicalPath) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
       await fs.promises.rm(lexicalPath, { recursive: true, force: true });
       return;
     }
@@ -2517,7 +2521,7 @@ export class HostedWorkspaceViewerService {
     }
 
     const resolved = this.safeResolve(requestedPath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const viewerPath = normalizeViewerPath(this.relativePath(resolved));
@@ -2593,7 +2597,7 @@ export class HostedWorkspaceViewerService {
     repoId?: string
   ): Promise<WorkspaceFileHistoryDiffResponse> {
     const resolved = this.safeResolve(requestedPath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     void repoId;
@@ -2628,7 +2632,7 @@ export class HostedWorkspaceViewerService {
       !isPathWithinAnyDirectory(commitAbsolutePath, this.trustedRoots) ||
       !isPathWithinAnyDirectory(parentAbsolutePath, this.trustedRoots)
     ) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     const changeType = this.diffChangeType(changedFile.status);
@@ -2686,7 +2690,7 @@ export class HostedWorkspaceViewerService {
       resolvedCommit,
       false
     );
-    if (!entry) throw new Error("Path not allowed");
+    if (!entry) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     return {
       ...commitInfo,
       ...entry,
