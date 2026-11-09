@@ -691,6 +691,15 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
     assert.strictEqual((output.match(/err-marker/g) ?? []).length, 1);
   });
 
+  test("prints completed stdout and stderr exactly once when nothing streamed", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "script", key: "completed-only" };
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, isStreaming: false, elapsed: 0 }, target, { command: "check.sh", stdout: "out-marker\\n", stderr: "err-marker", exitCode: 0 });`);
+
+    assert.strictEqual((output.match(/out-marker/g) ?? []).length, 1);
+    assert.strictEqual((output.match(/err-marker/g) ?? []).length, 1);
+  });
+
   test("does not count single-character chunks as separate script lines", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "single-char" });

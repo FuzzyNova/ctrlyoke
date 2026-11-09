@@ -913,6 +913,9 @@ export class CliTerminalFormatter {
       return;
     }
 
+    // Streamed chunks carry stdout only, so stderr still needs printing after a
+    // stream; a completed-only render prints the whole text (stderr included).
+    const streamedStdout = state !== undefined;
     if (!state && outputText) {
       state = {
         shownChars: 0,
@@ -931,7 +934,7 @@ export class CliTerminalFormatter {
       const totalText = outputText;
       state.totalChars = Math.max(state.totalChars, totalText.length);
       state.totalLines = countOutputLines(totalText);
-      const stderr = scriptOutput?.stderr?.trim() ?? "";
+      const stderr = streamedStdout ? (scriptOutput?.stderr?.trim() ?? "") : "";
       if (stderr) {
         const unstreamedText = `${state.endsWithNewline ? "" : "\n"}${stderr}`;
         CliTerminalFormatter.writeBoundedScriptChunk(unstreamedText, state);
