@@ -26,7 +26,7 @@ import {
  */
 export const STATUS_ICONS: Record<StepStatus, string> = {
   [STEP_STATUS.PENDING]: "codicon-circle-outline",
-  [STEP_STATUS.SENT]: "codicon-arrow-right",
+  [STEP_STATUS.SENT]: "codicon-arrow-up",
   [STEP_STATUS.RUNNING]: "codicon-play",
   [STEP_STATUS.COMPLETED]: "codicon-pass",
   [STEP_STATUS.FAILED]: "codicon-error",

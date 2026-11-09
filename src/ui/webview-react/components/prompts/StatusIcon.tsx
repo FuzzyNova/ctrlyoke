@@ -37,53 +37,10 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
         colorClass: "text-disabled-fg",
       };
     }
-    switch (status) {
-      case STEP_STATUS.PENDING:
-        return {
-          icon: "codicon-circle-outline",
-          colorClass: getStatusColorClass(STEP_STATUS.PENDING),
-        };
-      case STEP_STATUS.SENT:
-        return {
-          icon: "codicon-arrow-up",
-          colorClass: getStatusColorClass(STEP_STATUS.SENT),
-        };
-      case STEP_STATUS.RUNNING:
-        return {
-          icon: "codicon-play",
-          colorClass: getStatusColorClass(STEP_STATUS.RUNNING),
-        };
-      case STEP_STATUS.COMPLETED:
-        return {
-          icon: "codicon-pass",
-          colorClass: getStatusColorClass(STEP_STATUS.COMPLETED),
-        };
-      case STEP_STATUS.FAILED:
-        return {
-          icon: "codicon-error",
-          colorClass: getStatusColorClass(STEP_STATUS.FAILED),
-        };
-      case STEP_STATUS.CANCELLED:
-        return {
-          icon: "codicon-circle-slash",
-          colorClass: getStatusColorClass(STEP_STATUS.CANCELLED),
-        };
-      case STEP_STATUS.SKIPPED:
-        return {
-          icon: "codicon-debug-step-over",
-          colorClass: getStatusColorClass(STEP_STATUS.SKIPPED),
-        };
-      case STEP_STATUS.NO_TURN_STARTED:
-        return {
-          icon: getStatusIconClass(STEP_STATUS.NO_TURN_STARTED),
-          colorClass: getStatusColorClass(STEP_STATUS.NO_TURN_STARTED),
-        };
-      default:
-        return {
-          icon: "codicon-circle-outline",
-          colorClass: getStatusColorClass(STEP_STATUS.PENDING),
-        };
-    }
+    return {
+      icon: getStatusIconClass(status),
+      colorClass: getStatusColorClass(status),
+    };
   };
 
   const { icon, colorClass } = getIconConfig();
