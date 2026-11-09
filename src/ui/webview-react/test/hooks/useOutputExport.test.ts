@@ -190,6 +190,8 @@ describe("useOutputExport", () => {
       configurable: true,
       value: { writeText },
     });
+    // The export header embeds the current time; freeze it so the two exports match.
+    vi.useFakeTimers({ toFake: ["Date"] });
     const { result } = renderExportHook({ initialHiddenTargetKeys: [] });
 
     act(() => result.current.openModal());
@@ -204,6 +206,7 @@ describe("useOutputExport", () => {
     expect(writeText).toHaveBeenCalledWith(exported);
     expect(postMessage).not.toHaveBeenCalled();
     expect(result.current.modalOpen).toBe(false);
+    vi.useRealTimers();
   });
 
   it("keeps the modal open and copies nothing when the step range is invalid", () => {
