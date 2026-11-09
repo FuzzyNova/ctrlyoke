@@ -9,15 +9,15 @@ suite("CLI error contract baseline", () => {
     const cases = [
       {
         args: ["run", "--sandbox-mode", "invalid", "--prompt", "x"],
-        stderr: "Error: --sandbox-mode must be one of: workspace-write, read-only\n",
+        stderr: "error: option '--sandbox-mode <mode>' argument 'invalid' is invalid. --sandbox-mode must be one of: workspace-write, read-only\n",
       },
       {
         args: ["run", "--permission-mode", "invalid", "--prompt", "x"],
-        stderr: "Error: --permission-mode must be one of: dangerouslyAllowAll, allowAll, custom, none\n",
+        stderr: "error: option '--permission-mode <mode>' argument 'invalid' is invalid. --permission-mode must be one of: dangerouslyAllowAll, allowAll, custom, none\n",
       },
       {
         args: ["run", "--var", "invalid", "--prompt", "x"],
-        stderr: 'Error: --var "invalid" must be in key=value format\n',
+        stderr: 'error: option \'--var <assignment>\' argument \'invalid\' is invalid. --var "invalid" must be in key=value format\n',
       },
     ];
 
@@ -39,7 +39,11 @@ suite("CLI error contract baseline", () => {
 
     const json = await runCli(["run", "--json"], cwd);
     assert.strictEqual(json.code, 2, json.stderr);
-    assert.strictEqual(json.stdout, "");
-    assert.strictEqual(json.stderr, text.stderr);
+    assert.deepStrictEqual(JSON.parse(json.stdout), {
+      schemaVersion: 1,
+      success: false,
+      error: { message: "Provide a file argument or --prompt <text>" },
+    });
+    assert.strictEqual(json.stderr, "");
   });
 });

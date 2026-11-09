@@ -3,7 +3,6 @@ import {
   CLI_WORKFLOW_OPTION_DESCRIPTION,
   CLI_WORKFLOW_OPTION_FLAGS,
 } from "./CliWorkflowOption";
-import chalk from "chalk";
 import {
   HARNESS_DISPLAY_ORDER,
   PERMISSION_MODES,
@@ -328,24 +327,18 @@ function addExecutionOptions(command: Command, allowForce = false): Command {
 
 function parseSandboxMode(value: string): SandboxMode {
   if (!isSandboxMode(value)) {
-    console.error(
-      chalk.red(
-        `Error: --sandbox-mode must be one of: ${Object.values(SANDBOX_MODES).join(", ")}`
-      )
+    throw new InvalidArgumentError(
+      `--sandbox-mode must be one of: ${Object.values(SANDBOX_MODES).join(", ")}`
     );
-    process.exit(2);
   }
   return value;
 }
 
 function parsePermissionMode(value: string): PermissionMode {
   if (!isPermissionMode(value)) {
-    console.error(
-      chalk.red(
-        `Error: --permission-mode must be one of: ${Object.values(PERMISSION_MODES).join(", ")}`
-      )
+    throw new InvalidArgumentError(
+      `--permission-mode must be one of: ${Object.values(PERMISSION_MODES).join(", ")}`
     );
-    process.exit(2);
   }
   return value;
 }
@@ -374,17 +367,15 @@ function collectVar(
 ): Record<string, string> {
   const eqIndex = value.indexOf("=");
   if (eqIndex === -1) {
-    console.error(
-      chalk.red(`Error: --var "${value}" must be in key=value format`)
+    throw new InvalidArgumentError(
+      `--var "${value}" must be in key=value format`
     );
-    process.exit(2);
   }
   const assignment = value.slice(0, eqIndex);
   const next = { ...previous, [assignment]: value.slice(eqIndex + 1) };
   const errors = getVariableKeyErrors(Object.keys(next));
   if (errors.length > 0) {
-    console.error(chalk.red(`Error: --var ${errors.join(", ")}`));
-    process.exit(2);
+    throw new InvalidArgumentError(`--var ${errors.join(", ")}`);
   }
   return {
     ...next,

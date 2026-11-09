@@ -79,6 +79,7 @@ import {
 } from "./cli/CliTerminalFormatter";
 import {
   CLI_USAGE_EXIT_CODE,
+  CliUsageError,
   getExitCode as getTypedExitCode,
   reportCliError,
 } from "./cli/CliExitCode";
@@ -924,18 +925,18 @@ async function runCommand(
     options.sessionId !== undefined &&
     options.resumeSession === false
   ) {
-    console.error(
-      chalk.red("Error: --session-id cannot be used with --no-resume-session")
+    reportCliError(
+      new CliUsageError(
+        "--session-id cannot be used with --no-resume-session"
+      ),
+      { json: options.json === true }
     );
-    process.exit(2);
   }
   if (options.harness !== undefined) {
     try {
       assertHarnessId(options.harness);
     } catch (error) {
-      const message = getErrorMessage(error);
-      console.error(chalk.red(`Error: ${message}`));
-      process.exit(2);
+      reportCliError(error, { json: options.json === true });
     }
   }
 
@@ -947,10 +948,10 @@ async function runCommand(
     !file &&
     !options.prompt
   ) {
-    console.error(
-      chalk.red("Error: Provide a file argument or --prompt <text>")
+    reportCliError(
+      new CliUsageError("Provide a file argument or --prompt <text>"),
+      { json: options.json === true }
     );
-    process.exit(2);
   }
   if (
     (operation.kind === CLI_RUN_OPERATION_KINDS.RUN ||
@@ -958,10 +959,12 @@ async function runCommand(
     file &&
     options.prompt
   ) {
-    console.error(
-      chalk.red("Error: --prompt cannot be used together with a file argument")
+    reportCliError(
+      new CliUsageError(
+        "--prompt cannot be used together with a file argument"
+      ),
+      { json: options.json === true }
     );
-    process.exit(2);
   }
 
   const resolvedFile = file ? resolveCliFileArgument(file) : undefined;
