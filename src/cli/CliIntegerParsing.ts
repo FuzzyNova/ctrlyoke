@@ -12,17 +12,17 @@ export function parseStrictInteger(
   options: StrictIntegerOptions = {}
 ): number {
   const { minimum, maximum } = options;
-  const range =
+  const expected =
     minimum !== undefined && maximum !== undefined
-      ? `between ${minimum} and ${maximum}`
+      ? `an integer between ${minimum} and ${maximum}`
       : minimum !== undefined
-        ? `at least ${minimum}`
+        ? `an integer of at least ${minimum}`
         : maximum !== undefined
-          ? `at most ${maximum}`
+          ? `an integer of at most ${maximum}`
           : "a safe integer";
   if (!/^-?\d+$/.test(value)) {
     throw new InvalidArgumentError(
-      `Invalid ${optionName} value "${value}"; expected an integer ${range}.`
+      `Invalid ${optionName} value "${value}"; expected ${expected}.`
     );
   }
   const parsed = Number(value);
@@ -32,7 +32,7 @@ export function parseStrictInteger(
     (maximum !== undefined && parsed > maximum)
   ) {
     throw new InvalidArgumentError(
-      `Invalid ${optionName} value "${value}"; expected an integer ${range}.`
+      `Invalid ${optionName} value "${value}"; expected ${expected}.`
     );
   }
   return parsed;

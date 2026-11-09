@@ -31,13 +31,5 @@ export function parseHistoryInteger(
   whenMissing: number
 ): number {
   if (value === undefined) return whenMissing;
-  let parsed: number;
-  try {
-    parsed = parseStrictInteger(value, optionName, { minimum });
-  } catch {
-    throw new Error(
-      `Invalid ${optionName} value "${value}"; expected an integer of at least ${minimum}.`
-    );
-  }
-  return parsed;
+  return parseStrictInteger(value, optionName, { minimum });
 }

@@ -573,6 +573,11 @@ exits `2`. Unlike `run`, which only warns about a missing secret unless
 `execution.contextResolutionFailure` is `fail`, `secret check` always fails on
 one.
 
+The `secret` commands and `trust-secret-grants` support `--json`, which emits
+one versioned result line. Success results include the command data; `secret
+check` reports the checked file and missing secret names. Failures use the
+standard JSON error envelope and preserve the command's exit code.
+
 ## `ctrlyoke license`
 
 Manages this machine's [ctrlyoke Pro](/pro/) license from a terminal, which is

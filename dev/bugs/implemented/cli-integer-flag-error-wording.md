@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, reproduced with `node out/cli.js`)
 - **Area:** `src/cli/CliIntegerParsing.ts` (~15-27), `src/cli/HistoryFilterParsing.ts` (~36-40)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

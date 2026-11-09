@@ -43,6 +43,7 @@ import type {
 import { resolveCliFileArgument } from "./CliFileArgument";
 import { confirmMutation, promptYesNo, type CliConfirmIo } from "./CliPrompt";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { reportCliError } from "./CliExitCode";
 
 export interface SecretCommandIo extends CliConfirmIo {
   writeOut(message: string): void;
@@ -110,7 +111,12 @@ export async function setSecretCommand(
     secretKeyForScope(scope, workspaceRoot, name),
     value
   );
-  io.writeOut(`Stored secret ${name} in ${scope} scope.`);
+  writeSecretSuccess(
+    options.json,
+    io,
+    { name, scope, stored: true },
+    `Stored secret ${name} in ${scope} scope.`
+  );
 }
 
 export async function listSecretsCommand(
@@ -136,13 +142,14 @@ export async function listSecretsCommand(
     ])
   ).flat();
 
-  if (entries.length === 0) {
+  if (options.json) {
+    writeSecretSuccess(true, io, { entries });
+  } else if (entries.length === 0) {
     io.writeOut("No declared or managed secrets found.");
-    return;
-  }
-
-  for (const entry of entries) {
-    io.writeOut(formatSecretEntry(entry));
+  } else {
+    for (const entry of entries) {
+      io.writeOut(formatSecretEntry(entry));
+    }
   }
 }
 
@@ -164,14 +171,24 @@ export async function removeSecretCommand(
     `Remove secret ${name} from ${scope} scope? [y/N] `
   );
   if (!confirmed) {
-    io.writeOut("Dry run only; pass --yes to remove the secret.");
+    writeSecretSuccess(
+      options.json,
+      io,
+      { name, removed: false },
+      "Dry run only; pass --yes to remove the secret."
+    );
     return;
   }
 
   await dependencies.secretStore.delete(
     secretKeyForScope(scope, workspaceRoot, name)
   );
-  io.writeOut(`Removed secret ${name} from ${scope} scope.`);
+  writeSecretSuccess(
+    options.json,
+    io,
+    { name, scope, removed: true },
+    `Removed secret ${name} from ${scope} scope.`
+  );
 }
 
 /** Return the command exit code while using the same preflight as `run`. */
@@ -182,7 +199,7 @@ export async function checkSecretsCommand(
   io: SecretCommandIo
 ): Promise<number> {
   if (!file) {
-    io.writeErr("Error: Provide a workflow file to check.");
+    writeSecretError(options.json, io, "Provide a workflow file to check.", 2);
     return 2;
   }
 
@@ -199,11 +216,16 @@ export async function checkSecretsCommand(
           filePath
         );
   } catch (error) {
-    io.writeErr(`Error: ${getErrorMessage(error)}`);
+    writeSecretError(options.json, io, getErrorMessage(error), 2);
     return 2;
   }
   if (!workflow) {
-    io.writeErr(`Error: Workflow failed validation: ${filePath}`);
+    writeSecretError(
+      options.json,
+      io,
+      `Workflow failed validation: ${filePath}`,
+      2
+    );
     return 2;
   }
 
@@ -219,11 +241,22 @@ export async function checkSecretsCommand(
       }
     );
   } catch (error) {
-    io.writeErr(`Secret check failed: ${getErrorMessage(error)}`);
+    writeSecretError(
+      options.json,
+      io,
+      `Secret check failed: ${getErrorMessage(error)}`,
+      error instanceof MissingSecretsError ? 1 : 2,
+      error instanceof MissingSecretsError
+        ? { filesChecked: [filePath], missingNames: error.secretNames }
+        : { filesChecked: [filePath], missingNames: [] }
+    );
     return error instanceof MissingSecretsError ? 1 : 2;
   }
 
-  io.writeOut(
+  writeSecretSuccess(
+    options.json,
+    io,
+    { filesChecked: [filePath], missingNames: [] },
     `✓ ${path.basename(filePath)}: all declared secrets are resolvable.`
   );
   return 0;
@@ -248,11 +281,16 @@ export async function trustSecretGrantsCommand(
           filePath
         );
   } catch (error) {
-    io.writeErr(`Error: ${getErrorMessage(error)}`);
+    writeSecretError(options.json, io, getErrorMessage(error), 2);
     return 2;
   }
   if (!workflow) {
-    io.writeErr(`Error: Workflow failed validation: ${filePath}`);
+    writeSecretError(
+      options.json,
+      io,
+      `Workflow failed validation: ${filePath}`,
+      2
+    );
     return 2;
   }
 
@@ -265,21 +303,29 @@ export async function trustSecretGrantsCommand(
     getWorkflowSecretGrants(workflow)
   );
   if (requestedGrants.length === 0) {
-    io.writeOut("No pending secret grants to approve for this workflow.");
+    writeSecretSuccess(
+      options.json,
+      io,
+      { pendingGrants: [], approved: [] },
+      "No pending secret grants to approve for this workflow."
+    );
     return 0;
   }
 
-  io.writeOut(
-    `This workflow requests ${requestedGrants.length} secret grant(s):`
-  );
-  for (const name of requestedGrants) {
-    io.writeOut(`  - ${name}`);
+  if (!options.json) {
+    io.writeOut(
+      `This workflow requests ${requestedGrants.length} secret grant(s):`
+    );
+    for (const name of requestedGrants) io.writeOut(`  - ${name}`);
+    io.writeOut("");
   }
-  io.writeOut("");
 
   if (!options.yes && !io.isInteractive) {
-    io.writeErr(
-      "Error: Cannot approve secret grants without an interactive terminal. Review the grants above, then rerun with --yes or approve them in the ctrlyoke panel. No decisions were recorded."
+    writeSecretError(
+      options.json,
+      io,
+      "Cannot approve secret grants without an interactive terminal. Review the grants above, then rerun with --yes or approve them in the ctrlyoke panel. No decisions were recorded.",
+      2
     );
     return 2;
   }
@@ -304,13 +350,19 @@ export async function trustSecretGrantsCommand(
   }
 
   if (!approved) {
-    io.writeOut(
+    writeSecretSuccess(
+      options.json,
+      io,
+      { pendingGrants: requestedGrants, approved: [] },
       "No grants were approved. They remain blocked — rerun with --yes or approve interactively."
     );
     return 0;
   }
 
-  io.writeOut(
+  writeSecretSuccess(
+    options.json,
+    io,
+    { pendingGrants: requestedGrants, approved: requestedGrants },
     `Approved ${requestedGrants.length} secret grant(s) for this workflow.`
   );
   return 0;
@@ -455,4 +507,42 @@ async function readHiddenSecret(prompt: string): Promise<string> {
 
 function redactOutput(message: string): string {
   return secretRedactionService.redactText(message);
+}
+
+function writeSecretSuccess(
+  json: boolean | undefined,
+  io: SecretCommandIo,
+  data: Record<string, unknown>,
+  textOutput?: string
+): void {
+  if (json) {
+    io.writeOut(JSON.stringify({ schemaVersion: 1, success: true, ...data }));
+  } else if (textOutput !== undefined) {
+    io.writeOut(textOutput);
+  }
+}
+
+function writeSecretError(
+  json: boolean | undefined,
+  io: SecretCommandIo,
+  message: string,
+  exitCode: number,
+  data: Record<string, unknown> = {}
+): void {
+  if (json) {
+    reportCliError(message, {
+      json: true,
+      exitCode,
+      envelope: (errorMessage) => ({
+        schemaVersion: 1,
+        success: false,
+        error: { message: errorMessage },
+        ...data,
+      }),
+      writeOut: (output) => io.writeOut(output),
+      exit: () => {},
+    });
+  } else {
+    io.writeErr(message.startsWith("Error: ") ? message : `Error: ${message}`);
+  }
 }

@@ -239,6 +239,126 @@ suite("Secret command parser", () => {
   });
 });
 
+suite("Secret command JSON output", () => {
+  test("list emits one success envelope with entries", async () => {
+    const store = new InMemorySecretStore();
+    await store.store(userSecretKey("JSON_TOKEN"), "private-value");
+    const io = new TestIo();
+    await listSecretsCommand({ json: true }, dependencies(store), io);
+
+    assert.strictEqual(io.output.length, 1);
+    const result = JSON.parse(io.output[0]) as {
+      schemaVersion: number;
+      success: boolean;
+      entries: Array<{ name: string; state: string }>;
+    };
+    assert.strictEqual(result.schemaVersion, 1);
+    assert.strictEqual(result.success, true);
+    assert.deepStrictEqual(
+      result.entries.map(({ name, state }) => ({ name, state })),
+      [{ name: "JSON_TOKEN", state: "managed-and-set" }]
+    );
+    assert.doesNotMatch(io.output[0], /private-value/);
+    assert.deepStrictEqual(io.errors, []);
+  });
+
+  test("check emits success and returned-code error envelopes", async () => {
+    const allowedStore = {
+      getDecision: () => "allow" as const,
+      getUnallowedGrants: () => [],
+      setDecisions: async () => {},
+    };
+    const successIo = new TestIo();
+    const success = await checkSecretsCommand(
+      "workflow.ctrlyoke.yaml",
+      { json: true },
+      {
+        ...workflowDependencies(new InMemorySecretStore(), {
+          steps: [{ name: "deploy", prompt: "deploy" }],
+        }),
+        secretGrantsTrustStore: allowedStore,
+      },
+      successIo
+    );
+    assert.strictEqual(success, 0);
+    assert.deepStrictEqual(JSON.parse(successIo.output[0]), {
+      schemaVersion: 1,
+      success: true,
+      filesChecked: [path.resolve("workflow.ctrlyoke.yaml")],
+      missingNames: [],
+    });
+
+    const failureIo = new TestIo();
+    const failure = await checkSecretsCommand(
+      "workflow.ctrlyoke.yaml",
+      { json: true },
+      {
+        ...workflowDependencies(new InMemorySecretStore(), {
+          steps: [
+            {
+              name: "deploy",
+              secrets: ["MISSING_JSON_TOKEN"],
+              prompt: "deploy",
+            },
+          ],
+        }),
+        secretGrantsTrustStore: allowedStore,
+      },
+      failureIo
+    );
+    assert.strictEqual(failure, 1);
+    assert.deepStrictEqual(JSON.parse(failureIo.output[0]), {
+      schemaVersion: 1,
+      success: false,
+      error: {
+        message:
+          'Secret check failed: Secret "MISSING_JSON_TOKEN" is missing for scope "deploy" (workspace/user or environment).',
+      },
+      filesChecked: [path.resolve("workflow.ctrlyoke.yaml")],
+      missingNames: ["MISSING_JSON_TOKEN"],
+    });
+    assert.deepStrictEqual(failureIo.errors, []);
+  });
+
+  test("trust-secret-grants suppresses the text list without a TTY", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-json-grants-")
+    );
+    try {
+      const io = new TestIo();
+      const result = await trustSecretGrantsCommand(
+        "workflow.ctrlyoke.yaml",
+        { json: true },
+        {
+          ...workflowDependencies(new InMemorySecretStore(), {
+            steps: [
+              { name: "deploy", secrets: ["PENDING_TOKEN"], prompt: "deploy" },
+            ],
+          }),
+          workspaceRoot: tempRoot,
+          secretGrantsTrustStore: new SecretGrantsTrustStore(
+            path.join(tempRoot, "trust.json")
+          ),
+        },
+        io
+      );
+      assert.strictEqual(result, 2);
+      assert.strictEqual(io.output.length, 1);
+      assert.deepStrictEqual(JSON.parse(io.output[0]), {
+        schemaVersion: 1,
+        success: false,
+        error: {
+          message:
+            "Cannot approve secret grants without an interactive terminal. Review the grants above, then rerun with --yes or approve them in the ctrlyoke panel. No decisions were recorded.",
+        },
+      });
+      assert.deepStrictEqual(io.errors, []);
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
 suite("Secret command handlers", () => {
   test("reads set values from stdin and stores them in the requested scope", async () => {
     const store = new InMemorySecretStore();
