@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, reproduced against `out/mcp-server.js`)
 - **Area:** `src/mcp-server.ts` (`getCoordinationState`, coordination tool dispatch)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

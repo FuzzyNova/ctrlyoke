@@ -71,6 +71,7 @@ import {
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { resolveCoordinationBoardScope } from "../../core/orchestration/ExecutionRootCoordinationStore";
+import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
 
 interface RunFixture {
   workflowKey: WorkflowKey;
@@ -533,6 +534,26 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
     assert.deepStrictEqual(released.released, ["src/a.ts"]);
     assert.strictEqual(released.scope.claimSummary.count, 0);
+  });
+
+  test("shares one participant across concurrent coordination calls", async () => {
+    const server = await setup();
+    const [claimResult, notesResult] = await Promise.all([
+      server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, { paths: ["src/a.ts"] }),
+      server.invokeTool(MCP_READ_NOTES_TOOL_NAME, {}),
+    ]);
+    const claim = responseJson(claimResult);
+    const notes = responseJson(notesResult);
+
+    assert.strictEqual(claim.scope.you, notes.scope.you);
+    const board = await new CoordinationParticipantRegistry(workspaceRoot).fold();
+    assert.strictEqual(board.participants.length, 1);
+    assert.strictEqual(board.participants[0].participantId, claim.scope.you);
+
+    const released = responseJson(
+      await server.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, { paths: ["src/a.ts"] })
+    );
+    assert.deepStrictEqual(released.released, ["src/a.ts"]);
   });
 
   test("gives cursor paging guidance for filtered reads and keeps the unread hint by default", async () => {

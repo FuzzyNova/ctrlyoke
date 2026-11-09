@@ -568,6 +568,7 @@ export class CtrlYokeMCPServer {
   private workspaceRoot: string;
   private operationQueue: Promise<void> = Promise.resolve();
   private coordinationState?: CoordinationState;
+  private coordinationStatePromise?: Promise<CoordinationState>;
 
   constructor(options: { workspaceRoot?: string } = {}) {
     this.workspaceRoot =
@@ -910,6 +911,24 @@ export class CtrlYokeMCPServer {
   }
 
   private async getCoordinationState(
+    context: McpToolCallingContext
+  ): Promise<CoordinationState> {
+    if (this.coordinationStatePromise) {
+      return this.coordinationStatePromise;
+    }
+
+    const pending = this.resolveCoordinationState(context);
+    this.coordinationStatePromise = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.coordinationStatePromise === pending) {
+        this.coordinationStatePromise = undefined;
+      }
+    }
+  }
+
+  private async resolveCoordinationState(
     context: McpToolCallingContext
   ): Promise<CoordinationState> {
     if (this.coordinationState) {

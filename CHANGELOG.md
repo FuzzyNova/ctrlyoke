@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Concurrent MCP coordination calls now share one participant registration, so parallel claims and notes use the same identity and claims can be released.
 - Split project history is now recovered when a repository is opened through a differently named symlink, and workspace-mode definition anchors from older path keys are merged without replacing newer anchors.
 - Recovering an expired file-history listing now keeps its previous length and loaded rows while pages reload, preserving the scroll position.
 - Parallel-group failures now keep the failed member's message and error icon on the correct row, including after the group is rewound for retry.
