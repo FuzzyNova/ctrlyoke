@@ -1,0 +1,1 @@
+{"type":"system","subtype":"ui_telemetry","version":"0.26.7","systemPayload":{"uiEvent":{"event.name":"qwen-code.api_error","model":"qwen3.6-plus","auth_type":"openai","error_message":"401 Invalid API-key provided. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#apikey-error","error_type":"AuthenticationError","status_code":401}}}

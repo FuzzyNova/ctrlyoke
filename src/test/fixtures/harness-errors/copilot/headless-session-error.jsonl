@@ -1,0 +1,4 @@
+{"type":"assistant.turn_end","data":{"turnId":"0"},"id":"<REDACTED_ID>","timestamp":"2026-11-09T05:54:29.800Z","parentId":"<REDACTED_ID>"}
+{"type":"session.error","data":{"errorType":"query","message":"Could not connect to local model provider at http://127.0.0.1:9/v1.\n  Check that the service is running and the port is correct.","originatingMessageId":"<REDACTED_ID>"},"id":"<REDACTED_ID>","timestamp":"2026-11-09T05:54:29.801Z","parentId":"<REDACTED_ID>"}
+{"type":"assistant.idle","data":{},"ephemeral":true,"id":"<REDACTED_ID>","timestamp":"2026-11-09T05:54:29.802Z","parentId":"<REDACTED_ID>"}
+{"type":"result","timestamp":"2026-11-09T05:54:29.805Z","sessionId":"<REDACTED_ID>","exitCode":1,"usage":{"premiumRequests":0,"totalApiDurationMs":0,"sessionDurationMs":23453,"codeChanges":{"linesAdded":0,"linesRemoved":0,"filesModified":[]}}}

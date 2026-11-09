@@ -1,0 +1,4 @@
+✕ [API Error: 401 Invalid API-key provided. For details, see:
+  https://www.alibabacloud.com/help/en/model-studio/error-code#apikey-error (request_id: <REDACTED>)] (Press Ctrl+Y to retry)
+
+> Type your message or @path/to/file
