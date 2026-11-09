@@ -172,6 +172,10 @@ import {
 } from "@utils/outputTruncation";
 import { Icon } from "../shared/Icon";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
+import {
+  OUTPUT_COPY_BUTTON_LABELS,
+  OUTPUT_COPY_MENU_TITLES,
+} from "@utils/outputCopyMenuLabels";
 
 export interface OutputRowFileUndoRequest {
   path: string;
@@ -1660,7 +1664,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   const harnessId = structuredMetadata?.harness;
   const harnessName = harnessId ? getHarnessDisplayName(harnessId) : undefined;
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
-  const [copiedOutput, setCopiedOutput] = useState(false);
+  const [copiedResponse, setCopiedResponse] = useState(false);
   const showCostEstimates = useSettingsStore(
     (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
@@ -1675,12 +1679,12 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
     }, 1200);
   }, [sessionId]);
 
-  const handleCopyOutput = useCallback(async () => {
+  const handleCopyResponse = useCallback(async () => {
     if (!outputText) return;
     const didCopy = await copyTextToClipboard(outputText);
     if (!didCopy) return;
-    setCopiedOutput(true);
-    window.setTimeout(() => setCopiedOutput(false), 1200);
+    setCopiedResponse(true);
+    window.setTimeout(() => setCopiedResponse(false), 1200);
   }, [outputText]);
 
   if (!output) return null;
@@ -1837,19 +1841,23 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   if (!output.isStreaming && outputText) {
     parts.push(
       <button
-        key="copy-output"
+        key="copy-response"
         type="button"
         className={`inline-flex items-center align-middle gap-1 transition-colors ${
-          copiedOutput
+          copiedResponse
             ? "text-indicator-success"
             : "text-description-fg hover:text-foreground"
         }`}
-        onClick={handleCopyOutput}
-        title="Copy output to clipboard"
-        aria-label="Copy output to clipboard"
+        onClick={handleCopyResponse}
+        title={OUTPUT_COPY_MENU_TITLES.RESPONSE}
+        aria-label={OUTPUT_COPY_BUTTON_LABELS.ARIA_LABEL}
       >
-        <Icon name={copiedOutput ? "codicon-check" : "codicon-copy"} />
-        <span>{copiedOutput ? "Copied" : "Copy output"}</span>
+        <Icon name={copiedResponse ? "codicon-check" : "codicon-copy"} />
+        <span>
+          {copiedResponse
+            ? OUTPUT_COPY_BUTTON_LABELS.COPIED
+            : OUTPUT_COPY_BUTTON_LABELS.COPY_RESPONSE}
+        </span>
       </button>
     );
   }

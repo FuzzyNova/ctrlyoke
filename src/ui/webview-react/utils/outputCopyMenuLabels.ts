@@ -17,6 +17,16 @@ export const OUTPUT_COPY_MENU_LABELS = {
   COPY_STEP_TRANSCRIPT: "Copy Step Transcript",
 } as const;
 
+/**
+ * The inline button in each step's stats row, which copies the same text as
+ * Copy Response. Sentence case to match the rest of the stats row.
+ */
+export const OUTPUT_COPY_BUTTON_LABELS = {
+  COPY_RESPONSE: "Copy response",
+  COPIED: "Copied",
+  ARIA_LABEL: "Copy response to clipboard",
+} as const;
+
 export const OUTPUT_COPY_MENU_TITLES = {
   RESPONSE:
     "The assistant's response. Thinking, tool calls and diffs are left out.",
