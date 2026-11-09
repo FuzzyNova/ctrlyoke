@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Workflow failure notifications now include the failing step and reason, and the duplicate error popup is gone.
 - Failed workflow step rows now show the failure reason when the workflow stops, as well as when it continues after the failure.
 - Copilot and Antigravity headless session errors now fail the step even when their CLI exits successfully; externally signalled process kills now follow `errorBehavior`.
 - Interactive Claude, Copilot and OpenCode failures now show the harness's own error text.

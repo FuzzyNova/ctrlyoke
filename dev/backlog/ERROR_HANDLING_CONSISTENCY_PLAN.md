@@ -412,6 +412,10 @@ governing user-feedback toasts only.
   - preCondition `stopWorkflow` (`failStepForInternalError`),
   - the prompt-timeout guardrail stop (CLI exit 6).
 
+  **Phase 3b trace (2026-11-09):** each listed path reaches the shared error
+  transition; `isWorkflowCompletionTransition` already accepts in-flight →
+  `ERROR` and excludes `STOPPED`, keeping user-requested stops toast-free.
+
   Any path that ends elsewhere either moves to `ERROR` or is added to
   `isWorkflowCompletionTransition` explicitly. A user-requested stop stays toast-free.
 
@@ -450,13 +454,14 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
    _CHANGELOG Changed:_ a Copilot or Antigravity headless run that reported an error now
    fails instead of succeeding, and an external signal kill now follows `errorBehavior`.~~
    Implemented in Phase 2 on 2026-11-09.
-3. **Failure record surfaces (H7).**
+3. **Failure record surfaces (H7).** **Phase 3 complete (2026-11-09):**
    - Add `failureKind`/`failureSource` to the `ATTEMPT_TERMINATED` payload. This is an
      optional field; confirm under `PersistedSchemaGuard` rules whether the timeline format
      needs a version bump.
    - Show `failureMessage` on the step row for every failed step.
    - R7: `WorkflowSummary.failure`, enrich the "Workflow Failed" notification body, and
-     remove the duplicate stop-site `notifyUserFeedback` toasts.
+     remove the duplicate stop-site `notifyUserFeedback` toasts. The failure-stop paths
+     end in `ERROR`; user-requested `STOPPED` remains excluded from completion notices.
 4. **Script classification (S1–S5, S7).** Changes in the runner, evaluator, executor and
    PTY path, with fixtures for 126/127/SIGKILL/timeout. _CHANGELOG Changed:_ a missing
    command or killed script now counts as "could not run" (follows `errorBehavior`), and an

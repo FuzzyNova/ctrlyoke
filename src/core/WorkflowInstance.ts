@@ -8,6 +8,7 @@ import {
   type RunDefinitionRejection,
 } from "./WorkingFileManager";
 import { describeRunDefinitionChanges } from "../utils/RunDefinitionAnchor";
+import { formatStepTargetLabel } from "../utils/FinalStepLabels";
 import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
 import {
   buildClearUpdates,
@@ -83,6 +84,7 @@ import {
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
+  FAILURE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
   SCRIPT_SOURCE_LABELS,
   STEP_STATUS,
@@ -1443,6 +1445,18 @@ export class WorkflowInstance
 
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
+    const finalRuntime = this.promptQueue.getFinalStepRuntime();
+    const failedResult = state.results[state.currentIndex];
+    const failureMessage =
+      finalRuntime?.failureMessage ??
+      failedResult?.error ??
+      state.stopReason?.message;
+    const failureKind =
+      finalRuntime?.failureKind ??
+      failedResult?.failureKind ??
+      (failureMessage ? FAILURE_KINDS.UNKNOWN : undefined);
+    const failedFinalStep =
+      Boolean(finalRuntime?.failureMessage) && !failedResult?.error;
     const executionTimeUpdatedAt = Date.now();
     const finalStepSummary = deriveWorkflowFinalStepSummary(
       this.promptQueue.getWorkflowFile().finalStep,
@@ -1464,6 +1478,20 @@ export class WorkflowInstance
       workingFilePath: state.workingFilePath || undefined,
       executionState: this.getAuthoritativeExecutionState(),
       stopReason: state.stopReason,
+      ...(this.getAuthoritativeExecutionState() === EXECUTION_STATES.ERROR &&
+      failureKind &&
+      failureMessage
+        ? {
+            failure: {
+              stepLabel: formatStepTargetLabel(
+                failedFinalStep,
+                finalRuntime?.loopCount ?? state.currentIndex
+              ),
+              kind: failureKind,
+              message: failureMessage,
+            },
+          }
+        : {}),
       currentStep: state.currentIndex,
       totalSteps: state.steps.length,
       startedAt: this.startedAt || undefined,

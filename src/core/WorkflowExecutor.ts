@@ -5617,23 +5617,12 @@ export class WorkflowExecutor {
             : undefined);
     const failureSource = integration.getLastFailureSource();
 
-    // Keep these existing notifications until Phase 3b centralizes failure
-    // toasts; the failure policy below still decides retry/continue/stop.
     let failureReasonForPolicy: string | undefined;
     if (
       failureKind === FAILURE_KINDS.UNKNOWN ||
       failureKind === FAILURE_KINDS.SESSION_REJECTED
     ) {
       failureReasonForPolicy = integration.getLastFailureReason();
-      const stepLabel =
-        signedStepIndex >= 0
-          ? `prompt ${signedStepIndex + 1}`
-          : formatFinalPassPhrase(Math.abs(signedStepIndex));
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        "error",
-        `Failed to execute ${stepLabel}: ${failureReasonForPolicy}`
-      );
     }
 
     if (
@@ -5920,7 +5909,6 @@ export class WorkflowExecutor {
         getExecutionTargetRunKey(target),
         stopReason
       );
-      notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
       Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
     }
 

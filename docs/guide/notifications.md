@@ -62,9 +62,13 @@ badge count of unread notifications.
 | **Prompt complete**   | **All**, **Failures Only**, None | **None** |
 
 **Workflow complete** fires when a run finishes, either completed or failed
-with an error. A run you stop yourself doesn't notify. **Prompt complete** fires
-for each step that completes or fails. **Failures Only** keeps just the
-failures.
+with an error. A **Workflow Failed** notification includes the failing step and
+the reason it stopped. Turn workflow failure notifications off with **Workflow
+complete → None** (`notifications.events.workflowComplete`), or disable the
+VS Code channel (`notifications.vscode.enabled`) or browser channel
+(`notifications.browser.mode: Never`). A run you stop yourself doesn't notify.
+**Prompt complete** fires
+for each step that completes or fails. **Failures Only** keeps just the failures.
 
 **Waiting for input** fires once each time a harness stops to ask you
 something: a permission prompt or a question. Each harness signals this

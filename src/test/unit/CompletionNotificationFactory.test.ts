@@ -16,6 +16,10 @@ import {
   type HookArtifact,
 } from "../../ui/notifications/CompletionNotificationFactory";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import {
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../../utils/SecretRedactionService";
 
 suite("CompletionNotificationFactory", () => {
   const createHookArtifact = (
@@ -194,6 +198,104 @@ suite("CompletionNotificationFactory", () => {
     assert.strictEqual(event?.title, "ctrlyoke - Workflow Complete");
     assert.match(event?.body ?? "", /refactor\.ctrlyoke\.yaml/);
     assert.strictEqual(event?.url, "http://localhost:4747/?token=test");
+  });
+
+  test("includes the failing step and reason in workflow failure notifications", () => {
+    const event = buildWorkflowCompletionNotification({
+      summary: {
+        id: "wf-failed",
+        workflowName: "refactor",
+        filePath: "refactor.ctrlyoke.yaml",
+        executionState: EXECUTION_STATES.ERROR,
+        currentStep: 1,
+        totalSteps: 4,
+        failure: {
+          stepLabel: "Step 2",
+          kind: "harnessError",
+          message: "Rate limit exceeded",
+        },
+      },
+      settings: CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+    });
+
+    assert.match(event?.body ?? "", /Step 2 - Rate limit exceeded/);
+  });
+
+  test("truncates failure notification reasons at a word boundary", () => {
+    const event = buildWorkflowCompletionNotification({
+      summary: {
+        id: "wf-long-failure",
+        workflowName: "refactor",
+        filePath: "refactor.ctrlyoke.yaml",
+        executionState: EXECUTION_STATES.ERROR,
+        currentStep: 1,
+        totalSteps: 4,
+        failure: {
+          stepLabel: "Step 2",
+          kind: "harnessError",
+          message: `${"word ".repeat(50)}tail`,
+        },
+      },
+      settings: CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+    });
+
+    assert.ok((event?.body.length ?? 0) < 260);
+    assert.ok(!(event?.body ?? "").includes("tail"));
+  });
+
+  test("suppresses workflow failure notifications when workflow events are disabled", () => {
+    const event = buildWorkflowCompletionNotification({
+      summary: {
+        id: "wf-disabled",
+        workflowName: "refactor",
+        filePath: "refactor.ctrlyoke.yaml",
+        executionState: EXECUTION_STATES.ERROR,
+        currentStep: 1,
+        totalSteps: 4,
+          failure: {
+            stepLabel: "Step 2",
+            kind: "harnessError",
+            message: "Failed",
+          },
+      },
+      settings: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+        events: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
+          workflowComplete: NOTIFICATION_EVENT_MODES.NONE,
+        },
+      },
+    });
+
+    assert.strictEqual(event, undefined);
+  });
+
+  test("redacts resolved secrets from failure notification reasons", () => {
+    const redactor = new RunSecretRedactor();
+    redactor.addResolvedValues({ API_KEY: "notification-secret-value" });
+    const release = secretRedactionService.register(redactor);
+    try {
+      const event = buildWorkflowCompletionNotification({
+        summary: {
+          id: "wf-secret-failure",
+          workflowName: "refactor",
+          filePath: "refactor.ctrlyoke.yaml",
+          executionState: EXECUTION_STATES.ERROR,
+          currentStep: 1,
+          totalSteps: 4,
+          failure: {
+            stepLabel: "Step 2",
+            kind: "harnessError",
+            message: "Token notification-secret-value rejected",
+          },
+        },
+        settings: CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+      });
+
+      assert.doesNotMatch(event?.body ?? "", /notification-secret-value/);
+    } finally {
+      release();
+    }
   });
 
   test("builds test notifications with stable metadata", () => {

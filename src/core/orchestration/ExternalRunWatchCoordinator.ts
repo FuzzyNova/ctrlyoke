@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { queueTargetKey } from "../../utils/OutputTargetKeys";
+import { formatStepTargetLabel } from "../../utils/FinalStepLabels";
 import {
   EXECUTION_STATES,
   deriveWorkflowFinalStepSummary,
@@ -19,6 +20,7 @@ import {
   EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   FINAL_STEP_PHASES,
+  FAILURE_KINDS,
   OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
   WORKFLOW_LOCK_LIVENESS,
@@ -584,6 +586,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       workingFile.finalStep,
       workingFile._runtime?.finalStep
     );
+    const failedRuntime = workingFile.steps?.[currentIndex]?._runtime;
     const summary: WorkflowSummary = {
       id: workflowId,
       workflowKey,
@@ -595,6 +598,16 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       filePath: workingFilePath,
       workingFilePath,
       executionState,
+      ...(executionState === EXECUTION_STATES.ERROR &&
+      failedRuntime?.failureMessage
+        ? {
+            failure: {
+              stepLabel: formatStepTargetLabel(false, currentIndex),
+              kind: failedRuntime.failureKind ?? FAILURE_KINDS.UNKNOWN,
+              message: failedRuntime.failureMessage,
+            },
+          }
+        : {}),
       currentStep: currentIndex,
       totalSteps,
       startedAt: workingFile.startedAt,

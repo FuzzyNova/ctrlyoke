@@ -2109,6 +2109,57 @@ suite("CtrlYokeHostedServer feedback transport", () => {
     }
   });
 
+  test("uses the summary failure detail in browser completion notifications", () => {
+    const notifications: Array<{ event?: { body?: string } }> = [];
+    const server = Object.create(
+      CtrlYokeHostedServer.prototype
+    ) as HostedServerFeedbackInternals;
+    server.connections = new Set();
+    server.completionTracker = new CompletionNotificationTracker();
+    server.broadcast = (message) => {
+      if (
+        (message as { type?: string }).type === MESSAGE_TYPES.NOTIFICATION_EVENT
+      ) {
+        notifications.push(message as { event?: { body?: string } });
+      }
+    };
+    const summary = (
+      executionState: WorkflowSummary["executionState"]
+    ): WorkflowSummary => ({
+      id: "failed-run",
+      workflowKey: "lineage-1" as WorkflowSummary["workflowKey"],
+      runRef: "run-1" as WorkflowSummary["runRef"],
+      workflowName: "workflow",
+      filePath: "workflow.ctrlyoke.yaml",
+      executionState,
+      currentStep: 1,
+      totalSteps: 2,
+      failure:
+        executionState === EXECUTION_STATES.ERROR
+          ? {
+              stepLabel: "Step 2",
+              kind: "harnessError",
+              message: "Rate limited",
+            }
+          : undefined,
+    });
+
+    try {
+      configService.setCliOverlay({
+        notifications: {
+          browser: { mode: BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY },
+        },
+      });
+      server.notifyWorkflowSummaryUpdated(summary(EXECUTION_STATES.RUNNING));
+      server.notifyWorkflowSummaryUpdated(summary(EXECUTION_STATES.ERROR));
+
+      assert.strictEqual(notifications.length, 1);
+      assert.match(notifications[0]?.event?.body ?? "", /Step 2 - Rate limited/);
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
   test("delivers USER_FEEDBACK even when browser notifications are never", () => {
     try {
       configService.setCliOverlay({

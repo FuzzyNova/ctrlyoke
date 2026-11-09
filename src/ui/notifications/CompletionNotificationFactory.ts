@@ -22,6 +22,7 @@ import type {
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import type { CtrlYokeNotificationSettings } from "../../types/CtrlYokeSettings";
+import { secretRedactionService } from "../../utils/SecretRedactionService";
 
 export interface CtrlYokeNotificationEvent {
   id: string;
@@ -252,6 +253,11 @@ function buildWorkflowBody(
     parts.push(workflowName);
   }
 
+  if (state === EXECUTION_STATES.ERROR && summary.failure) {
+    parts.push(summary.failure.stepLabel);
+    parts.push(truncateFailureMessage(secretRedactionService.redactText(summary.failure.message)));
+  }
+
   if (summary.totalSteps > 0) {
     const completedCount =
       state === EXECUTION_STATES.COMPLETED
@@ -269,6 +275,13 @@ function buildWorkflowBody(
   }
 
   return parts.join(" - ") || "Workflow finished.";
+}
+
+function truncateFailureMessage(message: string): string {
+  const normalized = message.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 200) return normalized;
+  const boundary = normalized.lastIndexOf(" ", 200);
+  return `${normalized.slice(0, boundary > 0 ? boundary : 200).trimEnd()}…`;
 }
 
 function buildPromptBody(

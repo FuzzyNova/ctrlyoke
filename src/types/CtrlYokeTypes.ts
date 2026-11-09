@@ -1447,6 +1447,8 @@ export interface WorkflowSummary {
   executionState: ExecutionState;
   /** Structured reason when a run ended because an execution guardrail fired. */
   stopReason?: WorkflowStopReason;
+  /** Failure that stopped this run, when execution ended in ERROR. */
+  failure?: { stepLabel: string; kind: FailureKind; message: string };
   /** 0-indexed: index of the next prompt to execute (mirrors PromptQueue.state.currentIndex) */
   currentStep: number;
   totalSteps: number;
