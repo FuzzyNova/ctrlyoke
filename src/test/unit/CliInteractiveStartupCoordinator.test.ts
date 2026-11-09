@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { testNotificationDirectory } from "../helpers/tempWorkspace";
 import { suite, test } from "mocha";
 import { CliInteractiveStartupCoordinator } from "../../core/harness/shared/CliInteractiveStartupCoordinator";
 import { INTERACTIVE_ABORT_KINDS } from "../../types/DashboardConstants";
@@ -35,7 +36,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: true,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
       },
       getWorkspaceRoot: () => process.cwd(),
       getAbortState: () => null,
@@ -80,7 +81,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: true,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
         waitForSessionStart: async (
           _config: unknown,
           _startTime: Date,
@@ -139,7 +140,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: false,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
       },
       getWorkspaceRoot: () => process.cwd(),
       getAbortState: () => null,
@@ -181,7 +182,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: true,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
         waitForSessionStart: async () => ({
           completed: false,
           error: "Timeout waiting for SessionStart notification",
@@ -245,7 +246,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: true,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
         waitForSessionStart: async () => ({
           completed: true,
           data: {
@@ -308,7 +309,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: false,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
       },
       getWorkspaceRoot: () => process.cwd(),
       getAbortState: () => null,
@@ -364,7 +365,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: true,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
         waitForSessionStart: async () => ({
           completed: false,
           error: "Timeout waiting for SessionStart notification",
@@ -439,7 +440,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         supportsSessionStart: true,
         monitorForCompletion: async () => ({ completed: false }),
         buildHookConfig: () => ({ type: "none" as const }),
-        getNotificationDirectory: () => process.cwd(),
+        getNotificationDirectory: () => testNotificationDirectory(),
         waitForSessionStart: async () => ({
           completed: false,
           error: "Timeout waiting for SessionStart notification",

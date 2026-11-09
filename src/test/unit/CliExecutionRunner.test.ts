@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { testNotificationDirectory } from "../helpers/tempWorkspace";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -48,7 +49,7 @@ function createProvider(options?: {
       supportsSessionStart: options?.supportsSessionStart ?? true,
       monitorForCompletion: async () => ({ completed: false }),
       buildHookConfig: () => ({ type: "none" as const }),
-      getNotificationDirectory: () => process.cwd(),
+      getNotificationDirectory: () => testNotificationDirectory(),
       waitForSessionStart: async (
         _config: unknown,
         _startTime: Date,
@@ -1082,7 +1083,7 @@ suite("CliExecutionRunner", () => {
       // the environment; without it the step never sees its stop signal.
       assert.strictEqual(
         getStandaloneEnv()?.CTRLYOKE_NOTIFY_DIR,
-        process.cwd()
+        testNotificationDirectory()
       );
       assert.ok(getStandaloneEnv()?.CTRLYOKE_RUN_ID);
       // The TUI is ended only once the monitor has drained the session log.

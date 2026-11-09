@@ -16,6 +16,23 @@ export function makeTempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
+let sharedNotificationDirectory: string | undefined;
+
+/**
+ * Notification directory for harness test doubles' `getNotificationDirectory`.
+ * The execution runner writes `<runId>-turn-context.json` there, so a double
+ * that returned `process.cwd()` littered the repo root on every `npm test`.
+ * Created once per test process and removed when it exits.
+ */
+export function testNotificationDirectory(): string {
+  if (!sharedNotificationDirectory) {
+    const dir = makeTempDir("ctrlyoke-test-notify-");
+    sharedNotificationDirectory = dir;
+    process.once("exit", () => removeTempDir(dir));
+  }
+  return sharedNotificationDirectory;
+}
+
 /**
  * Unlinks every symlink and directory junction under `dir`, leaving their
  * targets alone. The extension tests run on Electron's Node 24, whose

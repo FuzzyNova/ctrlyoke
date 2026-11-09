@@ -4,7 +4,11 @@ import * as os from "os";
 import * as path from "path";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
-import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import {
+  makeTempDir,
+  removeTempDir,
+  testNotificationDirectory,
+} from "../helpers/tempWorkspace";
 import { suite, test, setup, teardown } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
@@ -131,7 +135,7 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
       supportsSessionStart: false,
       monitorForCompletion: async () => ({ completed: false }),
       buildHookConfig: () => ({ type: "none" as const }),
-      getNotificationDirectory: () => process.cwd(),
+      getNotificationDirectory: () => testNotificationDirectory(),
     },
     toolPermissionMapper: {
       hasFullPermissions: () => true,

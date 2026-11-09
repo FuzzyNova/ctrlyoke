@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { testNotificationDirectory } from "../helpers/tempWorkspace";
 import { suite, setup, teardown, test } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
@@ -51,7 +52,7 @@ function createProvider(): ICliProvider {
       supportsSessionStart: false,
       monitorForCompletion: async () => ({ completed: false }),
       buildHookConfig: () => ({ type: "none" as const }),
-      getNotificationDirectory: () => process.cwd(),
+      getNotificationDirectory: () => testNotificationDirectory(),
     },
     toolPermissionMapper: {
       capabilities: new CopilotToolPermissionMapper().capabilities,
