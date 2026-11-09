@@ -12,6 +12,11 @@ import {
   userProjectsRoot,
 } from "../../utils/ProjectStatePaths";
 import { formatRunRef } from "../../utils/WorkflowPaths";
+import { definitionAnchorPath } from "../../utils/WorkflowPaths";
+import {
+  anchorRunDefinitionOnDisk,
+  verifyRunDefinitionFile,
+} from "../../utils/RunDefinitionAnchor";
 import {
   RUN_HISTORY_LOCATIONS,
   RUNNER_IDS,
@@ -31,6 +36,7 @@ suite("Project state through symlinked paths", () => {
   let sandbox: string;
   let realRepo: string;
   let linkedRepo: string;
+  let differentlyNamedLink: string;
   let originalStateHome: string | undefined;
 
   setup(async () => {
@@ -47,6 +53,8 @@ suite("Project state through symlinked paths", () => {
     );
     realRepo = path.join(sandbox, "real", "repo");
     linkedRepo = path.join(sandbox, "linked", "repo");
+    differentlyNamedLink = path.join(sandbox, "work");
+    await fs.symlink(realRepo, differentlyNamedLink, LINK_TYPE);
   });
 
   teardown(async () => {
@@ -88,6 +96,75 @@ suite("Project state through symlinked paths", () => {
       (await readMetadata(canonicalProjectRoot())).statePath,
       realRepo
     );
+  });
+
+  test("startup adopts history filed under a differently named symlink", async () => {
+    const legacyRoot = await makeLegacyProject(
+      differentlyNamedLink,
+      Date.UTC(2026, 0, 2)
+    );
+
+    await registry().initialize(realRepo);
+
+    assert.deepStrictEqual(await runRefs(canonicalProjectRoot()), [
+      formatRunRef(Date.UTC(2026, 0, 2)),
+    ]);
+    await assert.rejects(() => fs.stat(legacyRoot), { code: "ENOENT" });
+  });
+
+  test("workspace startup merges split anchors and preserves the newer copy", async () => {
+    const canonicalRoot = await makeProjectScaffold(realRepo);
+    const legacyRoot = await makeProjectScaffold(linkedRepo);
+    const runA = await makeWorkspaceRun(Date.UTC(2026, 0, 1), "A");
+    const runB = await makeWorkspaceRun(Date.UTC(2026, 0, 2), "B");
+    await anchorRunDefinitionOnDisk(runA);
+    await anchorRunDefinitionOnDisk(runB);
+    const canonicalAnchorB = definitionAnchorPath(runB);
+    assert.ok(canonicalAnchorB);
+    const legacyAnchorB = path.join(
+      legacyRoot,
+      path.relative(canonicalRoot, canonicalAnchorB)
+    );
+    await fs.mkdir(path.dirname(legacyAnchorB), { recursive: true });
+    await fs.rename(canonicalAnchorB, legacyAnchorB);
+
+    await new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.WORKSPACE).initialize(
+      linkedRepo
+    );
+
+    assert.strictEqual(
+      (await verifyRunDefinitionFile(runB))?.verdict.status,
+      "trusted"
+    );
+    assert.ok(await fs.stat(path.join(canonicalRoot, ".definition-anchors")));
+  });
+
+  test("workspace anchor merge keeps a newer legacy anchor for the same run", async () => {
+    const canonicalRoot = await makeProjectScaffold(realRepo);
+    const legacyRoot = await makeProjectScaffold(linkedRepo);
+    const runFile = await makeWorkspaceRun(Date.UTC(2026, 0, 3), "current");
+    await anchorRunDefinitionOnDisk(runFile);
+    const canonicalAnchor = definitionAnchorPath(runFile);
+    assert.ok(canonicalAnchor);
+    const legacyAnchor = path.join(
+      legacyRoot,
+      path.relative(canonicalRoot, canonicalAnchor)
+    );
+    await fs.mkdir(path.dirname(legacyAnchor), { recursive: true });
+    const anchor = JSON.parse(await fs.readFile(canonicalAnchor, "utf8")) as {
+      recordedAt: number;
+    };
+    anchor.recordedAt += 1000;
+    await fs.writeFile(legacyAnchor, JSON.stringify(anchor));
+
+    await new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.WORKSPACE).initialize(
+      linkedRepo
+    );
+
+    const merged = JSON.parse(await fs.readFile(canonicalAnchor, "utf8")) as {
+      recordedAt: number;
+    };
+    assert.strictEqual(merged.recordedAt, anchor.recordedAt);
   });
 
   test("keeps the more recent history when both keys hold runs", async () => {
@@ -244,6 +321,50 @@ suite("Project state through symlinked paths", () => {
       })
     );
     return projectRoot;
+  }
+
+  async function makeProjectScaffold(spelling: string): Promise<string> {
+    const projectRoot = path.join(
+      userProjectsRoot(),
+      legacyProjectKey(spelling)
+    );
+    await fs.mkdir(projectRoot, { recursive: true });
+    const stamp = new Date(0).toISOString();
+    await fs.writeFile(
+      path.join(projectRoot, "project.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        statePath: spelling,
+        createdAt: stamp,
+        lastOpenedAt: stamp,
+      })
+    );
+    return projectRoot;
+  }
+
+  async function makeWorkspaceRun(
+    runAt: number,
+    label: string
+  ): Promise<string> {
+    const runFile = path.join(
+      realRepo,
+      ".ctrlyoke",
+      ".runs",
+      "workflow-2026-01-01T00-00-00",
+      formatRunRef(runAt),
+      "workflow.ctrlyoke.json"
+    );
+    await fs.mkdir(path.dirname(runFile), { recursive: true });
+    await fs.writeFile(
+      runFile,
+      JSON.stringify({
+        startedAt: runAt,
+        definitionRevision: 1,
+        steps: [{ prompt: label }],
+        _runtime: {},
+      })
+    );
+    return runFile;
   }
 
   async function runRefs(projectRoot: string): Promise<string[]> {

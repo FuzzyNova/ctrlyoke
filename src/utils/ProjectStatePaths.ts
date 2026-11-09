@@ -88,8 +88,8 @@ export function projectKey(stateRoot: string): string {
 }
 
 /**
- * The key ctrlyoke 0.2.0 derived from the path exactly as spelled, before keys
- * were canonicalized. Only the registry's migration of split history and
+ * The key older releases derived from the path exactly as spelled, before
+ * keys were canonicalized. Only the registry's migration of split history and
  * `history relink`'s source lookup may use it; everything else uses
  * {@link projectKey}.
  */

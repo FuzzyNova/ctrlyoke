@@ -62,6 +62,8 @@ export interface ProjectStateMetadata {
   gitToplevel?: string;
   createdAt: string;
   lastOpenedAt: string;
+  /** Whether the one-time full project-key recovery scan has completed. */
+  legacyProjectScanComplete?: boolean;
 }
 
 export interface ProjectStateInitialization {
@@ -124,7 +126,6 @@ async function registerUserProject(
   // before the directory exists. It is still inside the private projects
   // root and is removed by withFileLock after the transaction completes.
   return withUserProjectRegistryLock(async () => {
-    await adoptSplitProjectHistory(projectsRoot, resolvedStateRoot);
     return withFileLock(
       projectRoot,
       async () => {
@@ -163,6 +164,8 @@ async function registerUserProject(
           metadataPath,
           metadata
         );
+
+        await adoptSplitProjectHistory(projectsRoot, resolvedStateRoot);
 
         return { projectRoot, metadataPath, metadata };
       },
@@ -274,7 +277,7 @@ export interface ProjectHistoryLookup {
   /** The canonical directory, when it exists with metadata for this root. */
   canonical?: ProjectHistoryCandidate;
   /**
-   * Directories left under a key that ctrlyoke 0.2.0 derived from a
+   * Directories left under a key that older releases derived from a
    * symlinked spelling of the same root.
    */
   splits: ProjectHistoryCandidate[];
@@ -288,10 +291,10 @@ export interface ProjectHistoryLookup {
 
 /**
  * Find every directory holding history for one state root: the canonical key
- * and any key 0.2.0 derived from a symlinked spelling. Split directories are
+ * and any key older releases derived from a symlinked spelling. Split directories are
  * found by the spelling passed in and by scanning keys that share a slug with
- * either spelling, and are matched on their recorded `statePath`. Read-only;
- * call it under {@link withUserProjectRegistryLock}.
+ * either spelling. On the first lookup it scans all project keys and matches
+ * them on `statePath`. Call it under {@link withUserProjectRegistryLock}.
  */
 export async function findProjectHistory(
   projectsRoot: string,
@@ -313,6 +316,18 @@ export async function findProjectHistory(
     }
   }
   splitKeys.delete(canonicalKey);
+
+  const canonicalMetadata =
+    await readProjectStateMetadata(canonicalProjectRoot);
+  if (!canonicalMetadata?.legacyProjectScanComplete) {
+    for (const entry of await fs.readdir(projectsRoot, {
+      withFileTypes: true,
+    })) {
+      if (!entry.isDirectory() || !PROJECT_KEY_PATTERN.test(entry.name))
+        continue;
+      splitKeys.add(entry.name);
+    }
+  }
 
   const canonical = await readHistoryCandidate(
     projectsRoot,
@@ -360,7 +375,10 @@ function compareRecency(
   if (a.hasContent !== b.hasContent) {
     return a.hasContent ? 1 : -1;
   }
-  return (a.latestRunAt ?? -Infinity) - (b.latestRunAt ?? -Infinity);
+  if (a.latestRunAt === undefined && b.latestRunAt === undefined) return 0;
+  if (a.latestRunAt === undefined) return -1;
+  if (b.latestRunAt === undefined) return 1;
+  return a.latestRunAt - b.latestRunAt;
 }
 
 async function readHistoryCandidate(
@@ -395,7 +413,7 @@ async function readHistoryCandidate(
 const reportedSplitRoots = new Set<string>();
 
 /**
- * Move history that ctrlyoke 0.2.0 filed under a symlinked spelling's key to
+ * Move history filed under a symlinked spelling's key to
  * the canonical key, so every spelling of the project sees it. When both keys
  * hold history, the one with the most recent run is kept at the canonical key
  * and the other stays under the old key, untouched. Best effort: a live runner
@@ -409,10 +427,39 @@ async function adoptSplitProjectHistory(
   try {
     const lookup = await findProjectHistory(projectsRoot, stateRoot);
     const { keep, canonical, canonicalProjectRoot, canonicalRoot } = lookup;
+    if (
+      lookup.splits.length &&
+      lookup.canonical?.latestRunAt === undefined &&
+      lookup.splits.every((split) => split.latestRunAt === undefined)
+    ) {
+      const anchorMergeProjects = [
+        canonicalProjectRoot,
+        ...lookup.splits.map((split) => split.projectRoot),
+      ];
+      const runners = await Promise.all(
+        anchorMergeProjects.map((projectRoot) =>
+          inspectProjectRunner(projectRoot).catch(() => ({
+            status: PROJECT_RUNNER_STATUSES.UNKNOWN,
+          }))
+        )
+      );
+      if (
+        runners.every(
+          (runner) => runner.status === PROJECT_RUNNER_STATUSES.NONE
+        )
+      ) {
+        await mergeDefinitionAnchors(
+          projectsRoot,
+          canonicalProjectRoot,
+          lookup.splits
+        );
+      }
+    }
     if (!keep || keep === canonical) {
       if (
         canonical?.hasContent &&
         lookup.splits.some((split) => split.hasContent) &&
+        canonical.latestRunAt !== undefined &&
         !reportedSplitRoots.has(canonicalRoot)
       ) {
         reportedSplitRoots.add(canonicalRoot);
@@ -423,6 +470,11 @@ async function adoptSplitProjectHistory(
             .join(", ")}; ${canonicalProjectRoot} has the more recent run.`
         );
       }
+      await markLegacyProjectScanComplete(
+        projectsRoot,
+        canonicalProjectRoot,
+        canonical
+      );
       return;
     }
 
@@ -447,6 +499,7 @@ async function adoptSplitProjectHistory(
     await writeProjectStateMetadata(projectsRoot, canonicalProjectRoot, {
       ...keep.metadata,
       statePath: canonicalRoot,
+      legacyProjectScanComplete: true,
     });
     console.warn(
       `[ProjectStateRegistry] Moved history for "${canonicalRoot}" from ${keep.projectRoot} to ${canonicalProjectRoot}.`
@@ -456,6 +509,18 @@ async function adoptSplitProjectHistory(
       `[ProjectStateRegistry] Could not move split history for "${stateRoot}": ${getErrorMessage(error)}`
     );
   }
+}
+
+async function markLegacyProjectScanComplete(
+  projectsRoot: string,
+  projectRoot: string,
+  candidate: ProjectHistoryCandidate | undefined
+): Promise<void> {
+  if (!candidate) return;
+  await writeProjectStateMetadata(projectsRoot, projectRoot, {
+    ...candidate.metadata,
+    legacyProjectScanComplete: true,
+  });
 }
 
 /**
@@ -574,7 +639,7 @@ async function readOrCreateMetadata(
   const now = new Date().toISOString();
   return {
     schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROJECT_METADATA],
-    // Always the canonical spelling: a record written by 0.2.0 may hold the
+    // Always the canonical spelling: an older record may hold the
     // symlinked spelling the project was first opened under.
     statePath: stateRoot,
     ...(gitToplevel !== undefined
@@ -584,6 +649,9 @@ async function readOrCreateMetadata(
         : {}),
     createdAt: existing?.createdAt ?? now,
     lastOpenedAt: now,
+    ...(existing?.legacyProjectScanComplete
+      ? { legacyProjectScanComplete: true }
+      : {}),
   };
 }
 
@@ -620,7 +688,10 @@ function parseMetadata(
     typeof value.statePath !== "string" ||
     typeof value.createdAt !== "string" ||
     typeof value.lastOpenedAt !== "string" ||
-    (value.gitToplevel !== undefined && typeof value.gitToplevel !== "string")
+    (value.gitToplevel !== undefined &&
+      typeof value.gitToplevel !== "string") ||
+    (value.legacyProjectScanComplete !== undefined &&
+      typeof value.legacyProjectScanComplete !== "boolean")
   ) {
     throw new Error(`Invalid project metadata fields at ${metadataPath}.`);
   }
@@ -633,7 +704,87 @@ function parseMetadata(
       : {}),
     createdAt: value.createdAt,
     lastOpenedAt: value.lastOpenedAt,
+    ...(value.legacyProjectScanComplete === true
+      ? { legacyProjectScanComplete: true }
+      : {}),
   };
+}
+
+async function mergeDefinitionAnchors(
+  projectsRoot: string,
+  canonicalProjectRoot: string,
+  splits: ProjectHistoryCandidate[]
+): Promise<void> {
+  await fs.mkdir(canonicalProjectRoot, {
+    recursive: true,
+    mode: PRIVATE_DIRECTORY_MODE,
+  });
+  const sourceRoots = splits.map((split) =>
+    path.join(split.projectRoot, ".definition-anchors")
+  );
+  const destinationRoot = path.join(
+    canonicalProjectRoot,
+    ".definition-anchors"
+  );
+  for (const sourceRoot of sourceRoots) {
+    await copyNewerAnchorFiles(projectsRoot, sourceRoot, destinationRoot);
+  }
+}
+
+async function copyNewerAnchorFiles(
+  projectsRoot: string,
+  source: string,
+  destination: string
+): Promise<void> {
+  const sourceStats = await lstatIfExists(source);
+  if (!sourceStats) return;
+  if (sourceStats.isSymbolicLink() || !sourceStats.isDirectory()) return;
+  await assertContainedByRealRoot(projectsRoot, source);
+  const destinationStats = await lstatIfExists(destination);
+  if (
+    destinationStats?.isSymbolicLink() ||
+    (destinationStats && !destinationStats.isDirectory())
+  ) {
+    throw new Error(
+      `Definition anchor directory is not a real directory: ${destination}`
+    );
+  }
+  for (const entry of await fs.readdir(source, { withFileTypes: true })) {
+    const sourcePath = path.join(source, entry.name);
+    const destinationPath = path.join(destination, entry.name);
+    if (entry.isDirectory() && !entry.isSymbolicLink()) {
+      await fs.mkdir(destinationPath, {
+        recursive: true,
+        mode: PRIVATE_DIRECTORY_MODE,
+      });
+      await copyNewerAnchorFiles(projectsRoot, sourcePath, destinationPath);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const incoming = await fs.readFile(sourcePath, "utf8");
+    let shouldCopy = false;
+    try {
+      const existing = JSON.parse(
+        await fs.readFile(destinationPath, "utf8")
+      ) as { recordedAt?: number };
+      const next = JSON.parse(incoming) as { recordedAt?: number };
+      shouldCopy =
+        typeof next.recordedAt === "number" &&
+        (typeof existing.recordedAt !== "number" ||
+          next.recordedAt > existing.recordedAt);
+    } catch (error) {
+      shouldCopy = hasErrnoCode(error, NODE_ERROR_CODES.ENOENT);
+    }
+    if (shouldCopy) {
+      await fs.mkdir(path.dirname(destinationPath), {
+        recursive: true,
+        mode: PRIVATE_DIRECTORY_MODE,
+      });
+      await fs.writeFile(destinationPath, incoming, {
+        mode: PRIVATE_FILE_MODE,
+      });
+    }
+  }
 }
 
 async function writeMetadataAtomically(
