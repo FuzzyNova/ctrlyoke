@@ -335,18 +335,23 @@ suite("CLI run command parser", () => {
     }) as typeof process.exit;
     console.error = () => undefined;
     try {
+      // --var errors are Commander argument errors, formatted like every
+      // other flag error and mapped to the usage exit code by the CLI entry.
+      const isInvalidVar = (error: unknown) =>
+        (error as { code?: unknown }).code === "commander.invalidArgument" &&
+        /--var /.test((error as Error).message);
       await assert.rejects(
         createRunProgram({}).parseAsync(["run", "--var", "bad-name=value"], {
           from: "user",
         }),
-        /process\.exit\(2\)/
+        isInvalidVar
       );
       await assert.rejects(
         createRunProgram({}).parseAsync(
           ["run", "--var", "foo=one", "--var", "FOO=two"],
           { from: "user" }
         ),
-        /process\.exit\(2\)/
+        isInvalidVar
       );
     } finally {
       process.exit = originalExit;
