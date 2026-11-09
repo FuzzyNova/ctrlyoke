@@ -14,8 +14,12 @@ Four related improvements to the steps panel (`WorkflowStepsPanel` + `FinalStepF
    navigated, even though they cannot be edited.
 4. **Virtualize the step list**: resizing or expanding the panel with ~50+ steps is slow. Move
    the list onto the shared TanStack foundation that the other long lists already use.
+5. **Steps panel follows the output pane**: while the user scrolls the output, the steps panel
+   scrolls itself to keep the step being read in view. A manual scroll of the panel turns this
+   off until the step being read is back in view. See
+   [Part 5](#part-5-steps-panel-follows-the-output-pane).
 
-Optional fifth part (recommended): **final-step pass divider rows** in the main list. See
+Optional (recommended): **final-step pass divider rows** in the main list. See
 [Part 2b](#part-2b-final-step-pass-dividers-in-the-main-list).
 
 They are grouped because (1) changes row heights and adds nested scrollers, and that has to be
@@ -25,16 +29,17 @@ designed with (3) in mind. Navigation for (1) and (2) goes through one new code 
 
 ## Problems today
 
-| #   | Problem                                                                                                                                                                                                                                                                                                                             | Where                                                                                                                             |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| P1  | `Retry N of M` shows only while the step runs. `retryStates` is transient: it is keyed by queue step index only, set by `RETRY_ATTEMPT_CHANGED`, and cleared afterwards. A completed step does not show that it retried. The final step never shows retries.                                                                        | `PromptStepDetails.tsx:126`, `workflowStore.ts` `setRetryState`/`clearRetryState`, `useMessageHandler.ts` `RETRY_ATTEMPT_CHANGED` |
-| P2  | Clicking a step scrolls to the target's anchor row (`scrollToTarget` → `anchorRowIndexByTarget`), which is the step's first output. There is no way to land on "Retry 2".                                                                                                                                                           | `useStepClickHandler.ts`, `useOutputNavigation.ts` `scrollToTarget`                                                               |
-| P3  | In the output pane, attempt groups with more than one attempt start **collapsed** (`collapsedAttemptGroupKeys`, local `useState` in `useOutputRowsModel`). So the row for retry 2 often does not exist until the user expands the group.                                                                                            | `useOutputRowsModel.ts:187-213`, `outputRows.ts` `getCollapsibleAttemptGroupKeys`                                                 |
-| P4  | Clicking the Final Step row only calls `selectFinalStep`. It never navigates the output. The same handler is duplicated in `WorkflowStepsPanel.handleFinalStepSelect` and `PromptChipRail.handleFinalStepClick`.                                                                                                                    | `WorkflowStepsPanel.tsx:1027`, `PromptChipRail.tsx:694`                                                                           |
-| P5  | Across multiple passes, there is no way to jump to "pass 2". The output already addresses each pass as its own target (`{ kind: FINAL_STEP, index: loopIndex }`), so only the UI is missing.                                                                                                                                        | `outputProjection.ts` `toOutputMessageTarget`                                                                                     |
-| P6  | Every step row is mounted: done steps, pending sortable steps, and groups. Each row also has its own store subscriptions (`useSettingsStore` in `WorkflowStep`, `useIsStepInOutputView`, and so on). Mounting the panel and every resize frame both scale with step count.                                                          | `WorkflowStepsPanel.tsx:1973-2200`                                                                                                |
-| P7  | Read-only workflows cannot navigate. `handleStepClick` returns early when `isExternallyManaged`; the step list container gets `pointer-events-none` when `isLineageReadOnly` (deleted or system-generated), which blocks every click; the footer's `isSelectionReadOnly` blocks `onSelect`. Navigation and editing share one guard. | `WorkflowStepsPanel.tsx:1021`, `:1861`, `FinalStepFooter.tsx` `isSelectionReadOnly`                                               |
-| P8  | After a manual re-run (set start position → edit → continue), clicking the step lands on its **first** output ever (`anchorRowIndexByTarget` is set once, at the target's first row), which is the superseded run, not the run the step row now describes.                                                                          | `outputRows.ts:2535`                                                                                                              |
+| #   | Problem                                                                                                                                                                                                                                                                                                                                          | Where                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | `Retry N of M` shows only while the step runs. `retryStates` is transient: it is keyed by queue step index only, set by `RETRY_ATTEMPT_CHANGED`, and cleared afterwards. A completed step does not show that it retried. The final step never shows retries.                                                                                     | `PromptStepDetails.tsx:126`, `workflowStore.ts` `setRetryState`/`clearRetryState`, `useMessageHandler.ts` `RETRY_ATTEMPT_CHANGED` |
+| P2  | Clicking a step scrolls to the target's anchor row (`scrollToTarget` → `anchorRowIndexByTarget`), which is the step's first output. There is no way to land on "Retry 2".                                                                                                                                                                        | `useStepClickHandler.ts`, `useOutputNavigation.ts` `scrollToTarget`                                                               |
+| P3  | In the output pane, attempt groups with more than one attempt start **collapsed** (`collapsedAttemptGroupKeys`, local `useState` in `useOutputRowsModel`). So the row for retry 2 often does not exist until the user expands the group.                                                                                                         | `useOutputRowsModel.ts:187-213`, `outputRows.ts` `getCollapsibleAttemptGroupKeys`                                                 |
+| P4  | Clicking the Final Step row only calls `selectFinalStep`. It never navigates the output. The same handler is duplicated in `WorkflowStepsPanel.handleFinalStepSelect` and `PromptChipRail.handleFinalStepClick`.                                                                                                                                 | `WorkflowStepsPanel.tsx:1027`, `PromptChipRail.tsx:694`                                                                           |
+| P5  | Across multiple passes, there is no way to jump to "pass 2". The output already addresses each pass as its own target (`{ kind: FINAL_STEP, index: loopIndex }`), so only the UI is missing.                                                                                                                                                     | `outputProjection.ts` `toOutputMessageTarget`                                                                                     |
+| P6  | Every step row is mounted: done steps, pending sortable steps, and groups. Each row also has its own store subscriptions (`useSettingsStore` in `WorkflowStep`, `useIsStepInOutputView`, and so on). Mounting the panel and every resize frame both scale with step count.                                                                       | `WorkflowStepsPanel.tsx:1973-2200`                                                                                                |
+| P7  | Read-only workflows cannot navigate. `handleStepClick` returns early when `isExternallyManaged`; the step list container gets `pointer-events-none` when `isLineageReadOnly` (deleted or system-generated), which blocks every click; the footer's `isSelectionReadOnly` blocks `onSelect`. Navigation and editing share one guard.              | `WorkflowStepsPanel.tsx:1021`, `:1861`, `FinalStepFooter.tsx` `isSelectionReadOnly`                                               |
+| P8  | After a manual re-run (set start position → edit → continue), clicking the step lands on its **first** output ever (`anchorRowIndexByTarget` is set once, at the target's first row), which is the superseded run, not the run the step row now describes.                                                                                       | `outputRows.ts:2535`                                                                                                              |
+| P9  | The steps panel never scrolls on its own. As the user scrolls the output, the in-view marker (bright number + rail bar) moves to steps that are off screen in the panel, so a fast scroll from step 20 into 21 or 22 shows no visible change in the panel. The panel has no "reveal step" path at all (no `scrollIntoView`, no `scrollToIndex`). | `useOutputViewportSteps.ts` → `uiStore.outputInViewTargetKeys`, `InOutputViewMarker.tsx`                                          |
 
 ---
 
@@ -107,7 +112,7 @@ clean re-run gets no accordion.
 │ ▷  💬 Fix the failing tests            ▮ 14%│
 │      Copilot CLI · gpt-6-luna               │
 │      2:14 · 48.1k tks · a1b2c3 ⧉           │
-│    ▾ 4 attempts                              │  ← accordion header (chevron + count)
+│    ▾ Retry 3 ✓ · 4 attempts                  │  ← accordion header: latest attempt + count
 │    ┌──────────────────────────────────────┐ │
 │    │ Initial Attempt   0:31 · 9.8k     ✗   │ │  ← indented attempt rows,
 │    │ Retry 1           0:40 · 12.0k    ✗   │ │    max-height ≈ 5 rows,
@@ -131,30 +136,35 @@ clean re-run gets no accordion.
   panel at the end of the list. Above about 50 attempts, render the rows through the shared
   `VirtualizedList` (`components/shared/VirtualizedList.tsx`) with the accordion as its
   `scrollContainerRef`. A step with 1000 retries mounts about 10 rows.
-- **Live behaviour**: while a step is running and retrying, the newest attempt is appended
-  live and the list scrolls to it. When the user has scrolled the list up, leave it where they
-  put it until they scroll back to the bottom. The current `Retry N of M` line in
-  `PromptStepDetails` stays during the run, because it is the only place that shows the
-  denominator.
-- **Expanded state** (decided, see [Decisions](#decisions)):
-  - While the step is executing and has 2+ attempts, the list is **open by default**, scrolled
-    to the current retry.
-  - When the step finishes, it **closes automatically**.
-  - Once the user toggles it by hand, their choice sticks for that target and auto open/close
-    no longer applies.
+- **Expanded state: always collapsed by default; only the user opens it** (decided, see
+  [Decisions](#decisions)). Nothing opens or closes the list automatically. That keeps row
+  heights stable during a run: nothing below the row jumps while the user reads or aims a
+  click, and Part 4's height estimates only change on a user action. State is a plain
+  `expandedAttemptTargetKeys: ReadonlySet<string>` in `uiStore`, written only by the chevron.
+  It lives in the store, not component state, because virtualization (Part 4) unmounts rows.
+  It is session-only. Drop a target's key when a new run of that target starts (a re-run is a
+  new step version).
+- **The collapsed header is the summary.** It shows the **latest** attempt, so a running step
+  on its 4th retry reads that way at a glance without opening anything:
 
-  Model this as a user override plus a derived default, not as one boolean that effects keep
-  writing: `expanded = userOverride.get(targetKey) ?? (isExecuting && attempts >= 2)`. Keep
-  `attemptListUserOverrides: ReadonlyMap<string, boolean>` in `uiStore`, not in component
-  state, because virtualization (Part 4) unmounts rows. It is session-only and does not need
-  persisting. Clear a target's override when a new run of that target starts (a re-run is a new
-  step version), so the defaults apply again.
+  | State                   | Collapsed header                                                           |
+  | ----------------------- | -------------------------------------------------------------------------- |
+  | Step running, retrying  | `▸ Retry 3 of 5 · 0:42 ⟳` (denominator from the live `retryStates`)        |
+  | Step finished           | `▸ Retry 3 ✓ · 4 attempts`                                                 |
+  | Final step, many passes | `▸ Pass 3 · Retry 1 ✓ · 3 passes` (retry part only when that pass retried) |
 
+  Build it from `formatAttemptLabel`, `formatRetryDenominator` (`utils/LimitUtils.ts`) and
+  `formatFinalPassLabel`; no new string literals.
+
+- **Two click targets in the header**: the chevron toggles the list, and the label navigates
+  the output straight to that latest attempt or pass (`scrollToAttempt` / `scrollToTarget`).
+  The common "show me where it is now" case therefore takes one click without expanding.
+- **Live behaviour when expanded**: the newest attempt is appended live and the list scrolls to
+  it. If the user has scrolled the list up, leave it there until they scroll back to the
+  bottom.
 - **Row content**: label, duration, token total, and a small status icon (`StatusIcon`, `size`
   scaled down). Add an `InOutputViewBar` per attempt only if Part 3's attempt-level in-view keys
   land (optional; see Follow-ups).
-- **Collapsed summary**: when collapsed, the header itself ("▸ 4 attempts") is the
-  after-completion retry indicator from P1. No separate chip is needed.
 
 ### Final step: pass rows in the expanded footer
 
@@ -171,7 +181,7 @@ clean re-run gets no accordion.
   ✳ Claude Code · opus
   8:24 · 9eb07c ⧉
   [Interactive] [agent: …] [MCP[ctrlyoke]] [resume] [ec: git status …]
-  ▾ 3 passes
+  ▾ Pass 3 ✓ · 3 passes
   ┌───────────────────────────────────────┐
   │ Pass 1            7:02 · 88.1k     ✓  │
   │ Pass 2            9:40 · 120.4k    ✓  │
@@ -185,8 +195,8 @@ clean re-run gets no accordion.
 - A pass that itself retried shows its attempts as nested, further-indented rows under the
   pass row, inside the same scroller. They are flattened, not a second accordion, so there is
   never a scroller inside a scroller. A pass with a single attempt shows no nested rows.
-- The pass list follows the same open/close rules as the queue accordion: open while a pass is
-  executing, closed automatically when it finishes, and a manual toggle sticks.
+- The pass list uses the same rules as the queue accordion: collapsed by default, opened only
+  by the user, with a collapsed header that summarizes the latest pass.
 - The existing per-pass in-view logic (`useFinalStepPassesInOutputView`,
   `outputInViewTargetKeys`) already knows which passes are on screen. Each pass row gets the
   `InOutputViewBar` for free.
@@ -195,7 +205,10 @@ clean re-run gets no accordion.
 
 ### PromptStepDetails cleanup
 
-- Keep the running-only `Retry N of M` row.
+- **Remove** the running-only `Retry N of M` row (`PromptStepDetails.tsx:126`). The collapsed
+  accordion header now shows the same thing, so one place shows retry progress both during
+  and after the run. `PromptStepDetails` no longer needs the `retryState` prop; the accordion
+  reads `retryStates` for the live denominator.
 - Leave the compact stats row (duration · tokens · session) unchanged. It describes the
   **latest** attempt, which is what `useLatestStepOutput` already returns. State that in the row's
   tooltip ("Latest attempt"), so that once the accordion exists a reader does not take it for a
@@ -483,15 +496,113 @@ slow only for the length of a drag on very long lists, but it is always correct.
   store indices, not DOM, so they are unaffected. Focus: the foundation's focus retention keeps
   the focused row mounted.
 - **Scrolling a step into view**: nothing in the panel currently scrolls a step row into view
-  (no `scrollIntoView` on `data-prompt-index`). If "reveal the running step" or "reveal the
-  selected step" is wanted later, it must go through `rowVirtualizer.scrollToIndex`, never a
-  DOM query.
+  (no `scrollIntoView` on `data-prompt-index`). Part 5 adds the first such path, and it must
+  go through the virtualizer (`scrollToIndex` and item offsets), never a DOM query, because the
+  target row may not be mounted.
 - **`PauseBoundary`** before the first pending row (`showPauseBoundaryBefore`) stays part of
   that row's item, so it is included in that row's measured height.
 - **Lineage read-only overlay**: after Part 3 it is only `opacity-60 select-none` on the scroll
   container. That doesn't interact with virtualization.
 - **Context menu / long-press**: these are attached per row and to the container background.
   Unaffected.
+
+---
+
+## Part 5: Steps panel follows the output pane
+
+### Behaviour
+
+- **Following** (the default): as the user scrolls the output pane, the steps panel scrolls
+  itself so the step being read stays visible. Fast-scrolling from step 20 into 21 and 22 then
+  shows the in-view marker moving down the panel, instead of disappearing below its bottom edge.
+- **Manual scroll disarms it**: when the user scrolls the steps panel themselves (wheel,
+  touch, scrollbar drag, keyboard) and the step being read leaves the panel's viewport, the
+  panel stops following. The user is looking at something else, so the panel stays put.
+- **Re-arms when the reader's step is visible again**: following comes back on as soon as
+  the step being read is inside the panel's viewport again. That can happen because the user
+  scrolled the panel back to it, or because they scrolled the output to a step that happens to
+  be on screen in the panel. There is no button or setting; the rule is "the panel follows
+  while you can see what it is following".
+
+### Which row is "the step being read"
+
+`outputInViewTargetKeys` (written by `useOutputViewportSteps`) can hold several targets when
+short steps share the viewport. The **follow anchor** is the first (topmost) in-view target.
+That is the same step the sticky step header shows, so the panel tracks what the output pane
+labels as the current step. Expose it from `resolveOutputViewportSteps` as `readingTargetKey`
+next to `inViewTargetKeys`, so the rule lives in one place, and store it in `uiStore` as a
+primitive (`outputReadingTargetKey: string | null`) so consumers re-render only when it
+changes.
+
+Mapping the anchor to a panel item (Part 4's `StepPanelItem[]`):
+
+- Queue step → its `doneStep` / `pendingStep` item.
+- Parallel group member → the group's item, offset by the member's position inside the
+  group. Use the group item's own measured height; if a member offset is not available yet,
+  fall back to the group item as a whole.
+- Final-step pass → its `passDivider` item when Part 2b exists. Otherwise the footer, which is
+  always visible: nothing to scroll, and following does **not** disarm.
+
+### Scrolling rule
+
+- Keep the anchor row inside a **comfort band**: the panel viewport inset by about one row at
+  the top and bottom. While the anchor stays in the band, do nothing, so the panel does not
+  move on every frame.
+- When the anchor leaves the band, scroll the **minimum** distance that puts it back, so the
+  panel moves in step with the output. When the jump is large (the anchor was far off screen,
+  for example after a minimap click or a long fling), place the anchor at about one third of
+  the viewport instead, which leaves room to see the steps that come next.
+- Use `behavior: "auto"` (instant). Smooth scrolling that chases a target updated on every
+  output-scroll frame lags behind and stutters. Coalesce to one panel scroll per animation
+  frame.
+- Compute visibility from the virtualizer's item offsets (`start`/`size` versus the panel's
+  `scrollTop`/`clientHeight`), not `getBoundingClientRect`, so unmounted rows work. Scroll with
+  `rowVirtualizer.scrollToIndex` (or `scrollToOffset` for a group member offset). Below the
+  virtualization threshold, the same offsets come from the non-virtual layout the foundation
+  still measures.
+
+### Telling user scrolls from our own
+
+The panel has to tell its own programmatic scrolls apart from the user's, or following would
+disarm itself. Mirror `OutputPane`'s approach: mark user intent from
+`onWheelCapture` / `onTouchStartCapture` / `onPointerDownCapture` (scrollbar) /
+`onKeyDownCapture` on the panel's scroll container. Only a scroll that follows such input
+within a short window counts as manual. A scroll event with no recent user input is ours
+(or a layout shift) and never disarms.
+
+### When not to follow
+
+- During a step drag (`activeDragId` set): moving the list under the pointer would break
+  dnd-kit's collision loop (Part 4). Resume after drop or cancel.
+- While a context menu, rename or other panel overlay is open.
+- During **programmatic output navigation** that the panel started, such as a step click
+  smooth-scrolling the output past ten intermediate steps. Suppress following until the
+  navigation controller finalizes (`finalizePendingNavigation`), then apply once for the
+  landing target. The clicked row is visible, so following stays armed.
+- When the panel is collapsed to the chip rail or hidden (mobile overlay closed). The chip
+  rail following the same rule is a follow-up.
+- Live autoscroll needs no special case: when the output autoscrolls with a running step, the
+  anchor is the running step, so the panel follows the run. This replaces the earlier
+  follow-up "reveal the running step".
+
+### Implementation shape
+
+- New hook `hooks/useStepsPanelFollowOutput.ts`, owned by `WorkflowStepsPanel`. Inputs: the
+  scroll container ref, the virtualizer, the item list, and `activeDragId`. It keeps
+  `isFollowing` in a ref (not state, since nothing renders from it) and subscribes to
+  `outputReadingTargetKey` with `useUiStore.subscribe` rather than a render-time selector. Each
+  change then runs the scroll check without re-rendering the panel.
+- Respect `prefers-reduced-motion` trivially: scrolling is already instant.
+- Tests (`test/hooks/useStepsPanelFollowOutput.test.ts`, with stubbed offsets as in the
+  `VirtualizedDropdownList` regression test):
+  - anchor inside the band → no scroll
+  - anchor below the band → minimum scroll; far away → one-third placement
+  - wheel input + anchor leaves the viewport → disarmed, and later anchor changes do not
+    scroll
+  - anchor visible again → re-armed
+  - a programmatic scroll does not disarm
+  - no scrolling during drag and during panel-initiated output navigation
+  - group member and pass-divider anchors
 
 ---
 
@@ -510,6 +621,9 @@ would notice:
    latest-run landing for step clicks (P8).
 5. **Pass divider rows** (Part 2b).
 6. **Profile, then virtualize the step list**, with drag verification in the dev host.
+7. **Steps panel follows the output pane** (Part 5). It comes after virtualization because it
+   scrolls through the virtualizer's offsets and `scrollToIndex`. Building it against the
+   non-virtual DOM first would mean writing it twice.
 
 Doing phases 3–5 before 6 means the virtualization estimates are written against the final row
 shape (accordion and dividers included) rather than revised afterwards.
@@ -518,16 +632,19 @@ shape (accordion and dividers included) rather than revised afterwards.
 
 The dashboard UI changes, so update the hand-written docs page covering the steps panel and
 final step (find it under `docs/`, likely the dashboard/output guide): attempt rows, pass rows,
-click-to-navigate. No schema, settings, or persisted-format changes. Everything is derived from
+click-to-navigate, and the panel following the output. No schema, settings, or persisted-format changes. Everything is derived from
 existing output history.
 
 ## Decisions
 
 Settled with the user on 2026-11-09:
 
-1. **Accordion default state**: open by default while the step (or final-step pass) is
-   executing, scrolled to the current retry. It closes automatically when the step finishes,
-   unless the user toggled it by hand, in which case their choice sticks.
+1. **Accordion default state**: always collapsed, and only the user opens it. The collapsed
+   header summarizes the latest attempt or pass ("Retry 3 of 5" while running, "Retry 3 ✓ · 4
+   attempts" after), so retry progress is visible without expanding. This replaces an earlier
+   "auto-open while running, auto-close when done" design: that design was more state and
+   shifted row heights mid-run. The header replaces `PromptStepDetails`' running-only
+   `Retry N of M` row.
 2. **Read-only navigation**: navigation works in every read-only workflow: CLI-owned, owned by
    another VS Code window, commit-message generation, deleted, and history views. Only
    editing is blocked. This applies to the main step row too, not only to attempt and pass rows.
@@ -541,11 +658,13 @@ Settled with the user on 2026-11-09:
 5. **Pass divider rows** (Part 2b): recommended. The user's view is that the current
    footer-only behaviour is acceptable, so this is lower priority than Parts 1–4 and can be
    dropped if Part 4's measurements argue against extra rows.
+6. **Follow the output** (Part 5): the panel keeps the step being read in view while the user
+   scrolls the output. A manual panel scroll that hides that step turns following off, and it
+   comes back once the step is visible in the panel again. There is no setting.
 
 ## Follow-ups (out of scope)
 
 - Attempt-level in-view markers: extend `outputInViewTargetKeys` with attempt keys so the
   attempt row currently on screen gets an `InOutputViewBar`.
-- Reveal the running step in the steps panel (`scrollToIndex`) when it changes during a long
-  run.
 - Apply the same attempt rows to the collapsed `PromptChipRail` (e.g. a popover per chip).
+- Have the collapsed `PromptChipRail` follow the output with Part 5's rule.
