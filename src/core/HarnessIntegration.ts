@@ -1432,6 +1432,11 @@ export abstract class HarnessIntegration {
     return undefined;
   }
 
+  getLastFailureSource():
+    import("../types/DashboardConstants").FailureSource | undefined {
+    return undefined;
+  }
+
   /**
    * Get the reason for the last sendPrompt failure
    * Returns the failure reason and resets it to null

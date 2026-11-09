@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Failed workflow step rows now show the failure reason when the workflow stops, as well as when it continues after the failure.
 - Copilot and Antigravity headless session errors now fail the step even when their CLI exits successfully; externally signalled process kills now follow `errorBehavior`.
 - Interactive Claude, Copilot and OpenCode failures now show the harness's own error text.
 - A shell opened from a workflow's **Terminal** tab now starts in the worktree that workflow runs in, the same folder its steps and scripts use, so you can resolve a merge or check `git status` there without changing directory. Workflows without a worktree still open shells in the workspace folder.

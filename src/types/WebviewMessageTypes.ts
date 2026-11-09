@@ -454,6 +454,7 @@ export interface PromptStep extends StepDisplayProperties {
     contextWindowUsed?: number;
     contextWindowSize?: number;
     failureMessage?: string;
+    failureSource?: import("./DashboardConstants").FailureSource;
   };
   // Status for UI display
   status?: StepStatus;

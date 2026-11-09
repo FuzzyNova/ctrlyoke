@@ -2293,6 +2293,10 @@ export class CliIntegration extends HarnessIntegration {
     return this.failureTracker.getLastFailureKind();
   }
 
+  override getLastFailureSource() {
+    return this.failureTracker.getLastFailureRecord()?.source;
+  }
+
   // ============================================================
   // PROMPT SENDING (MAIN ENTRY POINT)
   // ============================================================

@@ -490,6 +490,8 @@ export interface FinalStepRuntimeState {
   failureKind?: FailureKind;
   /** Human-readable reason for the latest final-step failure. */
   failureMessage?: string;
+  /** Source that detected the latest failure, when known. */
+  failureSource?: import("./DashboardConstants").FailureSource;
   startedAt?: number;
   completedAt?: number;
   preCondition?: ConditionEvaluationSummary;
@@ -1178,6 +1180,9 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 
   /** Human-readable failure message persisted for UI/history display. */
   failureMessage?: string;
+
+  /** Source that detected the failure, when known. */
+  failureSource?: import("./DashboardConstants").FailureSource;
 
   /** False when the failed step was resolved by its per-step continue policy. */
   terminalFailure?: boolean;

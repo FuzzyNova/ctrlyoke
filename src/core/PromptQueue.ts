@@ -984,13 +984,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   async failStep(
     stepIndex: number,
     reason?: string,
-    failureKind?: PromptRuntimeMetadata["failureKind"]
+    failureKind?: PromptRuntimeMetadata["failureKind"],
+    failureSource?: PromptRuntimeMetadata["failureSource"]
   ): Promise<void> {
     if (!this.canFinalizeStep(stepIndex)) {
       return;
     }
 
-    this.failStepState(stepIndex, reason, true, failureKind);
+    this.failStepState(stepIndex, reason, true, failureKind, failureSource);
     this.emitStateChange();
   }
 
@@ -1510,7 +1511,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     stepIndex: number,
     error?: string,
     terminalFailure: boolean = true,
-    failureKind?: PromptRuntimeMetadata["failureKind"]
+    failureKind?: PromptRuntimeMetadata["failureKind"],
+    failureSource?: PromptRuntimeMetadata["failureSource"]
   ): void {
     const currentResult = this.state.results[stepIndex];
     if (!currentResult) {
@@ -1528,6 +1530,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.markPromptCompleted(stepIndex, PROMPT_TERMINAL_STATUS.FAILED, {
       ...(error ? { failureMessage: error } : {}),
       ...(failureKind ? { failureKind } : {}),
+      ...(failureSource ? { failureSource } : {}),
       terminalFailure,
     });
     this.stateMachine.resetRetryCount({

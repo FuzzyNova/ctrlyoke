@@ -390,6 +390,8 @@ export interface AttemptTerminatedEventDraft extends TargetedTimelineEventDraftB
   payload: {
     terminalState: TimelineAttemptTerminalState;
     reason?: string;
+    failureKind?: import("./DashboardConstants").FailureKind;
+    failureSource?: import("./DashboardConstants").FailureSource;
   };
 }
 

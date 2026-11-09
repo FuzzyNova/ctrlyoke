@@ -625,7 +625,11 @@ export class OutputHistoryManager {
     terminalState: TimelineAttemptTerminalState,
     definitionContext?: DefinitionRevisionContext,
     reason?: string,
-    harnessId?: HarnessId
+    harnessId?: HarnessId,
+    failure?: {
+      kind?: import("../../types/DashboardConstants").FailureKind;
+      source?: import("../../types/DashboardConstants").FailureSource;
+    }
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -638,7 +642,12 @@ export class OutputHistoryManager {
         runIndex,
         attemptIndex,
         definitionRevision: definitionContext?.definitionRevision ?? 1,
-        payload: { terminalState, reason },
+        payload: {
+          terminalState,
+          reason,
+          failureKind: failure?.kind,
+          failureSource: failure?.source,
+        },
       },
     ]);
     this.scheduleTerminalHarnessUsageRefresh(harnessId);

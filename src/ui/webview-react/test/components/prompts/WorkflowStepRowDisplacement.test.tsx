@@ -40,17 +40,24 @@ vi.mock("@dnd-kit/sortable", async () => {
 
 const step: WorkflowStep = { prompt: "a step" };
 
-function renderRow() {
+function renderRow(
+  options: {
+    step?: WorkflowStep;
+    status?: typeof STEP_STATUS.PENDING | typeof STEP_STATUS.FAILED;
+    executionState?:
+      typeof EXECUTION_STATES.IDLE | typeof EXECUTION_STATES.ERROR;
+  } = {}
+) {
   return render(
     <SortableWorkflowStepWrapper
       id="step-pending-1"
       disabled={false}
       slotNumber={6}
-      step={step}
+      step={options.step ?? step}
       index={1}
       currentStep={0}
-      executionState={EXECUTION_STATES.IDLE}
-      status={STEP_STATUS.PENDING}
+      executionState={options.executionState ?? EXECUTION_STATES.IDLE}
+      status={options.status ?? STEP_STATUS.PENDING}
       isCurrent={false}
       isSelected={false}
       canSetStartPosition
@@ -162,5 +169,20 @@ describe("step row drag displacement", () => {
     sortableState = { ...sortableState, isDragging: true };
     renderRow();
     expect(parts().body.style.opacity).toBe("0.5");
+  });
+
+  it("shows the failure message on a stopped failed step", () => {
+    renderRow({
+      step: {
+        prompt: "a failed step",
+        _runtime: { failureMessage: "Harness rejected the request" },
+      },
+      status: STEP_STATUS.FAILED,
+      executionState: EXECUTION_STATES.ERROR,
+    });
+
+    expect(
+      screen.getByText("Harness rejected the request")
+    ).toBeInTheDocument();
   });
 });

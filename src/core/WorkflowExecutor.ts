@@ -3334,7 +3334,11 @@ export class WorkflowExecutor {
     attemptIndex: number,
     terminalState: TimelineAttemptTerminalState,
     reason?: string,
-    harnessId?: HarnessId
+    harnessId?: HarnessId,
+    failure?: {
+      kind?: import("../types/DashboardConstants").FailureKind;
+      source?: import("../types/DashboardConstants").FailureSource;
+    }
   ): Promise<void> {
     if (!context.historyFilePath || !context.outputHistoryManager) {
       return;
@@ -3348,7 +3352,8 @@ export class WorkflowExecutor {
       terminalState,
       context.getDefinitionRevisionContext?.(),
       reason,
-      harnessId
+      harnessId,
+      failure
     );
   }
 
@@ -5610,6 +5615,7 @@ export class WorkflowExecutor {
           : integration.wasLastFailureTimeout()
             ? FAILURE_KINDS.TIMEOUT
             : undefined);
+    const failureSource = integration.getLastFailureSource();
 
     // Keep these existing notifications until Phase 3b centralizes failure
     // toasts; the failure policy below still decides retry/continue/stop.
@@ -5648,7 +5654,8 @@ export class WorkflowExecutor {
         errorRetryCount,
         failureKind,
         resolvedProperties,
-        failureReasonForPolicy
+        failureReasonForPolicy,
+        failureSource
       );
     }
 
@@ -5741,7 +5748,8 @@ export class WorkflowExecutor {
       | typeof FAILURE_KINDS.UNKNOWN
       | typeof FAILURE_KINDS.SESSION_REJECTED,
     resolvedProperties?: ResolvedProperties,
-    failureReasonOverride?: string
+    failureReasonOverride?: string,
+    failureSource?: import("../types/DashboardConstants").FailureSource
   ): Promise<PromptFailureDisposition> {
     const runtime = this.getRuntime();
     const failureReason =
@@ -5860,7 +5868,8 @@ export class WorkflowExecutor {
         await this.promptQueue.failStep(
           target.stepIndex,
           failureReason,
-          failureKind
+          failureKind,
+          failureSource
         );
         return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
       }
@@ -5871,6 +5880,7 @@ export class WorkflowExecutor {
         status: STEP_STATUS.FAILED,
         failureKind,
         failureMessage: failureReason,
+        failureSource,
         startedAt:
           this.promptQueue.getFinalStepRuntime()?.startedAt ??
           attemptTimestampMs,
@@ -5918,7 +5928,8 @@ export class WorkflowExecutor {
       await this.promptQueue.failStep(
         target.stepIndex,
         failureReason,
-        failureKind
+        failureKind,
+        failureSource
       );
     } else {
       await this.setFinalStepRuntime(context, {
@@ -5927,6 +5938,7 @@ export class WorkflowExecutor {
         status: STEP_STATUS.FAILED,
         failureKind,
         failureMessage: failureReason,
+        failureSource,
         startedAt:
           this.promptQueue.getFinalStepRuntime()?.startedAt ??
           attemptTimestampMs,

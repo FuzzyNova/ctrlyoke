@@ -136,13 +136,15 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
       status === STEP_STATUS.FAILED &&
       index < currentStep &&
       (executionState !== EXECUTION_STATES.ERROR || index < currentStep - 1);
-    if (workflowContinuedAfterFailure) {
-      const failureMessage = !isScriptStep(step)
-        ? step._runtime?.failureMessage
-        : undefined;
+    if (status === STEP_STATUS.FAILED) {
+      const failureMessage = step._runtime?.failureMessage;
       details.message = failureMessage
-        ? `Workflow continued after failure: ${failureMessage}`
-        : "Workflow continued after this step failed.";
+        ? workflowContinuedAfterFailure
+          ? `Workflow continued after failure: ${failureMessage}`
+          : failureMessage
+        : workflowContinuedAfterFailure
+          ? "Workflow continued after this step failed."
+          : undefined;
     }
 
     const outputText = latestOutput

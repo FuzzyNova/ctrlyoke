@@ -673,7 +673,9 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       0,
       "failed",
       definitionContext,
-      "harness failed"
+      "harness failed",
+      undefined,
+      { kind: "harnessError", source: "hook" }
     );
     await manager.appendRuntimeTransition(filePath, {
       command: "pause",
@@ -805,6 +807,30 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         TIMELINE_EVENT_TYPES.RUN_TERMINATED,
       ]
     );
+    const failedAttempt = events[3];
+    assert.strictEqual(
+      failedAttempt?.eventType,
+      TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED
+    );
+    if (failedAttempt?.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED) {
+      assert.deepStrictEqual(failedAttempt.payload, {
+        terminalState: "failed",
+        reason: "harness failed",
+        failureKind: "harnessError",
+        failureSource: "hook",
+      });
+    }
+    const legacyAttempt = events[14];
+    assert.strictEqual(
+      legacyAttempt?.eventType,
+      TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED
+    );
+    if (legacyAttempt?.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED) {
+      assert.deepStrictEqual(legacyAttempt.payload, {
+        terminalState: "cancelled",
+        reason: "user cancelled",
+      });
+    }
     const attempt = events[6];
     assert.strictEqual(
       attempt?.eventType,

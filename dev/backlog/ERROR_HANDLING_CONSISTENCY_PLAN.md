@@ -135,16 +135,23 @@ captured live (see §6).
   stop (`WorkflowExecutor.ts:5631-5698`). Every other non-cancel kind goes through
   `handleHarnessFailure`.
 - **H7 ✅ The failure is recorded inconsistently.**
-  - The timeline `ATTEMPT_TERMINATED` payload has `{ terminalState, reason }` and no
-    `failureKind` (`WorkflowTimelineTypes.ts:384-393`). History and search therefore cannot
-    tell a timeout from a rate limit.
-  - The dashboard step row shows `_runtime.failureMessage` only in the "Workflow continued
-    after failure" case (`WorkflowStepRow.tsx:135-145`). A stopped workflow's failed step
-    shows no reason on the row.
+  - ✅ `ATTEMPT_TERMINATED` records optional `failureKind` and `failureSource`, so history
+    can distinguish a timeout from a hook or process failure. Older events remain valid
+    without either field.
+  - ✅ Failed step rows show `_runtime.failureMessage` for stopped failures and retain the
+    "Workflow continued after failure" label for failures the workflow continued past.
   - Stop toasts are uneven (detail in R7). Every stop into `ERROR` gets a "Workflow Failed"
     completion notification, but its body carries no failing step and no reason. The
     `unknown`/`sessionRejected` stops and the timeout guardrail also raise a second, ad hoc
     `notifyUserFeedback` toast.
+  - **Phase 3a complete (2026-11-09):** added optional `failureKind` and
+    `failureSource` to `ATTEMPT_TERMINATED`, persisted `failureSource` with step runtime
+    failure metadata, and displayed stopped-step failure messages. No timeline version
+    bump is needed: both fields are optional additions to an existing event, old events
+    remain valid without them, and the reader treats absent optional payload fields as
+    absent rather than requiring migration. The persisted store guard only blocks writes
+    from older hosts when the recorded version is newer; it does not require a bump for
+    additive fields that older readers can ignore. Stop notifications remain Phase 3b.
 
 ### Script errors (`type: script`, pre/end conditions, hooks)
 
