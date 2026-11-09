@@ -15,10 +15,6 @@ export class IdleLruSnapshotStore<T extends { lastAccessedAt: number }> {
 
   constructor(private readonly options: IdleLruSnapshotStoreOptions<T>) {}
 
-  get size(): number {
-    return this.snapshots.size;
-  }
-
   createId(): string {
     let id = randomUUID();
     while (this.snapshots.has(id)) id = randomUUID();
@@ -53,10 +49,6 @@ export class IdleLruSnapshotStore<T extends { lastAccessedAt: number }> {
       this.snapshots.delete(oldestId);
       if (oldest) this.options.onEvict?.(oldest);
     }
-  }
-
-  has(id: string): boolean {
-    return this.snapshots.has(id);
   }
 
   delete(id: string): boolean {

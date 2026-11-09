@@ -75,6 +75,18 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   strict ones); `EXECUTION_STATE_ICONS` vs `EXECUTION_STATE_BADGE_ICONS` in
   `ui/webview-react/utils/status.ts` (the former has no production consumer).
 
+- **2026-11-08, pass 5** — reviewed pass 4's five commits (behavior preserved; the
+  route-status, LSP-casing and token-stats changes are filed bugs). Cleaned up: removed
+  the unused `has()`/`size` members of `IdleLruSnapshotStore`. Hunted the pass-4
+  candidate list and `npm run knip`'s duplicate exports; queued five steps (pure alias
+  exports, inline harness display-name lookups, "Parallel steps X–Y" range label, dead
+  and drifted execution-state helpers in `utils/status.ts`, `WebPushService`'s private
+  atomic JSON write). Still open for a later pass: `formatStepTargetLabel` re-inlined in
+  `useOutputContextMenu.tsx`/`outputRowTiming.ts`; hosted-server query parsing (`repo`
+  trimmed from the query but not the body; page-size parsers beside
+  `WorkspaceTreeRoute`'s strict ones); `src/license/LemonSqueezyConstants.ts` reported
+  as an unused file by knip.
+
 ## Deferred
 
 - `src/ui/webview-react/hooks/usePaged{CommitHistory,FileHistory,GitRefDiff,WorkspaceDirectory}.ts`
@@ -179,3 +191,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   snapshot maps — the listing cache adds a byte cap, a disposed flag and frozen copies;
   the search store uses a strict `>` idle boundary with its own dispose. Only the three
   identical viewer-service copies were queued in pass 4.
+- `MAX_OUTPUT_SNAPSHOT_BYTES = MAX_PASTED_IMAGE_BYTES` and
+  `OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS = PASTED_IMAGE_SAVE_TIMEOUT_MS` in
+  `src/types/DashboardConstants.ts` — knip calls them duplicate exports, but they name
+  two different limits that happen to share a value; both names have real callers.
+- `src/ui/webview-react/**/index.ts` barrels — listed under `ignore` in `knip.json` on
+  purpose; an unused barrel re-export is not dead code by itself.
