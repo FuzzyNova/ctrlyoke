@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (pass 26), claude-cli
 - **Area:** `src/server/lsp/ManagedLanguageServerBackend.ts`
-- **Severity:** high (security: approval shows less than it grants)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

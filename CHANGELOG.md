@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Workspace language server approval prompts now show the full command, environment and executable settings covered by approval.
 - CLI trust prompts now show workspace-supplied control and directional characters as visible escapes.
 - Commit-message diffs now keep untracked file hunks separate and report accurate line counts and missing final newlines.
 - Workspace viewer Stage, Unstage and Discard now target literal file paths, so bracketed route names cannot affect other files.

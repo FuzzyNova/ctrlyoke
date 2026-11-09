@@ -70,12 +70,14 @@ suite("ManagedLanguageServerBackend", () => {
 
   test("requires approval, remembers it, and asks again when executable fields change", async () => {
     let decisions = 0;
+    let approvalDetail = "";
     const store = new Map<string, unknown>();
     const interaction: UserInteractionPort = {
       canPrompt: () => true,
       requestChoice: async () => undefined,
       requestBatchApproval: async (request) => {
         decisions += 1;
+        approvalDetail = request.items[0]?.detail ?? "";
         return {
           approvedValues: request.items.map((item) => item.value),
           deniedValues: [],
@@ -110,6 +112,13 @@ suite("ManagedLanguageServerBackend", () => {
     );
     assert.ok("descriptor" in result);
     assert.strictEqual(decisions, 1);
+    assert.ok(approvalDetail.includes('Command:\n[\n  "custom-lsp",\n  "--stdio"\n]'));
+    assert.ok(approvalDetail.includes("MODE=one"));
+    assert.ok(
+      approvalDetail.includes(
+        'Execution options:\ntypescript.tsdk:"./node_modules/typescript/lib"'
+      )
+    );
     await backend.resolveForPath(
       "src/app.ts",
       roots,
