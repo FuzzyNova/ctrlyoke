@@ -95,6 +95,29 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   status utilities; retained the shared step icon maps and live control logic.
   Replaced `WebPushService.atomicWriteJson`'s collision-prone temp write with `writeFileAtomic`, preserving JSON formatting and private file modes.
 
+- **2026-11-08, pass 6** — reviewed pass 5's five commits (behavior preserved; `npm test`
+  green). Cleaned up: nine files the pass-5 steps left un-Prettiered;
+  `formatStepTargetLabel` re-inlined in `useOutputContextMenu.tsx` and
+  `outputRowTiming.ts`. Fixed directly: `PromptLinkProvider` compared against a raw
+  `"missing"` instead of `PROMPT_FILE_RESOLUTION_STATUSES.MISSING`; `WorkspaceFileIndex`
+  checked `"ERR_WORKER_OUT_OF_MEMORY"` by hand (now a `NODE_ERROR_CODES` entry via
+  `hasErrnoCode`); `HostedWorkspaceViewerService.currentRemote`'s `?? "origin"` could
+  never fire (now `||`). Hunted `src/core/orchestration/`, `src/cli/`, `src/config/`,
+  `src/git/`, `src/completions/`; queued five steps (shared execution-state sets with two
+  drifted copies, JSONC store read/atomic write in `src/config/`, relative-path escape
+  check, `queue:N`/`final:N` target keys, hosted route query-string parsing).
+  Candidates for a later pass: win32-only `toLowerCase()` path keys re-derived beside
+  `PathCasing` (`RunSummaryCache.cacheKey`, `WorkspaceRepoDiscovery.pathKey` whose comment
+  claims macOS folding too, `ExecutionPreviewService.normalizeComparisonPath`,
+  `WorktreeManager.dedupePaths` vs `WorkflowBundleAnalyzer`'s non-folding dedupe);
+  `flattenSteps` (`WorkflowFileCompletionCore.ts`) vs `flatStepCount`
+  (`WorkflowPromptDiagnostics.ts`) disagreeing on non-object members; identical private
+  copies of `normalizeBranchName` (`WorktreeManager`/`GitUtils`), `mapWithConcurrency`
+  (`historySearchRebuildWorker`/`SkillsRegistryClient`), `lstatIfExists`
+  (`ProjectStateLifecycle`/`ProjectStateRegistry`), `symbolKey`
+  (`FallbackSymbolIndex`/`LspSymbolIndex`), `matchesPrefix` (permission/script completion
+  helpers); `truncateUtf8` in `CommitMessageGenerator` vs `CliPromptPreparer`.
+
 ## Deferred
 
 - `src/ui/webview-react/hooks/usePaged{CommitHistory,FileHistory,GitRefDiff,WorkspaceDirectory}.ts`
@@ -143,6 +166,28 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   accepts the `x-ctrlyoke-token` header or `?token=`, the WebSocket upgrade and
   connection handlers only `?token=` (the latter closes with 4401) — auth surface;
   unifying needs a decision on which forms WebSocket clients may use.
+
+- CLI error reporting in `src/cli.ts` (`handleHistoryCommand`, `handleStepCommand`,
+  `handleSecretCommand`, ~20 inline `console.error(...); process.exit(2)` sites) vs
+  `handleCliError` in `src/cli/CliExitCode.ts` — drifted (only the secret path redacts,
+  only history handles closed pipes, step emits its own JSON error); stderr text, JSON
+  error shape and exit codes are a scripting contract, and `parseTimeoutSeconds`/
+  `parseScriptTimeoutSeconds` accepting `1e3`/`0x10` is flag validation — needs a
+  decision on the intended surface first.
+- Git invoked outside `execGit`: `GitCommitter.ts` (own spawn, no timeout),
+  `GitUtils.commitAll` (5-minute mutation timeout, contradicting the `GIT_NO_TIMEOUT`
+  comment that commits run hooks), `HostedWorkspaceViewerService` commit path,
+  `CommitMessageGenerator`'s raw `execFileAsync` with its own 100 MB buffer, three
+  repo-toplevel lookups — unifying needs a timeout/buffer policy decision.
+- The three trust stores in `src/config/` (`SecretGrantsTrustStore`,
+  `ExternalRootsTrustStore`, `WorkspaceSettingsTrustStore`) — same load/set/save
+  skeleton, but canonicalization, caching, listeners and copy-before-mutate differ; a
+  shared base class is a design change (pass 6 only queued their shared file I/O).
+- Prompt completion trigger detection in `src/completions/PromptCompletionProvider.ts`
+  vs `src/ui/webview-react/utils/promptCompletion/promptCompletionResult.ts` — drifted
+  (`#`/`~` query validation, slash-token rules, escaped-quote `@` paths exist on only one
+  side); the webview bundle can't import the VS Code completion module, so sharing it
+  needs a pure module both bundles accept and a decision on the intended rules.
 
 ## Ruled out
 
@@ -205,3 +250,16 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   two different limits that happen to share a value; both names have real callers.
 - `src/ui/webview-react/**/index.ts` barrels — listed under `ignore` in `knip.json` on
   purpose; an unused barrel re-export is not dead code by itself.
+- `src/license/LemonSqueezyConstants.ts` — knip reports it unused, but it is imported by
+  `landing/src/config.ts` and `netlify/functions/*`, outside knip's project.
+- JSON read-with-fallback helpers (`ExecutionRootLeaseManager`/`ExecutionRootScope`
+  `readJson`, `RunDefinitionAnchor`/`HarnessFileManager` `readJsonIfPresent`,
+  `McpRegistryFileManager`/`McpDiscoveryUtils` `readJsonFile`, `LspDiscoveryUtils.readJson`,
+  `FileSystemUtils.readJsonFile`) — each deliberately maps missing/unreadable/malformed
+  differently (throw vs null vs warn, JSONC vs JSON); a shared helper would need a flag
+  per difference. (The two identical `ExecutionRootScope`/`ExecutionRootLeaseManager`
+  copies could still be merged in a later pass.)
+- `src/ui/webview-react/store/editorStore.ts` `queue:${index}` draft keys — the
+  dashboard's own key over a different target shape, not the output-target key.
+- Hosted-server body `repo` reads not trimmed while query `repo` is — clients send ids
+  verbatim; the one-line body idiom is left inline.
