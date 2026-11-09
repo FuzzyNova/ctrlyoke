@@ -15,6 +15,7 @@ import {
   isGitUnavailableError,
 } from "../utils/GitUtils";
 import {
+  NODE_ERROR_CODES,
   USER_FEEDBACK_SEVERITY,
   WORKSPACE_ENTRY_KINDS,
   WORKSPACE_FILE_CHANGE_KINDS,
@@ -35,7 +36,7 @@ import {
   notifyUserFeedback,
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 
 export interface WorkspaceFileIndexStatus {
   readonly state: WorkspaceFileIndexState;
@@ -183,7 +184,7 @@ function defaultMemoryBudgetBytes(): number {
 }
 
 function isWorkerOutOfMemory(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException)?.code === "ERR_WORKER_OUT_OF_MEMORY";
+  return hasErrnoCode(error, NODE_ERROR_CODES.ERR_WORKER_OUT_OF_MEMORY);
 }
 
 /** The user-facing warning for a worker failure: only an OOM names memory. */

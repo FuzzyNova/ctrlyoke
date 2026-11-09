@@ -34,6 +34,7 @@ import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import {
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  PROMPT_FILE_RESOLUTION_STATUSES,
   VSCODE_COMMANDS,
 } from "../types/DashboardConstants";
 import { parseSecretReferences } from "../utils/SecretReferenceParser";
@@ -295,7 +296,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     const resolution = resolver.resolvePathSync(trimmedPath, document.fileName);
     const resolvedPath =
-      resolution.status === "missing"
+      resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.MISSING
         ? resolution.candidates[0]
         : resolution.path;
     if (!resolvedPath) {

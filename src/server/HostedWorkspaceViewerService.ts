@@ -2485,7 +2485,7 @@ export class HostedWorkspaceViewerService {
         ["-C", repoRoot, "remote"],
         { timeout: GIT_COMMAND_TIMEOUT_MS }
       );
-      return stdout.trim().split("\n")[0] ?? "origin";
+      return stdout.trim().split("\n")[0] || "origin";
     } catch {
       return "origin";
     }
