@@ -122,6 +122,7 @@ import {
   GIT_NO_TIMEOUT,
   getGitMutationTimeoutMs,
   getGitWholeRepoTimeoutMs,
+  literalGitPathspec,
 } from "../utils/GitUtils";
 import {
   DIFF_CHANGE_TYPES,
@@ -2310,7 +2311,7 @@ export class HostedWorkspaceViewerService {
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     await this.runGitAction(
-      ["-C", repoRoot, "add", "--", relPath],
+      ["-C", repoRoot, "add", "--", literalGitPathspec(relPath)],
       GIT_COMMAND_TIMEOUT_MS
     );
   }
@@ -2322,7 +2323,14 @@ export class HostedWorkspaceViewerService {
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     await this.runGitAction(
-      ["-C", repoRoot, "restore", "--staged", "--", relPath],
+      [
+        "-C",
+        repoRoot,
+        "restore",
+        "--staged",
+        "--",
+        literalGitPathspec(relPath),
+      ],
       GIT_COMMAND_TIMEOUT_MS
     );
   }
@@ -2358,7 +2366,9 @@ export class HostedWorkspaceViewerService {
         "restore",
         "--worktree",
         "--",
-        toGitPath(this.relativeToRepo(lexicalPath, repoRoot)),
+        literalGitPathspec(
+          toGitPath(this.relativeToRepo(lexicalPath, repoRoot))
+        ),
       ],
       GIT_COMMAND_TIMEOUT_MS
     );

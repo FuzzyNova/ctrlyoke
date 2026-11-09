@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, node repro against `out/`)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`stageFile`, `unstageFile`, `discardFile`); `src/utils/GitUtils.ts` (file-history helpers that end in `-- <gitPath>`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
