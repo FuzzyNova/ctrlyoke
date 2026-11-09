@@ -132,6 +132,7 @@ import {
   CliOutputFormatter,
   DashboardOutput,
 } from "./harness/shared/CliOutputFormatter";
+import { HARNESS_REPORTED_ERROR } from "./harness/shared/interfaces/INotificationMonitor";
 import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
@@ -180,9 +181,7 @@ import {
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
-import {
-  formatParallelStepsLabel,
-} from "../utils/FinalStepLabels";
+import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 import { getErrorMessage } from "../utils/ErrorUtils";
 
@@ -5792,7 +5791,7 @@ export class WorkflowExecutor {
               ? "Harness rejected the session"
               : failureKind === FAILURE_KINDS.UNKNOWN
                 ? "Harness invocation failed"
-                : "Harness reported an error";
+                : HARNESS_REPORTED_ERROR;
 
     if (canRetryErrorBehavior(errorBehavior, errorRetryCount)) {
       const nextAttemptIndex = attemptIndex + 1;
