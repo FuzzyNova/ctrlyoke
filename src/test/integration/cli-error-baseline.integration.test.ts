@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { runCli } from "./helpers/cliProcess";
 
@@ -45,5 +48,37 @@ suite("CLI error contract baseline", () => {
       error: { message: "Provide a file argument or --prompt <text>" },
     });
     assert.strictEqual(json.stderr, "");
+  });
+
+  test("pins step and validate error text and JSON envelopes", async function () {
+    this.timeout(60000);
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-errors-"));
+    try {
+      const invalid = path.join(cwd, "invalid.yaml");
+      const newer = path.join(cwd, "newer.yaml");
+      await fs.writeFile(invalid, "steps: nope\n");
+      await fs.writeFile(newer, "schemaVersion: 999\nsteps:\n  - prompt: hi\n");
+
+      for (const args of [
+        ["validate", path.join(cwd, "missing.yaml")],
+        ["validate", path.join(cwd, "missing.yaml"), "--json"],
+        ["validate", invalid],
+        ["validate", invalid, "--json"],
+        ["validate", newer],
+        ["validate", newer, "--json"],
+        ["validate", path.join(cwd, "missing.yaml"), "--json"],
+      ]) {
+        const result = await runCli(args, cwd);
+        assert.strictEqual(result.code, 2, `${args.join(" ")}\n${result.stderr}`);
+        if (args.includes("--json")) {
+          assert.doesNotThrow(() => JSON.parse(result.stdout), result.stdout);
+          assert.ok(result.stdout.length > 0, args.join(" "));
+        } else {
+          assert.ok(result.stderr.length > 0, args.join(" "));
+        }
+      }
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
   });
 });
