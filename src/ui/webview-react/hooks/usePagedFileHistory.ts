@@ -327,20 +327,28 @@ export function usePagedFileHistory(
           ) {
             return;
           }
-          updateState((current) => ({
-            ...current,
-            listingId: response.historyId,
-            totalCount: response.hasMore
+          updateState((current) => {
+            const totalCount = response.hasMore
               ? Math.max(response.totalEntries, response.pageSize * 2)
-              : response.totalEntries,
-            hasMore: response.hasMore,
-            pageSize: response.pageSize,
-            pages: new Map([[0, response.entries]]),
-            inFlightOffsets: new Set(),
-            failedRanges: new Map(),
-            initialLoading: false,
-            error: null,
-          }));
+              : response.totalEntries;
+            const isRecovery = recoveryTargetRef.current !== null;
+            const pages = isRecovery ? new Map(current.pages) : new Map();
+            pages.set(0, response.entries);
+            return {
+              ...current,
+              listingId: response.historyId,
+              totalCount: isRecovery
+                ? Math.max(current.totalCount, totalCount)
+                : totalCount,
+              hasMore: response.hasMore,
+              pageSize: response.pageSize,
+              pages,
+              inFlightOffsets: new Set(),
+              failedRanges: new Map(),
+              initialLoading: false,
+              error: null,
+            };
+          });
           virtualLengthRef.current = response.entries.length;
           rawCursorRef.current = response.nextOffset;
           nextCursorRef.current = response.nextCursor;

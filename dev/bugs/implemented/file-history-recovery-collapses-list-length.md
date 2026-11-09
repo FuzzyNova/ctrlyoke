@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli)
 - **Area:** `src/ui/webview-react/hooks/usePagedFileHistory.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

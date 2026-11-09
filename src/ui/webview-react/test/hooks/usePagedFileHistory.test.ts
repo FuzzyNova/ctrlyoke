@@ -504,6 +504,61 @@ describe("usePagedFileHistory expired listings", () => {
       [offset, offset + 1, offset + 2].filter((index) => index < 10).map(entry)
     );
 
+  const serverPage = (historyId: string, offset: number) => {
+    const entries = Array.from({ length: Math.min(3, 30 - offset) }, (_, i) =>
+      entry(offset + i)
+    );
+    return {
+      ...response(historyId, offset, entries, offset + entries.length),
+      hasMore: offset + entries.length < 30,
+    };
+  };
+
+  it("keeps the loaded list length while recovering a server-counted listing", async () => {
+    let initialCalls = 0;
+    const fetchPage = vi.fn<PagedFileHistoryFetcher>((request) => {
+      if (!request.historyId) {
+        initialCalls += 1;
+        return Promise.resolve(
+          serverPage(initialCalls === 1 ? HISTORY_A : HISTORY_B, 0)
+        );
+      }
+      if (request.historyId === HISTORY_A) {
+        return Promise.reject(new HostedHttpError(410, "expired"));
+      }
+      return Promise.resolve(serverPage(HISTORY_B, request.offset));
+    });
+    const totalCounts: number[] = [];
+    const { result } = renderHook(() => {
+      const history = usePagedFileHistory({
+        path: "src\\file.ts",
+        repo: "repo-a",
+        pageSize: 3,
+        fetchPage,
+      });
+      totalCounts.push(history.totalCount);
+      return history;
+    });
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+
+    for (const offset of [3, 6, 9, 12, 15]) {
+      act(() => result.current.requestRange(offset));
+      await waitFor(() =>
+        expect(result.current.loadedCount).toBe(offset + 3)
+      );
+    }
+    const previousTotalCount = result.current.totalCount;
+    expect(previousTotalCount).toBe(21);
+    totalCounts.length = 0;
+
+    act(() => result.current.requestRange(18));
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_B));
+    await waitFor(() => expect(result.current.loadedCount).toBeGreaterThan(18));
+
+    expect(totalCounts).toContain(previousTotalCount);
+    expect(totalCounts.every((count) => count >= previousTotalCount)).toBe(true);
+  });
+
   it("replaces an expired listing in place and appends back to the visible rows", async () => {
     const fresh = deferred<WorkspaceFileHistoryPageResponse>();
     let initialCalls = 0;
