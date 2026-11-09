@@ -99,7 +99,7 @@ function formatWorkspaceDefinitionDetail(
   settings: Record<string, unknown>
 ): string {
   const sections = [
-    `Command:\n${JSON.stringify(definition.command, null, 2)}`,
+    `Command:\n${escapeUntrustedDisplayText(JSON.stringify(definition.command, null, 2))}`,
   ];
   const envEntries = Object.entries(definition.env ?? {}).sort(
     ([left], [right]) => left.localeCompare(right)
