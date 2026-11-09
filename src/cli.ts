@@ -40,7 +40,7 @@ import type {
 } from "./types/CtrlYokeTypes";
 import { projectWorktreeRuntime } from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
-import { inheritsWorkflowHarnessScopedValues } from "./types/ExecutionPropertyResolver";
+import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import {
   isScriptStep,
   type PromptFile,
@@ -59,6 +59,7 @@ import {
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
+import { outputTargetKey } from "./utils/OutputTargetKeys";
 import { CliTerminalOutputGate } from "./cli/CliTerminalOutputGate";
 import {
   defaultShutdownTimers,
@@ -259,6 +260,7 @@ import {
 } from "./cli/CliValidation";
 import { formatFinalPassLabel } from "./utils/FinalStepLabels";
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
+import { getErrorMessage } from "./utils/ErrorUtils";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -757,19 +759,11 @@ function getCliPromptExecutionDetails(
   const workflow = instance.promptQueue.getWorkflowFile();
   const step = instance.promptQueue.getState().steps[stepIndex];
   const promptStep = step && !isScriptStep(step) ? step : undefined;
-  const workflowHarness = workflow.harness ?? defaults.harness;
-  const harness =
-    step?._runtime?.harness ?? promptStep?.harness ?? workflowHarness;
-  const inheritedModel = inheritsWorkflowHarnessScopedValues(
-    harness,
-    workflowHarness
-  )
-    ? (workflow.model ?? defaults.model)
-    : ConfigurationUtils.getModelForHarness(harness) || undefined;
-  return {
-    harness,
-    model: step?._runtime?.model ?? promptStep?.model ?? inheritedModel,
-  };
+  return resolveStepHarnessAndModel(promptStep ?? {}, workflow, {
+    ...defaults,
+    modelForHarness: (harness) =>
+      ConfigurationUtils.getModelForHarness(harness) || undefined,
+  });
 }
 
 function getCliOutputStepName(
@@ -798,12 +792,12 @@ function toCliOutputTarget(
     ? {
         stepIndex: target.stepIndex,
         stepName,
-        key: `queue:${target.stepIndex}`,
+        key: outputTargetKey(target),
       }
     : {
         stepIndex: target.loopIndex,
         stepName,
-        key: `final:${target.loopIndex}`,
+        key: outputTargetKey(target),
       };
 }
 
@@ -916,7 +910,7 @@ async function runCommand(
     try {
       assertHarnessId(options.harness);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       console.error(chalk.red(`Error: ${message}`));
       process.exit(2);
     }
@@ -1579,7 +1573,7 @@ async function runCommand(
     process.exit(exitCode);
   } catch (err) {
     releaseLiveOutputState();
-    const message = err instanceof Error ? err.message : String(err);
+    const message = getErrorMessage(err);
     if (options.json) {
       const state = instance.getQueueState();
       const result = buildCliJsonResult({
@@ -1615,7 +1609,7 @@ function handleHistoryCommand(operation: Promise<void>): Promise<void> {
   exitQuietlyOnClosedPipe();
   return operation.catch((error: unknown) => {
     if (isClosedPipeError(error)) process.exit(CLI_CLOSED_PIPE_EXIT_CODE);
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     console.error(chalk.red(`Error: ${message}`));
     process.exit(2);
   });
@@ -1644,7 +1638,7 @@ function handleStepCommand(
   json: boolean
 ): Promise<void> {
   return operation.catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     if (json) {
       process.stdout.write(
         JSON.stringify({ schemaVersion: 1, success: false, error: message }) +
@@ -1689,7 +1683,7 @@ function handleSecretCommand(operation: Promise<void | number>): Promise<void> {
       }
     })
     .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       console.error(
         chalk.red(secretRedactionService.redactText(`Error: ${message}`))
       );
@@ -1957,7 +1951,7 @@ async function dryRunCommand(
     );
     process.exit(hasErrors ? 1 : 0);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     console.error(chalk.red("Error: " + message));
     process.exit(2);
   }
@@ -2341,7 +2335,7 @@ async function readRunDefinition(
     ) as WorkingFile;
   } catch (error) {
     throw new Error(
-      `Failed to read run ${workflowKey}/${runRef}: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to read run ${workflowKey}/${runRef}: ${getErrorMessage(error)}`
     );
   }
 }
@@ -2381,7 +2375,7 @@ async function validateCommand(
       strictPolicy = parseCliValidateStrictPolicy(options.strict);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     if (options.json) {
       process.stdout.write(
         JSON.stringify(
@@ -2622,7 +2616,7 @@ async function validateCommand(
       capabilityRegistry.dispose();
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = getErrorMessage(err);
     if (options.json) {
       process.stdout.write(
         JSON.stringify(
@@ -2874,7 +2868,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     diffResult = generated.diffResult;
     message = generated.message;
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = getErrorMessage(err);
     console.error(chalk.red(`Error: ${errMsg}`));
     if (
       err instanceof CommitMessageGenerationError &&
@@ -2943,7 +2937,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
       stderr?: string | Buffer;
     };
     const errorDetails = [
-      err instanceof Error ? err.message : String(err),
+      getErrorMessage(err),
       execError.stdout?.toString().trim(),
       execError.stderr?.toString().trim(),
     ].filter(Boolean);

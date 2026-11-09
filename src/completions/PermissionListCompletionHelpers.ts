@@ -118,6 +118,3 @@ export function getPermissionListCompletions(
     return sortA.localeCompare(sortB);
   });
 }
-
-/** Alias with a shorter name for callers that do not need the implementation name. */
-export const getPermissionCompletions = getPermissionListCompletions;

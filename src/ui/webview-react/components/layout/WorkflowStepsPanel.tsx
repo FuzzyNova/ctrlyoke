@@ -6,14 +6,13 @@ import React, {
   useState,
 } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
+import { isScriptStep } from "@root/types/CtrlYokeTypes";
 import {
   DOCS_URLS,
   KEYBOARD_KEYS,
   SELECT_ALL_SCOPE_ATTRIBUTE,
   SELECT_ALL_SCOPES,
-  STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
@@ -35,6 +34,7 @@ import {
   useActiveWorkflowExternalOwner,
 } from "@hooks/index";
 import { getHarnessDisplayName } from "../../types/messages";
+import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
 import type { HarnessId } from "../../types/messages";
 import {
   type PromptOverride,
@@ -814,9 +814,6 @@ const PendingTailDropSlot: React.FC = () => {
   );
 };
 
-function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
-}
 /**
  * WorkflowStepsPanel - Left panel showing the list of steps in the workflow
  *
@@ -1433,6 +1430,8 @@ const WorkflowStepsPanelInner: React.FC<{
       latestOutput: finalStepLatestOutput,
       runtimeMeta:
         finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
+      status: finalStepStatus,
+      phase: finalStepPhase,
     });
 
   // Compute resolved harness/model for the final step using the same
@@ -1688,7 +1687,7 @@ const WorkflowStepsPanelInner: React.FC<{
         <div className="flex items-center gap-2 rounded-sm border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs shadow-lg">
           <ParallelStepsIcon className="text-description-fg" />
           <span className="font-semibold">
-            Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
+            {formatParallelStepsLabel(group)}
           </span>
         </div>
       );

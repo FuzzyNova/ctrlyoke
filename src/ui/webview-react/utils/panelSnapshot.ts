@@ -1,6 +1,7 @@
 import type { MutableRefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { WebviewLog } from "@utils/logger";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 interface PanelSnapshot {
   collapsed: boolean | null;
@@ -34,9 +35,9 @@ export function readPanelSnapshot(
     };
   } catch (error) {
     WebviewLog.warn(
-      `[LAYOUT][snapshot] Failed to read panel state for ${label}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
+      `[LAYOUT][snapshot] Failed to read panel state for ${label}: ${getErrorMessage(
+        error
+      )}`
     );
     return {
       collapsed: null,

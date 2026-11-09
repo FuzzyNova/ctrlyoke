@@ -10,7 +10,7 @@ import {
   type HistorySearchResult,
 } from "../../types/WorkflowTimelineTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, getErrnoCode } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import { findExistingWorkerPath } from "../../utils/WorkerPath";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
@@ -18,6 +18,7 @@ import {
   HISTORY_SEARCH_COUNT_STATES,
   HISTORY_SEARCH_INDEX_STATES,
   HISTORY_SEARCH_REBUILD_MESSAGE_TYPES,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import { HistorySearchDocumentCache } from "./HistorySearchDocumentCache";
 import {
@@ -1099,8 +1100,8 @@ export class HistorySearchIndexService {
         `[HistorySearchIndexService] loaded index manifest from disk: indexedRuns=${Object.keys(manifest.indexedRuns).length} durationMs=${Date.now() - loadStart}`
       );
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") {
+      const code = getErrnoCode(error);
+      if (code !== NODE_ERROR_CODES.ENOENT) {
         Log.warn(
           `[HistorySearchIndexService] Failed to load search index: ${getErrorMessage(error)}`
         );

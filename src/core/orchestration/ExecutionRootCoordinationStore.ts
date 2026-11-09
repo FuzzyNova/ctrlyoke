@@ -6,7 +6,10 @@ import {
   type CoordinationSettings,
 } from "../../types/CtrlYokeSettings";
 import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
-import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
+import {
+  COORDINATION_ENTRY_KINDS,
+  NODE_ERROR_CODES,
+} from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { Log } from "../../utils/Log";
@@ -26,6 +29,7 @@ import {
   verifyScopeRecord,
   type ExecutionRootScope,
 } from "./ExecutionRootScope";
+import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 const BOARD_FILE_NAME = "board.jsonl";
 const SCOPE_RECORD_FILE_NAME = "scope.json";
@@ -117,7 +121,7 @@ async function readEntries(boardPath: string): Promise<CoordinationEntry[]> {
   try {
     contents = await fs.readFile(boardPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return [];
     throw error;
   }
 
@@ -172,7 +176,7 @@ async function verifyBoardScope(scope: CoordinationBoardScope): Promise<void> {
         await fs.access(scope.boardPath);
         return true;
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+        if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return false;
         throw error;
       }
     },
@@ -666,7 +670,7 @@ export class ExecutionRootCoordinationStore {
     try {
       await fs.access(scope.boardPath);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return [];
       throw error;
     }
 

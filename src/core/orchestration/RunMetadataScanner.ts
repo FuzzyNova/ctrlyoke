@@ -9,6 +9,7 @@ import type {
 } from "../../types/OutputHistoryTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { TimelineRecorder } from "./TimelineRecorder";
+import { outputTargetKey } from "../../utils/OutputTargetKeys";
 
 /**
  * Narrow, streaming reads of a run's timeline for bookkeeping checks that only
@@ -29,14 +30,14 @@ export class RunMetadataScanner {
     manifestPath: string,
     target: OutputExecutionTarget
   ): Promise<WorkspaceSnapshot | undefined> {
-    const targetKey = getTargetKey(target);
+    const targetKey = outputTargetKey(target);
     let snapshot: WorkspaceSnapshot | undefined;
     for await (const event of this.recorder.streamEvents(manifestPath)) {
       if (
         (event.eventType === TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED ||
           event.eventType ===
             TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED) &&
-        getTargetKey(event.target) === targetKey
+        outputTargetKey(event.target) === targetKey
       ) {
         snapshot = event.payload.workspaceSnapshot;
       }
@@ -67,14 +68,14 @@ export class RunMetadataScanner {
     manifestPath: string,
     target: OutputExecutionTarget
   ): Promise<UndoRecord | undefined> {
-    const targetKey = getTargetKey(target);
+    const targetKey = outputTargetKey(target);
     let undoRecord: UndoRecord | undefined;
     for await (const event of this.recorder.streamEvents(manifestPath)) {
       if (
         (event.eventType === TIMELINE_EVENT_TYPES.UNDO_APPLIED ||
           event.eventType === TIMELINE_EVENT_TYPES.REDO_APPLIED ||
           event.eventType === TIMELINE_EVENT_TYPES.UNDO_RECORD_UPDATED) &&
-        getTargetKey(event.target) === targetKey
+        outputTargetKey(event.target) === targetKey
       ) {
         undoRecord = event.payload.undoRecord;
       }
@@ -101,9 +102,7 @@ export class RunMetadataScanner {
 
   /**
    * Next run index (one past the highest recorded CLI `runIndex`) for each
-   * target named in `targetKeys`. Keys use the same `queue:<index>` /
-   * `final:<index>` format as `getTargetKey` here and the equivalent helpers
-   * in `RunOutputResolver`/`OutputHistoryTimelineAdapter`/`WorkflowInstance`.
+   * target named in `targetKeys`. Keys use the shared output-target format.
    */
   async findNextRunIndexByTarget(
     manifestPath: string,
@@ -114,7 +113,7 @@ export class RunMetadataScanner {
       if (event.eventType !== TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED) {
         continue;
       }
-      const key = getTargetKey(event.target);
+      const key = outputTargetKey(event.target);
       if (!targetKeys.has(key)) {
         continue;
       }
@@ -131,10 +130,4 @@ export class RunMetadataScanner {
     }
     return nextRunIndexByTarget;
   }
-}
-
-function getTargetKey(target: OutputExecutionTarget): string {
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? `queue:${target.stepIndex}`
-    : `final:${target.loopIndex}`;
 }

@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import * as path from "path";
 import {
@@ -7,6 +8,7 @@ import {
   HARNESS_USAGE_REFRESH_DEBOUNCE_MS,
   type HarnessObservedPeriod,
   type HarnessId,
+  NODE_ERROR_CODES,
 } from "../../../../types/DashboardConstants";
 import type {
   HarnessObservedTokens,
@@ -16,7 +18,7 @@ import type {
 } from "../../../../types/UsageTypes";
 import { defaultStaleAfterMs } from "../../../../types/UsageTypes";
 import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
-import { getErrorMessage } from "../../../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../../../utils/ErrorUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
 import { Log } from "../../../../utils/Log";
 import { providerSnapshotsPath } from "../../../../utils/UsagePaths";
@@ -58,10 +60,6 @@ interface PersistedProviderUsage {
 
 const HARNESS_ID_LIST = Object.values(HARNESS_IDS) as HarnessId[];
 const VALID_HARNESS_IDS = new Set<HarnessId>(HARNESS_ID_LIST);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function localDayKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -467,7 +465,7 @@ export class HarnessUsageService {
         this.publish();
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return;
       // A newer ctrlyoke's file is left for it; this host starts empty.
       if (isNewerSchemaError(error)) return;
       await this.quarantineProviderSnapshotFile();

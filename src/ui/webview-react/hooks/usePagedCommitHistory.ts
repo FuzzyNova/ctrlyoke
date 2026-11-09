@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtualizedListRange } from "@components/shared/VirtualizedListFoundation";
-import { ERROR_NAMES } from "@root/types/DashboardConstants";
 import { workspaceCommitLog } from "@utils/hostedApi";
+import {
+  isAbortError,
+  loadedRowCount,
+  normalizeRepo,
+  pageOffset,
+} from "@utils/pagedListing";
+import { toError } from "@root/utils/ErrorUtils";
 import type {
   WorkspaceCommitLogEntry,
   WorkspaceCommitLogResponse,
@@ -110,11 +116,6 @@ const EMPTY_STATE = (
   error: null,
 });
 
-function normalizeRepo(repo: string | undefined): string | undefined {
-  const normalized = repo?.trim();
-  return normalized ? normalized : undefined;
-}
-
 function normalizeBranchHint(
   branchHint: string | undefined
 ): string | undefined {
@@ -136,26 +137,6 @@ function normalizeContext(
 
 function contextKey(context: PagedCommitHistoryContext): string {
   return `${context.repo ?? ""}\u0000${context.branchHint ?? ""}\u0000${context.detached ? "1" : "0"}`;
-}
-
-function pageOffset(index: number, pageSize: number): number {
-  return Math.floor(Math.max(0, index) / pageSize) * pageSize;
-}
-
-function loadedRowCount(
-  pages: ReadonlyMap<number, readonly WorkspaceCommitLogEntry[]>
-): number {
-  let count = 0;
-  for (const commits of pages.values()) count += commits.length;
-  return count;
-}
-
-function errorFrom(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
-function isAbortError(value: unknown): boolean {
-  return value instanceof Error && value.name === ERROR_NAMES.ABORT;
 }
 
 function responseIsUsable(
@@ -362,7 +343,7 @@ export function usePagedCommitHistory(
           updateState((current) => ({
             ...current,
             initialLoading: false,
-            error: errorFrom(value),
+            error: toError(value),
           }));
         })
         .finally(() => {
@@ -477,7 +458,7 @@ export function usePagedCommitHistory(
           ) {
             return;
           }
-          const error = errorFrom(value);
+          const error = toError(value);
           updateState((previous) => {
             const failedRanges = new Map(previous.failedRanges);
             failedRanges.set(offset, {

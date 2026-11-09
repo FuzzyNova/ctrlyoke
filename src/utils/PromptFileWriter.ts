@@ -3,6 +3,8 @@ import * as fs from "fs/promises";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { pathsEqual } from "./PathCasing";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 
 const PROMPT_FILE_SUFFIX = ".prompt.md";
 const MAX_SLUG_LENGTH = 80;
@@ -49,7 +51,7 @@ export class PromptFileWriter {
       try {
         handle = await fs.open(filePath, "wx");
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        if (hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)) {
           continue;
         }
         throw error;
@@ -193,7 +195,7 @@ async function rejectSymlinkIfPresent(filePath: string): Promise<void> {
       throw new Error(`Refusing symlinked prompt storage path: ${filePath}`);
     }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       throw error;
     }
   }

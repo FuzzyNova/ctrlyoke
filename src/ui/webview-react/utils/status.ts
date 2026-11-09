@@ -12,6 +12,7 @@ import {
 } from "../types/messages";
 import {
   FINAL_STEP_PHASES,
+  IN_FLIGHT_EXECUTION_STATES,
   STEP_TYPES,
   WORKFLOW_EXECUTION_CONTROL_ACTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -26,7 +27,7 @@ import {
  */
 export const STATUS_ICONS: Record<StepStatus, string> = {
   [STEP_STATUS.PENDING]: "codicon-circle-outline",
-  [STEP_STATUS.SENT]: "codicon-arrow-right",
+  [STEP_STATUS.SENT]: "codicon-arrow-up",
   [STEP_STATUS.RUNNING]: "codicon-play",
   [STEP_STATUS.COMPLETED]: "codicon-pass",
   [STEP_STATUS.FAILED]: "codicon-error",
@@ -47,17 +48,6 @@ export const STATUS_ICONS: Record<StepStatus, string> = {
  */
 export function getStatusIconClass(status: StepStatus): string {
   return STATUS_ICONS[status] || STATUS_ICONS[STEP_STATUS.PENDING];
-}
-
-/**
- * Get full codicon className string for a status
- * Convenience function that includes the base "codicon" class
- *
- * @param status - Step status
- * @returns Full className string (e.g., "codicon codicon-pass")
- */
-export function getStatusIconClassName(status: StepStatus): string {
-  return `codicon ${getStatusIconClass(status)}`;
 }
 
 /**
@@ -157,82 +147,10 @@ export function getStepAccentClass(status: StepStatus): string {
 }
 
 /**
- * Execution state icons (for workflow-level status)
- */
-const EXECUTION_STATE_ICONS: Record<ExecutionState, string> = {
-  [EXECUTION_STATES.IDLE]: "codicon-circle-outline",
-  [EXECUTION_STATES.RUNNING]: "codicon-play",
-  [EXECUTION_STATES.PAUSING]: "codicon-debug-pause",
-  [EXECUTION_STATES.PAUSED]: "codicon-debug-pause",
-  [EXECUTION_STATES.STOPPED]: "codicon-stop",
-  [EXECUTION_STATES.CANCELLING]: "codicon-loading",
-  [EXECUTION_STATES.COMPLETED]: "codicon-pass-filled",
-  [EXECUTION_STATES.ERROR]: "codicon-error",
-};
-
-/**
- * Get codicon class for execution state
- */
-export function getExecutionStateIconClass(state: ExecutionState): string {
-  return (
-    EXECUTION_STATE_ICONS[state] || EXECUTION_STATE_ICONS[EXECUTION_STATES.IDLE]
-  );
-}
-
-/**
- * Execution state colors
- */
-const EXECUTION_STATE_COLORS: Record<ExecutionState, string> = {
-  [EXECUTION_STATES.IDLE]: "text-description-fg",
-  [EXECUTION_STATES.RUNNING]: "text-charts-blue",
-  [EXECUTION_STATES.PAUSING]: "text-indicator-running",
-  [EXECUTION_STATES.PAUSED]: "text-indicator-running",
-  [EXECUTION_STATES.STOPPED]: "text-warning-fg",
-  [EXECUTION_STATES.CANCELLING]: "text-warning-fg",
-  [EXECUTION_STATES.COMPLETED]: "text-indicator-success",
-  [EXECUTION_STATES.ERROR]: "text-indicator-error",
-};
-
-/**
- * Get color class for execution state
- */
-export function getExecutionStateColorClass(state: ExecutionState): string {
-  return (
-    EXECUTION_STATE_COLORS[state] ||
-    EXECUTION_STATE_COLORS[EXECUTION_STATES.IDLE]
-  );
-}
-
-/**
- * Human-readable labels for execution states
- */
-const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
-  [EXECUTION_STATES.IDLE]: "Ready",
-  [EXECUTION_STATES.RUNNING]: "Running",
-  [EXECUTION_STATES.PAUSING]: "Pausing...",
-  [EXECUTION_STATES.PAUSED]: "Paused",
-  [EXECUTION_STATES.STOPPED]: "Stopped",
-  [EXECUTION_STATES.CANCELLING]: "Cancelling...",
-  [EXECUTION_STATES.COMPLETED]: "Completed",
-  [EXECUTION_STATES.ERROR]: "Error",
-};
-
-/**
- * Get human-readable label for execution state
- */
-export function getExecutionStateLabel(state: ExecutionState): string {
-  return EXECUTION_STATE_LABELS[state] || "Unknown";
-}
-
-/**
  * Check if execution is in a "busy" state (running or cancelling)
  */
 export function isExecutionBusy(state: ExecutionState): boolean {
-  return (
-    state === EXECUTION_STATES.RUNNING ||
-    state === EXECUTION_STATES.PAUSING ||
-    state === EXECUTION_STATES.CANCELLING
-  );
+  return IN_FLIGHT_EXECUTION_STATES.has(state);
 }
 
 /**
@@ -335,43 +253,6 @@ export function isExecutionFinished(state: ExecutionState): boolean {
     state === EXECUTION_STATES.COMPLETED ||
     state === EXECUTION_STATES.ERROR ||
     state === EXECUTION_STATES.STOPPED
-  );
-}
-
-/**
- * Check if execution can be started
- */
-export function canStartExecution(state: ExecutionState): boolean {
-  return (
-    state === EXECUTION_STATES.IDLE ||
-    state === EXECUTION_STATES.COMPLETED ||
-    state === EXECUTION_STATES.ERROR ||
-    state === EXECUTION_STATES.STOPPED
-  );
-}
-
-/**
- * Check if execution can be paused
- */
-export function canPauseExecution(state: ExecutionState): boolean {
-  return state === EXECUTION_STATES.RUNNING;
-}
-
-/**
- * Check if execution can be resumed
- */
-export function canResumeExecution(state: ExecutionState): boolean {
-  return state === EXECUTION_STATES.PAUSED;
-}
-
-/**
- * Check if execution can be stopped
- */
-export function canStopExecution(state: ExecutionState): boolean {
-  return (
-    state === EXECUTION_STATES.RUNNING ||
-    state === EXECUTION_STATES.PAUSING ||
-    state === EXECUTION_STATES.PAUSED
   );
 }
 

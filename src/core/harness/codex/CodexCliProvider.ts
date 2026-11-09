@@ -72,6 +72,7 @@ import {
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 const CODEX_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -1036,7 +1037,7 @@ export class CodexCliProvider implements ICliProvider {
         serverArgs.push(...this.buildToolApprovalOverrideArgs(server));
         configArgs.push(...serverArgs);
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = getErrorMessage(error);
         Log.warn(
           `[CodexCliProvider] Failed to generate MCP config for server "${server.id}": ${reason}`
         );

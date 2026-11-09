@@ -27,6 +27,7 @@ import {
   buildApplyPatchFileEvent,
 } from "../shared/ApplyPatchEventMapper";
 import { Log } from "../../../utils/Log";
+import { escapeRegExp } from "../../../utils/TextUtils";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import {
   CODEX_EXEC_OPERATION_KINDS,
@@ -615,7 +616,7 @@ export class CodexToolBuilder {
     src: string,
     key: string
   ): string[] {
-    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedKey = escapeRegExp(key);
     const keyRegex = new RegExp(
       `(?:["']${escapedKey}["']|${escapedKey})\\s*:\\s*\\[`
     );
@@ -762,7 +763,7 @@ export class CodexToolBuilder {
     src: string,
     key: string
   ): string | undefined {
-    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedKey = escapeRegExp(key);
     // Codex currently serializes helper arguments with JSON-style quoted keys
     // (`{"command":"..."}`), while older/test payloads used JavaScript-style
     // bare keys (`{command:"..."}`). Accept both forms.

@@ -1,5 +1,6 @@
 import {
-  HARNESS_INFO,
+  getHarnessDisplayName,
+  getHarnessShortName,
   HARNESS_IDS,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
@@ -75,7 +76,7 @@ export function permissionCapabilitySummary(
     const label =
       harnessId === HARNESS_IDS.CLAUDE_CLI
         ? "Claude CLI"
-        : (HARNESS_INFO[harnessId]?.name ?? harnessId);
+        : getHarnessDisplayName(harnessId);
 
     if (state?.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
       notEnforced.push(label);
@@ -154,7 +155,7 @@ function hasAdvisoryCaveat(
 }
 
 function harnessLabel(harnessId: HarnessId): string {
-  return HARNESS_INFO[harnessId]?.shortName ?? harnessId;
+  return getHarnessShortName(harnessId);
 }
 
 /**

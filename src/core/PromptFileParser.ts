@@ -20,6 +20,7 @@ import {
   type WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import { toError } from "../utils/ErrorUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
@@ -69,15 +70,14 @@ import {
 } from "./ParallelGroupTopology";
 import {
   CURRENT_SCHEMA_VERSIONS,
+  assertWritableSchema,
   isNewerSchemaError,
-  isNewerSchemaVersion,
   PERSISTED_STORES,
-  readSchemaVersion,
-  refuseNewerSchema,
   type NewerSchemaError,
 } from "../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 type ParallelValidationProperties = Pick<
   PromptFile,
@@ -285,8 +285,7 @@ export class PromptFileParser {
         });
         return null;
       }
-      this.lastParseError =
-        error instanceof Error ? error : new Error(String(error));
+      this.lastParseError = toError(error);
       Log.debug(`[PromptFileParser] Failed to parse file ${filePath}`);
       notifyUserFeedback(
         this.userFeedbackSink,
@@ -421,7 +420,7 @@ export class PromptFileParser {
           error instanceof WorkflowStructureValidationError
             ? error.instancePath
             : "",
-        message: error instanceof Error ? error.message : String(error),
+        message: getErrorMessage(error),
         severity: "error",
       };
       const mark = (error as { mark?: { line?: number; column?: number } })
@@ -508,7 +507,7 @@ export class PromptFileParser {
           error instanceof WorkflowStructureValidationError
             ? error.instancePath
             : "",
-        message: error instanceof Error ? error.message : String(error),
+        message: getErrorMessage(error),
         severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
       });
     }
@@ -599,16 +598,11 @@ export class PromptFileParser {
     contentPath: string,
     format: string
   ): void {
-    const schemaVersion = readSchemaVersion(parsed);
-    if (
-      isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
-    ) {
-      refuseNewerSchema(
-        PERSISTED_STORES.WORKFLOW_DEFINITION,
-        schemaVersion as number,
-        `${path.basename(contentPath)} (${format})`
-      );
-    }
+    assertWritableSchema(
+      PERSISTED_STORES.WORKFLOW_DEFINITION,
+      parsed,
+      `${path.basename(contentPath)} (${format})`
+    );
   }
 
   private static createRelaxedSchema(schema: Record<string, unknown>): any {
@@ -989,8 +983,7 @@ export class PromptFileParser {
         });
         return null;
       }
-      this.lastParseError =
-        error instanceof Error ? error : new Error(String(error));
+      this.lastParseError = toError(error);
       Log.debug(
         `[PromptFileParser] Failed to read markdown prompt file ${filePath}`
       );
@@ -1523,7 +1516,7 @@ export class PromptFileParser {
           parallelGroups: options.parallelGroups,
         });
       } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error));
+        errors.push(getErrorMessage(error));
       }
       errors.push(
         ...this.getParallelReferenceErrors(

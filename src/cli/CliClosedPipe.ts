@@ -3,19 +3,16 @@
  * `ctrlyoke history show --json --events | head -3`. The reader asked for
  * less output than the command had; nothing failed, so the command succeeds.
  */
-export const CLI_CLOSED_PIPE_EXIT_CODE = 0;
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "../utils/ErrorUtils";
 
-const EPIPE = "EPIPE";
+export const CLI_CLOSED_PIPE_EXIT_CODE = 0;
 
 const guardedStreams = new WeakSet<NodeJS.EventEmitter>();
 
 /** Whether an error is the write failure a closed pipe produces. */
 export function isClosedPipeError(error: unknown): boolean {
-  return (
-    error !== null &&
-    typeof error === "object" &&
-    (error as NodeJS.ErrnoException).code === EPIPE
-  );
+  return hasErrnoCode(error, NODE_ERROR_CODES.EPIPE);
 }
 
 /**

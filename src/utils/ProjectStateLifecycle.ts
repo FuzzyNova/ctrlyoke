@@ -18,9 +18,11 @@ import {
   PROJECT_STATE_PATH_STATUSES,
   RUN_HISTORY_LOCATIONS,
   WORKFLOW_LOCK_LIVENESS,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { WorkflowKey } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "./WorkflowPaths";
+import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 export type ProjectStatePathStatus =
   (typeof PROJECT_STATE_PATH_STATUSES)[keyof typeof PROJECT_STATE_PATH_STATUSES];
@@ -110,7 +112,7 @@ export async function pruneUserProjects(
           });
           deleted.push(inspection.projectRoot);
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
             throw error;
           }
         }
@@ -303,7 +305,7 @@ async function inspectUserProjectsUnderLock(
         reason = "project.json is missing";
       }
     } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      reason = getErrorMessage(error);
     }
 
     if (!metadata) {
@@ -321,14 +323,14 @@ async function inspectUserProjectsUnderLock(
     try {
       statePathStatus = await classifyStatePath(metadata.statePath);
     } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      reason = getErrorMessage(error);
     }
 
     let runnerStatus: ProjectRunnerStatus = PROJECT_RUNNER_STATUSES.UNKNOWN;
     try {
       runnerStatus = (await inspectRunner(projectRoot)).status;
     } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      reason = getErrorMessage(error);
     }
 
     inspections.push({
@@ -369,8 +371,8 @@ async function classifyStatePath(
     await fs.stat(path.resolve(statePath));
     return PROJECT_STATE_PATH_STATUSES.PRESENT;
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") {
+    const code = getErrnoCode(error);
+    if (code === NODE_ERROR_CODES.ENOENT) {
       const resolvedStatePath = path.resolve(statePath);
       if (
         resolvedStatePath.startsWith("\\\\") ||
@@ -386,8 +388,8 @@ async function classifyStatePath(
             ? PROJECT_STATE_PATH_STATUSES.MISSING
             : PROJECT_STATE_PATH_STATUSES.UNKNOWN;
         } catch (parentError) {
-          const parentCode = (parentError as NodeJS.ErrnoException).code;
-          if (parentCode !== "ENOENT") {
+          const parentCode = getErrnoCode(parentError);
+          if (parentCode !== NODE_ERROR_CODES.ENOENT) {
             return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
           }
           parent = path.dirname(parent);
@@ -483,7 +485,7 @@ async function lstatIfExists(
   try {
     return await fs.lstat(filePath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return undefined;
     }
     throw error;

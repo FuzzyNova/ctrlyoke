@@ -1,4 +1,6 @@
 import * as fs from "fs";
+import { NODE_ERROR_CODES } from "../../../types/DashboardConstants";
+import { hasErrnoCode } from "../../../utils/ErrorUtils";
 
 export interface IncrementalJsonlReadResult<TRecord> {
   records: TRecord[];
@@ -62,7 +64,10 @@ export async function readIncrementalJsonl<TRecord>(
   try {
     handle = await fs.promises.open(filePath, "r");
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+    if (
+      error instanceof Error &&
+      hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
+    ) {
       return { records: [], nextOffset: fromOffset };
     }
     throw error;

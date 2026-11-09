@@ -9,8 +9,6 @@ import type {
 import type { DashboardClient } from "./DashboardBroadcastHub";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
-  EXECUTION_STATES,
-  STEP_STATUS,
   type StepStatus,
 } from "../types/DashboardConstants";
 import {
@@ -18,9 +16,9 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
-  notificationIdentityPrefix,
   type CtrlYokeNotificationEvent,
 } from "./notifications/CompletionNotificationFactory";
+import { CompletionNotificationTracker } from "./notifications/CompletionNotificationTracker";
 import {
   showErrorMessage,
   showInformationMessage,
@@ -35,34 +33,20 @@ import {
  * builders shared with the hosted browser server.
  */
 export class NotificationManager implements DashboardClient {
-  private readonly notifiedKeys = new Set<string>();
-  private readonly workflowSummaries = new Map<string, WorkflowSummary>();
+  private readonly completionTracker = new CompletionNotificationTracker();
 
   constructor(private readonly getOrchestrator: () => WorkflowOrchestrator) {}
 
   notifyWorkflowAdded(summary: WorkflowSummary): void {
-    this.workflowSummaries.set(summary.id, summary);
+    this.completionTracker.workflowAdded(summary);
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
-    const summary = this.workflowSummaries.get(workflowId);
-    if (summary) {
-      this.clearNotificationKeys(summary);
-    }
-    this.workflowSummaries.delete(workflowId);
+    this.completionTracker.workflowDismissed(workflowId);
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
-    const previousSummary = this.workflowSummaries.get(summary.id);
-    this.workflowSummaries.set(summary.id, { ...summary });
-
-    if (
-      summary.executionState === EXECUTION_STATES.RUNNING &&
-      (previousSummary?.executionState === EXECUTION_STATES.COMPLETED ||
-        previousSummary?.executionState === EXECUTION_STATES.ERROR)
-    ) {
-      this.clearNotificationKeys(summary);
-    }
+    const previousSummary = this.completionTracker.summaryUpdated(summary);
 
     if (!isWorkflowCompletionTransition(previousSummary, summary)) {
       return;
@@ -103,13 +87,12 @@ export class NotificationManager implements DashboardClient {
       return;
     }
 
-    const summary = this.workflowSummaries.get(workflowId);
+    const summary = this.completionTracker.stepStatusChanged(
+      workflowId,
+      status.state
+    );
     if (!summary) {
       return;
-    }
-
-    if (status.state === STEP_STATUS.RUNNING) {
-      this.clearNotificationKeys(summary);
     }
 
     const steps = this.getWorkflowSteps(workflowId);
@@ -132,15 +115,6 @@ export class NotificationManager implements DashboardClient {
     return workflow?.getQueueState().steps;
   }
 
-  private clearNotificationKeys(summary: WorkflowSummary): void {
-    const prefix = notificationIdentityPrefix(summary);
-    for (const key of this.notifiedKeys) {
-      if (key.startsWith(prefix)) {
-        this.notifiedKeys.delete(key);
-      }
-    }
-  }
-
   notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     this.showNotification(event);
   }
@@ -159,10 +133,9 @@ export class NotificationManager implements DashboardClient {
       return;
     }
 
-    if (this.notifiedKeys.has(event.id)) {
+    if (!this.completionTracker.markShown(event.id)) {
       return;
     }
-    this.notifiedKeys.add(event.id);
 
     if (event.severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR) {
       void showErrorMessage(

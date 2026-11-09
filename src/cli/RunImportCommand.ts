@@ -15,6 +15,7 @@ import {
   RUN_IMPORT_STATUSES,
   type RunChangesTarget,
 } from "../types/RunBundleTypes";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface RunImportOptions {
   bundleDir: string;
@@ -195,7 +196,7 @@ export async function importRunCommand(
     if (continued) io.writeOut("Continuing imported run.");
   } catch (error) {
     if (!options.json) throw error;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     io.writeOut(
       JSON.stringify({
         schemaVersion: 1,

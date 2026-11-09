@@ -1,4 +1,5 @@
 import * as path from "path";
+import { relativePathEscapes } from "../utils/PathSecurity";
 
 import {
   EXECUTION_STATES,
@@ -28,8 +29,8 @@ import type {
   WorkflowStopReason,
   WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
+import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
-  queueTargetKey,
   type RunAttemptProjection,
   type RunFileChangeProjection,
   type RunOutputProjection,
@@ -598,7 +599,7 @@ function shapeFilePath(
     return change.path.replace(/\\/g, "/");
   }
   const relative = path.relative(workspaceRoot, change.path);
-  return relative && !relative.startsWith("..") && !path.isAbsolute(relative)
+  return relative && !relativePathEscapes(relative)
     ? relative.replace(/\\/g, "/")
     : change.path.replace(/\\/g, "/");
 }

@@ -19,7 +19,12 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
-import { FINAL_STEP_PHASES } from "@/types/messages";
+import {
+  FINAL_STEP_PHASES,
+  STEP_STATUS,
+  type FinalStepPhase,
+  type StepStatus,
+} from "@/types/messages";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { useFinalStepLatestPrompt } from "@hooks/useLatestStepOutput";
 
@@ -39,6 +44,8 @@ interface UseFinalStepContextMenuOptions {
   latestPrompt?: string;
   /** Cached runtime metadata (session ID, elapsed, context window). */
   runtimeMeta?: StepRuntimeMetaSnapshot;
+  status?: StepStatus | null;
+  phase?: FinalStepPhase | null;
 }
 
 export function useFinalStepContextMenu({
@@ -50,6 +57,8 @@ export function useFinalStepContextMenu({
   latestOutput,
   latestPrompt,
   runtimeMeta,
+  status,
+  phase,
 }: UseFinalStepContextMenuOptions) {
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
   const hiddenOutputTargets = useUiStore((s) => s.hiddenOutputTargets);
@@ -94,6 +103,9 @@ export function useFinalStepContextMenu({
             latestOutput,
             latestPrompt: latestPrompt ?? currentLatestPrompt,
             runtimeMeta,
+            isCurrent:
+              status === STEP_STATUS.RUNNING &&
+              phase === FINAL_STEP_PHASES.FINAL_STEP,
             liveContextWindow,
           })
         : [];
@@ -181,6 +193,8 @@ export function useFinalStepContextMenu({
       currentLatestPrompt,
       runtimeMeta,
       liveContextWindow,
+      phase,
+      status,
       finalStepLoopCount,
       hiddenOutputKeys,
       outputFilterWorkflowKey,

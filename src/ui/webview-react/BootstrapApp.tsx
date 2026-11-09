@@ -10,6 +10,7 @@ import { WebviewLog } from "@utils/logger";
 import { markFreshPageReadySent } from "@hooks/reconnectWatchdog";
 import { startPanelInboundBuffer } from "@hooks/panelInboundBuffer";
 import { installPanelHandshakeRetry } from "@hooks/panelHandshake";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 type DashboardAppComponent = ComponentType;
 
@@ -78,7 +79,7 @@ export default function BootstrapApp() {
         }
       } catch (error) {
         WebviewLog.error(
-          `[BootstrapApp] Dashboard App import failed: ${error instanceof Error ? error.message : String(error)}`
+          `[BootstrapApp] Dashboard App import failed: ${getErrorMessage(error)}`
         );
         throw error;
       }

@@ -9,6 +9,7 @@ import type {
   PromptResult,
   QueueState,
 } from "../types/CtrlYokeTypes";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export type TerminalFailure =
   | { kind: "queue"; index: number; result: PromptResult }
@@ -54,7 +55,7 @@ export function handleCliError(
   writeError: (message: string) => void = (message) => console.error(message),
   exit: (code: number) => void = (code) => process.exit(code)
 ): void {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = getErrorMessage(error);
   writeError(`Error: ${message}`);
   exit(CLI_USAGE_EXIT_CODE);
 }

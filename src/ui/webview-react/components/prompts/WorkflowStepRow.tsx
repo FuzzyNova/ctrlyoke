@@ -1,11 +1,7 @@
 import React, { useCallback } from "react";
 import { useSortable } from "@dnd-kit/sortable";
-import {
-  EXECUTION_STATES,
-  STEP_STATUS,
-  STEP_TYPES,
-} from "@root/types/DashboardConstants";
-import type { ScriptStep } from "@root/types/WebviewMessageTypes";
+import { EXECUTION_STATES, STEP_STATUS } from "@root/types/DashboardConstants";
+import { isScriptStep } from "@root/types/CtrlYokeTypes";
 import type { ExecutionState, StepStatus } from "../../types/messages";
 import {
   WorkflowStepItem,
@@ -95,10 +91,6 @@ export type WorkflowStepRowProps = {
     request: StepContextMenuRequest
   ) => void;
 };
-
-function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
-}
 
 function getStepText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : step.prompt;

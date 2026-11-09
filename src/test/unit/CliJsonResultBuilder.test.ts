@@ -24,8 +24,8 @@ import type {
   QueueState,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
+import { queueTargetKey } from "../../utils/OutputTargetKeys";
 import {
-  queueTargetKey,
   type RunAttemptProjection,
   type RunOutputProjection,
 } from "../../core/orchestration/RunOutputResolver";

@@ -1049,8 +1049,10 @@ export interface ParallelGroupDefinition {
 }
 
 /** Type guard: returns true if the step is a ScriptStep */
-export function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
+export function isScriptStep<T extends object>(
+  step: T
+): step is Extract<T, { type: typeof STEP_TYPES.SCRIPT }> {
+  return "type" in step && step.type === STEP_TYPES.SCRIPT;
 }
 
 /**

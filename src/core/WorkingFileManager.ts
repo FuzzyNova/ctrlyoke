@@ -29,11 +29,12 @@ import {
   type RunDefinitionChange,
   type RunDefinitionDecision,
   type RunDefinitionIntegrity,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
@@ -83,11 +84,9 @@ import {
 import {
   assertWritableSchema,
   isNewerSchemaError,
-  isNewerSchemaVersion,
   isNewerRunFile,
   PERSISTED_STORES,
   prepareRunFileForWrite,
-  readSchemaVersion,
   refuseNewerSchema,
 } from "../utils/PersistedSchemaGuard";
 import {
@@ -99,7 +98,7 @@ import {
   type PendingParallelGroupRange,
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
-  snapParallelGroupStartPosition,
+  snapParallelGroupIndex,
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
 } from "./ParallelGroupTopology";
@@ -191,16 +190,11 @@ function normalizeParsedWorkingFile(
   parsed: WorkingFile,
   workingFilePath: string
 ): WorkingFile {
-  const schemaVersion = readSchemaVersion(parsed);
-  if (
-    isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
-  ) {
-    refuseNewerSchema(
-      PERSISTED_STORES.WORKFLOW_DEFINITION,
-      schemaVersion as number,
-      `${workingFilePath.split(/[\\/]/).pop()} (JSON)`
-    );
-  }
+  assertWritableSchema(
+    PERSISTED_STORES.WORKFLOW_DEFINITION,
+    parsed,
+    `${workingFilePath.split(/[\\/]/).pop()} (JSON)`
+  );
   const workingFile = stripLegacyWorkingFileLineageMetadata(parsed);
   return stripTimelineDuplicatedWorkingFileOutput(workingFile);
 }
@@ -369,7 +363,7 @@ async function readWorkingFileForWriteDiagnostics(
       JSON.parse(content) as WorkingFile
     );
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       Log.trace(
         `[WorkingFileManager] Unable to read the previous working file for write diagnostics: ${workingFilePath}`
       );
@@ -1382,10 +1376,7 @@ export class WorkingFileManager {
               `Invalid rewind index ${fromStepIndex}; expected a suffix within ${topology.steps.length} step(s)`
             );
           }
-          const boundary = snapParallelGroupStartPosition(
-            topology,
-            fromStepIndex
-          );
+          const boundary = snapParallelGroupIndex(topology, fromStepIndex);
 
           // Snapshot first. A crash after this point is recoverable; a crash before
           // it leaves the untouched run and descriptor without a pending marker.
@@ -2340,7 +2331,13 @@ export class WorkingFileManager {
                 )
               )
               .catch((error: NodeJS.ErrnoException) => {
-                if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
+                if (
+                  !hasErrnoCode(
+                    error,
+                    NODE_ERROR_CODES.ENOTEMPTY,
+                    NODE_ERROR_CODES.ENOENT
+                  )
+                )
                   throw error;
               });
             return {
@@ -2516,7 +2513,13 @@ export class WorkingFileManager {
           )
         )
         .catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
+          if (
+            !hasErrnoCode(
+              error,
+              NODE_ERROR_CODES.ENOTEMPTY,
+              NODE_ERROR_CODES.ENOENT
+            )
+          )
             throw error;
         });
       return currentRevision;

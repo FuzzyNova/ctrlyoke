@@ -3,7 +3,6 @@ import {
   computeActiveExecutionMs,
 } from "../types/CtrlYokeTypes";
 import {
-  FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
   WORKFLOW_ATTEMPT_STATUS,
   WORKFLOW_RUNTIME_COMMANDS,
@@ -20,6 +19,7 @@ import type {
   WorkflowStopReason,
 } from "../types/CtrlYokeTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
+import { outputTargetKey } from "../utils/OutputTargetKeys";
 
 /**
  * WorkflowStateMachine
@@ -119,9 +119,7 @@ export class WorkflowStateMachine {
   }
 
   private getAttemptKey(target: WorkflowAttemptTarget): string {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? `queue:${target.stepIndex}`
-      : `final:${target.loopIndex}`;
+    return outputTargetKey(target);
   }
 
   private cloneAttemptState(

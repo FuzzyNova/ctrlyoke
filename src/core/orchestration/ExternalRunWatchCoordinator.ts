@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { queueTargetKey } from "../../utils/OutputTargetKeys";
 import {
   EXECUTION_STATES,
   deriveWorkflowFinalStepSummary,
@@ -13,6 +14,7 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  IN_FLIGHT_EXECUTION_STATES,
   EXECUTION_PHASES,
   EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
@@ -23,6 +25,7 @@ import {
   WORKFLOW_LOCK_LOCALITIES,
   type FinalStepPhase,
   type StepStatus,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
@@ -54,6 +57,7 @@ import { WorktreeManager } from "./WorktreeManager";
 import { WorkingFileManager } from "../WorkingFileManager";
 import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
 import type { RunViewPublisherExternalRunWatchPort } from "./RunViewPublisher";
+import { getErrnoCode } from "../../utils/ErrorUtils";
 
 const RUNNER_JSON_DISCOVERY_POLL_INTERVAL_MS = 10_000;
 const RUNNER_JSON_DISCOVERY_STAT_CONCURRENCY = 4;
@@ -555,10 +559,9 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       workingFilePath
     )) {
       const localSummary = instance.getSummary();
-      const hasInFlightStep =
-        localSummary.executionState === EXECUTION_STATES.RUNNING ||
-        localSummary.executionState === EXECUTION_STATES.PAUSING ||
-        localSummary.executionState === EXECUTION_STATES.CANCELLING;
+      const hasInFlightStep = IN_FLIGHT_EXECUTION_STATES.has(
+        localSummary.executionState
+      );
       if (hasInFlightStep) {
         Log.info(
           `[WorkflowOrchestrator] startExternalRunWatchSession: "${workflowId}" is already owned by this process's in-flight WorkflowInstance inst:${instance.id.slice(0, 8)} (executionState=${localSummary.executionState}) — skipping external watch session instead of retiring it`
@@ -887,7 +890,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       const stepIndex = historyEntry.target.stepIndex;
       const output = historyEntry.cliOutput as CliOutput;
       const entryKey = [
-        `queue:${stepIndex}`,
+        queueTargetKey(stepIndex),
         `run:${historyEntry.runIndex ?? output.runIndex ?? 0}`,
         `attempt:${historyEntry.attemptIndex ?? output.attemptIndex ?? 0}`,
         `phase:${historyEntry.phase ?? EXECUTION_PHASES.PROMPT}`,
@@ -1114,7 +1117,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     const hasResidentExecution = this.host
       .findInstanceForWorkingFile(workingFilePath, true)
       .some((instance) =>
-        isExecutionOwnerState(instance.getQueueState().status)
+        ACTIVE_EXECUTION_STATES.has(instance.getQueueState().status)
       );
     if (hasResidentExecution) return false;
     const address =
@@ -1177,8 +1180,8 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     try {
       process.kill(lock.pid, "SIGTERM");
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ESRCH") {
+      const code = getErrnoCode(err);
+      if (code !== NODE_ERROR_CODES.ESRCH) {
         Log.warn(
           `[WorkflowOrchestrator] stopExternalRunSession: process.kill(${lock.pid}) failed:`,
           err
@@ -1201,15 +1204,6 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     }
     this.polledRunnerJsonMtimes.clear();
   }
-}
-
-function isExecutionOwnerState(status: QueueState["status"]): boolean {
-  return (
-    status === EXECUTION_STATES.RUNNING ||
-    status === EXECUTION_STATES.PAUSING ||
-    status === EXECUTION_STATES.PAUSED ||
-    status === EXECUTION_STATES.CANCELLING
-  );
 }
 
 function getCliOutputSignature(output: CliOutput): string {

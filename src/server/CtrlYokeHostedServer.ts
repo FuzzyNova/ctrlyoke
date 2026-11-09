@@ -44,8 +44,6 @@ import {
   HOSTED_CERT_DOWNLOAD,
   HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
-  EXECUTION_STATES,
-  STEP_STATUS,
   BROWSER_CLIENT_PREFIX,
   LANGUAGE_SERVER_REQUEST_ORIGINS,
   type FinalStepPhase,
@@ -67,6 +65,7 @@ import {
   SERVER_BIND_ADDRESSES,
   WORKSPACE_MEDIA_GIT_INDEX_REF,
   WORKSPACE_MEDIA_KINDS,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -80,9 +79,9 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
-  notificationIdentityPrefix,
   type CtrlYokeNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
+import { CompletionNotificationTracker } from "../ui/notifications/CompletionNotificationTracker";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
 import { projectKey } from "../utils/ProjectStatePaths";
@@ -100,12 +99,18 @@ import {
   WorkspaceFileConflictError,
   WorkspaceMediaError,
   WORKSPACE_RAW_MEDIA_SOURCE_KINDS,
+  WORKSPACE_VIEWER_PATH_NOT_ALLOWED,
 } from "./HostedWorkspaceViewerService";
 import {
   HTTP_BYTE_RANGE_RESULT_KINDS,
   parseHttpByteRange,
 } from "./HttpByteRange";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
+import {
+  optionalNonEmptyQueryString,
+  optionalTrimmedQueryString,
+  parseHostedRoutePagingParams,
+} from "./HostedRouteParams";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
 import type {
   WorkspaceDeleteRequest,
@@ -137,6 +142,7 @@ import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 import { LanguageIntelligenceHost } from "./lsp/LanguageIntelligenceHost";
 import { EmptyLanguageServerBackend } from "./lsp/LanguageServerBackend";
 import type { JsonRpcMessage } from "./lsp/LspProtocol";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
@@ -344,8 +350,7 @@ export class CtrlYokeHostedServer
   private readonly socketClientTags = new WeakMap<WebSocket, string>();
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   private nextApplicationHeartbeatId = 1;
-  private readonly workflowSummaries = new Map<string, WorkflowSummary>();
-  private readonly notifiedEventIds = new Set<string>();
+  private readonly completionTracker = new CompletionNotificationTracker();
   private cachedThemeVars: Record<string, string> = {};
   private nextConnectionId = 1;
   private readonly sink: PostMessageDashboardSink;
@@ -726,31 +731,18 @@ export class CtrlYokeHostedServer
   }
 
   notifyWorkflowAdded(summary: WorkflowSummary): void {
-    this.workflowSummaries.set(summary.id, summary);
+    this.completionTracker.workflowAdded(summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
-    const summary = this.workflowSummaries.get(workflowId);
-    if (summary) {
-      this.clearNotificationEventIds(summary);
-    }
-    this.workflowSummaries.delete(workflowId);
+    this.completionTracker.workflowDismissed(workflowId);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
-    const previousSummary = this.workflowSummaries.get(summary.id);
-    this.workflowSummaries.set(summary.id, summary);
+    const previousSummary = this.completionTracker.summaryUpdated(summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
-
-    if (
-      summary.executionState === EXECUTION_STATES.RUNNING &&
-      (previousSummary?.executionState === EXECUTION_STATES.COMPLETED ||
-        previousSummary?.executionState === EXECUTION_STATES.ERROR)
-    ) {
-      this.clearNotificationEventIds(summary);
-    }
 
     if (!isWorkflowCompletionTransition(previousSummary, summary)) {
       return;
@@ -965,13 +957,12 @@ export class CtrlYokeHostedServer
       return;
     }
 
-    const summary = this.workflowSummaries.get(workflowId);
+    const summary = this.completionTracker.stepStatusChanged(
+      workflowId,
+      status.state
+    );
     if (!summary) {
       return;
-    }
-
-    if (status.state === STEP_STATUS.RUNNING) {
-      this.clearNotificationEventIds(summary);
     }
 
     const steps = this.getOrchestrator()
@@ -1532,14 +1523,8 @@ export class CtrlYokeHostedServer
           );
           res.json(await this.viewerService.listDirectory(request));
         } catch (err) {
-          if (err instanceof WorkspaceTreeHttpError) {
-            res.status(err.statusCode).json({ error: err.message });
-            return;
-          }
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /tree error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/tree", err);
         }
       }
     );
@@ -1567,10 +1552,7 @@ export class CtrlYokeHostedServer
             : WORKSPACE_SEARCH_SCOPES.BOTH;
         const includeGitIgnored =
           req.query.includeGitIgnored === BOOLEAN_STRING_VALUES.TRUE;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         const rawLimit =
           typeof req.query.limit === "string"
             ? Number.parseInt(req.query.limit, 10)
@@ -1583,10 +1565,7 @@ export class CtrlYokeHostedServer
             : NaN;
         const offset =
           Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : undefined;
-        const searchId =
-          typeof req.query.searchId === "string" && req.query.searchId
-            ? req.query.searchId
-            : undefined;
+        const searchId = optionalNonEmptyQueryString(req.query.searchId);
 
         try {
           res.json(
@@ -1601,10 +1580,8 @@ export class CtrlYokeHostedServer
             })
           );
         } catch (err) {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /search error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/search", err);
         }
       }
     );
@@ -1642,10 +1619,8 @@ export class CtrlYokeHostedServer
         res.locals.skipSecretRedaction = true;
         res.json(file);
       } catch (err) {
-        Log.error(
-          `[CtrlYokeHostedServer] workspace-viewer GET /file error: ${String(err)}`
-        );
-        res.status(500).json({ error: "Internal server error" });
+        if (this.sendKnownWorkspaceViewerError(res, err)) return;
+        this.sendWorkspaceViewerInternalError(res, "GET /file", err);
       }
     });
 
@@ -1858,18 +1833,14 @@ export class CtrlYokeHostedServer
         );
         res.json({ modifiedAt });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message === "Path not allowed") {
-          res.status(403).json({ error: message });
-        } else if (err instanceof WorkspaceFileConflictError) {
+        const message = getErrorMessage(err);
+        if (this.sendKnownWorkspaceViewerError(res, err)) return;
+        if (err instanceof WorkspaceFileConflictError) {
           res.status(409).json({ error: message, modifiedAt: err.modifiedAt });
         } else if (err instanceof RedactionMarkerSaveError) {
           res.status(400).json({ error: message });
         } else {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer PUT /file error: ${message}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          this.sendWorkspaceViewerInternalError(res, "PUT /file", err);
         }
       }
     });
@@ -1889,7 +1860,8 @@ export class CtrlYokeHostedServer
           await this.viewerService.deleteEntry(deleteRequest.path);
           res.status(204).send();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          const message = getErrorMessage(err);
           Log.warn(
             `[CtrlYokeHostedServer] workspace-viewer DELETE /entry error: ${message}`
           );
@@ -1921,7 +1893,8 @@ export class CtrlYokeHostedServer
           });
           res.status(204).send();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          const message = getErrorMessage(err);
           Log.warn(
             `[CtrlYokeHostedServer] workspace-viewer POST /copy error: ${message}`
           );
@@ -1954,7 +1927,8 @@ export class CtrlYokeHostedServer
           });
           res.status(204).send();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          const message = getErrorMessage(err);
           Log.warn(
             `[CtrlYokeHostedServer] workspace-viewer POST /move error: ${message}`
           );
@@ -1970,10 +1944,8 @@ export class CtrlYokeHostedServer
         try {
           res.json(await this.viewerService.getRepos());
         } catch (err) {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /repos error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/repos", err);
         }
       }
     );
@@ -1982,19 +1954,18 @@ export class CtrlYokeHostedServer
       "/api/workspace-viewer/status",
       requireToken,
       async (req, res) => {
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(await this.viewerService.getStatus(repo));
         } catch (err) {
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
           // The message is shown in the SCM pane in place of a file list.
-          const message = err instanceof Error ? err.message : String(err);
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /status error: ${message}`
+          this.sendWorkspaceViewerInternalError(
+            res,
+            "/status",
+            err,
+            getErrorMessage(err)
           );
-          res.status(500).json({ error: message });
         }
       }
     );
@@ -2012,15 +1983,8 @@ export class CtrlYokeHostedServer
         try {
           res.json(await this.viewerService.getDiff(filePath));
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message === "Path not allowed") {
-            res.status(403).json({ error: message });
-          } else {
-            Log.error(
-              `[CtrlYokeHostedServer] workspace-viewer /diff error: ${message}`
-            );
-            res.status(500).json({ error: "Internal server error" });
-          }
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/diff", err);
         }
       }
     );
@@ -2035,13 +1999,10 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "path is required" });
           return;
         }
-        const rawOffset =
-          typeof req.query.offset === "string" ? req.query.offset : "0";
-        const rawPageSize =
-          typeof req.query.pageSize === "string"
-            ? req.query.pageSize
-            : undefined;
-        const offset = Number.parseInt(rawOffset, 10);
+        const { offset, pageSize } = parseHostedRoutePagingParams(
+          req.query.offset,
+          req.query.pageSize
+        );
         const rawNextOffset =
           typeof req.query.nextOffset === "string"
             ? Number.parseInt(req.query.nextOffset, 10)
@@ -2050,18 +2011,8 @@ export class CtrlYokeHostedServer
           typeof req.query.nextCursor === "string"
             ? req.query.nextCursor
             : undefined;
-        const pageSize =
-          rawPageSize === undefined
-            ? undefined
-            : Number.parseInt(rawPageSize, 10);
-        const historyId =
-          typeof req.query.historyId === "string" && req.query.historyId
-            ? req.query.historyId
-            : undefined;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const historyId = optionalNonEmptyQueryString(req.query.historyId);
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(
             await this.viewerService.getFileHistory(
@@ -2075,18 +2026,8 @@ export class CtrlYokeHostedServer
             )
           );
         } catch (err) {
-          if (err instanceof WorkspaceTreeHttpError) {
-            res.status(err.statusCode).json({ error: err.message });
-            return;
-          }
-          if (err instanceof Error && err.message === "Path not allowed") {
-            res.status(403).json({ error: err.message });
-            return;
-          }
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /file-history error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/file-history", err);
         }
       }
     );
@@ -2107,10 +2048,7 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "commit is required" });
           return;
         }
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           const result = await this.viewerService.getFileHistoryDiff(
             filePath,
@@ -2119,18 +2057,8 @@ export class CtrlYokeHostedServer
           );
           res.json(result satisfies WorkspaceFileHistoryDiffResponse);
         } catch (err) {
-          if (err instanceof WorkspaceTreeHttpError) {
-            res.status(err.statusCode).json({ error: err.message });
-            return;
-          }
-          if (err instanceof Error && err.message === "Path not allowed") {
-            res.status(403).json({ error: err.message });
-            return;
-          }
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /file-history-diff error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/file-history-diff", err);
         }
       }
     );
@@ -2263,11 +2191,14 @@ export class CtrlYokeHostedServer
             truncated: result.truncated,
           } satisfies WorkspaceGenerateCommitMessageResponse);
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /generate-commit-message error: ${message}`
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          const message = getErrorMessage(err);
+          this.sendWorkspaceViewerInternalError(
+            res,
+            "/generate-commit-message",
+            err,
+            message
           );
-          res.status(500).json({ error: message });
         }
       }
     );
@@ -2278,18 +2209,9 @@ export class CtrlYokeHostedServer
       async (req, res) => {
         const skip = parseInt(String(req.query.skip ?? "0"), 10);
         const limit = parseInt(String(req.query.limit ?? "30"), 10);
-        const branch =
-          typeof req.query.branch === "string" && req.query.branch.trim()
-            ? req.query.branch.trim()
-            : undefined;
-        const historyId =
-          typeof req.query.historyId === "string" && req.query.historyId
-            ? req.query.historyId
-            : undefined;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const branch = optionalTrimmedQueryString(req.query.branch);
+        const historyId = optionalNonEmptyQueryString(req.query.historyId);
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(
             await this.viewerService.getCommitLog(
@@ -2301,14 +2223,8 @@ export class CtrlYokeHostedServer
             )
           );
         } catch (err) {
-          if (err instanceof WorkspaceTreeHttpError) {
-            res.status(err.statusCode).json({ error: err.message });
-            return;
-          }
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /commit-log error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/commit-log", err);
         }
       }
     );
@@ -2322,25 +2238,12 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "ref is required" });
           return;
         }
-        const rawOffset =
-          typeof req.query.offset === "string" ? req.query.offset : "0";
-        const rawPageSize =
-          typeof req.query.pageSize === "string"
-            ? req.query.pageSize
-            : undefined;
-        const offset = Number.parseInt(rawOffset, 10);
-        const pageSize =
-          rawPageSize === undefined
-            ? undefined
-            : Number.parseInt(rawPageSize, 10);
-        const diffId =
-          typeof req.query.diffId === "string" && req.query.diffId
-            ? req.query.diffId
-            : undefined;
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const { offset, pageSize } = parseHostedRoutePagingParams(
+          req.query.offset,
+          req.query.pageSize
+        );
+        const diffId = optionalNonEmptyQueryString(req.query.diffId);
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           res.json(
             (await this.viewerService.getGitRefDiffPage(
@@ -2352,14 +2255,8 @@ export class CtrlYokeHostedServer
             )) satisfies WorkspaceGitRefDiffPageResponse
           );
         } catch (err) {
-          if (err instanceof WorkspaceTreeHttpError) {
-            res.status(err.statusCode).json({ error: err.message });
-            return;
-          }
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-page error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/git-ref-diff-page", err);
         }
       }
     );
@@ -2373,10 +2270,7 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "ref is required" });
           return;
         }
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           const download = await this.viewerService.spawnGitRefDiffDownload(
             ref,
@@ -2433,14 +2327,13 @@ export class CtrlYokeHostedServer
           });
           download.stdout.pipe(res, { end: false });
         } catch (err) {
-          if (err instanceof WorkspaceTreeHttpError) {
-            res.status(err.statusCode).json({ error: err.message });
-            return;
-          }
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download error: ${String(err)}`
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(
+            res,
+            "/git-ref-diff-download",
+            err,
+            "Unable to download diff"
           );
-          res.status(500).json({ error: "Unable to download diff" });
         }
       }
     );
@@ -2454,18 +2347,13 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "ref is required" });
           return;
         }
-        const repo =
-          typeof req.query.repo === "string" && req.query.repo.trim()
-            ? req.query.repo.trim()
-            : undefined;
+        const repo = optionalTrimmedQueryString(req.query.repo);
         try {
           const result = await this.viewerService.getGitRefDiff(ref, repo);
           res.json(result satisfies WorkspaceGitRefDiffResponse);
         } catch (err) {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(res, "/git-ref-diff", err);
         }
       }
     );
@@ -2510,14 +2398,12 @@ export class CtrlYokeHostedServer
           );
           res.json(result satisfies WorkspaceGitRefDiffPageResponse);
         } catch (err) {
-          if (err instanceof WorkspaceTreeHttpError) {
-            res.status(err.statusCode).json({ error: err.message });
-            return;
-          }
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /worktree-diff-page error: ${String(err)}`
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          this.sendWorkspaceViewerInternalError(
+            res,
+            "/worktree-diff-page",
+            err
           );
-          res.status(500).json({ error: "Internal server error" });
         }
       }
     );
@@ -2537,11 +2423,14 @@ export class CtrlYokeHostedServer
             await this.viewerService.checkoutCommit(body.hash.trim(), repo)
           );
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /checkout-commit error: ${message}`
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          const message = getErrorMessage(err);
+          this.sendWorkspaceViewerInternalError(
+            res,
+            "/checkout-commit",
+            err,
+            message
           );
-          res.status(500).json({ error: message });
         }
       }
     );
@@ -2561,11 +2450,14 @@ export class CtrlYokeHostedServer
             await this.viewerService.checkoutBranch(body.branch.trim(), repo)
           );
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /checkout-branch error: ${message}`
+          if (this.sendKnownWorkspaceViewerError(res, err)) return;
+          const message = getErrorMessage(err);
+          this.sendWorkspaceViewerInternalError(
+            res,
+            "/checkout-branch",
+            err,
+            message
           );
-          res.status(500).json({ error: message });
         }
       }
     );
@@ -2879,10 +2771,9 @@ export class CtrlYokeHostedServer
     ) {
       return;
     }
-    if (this.notifiedEventIds.has(event.id)) {
+    if (!this.completionTracker.markShown(event.id)) {
       return;
     }
-    this.notifiedEventIds.add(event.id);
 
     const notificationEvent = {
       ...event,
@@ -2912,15 +2803,6 @@ export class CtrlYokeHostedServer
     }
   }
 
-  private clearNotificationEventIds(summary: WorkflowSummary): void {
-    const prefix = notificationIdentityPrefix(summary);
-    for (const eventId of this.notifiedEventIds) {
-      if (eventId.startsWith(prefix)) {
-        this.notifiedEventIds.delete(eventId);
-      }
-    }
-  }
-
   private sendPushAccessError(res: express.Response, error: unknown): boolean {
     if (!(error instanceof PushAccessDeniedError)) return false;
     res.status(403).json({
@@ -2940,15 +2822,39 @@ export class CtrlYokeHostedServer
     route: string,
     error: unknown
   ): void {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === "Path not allowed") {
-      res.status(403).json({ error: message });
-      return;
-    }
-    Log.error(
-      `[CtrlYokeHostedServer] workspace-viewer ${route} error: ${message}`
+    if (this.sendKnownWorkspaceViewerError(res, error)) return;
+    this.sendWorkspaceViewerInternalError(
+      res,
+      route,
+      error,
+      getErrorMessage(error)
     );
-    res.status(500).json({ error: message });
+  }
+
+  private sendKnownWorkspaceViewerError(
+    res: express.Response,
+    error: unknown
+  ): boolean {
+    if (error instanceof WorkspaceTreeHttpError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    const message = getErrorMessage(error);
+    if (message !== WORKSPACE_VIEWER_PATH_NOT_ALLOWED) return false;
+    res.status(403).json({ error: message });
+    return true;
+  }
+
+  private sendWorkspaceViewerInternalError(
+    res: express.Response,
+    route: string,
+    error: unknown,
+    publicMessage = "Internal server error"
+  ): void {
+    Log.error(
+      `[CtrlYokeHostedServer] workspace-viewer ${route} error: ${getErrorMessage(error)}`
+    );
+    res.status(500).json({ error: publicMessage });
   }
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
@@ -3132,7 +3038,7 @@ export class CtrlYokeHostedServer
         this.terminateSocket(
           ws,
           "new-connection-probe-send-failed",
-          `triggeredBy=${newClientTag} error=${error instanceof Error ? error.message : String(error)}`
+          `triggeredBy=${newClientTag} error=${getErrorMessage(error)}`
         );
       }
     }
@@ -3203,7 +3109,7 @@ export class CtrlYokeHostedServer
         this.terminateSocket(
           ws,
           "heartbeat-send-failed",
-          `error=${error instanceof Error ? error.message : String(error)}`
+          `error=${getErrorMessage(error)}`
         );
       }
     }
@@ -3427,7 +3333,7 @@ export class CtrlYokeHostedServer
           }
           const onError = (err: NodeJS.ErrnoException) => {
             this.httpServer.removeListener("listening", onListening);
-            if (err.code === "EADDRINUSE") {
+            if (hasErrnoCode(err, NODE_ERROR_CODES.EADDRINUSE)) {
               if (candidateIndex >= candidatePorts.length - 1) {
                 reject(err);
                 return;

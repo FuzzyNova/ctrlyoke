@@ -14,6 +14,32 @@ import {
 } from "../utils/ModelConstants";
 import type { DashboardHostActions } from "../core/HostPorts";
 
+/** Node.js filesystem and process error codes used for flow control. */
+export const NODE_ERROR_CODES = {
+  EACCES: "EACCES",
+  EADDRINUSE: "EADDRINUSE",
+  EBUSY: "EBUSY",
+  EEXIST: "EEXIST",
+  EIO: "EIO",
+  EISDIR: "EISDIR",
+  ELOOP: "ELOOP",
+  ENAMETOOLONG: "ENAMETOOLONG",
+  ENOENT: "ENOENT",
+  ENOSPC: "ENOSPC",
+  ENOTDIR: "ENOTDIR",
+  ENOTEMPTY: "ENOTEMPTY",
+  EPERM: "EPERM",
+  EPIPE: "EPIPE",
+  EROFS: "EROFS",
+  ESRCH: "ESRCH",
+  ERR_WORKER_OUT_OF_MEMORY: "ERR_WORKER_OUT_OF_MEMORY",
+  ETIMEDOUT: "ETIMEDOUT",
+  EXDEV: "EXDEV",
+} as const;
+
+export type NodeErrorCode =
+  (typeof NODE_ERROR_CODES)[keyof typeof NODE_ERROR_CODES];
+
 /** VS Code's default files.watcherExclude patterns, shared by Node watchers. */
 export const DEFAULT_FILE_WATCHER_EXCLUDES = [
   "**/node_modules/**",

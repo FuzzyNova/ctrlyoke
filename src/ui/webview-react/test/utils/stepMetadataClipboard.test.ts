@@ -19,4 +19,19 @@ describe("buildStepMetadataClipboardText prior context", () => {
     expect(previousCount).toContain("priorContext: Previous 3");
     expect(runSource).toContain("priorContext: Completed run output");
   });
+
+  it("uses live context telemetry while the step is rerunning", () => {
+    const text = buildStepMetadataClipboardText({
+      step: { prompt: "prompt" } as WorkflowStep,
+      slotNumber: 1,
+      isCurrent: true,
+      latestOutput: {
+        tokens: { contextWindowUsed: 20_000, contextWindowSize: 100_000 },
+      } as never,
+      liveContextWindow: { used: 40_000, size: 200_000 },
+    });
+
+    expect(text).toContain("Current context window: 40k/200k (20%)");
+    expect(text).not.toContain("Current context window: 20k/100k (20%)");
+  });
 });

@@ -2,7 +2,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import { Log } from "../../utils/Log";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
 import {
   addWorktree,
   abortMerge,
@@ -55,6 +55,8 @@ import {
   WORKTREE_SETUP_OUTCOMES,
   WORKFLOW_LOCK_LIVENESS,
   type WorktreeManagementAction,
+  NODE_ERROR_CODES,
+  WORKTREE_MERGE_OUTCOMES,
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
@@ -491,7 +493,7 @@ export class WorktreeSetupError extends Error {
   readonly worktreePath: string;
 
   constructor(worktreePath: string, cause: unknown) {
-    const causeText = cause instanceof Error ? cause.message : String(cause);
+    const causeText = getErrorMessage(cause);
     super(
       `Worktree setup failed in ${worktreePath}: ${summarizeStatusError(causeText)}`
     );
@@ -919,7 +921,7 @@ export class WorktreeManager {
         );
       });
     } catch (error) {
-      return blocked(error instanceof Error ? error.message : String(error));
+      return blocked(getErrorMessage(error));
     } finally {
       await info.lease?.release().catch(() => undefined);
     }
@@ -952,7 +954,10 @@ export class WorktreeManager {
 
     const initialGuardFailure = await guard();
     if (initialGuardFailure) {
-      return { mergeOutcome: "blocked", message: initialGuardFailure };
+      return {
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+        message: initialGuardFailure,
+      };
     }
 
     let sourceLease: ExecutionLeaseHandle | undefined;
@@ -968,15 +973,18 @@ export class WorktreeManager {
       });
     } catch (error) {
       return {
-        mergeOutcome: "blocked",
-        message: `Merge blocked: ${error instanceof Error ? error.message : String(error)}`,
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+        message: `Merge blocked: ${getErrorMessage(error)}`,
       };
     }
 
     try {
       const postLeaseGuardFailure = await guard();
       if (postLeaseGuardFailure) {
-        return { mergeOutcome: "blocked", message: postLeaseGuardFailure };
+        return {
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+          message: postLeaseGuardFailure,
+        };
       }
       return await this.attemptGuardedMerge(
         info.sourceCheckoutRoot,
@@ -1002,7 +1010,7 @@ export class WorktreeManager {
   ): Promise<WorktreeMergeResult> {
     try {
       await this.mergeOperations.fastForward(dir, ref);
-      return { mergeOutcome: "fast-forward" };
+      return { mergeOutcome: WORKTREE_MERGE_OUTCOMES.FAST_FORWARD };
     } catch {
       // A fast-forward refusal is the expected signal for a divergent
       // target. The guarded non-ff attempt below handles that case.
@@ -1010,17 +1018,16 @@ export class WorktreeManager {
 
     try {
       await this.mergeOperations.noFastForward(dir, ref);
-      return { mergeOutcome: "merge-commit" };
+      return { mergeOutcome: WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT };
     } catch (error) {
       const conflictFiles = await this.mergeOperations
         .getUnmergedPaths(dir)
         .catch(() => []);
       const mergeInProgress = await hasGitOperationInProgress(dir);
-      const failureMessage =
-        error instanceof Error ? error.message : String(error);
+      const failureMessage = getErrorMessage(error);
       if (!mergeInProgress && conflictFiles.length === 0) {
         return {
-          mergeOutcome: "blocked",
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
           message: `Merge blocked: ${failureMessage}`,
         };
       }
@@ -1029,9 +1036,9 @@ export class WorktreeManager {
         await this.mergeOperations.abort(dir);
       } catch (abortError) {
         return {
-          mergeOutcome: "abort-failed",
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.ABORT_FAILED,
           conflictFiles,
-          message: `Merge conflict abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+          message: `Merge conflict abort failed: ${getErrorMessage(abortError)}`,
         };
       }
 
@@ -1040,14 +1047,14 @@ export class WorktreeManager {
         !(await hasUncommittedChanges(dir));
       if (!abortRestoredCleanState) {
         return {
-          mergeOutcome: "abort-failed",
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.ABORT_FAILED,
           conflictFiles,
           message:
             "Merge conflict abort did not restore a clean, non-merging checkout.",
         };
       }
 
-      return { mergeOutcome: "conflict", conflictFiles };
+      return { mergeOutcome: WORKTREE_MERGE_OUTCOMES.CONFLICT, conflictFiles };
     }
   }
 
@@ -1134,9 +1141,7 @@ export class WorktreeManager {
         git
       );
     } catch (error) {
-      throw new Error(
-        `Sync blocked: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`Sync blocked: ${getErrorMessage(error)}`);
     }
 
     try {
@@ -1164,19 +1169,19 @@ export class WorktreeManager {
     const checkedOutBranch = await currentBranch(dir);
     if (checkedOutBranch !== expectedCheckedOutBranch) {
       return {
-        mergeOutcome: "blocked",
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message: `Merge blocked: "${dir}" is on "${checkedOutBranch ?? "detached HEAD"}", expected "${expectedCheckedOutBranch}".`,
       };
     }
     if (await hasGitOperationInProgress(dir)) {
       return {
-        mergeOutcome: "blocked",
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message: `Merge blocked: a Git operation is already in progress in "${dir}".`,
       };
     }
     if (await hasUncommittedChanges(dir)) {
       return {
-        mergeOutcome: "blocked",
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message: `Merge blocked: "${dir}" has uncommitted changes.`,
       };
     }
@@ -1300,9 +1305,9 @@ export class WorktreeManager {
     try {
       await this.removeCheckout(repositoryRoot, info.worktreePath);
     } catch (error) {
-      const message = `Managed worktree removal failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      const message = `Managed worktree removal failed: ${getErrorMessage(
+        error
+      )}`;
       await this.writeRecord(recordPath, {
         ...record,
         lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
@@ -1361,9 +1366,9 @@ export class WorktreeManager {
           await deleteLocalBranch(repositoryRoot, info.branchName);
           branchState = WORKTREE_BRANCH_STATES.DELETED;
         } catch (error) {
-          message = `Managed no-change branch deletion failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`;
+          message = `Managed no-change branch deletion failed: ${getErrorMessage(
+            error
+          )}`;
         }
       }
     }
@@ -1398,7 +1403,7 @@ export class WorktreeManager {
       // are durably recorded as gone. A crash before this unlink leaves the
       // record as a safe reconciliation tombstone.
       await fs.unlink(recordPath).catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
       });
     }
 
@@ -2726,7 +2731,7 @@ export class WorktreeManager {
     try {
       entries = await fs.readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return [];
       throw error;
     }
     const records: ManagedWorktreeOwnershipRecord[] = [];
@@ -2810,7 +2815,7 @@ export class WorktreeManager {
       }
       return validate(migrateToCurrent(store, parsed).doc as Partial<T>);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
       // A partially written/corrupt record is not ownership or setup evidence.
       return undefined;
     }
@@ -2842,7 +2847,7 @@ export class WorktreeManager {
       assertWritableSchema(store, current, recordPath);
     } catch (error) {
       if (
-        (error as NodeJS.ErrnoException).code !== "ENOENT" &&
+        !hasErrnoCode(error, NODE_ERROR_CODES.ENOENT) &&
         !(error instanceof SyntaxError)
       ) {
         throw error;
@@ -2885,7 +2890,7 @@ export class WorktreeManager {
       }
       throw new Error(`Managed worktree path collision: ${worktreePath}`);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
     }
   }
 
@@ -3045,7 +3050,7 @@ export class WorktreeManager {
         // resources have been observed gone. A crash before this unlink is
         // therefore safe to reconcile again.
         await fs.unlink(recordPath).catch((error: unknown) => {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
         });
       }
     }

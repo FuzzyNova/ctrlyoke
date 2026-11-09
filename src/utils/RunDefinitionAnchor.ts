@@ -1,3 +1,4 @@
+import { isRecord } from "./JsonTypeGuards";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -11,6 +12,7 @@ import {
   RUN_DEFINITION_CHANGE_SCOPES,
   RUN_DEFINITION_INTEGRITY,
   type RunDefinitionChange,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { writeFileAtomic } from "./AtomicFileUtils";
 import { withFileLock } from "./FileLockUtils";
@@ -27,6 +29,7 @@ export { describeRunDefinitionChanges };
 import { stableStringify } from "./StableJson";
 import * as WorkflowPaths from "./WorkflowPaths";
 import { definitionAnchorPath } from "./WorkflowPaths";
+import { hasErrnoCode } from "./ErrorUtils";
 
 /**
  * Run definition anchors: proof, kept where no harness sandbox can write, of
@@ -170,10 +173,6 @@ export function isRunDefinitionChangedError(
 
 /** Re-reads before concluding a definition changed; see {@link verifyRunDefinitionFile}. */
 const VERIFY_READ_ATTEMPTS = 3;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -367,7 +366,7 @@ async function readAnchorAt(
   try {
     raw = await fs.promises.readFile(anchorPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return undefined;
     }
     throw error;
@@ -547,7 +546,7 @@ async function readDirIfPresent(dir: string): Promise<fs.Dirent[]> {
   try {
     return await fs.promises.readdir(dir, { withFileTypes: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return [];
     }
     throw error;
@@ -623,7 +622,7 @@ export async function verifyRunDefinitionFile(
     try {
       raw = await fs.promises.readFile(workingFilePath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return undefined;
       }
       throw error;
@@ -855,7 +854,7 @@ async function readJsonIfPresent(filePath: string): Promise<unknown> {
   try {
     raw = await fs.promises.readFile(filePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return undefined;
     }
     throw error;

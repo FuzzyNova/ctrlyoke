@@ -23,7 +23,7 @@ import {
   WORKFLOW_ROW_TIERS,
   type WorkflowRowTier,
 } from "../../constants";
-import { HARNESS_INFO } from "../../types/messages";
+import { getHarnessDisplayName } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type {
@@ -224,9 +224,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           )
         }
         harnessTitle={
-          workflow.harness
-            ? (HARNESS_INFO[workflow.harness]?.name ?? workflow.harness)
-            : undefined
+          workflow.harness ? getHarnessDisplayName(workflow.harness) : undefined
         }
         label={
           <span className="workflow-menu-item-name">

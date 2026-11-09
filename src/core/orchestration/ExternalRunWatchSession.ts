@@ -18,12 +18,14 @@ import {
   ACTIVE_EXECUTION_STATES,
   WORKFLOW_LOCK_LIVENESS,
   WORKFLOW_LOCK_LOCALITIES,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import type { StepWithRuntimeStatus } from "../../utils/StepStatusDerivation";
+import { getErrnoCode } from "../../utils/ErrorUtils";
 
 export type ExternalRunWatchFinishReason =
   "terminal-working-file" | "lock-deleted" | "lock-stale" | "ownership-changed";
@@ -246,8 +248,8 @@ export class ExternalRunWatchSession implements Disposable {
         this.signalFinished("terminal-working-file");
       }
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") {
+      const code = getErrnoCode(err);
+      if (code === NODE_ERROR_CODES.ENOENT) {
         // File was deleted — that's fine, the lock watcher will handle it
         return;
       }

@@ -20,6 +20,7 @@
  *
  * Uses only Node built-ins so the CLI bundle can load it.
  */
+import { escapeRegExp } from "./TextUtils";
 
 /** Stands in for the exporting workspace root inside a bundle. */
 export const BUNDLE_WORKSPACE_TOKEN = "${workspaceFolder}";
@@ -43,10 +44,6 @@ const ROOT_END = `(?!${PATH_NAME_CHAR})`;
  */
 function notAfter(chars: string): string {
   return String.raw`(?<!(?<!\x1b\[[0-9;]*)${chars})`;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function rootPattern(root: string): RegExp | undefined {

@@ -15,7 +15,8 @@ import {
 } from "../utils/PromptDiagnosticRules";
 import { parseWorkflowDocumentRoot } from "./WorkflowDocumentLocation";
 import { getWorkflowTextSpans } from "./WorkflowPromptRanges";
-import { isRecord, type WorkflowPath } from "./WorkflowLocationTypes";
+import type { WorkflowPath } from "./WorkflowLocationTypes";
+import { isRecord } from "../utils/JsonTypeGuards";
 import type { WorkflowTextSpan } from "./WorkflowTextDecoding";
 import { resolveNullable } from "../types/ExecutionPropertyResolver";
 import type { PromptCompletionWorkflowContext } from "./PromptContextCompletions";

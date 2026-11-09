@@ -10,7 +10,7 @@ import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { FINAL_STEP_PHASES } from "../types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { getOutputTargetStepName, getTargetKey } from "@utils/outputProjection";
-import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { formatStepTargetLabel } from "@root/utils/FinalStepLabels";
 import { generateSingleStepMarkdownExport } from "@utils/markdownExport";
 import {
   OUTPUT_COPY_MENU_LABELS,
@@ -70,9 +70,7 @@ function buildCopyAllText(
 
     if (hiddenKeys.has(key)) continue;
 
-    const stepLabel = isFinalStep
-      ? formatFinalPassLabel(target.index + 1)
-      : `Step ${target.index + 1}`;
+    const stepLabel = formatStepTargetLabel(isFinalStep, target.index);
     const stepName = getOutputTargetStepName(target, steps, finalStep);
     const header = stepName ? `${stepLabel}: ${stepName}` : stepLabel;
 

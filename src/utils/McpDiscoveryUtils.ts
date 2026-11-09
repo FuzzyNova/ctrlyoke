@@ -6,6 +6,7 @@
  *
  * All I/O runs in the extension host (Node.js) — never in the webview.
  */
+import { isRecord as isPlainObject } from "./JsonTypeGuards";
 
 import * as fs from "fs/promises";
 import { parse, type ParseError } from "jsonc-parser";
@@ -42,6 +43,7 @@ import {
   getVscodeUserMcpConfigPath,
   getVscodeWorkspaceMcpConfigPath,
 } from "./McpConfigPaths";
+import { getErrorMessage } from "./ErrorUtils";
 
 type LocalSource = LocalMcpServerEntry["source"];
 
@@ -64,10 +66,6 @@ interface LocalConfigDescriptor {
     | "antigravity-json"
     | "opencode-json"
     | "codex-toml";
-}
-
-function isPlainObject(value: unknown): value is JsonRecord {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -1227,7 +1225,7 @@ export async function safeDiscoverLocalMcpServers(
     const servers = await discoverLocalMcpServers(workspaceRoot);
     return { servers };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = getErrorMessage(error);
     Log.warn("[McpDiscovery] local scan failed:", msg);
     return { servers: [], error: msg };
   }
@@ -1248,7 +1246,7 @@ export async function safeFetchMcpRegistry(
     });
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = getErrorMessage(error);
     Log.warn("[McpDiscovery] registry fetch failed:", msg);
     return { servers: [], error: msg };
   }

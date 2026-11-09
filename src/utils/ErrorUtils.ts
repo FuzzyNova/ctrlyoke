@@ -5,12 +5,38 @@
  * pattern that would otherwise be duplicated across the codebase.
  */
 
+import type { NodeErrorCode } from "../types/DashboardConstants";
+
+/** Read a string Node.js error code from an unknown caught value. */
+export function getErrnoCode(error: unknown): string | undefined {
+  if (error === null || typeof error !== "object") {
+    return undefined;
+  }
+
+  const candidate = error as { code?: unknown };
+  return typeof candidate.code === "string" ? candidate.code : undefined;
+}
+
+/** Check whether an unknown caught value has one of the supplied errno codes. */
+export function hasErrnoCode(
+  error: unknown,
+  ...codes: readonly NodeErrorCode[]
+): boolean {
+  const code = getErrnoCode(error);
+  return code !== undefined && codes.some((candidate) => candidate === code);
+}
+
 /**
  * Extract a readable message string from an unknown caught value.
  * Works with Error instances, strings, and anything else that can be stringified.
  */
 export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Normalize an unknown caught value to an Error while preserving Error identity. */
+export function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
 }
 
 /**

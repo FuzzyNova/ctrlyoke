@@ -16,6 +16,7 @@ import {
   type PriorContextDetail,
 } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { relativePathEscapes } from "../../utils/PathSecurity";
 import {
   RunOutputResolver,
   type RunOutputProjectionOptions,
@@ -248,8 +249,5 @@ export class AddressedPriorContextResolver {
 
 function isContained(candidate: string, root: string): boolean {
   const relative = path.relative(root, candidate);
-  return (
-    relative === "" ||
-    (!relative.startsWith("..") && !path.isAbsolute(relative))
-  );
+  return relative === "" || !relativePathEscapes(relative);
 }

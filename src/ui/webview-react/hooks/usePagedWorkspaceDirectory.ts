@@ -12,7 +12,12 @@ import {
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { HostedHttpError, workspaceTree } from "@utils/hostedApi";
 import type { VirtualizedListRange } from "@components/shared/VirtualizedListFoundation";
-import { ERROR_NAMES } from "@root/types/DashboardConstants";
+import {
+  isAbortError,
+  normalizePagedPath,
+  pageOffset,
+} from "@utils/pagedListing";
+import { toError } from "@root/utils/ErrorUtils";
 
 export interface PagedWorkspaceDirectoryOptions {
   /** Workspace-relative directory path. An empty path represents the root. */
@@ -142,10 +147,6 @@ const EMPTY_STATE = (path: string, pageSize: number): DirectoryState => ({
   scrollRestoration: null,
 });
 
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\.\//, "");
-}
-
 function normalizeSort(
   sort: WorkspaceEntrySort | undefined
 ): WorkspaceEntrySort {
@@ -161,18 +162,6 @@ function sameSort(
   return left.key === right.key && left.direction === right.direction;
 }
 
-function pageOffset(index: number, pageSize: number): number {
-  return Math.floor(Math.max(0, index) / pageSize) * pageSize;
-}
-
-function errorFrom(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
-function isAbortError(value: unknown): boolean {
-  return value instanceof Error && value.name === ERROR_NAMES.ABORT;
-}
-
 function isExpiredError(value: unknown): boolean {
   return value instanceof HostedHttpError && value.status === 410;
 }
@@ -182,12 +171,14 @@ function normalizeResponse(
 ): WorkspaceTreePageResponse {
   return {
     ...response,
-    path: normalizePath(response.path),
+    path: normalizePagedPath(response.path),
     parentPath:
-      response.parentPath === null ? null : normalizePath(response.parentPath),
+      response.parentPath === null
+        ? null
+        : normalizePagedPath(response.parentPath),
     entries: response.entries.map((entry) => ({
       ...entry,
-      path: normalizePath(entry.path),
+      path: normalizePagedPath(entry.path),
     })),
   };
 }
@@ -231,7 +222,7 @@ function readRefreshAnchor(
 export function usePagedWorkspaceDirectory(
   options: PagedWorkspaceDirectoryOptions
 ): PagedWorkspaceDirectoryController {
-  const normalizedOptionPath = normalizePath(options.path);
+  const normalizedOptionPath = normalizePagedPath(options.path);
   const normalizedOptionSort = normalizeSort(options.sort);
   const requestedPageSize =
     options.pageSize ?? WORKSPACE_TREE_DEFAULT_PAGE_SIZE;
@@ -360,7 +351,7 @@ export function usePagedWorkspaceDirectory(
 
   const startListing = useCallback(
     (path: string, anchorPath?: string, isRecovery = false): void => {
-      const normalizedPath = normalizePath(path);
+      const normalizedPath = normalizePagedPath(path);
       const generation = generationRef.current + 1;
       generationRef.current = generation;
       // A virtualizer can report its first range before this hook's initial
@@ -392,7 +383,7 @@ export function usePagedWorkspaceDirectory(
           : { pageSize: configRef.current.pageSize }),
         ...(anchorPath === undefined
           ? {}
-          : { anchorPath: normalizePath(anchorPath) }),
+          : { anchorPath: normalizePagedPath(anchorPath) }),
       };
 
       void fetcherRef
@@ -410,7 +401,7 @@ export function usePagedWorkspaceDirectory(
           const pages = new Map<number, readonly WorkspaceTreeEntry[]>();
           pages.set(response.offset, response.entries);
           const recoveryAnchor = anchorPath
-            ? normalizePath(anchorPath)
+            ? normalizePagedPath(anchorPath)
             : undefined;
           const recoveryEntryIndex = recoveryAnchor
             ? response.entries.findIndex(
@@ -458,7 +449,7 @@ export function usePagedWorkspaceDirectory(
             startListing(normalizedPath, anchor?.path, true);
             return;
           }
-          const error = errorFrom(value);
+          const error = toError(value);
           updateState((current) => ({
             ...current,
             initialLoading: false,
@@ -555,7 +546,7 @@ export function usePagedWorkspaceDirectory(
             startListing(path, anchor?.path, true);
             return;
           }
-          const error = errorFrom(value);
+          const error = toError(value);
           updateState((previous) => {
             const failedRanges = new Map(previous.failedRanges);
             failedRanges.set(offset, {
@@ -592,7 +583,7 @@ export function usePagedWorkspaceDirectory(
   const navigate = useCallback(
     (path: string, options?: WorkspaceDirectoryRefreshOptions): void => {
       skipOptionStartRef.current = {
-        path: normalizePath(path),
+        path: normalizePagedPath(path),
         includeGitIgnored: configRef.current.includeGitIgnored,
         pageSize: configRef.current.pageSize,
         sort: configRef.current.sort,

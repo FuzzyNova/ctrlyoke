@@ -1,3 +1,4 @@
+import { isRecord } from "../JsonTypeGuards";
 import type { ToolResult } from "../../types/CliOutputTypes";
 import { getToolResultText } from "../toolResultText";
 import { promptFirstLinePreview } from "../TextUtils";
@@ -16,9 +17,7 @@ export interface ToolTerminalLine {
   tone?: ToolTerminalTone;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export { isRecord };
 
 export function tryParseJson(text: string): unknown | undefined {
   try {

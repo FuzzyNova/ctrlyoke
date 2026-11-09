@@ -1,7 +1,7 @@
 import {
   GLOBAL_SETTINGS_TABS,
   HARNESS_IDS,
-  HARNESS_INFO,
+  getHarnessDisplayName,
   STATUS_LINE_HARNESS_IDS,
   HOOK_EVENT_NAMES,
   HOOK_EVENT_METADATA,
@@ -1084,7 +1084,7 @@ const defaultsModelEntries = buildHarnessEntries(
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "harness",
     label: "Model",
-    context: HARNESS_INFO[harnessId as HarnessId].name,
+    context: getHarnessDisplayName(harnessId),
   })
 );
 const defaultsArgsEntries = buildHarnessEntries(
@@ -1096,7 +1096,7 @@ const defaultsArgsEntries = buildHarnessEntries(
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "harness",
     label: "Additional CLI arguments",
-    context: HARNESS_INFO[harnessId as HarnessId].name,
+    context: getHarnessDisplayName(harnessId),
     keywords: ["extra args", "command line"],
   })
 );
@@ -1109,7 +1109,7 @@ const harnessColorEntries = buildHarnessEntries(
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "harness",
     label: "Harness step color",
-    context: HARNESS_INFO[harnessId as HarnessId].name,
+    context: getHarnessDisplayName(harnessId),
   })
 );
 const statusLineProperties = Object.values(STATUS_LINE_PROPERTY);
@@ -1133,9 +1133,9 @@ const statusLineEntries = Object.fromEntries(
           tab: GLOBAL_SETTINGS_TABS.STATUS_LINE,
           label:
             property === STATUS_LINE_PROPERTY.ENABLED
-              ? `Enable ${HARNESS_INFO[harnessId as HarnessId].name} statusline tracking`
+              ? `Enable ${getHarnessDisplayName(harnessId)} statusline tracking`
               : labels[property],
-          context: HARNESS_INFO[harnessId as HarnessId].name,
+          context: getHarnessDisplayName(harnessId),
           ...(property === STATUS_LINE_PROPERTY.ENABLED
             ? {
                 description: {

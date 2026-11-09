@@ -37,6 +37,7 @@ import {
   type CtrlYokeNotificationEvent,
   type HookArtifact,
 } from "../../ui/notifications/CompletionNotificationFactory";
+import { CompletionNotificationTracker } from "../../ui/notifications/CompletionNotificationTracker";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   REDACTION_MARKER,
@@ -48,6 +49,7 @@ import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 import { NoopFileWatcherFactory } from "../helpers/NoopFileWatcherFactory";
 import { InMemoryLanguageServerBackend } from "../helpers/InMemoryLanguageServerBackend";
 import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
+import { WorkspaceTreeExpiredError } from "../../server/WorkspaceTreeErrors";
 
 function hostedServerOptions(
   options: Partial<HostedServerOptions> = {}
@@ -258,7 +260,8 @@ function sendJsonRequest(
 function sendGetRequest(
   port: number,
   requestPath: string,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
+  method: "GET" | "DELETE" = "GET"
 ): Promise<{
   statusCode: number | undefined;
   body: string;
@@ -270,7 +273,7 @@ function sendGetRequest(
         hostname: "127.0.0.1",
         port,
         path: requestPath,
-        method: "GET",
+        method,
         headers,
       },
       (res) => {
@@ -1559,6 +1562,231 @@ suite("CtrlYokeHostedServer file history route", () => {
   });
 });
 
+suite("CtrlYokeHostedServer workspace viewer route errors", () => {
+  async function withStubbedViewerService(
+    stubbedMethods: Record<string, (...args: unknown[]) => unknown>,
+    callback: (port: number, token: string) => Promise<void>
+  ): Promise<void> {
+    const token = "viewer-route-error-token";
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
+    const internals = server as unknown as {
+      viewerService: Record<string, (...args: unknown[]) => unknown>;
+    };
+    Object.assign(internals.viewerService, stubbedMethods);
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      await callback(Number(new URL(serverUrl).port), token);
+    } finally {
+      server.dispose();
+    }
+  }
+
+  const errorBody = (body: string): { error: string } =>
+    JSON.parse(body) as { error: string };
+
+  test("maps diff path errors to 403 and hides ordinary errors behind 500", async () => {
+    await withStubbedViewerService(
+      {
+        getDiff: async (filePath) => {
+          if (filePath === "../outside.txt")
+            throw new Error("Path not allowed");
+          throw new Error("private detail");
+        },
+      },
+      async (port, token) => {
+        const disallowed = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/diff?path=..%2Foutside.txt&token=${token}`
+        );
+        assert.strictEqual(disallowed.statusCode, 403);
+        assert.deepStrictEqual(errorBody(disallowed.body), {
+          error: "Path not allowed",
+        });
+
+        const internal = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/diff?path=notes.txt&token=${token}`
+        );
+        assert.strictEqual(internal.statusCode, 500);
+        assert.deepStrictEqual(errorBody(internal.body), {
+          error: "Internal server error",
+        });
+      }
+    );
+  });
+
+  test("maps WorkspaceTreeHttpError from tree listing to its status", async () => {
+    await withStubbedViewerService(
+      {
+        listDirectory: async () => {
+          throw new WorkspaceTreeExpiredError();
+        },
+      },
+      async (port, token) => {
+        const response = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/tree?path=src&token=${token}`
+        );
+        assert.strictEqual(response.statusCode, 410);
+        assert.deepStrictEqual(errorBody(response.body), {
+          error: "Workspace directory listing has expired",
+        });
+      }
+    );
+  });
+
+  test("keeps the git-ref diff download fallback message", async () => {
+    await withStubbedViewerService(
+      {
+        spawnGitRefDiffDownload: async () => {
+          throw new Error("private detail");
+        },
+      },
+      async (port, token) => {
+        const response = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/git-ref-diff-download?ref=main&token=${token}`
+        );
+        assert.strictEqual(response.statusCode, 500);
+        assert.deepStrictEqual(errorBody(response.body), {
+          error: "Unable to download diff",
+        });
+      }
+    );
+  });
+
+  test("keeps raw 400 messages for ordinary move errors", async () => {
+    await withStubbedViewerService(
+      {
+        moveEntry: async () => {
+          throw new Error("destination already exists");
+        },
+      },
+      async (port, token) => {
+        const response = await sendJsonRequest(
+          port,
+          `/api/workspace-viewer/move?token=${token}`,
+          "POST",
+          { sourcePath: "source.txt", destDir: "folder" }
+        );
+        assert.strictEqual(response.statusCode, 400);
+        assert.deepStrictEqual(errorBody(response.body), {
+          error: "destination already exists",
+        });
+      }
+    );
+  });
+
+  test("keeps raw 500 messages for status errors", async () => {
+    await withStubbedViewerService(
+      {
+        getStatus: async () => {
+          throw new Error("git is unavailable");
+        },
+      },
+      async (port, token) => {
+        const response = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/status?token=${token}`
+        );
+        assert.strictEqual(response.statusCode, 500);
+        assert.deepStrictEqual(errorBody(response.body), {
+          error: "git is unavailable",
+        });
+      }
+    );
+  });
+
+  test("trims the repo query value before calling the status service", async () => {
+    let receivedRepo: unknown;
+    await withStubbedViewerService(
+      {
+        getStatus: async (repo) => {
+          receivedRepo = repo;
+          return {};
+        },
+      },
+      async (port, token) => {
+        const response = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/status?repo=%20repo-id%20&token=${token}`
+        );
+
+        assert.strictEqual(response.statusCode, 200);
+        assert.strictEqual(receivedRepo, "repo-id");
+      }
+    );
+  });
+
+  test("keeps GET file ordinary errors as generic 500 responses", async () => {
+    await withStubbedViewerService(
+      {
+        readFile: async () => {
+          throw new Error("private detail");
+        },
+      },
+      async (port, token) => {
+        const response = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/file?path=outside.txt&token=${token}`
+        );
+        assert.strictEqual(response.statusCode, 500);
+        assert.deepStrictEqual(errorBody(response.body), {
+          error: "Internal server error",
+        });
+      }
+    );
+  });
+
+  for (const [route, methodName, body] of [
+    ["entry", "deleteEntry", undefined],
+    ["copy", "copyEntry", { sourcePath: "source.txt", destDir: "../" }],
+    ["move", "moveEntry", { sourcePath: "source.txt", destDir: "../" }],
+  ] as const) {
+    test(`maps disallowed ${route} paths to 403`, async () => {
+      await withStubbedViewerService(
+        {
+          [methodName]: async () => {
+            throw new Error("Path not allowed");
+          },
+        },
+        async (port, token) => {
+          const url = `/api/workspace-viewer/${route}?token=${token}${route === "entry" ? "&path=../outside.txt" : ""}`;
+          const response =
+            route === "entry"
+              ? await sendGetRequest(port, url, {}, "DELETE")
+              : await sendJsonRequest(port, url, "POST", body);
+          assert.strictEqual(response.statusCode, 403);
+          assert.deepStrictEqual(errorBody(response.body), {
+            error: "Path not allowed",
+          });
+        }
+      );
+    });
+  }
+
+  test("maps git-ref diff snapshot errors to their status", async () => {
+    await withStubbedViewerService(
+      {
+        getGitRefDiff: async () => {
+          throw new WorkspaceTreeExpiredError();
+        },
+      },
+      async (port, token) => {
+        const response = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/git-ref-diff?ref=main&token=${token}`
+        );
+        assert.strictEqual(response.statusCode, 410);
+        assert.deepStrictEqual(errorBody(response.body), {
+          error: "Workspace directory listing has expired",
+        });
+      }
+    );
+  });
+});
+
 suite("CtrlYokeHostedServer JSON body limits", () => {
   test("rejects unauthenticated workspace file PUT before the JSON body finishes", async () => {
     const token = "unauthenticated-large-file-token";
@@ -1728,8 +1956,7 @@ interface HostedServerHeartbeatInternals {
 
 interface HostedServerFeedbackInternals {
   connections: Set<FakeHostedSocket>;
-  notifiedEventIds: Set<string>;
-  workflowSummaries: Map<string, WorkflowSummary>;
+  completionTracker: CompletionNotificationTracker;
   publicUrl?: string;
   webPushService: {
     sendNotification(event: unknown): Promise<{
@@ -1834,8 +2061,7 @@ suite("CtrlYokeHostedServer feedback transport", () => {
       CtrlYokeHostedServer.prototype
     ) as HostedServerFeedbackInternals;
     server.connections = new Set();
-    server.notifiedEventIds = new Set();
-    server.workflowSummaries = new Map();
+    server.completionTracker = new CompletionNotificationTracker();
     server.broadcast = (message) => {
       if (
         (message as { type?: string }).type === MESSAGE_TYPES.NOTIFICATION_EVENT
@@ -1972,7 +2198,7 @@ suite("CtrlYokeHostedServer feedback transport", () => {
         CtrlYokeHostedServer.prototype
       ) as HostedServerFeedbackInternals;
       server.connections = new Set([socket]);
-      server.notifiedEventIds = new Set();
+      server.completionTracker = new CompletionNotificationTracker();
       const event = buildTestNotificationEvent("http://localhost");
 
       configService.setCliOverlay({
@@ -2006,7 +2232,7 @@ suite("CtrlYokeHostedServer feedback transport", () => {
       CtrlYokeHostedServer.prototype
     ) as HostedServerFeedbackInternals;
     server.connections = new Set();
-    server.notifiedEventIds = new Set();
+    server.completionTracker = new CompletionNotificationTracker();
     server.publicUrl = "http://localhost:4312/?token=secret-token";
     server.broadcast = (message) => {
       broadcastPayload = message;

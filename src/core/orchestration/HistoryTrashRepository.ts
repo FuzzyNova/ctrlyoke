@@ -8,6 +8,7 @@ import {
   MESSAGE_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   type HistoryTrashEntryKind,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import type {
   HistoryClearPreview,
@@ -34,7 +35,11 @@ import {
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { removeRunDefinitionAnchors } from "../../utils/RunDefinitionAnchor";
 import { isProcessAlive } from "../../utils/LockSafetyPrimitives";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import {
+  getErrorMessage,
+  hasErrnoCode,
+  getErrnoCode,
+} from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
@@ -59,11 +64,11 @@ const STALE_PENDING_ENTRY_MS = 5 * 60 * 1000;
  */
 const MOVE_RENAME_BUDGET_MS = 2_000;
 /** Moving the files out one by one works where renaming their directory cannot. */
-const COPY_FALLBACK_ERROR_CODES = new Set([
-  "EXDEV",
-  "EPERM",
-  "EACCES",
-  "EBUSY",
+const COPY_FALLBACK_ERROR_CODES = new Set<string>([
+  NODE_ERROR_CODES.EXDEV,
+  NODE_ERROR_CODES.EPERM,
+  NODE_ERROR_CODES.EACCES,
+  NODE_ERROR_CODES.EBUSY,
 ]);
 
 const LOG_PREFIX = "[HistoryTrash]";
@@ -105,7 +110,7 @@ async function movePath(source: string, destination: string): Promise<void> {
     });
     return;
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code ?? "";
+    const code = getErrnoCode(error) ?? "";
     if (!COPY_FALLBACK_ERROR_CODES.has(code)) {
       throw error;
     }
@@ -460,7 +465,7 @@ export class HistoryTrashRepository {
       await batch.moveLineageDir(workflowKey);
     } catch (error) {
       await batch.commit();
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return undefined;
       }
       throw error;
@@ -558,7 +563,7 @@ export class HistoryTrashRepository {
         budgetMs: MOVE_RENAME_BUDGET_MS,
       });
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code ?? "";
+      const code = getErrnoCode(error) ?? "";
       if (!COPY_FALLBACK_ERROR_CODES.has(code)) throw error;
       renameRefused = true;
       Log.info(
@@ -813,7 +818,7 @@ export class HistoryTrashRepository {
         const sourceDescriptor = await this.lineageRepository
           .readDescriptorFromPath(sourceDescriptorPath)
           .catch((error: unknown) => {
-            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
               return undefined;
             }
             throw error;

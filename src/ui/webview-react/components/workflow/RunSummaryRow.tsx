@@ -14,7 +14,7 @@ import {
 } from "./WorkflowTokenUsage";
 import { RunDuration, runDurationAccessibleLabel } from "./RunDuration";
 import type { WorkflowRowTier } from "../../constants";
-import { HARNESS_INFO, type HarnessId } from "../../types/messages";
+import { getHarnessDisplayName, type HarnessId } from "../../types/messages";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
@@ -96,9 +96,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     ? formatRelativeTimeVerbose(summary.completedAt ?? summary.startedAt)
     : undefined;
   const harness = summary?.primaryHarness as HarnessId | undefined;
-  const harnessLabel = harness
-    ? (HARNESS_INFO[harness]?.name ?? harness)
-    : undefined;
+  const harnessLabel = harness ? getHarnessDisplayName(harness) : undefined;
   const harnessTitle = summary?.hasMixedHarnesses
     ? `Mixed harnesses (primary: ${harnessLabel ?? "unknown"})`
     : harnessLabel;

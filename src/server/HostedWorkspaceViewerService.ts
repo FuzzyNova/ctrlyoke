@@ -52,6 +52,7 @@ import {
   workspaceMediaInfoForPath,
   WORKSPACE_MEDIA_GIT_INDEX_REF,
   type WorkspaceMediaInfo,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import {
@@ -76,6 +77,7 @@ import {
   type ViewerRootContext,
 } from "../platform/WorkspaceViewerPath";
 import { safeResolveWorkspacePath } from "./lsp/WorkspacePathContainment";
+import { IdleLruSnapshotStore } from "./IdleLruSnapshotStore";
 import {
   discoverReposCached,
   findRepoForPath,
@@ -84,6 +86,7 @@ import {
 import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
+  realpathOrSelf,
 } from "../utils/PathSecurity";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
@@ -153,6 +156,11 @@ import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
 } from "./WorkspaceTreeErrors";
+import {
+  getErrorMessage,
+  hasErrnoCode,
+  getErrnoCode,
+} from "../utils/ErrorUtils";
 
 const execFileAsync = promisify(execFile);
 
@@ -164,6 +172,7 @@ export interface GitRefDiffDownload {
 export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 export const MAX_MEDIA_FILE_SIZE = 512 * 1024 * 1024;
 export const MAX_MEDIA_BLOB_SIZE = 50 * 1024 * 1024;
+export const WORKSPACE_VIEWER_PATH_NOT_ALLOWED = "Path not allowed";
 const DIFF_SIDE_TOO_LARGE = Symbol("diff-side-too-large");
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
@@ -183,13 +192,9 @@ const SEARCH_CANDIDATE_CHUNK = 256;
 const SEARCH_DEFAULT_LIMIT = 100;
 const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
-const FILE_HISTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const FILE_HISTORY_SNAPSHOT_MAX_COUNT = 32;
+const VIEWER_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const VIEWER_SNAPSHOT_MAX_COUNT = 32;
 const FILE_HISTORY_MAX_LIVE_WALKS = 8;
-const COMMIT_LOG_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const COMMIT_LOG_SNAPSHOT_MAX_COUNT = 32;
-const GIT_REF_DIFF_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const GIT_REF_DIFF_SNAPSHOT_MAX_COUNT = 32;
 const GIT_REF_DIFF_REFS = {
   WORKING_TREE: "~diff",
   STAGED: "~staged",
@@ -531,12 +536,30 @@ export class HostedWorkspaceViewerService {
     SEARCH_SESSION_MAX_COUNT,
     SEARCH_SESSION_IDLE_TTL_MS
   );
-  private readonly fileHistorySnapshots = new Map<
-    string,
-    FileHistorySnapshot
-  >();
-  private readonly commitLogSnapshots = new Map<string, CommitLogSnapshot>();
-  private readonly gitRefDiffSnapshots = new Map<string, GitRefDiffSnapshot>();
+  private readonly fileHistorySnapshots =
+    new IdleLruSnapshotStore<FileHistorySnapshot>({
+      ttlMs: VIEWER_SNAPSHOT_TTL_MS,
+      maxCount: VIEWER_SNAPSHOT_MAX_COUNT,
+      onEvict: (snapshot) => snapshot.walk?.dispose(),
+    });
+  private readonly commitLogSnapshots =
+    new IdleLruSnapshotStore<CommitLogSnapshot>({
+      ttlMs: VIEWER_SNAPSHOT_TTL_MS,
+      maxCount: VIEWER_SNAPSHOT_MAX_COUNT,
+      refreshOnAccess: (snapshot, now) => ({
+        ...snapshot,
+        lastAccessedAt: now,
+      }),
+    });
+  private readonly gitRefDiffSnapshots =
+    new IdleLruSnapshotStore<GitRefDiffSnapshot>({
+      ttlMs: VIEWER_SNAPSHOT_TTL_MS,
+      maxCount: VIEWER_SNAPSHOT_MAX_COUNT,
+      refreshOnAccess: (snapshot, now) => ({
+        ...snapshot,
+        lastAccessedAt: now,
+      }),
+    });
 
   constructor(
     private readonly workspaceRoot: string,
@@ -571,7 +594,7 @@ export class HostedWorkspaceViewerService {
         ? this.safeResolveForSettingsEdit(requestedPath)
         : this.safeResolve(requestedPath, { preserveLexicalPath: true });
     if (!resolved) {
-      throw new WorkspaceMediaError("Path not allowed", 403);
+      throw new WorkspaceMediaError(WORKSPACE_VIEWER_PATH_NOT_ALLOWED, 403);
     }
 
     const mediaInfo = workspaceMediaInfoForPath(resolved);
@@ -601,7 +624,7 @@ export class HostedWorkspaceViewerService {
     }
 
     if (!isPathWithinAnyDirectory(resolved, this.trustedRoots)) {
-      throw new WorkspaceMediaError("Path not allowed", 403);
+      throw new WorkspaceMediaError(WORKSPACE_VIEWER_PATH_NOT_ALLOWED, 403);
     }
 
     let repoPath: Awaited<ReturnType<typeof this.requireRepoRootForPath>>;
@@ -772,12 +795,7 @@ export class HostedWorkspaceViewerService {
       return true;
     }
 
-    let realResolved = resolved;
-    try {
-      realResolved = fs.realpathSync(resolved);
-    } catch {
-      // The lexical comparison above still protects roots that do not exist.
-    }
+    const realResolved = realpathOrSelf(resolved);
     return this.realpathsOf(trustedRoots).some((root) =>
       pathsEqual(root, realResolved)
     );
@@ -861,13 +879,7 @@ export class HostedWorkspaceViewerService {
   }
 
   private realpathsOf(directories: readonly string[]): string[] {
-    return directories.map((dir) => {
-      try {
-        return fs.realpathSync(dir);
-      } catch {
-        return dir;
-      }
-    });
+    return directories.map(realpathOrSelf);
   }
 
   // ── Path safety ──────────────────────────────────────────────────────────
@@ -956,13 +968,7 @@ export class HostedWorkspaceViewerService {
       (left, right) => right.length - left.length
     );
     for (const lexicalRoot of rootsBySpecificity) {
-      let realRoot: string;
-      try {
-        realRoot = fs.realpathSync(lexicalRoot);
-      } catch {
-        // Preserve paths for roots that do not exist yet.
-        realRoot = lexicalRoot;
-      }
+      const realRoot = realpathOrSelf(lexicalRoot);
       if (!isPathWithinDirectory(absolutePath, realRoot)) continue;
 
       const relative = path.relative(realRoot, absolutePath);
@@ -1538,7 +1544,10 @@ export class HostedWorkspaceViewerService {
   async readFile(requestedPath: string): Promise<WorkspaceFileResponse> {
     const resolved = this.safeResolveForSettingsEdit(requestedPath);
     if (!resolved) {
-      return this.rejectedFileResponse(requestedPath, "Path not allowed");
+      return this.rejectedFileResponse(
+        requestedPath,
+        WORKSPACE_VIEWER_PATH_NOT_ALLOWED
+      );
     }
 
     let stat: fs.Stats;
@@ -1635,7 +1644,7 @@ export class HostedWorkspaceViewerService {
   async saveFile(req: WorkspaceFileSaveRequest): Promise<number> {
     const resolved = this.safeResolveForSettingsEdit(req.path);
     if (!resolved) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     // Check if existing file is binary — refuse to overwrite
@@ -1706,7 +1715,7 @@ export class HostedWorkspaceViewerService {
       preserveLexicalPath: true,
     });
     if (!resolved || this.isExactRoot(resolved)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     await fs.promises.rm(resolved, { recursive: true, force: false });
@@ -1741,7 +1750,7 @@ export class HostedWorkspaceViewerService {
       preserveLexicalPath: true,
     });
     if (!resolvedSource || this.isExactRoot(resolvedSource)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
     await fs.promises.lstat(resolvedSource);
 
@@ -1750,13 +1759,13 @@ export class HostedWorkspaceViewerService {
       !destinationName ||
       path.basename(destinationName) !== destinationName
     ) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     const trustedRoots = this.trustedRoots;
     const resolvedDestDir = this.resolveAgainstRoots(requestedDestDir);
     if (!isPathWithinAnyDirectory(resolvedDestDir, trustedRoots)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     let existingAncestor = resolvedDestDir;
@@ -1772,12 +1781,12 @@ export class HostedWorkspaceViewerService {
     if (
       !isPathWithinAnyDirectory(realAncestor, this.realpathsOf(trustedRoots))
     ) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     const destPath = path.resolve(resolvedDestDir, destinationName);
     if (!isPathWithinAnyDirectory(destPath, trustedRoots)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     return { resolvedSource, destPath };
@@ -1788,8 +1797,8 @@ export class HostedWorkspaceViewerService {
       await fs.promises.access(destPath);
       throw new Error("Destination already exists");
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException | undefined)?.code;
-      if (code === "ENOENT") {
+      const code = getErrnoCode(err);
+      if (code === NODE_ERROR_CODES.ENOENT) {
         return;
       }
       throw err;
@@ -1853,7 +1862,7 @@ export class HostedWorkspaceViewerService {
         { timeout: getGitWholeRepoTimeoutMs() }
       ).catch((err: unknown) => {
         throw new Error(
-          `git status failed in ${repoRoot}: ${err instanceof Error ? err.message : String(err)}`
+          `git status failed in ${repoRoot}: ${getErrorMessage(err)}`
         );
       }),
       // Never rejects: an unknown upstream reads as nothing to sync.
@@ -2128,7 +2137,7 @@ export class HostedWorkspaceViewerService {
   async getDiff(requestedPath: string): Promise<WorkspaceScmDiffResponse> {
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
@@ -2296,7 +2305,7 @@ export class HostedWorkspaceViewerService {
 
   async stageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
@@ -2308,7 +2317,7 @@ export class HostedWorkspaceViewerService {
 
   async unstageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
@@ -2321,7 +2330,7 @@ export class HostedWorkspaceViewerService {
   async discardFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved || this.isExactRoot(resolved)) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
@@ -2337,7 +2346,7 @@ export class HostedWorkspaceViewerService {
       const lexicalPath = this.safeResolve(filePath, {
         preserveLexicalPath: true,
       });
-      if (!lexicalPath) throw new Error("Path not allowed");
+      if (!lexicalPath) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
       await fs.promises.rm(lexicalPath, { recursive: true, force: true });
       return;
     }
@@ -2476,7 +2485,7 @@ export class HostedWorkspaceViewerService {
         ["-C", repoRoot, "remote"],
         { timeout: GIT_COMMAND_TIMEOUT_MS }
       );
-      return stdout.trim().split("\n")[0] ?? "origin";
+      return stdout.trim().split("\n")[0] || "origin";
     } catch {
       return "origin";
     }
@@ -2511,7 +2520,7 @@ export class HostedWorkspaceViewerService {
     }
 
     const resolved = this.safeResolve(requestedPath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const viewerPath = normalizeViewerPath(this.relativePath(resolved));
@@ -2521,7 +2530,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(historyId)) {
         throw new WorkspaceTreeBadRequestError("historyId is invalid");
       }
-      const snapshot = this.getFileHistorySnapshot(historyId);
+      const snapshot = this.fileHistorySnapshots.get(historyId);
       if (!snapshot) throw new WorkspaceTreeExpiredError();
       if (
         !pathsEqual(snapshot.repoRoot, repoRoot) ||
@@ -2554,7 +2563,7 @@ export class HostedWorkspaceViewerService {
     const gitPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     const headHash = await resolveCommit(repoRoot, "HEAD");
     const snapshot: FileHistorySnapshot = {
-      historyId: this.createFileHistoryId(),
+      historyId: this.fileHistorySnapshots.createId(),
       requestedPath: viewerPath,
       gitPath,
       repoRoot,
@@ -2565,7 +2574,6 @@ export class HostedWorkspaceViewerService {
       pageCache: new Map(),
     };
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
-    this.trimFileHistorySnapshots();
 
     try {
       return await this.materializeFileHistoryPage(
@@ -2587,7 +2595,7 @@ export class HostedWorkspaceViewerService {
     repoId?: string
   ): Promise<WorkspaceFileHistoryDiffResponse> {
     const resolved = this.safeResolve(requestedPath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     void repoId;
@@ -2622,7 +2630,7 @@ export class HostedWorkspaceViewerService {
       !isPathWithinAnyDirectory(commitAbsolutePath, this.trustedRoots) ||
       !isPathWithinAnyDirectory(parentAbsolutePath, this.trustedRoots)
     ) {
-      throw new Error("Path not allowed");
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     }
 
     const changeType = this.diffChangeType(changedFile.status);
@@ -2680,7 +2688,7 @@ export class HostedWorkspaceViewerService {
       resolvedCommit,
       false
     );
-    if (!entry) throw new Error("Path not allowed");
+    if (!entry) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
     return {
       ...commitInfo,
       ...entry,
@@ -2698,41 +2706,6 @@ export class HostedWorkspaceViewerService {
       );
     }
     return Math.min(WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE, requestedPageSize);
-  }
-
-  private createFileHistoryId(): string {
-    let historyId = randomUUID();
-    while (this.fileHistorySnapshots.has(historyId)) {
-      historyId = randomUUID();
-    }
-    return historyId;
-  }
-
-  private getFileHistorySnapshot(
-    historyId: string
-  ): FileHistorySnapshot | undefined {
-    const now = Date.now();
-    for (const [id, snapshot] of this.fileHistorySnapshots) {
-      if (now - snapshot.lastAccessedAt >= FILE_HISTORY_SNAPSHOT_TTL_MS) {
-        snapshot.walk?.dispose();
-        this.fileHistorySnapshots.delete(id);
-      }
-    }
-    const snapshot = this.fileHistorySnapshots.get(historyId);
-    if (!snapshot) return undefined;
-    snapshot.lastAccessedAt = now;
-    this.fileHistorySnapshots.delete(historyId);
-    this.fileHistorySnapshots.set(historyId, snapshot);
-    return snapshot;
-  }
-
-  private trimFileHistorySnapshots(): void {
-    while (this.fileHistorySnapshots.size > FILE_HISTORY_SNAPSHOT_MAX_COUNT) {
-      const oldest = this.fileHistorySnapshots.keys().next().value;
-      if (oldest === undefined) return;
-      this.fileHistorySnapshots.get(oldest)?.walk?.dispose();
-      this.fileHistorySnapshots.delete(oldest);
-    }
   }
 
   private async materializeFileHistoryPage(
@@ -2859,72 +2832,6 @@ export class HostedWorkspaceViewerService {
     return response;
   }
 
-  private createGitRefDiffId(): string {
-    let diffId = randomUUID();
-    while (this.gitRefDiffSnapshots.has(diffId)) {
-      diffId = randomUUID();
-    }
-    return diffId;
-  }
-
-  private getGitRefDiffSnapshot(
-    diffId: string
-  ): GitRefDiffSnapshot | undefined {
-    const now = Date.now();
-    for (const [id, snapshot] of this.gitRefDiffSnapshots) {
-      if (now - snapshot.lastAccessedAt >= GIT_REF_DIFF_SNAPSHOT_TTL_MS) {
-        this.gitRefDiffSnapshots.delete(id);
-      }
-    }
-    const snapshot = this.gitRefDiffSnapshots.get(diffId);
-    if (!snapshot) return undefined;
-    const refreshed = { ...snapshot, lastAccessedAt: now };
-    this.gitRefDiffSnapshots.delete(diffId);
-    this.gitRefDiffSnapshots.set(diffId, refreshed);
-    return refreshed;
-  }
-
-  private trimGitRefDiffSnapshots(): void {
-    while (this.gitRefDiffSnapshots.size > GIT_REF_DIFF_SNAPSHOT_MAX_COUNT) {
-      const oldest = this.gitRefDiffSnapshots.keys().next().value;
-      if (oldest === undefined) return;
-      this.gitRefDiffSnapshots.delete(oldest);
-    }
-  }
-
-  private createCommitLogId(): string {
-    let historyId = randomUUID();
-    while (this.commitLogSnapshots.has(historyId)) {
-      historyId = randomUUID();
-    }
-    return historyId;
-  }
-
-  private getCommitLogSnapshot(
-    historyId: string
-  ): CommitLogSnapshot | undefined {
-    const now = Date.now();
-    for (const [id, snapshot] of this.commitLogSnapshots) {
-      if (now - snapshot.lastAccessedAt >= COMMIT_LOG_SNAPSHOT_TTL_MS) {
-        this.commitLogSnapshots.delete(id);
-      }
-    }
-    const snapshot = this.commitLogSnapshots.get(historyId);
-    if (!snapshot) return undefined;
-    const refreshed = { ...snapshot, lastAccessedAt: now };
-    this.commitLogSnapshots.delete(historyId);
-    this.commitLogSnapshots.set(historyId, refreshed);
-    return refreshed;
-  }
-
-  private trimCommitLogSnapshots(): void {
-    while (this.commitLogSnapshots.size > COMMIT_LOG_SNAPSHOT_MAX_COUNT) {
-      const oldest = this.commitLogSnapshots.keys().next().value;
-      if (oldest === undefined) return;
-      this.commitLogSnapshots.delete(oldest);
-    }
-  }
-
   private async materializeCommitLogPage(
     snapshot: CommitLogSnapshot,
     offset: number
@@ -3012,7 +2919,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(historyId)) {
         throw new WorkspaceTreeBadRequestError("historyId is invalid");
       }
-      const snapshot = this.getCommitLogSnapshot(historyId);
+      const snapshot = this.commitLogSnapshots.get(historyId);
       if (!snapshot) throw new WorkspaceTreeExpiredError();
       const { detached } = await this.getCommitLogMetadata(repoRoot);
       if (
@@ -3049,7 +2956,7 @@ export class HostedWorkspaceViewerService {
       : 0;
 
     const snapshot: CommitLogSnapshot = {
-      historyId: this.createCommitLogId(),
+      historyId: this.commitLogSnapshots.createId(),
       repoRoot,
       branchHint: safeBranch,
       tipHash,
@@ -3061,7 +2968,6 @@ export class HostedWorkspaceViewerService {
       lastAccessedAt: Date.now(),
     };
     this.commitLogSnapshots.set(snapshot.historyId, snapshot);
-    this.trimCommitLogSnapshots();
 
     if (skip % snapshot.pageSize !== 0) {
       throw new WorkspaceTreeBadRequestError(
@@ -3290,7 +3196,7 @@ export class HostedWorkspaceViewerService {
       if (
         error instanceof Error &&
         "code" in error &&
-        (error as NodeJS.ErrnoException).code === "ENOENT"
+        hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
       ) {
         return null;
       }
@@ -3544,7 +3450,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(diffId)) {
         throw new WorkspaceTreeBadRequestError("diffId is invalid");
       }
-      const existing = this.getGitRefDiffSnapshot(diffId);
+      const existing = this.gitRefDiffSnapshots.get(diffId);
       if (!existing) throw new WorkspaceTreeExpiredError();
       if (existing.ref !== ref || !pathsEqual(existing.repoRoot, repoRoot)) {
         throw new WorkspaceTreeBadRequestError(
@@ -3565,7 +3471,7 @@ export class HostedWorkspaceViewerService {
         .filter((file) => this.isVisibleGitChangedFile(repoRoot, file))
         .map((file) => Object.freeze({ ...file }));
       snapshot = Object.freeze({
-        diffId: this.createGitRefDiffId(),
+        diffId: this.gitRefDiffSnapshots.createId(),
         ref,
         repoRoot,
         pageSize: resolvedPageSize,
@@ -3575,7 +3481,6 @@ export class HostedWorkspaceViewerService {
         lastAccessedAt: Date.now(),
       });
       this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
-      this.trimGitRefDiffSnapshots();
     }
 
     return this.getGitRefDiffSnapshotPage(snapshot, offset);
@@ -3757,7 +3662,7 @@ export class HostedWorkspaceViewerService {
         );
       } catch (err) {
         Log.warn(
-          `[HostedWorkspaceViewerService] Failed to list untracked files for streamed diff in ${repoRoot}: ${err instanceof Error ? err.message : String(err)}`
+          `[HostedWorkspaceViewerService] Failed to list untracked files for streamed diff in ${repoRoot}: ${getErrorMessage(err)}`
         );
       }
     } else if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {
@@ -3807,7 +3712,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(diffId)) {
         throw new WorkspaceTreeBadRequestError("diffId is invalid");
       }
-      const existing = this.getGitRefDiffSnapshot(diffId);
+      const existing = this.gitRefDiffSnapshots.get(diffId);
       if (!existing) throw new WorkspaceTreeExpiredError();
       if (existing.ref !== ref || !pathsEqual(existing.repoRoot, repoRoot)) {
         throw new WorkspaceTreeBadRequestError(
@@ -3857,7 +3762,7 @@ export class HostedWorkspaceViewerService {
         .filter((file) => this.isVisibleGitChangedFile(repoRoot, file))
         .map((file) => Object.freeze({ ...file }));
       snapshot = Object.freeze({
-        diffId: this.createGitRefDiffId(),
+        diffId: this.gitRefDiffSnapshots.createId(),
         ref,
         repoRoot,
         pageSize: resolvedPageSize,
@@ -3870,7 +3775,6 @@ export class HostedWorkspaceViewerService {
         lastAccessedAt: Date.now(),
       });
       this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
-      this.trimGitRefDiffSnapshots();
     }
     return this.getGitRefDiffSnapshotPage(snapshot, offset);
   }

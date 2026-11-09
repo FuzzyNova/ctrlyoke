@@ -7,6 +7,8 @@ import { Socket } from "node:net";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { withFileLock } from "../utils/FileLockUtils";
 import { SecretStoreUnavailableError, type SecretStore } from "./SecretStore";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "../utils/ErrorUtils";
 
 export { SecretStoreUnavailableError } from "./SecretStore";
 
@@ -521,7 +523,7 @@ export class OsCredentialStore implements SecretStore {
       if (error instanceof SecretStoreUnavailableError) {
         throw error;
       }
-      if (isMissingCommandError(error)) {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         throw new SecretStoreUnavailableError(this.platform, error);
       }
       throw error;
@@ -1213,15 +1215,6 @@ function isMissingCredential(result: CommandResult): boolean {
     /not found|could not be found|no secret found|no such item/i.test(
       result.stderr
     )
-  );
-}
-
-function isMissingCommandError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ENOENT"
   );
 }
 

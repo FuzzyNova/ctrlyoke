@@ -4,6 +4,8 @@ import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { withFileLock } from "../utils/FileLockUtils";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import type { SecretStore } from "./SecretStore";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "../utils/ErrorUtils";
 
 const SECRET_FILE_NAME = "secrets.json";
 const SECRET_FILE_MODE = 0o600;
@@ -107,7 +109,7 @@ export class FileSecretStore implements SecretStore {
     try {
       contents = await fs.readFile(this.filePath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return {};
       throw error;
     }
     await this.checkPermissions();

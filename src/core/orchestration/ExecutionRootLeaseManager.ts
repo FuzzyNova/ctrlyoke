@@ -14,6 +14,8 @@ import {
   scopeStorageRoot,
   verifyScopeRecord as verifyExecutionRootScopeRecord,
 } from "./ExecutionRootScope";
+import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
+import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 export const EXECUTION_LEASE_MODES = {
   SHARED_NATIVE: "shared-native",
@@ -117,7 +119,7 @@ async function readJson<T>(filePath: string): Promise<T | null> {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return null;
     throw error;
   }
 }
@@ -133,7 +135,7 @@ async function readLeaseTolerantly(
     if (!(error instanceof SyntaxError)) throw error;
     if (removeMalformed) {
       await fs.unlink(leasePath).catch((unlinkError: unknown) => {
-        if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT")
+        if (!hasErrnoCode(unlinkError, NODE_ERROR_CODES.ENOENT))
           throw unlinkError;
       });
     }
@@ -180,7 +182,7 @@ async function readLiveLeases(scope: LeaseScope): Promise<ExecutionLease[]> {
     if (!lease) continue;
     if (isOwnerStale(lease.pid, lease.lastHeartbeat)) {
       await fs.unlink(leasePath).catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
       });
       continue;
     }
@@ -255,7 +257,7 @@ export class ExecutionRootLeaseManager {
           const entries = await fs
             .readdir(scope.leasesRoot)
             .catch((error: unknown) => {
-              if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+              if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return [];
               throw error;
             });
           return entries.some((entry) => entry.endsWith(".json"));
@@ -311,7 +313,7 @@ export class ExecutionRootLeaseManager {
       const existing = await readJson<ExecutionLease>(leasePath);
       if (!existing || existing.ownerToken !== ownerToken) return;
       await fs.unlink(leasePath).catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
       });
     });
   }
@@ -332,7 +334,7 @@ export class ExecutionRootLeaseManager {
     try {
       entries = await fs.readdir(scope.leasesRoot, { withFileTypes: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return [];
       throw error;
     }
 

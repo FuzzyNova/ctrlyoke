@@ -8,6 +8,9 @@ import {
 } from "./WorkflowBundleAnalyzer";
 import { renameWithTransientRetry, writeFileAtomic } from "./AtomicFileUtils";
 import { foldPathForCompare } from "./PathCasing";
+import { relativePathEscapes } from "./PathSecurity";
+import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
 
 export interface WorkflowBundleWriteOptions {
   workflowPath: string;
@@ -160,7 +163,7 @@ export async function writeWorkflowBundle(
         try {
           await fs.unlink(manifestPath);
         } catch (error) {
-          if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
             warnings.push(
               `Could not remove obsolete bundle manifest "${manifestPath}": ${getErrorMessage(error)}.`
             );
@@ -187,9 +190,7 @@ function getAssetFileName(
   const relative = path.relative(assetsDirectory, destinationPath);
   if (
     !relative ||
-    path.isAbsolute(relative) ||
-    relative.startsWith(`..${path.sep}`) ||
-    relative === ".." ||
+    relativePathEscapes(relative) ||
     path.dirname(relative) !== "."
   ) {
     throw new Error(`Bundle asset destination escapes "${assetsDirectory}".`);
@@ -235,8 +236,8 @@ async function pruneManagedAssets(
         }
       }
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (code !== "ENOENT") {
+      const code = getErrnoCode(error);
+      if (code !== NODE_ERROR_CODES.ENOENT) {
         warnings.push(
           `Could not prune managed asset "${target}": ${getErrorMessage(error)}.`
         );
@@ -294,12 +295,7 @@ async function resolvesToPublishedFile(
 
 function isContainedPath(target: string, directory: string): boolean {
   const relative = path.relative(path.resolve(directory), path.resolve(target));
-  return (
-    relative !== "" &&
-    !path.isAbsolute(relative) &&
-    !relative.startsWith(`..${path.sep}`) &&
-    relative !== ".."
-  );
+  return relative !== "" && !relativePathEscapes(relative);
 }
 
 async function hasSymlinkAncestor(
@@ -314,7 +310,7 @@ async function hasSymlinkAncestor(
         return true;
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return false;
       }
       throw error;
@@ -342,15 +338,14 @@ async function removeDirectoryWhenEmpty(
       await fs.rmdir(directory);
     }
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
-    if (code !== "ENOENT" && code !== "ENOTEMPTY") {
+    const code = getErrnoCode(error);
+    if (
+      code !== NODE_ERROR_CODES.ENOENT &&
+      code !== NODE_ERROR_CODES.ENOTEMPTY
+    ) {
       warnings.push(
         `Could not remove empty bundle assets directory "${directory}": ${getErrorMessage(error)}.`
       );
     }
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

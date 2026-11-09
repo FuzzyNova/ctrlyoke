@@ -11,6 +11,7 @@ import {
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
 import type { ExecutionState } from "../../types/DashboardConstants";
+import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { splitLines, streamFileLines } from "../../utils/TextLines";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
@@ -25,6 +26,7 @@ import { truncateCliEventTextFields } from "../../utils/CliEventText";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { runStateWriteOptions } from "../../utils/RunStateWrites";
 import { Log } from "../../utils/Log";
+import { hasErrnoCode, getErrnoCode } from "../../utils/ErrorUtils";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -80,7 +82,7 @@ export class TimelineRecorder {
         return manifestPath;
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
     }
     const manifest: WorkflowRunManifest = {
       schemaVersion: TIMELINE_SCHEMA_VERSION,
@@ -122,7 +124,7 @@ export class TimelineRecorder {
     try {
       handle = await fs.promises.open(eventsPath, "r+");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return;
       }
       throw error;
@@ -208,7 +210,7 @@ export class TimelineRecorder {
       .stat(eventsPath)
       .then((stats) => stats.size)
       .catch((error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return 0;
+        if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return 0;
         throw error;
       });
     await fs.promises.appendFile(
@@ -265,8 +267,8 @@ export class TimelineRecorder {
 
       return events;
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") {
+      const code = getErrnoCode(error);
+      if (code === NODE_ERROR_CODES.ENOENT) {
         return [];
       }
       throw error;
@@ -302,8 +304,8 @@ export class TimelineRecorder {
         }
       }
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") {
+      const code = getErrnoCode(error);
+      if (code === NODE_ERROR_CODES.ENOENT) {
         return;
       }
       throw error;

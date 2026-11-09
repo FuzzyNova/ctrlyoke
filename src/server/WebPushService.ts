@@ -5,11 +5,13 @@ import { createHash } from "crypto";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { withFileLock } from "../utils/FileLockUtils";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { stripLeadingBom } from "../utils/TextUtils";
 import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
-import { LICENSE_UI } from "../types/DashboardConstants";
+import { LICENSE_UI, NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { getErrorMessage, getErrnoCode } from "../utils/ErrorUtils";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
@@ -384,7 +386,7 @@ export class WebPushService {
       try {
         content = await fsp.readFile(this.vapidKeysPath, "utf8");
       } catch (error) {
-        if (getErrorCode(error) === "ENOENT") {
+        if (getErrnoCode(error) === NODE_ERROR_CODES.ENOENT) {
           const generated = await generateVapidKeys();
           await atomicWriteJson(this.vapidKeysPath, generated);
           return generated;
@@ -424,7 +426,7 @@ export class WebPushService {
     try {
       content = await fsp.readFile(this.subscriptionsPath, "utf8");
     } catch (error) {
-      if (getErrorCode(error) === "ENOENT") {
+      if (getErrnoCode(error) === NODE_ERROR_CODES.ENOENT) {
         return { subscriptions: [] };
       }
       throw new Error(
@@ -617,19 +619,10 @@ async function atomicWriteJson(
   value: unknown
 ): Promise<void> {
   await ensurePrivateDirectory(path.dirname(targetPath));
-  const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await fsp.writeFile(tempPath, JSON.stringify(value, null, 2), {
-      encoding: "utf8",
-      mode: PRIVATE_FILE_MODE,
-    });
-    await fsp.chmod(tempPath, PRIVATE_FILE_MODE);
-    await fsp.rename(tempPath, targetPath);
-    await fsp.chmod(targetPath, PRIVATE_FILE_MODE);
-  } catch (error) {
-    await fsp.unlink(tempPath).catch(() => undefined);
-    throw error;
-  }
+  await writeFileAtomic(targetPath, JSON.stringify(value, null, 2), {
+    mode: PRIVATE_FILE_MODE,
+  });
+  await fsp.chmod(targetPath, PRIVATE_FILE_MODE);
 }
 
 function getStatusCode(error: unknown): number | undefined {
@@ -648,19 +641,4 @@ async function safeReadResponseText(response: Response): Promise<string> {
   } catch {
     return response.statusText;
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
-function getErrorCode(error: unknown): string | undefined {
-  if (!error || typeof error !== "object") {
-    return undefined;
-  }
-  const candidate = error as { code?: unknown };
-  return typeof candidate.code === "string" ? candidate.code : undefined;
 }

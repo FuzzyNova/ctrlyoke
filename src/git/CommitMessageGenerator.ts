@@ -49,6 +49,7 @@ import {
   type RunnerHostIdentity,
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 const execFileAsync = promisify(execFile);
 
@@ -795,7 +796,7 @@ export class CommitMessageGenerator {
       }
       const state = instance.promptQueue.getState();
       throw new CommitMessageGenerationError(
-        error instanceof Error ? error.message : String(error),
+        getErrorMessage(error),
         state.workflowKey ?? existingWorkflowKey,
         state.runRef,
         { cause: error }

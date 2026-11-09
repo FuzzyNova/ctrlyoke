@@ -1,6 +1,8 @@
 import * as fs from "fs/promises";
 import * as path from "node:path";
 import { randomBytes } from "crypto";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 /** Read an editable file, treating only a missing file as an empty document. */
 export async function readFileForEdit(
@@ -10,7 +12,7 @@ export async function readFileForEdit(
   try {
     return await fs.readFile(filePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return missingContents;
     }
     throw error;
@@ -37,7 +39,11 @@ export async function readFileForEdit(
  */
 
 /** Errors that mean "the path is momentarily held", not "denied". */
-const TRANSIENT_SHARING_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+const TRANSIENT_SHARING_CODES = new Set<string>([
+  NODE_ERROR_CODES.EPERM,
+  NODE_ERROR_CODES.EACCES,
+  NODE_ERROR_CODES.EBUSY,
+]);
 
 /**
  * Default window for a caller whose failure costs little — a settings sidecar,
@@ -112,7 +118,7 @@ function defaultSleep(ms: number): Promise<void> {
  * previous file was unlinked but is still delete-pending (`FileLockUtils`).
  */
 export function isTransientSharingError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  const code = getErrnoCode(error);
   return code !== undefined && TRANSIENT_SHARING_CODES.has(code);
 }
 
@@ -216,7 +222,7 @@ export async function writeTextFileAtomic(
     targetPath = await fs.realpath(filePath);
     mode = (await fs.stat(targetPath)).mode & 0o7777;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
   }
 
   await writeFileAtomic(targetPath, contents, { mode });

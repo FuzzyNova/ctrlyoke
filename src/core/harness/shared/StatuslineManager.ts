@@ -31,6 +31,7 @@ import {
   type SettingsJsonPersistentValueInstallResult,
   type SettingsJsonPersistentValueUninstall,
 } from "./SettingsJsonMcpTracker";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 const QWEN_STATUS_LINE_SETTING_KEY = "ui.statusLine";
 
@@ -317,7 +318,7 @@ export class StatuslineManager implements StatuslineManagerLike {
       } catch (error) {
         failed.push({
           harnessId: provider,
-          message: error instanceof Error ? error.message : String(error),
+          message: getErrorMessage(error),
         });
       }
     }

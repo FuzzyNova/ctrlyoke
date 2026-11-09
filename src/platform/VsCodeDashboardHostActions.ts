@@ -25,6 +25,7 @@ import {
   notifyUserFeedback,
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 /** VS Code implementations of the dashboard's host-native actions. */
 export class VsCodeDashboardHostActions implements DashboardHostActions {
@@ -51,7 +52,7 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
     } catch (error) {
       return {
         status: DASHBOARD_ACTION_RESULT_STATUSES.FAILED,
-        message: error instanceof Error ? error.message : String(error),
+        message: getErrorMessage(error),
       };
     }
   }
@@ -94,7 +95,7 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
         notifyUserFeedback(
           this.feedbackSink,
           USER_FEEDBACK_SEVERITY.ERROR,
-          `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to list workflow files: ${getErrorMessage(error)}`,
           undefined,
           error
         );
@@ -237,7 +238,7 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
   private failed(error: unknown): ActionResult {
     return {
       status: DASHBOARD_ACTION_RESULT_STATUSES.FAILED,
-      message: error instanceof Error ? error.message : String(error),
+      message: getErrorMessage(error),
     };
   }
 }

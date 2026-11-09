@@ -11,6 +11,7 @@ import type {
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   EXECUTION_STATES,
+  ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
   getEffectiveParallelGroupWidth,
   PARALLEL_GROUP_ADMISSION,
@@ -21,6 +22,7 @@ import {
   WORKFLOW_LOCK_LIVENESS,
   WORKFLOW_LOCK_LOCALITIES,
   WORKTREE_EDIT_KINDS,
+  IN_FLIGHT_EXECUTION_STATES,
   type ExecutionState,
   type QueuePosition,
 } from "../../types/DashboardConstants";
@@ -84,6 +86,7 @@ import {
   writeAnchoredRunDefinition,
 } from "../../utils/RunDefinitionAnchor";
 import { assertStepIndex } from "./StepIndexValidation";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
@@ -422,9 +425,8 @@ export class RunContinuationService {
         const sourceState = source._runtime?.executionState;
         if (
           !allowInterruptedRun &&
-          (sourceState === EXECUTION_STATES.RUNNING ||
-            sourceState === EXECUTION_STATES.PAUSING ||
-            sourceState === EXECUTION_STATES.CANCELLING)
+          sourceState !== undefined &&
+          IN_FLIGHT_EXECUTION_STATES.has(sourceState)
         ) {
           throw new Error(`Cannot append while run is in state ${sourceState}`);
         }
@@ -1301,22 +1303,18 @@ export class RunContinuationService {
       ) as WorkingFile;
     } catch (error) {
       throw new Error(
-        `Failed to read run ${workflowKey}/${runRef}: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to read run ${workflowKey}/${runRef}: ${getErrorMessage(error)}`
       );
     }
   }
 }
 
 function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
-  return (
-    state === EXECUTION_STATES.RUNNING ||
-    state === EXECUTION_STATES.PAUSING ||
-    state === EXECUTION_STATES.CANCELLING
-  );
+  return state !== undefined && IN_FLIGHT_EXECUTION_STATES.has(state);
 }
 
 function isExecutionActiveState(state: ExecutionState | undefined): boolean {
-  return isInFlightExecutionState(state) || state === EXECUTION_STATES.PAUSED;
+  return state !== undefined && ACTIVE_EXECUTION_STATES.has(state);
 }
 
 /**
@@ -1490,9 +1488,7 @@ async function writeWorkingFileAtomic(
     if (isRunDefinitionChangedError(error) || isNewerSchemaError(error)) {
       throw error;
     }
-    throw new Error(
-      `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
-    );
+    throw new Error(`Failed to write working file: ${getErrorMessage(error)}`);
   } finally {
     invalidateRunSummaryFor(filePath);
   }

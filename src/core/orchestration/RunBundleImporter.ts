@@ -38,7 +38,10 @@ import {
 } from "./RunBundleReader";
 import { RunMaterializer } from "./RunMaterializer";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
-import { EXECUTION_STATES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  NODE_ERROR_CODES,
+} from "../../types/DashboardConstants";
 import {
   RunChangesPlacer,
   type RunChangesTarget,
@@ -48,6 +51,7 @@ import type {
   WorkingFile,
   WorkingFileRuntime,
 } from "../../types/CtrlYokeTypes";
+import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 export interface RunBundleImportOptions extends ReadRunBundleOptions {
   workspaceRoot: string;
@@ -378,14 +382,14 @@ export class RunBundleImporter {
               }
               exists = true;
             } catch (hashedError) {
-              if ((hashedError as NodeJS.ErrnoException).code !== "ENOENT")
+              if (!hasErrnoCode(hashedError, NODE_ERROR_CODES.ENOENT))
                 throw hashedError;
             }
           } else {
             exists = true;
           }
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
         }
         if (!exists) {
           await writeFileAtomic(destination, content);

@@ -1,15 +1,20 @@
+import { isRecord } from "./JsonTypeGuards";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type FileLockOptions, withFileLock } from "./FileLockUtils";
 import { renameWithTransientRetry } from "./AtomicFileUtils";
 import { pathsEqual } from "./PathCasing";
+import { relativePathEscapes } from "./PathSecurity";
 import {
   ctrlyokeStateHome,
   projectStateRoot,
   userProjectsRoot,
 } from "./ProjectStatePaths";
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
-import { RUN_HISTORY_LOCATIONS } from "../types/DashboardConstants";
+import {
+  RUN_HISTORY_LOCATIONS,
+  NODE_ERROR_CODES,
+} from "../types/DashboardConstants";
 import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
 import {
   assertWritableSchema,
@@ -17,6 +22,7 @@ import {
   PERSISTED_STORES,
 } from "./PersistedSchemaGuard";
 import { migrateToCurrent } from "./FormatMigrations";
+import { hasErrnoCode } from "./ErrorUtils";
 
 export const PROJECT_METADATA_FILE_NAME = "project.json";
 const PRIVATE_DIRECTORY_MODE = 0o700;
@@ -250,12 +256,7 @@ function isPathWithinOrEqual(candidate: string, directory: string): boolean {
     return true;
   }
   const relative = path.relative(resolvedDirectory, resolvedCandidate);
-  return (
-    relative !== "" &&
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  );
+  return relative !== "" && !relativePathEscapes(relative);
 }
 
 async function readOrCreateMetadata(
@@ -280,7 +281,7 @@ async function readOrCreateMetadata(
       metadataPath
     );
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       throw error;
     }
 
@@ -426,11 +427,7 @@ async function assertContainedByRealRoot(
     path.basename(resolvedCandidate)
   );
   const relative = path.relative(realRoot, realCandidate);
-  if (
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) {
+  if (relativePathEscapes(relative)) {
     throw new Error(
       `Project state path escapes the projects root: ${resolvedCandidate}`
     );
@@ -443,7 +440,7 @@ async function lstatIfExists(
   try {
     return await fs.lstat(filePath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return undefined;
     }
     throw error;
@@ -452,8 +449,4 @@ async function lstatIfExists(
 
 async function pathExists(filePath: string): Promise<boolean> {
   return (await lstatIfExists(filePath)) !== undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

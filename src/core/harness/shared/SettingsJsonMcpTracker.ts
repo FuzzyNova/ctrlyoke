@@ -5,6 +5,8 @@ import { Log } from "../../../utils/Log";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { AsyncMutex } from "./AsyncMutex";
+import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
+import { NODE_ERROR_CODES } from "../../../types/DashboardConstants";
 
 /**
  * Options for customizing where a tracker reads/writes its MCP config.
@@ -724,13 +726,11 @@ export class SettingsJsonMcpTracker {
         unknown
       >;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return {};
       }
       throw new Error(
-        `Cannot safely update ${settingsPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${settingsPath}: ${getErrorMessage(error)}`
       );
     }
   }

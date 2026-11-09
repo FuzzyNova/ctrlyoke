@@ -8,9 +8,7 @@ import {
   formatTokenCount,
   formatTokenTotal,
   resolveTokenTotal,
-  TOKEN_USAGE_SCOPE_NOTE,
-  TOKEN_TOTAL_CACHE_NETTED_NOTE,
-  isCacheInputSubset,
+  buildAttemptTokenTooltipLines,
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
@@ -1724,19 +1722,15 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
       compactionCount !== undefined && compactionCount > 0
         ? `Compacted ${compactionCount}x`
         : undefined;
-    const tokenTooltip = [
-      contextDetails ? `Current context window: ${contextDetails}` : null,
-      contextDetails && totalLabel ? TOKEN_USAGE_SCOPE_NOTE : null,
-      totalLabel && isCacheInputSubset(harnessId)
-        ? TOKEN_TOTAL_CACHE_NETTED_NOTE
-        : null,
-      totalLabel ? `Attempt total: ${totalLabel} tokens` : null,
-      tokenBreakdown || null,
-      compactionLabel ? `Compactions: ${compactionCount}` : null,
-      showCostEstimates && cost ? formatAttemptCostTooltip(cost) : null,
-    ]
-      .filter((part): part is string => part !== null)
-      .join("\n");
+    const tokenTooltip = buildAttemptTokenTooltipLines({
+      contextWindow:
+        contextWindowUsed !== undefined && contextWindowSize
+          ? { used: contextWindowUsed, size: contextWindowSize }
+          : undefined,
+      harness: harnessId,
+      attemptTokens: output.tokens,
+      showCostEstimates,
+    }).join("\n");
 
     if (pct !== undefined) {
       parts.push(

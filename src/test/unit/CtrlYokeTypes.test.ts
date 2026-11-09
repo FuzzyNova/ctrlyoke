@@ -4,10 +4,29 @@ import {
   computeActiveExecutionMs,
   frozenActiveExecutionMs,
   hasWorkflowStepProgress,
+  isScriptStep,
   workflowDisplayStep,
   workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
 } from "../../types/CtrlYokeTypes";
+
+suite("CtrlYokeTypes isScriptStep", () => {
+  test("recognizes script steps", () => {
+    assert.strictEqual(
+      isScriptStep({ type: "script", script: "echo hi" }),
+      true
+    );
+  });
+
+  test("rejects prompt steps with or without a type", () => {
+    assert.strictEqual(
+      isScriptStep({ type: "prompt", prompt: "hello" }),
+      false
+    );
+    const promptWithoutType: { prompt: string } = { prompt: "hello" };
+    assert.strictEqual(isScriptStep(promptWithoutType), false);
+  });
+});
 
 suite("CtrlYokeTypes hasWorkflowStepProgress", () => {
   test("reports progress for a non-empty queue", () => {

@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import type { Dirent } from "fs";
 import {
@@ -6,6 +7,7 @@ import {
   WORKSPACE_STATS_BACKFILL_STATES,
   type RunOutcomeBucket,
   type WorkspaceStatsBackfillState,
+  NODE_ERROR_CODES,
 } from "../../../../types/DashboardConstants";
 import type {
   LifetimeHarnessContribution,
@@ -28,6 +30,7 @@ import {
   manifestPath,
   runsRoot,
 } from "../../../../utils/WorkflowPaths";
+import { hasErrnoCode } from "../../../../utils/ErrorUtils";
 
 /** Keep manifest reads aligned with OutputHistoryManager's run-list scanner. */
 export const WORKSPACE_STATS_READ_BATCH_SIZE = 32;
@@ -84,10 +87,6 @@ function emptyData(now: number): LifetimeUsageStoreData {
     skippedRunCount: 0,
     lineages: {},
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isManifest(value: unknown): value is WorkflowRunManifest {
@@ -216,7 +215,7 @@ export class WorkspaceStatsService {
       });
       return { count: entries.filter(isLineageDirEntry).length };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return { count: 0 };
       }
       return {
@@ -235,7 +234,7 @@ export class WorkspaceStatsService {
           withFileTypes: true,
         });
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
           this.progress = {
             ...this.progress,
             state: WORKSPACE_STATS_BACKFILL_STATES.COMPLETE,

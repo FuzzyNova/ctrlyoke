@@ -25,7 +25,7 @@ import type {
 } from "../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import {
-  HARNESS_INFO,
+  getHarnessDisplayName,
   FINAL_STEP_PHASES,
   type FinalStepPhase,
 } from "../types/messages";
@@ -57,7 +57,11 @@ import {
 } from "./outputUtils";
 import { getCliCommandDisplayParts } from "../../../utils/outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
-import { formatTokenCount } from "@root/utils/TokenFormatting";
+import {
+  formatTokenCount,
+  resolveTokenTotal,
+} from "@root/utils/TokenFormatting";
+import { calcContextPct } from "@utils/tokenUtils";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { formatCreatedFileDiff } from "@root/utils/CliEventDiff";
@@ -515,6 +519,7 @@ export function generateMarkdownExport(
         tokens?: {
           prompt: number;
           completion: number;
+          total?: number;
           cached?: number;
           contextWindowUsed?: number;
           contextWindowSize?: number;
@@ -615,8 +620,7 @@ export function generateMarkdownExport(
         const sessionId = output.structured?.metadata?.sessionId;
         const harnessId = output.structured?.metadata?.harness;
         const harnessName = harnessId
-          ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ??
-            harnessId)
+          ? getHarnessDisplayName(harnessId)
           : undefined;
 
         if (output.tokens) {
@@ -626,16 +630,15 @@ export function generateMarkdownExport(
             cached,
             contextWindowUsed,
             contextWindowSize,
+            total: reportedTotal,
           } = output.tokens;
-          if (contextWindowUsed !== undefined && contextWindowSize) {
-            const pct = Math.round(
-              (contextWindowUsed / contextWindowSize) * 100
-            );
+          const pct = calcContextPct(contextWindowUsed, contextWindowSize);
+          if (pct !== undefined) {
             stats.push(
               `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`
             );
           }
-          const total = prompt + completion;
+          const total = resolveTokenTotal(reportedTotal, prompt, completion);
           const cachedSuffix = cached ? ` / ${cached} cached` : "";
           stats.push(
             `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`

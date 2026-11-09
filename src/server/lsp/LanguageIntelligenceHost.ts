@@ -26,6 +26,7 @@ import {
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 interface SharedServerSession {
   readonly id: string;
@@ -454,7 +455,7 @@ export class LanguageIntelligenceHost {
     void created.catch((error: unknown) => {
       if (this.sessions.get(key) === created) this.sessions.delete(key);
       Log.warn(
-        `[LanguageIntelligenceHost] Session for ${descriptor.id} failed: ${error instanceof Error ? error.message : String(error)}`
+        `[LanguageIntelligenceHost] Session for ${descriptor.id} failed: ${getErrorMessage(error)}`
       );
     });
     void created

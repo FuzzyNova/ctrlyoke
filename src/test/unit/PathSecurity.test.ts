@@ -4,10 +4,47 @@ import { suite, test, teardown } from "mocha";
 import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
+  relativePathEscapes,
   isSafePathSegment,
+  realpathOrSelf,
 } from "../../utils/PathSecurity";
 
 suite("PathSecurity", () => {
+  suite("relativePathEscapes", () => {
+    test("distinguishes parent segments from child names on POSIX", () => {
+      assert.strictEqual(relativePathEscapes("..", path.posix), true);
+      assert.strictEqual(relativePathEscapes("../x", path.posix), true);
+      assert.strictEqual(relativePathEscapes("..cache", path.posix), false);
+      assert.strictEqual(relativePathEscapes("..cache/x", path.posix), false);
+      assert.strictEqual(relativePathEscapes("", path.posix), false);
+    });
+
+    test("rejects a path on another Windows drive", () => {
+      const relative = path.win32.relative("C:\\root", "D:\\root\\x");
+      assert.strictEqual(relativePathEscapes(relative, path.win32), true);
+      assert.strictEqual(relativePathEscapes("..\\x", path.win32), true);
+      assert.strictEqual(relativePathEscapes("..cache\\x", path.win32), false);
+      assert.strictEqual(relativePathEscapes("", path.win32), false);
+    });
+  });
+
+  suite("realpathOrSelf", () => {
+    test("returns the real path when it exists", () => {
+      assert.strictEqual(
+        realpathOrSelf(process.cwd()),
+        path.resolve(process.cwd())
+      );
+    });
+
+    test("preserves the input when realpath fails", () => {
+      const missingPath = path.join(
+        process.cwd(),
+        "missing-path-security-test"
+      );
+      assert.strictEqual(realpathOrSelf(missingPath), missingPath);
+    });
+  });
+
   suite("isPathWithinDirectory", () => {
     test("accepts the directory itself and descendants", () => {
       const dir = path.join("C:", "dev", "ctrlyoke");

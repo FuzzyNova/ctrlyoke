@@ -11,6 +11,8 @@ import {
 } from "./ProjectStatePaths";
 import { TIMELINE_STORAGE_FILES } from "../types/WorkflowTimelineTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 
 /**
  * Canonical, VS Code-free authority for the run-storage `.runs/<workflowKey>/...` layout.
@@ -664,7 +666,7 @@ export async function allocateWorkflowKey(
       await fs.promises.mkdir(dir);
       return candidate;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)) {
         throw error;
       }
       // Collision — retry with an advanced timestamp.

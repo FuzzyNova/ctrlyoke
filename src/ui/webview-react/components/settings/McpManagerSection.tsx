@@ -27,6 +27,7 @@ import {
   KEYBOARD_KEYS,
   HARNESS_IDS,
   HARNESS_INFO,
+  getHarnessShortName,
   SETTING_SCOPES,
   MCP_TRANSPORTS,
   SPECIAL_TARGET_IDS,
@@ -276,10 +277,7 @@ function sortRegistryServers(
 function getExportTargetLabel(id: AnyTargetId): string {
   if (id === SPECIAL_TARGET_IDS.CTRLYOKE) return "ctrlyoke";
   if (id === SPECIAL_TARGET_IDS.VSCODE) return "VS Code";
-  if (id in HARNESS_INFO) {
-    return HARNESS_INFO[id as keyof typeof HARNESS_INFO].shortName;
-  }
-  return id;
+  return getHarnessShortName(id);
 }
 
 /**

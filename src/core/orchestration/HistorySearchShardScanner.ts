@@ -11,8 +11,9 @@ import {
   createHistorySearchMatcher,
   type HistorySearchMatcher,
 } from "./HistorySearchMatcher";
+import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
+import { hasErrnoCode } from "../../utils/ErrorUtils";
 
-const FILE_NOT_FOUND_ERROR_CODE = "ENOENT";
 const NON_ASCII_PATTERN = /[^\x00-\x7f]/;
 
 export type HistorySearchLinePrefilter = (rawLine: string) => boolean;
@@ -142,7 +143,7 @@ export async function listDocumentShardEntries(
       withFileTypes: true,
     });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === FILE_NOT_FOUND_ERROR_CODE) {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return [];
     }
     throw error;
@@ -172,7 +173,7 @@ async function deriveShardStartedAt(shardPath: string): Promise<number> {
       return (JSON.parse(rawLine) as HistorySearchDocument).startedAt;
     }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== FILE_NOT_FOUND_ERROR_CODE) {
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       throw error;
     }
   }
@@ -258,7 +259,7 @@ export async function readShardDocuments(
       documents.push(JSON.parse(rawLine) as HistorySearchDocument);
     }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== FILE_NOT_FOUND_ERROR_CODE) {
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       throw error;
     }
     return { documents, complete: false };
@@ -311,7 +312,7 @@ export async function* streamHistorySearchDocuments(
         yield JSON.parse(rawLine) as HistorySearchDocument;
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== FILE_NOT_FOUND_ERROR_CODE) {
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         throw error;
       }
     }

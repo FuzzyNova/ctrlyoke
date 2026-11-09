@@ -8,6 +8,8 @@ import {
   type CoordinationClaim,
 } from "./ExecutionRootCoordination";
 import { resolveCoordinationBoardScope } from "./ExecutionRootCoordinationStore";
+import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
+import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 export const COORDINATION_BOARD_CHANGE_THROTTLE_MS = 150;
 export const COORDINATION_ATTESTATION_NOTICE =
@@ -111,7 +113,7 @@ export class ExecutionRootCoordinationWatchSession implements Disposable {
     try {
       this.onUpdate(await this.readSnapshot(this.executionRoot));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         Log.warn(
           "[ExecutionRootCoordinationWatchSession] refresh failed",
           error

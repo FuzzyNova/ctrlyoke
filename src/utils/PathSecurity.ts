@@ -1,10 +1,21 @@
 import * as path from "path";
-import { promises as fs } from "fs";
+import { realpathSync, promises as fs } from "fs";
 import { foldPathForCompare } from "./PathCasing";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 
 export interface RealpathContainmentResult {
   resolvedPath: string;
   allowed: boolean;
+}
+
+/** Resolve a path's physical location, falling back to its input if unavailable. */
+export function realpathOrSelf(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
 }
 
 /**
@@ -23,7 +34,7 @@ export class RealpathContainmentChecker {
         try {
           return path.resolve(await fs.realpath(root));
         } catch (error) {
-          if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+          if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
             return path.resolve(root);
           }
           throw error;
@@ -37,7 +48,7 @@ export class RealpathContainmentChecker {
     try {
       resolvedPath = path.resolve(await fs.realpath(candidate));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         // Preserve the existing missing-file behaviour. A lexical in-root
         // missing path cannot expose content; its caller's stat/read keeps
         // producing the existing not-found skip. Traversal is still denied.
@@ -87,6 +98,18 @@ export function isPathWithinDirectory(
   return (
     foldedCandidate === foldedDirectory ||
     foldedCandidate.startsWith(directoryPrefix)
+  );
+}
+
+/** Returns whether a `path.relative` result escapes its root directory. */
+export function relativePathEscapes(
+  relative: string,
+  pathImplementation: Pick<typeof path, "sep" | "isAbsolute"> = path
+): boolean {
+  return (
+    relative === ".." ||
+    relative.startsWith(".." + pathImplementation.sep) ||
+    pathImplementation.isAbsolute(relative)
   );
 }
 

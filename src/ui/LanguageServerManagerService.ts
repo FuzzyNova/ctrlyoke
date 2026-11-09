@@ -29,6 +29,7 @@ import {
 } from "../utils/HarnessLspExporter";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import type { WebviewClientContext } from "./WebviewClientContext";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export type LanguageServerSpawn = typeof spawn;
 
@@ -218,7 +219,7 @@ export class LanguageServerManagerService {
         targetId: message.targetId,
         scope: message.scope,
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     }
   }
@@ -356,7 +357,7 @@ export class LanguageServerManagerService {
       ctx.emit({
         type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
         action: "restart language server",
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     }
   }
@@ -371,7 +372,7 @@ export class LanguageServerManagerService {
       ctx.emit({
         type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
         action: "approve language servers",
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     }
   }
@@ -385,7 +386,7 @@ export class LanguageServerManagerService {
       ctx.emit({
         type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
         action: "stop language server",
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     }
   }

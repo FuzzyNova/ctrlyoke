@@ -10,6 +10,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { installPerformanceProfiler } from "@utils/performanceProfiler";
 import "./styles/globals.css";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 const root = document.getElementById("root");
 window.__ctrlyokeReactMounted = true;
@@ -39,9 +40,7 @@ if (!root) {
         </React.StrictMode>
       );
     } catch (error) {
-      WebviewLog.error(
-        `[main] bootstrap failed: ${error instanceof Error ? error.message : String(error)}`
-      );
+      WebviewLog.error(`[main] bootstrap failed: ${getErrorMessage(error)}`);
       throw error;
     }
   };

@@ -16,6 +16,8 @@
  */
 
 import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
+import { toError } from "./utils/ErrorUtils";
+import { queueTargetKey } from "./utils/OutputTargetKeys";
 ensureMinFsThreadpoolSize(64);
 
 // Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
@@ -41,8 +43,10 @@ import type {
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
+import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import { configService } from "./config/CtrlYokeConfigService";
 import { PropertyResolver } from "./utils/PropertyResolver";
+import { ConfigurationUtils } from "./utils/ConfigurationUtils";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
@@ -63,6 +67,7 @@ import {
   STEP_TYPES,
   STEP_STATUS,
   type ExecutionState,
+  NODE_ERROR_CODES,
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
@@ -127,11 +132,9 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import {
+  assertWritableSchema,
   isNewerSchemaError,
-  isNewerSchemaVersion,
   PERSISTED_STORES,
-  readSchemaVersion,
-  refuseNewerSchema,
 } from "./utils/PersistedSchemaGuard";
 import {
   initializeRunHistoryLocation,
@@ -181,6 +184,7 @@ import { PromptFileParser } from "./core/PromptFileParser";
 import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "./types/OutputHistoryTypes";
+import { getErrorMessage, hasErrnoCode } from "./utils/ErrorUtils";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -236,10 +240,6 @@ function participantAttribution(participant: {
 
 const MCP_CLI_MODE_ENV = "CTRLYOKE_MCP_CLI_MODE";
 const MCP_CLI_MODE_VALUE = "true";
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * The caller-facing view of a participant: who it is and where it runs. Lease
@@ -477,13 +477,14 @@ function resolveEffectiveStepSettings(
 } {
   const workflowResumeSession =
     workflow.resumeSession ?? CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
+  const resolved = resolveStepHarnessAndModel(step, workflow, {
+    harness: PropertyResolver.resolveHarnessValue(undefined, undefined),
+    modelForHarness: (harness) =>
+      ConfigurationUtils.getModelForHarness(harness) || undefined,
+  });
   return {
-    harness:
-      step._runtime?.harness ??
-      step.harness ??
-      workflow.harness ??
-      PropertyResolver.resolveHarnessValue(undefined, undefined),
-    model: step.model ?? workflow.model ?? null,
+    harness: resolved.harness,
+    model: resolved.model ?? null,
     executionMode:
       step._runtime?.executionMode ??
       step.executionMode ??
@@ -634,8 +635,7 @@ export class CtrlYokeMCPServer {
         try {
           return await this.invokeTool(name, args);
         } catch (error) {
-          const normalizedError =
-            error instanceof Error ? error : new Error(String(error));
+          const normalizedError = toError(error);
           log("ERROR in tool invocation:", error);
           log("Error stack:", normalizedError.stack);
           return {
@@ -782,7 +782,7 @@ export class CtrlYokeMCPServer {
         await fs.readFile(selected.filePath, "utf8")
       ) as WorkingFile;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = getErrorMessage(error);
       if (cliMode) {
         throw new Error(
           `CLI coordination address is not a valid live run: ${detail}`
@@ -1817,14 +1817,14 @@ export class CtrlYokeMCPServer {
     try {
       content = await fs.readFile(capabilitiesPath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return null;
       throw error;
     }
     try {
       return JSON.parse(content) as CapabilitiesFile;
     } catch (error) {
       throw new Error(
-        `capabilities.json is invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+        `capabilities.json is invalid JSON: ${getErrorMessage(error)}`
       );
     }
   }
@@ -1986,7 +1986,7 @@ export class CtrlYokeMCPServer {
       .filter((i) => i >= 0 && i < allSteps.length)
       .map((i) => {
         const p = allSteps[i];
-        const resolvedOutput = resolved.get(`queue:${i}`);
+        const resolvedOutput = resolved.get(queueTargetKey(i));
         const fullResponseText = resolvedOutput
           ? getStepOutputText(resolvedOutput, StepOutputTextMode.TRANSCRIPT)
           : null;
@@ -2086,7 +2086,7 @@ export class CtrlYokeMCPServer {
         error !== null &&
         typeof error === "object" &&
         "code" in error &&
-        error.code === "ENOENT"
+        hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
       ) {
         return {
           content: [
@@ -2142,7 +2142,7 @@ export class CtrlYokeMCPServer {
       await fs.writeFile(outputPath, message.trim(), "utf8");
     } catch (error) {
       throw new Error(
-        `${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}: the message was not submitted — writing it to ${outputPath} failed (${describeError(error)}).`
+        `${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}: the message was not submitted — writing it to ${outputPath} failed (${getErrorMessage(error)}).`
       );
     }
     log("Commit message written to:", outputPath);
@@ -2218,7 +2218,7 @@ export class CtrlYokeMCPServer {
       await fs.access(filePath);
     } catch (error) {
       throw new Error(
-        `${operation}: the attached ctrlyoke run file no longer exists at ${filePath}, so nothing was done (${describeError(error)}). Its run history may have been deleted, or this harness session may have outlived the workspace it was launched from.`
+        `${operation}: the attached ctrlyoke run file no longer exists at ${filePath}, so nothing was done (${getErrorMessage(error)}). Its run history may have been deleted, or this harness session may have outlived the workspace it was launched from.`
       );
     }
     // Mutations resolve here before reaching the shared continuation service;
@@ -2231,7 +2231,7 @@ export class CtrlYokeMCPServer {
       ).revision;
     } catch (error) {
       throw new Error(
-        `${operation}: could not read the workflow lineage '${workflowKey}' under ${this.workspaceRoot}, so nothing was done (${describeError(error)}).`
+        `${operation}: could not read the workflow lineage '${workflowKey}' under ${this.workspaceRoot}, so nothing was done (${getErrorMessage(error)}).`
       );
     }
     return {
@@ -2256,29 +2256,21 @@ export class CtrlYokeMCPServer {
       content = await fs.readFile(filePath, "utf8");
     } catch (error) {
       throw new Error(
-        `${operation}: could not read the attached ctrlyoke run file ${filePath}, so nothing was done (${describeError(error)}).`
+        `${operation}: could not read the attached ctrlyoke run file ${filePath}, so nothing was done (${getErrorMessage(error)}).`
       );
     }
     try {
       const workingFile = JSON.parse(content) as WorkingFile;
-      const schemaVersion = readSchemaVersion(workingFile);
-      if (
-        isNewerSchemaVersion(
-          PERSISTED_STORES.WORKFLOW_DEFINITION,
-          schemaVersion
-        )
-      ) {
-        refuseNewerSchema(
-          PERSISTED_STORES.WORKFLOW_DEFINITION,
-          schemaVersion as number,
-          `${path.basename(filePath)} (JSON)`
-        );
-      }
+      assertWritableSchema(
+        PERSISTED_STORES.WORKFLOW_DEFINITION,
+        workingFile,
+        `${path.basename(filePath)} (JSON)`
+      );
       return workingFile;
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
       throw new Error(
-        `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${describeError(error)}).`
+        `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${getErrorMessage(error)}).`
       );
     }
   }
@@ -2473,9 +2465,7 @@ if (require.main === module) {
   const cliArgs = process.argv.slice(2);
   if (cliArgs.includes("--tool")) {
     runMcpToolCli(cliArgs).catch((error) => {
-      process.stderr.write(
-        `${error instanceof Error ? error.message : String(error)}\n`
-      );
+      process.stderr.write(`${getErrorMessage(error)}\n`);
       process.exit(1);
     });
   } else {

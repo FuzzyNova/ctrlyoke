@@ -6,7 +6,9 @@ import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import {
   MAX_OUTPUT_SNAPSHOT_BYTES,
   TempFileCategory,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 
 /**
  * TempFileManager - Manages temporary prompt files in .ctrlyoke/temp/
@@ -278,7 +280,7 @@ export class TempFileManager {
     try {
       await fs.promises.unlink(filePath);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+      if (hasErrnoCode(err, NODE_ERROR_CODES.ENOENT)) {
         return;
       }
       // Log but don't throw - cleanup is best-effort
@@ -364,7 +366,7 @@ export class TempFileManager {
             // A sibling ctrlyoke instance (or the periodic sweep's own prior
             // pass) may have already deleted this stale file — benign race,
             // not a failure worth surfacing.
-            if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+            if (!hasErrnoCode(err, NODE_ERROR_CODES.ENOENT)) {
               Log.warn(
                 `[TempFileManager] Failed to process temp file ${file}: ${err}`
               );
@@ -409,7 +411,7 @@ export class TempFileManager {
         } catch (err) {
           // Benign race with a sibling instance/prior sweep pass — see the
           // matching comment in cleanupOrphanedFiles().
-          if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+          if (!hasErrnoCode(err, NODE_ERROR_CODES.ENOENT)) {
             Log.warn(
               `[TempFileManager] Failed to process notification file ${file}: ${err}`
             );

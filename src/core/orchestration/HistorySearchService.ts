@@ -3,6 +3,7 @@ import * as path from "path";
 import {
   HISTORY_SEARCH_COUNT_STATES,
   HISTORY_SEARCH_INDEX_STATES,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
@@ -13,7 +14,7 @@ import {
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, getErrnoCode } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
@@ -211,8 +212,8 @@ export class HistorySearchService {
         withFileTypes: true,
       });
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") {
+      const code = getErrnoCode(error);
+      if (code === NODE_ERROR_CODES.ENOENT) {
         return [];
       }
       Log.warn(

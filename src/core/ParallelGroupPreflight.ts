@@ -28,11 +28,13 @@ import {
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
 import {
   PASSTHROUGH_PROMPT_FILE_RESOLVER,
   resolvePromptTextWithVariables,
   type PromptTextFileResolver,
 } from "./PromptTextResolver";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface ParallelGroupPreflightIssue {
   readonly code: ParallelGroupPreflightDiagnosticCode;
@@ -340,7 +342,7 @@ export async function preflightParallelGroupMember(
       issues.push({
         code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
         memberIndices: [options.stepIndex],
-        message: `${memberLabel(workflow, options.stepIndex)} could not create an isolated ${resolvedProperties.harness} integration: ${error instanceof Error ? error.message : String(error)}`,
+        message: `${memberLabel(workflow, options.stepIndex)} could not create an isolated ${resolvedProperties.harness} integration: ${getErrorMessage(error)}`,
       });
     }
   }
@@ -403,9 +405,8 @@ export async function preflightParallelGroup(
 export function formatParallelGroupPreflightFailure(
   result: ParallelGroupPreflightResult
 ): string {
-  const range = `${result.group.startIndex + 1}–${result.group.endIndex + 1}`;
   return [
-    `Parallel steps ${range} failed preflight:`,
+    `${formatParallelStepsLabel(result.group)} failed preflight:`,
     ...result.issues.map((issue) => `- ${issue.message}`),
   ].join("\n");
 }
@@ -434,10 +435,9 @@ export const PARALLEL_PREFLIGHT_WIDTH_STATE = {
 export function parallelGroupWidthMessage(
   result: ParallelGroupPreflightResult
 ): string {
-  const range = `${result.group.startIndex + 1}–${result.group.endIndex + 1}`;
   return result.effectiveWidth <= 1
-    ? `Parallel steps ${range} run sequentially (effective width 1).`
-    : `Parallel steps ${range} run up to ${result.effectiveWidth} members concurrently.`;
+    ? `${formatParallelStepsLabel(result.group)} run sequentially (effective width 1).`
+    : `${formatParallelStepsLabel(result.group)} run up to ${result.effectiveWidth} members concurrently.`;
 }
 
 export function parallelGroupIssueSeverity() {

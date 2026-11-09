@@ -15,7 +15,8 @@ import { withFileLock } from "./FileLockUtils";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { ConfigurationUtils } from "./ConfigurationUtils";
-import { WORKTREE_MODES } from "../types/DashboardConstants";
+import { WORKTREE_MODES, NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 export interface WorkspaceEligibility {
   eligible: boolean;
@@ -42,7 +43,7 @@ export async function resolveThroughNearestExistingAncestor(
       const existing = await fs.realpath(current);
       return path.normalize(path.join(existing, ...missing.reverse()));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
       const parent = path.dirname(current);
       if (parent === current) return path.normalize(absolute);
       missing.push(path.basename(current));
@@ -85,8 +86,6 @@ export function createWorktreeDirectoryName(
     .slice(0, 12);
   return `${slugifyWorktreeName(readableName)}-${hash}`;
 }
-
-export const buildWorktreeDirectoryName = createWorktreeDirectoryName;
 
 export function createRepositoryIdentity(
   repositoryName: string,
@@ -151,18 +150,18 @@ export function expandExplicitRoot(
 }
 
 function isFilesystemFailure(error: unknown): boolean {
-  return new Set([
-    "EACCES",
-    "EBUSY",
-    "EEXIST",
-    "EIO",
-    "ELOOP",
-    "ENAMETOOLONG",
-    "ENOSPC",
-    "ENOTDIR",
-    "EPERM",
-    "EROFS",
-  ]).has((error as NodeJS.ErrnoException).code ?? "");
+  return new Set<string>([
+    NODE_ERROR_CODES.EACCES,
+    NODE_ERROR_CODES.EBUSY,
+    NODE_ERROR_CODES.EEXIST,
+    NODE_ERROR_CODES.EIO,
+    NODE_ERROR_CODES.ELOOP,
+    NODE_ERROR_CODES.ENAMETOOLONG,
+    NODE_ERROR_CODES.ENOSPC,
+    NODE_ERROR_CODES.ENOTDIR,
+    NODE_ERROR_CODES.EPERM,
+    NODE_ERROR_CODES.EROFS,
+  ]).has(getErrnoCode(error) ?? "");
 }
 
 async function createRoot(root: string): Promise<void> {
@@ -465,5 +464,3 @@ export async function withRepositoryWorktreeMutationLock<T>(
     throw new Error("Cannot resolve the repository Git common directory.");
   return withWorktreeMutationLock(common, action);
 }
-
-export const withGitWorktreeMutationLock = withRepositoryWorktreeMutationLock;

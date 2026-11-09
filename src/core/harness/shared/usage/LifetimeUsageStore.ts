@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import type { Dirent } from "fs";
 import * as path from "path";
@@ -10,6 +11,7 @@ import {
   type AttemptCostSource,
   type HarnessId,
   type RunOutcomeBucket,
+  NODE_ERROR_CODES,
 } from "../../../../types/DashboardConstants";
 import type {
   LifetimeHarnessContribution,
@@ -39,6 +41,7 @@ import {
   PERSISTED_STORES,
 } from "../../../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../../../utils/FormatMigrations";
+import { hasErrnoCode } from "../../../../utils/ErrorUtils";
 
 export const LIFETIME_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LIFETIME_USAGE];
@@ -97,10 +100,6 @@ export interface LifetimeBackfillBatch {
   contributions: readonly LifetimeRunContribution[];
   skippedRunCount: number;
   dirMtimeMs?: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function numeric(value: unknown): number {
@@ -1118,7 +1117,7 @@ export class LifetimeUsageStore {
     try {
       parsed = JSON.parse(await fs.readFile(this.filePath, "utf8"));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
       throw error;
     }
     if (hasNewerSchema(PERSISTED_STORES.LIFETIME_USAGE, parsed)) {

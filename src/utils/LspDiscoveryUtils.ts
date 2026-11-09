@@ -1,3 +1,4 @@
+import { isRecord } from "./JsonTypeGuards";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
@@ -5,6 +6,7 @@ import type { LocalLanguageServerEntry } from "../types/WebviewMessageTypes";
 import {
   LSP_DISCOVERY_FORMATS,
   LSP_DISCOVERY_SOURCES,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import {
   getCclspConfigPaths,
@@ -16,6 +18,7 @@ import {
   getQwenWorkspaceLspConfigPath,
 } from "./LspConfigPaths";
 import { Log } from "./Log";
+import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 type JsonRecord = Record<string, unknown>;
 interface Descriptor {
@@ -25,9 +28,6 @@ interface Descriptor {
   pluginRoot?: string;
 }
 
-function isRecord(value: unknown): value is JsonRecord {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
 function strings(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
@@ -108,7 +108,7 @@ async function readJson(filePath: string): Promise<JsonRecord | undefined> {
     const parsed: unknown = JSON.parse(await fs.readFile(filePath, "utf8"));
     return isRecord(parsed) ? parsed : undefined;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT))
       Log.warn(`[LspDiscovery] Could not read ${filePath}: ${String(error)}`);
     return undefined;
   }
@@ -273,7 +273,7 @@ export async function safeDiscoverLocalLanguageServers(
     }
     return { servers: results };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     Log.warn("[LspDiscovery] Local scan failed:", message);
     return { servers: [], error: message };
   }

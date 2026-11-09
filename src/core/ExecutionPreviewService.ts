@@ -8,6 +8,7 @@ import type {
 } from "../types/CompatibilityTypes";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../types/CompatibilityTypes";
 import { formatComparison } from "../utils/ScriptComparison";
+import { relativePathEscapes } from "../utils/PathSecurity";
 import {
   CONDITION_ACTIONS,
   FINAL_STEP_PHASES,
@@ -1236,10 +1237,7 @@ export class ExecutionPreviewService {
         : undefined;
     const isRunLocal =
       !mutationPath ||
-      (relativePath !== undefined &&
-        relativePath !== ".." &&
-        !relativePath.startsWith(`..${path.sep}`) &&
-        !path.isAbsolute(relativePath));
+      (relativePath !== undefined && !relativePathEscapes(relativePath));
     const scope = isRunLocal
       ? PREVIEW_MUTATION_SCOPES.RUN_LOCAL
       : PREVIEW_MUTATION_SCOPES.SHARED;

@@ -634,6 +634,39 @@ suite("ManagedLanguageServerBackend", () => {
     }
   });
 
+  test("uses the nearest root marker when the drive letter casing differs", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+    }
+
+    const workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lsp-root-case-")
+    );
+    const projectRoot = path.join(workspace, "packages", "app");
+    await fs.promises.mkdir(path.join(projectRoot, "src"), { recursive: true });
+    await fs.promises.writeFile(path.join(projectRoot, "app.sln"), "", "utf8");
+    const backend = createBackend({ root: workspace });
+    try {
+      const filePath = path.join(projectRoot, "src", "app.cs");
+      const lowerCaseDrivePath = filePath.replace(/^[A-Z]:/, (drive) =>
+        drive.toLowerCase()
+      );
+      const result = await backend.resolveForPath(
+        lowerCaseDrivePath,
+        { workspaceRoot: workspace, namedRoots: [] },
+        LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+      );
+      assert.ok("descriptor" in result);
+      assert.strictEqual(
+        result.descriptor.rootPath.toLowerCase(),
+        projectRoot.toLowerCase()
+      );
+    } finally {
+      await backend.dispose();
+      removeTempDir(workspace);
+    }
+  });
+
   test("warm-up anchors do not protect idle servers, while a browser open of the same URI does", async () => {
     const workspace = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lsp-anchor-")

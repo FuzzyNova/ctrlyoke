@@ -11,6 +11,7 @@ import {
   type ScriptComparisonResult,
 } from "./ScriptComparison";
 import { findExistingWorkerPath } from "./WorkerPath";
+import { getErrorMessage } from "./ErrorUtils";
 
 interface RegexWorkerResult {
   passed: boolean;
@@ -134,7 +135,7 @@ function runNext(): void {
       {
         passed: false,
         timedOut: false,
-        failure: error instanceof Error ? error.message : String(error),
+        failure: getErrorMessage(error),
       },
       true
     );

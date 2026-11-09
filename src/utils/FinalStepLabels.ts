@@ -54,3 +54,11 @@ export function formatFinalPassRangeBadge(first: number, last: number): string {
     ? formatFinalPassBadge(first)
     : `Passes ${formatFinalPassRangeCompact(first, last)}`;
 }
+
+/** "Parallel steps 3–5" for a group's zero-based start/end indices. */
+export function formatParallelStepsLabel(group: {
+  startIndex: number;
+  endIndex: number;
+}): string {
+  return `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`;
+}

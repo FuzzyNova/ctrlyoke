@@ -14,6 +14,7 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import { workflowDisplayStep } from "../../types/CtrlYokeTypes";
 import {
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   TERMINAL_SESSION_STATUS,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -38,12 +39,7 @@ export interface LineageExecutionClaim {
 }
 
 export function isExecutionOwnerState(status: QueueState["status"]): boolean {
-  return (
-    status === EXECUTION_STATES.RUNNING ||
-    status === EXECUTION_STATES.PAUSING ||
-    status === EXECUTION_STATES.PAUSED ||
-    status === EXECUTION_STATES.CANCELLING
-  );
+  return ACTIVE_EXECUTION_STATES.has(status);
 }
 
 export function isSpentExecutionOwnerState(

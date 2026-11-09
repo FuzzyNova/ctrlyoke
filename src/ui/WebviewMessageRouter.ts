@@ -39,6 +39,7 @@ import {
   DASHBOARD_HOST_ACTIONS,
   PATH_SELECTION_KINDS,
   PATH_SELECTION_TITLES,
+  WORKTREE_MERGE_OUTCOMES,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import {
@@ -2996,8 +2997,8 @@ export class WebviewMessageRouter {
           message.worktreePath
         );
         const succeeded = (direction: typeof result.intoSource) =>
-          direction.mergeOutcome === "fast-forward" ||
-          direction.mergeOutcome === "merge-commit";
+          direction.mergeOutcome === WORKTREE_MERGE_OUTCOMES.FAST_FORWARD ||
+          direction.mergeOutcome === WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT;
         const describe = (
           label: string,
           direction: typeof result.intoSource

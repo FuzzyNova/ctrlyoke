@@ -1,3 +1,4 @@
+import { isRecord } from "../utils/JsonTypeGuards";
 import {
   CAPABILITY_DOMAINS,
   CAPABILITY_FIDELITIES,
@@ -389,10 +390,6 @@ function isCapabilityDeclaration(
     "fidelity" in value &&
     "mechanism" in value
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function requiredLeavesForDomain(domain: CapabilityDomain): readonly string[] {

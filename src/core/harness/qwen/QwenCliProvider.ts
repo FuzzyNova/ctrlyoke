@@ -48,11 +48,11 @@ import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { redactMcpConfigArgs } from "../shared/CliLauncherResolver";
-import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import {
   StatuslineManager,
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
+import { ProviderStatuslineRegistration } from "../shared/ProviderStatuslineRegistration";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type {
@@ -137,17 +137,17 @@ export class QwenCliProvider implements ICliProvider {
   private hookSettingsPath: string | undefined;
   private readonly hookSettingsPaths = new Set<string>();
 
-  private statusLineToken: string | undefined;
-  private readonly statusLineSnapshotPaths = new Set<string>();
-  private statusLineDirectory: string | undefined;
-  private statusLineWorkspaceRoot: string | undefined;
-  private statusLineEnabledForPrompt = false;
-  private statuslineInstallResult: StatuslineInstallResult | undefined;
+  private readonly statuslineRegistration = new ProviderStatuslineRegistration({
+    manager: QwenCliProvider.statuslineManager,
+    logPrefix: "QwenCliProvider",
+    harnessLabel: "Qwen",
+    snapshotPrefix: "qwen",
+    tokenEnvironmentVariable: "CTRLYOKE_QWEN_STATUSLINE_TOKEN",
+    directoryEnvironmentVariable: "CTRLYOKE_QWEN_STATUSLINE_DIR",
+  });
 
   consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
-    const result = this.statuslineInstallResult;
-    this.statuslineInstallResult = undefined;
-    return result;
+    return this.statuslineRegistration.consumeInstallResult();
   }
 
   /**
@@ -401,18 +401,14 @@ export class QwenCliProvider implements ICliProvider {
         {
           description: "Prepare Qwen statusline tracking",
           apply: async () => {
-            this.statusLineToken = statusLineToken;
-            this.statusLineDirectory = undefined;
-            this.statusLineWorkspaceRoot = undefined;
-            this.statusLineEnabledForPrompt = false;
-            this.statuslineInstallResult = undefined;
+            this.statuslineRegistration.reset(statusLineToken);
             if (
               workspaceRoot &&
               ConfigurationUtils.getStatusLineHarnessSettings(
                 STATUS_LINE_HARNESS_IDS.QWEN
               ).enabled
             ) {
-              this.statuslineInstallResult = await this.registerStatusLine(
+              await this.statuslineRegistration.register(
                 extensionPath,
                 workspaceRoot
               );
@@ -435,7 +431,7 @@ export class QwenCliProvider implements ICliProvider {
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
       ...CliProviderUtils.buildProcessEnv(),
-      ...this.buildStatusLineSpawnEnv(),
+      ...this.statuslineRegistration.buildSpawnEnv(),
       ...this.buildHookSettingsSpawnEnv(),
       ...this.sandboxSpawnEnv,
     };
@@ -443,7 +439,7 @@ export class QwenCliProvider implements ICliProvider {
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
     return {
-      ...this.buildStatusLineSpawnEnv(),
+      ...this.statuslineRegistration.buildSpawnEnv(),
       ...this.buildHookSettingsSpawnEnv(),
       ...this.sandboxSpawnEnv,
     };
@@ -459,69 +455,6 @@ export class QwenCliProvider implements ICliProvider {
           [QWEN_SYSTEM_DEFAULTS_PATH_ENV]: defaultQwenSystemDefaultsPath(),
         }
       : {};
-  }
-
-  private async registerStatusLine(
-    extensionPath: string,
-    workspaceRoot: string
-  ): Promise<StatuslineInstallResult> {
-    const scriptPath =
-      await QwenCliProvider.statuslineManager.resolveScriptPath(extensionPath);
-    if (!scriptPath) {
-      Log.warn(
-        `[QwenCliProvider] Skipping Qwen statusline: no statusline script under ${extensionPath}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
-      "",
-    ]).trim();
-    const snapshotDirectory = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.TEMP_DIR
-    );
-    const snapshotPath = path.join(
-      snapshotDirectory,
-      `qwen-statusline-${this.statusLineToken}.json`
-    );
-    this.statusLineSnapshotPaths.add(snapshotPath);
-
-    try {
-      const result = await QwenCliProvider.statuslineManager.install(
-        workspaceRoot,
-        command
-      );
-      if (result.kind !== "declined") {
-        this.statusLineDirectory = snapshotDirectory;
-        this.statusLineWorkspaceRoot = workspaceRoot;
-        this.statusLineEnabledForPrompt = true;
-      }
-      return result;
-    } catch (error) {
-      Log.warn(
-        `[QwenCliProvider] Failed to register Qwen statusline: ${error}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-  }
-
-  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
-    if (
-      !this.statusLineEnabledForPrompt ||
-      !this.statusLineToken ||
-      !this.statusLineDirectory
-    ) {
-      return {};
-    }
-
-    return {
-      CTRLYOKE_QWEN_STATUSLINE_TOKEN: this.statusLineToken,
-      CTRLYOKE_QWEN_STATUSLINE_DIR: this.statusLineDirectory,
-      ...(this.statusLineWorkspaceRoot
-        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
-        : {}),
-    };
   }
 
   /**
@@ -784,7 +717,10 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.hookSettingsPaths, ...this.statusLineSnapshotPaths];
+    return [
+      ...this.hookSettingsPaths,
+      ...this.statuslineRegistration.snapshotPaths,
+    ];
   }
 
   /**

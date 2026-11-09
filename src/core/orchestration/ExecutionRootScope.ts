@@ -8,6 +8,8 @@ import {
 } from "../../utils/GitUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { foldPathForCompare } from "../../utils/PathCasing";
+import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
+import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 /** The canonical identity used by all execution-root-scoped storage. */
 export interface ExecutionRootScope {
@@ -38,7 +40,7 @@ async function readJson<T>(filePath: string): Promise<T | null> {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return null;
     throw error;
   }
 }
@@ -228,6 +230,3 @@ export async function sweepOrphanedScopeStorage(
   }
   return removed;
 }
-
-/** Backward-friendly name for callers that previously owned the lease resolver. */
-export const resolveLeaseScope = resolveExecutionRootScope;

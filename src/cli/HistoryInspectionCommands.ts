@@ -63,8 +63,10 @@ import {
   STATUS_MESSAGE_SEVERITY,
   type HistoryListSortOrder,
   type ScriptOutputSource,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
+import { outputTargetKey } from "../utils/OutputTargetKeys";
 import type {
   HistoryEventKind,
   HistorySearchQuery,
@@ -124,6 +126,7 @@ import {
   parseHistoryStateFilter,
 } from "./HistoryFilterParsing";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 
 export interface HistoryInspectionCommandIo {
   writeOut(message: string): void;
@@ -606,7 +609,7 @@ export async function showHistoryCommand(
   try {
     targetFilter = parseHistoryShowStep(options.step);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     // Queue indices say nothing about a final pass number, so only a
     // queue-style selector gets the valid index range appended.
     throw new Error(
@@ -1874,10 +1877,7 @@ function createHistoryOutputTarget(attempt: ResolvedRunAttemptValue): {
         ? attempt.target.stepIndex
         : attempt.target.loopIndex,
     stepName: historyStepName(attempt),
-    key:
-      attempt.target.kind === FINAL_STEP_PHASES.QUEUE
-        ? `queue:${attempt.target.stepIndex}`
-        : `final:${attempt.target.loopIndex}`,
+    key: outputTargetKey(attempt.target),
   };
 }
 
@@ -2173,7 +2173,7 @@ async function readRunWorkingDefinition(
       ? (candidate as RunWorkingDefinition)
       : undefined;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
     throw error;
   }
 }

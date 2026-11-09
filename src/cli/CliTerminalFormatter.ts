@@ -28,6 +28,7 @@ import {
   getBackgroundWorkHoldHeadline,
   getBackgroundWorkAbandonedNotice,
 } from "../utils/BackgroundWorkHoldText";
+import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
@@ -75,7 +76,10 @@ import {
   isCacheInputSubset,
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
-import { formatFinalPassLabel } from "../utils/FinalStepLabels";
+import {
+  formatFinalPassLabel,
+  formatParallelStepsLabel,
+} from "../utils/FinalStepLabels";
 import { formatThinkingLabel } from "../utils/ThinkingBlockFormat";
 import { getToolResultText } from "../utils/toolResultText";
 import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
@@ -710,7 +714,7 @@ export class CliTerminalFormatter {
           group.endIndex - group.startIndex + 1;
         writeLine(
           chalk.bold(
-            `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}${group.failFast ? " (failFast)" : ""}`
+            `${formatParallelStepsLabel(group)}${group.failFast ? " (failFast)" : ""}`
           )
         );
         writeLine(
@@ -828,7 +832,9 @@ export class CliTerminalFormatter {
   };
 
   private static targetKey(target?: CliOutputTarget): string {
-    return target?.key ?? (target ? `queue:${target.stepIndex}` : "default");
+    return (
+      target?.key ?? (target ? queueTargetKey(target.stepIndex) : "default")
+    );
   }
 
   private static writeTargetPrefix(target?: CliOutputTarget): void {

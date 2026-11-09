@@ -1,6 +1,7 @@
 import * as path from "path";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { parseAllFileReferences } from "../utils/FileReferenceParser";
+import { relativePathEscapes } from "../utils/PathSecurity";
 import {
   getTrustedSourceDefinitionDir,
   resolveReferencePath,
@@ -143,7 +144,7 @@ function destinationPromptFileReference(
 ): string {
   const resolvedPath = path.resolve(absolutePath);
   const primaryRelative = path.relative(workspaceRoot, resolvedPath);
-  if (!path.isAbsolute(primaryRelative) && !primaryRelative.startsWith("..")) {
+  if (!relativePathEscapes(primaryRelative)) {
     const relative = destinationDefinitionPath
       ? path.relative(path.dirname(destinationDefinitionPath), resolvedPath)
       : primaryRelative;
@@ -155,7 +156,7 @@ function destinationPromptFileReference(
 
   for (const root of namedRoots) {
     const relative = path.relative(path.resolve(root.fsPath), resolvedPath);
-    if (!path.isAbsolute(relative) && !relative.startsWith("..")) {
+    if (!relativePathEscapes(relative)) {
       return toPortablePath(path.join(root.name, relative));
     }
   }
@@ -169,13 +170,13 @@ function workspaceRelativeReference(
 ): string {
   const resolvedPath = path.resolve(absolutePath);
   const primaryRelative = path.relative(workspaceRoot, resolvedPath);
-  if (!path.isAbsolute(primaryRelative) && !primaryRelative.startsWith("..")) {
+  if (!relativePathEscapes(primaryRelative)) {
     return toPortablePath(primaryRelative);
   }
 
   for (const root of namedRoots) {
     const relative = path.relative(path.resolve(root.fsPath), resolvedPath);
-    if (!path.isAbsolute(relative) && !relative.startsWith("..")) {
+    if (!relativePathEscapes(relative)) {
       return toPortablePath(path.join(root.name, relative));
     }
   }

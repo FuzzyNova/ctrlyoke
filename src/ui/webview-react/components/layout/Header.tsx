@@ -324,7 +324,7 @@ export const Header: React.FC<{
 
   const handleSlotAction = useCallback(
     (action: WorkflowExecutionControlAction) => {
-      if (action === "run-draft") {
+      if (action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.RUN_DRAFT) {
         if (
           displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT &&
           displayedDefinitionRevision !== null &&
@@ -336,20 +336,23 @@ export const Header: React.FC<{
             expectedDescriptorRevision: displayedDescriptorRevision,
           });
         }
-      } else if (action === "rerun") {
+      } else if (action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.RERUN) {
         if (shouldConfirmRerun(rerunConfirmationMode, isDisplayedFavorite)) {
           setRerunConfirmOpen(true);
         } else {
           postViewedRunAction(MESSAGE_TYPES.SEED_NEW_RUN);
         }
-      } else if (action === "continue" || action === "start-run") {
+      } else if (
+        action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.CONTINUE ||
+        action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.START_RUN
+      ) {
         // Starting a never-executed run *is* a continuation from its own step 0:
         // the run directory, working file, and timeline already exist, so the
         // backend only has to bind and execute what is on disk.
         postViewedRunAction(MESSAGE_TYPES.CONTINUE_RUN);
-      } else if (action === "restart") {
+      } else if (action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.RESTART) {
         postViewedRunAction(MESSAGE_TYPES.START_NEW_RUN_INSTEAD);
-      } else if (action === "resume") {
+      } else if (action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.RESUME) {
         if (executionRunAddress) {
           sendMessage(MESSAGE_TYPES.RESUME_RUN, {
             address: executionRunAddress,

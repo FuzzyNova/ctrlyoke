@@ -19,8 +19,7 @@ import {
   parseStreamingChunkKey,
   isPromptExecutionPhase,
 } from "../types/messages";
-import type { ScriptStep } from "@root/types/WebviewMessageTypes";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { isScriptStep, type ScriptStep } from "@root/types/CtrlYokeTypes";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
 import type {
   WorktreeRunProjection,
@@ -48,11 +47,6 @@ interface StepRuntimeStatus {
  * to avoid _runtime type incompatibility with CtrlYokeTypes.PromptStep.
  */
 export type WorkflowStep = (PromptStep | ScriptStep) & StepRuntimeStatus;
-
-/** Type guard for script steps (webview-local version) */
-function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
-}
 
 /**
  * Deep, key-order-independent equality for JSON-shaped values. A key present

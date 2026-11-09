@@ -2,6 +2,7 @@ import {
   PROCESS_SIGNALS,
   type ProcessSignal,
 } from "../types/DashboardConstants";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export type ShutdownSignal = Exclude<
   ProcessSignal,
@@ -106,9 +107,7 @@ export function installTwoStageShutdown(
         requestExit(options.successExitCode);
       })
       .catch((error: unknown) => {
-        options.onMessage(
-          `Shutdown failed: ${error instanceof Error ? error.message : String(error)}`
-        );
+        options.onMessage(`Shutdown failed: ${getErrorMessage(error)}`);
         requestExit(options.timeoutExitCode);
       });
   };

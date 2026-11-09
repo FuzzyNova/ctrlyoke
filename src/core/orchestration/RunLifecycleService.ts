@@ -25,6 +25,7 @@ import type {
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import {
+  IN_FLIGHT_EXECUTION_STATES,
   EXECUTION_STATES,
   type ExecutionState,
   HISTORY_TRASH_ENTRY_KINDS,
@@ -36,12 +37,13 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKTREE_EDIT_KINDS,
   type RunDefinitionDecision,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import type { DefinitionRollbackInvalidation } from "./RunViewPublisher";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { buildDefinitionSnapshot } from "../WorkflowStepSanitizer";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
 import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import { Log } from "../../utils/Log";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
@@ -308,11 +310,7 @@ export class RunLifecycleService {
     }
     const targetState =
       target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
-    if (
-      targetState === EXECUTION_STATES.RUNNING ||
-      targetState === EXECUTION_STATES.PAUSING ||
-      targetState === EXECUTION_STATES.CANCELLING
-    ) {
+    if (IN_FLIGHT_EXECUTION_STATES.has(targetState)) {
       throw new Error(
         `Cannot set start position while in state ${targetState}`
       );
@@ -581,7 +579,7 @@ export class RunLifecycleService {
       Log.warn(
         `[WorkflowOrchestrator] Failed to switch ${clientId} to run ${address.runRef}: ${getErrorMessage(error)}`
       );
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         this.host.registry
           .getViewAddressRegistry()
           .set(clientId, previousAddress);

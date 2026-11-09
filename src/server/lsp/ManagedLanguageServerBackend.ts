@@ -25,6 +25,10 @@ import {
 import type { KeyValueStore } from "../../core/HostPorts";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import {
+  isPathWithinDirectory,
+  realpathOrSelf,
+} from "../../utils/PathSecurity";
+import {
   createNodeLanguageServerResolverDependencies,
   getWorkspaceExecutionOptionEntries,
   resolveLanguageServer,
@@ -42,6 +46,7 @@ import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import { LANGUAGE_SERVER_CATALOG } from "./LanguageServerCatalog";
 import { ctrlyokeStateHome } from "../../utils/ProjectStatePaths";
 import { Log } from "../../utils/Log";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export type LanguageServerStatus =
   (typeof LANGUAGE_SERVER_STATUSES)[keyof typeof LANGUAGE_SERVER_STATUSES];
@@ -802,37 +807,23 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     roots: WorkspacePathContext
   ): Promise<string> {
     const resolveRealRoot = (rootPath: string): string => {
-      try {
-        return fs.realpathSync(rootPath);
-      } catch {
-        return path.resolve(rootPath);
-      }
+      return realpathOrSelf(path.resolve(rootPath));
     };
     const containingRoots = (
       roots.namedRoots.length
         ? roots.namedRoots.map((root) => resolveRealRoot(root.fsPath))
         : [resolveRealRoot(roots.workspaceRoot)]
     )
-      .filter((root) => {
-        const relative = path.relative(root, filePath);
-        return (
-          relative === "" ||
-          (!relative.startsWith(`..${path.sep}`) &&
-            relative !== ".." &&
-            !path.isAbsolute(relative))
-        );
-      })
+      .filter((root) => isPathWithinDirectory(filePath, root))
       .sort((a, b) => b.length - a.length);
     const workspaceRoot =
       containingRoots[0] ?? resolveRealRoot(roots.workspaceRoot);
     let current = path.dirname(filePath);
-    while (
-      current === workspaceRoot ||
-      current.startsWith(`${workspaceRoot}${path.sep}`)
-    ) {
+    while (isPathWithinDirectory(current, workspaceRoot)) {
       if (await this.hasRootMarker(current, markers)) return current;
-      if (current === workspaceRoot) break;
-      current = path.dirname(current);
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
     }
     return workspaceRoot;
   }
@@ -927,11 +918,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     this.servers.set(key, server);
     connection.onError((errors) => {
       if (server.intentionalStop || this.disposed) return;
-      const detail = errors
-        .map((error) =>
-          error instanceof Error ? error.message : String(error)
-        )
-        .join("; ");
+      const detail = errors.map((error) => getErrorMessage(error)).join("; ");
       this.crashed(
         server,
         new Error(detail || "Language server JSON-RPC connection failed.")
@@ -1108,7 +1095,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
             id: server.resolved.id,
             rootPath: server.descriptor.rootPath,
             status: LANGUAGE_SERVER_STATUSES.STOPPED,
-            detail: `Not restarted: ${error instanceof Error ? error.message : String(error)}`,
+            detail: `Not restarted: ${getErrorMessage(error)}`,
           });
         });
       }, delay);

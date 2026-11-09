@@ -1,3 +1,4 @@
+import { finiteNumber as asFiniteNumber } from "../../../utils/JsonTypeGuards";
 import { ANTIGRAVITY_STREAM_JSON_EVENTS as STREAM_JSON_EVENTS } from "./AntigravityProtocolConstants";
 import { splitCompleteLines } from "../../../utils/TextLines";
 
@@ -25,12 +26,6 @@ interface JsonRecord {
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function asFiniteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function parseUsage(value: unknown): AntigravityStreamJsonUsage | undefined {

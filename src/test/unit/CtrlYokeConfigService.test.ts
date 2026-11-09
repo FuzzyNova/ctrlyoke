@@ -12,7 +12,6 @@ import {
   type ConfigBackend,
 } from "../../config/CtrlYokeConfigService";
 import { FileConfigBackend } from "../../config/FileConfigBackend";
-import { uniqueAtomicTempPath } from "../../config/AtomicFileWrite";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
@@ -1309,19 +1308,6 @@ suite("FileConfigBackend", () => {
 
     assert.strictEqual(({} as Record<string, unknown>).polluted, undefined);
     assert.deepStrictEqual(fs.readFileSync(configPath), original);
-  });
-
-  test("uses unique process-scoped names for atomic temp files", () => {
-    const configPath = path.join(tmpDir, "settings.json");
-    const first = uniqueAtomicTempPath(configPath);
-    const second = uniqueAtomicTempPath(configPath);
-    const prefix = `${configPath}.${process.pid}.`;
-    const randomSuffix = first.slice(prefix.length, -".tmp".length);
-
-    assert.ok(first.startsWith(prefix));
-    assert.match(randomSuffix, /^[0-9a-f-]{36}$/);
-    assert.ok(first.endsWith(".tmp"));
-    assert.notStrictEqual(first, second);
   });
 
   test("filePath getter returns the configured path", () => {

@@ -3,6 +3,8 @@
  * Unknown provider variants remain representable through the string fields,
  * but are only consumed after passing these runtime guards.
  */
+import { isRecord } from "../../../utils/JsonTypeGuards";
+
 export interface AntigravityPlannerToolCall {
   name: string;
   args?: Record<string, unknown>;
@@ -20,10 +22,6 @@ export interface AntigravityTranscriptEntry {
   thinking?: string;
   tool_calls?: AntigravityPlannerToolCall[];
   [key: string]: unknown;
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isAntigravityPlannerToolCall(

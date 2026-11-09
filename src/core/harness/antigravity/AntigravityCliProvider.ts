@@ -35,6 +35,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   type HookEvent,
+  NODE_ERROR_CODES,
 } from "../../../types/DashboardConstants";
 import type {
   McpServerConfig,
@@ -54,10 +55,7 @@ import {
 } from "../../../types/CompatibilityTypes";
 import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../../../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
@@ -65,6 +63,7 @@ import {
   StatuslineManager,
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
+import { ProviderStatuslineRegistration } from "../shared/ProviderStatuslineRegistration";
 import { Log } from "../../../utils/Log";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { withFileLock } from "../../../utils/FileLockUtils";
@@ -89,6 +88,7 @@ import {
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
+import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
 
 const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -227,26 +227,24 @@ export class AntigravityCliProvider implements ICliProvider {
   private readonly streamJsonUsage =
     new AntigravityStreamJsonUsageAccumulator();
 
-  /** Fresh correlation token for the prompt currently being spawned. */
-  private statusLineToken: string | undefined;
-  /** Snapshot files created by every prompt in this workflow. */
-  private readonly statusLineSnapshotPaths = new Set<string>();
+  private readonly statuslineRegistration = new ProviderStatuslineRegistration({
+    manager: AntigravityCliProvider.statuslineManager,
+    logPrefix: "AntigravityCliProvider",
+    harnessLabel: "Antigravity",
+    snapshotPrefix: "agy",
+    tokenEnvironmentVariable: "CTRLYOKE_AGY_STATUSLINE_TOKEN",
+    directoryEnvironmentVariable: "CTRLYOKE_AGY_STATUSLINE_DIR",
+    quoteNodeCommand: CliNotificationMonitor.shouldQuoteNodeCommand(
+      HARNESS_IDS.ANTIGRAVITY_CLI
+    ),
+  });
   /** Permission settings stay alive until their agy process or PTY exits. */
   private readonly permissionSettingsPaths = new Set<string>();
-  /** Workspace temp directory for the current statusline invocation. */
-  private statusLineDirectory: string | undefined;
-  /** Effective ctrlyoke root for workspace-scoped statusline settings. */
-  private statusLineWorkspaceRoot: string | undefined;
-  /** Whether the current prompt successfully acquired the statusline lease. */
-  private statusLineEnabledForPrompt = false;
   /** Sidecar for the current prompt, retained for final snapshot consumers. */
   private statusLineSidecar: AntigravityStatuslineSidecar | undefined;
-  private statuslineInstallResult: StatuslineInstallResult | undefined;
 
   consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
-    const result = this.statuslineInstallResult;
-    this.statuslineInstallResult = undefined;
-    return result;
+    return this.statuslineRegistration.consumeInstallResult();
   }
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
@@ -380,11 +378,7 @@ export class AntigravityCliProvider implements ICliProvider {
         {
           description: "Prepare Antigravity prompt runtime state",
           apply: async () => {
-            this.statusLineToken = statusLineToken;
-            this.statusLineDirectory = undefined;
-            this.statusLineWorkspaceRoot = undefined;
-            this.statusLineEnabledForPrompt = false;
-            this.statuslineInstallResult = undefined;
+            this.statuslineRegistration.reset(statusLineToken);
             this.statusLineSidecar = undefined;
             this.streamJsonUsage.reset();
             this.logParser.setStatuslineSnapshot();
@@ -395,10 +389,9 @@ export class AntigravityCliProvider implements ICliProvider {
                 STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
               ).enabled
             ) {
-              this.statuslineInstallResult = await this.registerStatusLine(
+              await this.statuslineRegistration.register(
                 extensionPath,
-                workspaceRoot,
-                workflowContext?.workingFilePath ?? workspaceRoot
+                workspaceRoot
               );
             }
           },
@@ -458,19 +451,13 @@ export class AntigravityCliProvider implements ICliProvider {
   startExecutionSidecar(
     deps: CliExecutionSidecarDeps
   ): AntigravityStatuslineSidecar | undefined {
-    if (
-      !this.statusLineEnabledForPrompt ||
-      !this.statusLineToken ||
-      !this.statusLineDirectory
-    ) {
+    const snapshotPath = this.statuslineRegistration.snapshotPath;
+    if (!snapshotPath) {
       return undefined;
     }
 
     this.statusLineSidecar = new AntigravityStatuslineSidecar({
-      snapshotPath: path.join(
-        this.statusLineDirectory,
-        `agy-statusline-${this.statusLineToken}.json`
-      ),
+      snapshotPath,
       model: deps.model,
       parser: this.logParser,
       onContextWindowUpdate: deps.onContextWindowUpdate,
@@ -486,13 +473,13 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
-    return this.buildStatusLineSpawnEnv();
+    return this.statuslineRegistration.buildSpawnEnv();
   }
 
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
       ...CliProviderUtils.buildProcessEnv(),
-      ...this.buildStatusLineSpawnEnv(),
+      ...this.statuslineRegistration.buildSpawnEnv(),
     };
   }
 
@@ -760,7 +747,10 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.statusLineSnapshotPaths, ...this.permissionSettingsPaths];
+    return [
+      ...this.statuslineRegistration.snapshotPaths,
+      ...this.permissionSettingsPaths,
+    ];
   }
 
   getLiveProcessFilePaths(): string[] {
@@ -804,7 +794,7 @@ export class AntigravityCliProvider implements ICliProvider {
     startTime: Date,
     workspaceRoot?: string
   ): Promise<string | undefined> {
-    if (this.statusLineEnabledForPrompt) {
+    if (this.statuslineRegistration.enabled) {
       const snapshot = this.getLatestStatuslineSnapshot();
       const conversationId = snapshot?.conversation_id;
       const writtenAt = snapshot?._ctrlyoke?.writtenAt;
@@ -1043,78 +1033,6 @@ export class AntigravityCliProvider implements ICliProvider {
     return null;
   }
 
-  private async registerStatusLine(
-    extensionPath: string,
-    workspaceRoot: string,
-    _workflowKey: string
-  ): Promise<StatuslineInstallResult> {
-    const scriptPath =
-      await AntigravityCliProvider.statuslineManager.resolveScriptPath(
-        extensionPath
-      );
-    if (!scriptPath) {
-      Log.warn(
-        `[AntigravityCliProvider] Skipping Antigravity statusline: no statusline script under ${extensionPath}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-    // agy's statusline runner uses the same naive, unquoted whitespace split
-    // as its hook runner. Passing an empty directory and trimming the result
-    // gives the exact `node <script>` command from the wrapper contract.
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      [""],
-      CliNotificationMonitor.shouldQuoteNodeCommand(HARNESS_IDS.ANTIGRAVITY_CLI)
-    ).trim();
-    const snapshotDirectory = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.TEMP_DIR
-    );
-    const snapshotPath = path.join(
-      snapshotDirectory,
-      `agy-statusline-${this.statusLineToken}.json`
-    );
-    this.statusLineSnapshotPaths.add(snapshotPath);
-
-    try {
-      const result = await AntigravityCliProvider.statuslineManager.install(
-        workspaceRoot,
-        command
-      );
-      this.statusLineDirectory = snapshotDirectory;
-      this.statusLineWorkspaceRoot = workspaceRoot;
-      this.statusLineEnabledForPrompt = true;
-      return result;
-    } catch (error) {
-      // agy treats a broken statusline as non-fatal. Match that behavior so a
-      // settings-file problem never prevents the harness itself from running.
-      Log.warn(
-        `[AntigravityCliProvider] Failed to register Antigravity statusline: ${error}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-  }
-
-  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
-    if (
-      !this.statusLineEnabledForPrompt ||
-      !this.statusLineToken ||
-      !this.statusLineDirectory
-    ) {
-      return {};
-    }
-
-    const env: NodeJS.ProcessEnv = {
-      CTRLYOKE_AGY_STATUSLINE_TOKEN: this.statusLineToken,
-      CTRLYOKE_AGY_STATUSLINE_DIR: this.statusLineDirectory,
-      ...(this.statusLineWorkspaceRoot
-        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
-        : {}),
-    };
-    return env;
-  }
-
   private asFiniteNumber(value: unknown): number | undefined {
     return typeof value === "number" && Number.isFinite(value)
       ? value
@@ -1220,11 +1138,9 @@ export class AntigravityCliProvider implements ICliProvider {
     try {
       content = await fs.readFile(ownersPath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return {};
       throw new Error(
-        `Cannot safely update ${ownersPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${ownersPath}: ${getErrorMessage(error)}`
       );
     }
     try {
@@ -1235,9 +1151,7 @@ export class AntigravityCliProvider implements ICliProvider {
       throw new Error("Expected a JSON object");
     } catch (error) {
       throw new Error(
-        `Cannot safely update ${ownersPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${ownersPath}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -1254,13 +1168,11 @@ export class AntigravityCliProvider implements ICliProvider {
     try {
       content = await fs.readFile(hooksPath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return {};
       }
       throw new Error(
-        `Cannot safely update ${hooksPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${hooksPath}: ${getErrorMessage(error)}`
       );
     }
 
@@ -1272,9 +1184,7 @@ export class AntigravityCliProvider implements ICliProvider {
       throw new Error("Expected a JSON object");
     } catch (error) {
       throw new Error(
-        `Cannot safely update ${hooksPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${hooksPath}: ${getErrorMessage(error)}`
       );
     }
   }

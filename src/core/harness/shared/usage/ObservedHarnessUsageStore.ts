@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { Dirent } from "fs";
@@ -10,6 +11,7 @@ import {
   ATTEMPT_COST_SOURCES,
   HARNESS_IDS,
   HARNESS_OBSERVED_PERIODS,
+  NODE_ERROR_CODES,
   RUN_HISTORY_LOCATIONS,
   WORKFLOW_TOKEN_COVERAGE,
 } from "../../../../types/DashboardConstants";
@@ -36,6 +38,7 @@ import {
   PERSISTED_STORES,
 } from "../../../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../../../utils/FormatMigrations";
+import { getErrnoCode } from "../../../../utils/ErrorUtils";
 
 export const OBSERVED_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.OBSERVED_USAGE];
@@ -88,10 +91,6 @@ function emptyStore(now: number): ObservedHarnessUsageStoreData {
     runs: {},
     buckets: EMPTY_BUCKETS(),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isLocalDayKey(value: string): boolean {
@@ -637,8 +636,8 @@ export class ObservedHarnessUsageStore {
       );
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") return emptyStore(now);
+      const code = getErrnoCode(error);
+      if (code === NODE_ERROR_CODES.ENOENT) return emptyStore(now);
       this.lastErrorCode = OBSERVED_USAGE_ERROR_CODES.MALFORMED_DATA;
       await this.quarantineMalformedFile();
       return emptyStore(now);

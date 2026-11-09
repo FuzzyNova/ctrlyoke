@@ -72,6 +72,26 @@ suite("WebPushService", () => {
     assert.strictEqual(stored.privateJwk.crv, "P-256");
     assert.strictEqual(typeof stored.privateJwk.x, "string");
     assert.strictEqual(typeof stored.privateJwk.y, "string");
+    assert.strictEqual(
+      await fs.promises.readFile(vapidKeysPath, "utf8"),
+      JSON.stringify(stored, null, 2)
+    );
+    if (process.platform !== "win32") {
+      const mode = (await fs.promises.stat(vapidKeysPath)).mode & 0o777;
+      assert.strictEqual(mode, 0o600);
+    }
+  });
+
+  test("writes subscriptions as pretty JSON with private permissions", async () => {
+    const service = new WebPushService();
+    await service.upsertSubscription(await createValidSubscription(), {});
+
+    const content = await fs.promises.readFile(subscriptionsPath, "utf8");
+    assert.strictEqual(content, JSON.stringify(JSON.parse(content), null, 2));
+    if (process.platform !== "win32") {
+      const mode = (await fs.promises.stat(subscriptionsPath)).mode & 0o777;
+      assert.strictEqual(mode, 0o600);
+    }
   });
 
   test("uses the support email as the default VAPID subject", async () => {

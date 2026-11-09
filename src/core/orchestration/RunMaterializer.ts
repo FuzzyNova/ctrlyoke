@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import {
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
@@ -19,6 +20,7 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { OutputHistoryManager } from "./OutputHistoryManager";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkingFileManager } from "../WorkingFileManager";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export interface RunMaterializationInput {
   workspaceRoot: string;
@@ -61,12 +63,7 @@ export class RunMaterializer {
       input.workingFile?._runtime?.executionState ??
       input.executionState ??
       EXECUTION_STATES.COMPLETED;
-    if (
-      executionState === EXECUTION_STATES.RUNNING ||
-      executionState === EXECUTION_STATES.PAUSED ||
-      executionState === EXECUTION_STATES.PAUSING ||
-      executionState === EXECUTION_STATES.CANCELLING
-    ) {
+    if (ACTIVE_EXECUTION_STATES.has(executionState)) {
       throw new Error("Imported runs must have a settled execution state.");
     }
     const startedAt = input.startedAt ?? Date.now();
@@ -202,7 +199,7 @@ export class RunMaterializer {
         .catch(() => undefined);
       if (rollbackError) {
         throw new Error(
-          `${error instanceof Error ? error.message : String(error)}; imported workspace rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+          `${getErrorMessage(error)}; imported workspace rollback failed: ${getErrorMessage(rollbackError)}`
         );
       }
       throw error;

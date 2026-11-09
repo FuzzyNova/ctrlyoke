@@ -1,3 +1,4 @@
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import type { CapabilitiesModel } from "../../../types/CapabilitiesTypes";
 import { HARNESS_USAGE_STATUS_CODES } from "../../../types/DashboardConstants";
@@ -46,10 +47,6 @@ interface JsonRpcMessage {
   id?: unknown;
   result?: unknown;
   error?: unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**

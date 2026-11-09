@@ -30,6 +30,7 @@ import {
   PANEL_MIN_SIZE_CENTER,
   PANEL_MIN_SIZE_EDITOR_PX,
 } from "../constants";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 interface DesktopLayoutParams {
   isMobile: boolean;
@@ -248,7 +249,7 @@ export function useDesktopLayout({
         reason,
         layout,
         totalPx,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         snapshot: getDesktopPanelSnapshot(),
       });
     }
@@ -314,7 +315,7 @@ export function useDesktopLayout({
       WebviewLog.error("[LAYOUT] setLayout() failed", {
         reason,
         layout,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         snapshot: getDesktopPanelSnapshot(),
       });
     }
@@ -360,7 +361,7 @@ export function useDesktopLayout({
         reason,
         layout,
         totalPx,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         snapshot: getDesktopPanelSnapshot(),
       });
       return false;

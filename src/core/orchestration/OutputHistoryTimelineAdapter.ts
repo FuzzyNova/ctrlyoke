@@ -1,6 +1,5 @@
 import {
   FINAL_STEP_PHASES,
-  getExecutionPhaseKeySuffix,
   IN_FLIGHT_EXECUTION_STATES,
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
@@ -17,6 +16,7 @@ import type {
 import type { OrderedCliHistoryEntry } from "../../types/OutputHistoryTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
+import { outputAttemptKey } from "../../utils/OutputTargetKeys";
 import {
   TIMELINE_EVENT_TYPES,
   type CliOutputChunkAppendedEvent,
@@ -424,11 +424,7 @@ export function getCliEntryKey(
   attemptIndex: number,
   phase?: ExecutionPhase
 ): string {
-  const base =
-    target.kind === FINAL_STEP_PHASES.QUEUE
-      ? `queue:${target.stepIndex}`
-      : `final:${target.loopIndex}`;
-  return `${base}:run:${runIndex}:attempt:${attemptIndex}${getExecutionPhaseKeySuffix(phase)}`;
+  return outputAttemptKey(target, runIndex, attemptIndex, phase);
 }
 
 function compareOrderedHistoryEntries(

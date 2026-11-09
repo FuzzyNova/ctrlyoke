@@ -161,6 +161,23 @@ suite("ExternalRootsTrustStore", () => {
     });
   });
 
+  test("empty and comment-only trust files accept decisions", async () => {
+    for (const [index, content] of [
+      "",
+      " \r\n\t",
+      "// no decisions\n/* empty */",
+    ].entries()) {
+      const casePath = path.join(tempDir, `empty-trust-${index}.json`);
+      fs.writeFileSync(casePath, content, "utf-8");
+      const emptyStore = new ExternalRootsTrustStore(casePath);
+      const root = path.join(tempDir, `empty-root-${index}`);
+
+      await emptyStore.setDecisions(workspaceA, [root], "allow");
+
+      assert.strictEqual(emptyStore.getDecision(workspaceA, root), "allow");
+    }
+  });
+
   test("refuses to overwrite an unparseable store file", async () => {
     fs.mkdirSync(path.dirname(storePath), { recursive: true });
     const original = "{ not valid json";
@@ -171,6 +188,36 @@ suite("ExternalRootsTrustStore", () => {
       /contains invalid JSON/
     );
     assert.strictEqual(fs.readFileSync(storePath, "utf-8"), original);
+  });
+
+  test("refuses to overwrite an array-root store file", async () => {
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    const original = '[{"decisions":{}}]';
+    fs.writeFileSync(storePath, original, "utf-8");
+
+    await assert.rejects(
+      store.setDecisions(workspaceA, [rootDir()], "allow"),
+      /contains invalid JSON/
+    );
+    assert.strictEqual(fs.readFileSync(storePath, "utf-8"), original);
+  });
+
+  test("refuses to overwrite a store with non-object decisions", async () => {
+    for (const decisions of ["invalid", "null", "[]"] as const) {
+      const casePath = path.join(
+        tempDir,
+        `invalid-decisions-${decisions}.json`
+      );
+      const original = `{"decisions":${decisions}}`;
+      fs.writeFileSync(casePath, original, "utf-8");
+      const invalidStore = new ExternalRootsTrustStore(casePath);
+
+      await assert.rejects(
+        invalidStore.setDecisions(workspaceA, [rootDir()], "allow"),
+        /contains invalid JSON/
+      );
+      assert.strictEqual(fs.readFileSync(casePath, "utf-8"), original);
+    }
   });
 
   test("serializes concurrent decisions and leaves valid JSON", async () => {

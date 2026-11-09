@@ -320,6 +320,43 @@ export function inheritsWorkflowHarnessScopedValues(
   return stepHarness === workflowHarness;
 }
 
+/**
+ * Resolve the effective harness and model reported or used for one step.
+ * Runtime values take precedence over authored values; the workflow model is
+ * inherited only by steps on the workflow's harness.
+ */
+export function resolveStepHarnessAndModel(
+  step: Pick<PromptStep, "harness" | "model" | "_runtime">,
+  workflow: Pick<PromptFile, "harness" | "model">,
+  defaults: {
+    harness: HarnessId;
+    /** Resolved run model, used when the step inherits the workflow harness. */
+    model?: string;
+    modelForHarness(harness: HarnessId): string | undefined;
+  }
+): { harness: HarnessId; model: string | undefined } {
+  const harness =
+    step._runtime?.harness ??
+    step.harness ??
+    workflow.harness ??
+    defaults.harness;
+  const inheritsWorkflowModel = inheritsWorkflowHarnessScopedValues(
+    harness,
+    workflow.harness ?? defaults.harness
+  );
+  return {
+    harness,
+    model:
+      step._runtime?.model ??
+      step.model ??
+      (inheritsWorkflowModel
+        ? (workflow.model ??
+          defaults.model ??
+          defaults.modelForHarness(harness))
+        : defaults.modelForHarness(harness)),
+  };
+}
+
 function resolveAdditionalArgs(
   prompt: PromptStep,
   workflow: PromptFile,

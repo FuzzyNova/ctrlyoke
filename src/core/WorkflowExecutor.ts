@@ -67,6 +67,7 @@ import {
   type WorkflowExecutionOutcome,
   type ExecutionMode,
 } from "../types/DashboardConstants";
+import { outputTargetKey } from "../utils/OutputTargetKeys";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
 import { findStepIndexById } from "./StepIdentity";
@@ -179,8 +180,12 @@ import {
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
-import { formatFinalPassPhrase } from "../utils/FinalStepLabels";
+import {
+  formatFinalPassPhrase,
+  formatParallelStepsLabel,
+} from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 /** Live harness output of one attempt, with the target that produced it. */
 interface TargetStreamingOutput {
@@ -430,9 +435,7 @@ export type ParallelGroupJoinResult =
 type ExecutionTarget = WorkflowAttemptTarget;
 
 function getExecutionTargetRunKey(target: ExecutionTarget): string {
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? `queue:${target.stepIndex}`
-    : `final:${target.loopIndex}`;
+  return outputTargetKey(target);
 }
 
 function isStepEnabled(step: WorkflowStep | undefined | null): boolean {
@@ -959,7 +962,7 @@ export class WorkflowExecutor {
     );
 
     Log.info(
-      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
+      `[WorkflowExecutor] ${formatParallelStepsLabel(group)}: effective width ${preflight.effectiveWidth}`
     );
     if (preflight.issues.length > 0) {
       await Promise.all(
@@ -1487,9 +1490,9 @@ export class WorkflowExecutor {
     } catch (error: unknown) {
       return {
         accepted: false,
-        diagnostic: `Parallel-group promotion failed to resolve the running step: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        diagnostic: `Parallel-group promotion failed to resolve the running step: ${getErrorMessage(
+          error
+        )}`,
       };
     }
     const liveAnchorSessionId = anchor._runtime?.sessionId;
@@ -1516,9 +1519,9 @@ export class WorkflowExecutor {
       );
       return {
         accepted: false,
-        diagnostic: `Parallel step ${memberIndex + 1} failed preflight: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        diagnostic: `Parallel step ${memberIndex + 1} failed preflight: ${getErrorMessage(
+          error
+        )}`,
       };
     }
     if (preflight.issues.length > 0) {
@@ -1565,7 +1568,7 @@ export class WorkflowExecutor {
       outcome,
     };
     Log.info(
-      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: ` +
+      `[WorkflowExecutor] ${formatParallelStepsLabel(group)}: ` +
         `step ${memberIndex + 1} joined the promoted group beside running step ${anchorIndex + 1} ` +
         `(effective width ${effectiveWidth})`
     );
@@ -1648,9 +1651,7 @@ export class WorkflowExecutor {
     );
     return join.catch((error: unknown) => ({
       accepted: false,
-      diagnostic: `Parallel-group join failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      diagnostic: `Parallel-group join failed: ${getErrorMessage(error)}`,
     }));
   }
 
@@ -1802,9 +1803,9 @@ export class WorkflowExecutor {
       );
       return {
         accepted: false,
-        diagnostic: `Parallel step ${stepIndex + 1} failed preflight: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        diagnostic: `Parallel step ${stepIndex + 1} failed preflight: ${getErrorMessage(
+          error
+        )}`,
       };
     }
 
@@ -2105,8 +2106,7 @@ export class WorkflowExecutor {
         preflightMember
       );
     } catch (error) {
-      const failureReason =
-        error instanceof Error ? error.message : String(error);
+      const failureReason = getErrorMessage(error);
       if (
         context.abortSignal?.aborted ||
         this.getRuntime().status === EXECUTION_STATES.CANCELLING ||

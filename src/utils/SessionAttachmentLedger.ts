@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { HarnessId } from "../types/DashboardConstants";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
 import { writeFileAtomic } from "./AtomicFileUtils";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { withFileLock } from "./FileLockUtils";
@@ -12,6 +13,7 @@ import {
 } from "./PersistedSchemaGuard";
 import { projectStateRoot } from "./ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
+import { hasErrnoCode } from "./ErrorUtils";
 
 /** The agents and skills a harness session has already been sent. */
 export interface SessionAttachments {
@@ -138,7 +140,7 @@ export class SessionAttachmentLedger {
     try {
       raw = await fs.readFile(this.filePath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return undefined;
       }
       throw error;

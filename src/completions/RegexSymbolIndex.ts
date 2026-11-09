@@ -1,5 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { relativePathEscapes } from "../utils/PathSecurity";
 import { fuzzyMatches } from "./FuzzyRanking";
 import type { IndexedSymbol, SymbolIndex } from "./SymbolIndex";
 import { LspSymbolKind } from "./SymbolIndex";
@@ -107,8 +108,7 @@ export class RegexSymbolIndex implements SymbolIndex {
     const absolutePath =
       resolved?.absolutePath ?? path.resolve(workspaceRoot, viewerPath);
     const relativeCheck = path.relative(workspaceRoot, absolutePath);
-    if (relativeCheck === ".." || relativeCheck.startsWith(`..${path.sep}`))
-      return [];
+    if (relativePathEscapes(relativeCheck)) return [];
 
     try {
       const stat = await fs.stat(absolutePath);
@@ -120,12 +120,7 @@ export class RegexSymbolIndex implements SymbolIndex {
         this.realWorkspaceRoots.set(workspaceRoot, realWorkspaceRoot);
       }
       const realRelative = path.relative(await realWorkspaceRoot, realPath);
-      if (
-        realRelative === ".." ||
-        realRelative.startsWith(`..${path.sep}`) ||
-        path.isAbsolute(realRelative)
-      )
-        return [];
+      if (relativePathEscapes(realRelative)) return [];
       // A file can have a different workspace-prefixed display path after a
       // folder is renamed, even though its absolute path and mtime are stable.
       const cacheKey = JSON.stringify([absolutePath, viewerPath]);

@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import {
-  HARNESS_INFO,
+  getHarnessDisplayName,
   MESSAGE_TYPES,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_SCOPES,
@@ -70,6 +70,7 @@ import { PortabilityReportSection } from "./PortabilityReportSection";
 import { SegmentedTabBar, type SegmentedTab } from "./SegmentedTabBar";
 import { getPermissionModeBadge, type TabIconOverride } from "./tabBadgeUtils";
 import { Icon } from "./Icon";
+import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
 
 const DRY_RUN_TABS = {
   SUMMARY: "summary",
@@ -633,11 +634,11 @@ function OverviewPanel({
               <section
                 key={group.id}
                 className="flex flex-col gap-2 rounded-sm border border-panel-border p-2"
-                aria-label={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
+                aria-label={formatParallelStepsLabel(group)}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="font-semibold text-foreground">
-                    Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
+                    {formatParallelStepsLabel(group)}
                   </span>
                   <span className="text-description-fg">
                     failFast: {String(group.failFast)} · {executionSummary}
@@ -688,10 +689,7 @@ function SummaryPanel({
         </h3>
         <DefinitionList
           entries={[
-            [
-              "Harness",
-              HARNESS_INFO[properties.harnessId]?.name ?? properties.harnessId,
-            ],
+            ["Harness", getHarnessDisplayName(properties.harnessId)],
             ["Harness version", properties.harnessVersion ?? "Not reported"],
             ["Model", properties.model ?? "Default"],
             ["Execution mode", properties.executionMode ?? "Default"],
@@ -1198,8 +1196,7 @@ function StepDetail({
               size={14}
             />
             <span>
-              {HARNESS_INFO[step.resolvedProperties.harnessId]?.name ??
-                step.resolvedProperties.harnessId}
+              {getHarnessDisplayName(step.resolvedProperties.harnessId)}
             </span>
           </div>
         </div>
@@ -1430,9 +1427,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
     ...(preview?.steps.map((step) => ({
       value: String(step.stepIndex),
       label: `${step.stepIndex + 1}. ${stepLabel(step)}`,
-      description:
-        HARNESS_INFO[step.resolvedProperties.harnessId]?.name ??
-        step.resolvedProperties.harnessId,
+      description: getHarnessDisplayName(step.resolvedProperties.harnessId),
     })) ?? []),
   ];
 

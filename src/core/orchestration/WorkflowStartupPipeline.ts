@@ -30,6 +30,10 @@ import {
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ReplayableAttemptOutput } from "../OutputCaptureBuffer";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import {
+  outputTargetKey,
+  type OutputTargetKey,
+} from "../../utils/OutputTargetKeys";
 import type { DefinitionRevisionContext } from "./OutputHistoryManager";
 import type { WorkspaceWorktreeResolution } from "../../utils/WorktreeResolution";
 import { resolveWorktreeForWorkspace } from "../../utils/WorktreeResolution";
@@ -1272,10 +1276,8 @@ export class WorkflowStartupPipeline {
 
   private getExecutionTargetRunKey(
     target: OutputExecutionTarget
-  ): `queue:${number}` | `final:${number}` {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? `queue:${target.stepIndex}`
-      : `final:${target.loopIndex}`;
+  ): OutputTargetKey {
+    return outputTargetKey(target);
   }
 
   private async cacheHistoricalStepOutputs(

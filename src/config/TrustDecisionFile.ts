@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { parse, type ParseError } from "jsonc-parser";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
   assertWritableSchema,
   CURRENT_SCHEMA_VERSIONS,
@@ -8,8 +8,10 @@ import {
   type PersistedStore,
 } from "../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../utils/FormatMigrations";
-import { stripLeadingBom } from "../utils/TextUtils";
-import { uniqueAtomicTempPath } from "./AtomicFileWrite";
+import {
+  JSONC_OBJECT_FILE_RESULT_KIND,
+  readJsoncObjectFile,
+} from "./JsoncObjectFile";
 
 /** On-disk shape shared by the user-local trust-decision stores. */
 export interface TrustDecisionFile<Decision> {
@@ -29,24 +31,32 @@ export function loadTrustDecisionFile<Decision>(
   storePath: string,
   label: string
 ): TrustDecisionFile<Decision> {
-  let content: string;
-  try {
-    content = fs.readFileSync(storePath, "utf-8");
-  } catch {
+  const result = readJsoncObjectFile(storePath);
+  if (
+    result.kind === JSONC_OBJECT_FILE_RESULT_KIND.MISSING ||
+    result.kind === JSONC_OBJECT_FILE_RESULT_KIND.EMPTY
+  ) {
     return { decisions: {} };
   }
+  if (result.kind === JSONC_OBJECT_FILE_RESULT_KIND.INVALID) {
+    console.warn(
+      `[ctrlyoke] ${label} has invalid JSON and will be treated as empty: ${storePath}`
+    );
+    return { decisions: {}, invalidContent: true };
+  }
   try {
-    const errors: ParseError[] = [];
-    const parsedJson = parse(stripLeadingBom(content), errors, {
-      allowTrailingComma: true,
-    });
-    if (errors.length > 0 || parsedJson === undefined) {
-      throw new Error("Invalid JSONC syntax");
-    }
-    const parsed = migrateToCurrent(store, parsedJson).doc as Partial<
+    const parsed = migrateToCurrent(store, result.value).doc as Partial<
       TrustDecisionFile<Decision>
     >;
     const schemaVersion = readSchemaVersion(parsed);
+    if (
+      parsed.decisions !== undefined &&
+      (parsed.decisions === null ||
+        typeof parsed.decisions !== "object" ||
+        Array.isArray(parsed.decisions))
+    ) {
+      throw new Error("Trust decisions must be an object");
+    }
     return {
       ...(schemaVersion !== undefined ? { schemaVersion } : {}),
       decisions: parsed.decisions ?? {},
@@ -72,15 +82,12 @@ export async function saveTrustDecisionFile<Decision>(
   }
   assertWritableSchema(store, data, storePath);
   await fs.promises.mkdir(path.dirname(storePath), { recursive: true });
-  const tmpPath = uniqueAtomicTempPath(storePath);
-  await fs.promises.writeFile(
-    tmpPath,
+  await writeFileAtomic(
+    storePath,
     JSON.stringify(
       { ...data, schemaVersion: CURRENT_SCHEMA_VERSIONS[store] },
       null,
       2
-    ),
-    "utf-8"
+    )
   );
-  await fs.promises.rename(tmpPath, storePath);
 }

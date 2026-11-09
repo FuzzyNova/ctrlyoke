@@ -15,6 +15,7 @@ import {
   isGitUnavailableError,
 } from "../utils/GitUtils";
 import {
+  NODE_ERROR_CODES,
   USER_FEEDBACK_SEVERITY,
   WORKSPACE_ENTRY_KINDS,
   WORKSPACE_FILE_CHANGE_KINDS,
@@ -35,6 +36,7 @@ import {
   notifyUserFeedback,
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 
 export interface WorkspaceFileIndexStatus {
   readonly state: WorkspaceFileIndexState;
@@ -181,12 +183,8 @@ function defaultMemoryBudgetBytes(): number {
   return v8.getHeapStatistics().heap_size_limit * STORE_BUDGET_HEAP_FRACTION;
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function isWorkerOutOfMemory(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException)?.code === "ERR_WORKER_OUT_OF_MEMORY";
+  return hasErrnoCode(error, NODE_ERROR_CODES.ERR_WORKER_OUT_OF_MEMORY);
 }
 
 /** The user-facing warning for a worker failure: only an OOM names memory. */
@@ -272,7 +270,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
       .catch((error: unknown) => {
         markGitReady();
         this.options.onWarning?.(
-          `Workspace file index build failed: ${errorText(error)}`
+          `Workspace file index build failed: ${getErrorMessage(error)}`
         );
         // Retried by the next query after the usual staleness interval.
         this.lastBuildAt = this.dependencies.now();
@@ -1014,7 +1012,7 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     void this.worker?.terminate();
     this.worker = undefined;
     Log.warn(
-      `Workspace file index worker failed${isWorkerOutOfMemory(error) ? " with ERR_WORKER_OUT_OF_MEMORY" : ""}: ${errorText(error)}`
+      `Workspace file index worker failed${isWorkerOutOfMemory(error) ? " with ERR_WORKER_OUT_OF_MEMORY" : ""}: ${getErrorMessage(error)}`
     );
     // With gitignore respected the fallback indexes the same Git-visible
     // paths, so the user loses nothing worth interrupting them for.

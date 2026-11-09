@@ -1,3 +1,5 @@
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 /** Return whether a child-process error represents a timeout. */
 export function isSubprocessTimeoutError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -9,7 +11,7 @@ export function isSubprocessTimeoutError(error: unknown): boolean {
     originalError?: unknown;
   };
   if (
-    subprocessError.code === "ETIMEDOUT" ||
+    hasErrnoCode(subprocessError, NODE_ERROR_CODES.ETIMEDOUT) ||
     (subprocessError.killed === true &&
       typeof subprocessError.signal === "string")
   ) {

@@ -40,6 +40,12 @@ const HOME = os.homedir();
 const MOVED = path.join(os.tmpdir(), "moved-harness-home");
 
 suite("HarnessHome", () => {
+  test("formats ..-prefixed workspace children as relative paths", () => {
+    const root = path.join(os.tmpdir(), "ctrlyoke-discovery-root");
+    const child = path.join(root, "..cache", "agent.md");
+    assert.strictEqual(formatDiscoveryPath(child, root), "..cache/agent.md");
+  });
+
   suite("resolvers", () => {
     test("default to the CLI's directory under the home directory", () => {
       const env = {};

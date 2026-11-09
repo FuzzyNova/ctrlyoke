@@ -14,7 +14,6 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HEADLESS_SOURCE_MODES,
-  PERSISTENT_VALUE_INSTALL_RESULT_KINDS,
   STATUS_LINE_HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
@@ -47,11 +46,11 @@ import {
   hasCtrlYokeServer,
 } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
-import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import {
   StatuslineManager,
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
+import { ProviderStatuslineRegistration } from "../shared/ProviderStatuslineRegistration";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   capabilitySuiteVerification,
@@ -209,17 +208,17 @@ export class CopilotCliProvider implements ICliProvider {
   private otelFilePath: string | undefined;
   /** Every invocation's OTel export file, retained for end-of-workflow cleanup. */
   private readonly otelFilePaths: string[] = [];
-  private statusLineToken: string | undefined;
-  private readonly statusLineSnapshotPaths = new Set<string>();
-  private statusLineDirectory: string | undefined;
-  private statusLineWorkspaceRoot: string | undefined;
-  private statusLineEnabledForPrompt = false;
-  private statuslineInstallResult: StatuslineInstallResult | undefined;
+  private readonly statuslineRegistration = new ProviderStatuslineRegistration({
+    manager: CopilotCliProvider.statuslineManager,
+    logPrefix: "CopilotCliProvider",
+    harnessLabel: "Copilot",
+    snapshotPrefix: "copilot",
+    tokenEnvironmentVariable: "CTRLYOKE_COPILOT_STATUSLINE_TOKEN",
+    directoryEnvironmentVariable: "CTRLYOKE_COPILOT_STATUSLINE_DIR",
+  });
 
   consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
-    const result = this.statuslineInstallResult;
-    this.statuslineInstallResult = undefined;
-    return result;
+    return this.statuslineRegistration.consumeInstallResult();
   }
 
   constructor() {
@@ -484,18 +483,14 @@ export class CopilotCliProvider implements ICliProvider {
         {
           description: "Prepare Copilot statusline tracking",
           apply: async () => {
-            this.statusLineToken = statusLineToken;
-            this.statusLineDirectory = undefined;
-            this.statusLineWorkspaceRoot = undefined;
-            this.statusLineEnabledForPrompt = false;
-            this.statuslineInstallResult = undefined;
+            this.statuslineRegistration.reset(statusLineToken);
             if (
               workspaceRoot &&
               ConfigurationUtils.getStatusLineHarnessSettings(
                 STATUS_LINE_HARNESS_IDS.COPILOT
               ).enabled
             ) {
-              this.statuslineInstallResult = await this.registerStatusLine(
+              await this.statuslineRegistration.register(
                 extensionPath,
                 workspaceRoot
               );
@@ -787,7 +782,7 @@ export class CopilotCliProvider implements ICliProvider {
     return {
       ...env,
       ...this.buildOtelSpawnEnv(),
-      ...this.buildStatusLineSpawnEnv(),
+      ...this.statuslineRegistration.buildSpawnEnv(),
     };
   }
 
@@ -819,72 +814,7 @@ export class CopilotCliProvider implements ICliProvider {
     return {
       ...CliProviderUtils.buildProcessEnv(),
       ...this.buildOtelSpawnEnv(),
-      ...this.buildStatusLineSpawnEnv(),
-    };
-  }
-
-  private async registerStatusLine(
-    extensionPath: string,
-    workspaceRoot: string
-  ): Promise<StatuslineInstallResult> {
-    const scriptPath =
-      await CopilotCliProvider.statuslineManager.resolveScriptPath(
-        extensionPath
-      );
-    if (!scriptPath) {
-      Log.warn(
-        `[CopilotCliProvider] Skipping Copilot statusline: no statusline script under ${extensionPath}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
-      "",
-    ]).trim();
-    const snapshotDirectory = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.TEMP_DIR
-    );
-    const snapshotPath = path.join(
-      snapshotDirectory,
-      `copilot-statusline-${this.statusLineToken}.json`
-    );
-    this.statusLineSnapshotPaths.add(snapshotPath);
-
-    try {
-      const result = await CopilotCliProvider.statuslineManager.install(
-        workspaceRoot,
-        command
-      );
-      if (result.kind !== PERSISTENT_VALUE_INSTALL_RESULT_KINDS.DECLINED) {
-        this.statusLineDirectory = snapshotDirectory;
-        this.statusLineWorkspaceRoot = workspaceRoot;
-        this.statusLineEnabledForPrompt = true;
-      }
-      return result;
-    } catch (error) {
-      Log.warn(
-        `[CopilotCliProvider] Failed to register Copilot statusline: ${error}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-  }
-
-  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
-    if (
-      !this.statusLineEnabledForPrompt ||
-      !this.statusLineToken ||
-      !this.statusLineDirectory
-    ) {
-      return {};
-    }
-
-    return {
-      CTRLYOKE_COPILOT_STATUSLINE_TOKEN: this.statusLineToken,
-      CTRLYOKE_COPILOT_STATUSLINE_DIR: this.statusLineDirectory,
-      ...(this.statusLineWorkspaceRoot
-        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
-        : {}),
+      ...this.statuslineRegistration.buildSpawnEnv(),
     };
   }
 
@@ -931,7 +861,7 @@ export class CopilotCliProvider implements ICliProvider {
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
     return [
       ...this.hookFilePaths,
-      ...this.statusLineSnapshotPaths,
+      ...this.statuslineRegistration.snapshotPaths,
       ...this.otelFilePaths,
       // Defensive: some environments have COPILOT_OTEL_FILE_EXPORTER_PATH set globally
       // to the relative path "NUL" (observed pointed at the Windows null device via

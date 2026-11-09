@@ -12,7 +12,7 @@ import {
   shortenPath,
   formatTimeHMS,
   extractKeyParameters,
-  extractCliOutputText,
+  getStepAssistantTextForCopy,
   generateDiffLines,
   normalizeStructuredPatch,
   isStructuredPatchMalformed,
@@ -53,13 +53,13 @@ describe("shortenPath", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// extractCliOutputText
+// getStepAssistantTextForCopy
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("extractCliOutputText", () => {
+describe("getStepAssistantTextForCopy", () => {
   it("returns plain assistant text from structured events", () => {
     expect(
-      extractCliOutputText({
+      getStepAssistantTextForCopy({
         structured: {
           events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "hello" } }],
           metadata: {},
@@ -83,7 +83,7 @@ describe("extractCliOutputText", () => {
         metadata: {},
       },
     };
-    expect(extractCliOutputText(output)).toBe("before.\n\n and after.");
+    expect(getStepAssistantTextForCopy(output)).toBe("before.\n\n and after.");
   });
 
   it("joins structured TEXT around follow-up events", () => {
@@ -99,7 +99,7 @@ describe("extractCliOutputText", () => {
         metadata: {},
       },
     };
-    expect(extractCliOutputText(output)).toBe("base\n\n+resumed");
+    expect(getStepAssistantTextForCopy(output)).toBe("base\n\n+resumed");
   });
 
   it("never serves cached text after events are appended in place", () => {
@@ -109,17 +109,17 @@ describe("extractCliOutputText", () => {
       elapsed: 0,
       structured: { events, metadata: {} },
     };
-    expect(extractCliOutputText(output)).toBe("first");
-    expect(extractCliOutputText(output)).toBe("first");
+    expect(getStepAssistantTextForCopy(output)).toBe("first");
+    expect(getStepAssistantTextForCopy(output)).toBe("first");
 
     events.push({ type: CLI_EVENT_TYPES.TEXT, data: { text: "second" } });
-    expect(extractCliOutputText(output)).toBe("first\n\nsecond");
+    expect(getStepAssistantTextForCopy(output)).toBe("first\n\nsecond");
 
     output.structured = {
       events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "replaced" } }],
       metadata: {},
     };
-    expect(extractCliOutputText(output)).toBe("replaced");
+    expect(getStepAssistantTextForCopy(output)).toBe("replaced");
   });
 
   it("does not cache a streaming output's text", () => {
@@ -131,12 +131,12 @@ describe("extractCliOutputText", () => {
         metadata: {},
       },
     };
-    expect(extractCliOutputText(output)).toBe("partial");
+    expect(getStepAssistantTextForCopy(output)).toBe("partial");
 
     // A streaming delta may grow the last TEXT event in place, which the
     // event-count check alone could not detect.
     output.structured.events[0].data.text = "partial and more";
-    expect(extractCliOutputText(output)).toBe("partial and more");
+    expect(getStepAssistantTextForCopy(output)).toBe("partial and more");
   });
 
   it("copies a script step's stdout and stderr", () => {
@@ -415,6 +415,33 @@ describe("generateMarkdownExport", () => {
     totalSteps: 2,
   };
 
+  it.each([
+    ["claude-cli", "Claude Code"],
+    ["unknown-cli", "unknown-cli"],
+  ])(
+    "uses the shared display label for %s harness metadata",
+    (harness, label) => {
+      const md = generateMarkdownExport(
+        [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            data: {
+              structured: {
+                events: [],
+                metadata: { harness, sessionId: "session-1" },
+              },
+            },
+          },
+        ],
+        metadata
+      );
+
+      expect(md).toContain(`Session (${label}): session-1`);
+    }
+  );
+
   it("includes the header and metadata", () => {
     const md = generateMarkdownExport([], metadata);
     expect(md).toContain("# ctrlyoke Execution Output");
@@ -546,6 +573,24 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("100 in / 50 out / 150 total");
     expect(md).toContain("20 cached");
     expect(md).toContain("3.5s");
+  });
+
+  it("uses the provider-reported total in token stats", () => {
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: {
+          tokens: { prompt: 8_000, completion: 2_000, total: 410_000 },
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    expect(md).toContain("Tokens: 8000 in / 2000 out / 410000 total");
+    expect(md).not.toContain("Tokens: 8000 in / 2000 out / 10000 total");
   });
 
   it.each([1_000_000, 999_960])(

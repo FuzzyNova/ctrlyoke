@@ -2,6 +2,9 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   QUEUE_POSITION,
+  getHarnessDisplayName,
+  getHarnessShortName,
+  HARNESS_IDS,
   resolveQueueInsertIndex,
   IMAGE_REF_EXTENSIONS,
   imageExtensionToMimeType,
@@ -37,6 +40,18 @@ suite("resolveQueueInsertIndex", () => {
       resolveQueueInsertIndex(QUEUE_POSITION.NEXT, 2, 7, parallelGroups),
       3
     );
+  });
+});
+
+suite("harness display labels", () => {
+  test("fall back to an unknown harness id", () => {
+    assert.strictEqual(getHarnessDisplayName("unknown-cli"), "unknown-cli");
+    assert.strictEqual(getHarnessShortName("unknown-cli"), "unknown-cli");
+  });
+
+  test("use the configured labels for known harness ids", () => {
+    assert.strictEqual(getHarnessDisplayName(HARNESS_IDS.CODEX_CLI), "Codex");
+    assert.strictEqual(getHarnessShortName(HARNESS_IDS.CODEX_CLI), "Codex");
   });
 });
 

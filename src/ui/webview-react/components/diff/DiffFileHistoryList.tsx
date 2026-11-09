@@ -252,5 +252,3 @@ export const DiffFileHistoryList = React.forwardRef<
 });
 
 DiffFileHistoryList.displayName = "DiffFileHistoryList";
-
-export const FileHistoryList = DiffFileHistoryList;

@@ -1203,7 +1203,7 @@ function registerCommands(
       });
     } catch (error) {
       reportCommandError(
-        `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to list workflow files: ${getErrorMessage(error)}`,
         error
       );
       return undefined;
@@ -1825,7 +1825,7 @@ function registerCommands(
         unprotectServerToken?.();
         unprotectServerToken = undefined;
         reportCommandError(
-          `ctrlyoke: Failed to start server — ${err instanceof Error ? err.message : String(err)}`,
+          `ctrlyoke: Failed to start server — ${getErrorMessage(err)}`,
           err
         );
         return;
@@ -1857,7 +1857,7 @@ function registerCommands(
         }
         cleanupServer();
         reportCommandError(
-          `ctrlyoke: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`,
+          `ctrlyoke: Failed to bind server — ${getErrorMessage(err)}`,
           err
         );
         return;

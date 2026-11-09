@@ -15,8 +15,8 @@ import {
   type FinalStepPhase,
 } from "../../types/messages";
 import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
-import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
-import type { ScriptStep } from "@root/types/WebviewMessageTypes";
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import { isScriptStep } from "@root/types/CtrlYokeTypes";
 import { Icon } from "../shared/Icon";
 import {
   formatFinalPassBadge,
@@ -28,10 +28,6 @@ import {
   InOutputViewBar,
   useFinalStepPassesInOutputView,
 } from "./InOutputViewMarker";
-
-function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
-}
 
 function getStepDisplayText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : (step.name ?? step.prompt);

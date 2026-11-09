@@ -5,9 +5,9 @@ import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
   parallelGroupActionTooltip,
   parallelGroupHeaderSummaryText,
-  parallelGroupHeaderTitle,
   type ParallelGroupHeaderRow,
 } from "@utils/outputRows";
+import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
 import { Icon } from "../shared/Icon";
 import { StepHeaderPinButton } from "./StepHeaderPinButton";
 
@@ -90,7 +90,7 @@ export const ParallelGroupHeaderRowView: React.FC<
     <div className="mx-2 mb-1 rounded-sm border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-semibold text-foreground">
-          {parallelGroupHeaderTitle(row)}
+          {formatParallelStepsLabel(row)}
         </span>
         <span className="text-description-fg">
           {parallelGroupHeaderSummaryText(row)}

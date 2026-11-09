@@ -1,4 +1,8 @@
 import {
+  isRecord,
+  parseFiniteNumber as asFiniteNumber,
+} from "../../../../../utils/JsonTypeGuards";
+import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_CONFIDENCE,
@@ -27,21 +31,6 @@ export interface AntigravityStatuslineQuotaEntry {
 /** Typed boundary for the open-ended statusline quota map. */
 export interface AntigravityStatuslineQuotaSnapshot {
   quota?: Record<string, AntigravityStatuslineQuotaEntry>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function asFiniteNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
 }
 
 /** Parse dynamic Antigravity plan tiers into the normalized live quota contract. */

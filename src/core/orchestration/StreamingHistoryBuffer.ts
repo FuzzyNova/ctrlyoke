@@ -1,11 +1,10 @@
 import type { CliEvent, TextData } from "../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
-  getExecutionPhaseKeySuffix,
   type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
-import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
+import { outputAttemptKey } from "../../utils/OutputTargetKeys";
 import {
   canCoalesceTextEvents,
   coalesceTextEvents,
@@ -300,11 +299,7 @@ export class StreamingHistoryBuffer {
     attemptIndex: number,
     phase?: ExecutionPhase
   ): string {
-    const base =
-      target.kind === FINAL_STEP_PHASES.QUEUE
-        ? `queue:${target.stepIndex}`
-        : `final:${target.loopIndex}`;
-    return `${historyFilePath}::${base}:run:${runIndex}:attempt:${attemptIndex}${getExecutionPhaseKeySuffix(phase)}`;
+    return `${historyFilePath}::${outputAttemptKey(target, runIndex, attemptIndex, phase)}`;
   }
 }
 

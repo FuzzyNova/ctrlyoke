@@ -17,6 +17,7 @@ import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { PromptQueue } from "../../core/PromptQueue";
 import { buildDefinitionSnapshot } from "../../core/WorkflowStepSanitizer";
 import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { clearRunSummaryCache } from "../../core/orchestration/RunSummaryCache";
 import {
   EXECUTION_PHASES,
@@ -2078,6 +2079,38 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     ]);
     assert.strictEqual(tied?.primaryHarness, HARNESS_IDS.CLAUDE_CLI);
     assert.strictEqual(tied?.primaryModel, "opus");
+  });
+
+  test("getRunSummaries uses the configured model for a cross-harness step", async () => {
+    const { workflowKey, runRef } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-cross-harness-model"
+    );
+    const runFilePath = WorkflowPaths.runFilePath(
+      tempWorkspace,
+      workflowKey,
+      runRef
+    );
+    await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        definitionRevision: 1,
+        steps: [{ prompt: "worker", harness: HARNESS_IDS.CODEX_CLI }],
+      }),
+      "utf8"
+    );
+
+    const [summary] = await manager.getRunSummaries(workflowKey);
+
+    assert.strictEqual(
+      summary?.primaryModel,
+      ConfigurationUtils.getModelForHarness(HARNESS_IDS.CODEX_CLI)
+    );
+    assert.notStrictEqual(summary?.primaryModel, "workflow-model");
   });
 
   test("getRunSummaries falls back to the manifest when the run file is unreadable", async () => {

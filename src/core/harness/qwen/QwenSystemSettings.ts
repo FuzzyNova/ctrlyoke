@@ -1,3 +1,4 @@
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import * as path from "path";
 import {
@@ -8,9 +9,10 @@ import {
   type ParseError,
 } from "jsonc-parser";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { isCtrlYokeQwenHookGroup } from "./QwenNotificationMonitor";
+import { NODE_ERROR_CODES } from "../../../types/DashboardConstants";
 
 /**
  * Qwen's system settings path override. Qwen reads hooks from its system,
@@ -70,10 +72,6 @@ export function defaultQwenSystemDefaultsPath(
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /**
  * Read the real system settings so the per-run copy keeps everything an
  * administrator set. A missing file is an empty one. A file that exists but
@@ -87,7 +85,7 @@ async function readBaseSettings(
   try {
     content = await fs.readFile(settingsPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return {};
     throw new Error(
       `Cannot read Qwen system settings at ${settingsPath}: ${getErrorMessage(error)}`
     );

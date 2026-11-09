@@ -5,6 +5,8 @@
  * stdout and interactive polling and produces the shared CliEvent types.
  * This module is the single source of truth for tool and token mapping.
  */
+import { isRecord } from "../../../utils/JsonTypeGuards";
+import { escapeRegExp } from "../../../utils/TextUtils";
 import {
   type CliEvent,
   type AskUserQuestionData,
@@ -51,10 +53,6 @@ export function openCodeStepTotal(
     (sum, value) => sum + (typeof value === "number" ? value : 0),
     0
   );
-}
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Text of an OpenCode 2 tool result's `content` array. */
@@ -595,7 +593,7 @@ function parseOpenCodeAnswerFromOutput(
   question: string
 ): string | undefined {
   if (!output || !question) return undefined;
-  const escapedQuestion = question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedQuestion = escapeRegExp(question);
   const match = output.match(new RegExp(`"${escapedQuestion}"="([^"]*)"`));
   return match?.[1];
 }

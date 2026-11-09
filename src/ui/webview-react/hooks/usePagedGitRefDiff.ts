@@ -7,7 +7,13 @@ import {
   type WorkspaceGitRefDiffPageResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
-import { ERROR_NAMES } from "@root/types/DashboardConstants";
+import {
+  isAbortError,
+  listingKey,
+  normalizeRepo,
+  pageOffset,
+} from "@utils/pagedListing";
+import { toError } from "@root/utils/ErrorUtils";
 
 export interface PagedGitRefDiffPageRequest {
   ref: string;
@@ -111,27 +117,6 @@ const EMPTY_STATE = (
 
 function normalizeRef(ref: string): string {
   return ref.trim();
-}
-
-function normalizeRepo(repo: string | undefined): string | undefined {
-  const normalized = repo?.trim();
-  return normalized ? normalized : undefined;
-}
-
-function listingKey(ref: string, repo: string | undefined): string {
-  return `${repo ?? ""}\u0000${ref}`;
-}
-
-function pageOffset(index: number, pageSize: number): number {
-  return Math.floor(Math.max(0, index) / pageSize) * pageSize;
-}
-
-function errorFrom(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
-function isAbortError(value: unknown): boolean {
-  return value instanceof Error && value.name === ERROR_NAMES.ABORT;
 }
 
 function responseIsUsable(
@@ -341,7 +326,7 @@ export function usePagedGitRefDiff(
           updateState((current) => ({
             ...current,
             initialLoading: false,
-            error: errorFrom(value),
+            error: toError(value),
           }));
         })
         .finally(() => {
@@ -428,7 +413,7 @@ export function usePagedGitRefDiff(
           ) {
             return;
           }
-          const error = errorFrom(value);
+          const error = toError(value);
           updateState((previous) => {
             const failedRanges = new Map(previous.failedRanges);
             failedRanges.set(offset, {

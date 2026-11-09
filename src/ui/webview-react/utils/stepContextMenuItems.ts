@@ -42,6 +42,7 @@ export interface StepCopyMenuItemsInput {
   latestOutput?: CliOutput | null;
   latestPrompt?: string;
   runtimeMeta?: StepRuntimeMetaSnapshot;
+  isCurrent?: boolean;
   liveContextWindow?: { used: number; size: number };
 }
 
@@ -57,6 +58,7 @@ export function buildStepCopyMenuItems({
   latestOutput,
   latestPrompt,
   runtimeMeta,
+  isCurrent,
   liveContextWindow,
 }: StepCopyMenuItemsInput): StepContextMenuItem[] {
   const isScript = isScriptWorkflowStep(step);
@@ -125,6 +127,7 @@ export function buildStepCopyMenuItems({
             isFinalStep,
             latestOutput,
             runtimeMeta,
+            isCurrent,
             liveContextWindow,
           })
         );

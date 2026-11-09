@@ -3,6 +3,11 @@ export function stripLeadingBom(text: string): string {
   return text.startsWith("\uFEFF") ? text.slice(1) : text;
 }
 
+/** Escape regex metacharacters so text can be matched literally. */
+export function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Preview cap for a one-row-per-step listing (`ctrlyoke history steps`, the
  * MCP `workflow_status` tool), where every step's prompt is shown at once.

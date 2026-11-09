@@ -4,11 +4,15 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import { StringDecoder } from "string_decoder";
 import type { ExecFileOptions } from "child_process";
-import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
+import {
+  GIT_CHANGE_KINDS,
+  NODE_ERROR_CODES,
+} from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
 import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
 import { isSubprocessTimeoutError } from "./SubprocessUtils";
 import { Log } from "./Log";
+import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
@@ -18,7 +22,6 @@ const GIT_MAX_BUFFER = 50 * 1024 * 1024;
 /** Whole-repository `ls-files` listings: large monorepos can exceed 100 MB. */
 const GIT_WHOLE_REPO_LISTING_MAX_BUFFER = 500 * 1024 * 1024;
 const GIT_SUBMODULE_MODE = "160000";
-const GIT_UNAVAILABLE_ERRNO = "ENOENT";
 const execFilePromisified = promisify(execFile);
 
 interface GitTimeoutOverrides {
@@ -367,7 +370,7 @@ export function describeGitFailure(error: unknown): string {
   const message =
     outputText(output.stderr) ||
     outputText(output.stdout) ||
-    (error instanceof Error ? error.message : String(error));
+    getErrorMessage(error);
   return message.length > GIT_FAILURE_MESSAGE_MAX_CHARS
     ? `…${message.slice(-GIT_FAILURE_MESSAGE_MAX_CHARS)}`
     : message;
@@ -392,7 +395,7 @@ export function isGitUnavailableError(error: unknown): boolean {
     message?: unknown;
     stderr?: unknown;
   };
-  if (gitError.code === GIT_UNAVAILABLE_ERRNO) return true;
+  if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return true;
   return [gitError.stderr, gitError.message].some((value) =>
     /detected dubious ownership/i.test(String(value ?? ""))
   );

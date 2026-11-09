@@ -41,13 +41,12 @@ import type {
   TrustSecretGrantsOptions,
 } from "./SecretCommandDefinitions";
 import { resolveCliFileArgument } from "./CliFileArgument";
-import { promptYesNo } from "./CliPrompt";
+import { confirmMutation, promptYesNo, type CliConfirmIo } from "./CliPrompt";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
-export interface SecretCommandIo {
+export interface SecretCommandIo extends CliConfirmIo {
   writeOut(message: string): void;
   writeErr(message: string): void;
-  readonly isInteractive: boolean;
-  confirm(question: string): Promise<boolean>;
   readHidden(prompt: string): Promise<string>;
   readStdin(): Promise<string>;
 }
@@ -200,7 +199,7 @@ export async function checkSecretsCommand(
           filePath
         );
   } catch (error) {
-    io.writeErr(`Error: ${errorMessage(error)}`);
+    io.writeErr(`Error: ${getErrorMessage(error)}`);
     return 2;
   }
   if (!workflow) {
@@ -220,7 +219,7 @@ export async function checkSecretsCommand(
       }
     );
   } catch (error) {
-    io.writeErr(`Secret check failed: ${errorMessage(error)}`);
+    io.writeErr(`Secret check failed: ${getErrorMessage(error)}`);
     return error instanceof MissingSecretsError ? 1 : 2;
   }
 
@@ -249,7 +248,7 @@ export async function trustSecretGrantsCommand(
           filePath
         );
   } catch (error) {
-    io.writeErr(`Error: ${errorMessage(error)}`);
+    io.writeErr(`Error: ${getErrorMessage(error)}`);
     return 2;
   }
   if (!workflow) {
@@ -403,16 +402,6 @@ async function readHiddenValue(io: SecretCommandIo): Promise<string> {
   return io.readHidden("Secret value: ");
 }
 
-async function confirmMutation(
-  yes: boolean,
-  io: SecretCommandIo,
-  question: string
-): Promise<boolean> {
-  if (yes) return true;
-  if (!io.isInteractive) return false;
-  return io.confirm(question);
-}
-
 async function readSecretFromStdin(): Promise<string> {
   let value = "";
   for await (const chunk of process.stdin) {
@@ -466,8 +455,4 @@ async function readHiddenSecret(prompt: string): Promise<string> {
 
 function redactOutput(message: string): string {
   return secretRedactionService.redactText(message);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
