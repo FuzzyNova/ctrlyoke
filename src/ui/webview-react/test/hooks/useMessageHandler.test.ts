@@ -424,7 +424,7 @@ describe("FILE_SELECTED", () => {
         workflowProperties: {
           harness: "claude-cli",
           model: "claude-haiku-4.5",
-          preCondition: { script: "check.sh", returns: "true" },
+          preCondition: { script: "check.sh", operator: "isEmpty" },
         },
       });
     });
@@ -434,7 +434,7 @@ describe("FILE_SELECTED", () => {
     expect(props.model).toBe("claude-haiku-4.5");
     expect(props.preCondition).toEqual({
       script: "check.sh",
-      returns: "true",
+      operator: "isEmpty",
     });
   });
 

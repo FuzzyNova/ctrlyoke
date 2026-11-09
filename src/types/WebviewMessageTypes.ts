@@ -78,6 +78,7 @@ import type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCat
 import type { LanguageServerStatusChange } from "../server/lsp/ManagedLanguageServerBackend";
 export type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCatalog";
 import type {
+  EndCondition,
   ErrorBehavior,
   WorkflowSummary,
   WorkspaceWorktreeOwnership,
@@ -407,17 +408,8 @@ export interface OutputStatusMessage {
 // PROMPT & WORKFLOW TYPES
 // ============================================================================
 
-/**
- * End condition configuration for prompt validation
- */
-export interface EndConditionConfig {
-  script: string;
-  returns?: string;
-  timeoutSec?: number;
-  maxRetries?: number;
-  retryPrompt?: string;
-  passRetryPrompt?: string;
-}
+/** End condition configuration — the schema-backed core `EndCondition` shape. */
+export type EndConditionConfig = EndCondition;
 
 /**
  * Prompt item shape (used in workflowStore and throughout webview)

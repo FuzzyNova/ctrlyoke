@@ -91,10 +91,10 @@ export function buildPropertyUpdateValues(
   }
   if (has("endCondition")) {
     const value = values.endCondition;
+    // `script` is the only field the schema requires; an end condition
+    // without one cannot be saved, so it is sent as None (null).
     if (value !== undefined) {
-      const script = value?.script?.trim() || "";
-      const returns = value?.returns?.trim() || "";
-      result.endCondition = !script || !returns ? null : value;
+      result.endCondition = value?.script?.trim() ? value : null;
     } else inherit("endCondition");
   }
   if (enabled !== undefined) {

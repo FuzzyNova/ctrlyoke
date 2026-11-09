@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
-import type { ErrorBehavior, UserHookConfig } from "@root/types/CtrlYokeTypes";
+import type {
+  EndCondition,
+  ErrorBehavior,
+  UserHookConfig,
+} from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type {
@@ -8,7 +12,6 @@ import type {
   ToolPermissionsOverride,
   PreCondition,
 } from "../types/messages";
-import type { EndConditionCompareSource } from "../utils/prompt";
 import {
   FINAL_STEP_PHASES,
   EDITOR_TARGET_KINDS,
@@ -51,24 +54,8 @@ export type Inheritable<T> = T | undefined;
 /** Property can inherit (undefined), be explicitly disabled (null), or set to a custom value. */
 export type Disableable<T> = T | null | undefined;
 
-/**
- * End condition configuration
- * All fields optional except script to match PromptStep.endCondition
- */
-export interface EndConditionConfig {
-  script: string;
-  env?: Record<string, string>;
-  returns?: string;
-  compareSource?: EndConditionCompareSource;
-  timeoutSec?: number;
-  shell?: string;
-  maxRetries?: number;
-  retryPrompt?: string;
-  passRetryPrompt?: string;
-  resumeSessionOnRetry?: boolean;
-  onPass?: string;
-  onFail?: string;
-}
+/** End condition draft — the schema-backed core `EndCondition` shape. */
+export type EndConditionConfig = EndCondition;
 
 /**
  * Property values for prompt editor controls
@@ -223,7 +210,6 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
 
 export const END_CONDITION_DEFAULTS: EndConditionConfig = {
   script: "",
-  returns: "",
   maxRetries: 0,
   retryPrompt: "",
   passRetryPrompt: "",

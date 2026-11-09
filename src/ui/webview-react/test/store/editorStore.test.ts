@@ -290,14 +290,14 @@ describe("reply to step editor state", () => {
 
 describe("setEndCondition", () => {
   it("sets end condition and marks dirty", () => {
-    store().setEndCondition({ script: "npm test", returns: "true" });
+    store().setEndCondition({ script: "npm test" });
     expect(store().properties.endCondition?.script).toBe("npm test");
     expect(store().isDirty).toBe(true);
     expect(store().hasEndCondition()).toBe(true);
   });
 
   it("accepts null to disable end condition", () => {
-    store().setEndCondition({ script: "npm test", returns: "true" });
+    store().setEndCondition({ script: "npm test" });
     store().setEndCondition(null);
     expect(store().properties.endCondition).toBeNull();
     expect(store().hasEndCondition()).toBe(false);
@@ -314,7 +314,7 @@ describe("updateEndConditionField", () => {
   });
 
   it("updates maxRetries without touching other fields", () => {
-    store().setEndCondition({ script: "npm test", returns: "true" });
+    store().setEndCondition({ script: "npm test" });
     store().updateEndConditionField("maxRetries", 3);
     expect(store().properties.endCondition?.script).toBe("npm test");
     expect(store().properties.endCondition?.maxRetries).toBe(3);
@@ -323,7 +323,7 @@ describe("updateEndConditionField", () => {
 
 describe("clearEndCondition", () => {
   it("sets endCondition to undefined", () => {
-    store().setEndCondition({ script: "npm test", returns: "true" });
+    store().setEndCondition({ script: "npm test" });
     store().clearEndCondition();
     expect(store().properties.endCondition).toBeUndefined();
     expect(store().hasEndCondition()).toBe(false);
@@ -705,13 +705,13 @@ describe("getPromptProperties", () => {
 
   it("includes endCondition when script is non-empty", () => {
     store().setPromptText("Run tests");
-    store().setEndCondition({ script: "npm test", returns: "true" });
+    store().setEndCondition({ script: "npm test" });
     expect(store().getPromptProperties().endCondition?.script).toBe("npm test");
   });
 
   it("omits endCondition when script is empty/blank", () => {
     store().setPromptText("Run tests");
-    store().setEndCondition({ script: "  ", returns: "true" });
+    store().setEndCondition({ script: "  " });
     expect("endCondition" in store().getPromptProperties()).toBe(false);
   });
 
