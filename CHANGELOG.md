@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Headless slash commands with arguments are now passed intact instead of having their arguments moved into a prompt file.
 - `ctrlyoke run` no longer reports streamed script output as truncated just because the script also wrote to stderr.
 - The failed queue step in an errored run can now be edited, removed, reordered, or enabled before continuing.
 - Exporting a pending run without a Git repository or first commit now creates a view-only bundle instead of failing.

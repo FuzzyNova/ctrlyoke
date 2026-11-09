@@ -357,6 +357,7 @@ export class CliPromptPreparer {
             inlineMcpNames.includes(token.name))
       ),
     };
+    const noteFreeUserPromptText = outgoingSections.userPromptText;
     if (resolvedProperties?.executionMode === EXECUTION_MODES.HEADLESS) {
       outgoingSections.userPromptText = `${outgoingSections.userPromptText.trimEnd()} ${HEADLESS_EXECUTION_NOTE}`;
     }
@@ -392,7 +393,7 @@ export class CliPromptPreparer {
     if (
       hasSlashCommandArguments &&
       !/[\r\n]/.test(originalPromptText) &&
-      originalPromptText === outgoingSections.userPromptText &&
+      originalPromptText === noteFreeUserPromptText &&
       inlineCheck(originalPromptText) &&
       !hasExtras &&
       !hasExpandableReferences &&

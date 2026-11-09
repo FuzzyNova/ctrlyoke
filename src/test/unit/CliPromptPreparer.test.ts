@@ -1765,6 +1765,40 @@ suite("CliPromptPreparer", () => {
     assert.deepStrictEqual(plan.files, []);
   });
 
+  test("keeps a slash command with arguments inline in headless mode too", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: (text) => text.split(" ")[0] ?? null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+    const prompt = { prompt: "/review 123" } as PromptStep;
+    for (const executionMode of [
+      EXECUTION_MODES.INTERACTIVE,
+      EXECUTION_MODES.HEADLESS,
+    ]) {
+      const plan = await preparer.planPrompt(
+        prompt,
+        undefined,
+        { executionMode } as ResolvedProperties,
+        undefined
+      );
+      assert.strictEqual(
+        plan.promptWithInstruction,
+        "/review 123",
+        executionMode
+      );
+      assert.deepStrictEqual(plan.tempFilePaths, [], executionMode);
+    }
+  });
+
   test("uses the prompt file form for multiline slash-command arguments", async () => {
     const promptText = "/handoff summarize\nthe session";
     const preparer = new CliPromptPreparer({

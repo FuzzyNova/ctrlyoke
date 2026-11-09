@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, dry-run + unit test)
 - **Area:** `src/core/harness/shared/CliPromptPreparer.ts` (`planPrompt`, headless note and the slash-command-with-arguments inline path)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
