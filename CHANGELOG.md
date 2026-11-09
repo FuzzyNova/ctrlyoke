@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ctrlyoke run` now stops before dispatching a step when interrupted during startup.
 - `ctrlyoke run` now exits with code 5 and writes its final result when interrupted by Ctrl+C or SIGTERM.
 - Resuming or continuing an errored run now re-runs the terminal failed step before continuing with later steps.
 - **Copy All Responses** (formerly **Copy All**) now copies each step's prompt. Before, the section labeled "Prompt" held the harness command line ctrlyoke ran, not the prompt. Each section is also headed with the step's name when it has one.

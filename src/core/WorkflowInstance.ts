@@ -1335,7 +1335,8 @@ export class WorkflowInstance
       status === EXECUTION_STATES.PAUSING;
     if (
       (status === EXECUTION_STATES.RUNNING ||
-        status === EXECUTION_STATES.PAUSING) &&
+        status === EXECUTION_STATES.PAUSING ||
+        this.preDispatchStartup !== undefined) &&
       !preservePausingWorktree
     ) {
       await this.stop().catch((error) =>
@@ -1350,7 +1351,10 @@ export class WorkflowInstance
 
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
-      this.executionSettledPromise,
+      Promise.all([
+        this.executionSettledPromise,
+        this.preDispatchStartup?.settled ?? Promise.resolve(),
+      ]).then(() => undefined),
       new Promise<void>((resolve) => {
         timeoutHandle = setTimeout(
           resolve,

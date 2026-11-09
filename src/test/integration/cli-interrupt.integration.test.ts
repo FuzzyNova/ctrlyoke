@@ -7,10 +7,16 @@ import { suite, teardown, test } from "mocha";
 
 const temporaryRoots: string[] = [];
 
-async function interruptRun(json: boolean): Promise<{
+async function interruptRun(
+  json: boolean,
+  beforeStepStarts = false
+): Promise<{
   code: number;
   stdout: string;
   stderr: string;
+  elapsedMs: number;
+  root: string;
+  startMarker: string;
 }> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-interrupt-"));
   temporaryRoots.push(root);
@@ -38,32 +44,43 @@ async function interruptRun(json: boolean): Promise<{
   );
   let stdout = "";
   let stderr = "";
+  let signalSent = false;
   child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
     stdout += chunk;
+    if (
+      beforeStepStarts &&
+      !signalSent &&
+      stdout.includes("Running:")
+    ) {
+      signalSent = true;
+      child.kill("SIGINT");
+    }
   });
   child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
     stderr += chunk;
   });
 
   const startedAt = Date.now();
-  while (true) {
+  while (beforeStepStarts ? !signalSent : true) {
     if (child.exitCode !== null) {
       throw new Error(`CLI exited before script started (${child.exitCode}): ${stderr}`);
     }
-    try {
-      await fs.access(startMarker);
-      break;
-    } catch {
-      // Poll until the running script creates its start marker.
+    if (!beforeStepStarts) {
+      try {
+        await fs.access(startMarker);
+        break;
+      } catch {
+        // Poll until the running script creates its start marker.
+      }
     }
-    if (Date.now() - startedAt > 30_000) {
+    if (Date.now() - startedAt > (beforeStepStarts ? 10_000 : 30_000)) {
       child.kill("SIGKILL");
       throw new Error(`Timed out waiting for script start: ${stdout}\n${stderr}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 
-  child.kill("SIGINT");
+  if (!beforeStepStarts) child.kill("SIGINT");
   return await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       child.kill("SIGKILL");
@@ -75,7 +92,14 @@ async function interruptRun(json: boolean): Promise<{
     });
     child.once("close", (code) => {
       clearTimeout(timeout);
-      resolve({ code: code ?? 1, stdout, stderr });
+      resolve({
+        code: code ?? 1,
+        stdout,
+        stderr,
+        elapsedMs: Date.now() - startedAt,
+        root,
+        startMarker,
+      });
     });
   });
 }
@@ -90,7 +114,7 @@ suite("CLI interrupted run", () => {
   test("text mode exits with the interrupted code after printing the summary", async function () {
     this.timeout(60_000);
     const result = await interruptRun(false);
-    assert.strictEqual(result.code, 5, result.stderr);
+    assert.strictEqual(result.code, 5, `${result.stderr}\n${result.stdout}`);
     assert.match(result.stdout, /Workflow ended: stopped/u);
   });
 
@@ -107,5 +131,36 @@ suite("CLI interrupted run", () => {
     assert.ok(output.workflowKey);
     assert.ok(output.runRef);
     assert.strictEqual(output.status, "stopped");
+  });
+
+  test("interrupting at the run header prevents the first step from starting", async function () {
+    this.timeout(45_000);
+    const result = await interruptRun(false, true);
+    assert.strictEqual(result.code, 5, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stdout, /Running:/u);
+    assert.ok(result.elapsedMs < 5000, `exit took ${result.elapsedMs}ms`);
+    assert.strictEqual(
+      await fs
+        .access(result.startMarker)
+        .then(() => true)
+        .catch(() => false),
+      false,
+      "script start marker should not exist"
+    );
+    const runFiles: string[] = [];
+    async function collect(directory: string): Promise<void> {
+      for (const entry of await fs.readdir(directory, { withFileTypes: true }).catch(() => [])) {
+        const entryPath = path.join(directory, entry.name);
+        if (entry.isDirectory()) await collect(entryPath);
+        else if (entry.name === "workflow.ctrlyoke.json") runFiles.push(entryPath);
+      }
+    }
+    await collect(result.root);
+    for (const runFile of runFiles) {
+      const workflow = JSON.parse(await fs.readFile(runFile, "utf8")) as {
+        _runtime?: { executionState?: string };
+      };
+      assert.notStrictEqual(workflow._runtime?.executionState, "running", runFile);
+    }
   });
 });

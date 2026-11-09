@@ -1500,18 +1500,26 @@ async function runCommand(
         )
       );
 
-      await instance.executeLoadedPromptFile();
+      if (interrupted) {
+        await instance.stop();
+      } else {
+        await instance.executeLoadedPromptFile();
+      }
     } else {
-      await executeAddressedCliOperation(
-        operation,
-        options,
-        workingDir,
-        platform,
-        instance,
-        hostCanProvidePty,
-        userFeedbackSink,
-        printRunHeader
-      );
+      if (interrupted) {
+        await instance.stop();
+      } else {
+        await executeAddressedCliOperation(
+          operation,
+          options,
+          workingDir,
+          platform,
+          instance,
+          hostCanProvidePty,
+          userFeedbackSink,
+          printRunHeader
+        );
+      }
     }
 
     releaseLiveOutputState();
@@ -1522,9 +1530,9 @@ async function runCommand(
       getExitCode(state, instance.promptQueue.getFinalStepRuntime()),
       schemaRefusal
     );
-    // Guardrail (6) and run-state refusal (2) retain precedence; interruption
-    // replaces only the generic workflow failure (1).
-    if (interrupted && exitCode === 1) {
+    // Once the CLI has accepted an interrupt, completion belongs to the
+    // interrupted-run path even when no run identity or terminal state exists.
+    if (interrupted) {
       exitCode = CLI_INTERRUPTED_EXIT_CODE;
     }
     const completed = exitCode === 0;

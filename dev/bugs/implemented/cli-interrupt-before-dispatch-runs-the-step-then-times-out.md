@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro while reviewing 913b874e6)
 - **Area:** `src/cli.ts` (`runCommand` signal handling, around lines 1407–1446), `src/core/WorkflowInstance.ts` (`shutdown`, around line 1331)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

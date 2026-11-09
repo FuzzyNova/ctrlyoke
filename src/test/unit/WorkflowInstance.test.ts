@@ -1443,6 +1443,50 @@ suite("WorkflowInstance runtime transitions", () => {
     }
   });
 
+  test("shutdown stops and waits for a pre-dispatch startup", async () => {
+    const platform = new MockPlatform();
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-shutdown-startup-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempDir
+      );
+      instance.promptQueue.loadPrompts(
+        { steps: [{ type: "script", script: "touch should-not-run" }] },
+        path.join(tempDir, "workflow.working")
+      );
+      const startup = await (instance as any).beginPreDispatchStartup();
+      let shutdownSettled = false;
+      const shutdown = instance.shutdown().then(() => {
+        shutdownSettled = true;
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.strictEqual(
+        instance.getQueueState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.strictEqual(shutdownSettled, false);
+      (instance as any).endPreDispatchStartup(startup);
+      await shutdown;
+      assert.strictEqual(shutdownSettled, true);
+      assert.strictEqual(instance.getQueueState().currentIndex, 0);
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("resuming an errored run rewinds its terminal failed step before startup", async () => {
     const platform = new MockPlatform();
     const tempDir = await fs.mkdtemp(
