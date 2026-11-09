@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, reproduced against the compiled service)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`saveFile`, ~1645-1709), `src/utils/AtomicFileUtils.ts` (`writeFileAtomic`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

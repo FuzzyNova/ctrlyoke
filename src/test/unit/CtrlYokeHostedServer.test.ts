@@ -740,6 +740,28 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
     });
   });
 
+  test("redacts credentials in streamed full-diff downloads", async () => {
+    await withServer(async (root, port, token) => {
+      const filePath = path.join(root, "app.env");
+      fs.writeFileSync(filePath, "PORT=3000\n");
+      execFileSync("git", ["init", "-q"], { cwd: root });
+      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+      execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+      execFileSync("git", ["add", "app.env"], { cwd: root });
+      execFileSync("git", ["commit", "-qm", "add env"], { cwd: root });
+      const secret = "sk-live-4f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c";
+      fs.appendFileSync(filePath, `API_KEY=${secret}\n`);
+
+      const response = await sendGetRequest(
+        port,
+        `/api/workspace-viewer/git-ref-diff-download?ref=~diff&token=${encodeURIComponent(token)}`
+      );
+      assert.strictEqual(response.statusCode, 200);
+      assert.ok(response.body.includes(REDACTION_MARKER));
+      assert.ok(!response.body.includes(secret));
+    });
+  });
+
   test("rejects saving a newly introduced redaction marker without changing the file", async () => {
     await withServer(async (root, port, token) => {
       const original = "PORT=3000\n";
@@ -1523,6 +1545,7 @@ suite("CtrlYokeHostedServer file history route", () => {
       stdout.once("end", () => child.emit("close", 0));
       setImmediate(async () => {
         const chunk = Buffer.alloc(1024 * 1024, 97);
+        chunk[chunk.length - 1] = 10;
         for (let index = 0; index < 51; index++) {
           if (!stdout.write(chunk)) {
             await new Promise<void>((resolve) => stdout.once("drain", resolve));

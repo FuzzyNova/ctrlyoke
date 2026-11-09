@@ -2568,6 +2568,27 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(written, "updated");
     });
 
+    (process.platform === "win32" ? test.skip : test)(
+      "preserves existing file permissions",
+      async () => {
+        const root = createWorkspace();
+        const svc = new HostedWorkspaceViewerService(root);
+        for (const [name, mode] of [
+          ["executable.sh", 0o755],
+          ["private.env", 0o600],
+        ] as const) {
+          const filePath = path.join(root, name);
+          fs.writeFileSync(filePath, "original\n", { mode });
+          await svc.saveFile({
+            path: name,
+            content: "updated\n",
+            baseModifiedAt: fs.statSync(filePath).mtimeMs,
+          });
+          assert.strictEqual(fs.statSync(filePath).mode & 0o7777, mode, name);
+        }
+      }
+    );
+
     test("does not follow a pre-existing cy-tmp hard link", async () => {
       const root = createWorkspace();
       const outsideRoot = makeTempDir("cy-viewer-outside-");

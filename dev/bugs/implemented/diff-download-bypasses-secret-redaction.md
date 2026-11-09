@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, reproduced against the compiled server)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`/api/workspace-viewer/git-ref-diff-download`, ~2275-2345), `src/server/HostedWorkspaceViewerService.ts` (`spawnGitRefDiffDownload`, ~3642), `src/server/SecretRedactionMiddleware.ts`
-- **Severity:** high (security)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hosted full-diff downloads now redact secrets like the on-screen diff, and saving a workspace file preserves its permissions.
 - OpenCode now leaves the model unset when its default is `none`, including for a step model without a `/` or an empty model value. OpenCode then uses the model from its own configuration instead of unexpectedly falling back to `opencode/big-pickle`.
 - Single-step workflows now suggest unknown-property corrections for the authored step kind and warn when a key belongs to the other kind.
 - Dashboard undo and redo now preserve executed steps after a run stops.

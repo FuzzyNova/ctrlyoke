@@ -13,6 +13,8 @@ import {
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import { StringDecoder } from "string_decoder";
+import { Transform, type TransformCallback } from "stream";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { FileWatcher, FileWatcherFactory } from "../core/HostPorts";
 import type { DashboardClientEndpoint } from "../ui/DashboardClientEndpoint";
@@ -134,6 +136,7 @@ import type {
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
+
 import { buildHostedErrorPage } from "./HostedErrorPageTemplate";
 import type { HostedThemeDefaults } from "./HostedThemeDefaults";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
@@ -320,6 +323,26 @@ export interface HostedServerOptions {
   themeDefaults: HostedThemeDefaults;
   fileWatcherFactory: FileWatcherFactory;
   languageIntelligenceHost?: LanguageIntelligenceHost;
+}
+
+function createSecretRedactingLineTransform(): Transform {
+  const decoder = new StringDecoder("utf8");
+  let pending = "";
+  const redactCompleteLines = (text: string): string => {
+    const lines = text.split("\n");
+    pending = lines.pop() ?? "";
+    return lines.map((line) => secretRedactionService.redactText(`${line}\n`)).join("");
+  };
+  return new Transform({
+    transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback) {
+      callback(null, redactCompleteLines(decoder.write(chunk)));
+    },
+    flush(callback: TransformCallback) {
+      const finalText = `${pending}${decoder.end()}`;
+      if (finalText) callback(null, secretRedactionService.redactText(finalText));
+      else callback();
+    },
+  });
 }
 
 export class CtrlYokeHostedServer
@@ -2333,10 +2356,13 @@ export class CtrlYokeHostedServer
               return;
             }
           });
-          download.stdout.once("end", () => {
+          const redactingStream = createSecretRedactingLineTransform();
+          redactingStream.once("end", () => {
             if (!res.writableEnded && !res.destroyed) res.end();
           });
-          download.stdout.pipe(res, { end: false });
+          download.stdout
+            .pipe(redactingStream)
+            .pipe(res, { end: false });
         } catch (err) {
           if (this.sendKnownWorkspaceViewerError(res, err)) return;
           this.sendWorkspaceViewerInternalError(

@@ -1705,7 +1705,9 @@ export class HostedWorkspaceViewerService {
     if ((latest?.mtimeMs ?? null) !== req.baseModifiedAt) {
       throw new WorkspaceFileConflictError(latest?.mtimeMs);
     }
-    await writeFileAtomic(resolved, content);
+    await writeFileAtomic(resolved, content, {
+      mode: latest ? latest.mode & 0o7777 : undefined,
+    });
     return (await fs.promises.stat(resolved)).mtimeMs;
   }
 
