@@ -139,11 +139,9 @@ export class ScriptProcessRunner {
         stdout: result.stdout.trim(),
         stderr: result.stderr.trim(),
         error:
-          (result.terminationSignal && !result.terminatedByManager
+          result.terminationSignal && !result.terminatedByManager
             ? `Process terminated by ${result.terminationSignal}`
-            : undefined) ||
-          result.stderr.trim() ||
-          undefined,
+            : undefined,
         ...(result.terminationSignal && result.terminatedByManager
           ? { cancelled: true }
           : { exitCode: result.exitCode }),

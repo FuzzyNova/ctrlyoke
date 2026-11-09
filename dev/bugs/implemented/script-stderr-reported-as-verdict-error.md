@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/orchestration/ScriptProcessRunner.ts` (`run`), `src/core/orchestration/ScriptExecutionReporter.ts` (`createVerdict`, `formatVerdictSummary`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
