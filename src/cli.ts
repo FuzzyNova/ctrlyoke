@@ -76,6 +76,7 @@ import {
   CliTerminalFormatter,
   type CliOutputTarget,
 } from "./cli/CliTerminalFormatter";
+import { formatCliRunHeaderLabel } from "./cli/CliRunHeader";
 import {
   CLI_INTERRUPTED_EXIT_CODE,
   CLI_USAGE_EXIT_CODE,
@@ -1118,7 +1119,17 @@ async function runCommand(
       console.log(chalk.dim("━".repeat(52)));
       console.log();
       console.log(
-        `Running: ${chalk.cyan(resolvedFile ? path.basename(resolvedFile) : "<inline prompt>")}`
+        `Running: ${chalk.cyan(
+          formatCliRunHeaderLabel({
+            addressed: operation.kind !== CLI_RUN_OPERATION_KINDS.RUN,
+            workflowName: instance.promptQueue.getWorkflowFile().name,
+            workflowKey: instance.promptQueue.getState().workflowKey,
+            runRef: instance.promptQueue.getState().runRef,
+            resolvedFile,
+            inlinePrompt: Boolean(options.prompt),
+            fileBasename: path.basename,
+          })
+        )}`
       );
       console.log(
         `Harness: ${chalk.yellow(runHarness)}${runModel ? chalk.dim(" (" + runModel + ")") : ""}`

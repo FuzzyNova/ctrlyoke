@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/cli.ts` (`printRunHeader` in `runCommand`, around lines 1085–1125)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
