@@ -63,7 +63,11 @@ export interface SpawnResult {
 
 /** A spawned CLI exceeded its configured prompt execution time. */
 export class CliProcessTimeoutError extends Error {
-  constructor(readonly timeoutMs: number) {
+  constructor(
+    readonly timeoutMs: number,
+    readonly stdout = "",
+    readonly stderr = ""
+  ) {
     super(`Process timeout after ${timeoutMs}ms`);
     this.name = "CliProcessTimeoutError";
   }
@@ -272,7 +276,7 @@ export class CliProcessManager {
               "⏱️ Process timeout - sending SIGTERM, will escalate to SIGKILL if needed"
             );
             this.killGracefully(child);
-            reject(new CliProcessTimeoutError(timeoutMs));
+            reject(new CliProcessTimeoutError(timeoutMs, stdout, stderr));
           }
         }, timeoutMs);
       }

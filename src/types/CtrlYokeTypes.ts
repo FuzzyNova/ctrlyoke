@@ -1137,6 +1137,10 @@ export interface ConditionEvaluationSummary {
   exitCode?: number;
   durationMs: number;
   error?: string;
+  /** Evaluator could not run. */
+  errored?: boolean;
+  /** Evaluator timed out. */
+  timedOut?: boolean;
 }
 
 /**

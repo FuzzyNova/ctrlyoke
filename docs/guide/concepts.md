@@ -140,3 +140,12 @@ These are script-based gates:
 - **End condition** runs after a prompt and can continue, retry, or stop
 
 Use them when a workflow should react to actual project state instead of trusting the model's self-report.
+# Script failures and validation failures
+
+`onFail` handles a script that ran and returned a comparison result that did not
+match. `errorBehavior` handles a script that could not run, timed out, or was
+terminated externally. For script steps, `errorBehavior.onError: continue`
+continues the workflow while leaving that step marked failed. A missing shell
+command is treated as a run error; shell exit codes 126 and 127 are used for
+this detection, so a shell script that intentionally returns either code is
+also classified as a run error.

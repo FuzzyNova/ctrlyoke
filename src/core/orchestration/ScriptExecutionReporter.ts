@@ -206,6 +206,8 @@ export function createConditionEvaluationSummary(
   if (result.error !== undefined) {
     summary.error = result.error;
   }
+  if (result.errored) summary.errored = true;
+  if (result.timeout) summary.timedOut = true;
   return summary;
 }
 

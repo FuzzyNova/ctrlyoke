@@ -5372,10 +5372,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     assert.deepStrictEqual(integration.sentPrompts, ["after-script-error"]);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
-    assert.strictEqual(
-      queue.getState().results[0].status,
-      STEP_STATUS.COMPLETED
-    );
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.FAILED);
   });
 
   test("retries an errored script once by default and closes both attempts", async () => {

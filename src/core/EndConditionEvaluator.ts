@@ -118,6 +118,7 @@ export interface EvaluationResult {
   comparisonReason?: string;
   timeout?: boolean;
   cancelled?: boolean;
+  signal?: NodeJS.Signals;
   duration: number;
   exitCode?: number; // Capture exit code for better error handling
 }
@@ -386,6 +387,7 @@ export class EndConditionEvaluator {
           result: normalizedResult.result,
           error: result.error,
           timeout: result.timeout,
+          signal: result.signal,
           duration: Date.now() - startTime,
           exitCode: result.exitCode,
         };
@@ -405,6 +407,7 @@ export class EndConditionEvaluator {
         error: comparison.error ?? result.error,
         timeout: result.timeout,
         cancelled: result.cancelled,
+        signal: result.signal,
         duration: Date.now() - startTime,
         exitCode: result.exitCode,
       };

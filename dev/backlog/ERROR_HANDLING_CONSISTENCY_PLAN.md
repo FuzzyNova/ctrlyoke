@@ -462,10 +462,11 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
    - R7: `WorkflowSummary.failure`, enrich the "Workflow Failed" notification body, and
      remove the duplicate stop-site `notifyUserFeedback` toasts. The failure-stop paths
      end in `ERROR`; user-requested `STOPPED` remains excluded from completion notices.
-4. **Script classification (S1–S5, S7).** Changes in the runner, evaluator, executor and
+4. ~~**Script classification (S1–S5, S7).**~~ Implemented 2026-11-09: runner and evaluator classify external signals and shell 126/127 as run errors, preserve timeout output, PTY startup errors share `errorBehavior`, and continued errored script steps remain failed. Verdict action follows retry exhaustion; the CLI folds the action into the verdict. Docs and changelog updated. The 126/127 shell heuristic also classifies scripts that deliberately return those codes. Tests cover signal, manager cancellation, timeout output, shell 126/127, and PTY spawn failure.
+   ~~Changes in the runner, evaluator, executor and
    PTY path, with fixtures for 126/127/SIGKILL/timeout. _CHANGELOG Changed:_ a missing
    command or killed script now counts as "could not run" (follows `errorBehavior`), and an
-   errored script step with `onError: continue` now shows as failed.
+   errored script step with `onError: continue` now shows as failed.~~
 5. **Decision hook failures (S6).** Coordinate with HOOK_DECISION_FORMAT_PLAN Phase 2 if it
    is in flight.
 6. **CLI reporter (C1–C4).** Mechanical sweep of the 26 sites, plus the strict integer

@@ -1,5 +1,8 @@
 import { getErrorMessage } from "../../utils/ErrorUtils";
-import { CliProcessManager } from "../../utils/CliProcessManager";
+import {
+  CliProcessManager,
+  CliProcessTimeoutError,
+} from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
 import { resolveShellInvocation } from "../harness/PtyProcessManager";
 
@@ -54,6 +57,7 @@ export interface ScriptProcessResult {
   errored?: boolean;
   /** The process tree was terminated by ctrlyoke, rather than exiting itself. */
   cancelled?: boolean;
+  signal?: NodeJS.Signals;
 }
 
 type ScriptProcessManager = Pick<
@@ -133,30 +137,65 @@ export class ScriptProcessRunner {
         stdin: "pipe",
       });
 
+      const managerTerminated = result.terminatedByManager;
+      const externalSignal = result.terminationSignal && !managerTerminated;
+      // Shells use 126/127 for command lookup/permission failures. A script
+      // that genuinely ran and chose those codes is indistinguishable here;
+      // classify them only for shell invocations to avoid reclassifying direct
+      // executables that deliberately return those codes.
+      const executableName = executable.split(/[\\/]/u).pop()?.toLowerCase();
+      const isShellExecutable = new Set([
+        "sh",
+        "bash",
+        "zsh",
+        "dash",
+        "cmd",
+        "cmd.exe",
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+      ]).has(executableName ?? "");
+      const shellCommandFailure =
+        (options.viaShell || isShellExecutable) &&
+        [126, 127].includes(result.exitCode);
+      const shellFailureMessage = shellCommandFailure
+        ? `${result.exitCode === 127 ? "command not found" : "command could not execute"}: ${result.stderr.trim().split(/\r?\n/u, 1)[0] || executable}`
+        : undefined;
+      const errored = Boolean(externalSignal || shellCommandFailure);
       return {
         success: result.exitCode === 0 && !result.terminationSignal,
         result: result.stdout.trim(),
         stdout: result.stdout.trim(),
         stderr: result.stderr.trim(),
         error:
-          (result.terminationSignal && !result.terminatedByManager
+          (externalSignal
             ? `Process terminated by ${result.terminationSignal}`
             : undefined) ||
+          shellFailureMessage ||
           result.stderr.trim() ||
           undefined,
-        ...(result.terminationSignal && result.terminatedByManager
+        ...(externalSignal ? { signal: result.terminationSignal } : {}),
+        ...(managerTerminated
           ? { cancelled: true }
-          : { exitCode: result.exitCode }),
-        errored: false,
+          : externalSignal
+            ? {}
+            : { exitCode: result.exitCode }),
+        errored,
       };
     } catch (error) {
       const isTimeout =
-        error instanceof Error && error.message.includes("timeout");
+        error instanceof CliProcessTimeoutError ||
+        (error instanceof Error && error.message.includes("timeout"));
+      const partialStdout =
+        error instanceof CliProcessTimeoutError ? error.stdout : "";
+      const partialStderr =
+        error instanceof CliProcessTimeoutError ? error.stderr : "";
       return {
         success: false,
-        result: "",
-        stdout: "",
-        stderr: "",
+        result: partialStdout.trim(),
+        stdout: partialStdout.trim(),
+        stderr: partialStderr.trim(),
         error: getErrorMessage(error),
         timeout: isTimeout,
         errored: true,

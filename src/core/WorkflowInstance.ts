@@ -3962,12 +3962,16 @@ export class WorkflowInstance
     options: Parameters<
       NonNullable<WorkflowExecutionContext["spawnScriptPty"]>
     >[0]
-  ): Promise<number> {
-    return new Promise<number>((resolve) => {
+  ): Promise<number | { exitCode: number; errored?: boolean; error?: string }> {
+    return new Promise((resolve) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager) {
         Log.warn("[spawnScriptPty] PtyProcessManager not available");
-        resolve(1);
+        resolve({
+          exitCode: 1,
+          errored: true,
+          error: "PtyProcessManager not available",
+        });
         return;
       }
 
@@ -3989,7 +3993,7 @@ export class WorkflowInstance
       if (shellError) {
         Log.warn(`[spawnScriptPty] ${shellError}`);
         options.onOutput(shellError);
-        resolve(1);
+        resolve({ exitCode: 1, errored: true, error: shellError });
         return;
       }
 
@@ -4066,7 +4070,7 @@ export class WorkflowInstance
           )
         );
         options.onOutput(message);
-        resolve(1);
+        resolve({ exitCode: 1, errored: true, error: message });
       }
     });
   }

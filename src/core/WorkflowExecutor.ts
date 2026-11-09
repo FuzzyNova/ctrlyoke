@@ -416,7 +416,9 @@ export interface WorkflowExecutionContext {
     onTimeout?: () => void;
     onSessionCreated?: (sessionId: string) => void;
     onSessionEnded?: () => void;
-  }) => Promise<number>;
+  }) => Promise<
+    number | { exitCode: number; errored?: boolean; error?: string }
+  >;
   targetRunIndices?: Map<string, number>;
   /**
    * The definitionRevision producing this run's current output, plus the snapshot to
@@ -466,6 +468,7 @@ type PromptFailureDisposition =
 
 type PhaseDisposition = {
   outcome: WorkflowExecutionOutcome;
+  actionText?: string;
   nextAttemptIndex?: number;
   nextErrorRetryCount?: number;
 };
@@ -478,6 +481,33 @@ function canRetryErrorBehavior(
     errorBehavior.onError === CONDITION_ACTIONS.RETRY &&
     attemptIndex < (errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES)
   );
+}
+
+function getErrorBehaviorDecision(
+  errorBehavior: ErrorBehavior,
+  errorRetryCount: number
+): { canRetry: boolean; action: ConditionAction; actionText: string } {
+  const maxRetries = errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
+  const canRetry = canRetryErrorBehavior(errorBehavior, errorRetryCount);
+  if (canRetry) {
+    return {
+      canRetry,
+      action: CONDITION_ACTIONS.RETRY,
+      actionText: `retry ${errorRetryCount + 1} of ${formatRetryDenominator(maxRetries)}`,
+    };
+  }
+  const action =
+    errorBehavior.onError === CONDITION_ACTIONS.CONTINUE
+      ? CONDITION_ACTIONS.CONTINUE
+      : CONDITION_ACTIONS.STOP_WORKFLOW;
+  return {
+    canRetry,
+    action,
+    actionText:
+      action === CONDITION_ACTIONS.STOP_WORKFLOW
+        ? WORKFLOW_EXECUTION_OUTCOMES.STOP
+        : action,
+  };
 }
 
 function getAttemptStartReason(
@@ -2974,12 +3004,14 @@ export class WorkflowExecutor {
       });
       const outputChunks: string[] = [];
       let ptyExitCode: number | undefined;
+      let ptyErrored = false;
+      let ptyError: string | undefined;
       let ptyTimedOut = false;
 
       const evaluation = async (onOutput: (chunk: string) => void) => {
         if (isInteractive && context.spawnScriptPty) {
           Log.info(`[script:interactive] spawning PTY for: ${stepLabel}`);
-          ptyExitCode = await context.spawnScriptPty({
+          const ptyResult = await context.spawnScriptPty({
             stepName: stepLabel,
             stepIndex: signedStepIndex,
             parallelGroupId:
@@ -3013,6 +3045,12 @@ export class WorkflowExecutor {
               context.registerTargetPtySession?.(target, sessionId),
             onSessionEnded: () => context.clearTargetPtySession?.(target),
           });
+          if (typeof ptyResult === "number") ptyExitCode = ptyResult;
+          else {
+            ptyExitCode = ptyResult.exitCode;
+            ptyErrored = ptyResult.errored === true;
+            ptyError = ptyResult.error;
+          }
         }
 
         if (!isInteractive || ptyExitCode === undefined) {
@@ -3040,7 +3078,8 @@ export class WorkflowExecutor {
         );
         return {
           ...comparison,
-          errored: ptyTimedOut || comparison.errored === true,
+          errored: ptyErrored || ptyTimedOut || comparison.errored === true,
+          error: ptyError ?? comparison.error,
           stdout: comparison.stdout,
           stderr: comparison.stderr,
           result: comparison.result,
@@ -3048,6 +3087,15 @@ export class WorkflowExecutor {
           exitCode,
           timeout: ptyTimedOut,
         };
+      };
+
+      const errorBehavior =
+        step.errorBehavior === null
+          ? undefined
+          : (step.errorBehavior ??
+            this.promptQueue.getWorkflowFile().errorBehavior);
+      const effectiveErrorBehavior = errorBehavior ?? {
+        onError: CONDITION_ACTIONS.STOP_WORKFLOW,
       };
 
       const report = await this.scriptExecutionReporter.report({
@@ -3070,12 +3118,13 @@ export class WorkflowExecutor {
         evaluate: evaluation,
         emitStatus: false,
         actionForErrored: this.getErrorConditionAction(
-          step.errorBehavior === null
-            ? undefined
-            : (step.errorBehavior ??
-                this.promptQueue.getWorkflowFile().errorBehavior ??
-                undefined)
+          errorBehavior ?? undefined
         ),
+        actionDetail: (result) =>
+          result.errored
+            ? getErrorBehaviorDecision(effectiveErrorBehavior, errorRetryCount)
+                .actionText
+            : undefined,
       });
 
       const evalResult = report.evaluationResult;
@@ -3094,12 +3143,6 @@ export class WorkflowExecutor {
         return false;
       }
 
-      const errorBehavior =
-        step.errorBehavior === null
-          ? undefined
-          : (step.errorBehavior ??
-            this.promptQueue.getWorkflowFile().errorBehavior);
-
       if (evalResult.errored) {
         const errorDisposition = await this.handleEvaluationError(
           context,
@@ -3110,7 +3153,8 @@ export class WorkflowExecutor {
           errorBehavior,
           attemptIndex,
           errorRetryCount,
-          false
+          false,
+          report.verdict
         );
         if (errorDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           if (await this.checkExecutionTimeLimitBeforeRetry()) {
@@ -3134,18 +3178,19 @@ export class WorkflowExecutor {
         );
       }
 
-      const succeeded = evalResult.errored ? true : evalResult.passed;
+      const succeeded = !evalResult.errored && evalResult.passed;
 
       const onPass = step.onPass ?? CONDITION_ACTIONS.CONTINUE;
       const onFail = step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
       const shouldContinue = evalResult.errored
-        ? true
+        ? errorBehavior?.onError === CONDITION_ACTIONS.CONTINUE
         : succeeded
           ? onPass !== CONDITION_ACTIONS.STOP_WORKFLOW
           : onFail !== CONDITION_ACTIONS.STOP_WORKFLOW;
-      const terminalStatus = shouldContinue
-        ? STEP_STATUS.COMPLETED
-        : STEP_STATUS.FAILED;
+      const terminalStatus =
+        shouldContinue && !evalResult.errored
+          ? STEP_STATUS.COMPLETED
+          : STEP_STATUS.FAILED;
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
         await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
           elapsed: evalResult.duration / 1000,
@@ -3167,7 +3212,7 @@ export class WorkflowExecutor {
       }
 
       // Complete or fail the attempt in the state machine
-      if (shouldContinue) {
+      if (shouldContinue && !evalResult.errored) {
         runtime.completeAttempt(target, attemptIndex);
       } else {
         runtime.failAttempt(
@@ -3180,10 +3225,10 @@ export class WorkflowExecutor {
         context,
         target,
         attemptIndex,
-        shouldContinue
+        shouldContinue && !evalResult.errored
           ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
           : TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
-        shouldContinue
+        shouldContinue && !evalResult.errored
           ? undefined
           : `Script exited with code ${evalResult.exitCode}`
       );
@@ -3197,12 +3242,14 @@ export class WorkflowExecutor {
       }
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        if (shouldContinue) {
+        if (shouldContinue && !evalResult.errored) {
           // The coordinator commits the target outcome and advances at join.
         } else {
           await this.promptQueue.failStep(
             target.stepIndex,
-            `Script exited with code ${evalResult.exitCode}`
+            evalResult.errored
+              ? (evalResult.error ?? "Script could not run")
+              : `Script exited with code ${evalResult.exitCode}`
           );
         }
       }
@@ -4013,16 +4060,12 @@ export class WorkflowExecutor {
   }
 
   private getErrorConditionAction(
-    errorBehavior?: ErrorBehavior
+    errorBehavior?: ErrorBehavior,
+    errorRetryCount = 0
   ): ConditionAction {
-    switch (errorBehavior?.onError) {
-      case CONDITION_ACTIONS.RETRY:
-        return CONDITION_ACTIONS.RETRY;
-      case CONDITION_ACTIONS.CONTINUE:
-        return CONDITION_ACTIONS.CONTINUE;
-      default:
-        return CONDITION_ACTIONS.STOP_WORKFLOW;
-    }
+    return errorBehavior
+      ? getErrorBehaviorDecision(errorBehavior, errorRetryCount).action
+      : CONDITION_ACTIONS.STOP_WORKFLOW;
   }
 
   private getEvaluationErrorMessage(result: EvaluationResult): string {
@@ -4042,18 +4085,14 @@ export class WorkflowExecutor {
     errorBehavior: ErrorBehavior | null | undefined,
     attemptIndex: number,
     errorRetryCount: number,
-    completeAttemptOnContinue: boolean = false
+    completeAttemptOnContinue: boolean = false,
+    scriptVerdict?: ScriptVerdict
   ): Promise<PhaseDisposition> {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
-    const maxRetries = policy.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
-    const canRetry = canRetryErrorBehavior(policy, errorRetryCount);
-    const actionText = canRetry
-      ? `retry ${errorRetryCount + 1} of ${formatRetryDenominator(maxRetries)}`
-      : policy.onError === CONDITION_ACTIONS.CONTINUE
-        ? CONDITION_ACTIONS.CONTINUE
-        : WORKFLOW_EXECUTION_OUTCOMES.STOP;
+    const decision = getErrorBehaviorDecision(policy, errorRetryCount);
+    const { canRetry, actionText } = decision;
     const severity =
       canRetry || policy.onError === CONDITION_ACTIONS.CONTINUE
         ? STATUS_MESSAGE_SEVERITY.WARNING
@@ -4063,7 +4102,9 @@ export class WorkflowExecutor {
     await this.trackStatusMessage(
       context,
       target,
-      `${phase} could not run: ${reason} → ${actionText}`,
+      scriptVerdict
+        ? formatVerdictSummary(phase, scriptVerdict)
+        : `${phase} could not run: ${reason} → ${actionText}`,
       severity
     );
 
@@ -4085,6 +4126,7 @@ export class WorkflowExecutor {
       }
       return {
         outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY,
+        actionText,
         nextAttemptIndex,
         nextErrorRetryCount: errorRetryCount + 1,
       };
@@ -4094,7 +4136,7 @@ export class WorkflowExecutor {
       if (completeAttemptOnContinue) {
         this.getRuntime().completeAttempt(target, attemptIndex);
       }
-      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE, actionText };
     }
 
     await this.failStepForInternalError(
@@ -4105,7 +4147,7 @@ export class WorkflowExecutor {
       `${phase}: ${reason}`,
       result.timeout ? FAILURE_KINDS.TIMEOUT : undefined
     );
-    return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
+    return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP, actionText };
   }
 
   private async failStepForInternalError(
@@ -4329,7 +4371,7 @@ export class WorkflowExecutor {
       result: EvaluationResult
     ): ConditionAction => {
       if (result.errored) {
-        return this.getErrorConditionAction(errorBehavior);
+        return this.getErrorConditionAction(errorBehavior, errorRetryCount);
       }
       if (willRetryEndCondition(result)) {
         return CONDITION_ACTIONS.RETRY;

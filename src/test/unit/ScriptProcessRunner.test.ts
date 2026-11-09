@@ -50,8 +50,73 @@ suite("ScriptProcessRunner", () => {
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.cancelled, undefined);
-    assert.strictEqual(result.exitCode, 1);
+    assert.strictEqual(result.exitCode, undefined);
+    assert.strictEqual(result.errored, true);
+    assert.strictEqual(result.signal, "SIGKILL");
     assert.match(result.error ?? "", /SIGKILL/);
+  });
+
+  test("classifies shell 127 as a command lookup error", async () => {
+    class MissingCommandManager implements Pick<
+      CliProcessManager,
+      "spawn" | "cancel" | "dispose"
+    > {
+      async spawn(): Promise<SpawnResult> {
+        return {
+          stdout: "",
+          stderr: "sh: 1: missing-tool: not found",
+          exitCode: 127,
+          terminatedByManager: false,
+        };
+      }
+      async cancel(): Promise<void> {}
+      dispose(): void {}
+    }
+    const runner = new ScriptProcessRunner(
+      process.cwd(),
+      new MissingCommandManager()
+    );
+    const result = await runner.run({
+      cwd: process.cwd(),
+      timeout: 1000,
+      argv: ["sh", "-c", "missing-tool"],
+      viaShell: true,
+    });
+    assert.strictEqual(result.errored, true);
+    assert.match(result.error ?? "", /command not found: sh: 1: missing-tool/u);
+  });
+
+  test("classifies shell 126 as a command execution error", async () => {
+    class PermissionDeniedManager implements Pick<
+      CliProcessManager,
+      "spawn" | "cancel" | "dispose"
+    > {
+      async spawn(): Promise<SpawnResult> {
+        return {
+          stdout: "",
+          stderr: "permission denied",
+          exitCode: 126,
+          terminatedByManager: false,
+        };
+      }
+      async cancel(): Promise<void> {}
+      dispose(): void {}
+    }
+    const runner = new ScriptProcessRunner(
+      process.cwd(),
+      new PermissionDeniedManager()
+    );
+    const result = await runner.run({
+      cwd: process.cwd(),
+      timeout: 1000,
+      argv: ["sh", "-c", "blocked"],
+      viaShell: true,
+    });
+    assert.strictEqual(result.errored, true);
+    assert.match(
+      result.error ?? "",
+      /command could not execute: permission denied/u
+    );
   });
 
   test("isolates timeout and cancellation state between runners", async () => {
@@ -70,7 +135,7 @@ suite("ScriptProcessRunner", () => {
           argv: [
             nodeExecutable,
             "-e",
-            "setTimeout(() => process.stdout.write('slow'), 2000)",
+            "process.stdout.write('partial'); setTimeout(() => process.stdout.write('slow'), 2000)",
           ],
         }),
         completingRunner.run({
@@ -82,6 +147,7 @@ suite("ScriptProcessRunner", () => {
 
       assert.strictEqual(timedOut.timeout, true);
       assert.strictEqual(timedOut.success, false);
+      assert.strictEqual(timedOut.stdout, "partial");
       assert.strictEqual(completed.success, true);
       assert.strictEqual(completed.result, "fast");
     } finally {

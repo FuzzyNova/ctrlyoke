@@ -105,7 +105,9 @@ function makeContext(
     timeout: number;
     onOutput: (chunk: string) => void;
     onTimeout?: () => void;
-  }) => Promise<number>,
+  }) => Promise<
+    number | { exitCode: number; errored?: boolean; error?: string }
+  >,
   scriptOutputs?: Array<{ stdout: string; stderr: string }>
 ): WorkflowExecutionContext {
   const integration = new MockHarnessIntegration(undefined, false);
@@ -257,6 +259,35 @@ async function runCase(
 }
 
 suite("interactive script steps", () => {
+  test("routes a PTY spawn failure through errorBehavior and leaves the step failed", async () => {
+    const queue = new PromptQueue();
+    const executor = makeExecutor(queue);
+    const context = makeContext(undefined, async () => ({
+      exitCode: 1,
+      errored: true,
+      error: "spawn failed",
+    }));
+    queue.loadPrompts({
+      errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+      steps: [
+        {
+          type: STEP_TYPES.SCRIPT,
+          script: "missing-command",
+          executionMode: EXECUTION_MODES.INTERACTIVE,
+        },
+        { prompt: "continue after spawn failure" },
+      ],
+    });
+
+    await executor.execute(
+      new MockHarnessIntegration(undefined, false),
+      context
+    );
+
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.FAILED);
+    assert.strictEqual(queue.getState().status, "completed");
+  });
+
   test("matches headless verdicts across the comparison matrix", async () => {
     for (const comparisonCase of cases) {
       const headless = await runCase(comparisonCase, "headless");
@@ -329,7 +360,7 @@ suite("interactive script steps", () => {
     assert.strictEqual(timeoutCallbackCalled, true);
     assert.ok(
       statusMessages.some((message) =>
-        message.includes("Script step could not run: timed out")
+        message.includes("Script step errored (timed out) → stop")
       ),
       statusMessages.join("\n")
     );
@@ -379,7 +410,7 @@ suite("interactive script steps", () => {
       assert.ok(
         statusMessages.some(
           (message) =>
-            message.includes("Script step could not run") &&
+            message.includes("Script step errored (") &&
             message.includes("timed out after")
         ),
         statusMessages.join("\n")
