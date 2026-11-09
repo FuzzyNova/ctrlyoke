@@ -281,6 +281,7 @@ const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
     },
     sessionId: {
       type: "number",
+      minimum: 1,
       description:
         "1-based step number whose conversation to continue. Requires resumeSession.",
     },
@@ -341,7 +342,7 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
       description: "Whether the step should resume a previous session.",
     },
     sessionId: {
-      oneOf: [{ type: "string" }, { type: "number" }],
+      oneOf: [{ type: "string" }, { type: "number", minimum: 1 }],
       description: "A 1-based step number or a session id string to resume.",
     },
     agent: MCP_AGENT_SCHEMA,

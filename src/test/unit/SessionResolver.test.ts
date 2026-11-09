@@ -140,6 +140,17 @@ suite("SessionResolver Tests", () => {
   });
 
   suite("resolve - numeric reference", () => {
+    test("returns undefined for a fractional numeric reference", () => {
+      const prompt: PromptStep = {
+        prompt: "fractional reference",
+        sessionId: 1.5,
+        resumeSession: true,
+      };
+      assert.doesNotThrow(() => {
+        assert.strictEqual(SessionResolver.resolve(prompt, 1, [prompt]), undefined);
+      });
+    });
+
     test("should resolve numeric reference to runtime session ID", () => {
       const workflow: PromptFile = {
         steps: [],

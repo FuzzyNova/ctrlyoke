@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-08 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/McpToolDefinitions.ts`, `src/mcp-server.ts` (`handleAppendStep`, `handleStepEdit`), `src/utils/SessionResolver.ts` (`resolveNumericReference`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

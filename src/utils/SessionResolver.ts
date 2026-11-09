@@ -177,7 +177,11 @@ export class SessionResolver {
     const refIndex = refNumber - 1; // 1-based to 0-based
 
     // Validate reference is within bounds and points to previous prompt
-    if (refIndex < 0 || refIndex >= groupStartBoundary) {
+    if (
+      !Number.isInteger(refNumber) ||
+      refIndex < 0 ||
+      refIndex >= groupStartBoundary
+    ) {
       if (logWarnings) {
         Log.warn(
           `[SessionResolver] Invalid sessionId reference: ${refNumber}. ` +

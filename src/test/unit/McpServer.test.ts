@@ -817,6 +817,54 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.deepStrictEqual(grantedAfterRelease.granted, ["src/a.ts"]);
   });
 
+  test("normalizes backslash claim paths before containment and conflict checks", async () => {
+    const priorWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
+    const priorExecutionRoot = process.env.CTRLYOKE_EXECUTION_ROOT;
+    const priorParticipantLabel = process.env.CTRLYOKE_PARTICIPANT_LABEL;
+    delete process.env.CTRLYOKE_WORKING_FILE;
+    process.env.CTRLYOKE_EXECUTION_ROOT = workspaceRoot;
+    process.env.CTRLYOKE_PARTICIPANT_LABEL = "Backslash claim owner";
+    const firstServer = await setup();
+    try {
+      await assert.rejects(
+        firstServer.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+          paths: ["..\\..\\outside.txt"],
+        }),
+        /escapes the execution root/
+      );
+      const normalized = responseJson(
+        await firstServer.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+          paths: ["src\\..\\docs", "src\\a.ts"],
+        })
+      );
+      assert.deepStrictEqual(normalized.granted, ["docs", "src/a.ts"]);
+
+      process.env.CTRLYOKE_PARTICIPANT_LABEL = "Backslash claim contender";
+      const secondServer = new CtrlYokeMCPServer({ workspaceRoot });
+      const conflict = responseJson(
+        await secondServer.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+          paths: ["docs"],
+        })
+      );
+      assert.deepStrictEqual(conflict.granted, []);
+      assert.strictEqual(conflict.denied[0].path, "docs");
+
+      const released = responseJson(
+        await firstServer.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, {
+          paths: ["src\\..\\docs"],
+        })
+      );
+      assert.deepStrictEqual(released.released, ["docs"]);
+    } finally {
+      if (priorWorkingFile === undefined) delete process.env.CTRLYOKE_WORKING_FILE;
+      else process.env.CTRLYOKE_WORKING_FILE = priorWorkingFile;
+      if (priorExecutionRoot === undefined) delete process.env.CTRLYOKE_EXECUTION_ROOT;
+      else process.env.CTRLYOKE_EXECUTION_ROOT = priorExecutionRoot;
+      if (priorParticipantLabel === undefined) delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
+      else process.env.CTRLYOKE_PARTICIPANT_LABEL = priorParticipantLabel;
+    }
+  });
+
   test("uses the shared steps default when no max-steps environment value is set", () => {
     const priorMaxSteps = process.env.CTRLYOKE_MAX_STEPS;
     try {
@@ -2120,6 +2168,62 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       EXECUTION_MODES.INTERACTIVE
     );
     assert.strictEqual("warnings" in result, false);
+  });
+
+  test("append_step and edit_step require numeric sessionId to be an integer >= 1", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "numeric-session-id-validation"
+    );
+    try {
+      for (const sessionId of [1.5, 0]) {
+        await assert.rejects(
+          invokeAppendHandler(server, {
+            position: "end",
+            steps: [{ prompt: "invalid session", sessionId }],
+          }),
+          /steps\[0\]\.sessionId must be an integer >= 1/
+        );
+        await assert.rejects(
+          invokeAppendHandler(server, {
+            position: "end",
+            steps: [
+              {
+                parallel: [
+                  { prompt: "invalid parallel session", sessionId },
+                  { prompt: "valid parallel member" },
+                ],
+              },
+            ],
+          }),
+          /steps\[0\]\.parallel\[0\]\.sessionId must be an integer >= 1/
+        );
+        await assert.rejects(
+          server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+            index: 2,
+            updates: { sessionId },
+          }),
+          /step 2 sessionId must be an integer >= 1/
+        );
+      }
+      await invokeAppendHandler(server, {
+        position: "end",
+        steps: [{ prompt: "valid session", sessionId: 1 }],
+      });
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { sessionId: "literal-session-id" },
+      });
+      const edited = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(
+        (edited.steps?.[2] as PromptStep).sessionId,
+        "literal-session-id"
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
   });
 
   test("append_step accepts agent and skills and echoes effective settings", async () => {

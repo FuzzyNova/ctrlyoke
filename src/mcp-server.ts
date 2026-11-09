@@ -623,6 +623,51 @@ export class CtrlYokeMCPServer {
     ) {
       assertRunAcceptsMutation(name, callingContext);
     }
+    if (name === MCP_APPEND_STEP_TOOL_NAME && args && typeof args === "object") {
+      const steps = (args as McpAppendStepArguments).steps;
+      if (Array.isArray(steps)) {
+        for (const [itemIndex, item] of steps.entries()) {
+          const members =
+            item && typeof item === "object" && "parallel" in item
+              ? (item as { parallel?: unknown }).parallel
+              : [item];
+          if (!Array.isArray(members)) continue;
+          for (const [memberIndex, member] of members.entries()) {
+            const sessionId =
+              member && typeof member === "object"
+                ? (member as { sessionId?: unknown }).sessionId
+                : undefined;
+            if (
+              typeof sessionId === "number" &&
+              (!Number.isInteger(sessionId) || sessionId < 1)
+            ) {
+              const stepName =
+                item && typeof item === "object" && "parallel" in item
+                  ? `steps[${itemIndex}].parallel[${memberIndex}]`
+                  : `steps[${itemIndex}]`;
+              throw new Error(
+                `${MCP_APPEND_STEP_TOOL_NAME}: ${stepName}.sessionId must be an integer >= 1.`
+              );
+            }
+          }
+        }
+      }
+    } else if (
+      name === MCP_EDIT_STEP_TOOL_NAME &&
+      args &&
+      typeof args === "object"
+    ) {
+      const { index, updates } = args as McpEditStepArguments;
+      if (
+        updates &&
+        typeof updates.sessionId === "number" &&
+        (!Number.isInteger(updates.sessionId) || updates.sessionId < 1)
+      ) {
+        throw new Error(
+          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} sessionId must be an integer >= 1.`
+        );
+      }
+    }
     const call = validateMcpToolCall(name, args);
     switch (call.name) {
       case MCP_WORKFLOW_STATUS_TOOL_NAME:
@@ -951,17 +996,18 @@ export class CtrlYokeMCPServer {
     }
     const resolvedRoot = path.resolve(executionRoot);
     return paths.map((value) => {
+      const normalizedValue = value.replace(/\\/g, "/");
       if (
-        !value.trim() ||
-        path.isAbsolute(value) ||
-        path.posix.isAbsolute(value) ||
-        path.win32.isAbsolute(value)
+        !normalizedValue.trim() ||
+        path.isAbsolute(normalizedValue) ||
+        path.posix.isAbsolute(normalizedValue) ||
+        path.win32.isAbsolute(normalizedValue)
       ) {
         throw new Error(
           `Coordination paths must be non-empty execution-root-relative paths: ${value}`
         );
       }
-      const resolved = path.resolve(resolvedRoot, value);
+      const resolved = path.resolve(resolvedRoot, normalizedValue);
       if (!isPathWithinDirectory(resolved, resolvedRoot)) {
         throw new Error(
           `Coordination path escapes the execution root: ${value}`
@@ -1344,6 +1390,23 @@ export class CtrlYokeMCPServer {
     const promptSteps = steps.flatMap((item) =>
       "parallel" in item ? item.parallel : [item]
     );
+    for (const [itemIndex, item] of steps.entries()) {
+      const members = "parallel" in item ? item.parallel : [item];
+      for (const [memberIndex, step] of members.entries()) {
+        if (
+          typeof step.sessionId === "number" &&
+          (!Number.isInteger(step.sessionId) || step.sessionId < 1)
+        ) {
+          const stepName =
+            "parallel" in item
+              ? `steps[${itemIndex}].parallel[${memberIndex}]`
+              : `steps[${itemIndex}]`;
+          throw new Error(
+            `${MCP_APPEND_STEP_TOOL_NAME}: ${stepName}.sessionId must be an integer >= 1.`
+          );
+        }
+      }
+    }
     if (
       promptSteps.some((step) =>
         step.prompt.startsWith(MCP_SCRIPT_STEP_PROMPT_MARKER)
@@ -1558,6 +1621,14 @@ export class CtrlYokeMCPServer {
   /** Handle edit_step for a zero-based pending step index. */
   private async handleStepEdit(args: McpEditStepArguments) {
     const { index, updates, clearProperties } = args;
+    if (
+      typeof updates.sessionId === "number" &&
+      (!Number.isInteger(updates.sessionId) || updates.sessionId < 1)
+    ) {
+      throw new Error(
+        `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} sessionId must be an integer >= 1.`
+      );
+    }
     if (
       Object.prototype.hasOwnProperty.call(updates, "additionalArgs") ||
       clearProperties?.includes("additionalArgs")

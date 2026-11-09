@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MCP step tools now reject numeric session references unless they are integers of at least 1; session resolution safely ignores fractional references. Coordination path claims normalize backslashes before checking containment and conflicts.
 - Unknown workflow properties no longer suggest removed or internal fields, or unrelated keys for distant typos.
 - CLI validate summaries now count all workflow steps, including parallel
   members and the final step. Dry run guardrails omit the seconds unit for
