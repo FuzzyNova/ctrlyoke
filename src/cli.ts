@@ -2423,7 +2423,11 @@ async function validateCommand(
   }
 
   try {
-    const { PromptFileParser } = await import("./core/PromptFileParser.js");
+    const [{ PromptFileParser }, { countWorkflowExecutionSteps }] =
+      await Promise.all([
+        import("./core/PromptFileParser.js"),
+        import("./core/ExecutionPreviewService.js"),
+      ]);
     const parser = new PromptFileParser();
     const result = await parser.parsePromptFile(resolvedFile);
     if (!result) {
@@ -2547,7 +2551,8 @@ async function validateCommand(
         );
       } else {
         console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
-        console.log(chalk.dim(`  ${result.steps?.length ?? 1} prompt(s)`));
+        const stepCount = countWorkflowExecutionSteps(result) || 1;
+        console.log(chalk.dim(`  ${stepCount} step(s)`));
         renderCliValidationWarnings(warnings);
       }
       process.exit(0);

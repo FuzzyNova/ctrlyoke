@@ -50,6 +50,32 @@ suite("ctrlyoke validate compatibility command", () => {
     assert.strictEqual(result.target, null);
   });
 
+  test("counts script steps, parallel members and finalStep in the summary", async function () {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-validate-count-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "count.ctrlyoke.yaml");
+    await fs.writeFile(
+      workflow,
+      [
+        "steps:",
+        "  - type: script",
+        "    script: echo script",
+        "  - parallel:",
+        "      - prompt: first",
+        "      - prompt: second",
+        "finalStep:",
+        "  prompt: done",
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await runCli(["validate", workflow], root);
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.match(result.stdout, /4 step\(s\)/u);
+  });
+
   test("workflow file arguments stay relative to process cwd when --cwd differs", async function () {
     this.timeout(60000);
     const processRoot = await fs.mkdtemp(

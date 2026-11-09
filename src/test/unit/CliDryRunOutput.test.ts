@@ -347,7 +347,7 @@ CliTerminalFormatter.renderExecutionPreview(${JSON.stringify(previewFixture())})
     assert.ok(output.includes("Execution guardrails"));
     assert.ok(output.includes("Queue steps: unlimited"));
     assert.ok(output.includes("Workflow duration: 900 seconds"));
-    assert.ok(output.includes("Prompt timeout: unlimited seconds"));
+    assert.ok(output.includes("Prompt timeout: unlimited"));
     assert.ok(output.includes("Script timeout: 3600 seconds"));
   });
 

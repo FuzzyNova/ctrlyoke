@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-08 by bug-hunt final step (claude-cli)
 - **Area:** `src/cli.ts` (validate command), `src/cli/CliTerminalFormatter.ts` (`renderExecutionPreview`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

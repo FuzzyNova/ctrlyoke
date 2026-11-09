@@ -193,6 +193,14 @@ export interface ExecutionPreviewRequest {
   readonly variables?: Record<string, string>;
 }
 
+/** Count executable queue entries and the optional final step for summaries. */
+export function countWorkflowExecutionSteps(workflow: PromptFile): number {
+  return [
+    ...(workflow.steps ?? []),
+    ...(workflow.finalStep ? [workflow.finalStep] : []),
+  ].filter((step) => step.enabled !== false).length;
+}
+
 interface PreviewStepTarget {
   readonly step: WorkflowStep;
   readonly stepIndex: number;
@@ -432,7 +440,10 @@ export class ExecutionPreviewService {
           ? extractWorkflowName(request.sourcePath)
           : undefined) ||
         "Unnamed workflow",
-      stepCount: steps.length,
+      stepCount:
+        scope.kind === PREVIEW_SCOPES.WORKFLOW
+          ? countWorkflowExecutionSteps(workflow)
+          : steps.length,
       ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
       ...(request.definitionRevision !== undefined
         ? { definitionRevision: String(request.definitionRevision) }

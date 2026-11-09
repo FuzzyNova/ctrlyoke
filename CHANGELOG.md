@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CLI validate summaries now count all workflow steps, including parallel
+  members and the final step. Dry run guardrails omit the seconds unit for
+  unlimited and unknown limits.
 - `--force script-timeout` now also applies to workflow-level preconditions and end conditions inherited by steps.
 - CLI dry run previews now show the workflow's authored name, or its filename when unnamed.
 - The terminal control bar's **...** button now opens its shortcut menu. Before, the menu opened but was cut off by the bar, so nothing appeared. You also can no longer drag-select the bar's buttons as text.

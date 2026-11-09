@@ -660,13 +660,13 @@ export class CliTerminalFormatter {
         `  Queue steps: ${CliTerminalFormatter.formatPreviewLimit(limits.maxQueueSteps)}`
       );
       writeLine(
-        `  Workflow duration: ${CliTerminalFormatter.formatPreviewLimit(limits.maxExecutionSeconds)} seconds`
+        `  Workflow duration: ${CliTerminalFormatter.formatPreviewSeconds(limits.maxExecutionSeconds)}`
       );
       writeLine(
-        `  Prompt timeout: ${CliTerminalFormatter.formatPreviewLimit(limits.maxPromptTimeoutSeconds)} seconds`
+        `  Prompt timeout: ${CliTerminalFormatter.formatPreviewSeconds(limits.maxPromptTimeoutSeconds)}`
       );
       writeLine(
-        `  Script timeout: ${limits.scriptTimeoutSeconds ?? "—"} seconds`
+        `  Script timeout: ${CliTerminalFormatter.formatPreviewSeconds(limits.scriptTimeoutSeconds)}`
       );
       writeLine("");
     }
@@ -786,6 +786,14 @@ export class CliTerminalFormatter {
 
   private static formatPreviewLimit(limit: number | undefined): string {
     return limit === undefined ? "—" : formatLimitValue(limit);
+  }
+
+  private static formatPreviewSeconds(limit: number | undefined): string {
+    if (limit === undefined) return "—";
+    const formatted = formatLimitValue(limit);
+    return formatted === "unlimited" || formatted === "—"
+      ? formatted
+      : `${formatted} seconds`;
   }
 
   /** Print the shared run-level reason when execution stopped on a guardrail. */
