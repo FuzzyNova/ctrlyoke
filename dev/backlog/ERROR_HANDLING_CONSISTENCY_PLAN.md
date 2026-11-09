@@ -1,7 +1,7 @@
 # Error Handling Consistency Plan (harnesses, scripts, CLI)
 
 **Status:** Phase 2 implemented on 2026-11-09 (H1, H2, H4, H5, H6, R1 types, R2 hook
-column, R3). Phase 0 captures completed on 2026-11-09 for every harness except OpenCode
+column, R3). Phase 7 (R4, H3) completed on 2026-11-09 for Codex, Qwen and Antigravity. Phase 0 captures completed on 2026-11-09 for every harness except OpenCode
 2.x, which is not yet released (§6). Research and recommendation done; open
 decisions settled with the user on 2026-11-08 (§7).
 
@@ -96,8 +96,8 @@ captured live (see §6).
     (`AntigravityLogParser.ts:773-787,432-439`). The agy 1.5.3 capture (§6) shows that
     entry is **not written** for an API error: the text is only in the stream-json
     `result.error`, alongside exit code 3. Phase 2's transcript-based `metadata.error`
-    therefore never fires
-    (`dev/bugs/backlog/antigravity-headless-error-not-parsed-from-stream-json.md`).
+    therefore never fired; Phase 7 reads `result.error` from stdout instead
+    (`dev/bugs/implemented/antigravity-headless-error-not-parsed-from-stream-json.md`).
   - Neither sets `metadata.error` or implements `extractErrorFromStdout`. Only Codex and
     Qwen implement it.
   - If the process exits 0 after such an error, the step **succeeds** with the error text as
@@ -115,9 +115,11 @@ captured live (see §6).
   - **Codex 0.166.0** hangs. Stop does not fire after a 401. The rollout records
     `task_complete` with a typed `error`.
   - **Qwen 0.26.7** hangs. Stop does not fire after a 401. The chat JSONL records
-    `qwen-code.api_error` and a `request_lifecycle` ending `outcome: "error"`. ~558ef85
-    consumes the `api_error`, but a turn that Qwen's retry recovers then fails
-    (`dev/bugs/implemented/qwen-retried-api-error-fails-recovered-turn.md`).
+    `qwen-code.api_error` and a `request_lifecycle` ending `outcome: "error"`, but an
+    `api_error` marks one failed attempt, and Qwen's retry can still recover the turn
+    (`dev/bugs/implemented/qwen-retried-api-error-fails-recovered-turn.md`). Phase 7
+    fails only statuses Qwen never retries (401/403); other API errors still wait for
+    process exit or `maxPromptTimeoutSec`.
   - **Antigravity 1.5.3** succeeds silently. Stop **does** fire, with
     `terminationReason: "ERROR"` and the text in `error`, and `ctrlyoke-antigravity-hook.js`
     writes a normal stop file.
@@ -317,8 +319,9 @@ Do these in order, and keep the ERROR_BEHAVIOR_PLAN's "no keyword matching" rule
    typed session-error event that the monitor can see. `CliLogMonitor` resolves it as
    `HARNESS_ERROR` through the same path as the `-error.json` result.
    - Codex: the rollout's `task_complete` with `error`.
-   - Qwen: done in ~558ef85. It must wait for the turn's final outcome, because a
-     retried attempt also logs `api_error` (see the Qwen bug in H3).
+   - Qwen: the chat JSONL never records a turn's final outcome (`turn_result` is
+     written only on Qwen's ACP daemon path), so only an `api_error` whose status
+     Qwen never retries is terminal (see Phase 7).
 3. **Wherever Stop fires after an error** (Antigravity), fail the step instead of accepting
    completion. Antigravity's Stop payload states the failure itself: have the hook treat
    `terminationReason: "ERROR"` as an error artifact carrying `error`. No log lookup is
@@ -507,23 +510,27 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
    Qwen and Antigravity. Depends on the live captures; one
    commit per harness. Update `docs/harnesses/compatibility.md` through
    `npm run check:docs`/`scripts/generate-compatibility-docs.mjs`.
-   - `ILogParser.getSessionError` returns a `SessionErrorSignal` `{ message, graceMs? }`.
-     With `graceMs`, `CliLogMonitor` waits that long and fails unless a record matching
-     `cancelsPendingSessionError` arrives first.
-   - Codex: a rollout `task_complete` with `error` fails the step at once.
-   - Qwen: a main-turn `request_lifecycle` ending `outcome: "error"` fails the step. Non-retryable
-     statuses fail at once. 429/5xx (and unknown statuses) wait
-     `QWEN_RETRYABLE_ERROR_GRACE_MS` (45 s, covering Qwen's 30 s retry cap plus jitter), and a
-     new main-turn lifecycle or `api_response` cancels the wait. Subagent requests are
-     ignored.
+   - `ILogParser.getSessionError` returns a `SessionErrorSignal` `{ message }` for a raw
+     session-log record that proves the turn failed; `CliLogMonitor` resolves it as
+     `HARNESS_ERROR` with source `sessionLog`.
+   - Codex: a rollout `task_complete` with `error` fails the step at once. The monitor
+     receives raw rollout records from `BaseLogParser.readNewLines`, verified by a
+     `CliLogMonitor` test over the captured fixture.
+   - Qwen: an `api_error` on the user's turn (prompt id `<session>########<n>`, no
+     `subagentId`) with HTTP 401 or 403 fails the step at once with `error_message`.
+     Qwen's `shouldRetryOnError`/`classifyRetryError` retry 429, 5xx, 408/409,
+     transport-wrapped 400s and bodyless 4xx, and the log never says whether a retry
+     gave up, so every other `api_error` is left to process exit and
+     `maxPromptTimeoutSec` (documented in `docs/harnesses/qwen-cli.md`). The earlier
+     45 s grace period and `cancelsPendingSessionError` were removed.
    - Antigravity: `NotificationMonitorBase` asks the monitor's `describeStopFailure`. A Stop
      with `terminationReason: "ERROR"` resolves as a harness error carrying agy's `error` text.
+     Headless: `AntigravityCliProvider.extractErrorFromStdout` reads the stream-json
+     `result` with `status: "ERROR"` (closes the headless bug).
    - Claude: StopFailure extraction prefers `last_assistant_message` over the `error`
      category.
    - The compatibility table is unchanged: `hooks.error` remains unsupported for all three,
      because detection comes from the session log or the Stop payload, not an error hook.
-   - Still open: Antigravity headless extraction
-     (`dev/bugs/backlog/antigravity-headless-error-not-parsed-from-stream-json.md`).
 
 When this plan ships, move the ledger's "CLI error reporting" Deferred entry into the pass log.
 
@@ -597,7 +604,7 @@ responseHeaders, responseBody, metadata } }`. `getOpenCodeErrorMessage`'s
     lifecycle (new `executionId`, same `promptId`) that ended `success`, and Stop fired.
     Fixture: `qwen/interactive-outer-retried-429-session-log.jsonl`.
   - So `api_error` marks one failed attempt, not the turn's outcome, and the detection added
-    in ~558ef85 fails such a recovered turn
+    in ~558ef85 failed such a recovered turn (fixed in Phase 7)
     (`dev/bugs/implemented/qwen-retried-api-error-fails-recovered-turn.md`).
   - The original DashScope fixtures (`qwen/interactive-session-log.jsonl`, `…-pty-excerpt.txt`)
     are unchanged.
@@ -613,7 +620,7 @@ responseHeaders, responseBody, metadata } }`. `getOpenCodeErrorMessage`'s
     `retryable`).
   - **No SYSTEM `ERROR_MESSAGE` entry is written to the transcript** (nor found in any
     existing transcript), so Phase 2's transcript extraction never fires
-    (`dev/bugs/backlog/antigravity-headless-error-not-parsed-from-stream-json.md`).
+    (`dev/bugs/implemented/antigravity-headless-error-not-parsed-from-stream-json.md`).
   - The synthesized `antigravity/headless-system-error.jsonl` was removed. Fixtures:
     `antigravity/headless-stream-json-error.jsonl` and `antigravity/headless-stderr.txt`.
   - A bogus `--model` fails client-side validation (exit 1, before any request) and is not

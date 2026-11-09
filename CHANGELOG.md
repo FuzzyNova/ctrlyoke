@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failed workflow step rows now show the failure reason when the workflow stops, as well as when it continues after the failure.
 - Copilot and Antigravity headless session errors now fail the step even when their CLI exits successfully; externally signalled process kills now follow `errorBehavior`.
 - Interactive Claude, Copilot and OpenCode failures now show the harness's own error text.
-- Interactive Codex, Qwen and Antigravity steps that hit an API error now fail with the harness's error text instead of waiting forever (Codex, Qwen) or completing as if the turn succeeded (Antigravity). A Qwen rate-limit or server error waits up to 45 seconds for Qwen's own retry, so a recovered turn is not failed.
+- Codex: an interactive step that hits an API error now fails with Codex's error text instead of waiting forever.
+- Qwen: an interactive step now fails with Qwen's error text on an API error Qwen never retries (HTTP 401 or 403) instead of waiting forever. Other API errors, which Qwen may retry, still wait for the process to exit or for `maxPromptTimeoutSec`.
+- Antigravity: interactive and headless steps that hit an API error now fail with agy's error text. Before, an interactive step completed as if the turn had succeeded, and a headless step failed as an unexpected process exit.
+- Claude: a failed interactive turn (`StopFailure`) now shows the provider's error text instead of an error category such as `unknown`.
 - A missing command or externally killed script now counts as "could not run" and follows `errorBehavior`; an errored script step with `onError: continue` remains visible as failed while the workflow continues. The CLI now folds the error action into the script verdict instead of printing a second error line.
 - A decision hook that cannot start, times out, is killed, or exceeds its output limit now records a visible error and falls back to the harness's normal permission prompt instead of silently allowing; partial output is discarded.
 - A shell opened from a workflow's **Terminal** tab now starts in the worktree that workflow runs in, the same folder its steps and scripts use, so you can resolve a merge or check `git status` there without changing directory. Workflows without a worktree still open shells in the workspace folder.
