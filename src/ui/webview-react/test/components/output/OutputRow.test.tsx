@@ -956,6 +956,48 @@ describe("OutputRow activity attribution label", () => {
 });
 
 describe("OutputRow auto-expand on hidden active match", () => {
+  it("shows effective verdict values for valueless and fallback comparisons", () => {
+    const row: OutputRenderRow = {
+      key: "verdict-effective-rule",
+      target: TARGET,
+      estimateSize: 36,
+      rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
+      expanded: true,
+      verdict: {
+        compareSource: "stdout",
+        operator: "isEmpty",
+        actual: "x",
+        outcome: SCRIPT_VERDICT_OUTCOMES.FAILED,
+        action: "continue",
+        durationMs: 1,
+      },
+    };
+    const { rerender } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+    expect(screen.getByText("stdout is empty")).toBeInTheDocument();
+    expect(screen.getByText("x")).toBeInTheDocument();
+    expect(screen.queryByText("Expected")).toBeNull();
+
+    rerender(
+      <OutputRow
+        row={{
+          ...row,
+          key: "verdict-fallback-rule",
+          verdict: {
+            ...row.verdict,
+            operator: "contains",
+            actual: "hello",
+            exitCode: 0,
+          },
+        }}
+        isExecutionActive={false}
+      />
+    );
+    expect(screen.getByText("exit code == 0")).toBeInTheDocument();
+    expect(screen.getAllByText("0", { selector: "dd" })).toHaveLength(2);
+  });
+
   it.each([
     [SCRIPT_VERDICT_OUTCOMES.PASSED, "✔ Passed"],
     [SCRIPT_VERDICT_OUTCOMES.FAILED, "✖ Failed"],

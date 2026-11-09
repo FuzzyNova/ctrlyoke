@@ -664,7 +664,8 @@ CliTerminalFormatter.renderScriptOutput({
   },
 }, { stepIndex: 0, stepName: "script", key: "default-expected" });`);
 
-    assert.ok(output.includes("Expected: exit code 0 (no `expected` set)"));
+    assert.ok(output.includes("Expected: 0"));
+    assert.ok(output.includes("Actual: 0"));
     assert.ok(!output.includes("returns"));
   });
 
@@ -702,7 +703,11 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
 
     assert.ok(output.includes("line 199"));
     assert.ok(!output.includes("line 200"));
-    assert.ok(output.includes("script output truncated: 41 more lines, 371 more characters"));
+    assert.ok(
+      output.includes(
+        "script output truncated: 41 more lines, 371 more characters"
+      )
+    );
   });
 
   test("prints completed stdout and stderr exactly once when nothing streamed", () => {

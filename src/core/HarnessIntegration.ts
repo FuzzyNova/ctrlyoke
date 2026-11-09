@@ -31,9 +31,12 @@ import {
 import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
+  operatorTakesNoValue,
+  resolveVerdictDisplay,
+} from "../utils/ScriptComparison";
+import {
   COMPARE_SOURCES,
   DIFF_CHANGE_TYPES,
-  DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
   PriorContextItemType,
   PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
@@ -48,7 +51,6 @@ import type {
   PriorContextText,
 } from "./PriorContextTranscript";
 import { boundPriorContextText } from "./PriorContextTranscript";
-import { operatorTakesNoValue } from "../utils/ScriptComparison";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import {
@@ -181,20 +183,20 @@ function escapeXmlAttribute(value: string): string {
  * already rendered in its own element, so it is not repeated here.
  */
 function buildScriptVerdictXml(verdict: ScriptVerdict): string {
-  const fallsBackToExitCode =
-    verdict.expected === undefined && !operatorTakesNoValue(verdict.operator);
-  const compareSource = fallsBackToExitCode
-    ? COMPARE_SOURCES.EXIT_CODE
-    : verdict.compareSource;
-  const operator = fallsBackToExitCode
-    ? DEFAULT_SCRIPT_OPERATOR
-    : verdict.operator;
-  const expected = fallsBackToExitCode ? "0" : verdict.expected;
+  const {
+    compareSource,
+    operator,
+    expected,
+    actual: resolvedActual,
+  } = resolveVerdictDisplay(verdict);
   const actual =
-    compareSource === COMPARE_SOURCES.EXIT_CODE
-      ? fallsBackToExitCode
-        ? verdict.exitCode?.toString()
-        : verdict.actual
+    compareSource === COMPARE_SOURCES.EXIT_CODE &&
+    !(
+      verdict.expected === undefined &&
+      !operatorTakesNoValue(verdict.operator) &&
+      verdict.exitCode === undefined
+    )
+      ? resolvedActual
       : undefined;
   const reason = verdict.error?.replace(/\s+/g, " ").trim();
   const attributes: [string, string | undefined][] = [

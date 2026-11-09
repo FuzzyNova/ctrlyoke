@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/cli/CliTerminalFormatter.ts` (`renderScriptVerdict`), `src/ui/webview-react/components/output/ScriptVerdict.tsx` (`getExpectedLabel`, expanded rows), `src/ui/webview-react/utils/outputFind.ts` (`SCRIPT_VERDICT` search segments), `src/core/HarnessIntegration.ts` (`buildScriptVerdictXml`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

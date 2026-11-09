@@ -9,6 +9,7 @@ import {
   type CompareSource,
   type ScriptOperator,
 } from "../types/DashboardConstants";
+import type { ScriptVerdict } from "../types/CtrlYokeTypes";
 import {
   COMPARE_SOURCE_OPTIONS_META,
   SCRIPT_OPERATOR_OPTIONS_META,
@@ -32,6 +33,32 @@ export function normalizeExpected(
   expected: string | number | undefined
 ): string | undefined {
   return expected === undefined ? undefined : String(expected);
+}
+
+/** Resolve the rule and value that a completed verdict actually represents. */
+export function resolveVerdictDisplay(verdict: ScriptVerdict): {
+  compareSource: CompareSource;
+  operator: ScriptOperator;
+  expected?: string;
+  actual: string;
+} {
+  if (
+    verdict.expected === undefined &&
+    !operatorTakesNoValue(verdict.operator)
+  ) {
+    return {
+      compareSource: COMPARE_SOURCES.EXIT_CODE,
+      operator: DEFAULT_SCRIPT_OPERATOR,
+      expected: "0",
+      actual: String(verdict.exitCode ?? ""),
+    };
+  }
+  return {
+    compareSource: verdict.compareSource,
+    operator: verdict.operator,
+    expected: verdict.expected,
+    actual: verdict.actual,
+  };
 }
 
 /** The script output a comparison reads from. */

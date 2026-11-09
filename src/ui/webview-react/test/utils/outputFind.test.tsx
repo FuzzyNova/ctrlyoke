@@ -272,13 +272,14 @@ describe("outputFind", () => {
       expect(actionMatches[0]).toMatchObject({ field: "action" });
     });
 
-    it("searches the exact default expected text rendered for a script verdict", () => {
+    it("searches the effective fallback expected and actual values", () => {
       const row = makeVerdictRow();
       row.verdict.expected = undefined;
+      row.verdict.exitCode = 0;
 
-      expect(findOutputMatches([row], "no `expected` set", false)).toHaveLength(
-        1
-      );
+      expect(
+        findOutputMatches([row], "0", false).map((match) => match.field)
+      ).toEqual(["expected", "actual"]);
       expect(findOutputMatches([row], "returns", false)).toHaveLength(0);
     });
 

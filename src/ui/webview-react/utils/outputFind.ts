@@ -17,7 +17,7 @@ import type {
 } from "@/types/cliEvents";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
-import { DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT } from "@root/types/CtrlYokeTypes";
+import { resolveVerdictDisplay } from "@root/utils/ScriptComparison";
 import {
   getStructuredPatchDiffLines,
   normalizeStructuredPatch,
@@ -163,18 +163,19 @@ function getBaseOutputRowSearchSegments(
     case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
     case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
       return [];
-    case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
+    case OUTPUT_ROW_KINDS.SCRIPT_VERDICT: {
+      const display = resolveVerdictDisplay(row.verdict);
       return createSegments([
-        {
-          field: "expected",
-          text: row.verdict.expected ?? DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
-        },
-        { field: "actual", text: row.verdict.actual },
+        ...(display.expected === undefined
+          ? []
+          : [{ field: "expected" as const, text: display.expected }]),
+        { field: "actual", text: display.actual },
         {
           field: "action",
           text: row.verdict.actionDetail ?? row.verdict.action,
         },
       ]);
+    }
     case OUTPUT_ROW_KINDS.CLI_HEADER:
       return createSegments([
         { field: "header", text: row.stepLabel },

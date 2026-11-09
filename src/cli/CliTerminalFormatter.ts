@@ -45,7 +45,6 @@ import {
   type HarnessId,
 } from "../types/DashboardConstants";
 import {
-  DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
   type WorkflowStopReason,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
@@ -53,6 +52,7 @@ import type { ScriptRuntimeOutput } from "../types/CtrlYokeTypes";
 import type { CliOutput, TokenStats } from "../types/WebviewMessageTypes";
 import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import { formatComparison } from "../utils/ScriptComparison";
+import { resolveVerdictDisplay } from "../utils/ScriptComparison";
 import type {
   PromptAttemptStats,
   PromptStartData,
@@ -1011,19 +1011,22 @@ export class CliTerminalFormatter {
     border: string
   ): void {
     const presentation = scriptOutcomePresentation(verdict.outcome);
+    const display = resolveVerdictDisplay(verdict);
     const summary = formatVerdictSummary(sourceLabel, verdict);
     console.log(
       `${border} ${presentation.color(`${presentation.icon} ${presentation.label}`)} ${chalk.dim(`— ${summary}`)}`
     );
     console.log(`${border}   Compare: ${scriptCompareLabel(verdict)}`);
-    CliTerminalFormatter.writeBoundedScriptField(
-      "Expected",
-      verdict.expected ?? DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
-      border
-    );
+    if (display.expected !== undefined) {
+      CliTerminalFormatter.writeBoundedScriptField(
+        "Expected",
+        display.expected,
+        border
+      );
+    }
     CliTerminalFormatter.writeBoundedScriptField(
       "Actual",
-      verdict.actual || "∅",
+      display.actual || "∅",
       border
     );
     console.log(

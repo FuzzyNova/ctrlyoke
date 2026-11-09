@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Script verdicts now show the effective expected and actual values for valueless comparisons and exit-code fallbacks.
 - Unknown-property suggestions now use keys valid for the affected step kind.
 - `ctrlyoke history steps` now excludes idle time between retries from
   final-step pass elapsed time.
