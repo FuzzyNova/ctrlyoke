@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PromptChipRail } from "@components/prompts/PromptChipRail";
+import { StepChipRail } from "@components/steps/StepChipRail";
 import {
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
@@ -16,7 +16,7 @@ import {
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
-import type { StepHarnessModel } from "@components/prompts/WorkflowStepRow";
+import type { StepHarnessModel } from "@components/steps/WorkflowStepRow";
 
 function resetStores() {
   useWorkflowStore.getState().resetWorkflow();
@@ -33,7 +33,7 @@ function getStepHarnessModel(): StepHarnessModel {
   };
 }
 
-describe("PromptChipRail", () => {
+describe("StepChipRail", () => {
   beforeEach(resetStores);
 
   it("keeps status in an icon and paints the identity border from the resolver", () => {
@@ -51,7 +51,7 @@ describe("PromptChipRail", () => {
     });
 
     render(
-      <PromptChipRail
+      <StepChipRail
         onExpand={vi.fn()}
         getStepHarnessModel={getStepHarnessModel}
       />
@@ -81,7 +81,7 @@ describe("PromptChipRail", () => {
   it("expands from the header when Space is pressed", async () => {
     const user = userEvent.setup();
     const onExpand = vi.fn();
-    render(<PromptChipRail onExpand={onExpand} />);
+    render(<StepChipRail onExpand={onExpand} />);
 
     const expandButton = screen.getByRole("button", { name: "Expand prompts" });
     expandButton.focus();
@@ -98,7 +98,7 @@ describe("PromptChipRail", () => {
       executionState: EXECUTION_STATES.IDLE,
     });
 
-    render(<PromptChipRail onExpand={vi.fn()} />);
+    render(<StepChipRail onExpand={vi.fn()} />);
 
     const chip = screen.getByRole("button", { name: "Prompt 1" });
     chip.focus();
@@ -116,7 +116,7 @@ describe("PromptChipRail", () => {
       executionState: EXECUTION_STATES.IDLE,
     });
 
-    render(<PromptChipRail onExpand={vi.fn()} />);
+    render(<StepChipRail onExpand={vi.fn()} />);
 
     const chip = screen.getByRole("button", { name: "Final step" });
     chip.focus();
@@ -143,7 +143,7 @@ describe("PromptChipRail", () => {
     });
 
     render(
-      <PromptChipRail
+      <StepChipRail
         onExpand={vi.fn()}
         getStepHarnessModel={getStepHarnessModel}
       />
@@ -173,7 +173,7 @@ describe("PromptChipRail", () => {
     });
 
     render(
-      <PromptChipRail
+      <StepChipRail
         onExpand={vi.fn()}
         getStepHarnessModel={getStepHarnessModel}
       />
@@ -203,7 +203,7 @@ describe("PromptChipRail", () => {
       executionState: EXECUTION_STATES.IDLE,
     });
 
-    render(<PromptChipRail onExpand={vi.fn()} />);
+    render(<StepChipRail onExpand={vi.fn()} />);
 
     const stepBar = document.querySelector(
       '[data-workflow-chip-index="0"] [data-chip-identity-bar]'
@@ -228,7 +228,7 @@ describe("PromptChipRail", () => {
     });
 
     render(
-      <PromptChipRail
+      <StepChipRail
         onExpand={vi.fn()}
         getStepHarnessModel={getStepHarnessModel}
       />
@@ -260,7 +260,7 @@ describe("PromptChipRail", () => {
       executionState: EXECUTION_STATES.IDLE,
     });
 
-    render(<PromptChipRail onExpand={vi.fn()} />);
+    render(<StepChipRail onExpand={vi.fn()} />);
 
     const groupWrapper = screen.getByTestId(`chip-parallel-group-${group.id}`);
     expect(groupWrapper.querySelector(".lucide-split")).not.toBeNull();
@@ -296,7 +296,7 @@ describe("PromptChipRail", () => {
       ],
     });
 
-    render(<PromptChipRail onExpand={vi.fn()} />);
+    render(<StepChipRail onExpand={vi.fn()} />);
 
     const groupWrapper = screen.getByTestId(`chip-parallel-group-${group.id}`);
     expect(

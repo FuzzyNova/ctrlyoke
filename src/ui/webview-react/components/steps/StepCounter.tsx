@@ -1,28 +1,28 @@
 import React from "react";
 import { useWorkflowStore } from "@store/workflowStore";
-import { usePromptStatus } from "@hooks/index";
+import { useStepStatus } from "@hooks/index";
 import { STEP_STATUS } from "@/types/messages";
 import { isWorkflowActive } from "@utils/status";
 import { useMultiSelectionCount } from "@store/editorStore";
 
-interface PromptCounterProps {
+interface StepCounterProps {
   className?: string;
   narrow?: boolean;
 }
 
 /**
- * PromptCounter - Shows prompt progress during workflow execution
+ * StepCounter - Shows prompt progress during workflow execution
  *
  * Display modes:
  * - During execution: "N of M" format with optional percentage
  * - When idle: "N prompts" format or empty if no prompts
  */
-export const PromptCounter: React.FC<PromptCounterProps> = ({
+export const StepCounter: React.FC<StepCounterProps> = ({
   className = "",
   narrow = false,
 }) => {
   const { steps: prompts, totalSteps, executionState } = useWorkflowStore();
-  const getPromptStatus = usePromptStatus();
+  const getStepStatus = useStepStatus();
   const selectedCount = useMultiSelectionCount();
 
   if (selectedCount > 1) {
@@ -35,7 +35,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
 
   const statusCounts = prompts.reduce(
     (counts, prompt, index) => {
-      const status = getPromptStatus(prompt, index);
+      const status = getStepStatus(prompt, index);
       counts[status] = (counts[status] ?? 0) + 1;
       return counts;
     },

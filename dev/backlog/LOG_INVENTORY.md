@@ -83,7 +83,7 @@ Ranked by call count (highest first).
 | `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`           |       | 3     |      |      |       | 3     |
 | `src/ui/webview-react/components/output/MarkdownText.tsx`               |       |       |      | 2    |       | 2     |
 | `src/ui/webview-react/components/output/TerminalView.tsx`               | 1     | 1     |      |      |       | 2     |
-| `src/ui/webview-react/components/prompts/ExecutingStepHighlight.tsx`    |       | 2     |      |      |       | 2     |
+| `src/ui/webview-react/components/steps/ExecutingStepHighlight.tsx`    |       | 2     |      |      |       | 2     |
 | `src/ui/webview-react/components/settings/stats/StatsUsageSection.tsx`  |       |       |      | 1    | 1     | 2     |
 | `src/ui/webview-react/components/shared/AdditionalArgsEditor.tsx`       | 2     |       |      |      |       | 2     |
 | `src/ui/webview-react/components/shared/BranchNameEditor.tsx`           | 2     |       |      |      |       | 2     |

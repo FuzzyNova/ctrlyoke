@@ -28,7 +28,7 @@ import {
   livePreviewSortingStrategy,
 } from "@utils/dndKit";
 import { verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ExecutingStepHighlight } from "@components/prompts/ExecutingStepHighlight";
+import { ExecutingStepHighlight } from "@components/steps/ExecutingStepHighlight";
 import { useEditorStore, useIsStepMultiSelected } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";

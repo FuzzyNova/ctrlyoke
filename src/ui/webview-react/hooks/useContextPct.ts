@@ -14,7 +14,7 @@ import { isWorkflowRunning } from "@utils/status";
  * Returns a `getContextPct(stepIndex)` helper that looks up the context-window
  * usage percentage for a queued prompt step.
  *
- * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
+ * Single source of truth shared by WorkflowStepsPanel and StepChipRail.
  */
 export function useContextPct() {
   const {

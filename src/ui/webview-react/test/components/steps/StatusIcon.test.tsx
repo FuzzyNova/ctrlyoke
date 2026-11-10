@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { StatusIcon } from "@components/prompts/StatusIcon";
+import { StatusIcon } from "@components/steps/StatusIcon";
 import { STEP_STATUS, type StepStatus } from "@/types/messages";
 import { getStatusColorClass } from "@utils/status";
 

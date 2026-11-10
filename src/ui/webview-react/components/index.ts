@@ -4,8 +4,8 @@ export * from "./layout";
 // Shared components
 export * from "./shared";
 
-// Prompt components
-export * from "./prompts";
+// Step components
+export * from "./steps";
 
 // Output components
 export * from "./output";

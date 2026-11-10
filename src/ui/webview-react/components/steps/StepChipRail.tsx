@@ -1,5 +1,5 @@
 /**
- * PromptChipRail — compact chip list for collapsed/narrow prompt navigation.
+ * StepChipRail — compact chip list for collapsed/narrow prompt navigation.
  *
  * Renders one chip per prompt showing its slot number + status icon. Used in:
  *  - Desktop: the collapsed WorkflowStepsPanel (32px wide Panel bar)
@@ -19,7 +19,7 @@ import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
-  usePromptStatus,
+  useStepStatus,
   useContextPct,
   useStepClickHandler,
   useStepContextMenu,
@@ -161,7 +161,7 @@ type ChipProps = {
   stepIndex: number;
   /** 1-based display slot (visual position, not absolute index) */
   slotNumber: number;
-  status: ReturnType<ReturnType<typeof usePromptStatus>>;
+  status: ReturnType<ReturnType<typeof useStepStatus>>;
   contextPct: number | undefined;
   isExecuting: boolean;
   /**
@@ -379,9 +379,9 @@ function FinalStepChip({
   );
 }
 
-// ─── PromptChipRail ───────────────────────────────────────────────────────────
+// ─── StepChipRail ───────────────────────────────────────────────────────────
 
-interface PromptChipRailProps {
+interface StepChipRailProps {
   /** Called when the user taps the header to expand to the full panel view. */
   onExpand: () => void;
   /** Shared effective harness resolution used by the expanded step surfaces. */
@@ -401,7 +401,7 @@ interface PromptChipRailProps {
  * with position-management options. A final step chip is rendered at the
  * bottom.
  */
-export const PromptChipRail: React.FC<PromptChipRailProps> = ({
+export const StepChipRail: React.FC<StepChipRailProps> = ({
   onExpand,
   getStepHarnessModel,
 }) => {
@@ -445,7 +445,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
 
   const getLatestOutput = useLatestStepOutput();
 
-  const getPromptStatus = usePromptStatus();
+  const getStepStatus = useStepStatus();
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
 
@@ -515,7 +515,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
               step: memberStep,
               harnessId: getChipHarnessId(
                 memberStep,
-                getPromptStatus(memberStep, group.startIndex + offset)
+                getStepStatus(memberStep, group.startIndex + offset)
               ),
               offsetInGroup: offset,
             }))
@@ -574,7 +574,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   // pending-only conditionals below just evaluate to their old defaults).
   const renderPromptChip = (index: number, hideExecutingHighlight = false) => {
     const prompt = prompts[index];
-    const status = getPromptStatus(prompt, index);
+    const status = getStepStatus(prompt, index);
     const contextPct = getContextPct(index);
     const isCurrentStep = index === currentStep;
     // Not `isCurrentStep`: every live member of a parallel group is
@@ -646,7 +646,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       indices.map((index) => {
         const step = prompts[index];
         return {
-          status: getPromptStatus(step, index),
+          status: getStepStatus(step, index),
           enabled: step.enabled !== false,
         };
       })

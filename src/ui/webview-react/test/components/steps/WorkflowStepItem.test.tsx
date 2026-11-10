@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { WorkflowStepItem } from "@components/prompts/WorkflowStep";
+import { WorkflowStepItem } from "@components/steps/WorkflowStepItem";
 import { STEP_STATUS, type CliOutput } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import { useSettingsStore } from "@store/settingsStore";

@@ -67,7 +67,7 @@ function useLatestQueuePromptEntries(): Map<number, OrderedCliHistoryEntry> {
  *
  * Condition/setup phases are skipped for the same reason as `useLatestStepOutput`.
  *
- * Shared by WorkflowStepsPanel and PromptChipRail.
+ * Shared by WorkflowStepsPanel and StepChipRail.
  */
 export function useFinalStepLatestOutput(): CliOutput | null {
   return useLatestFinalPromptEntry()?.cliOutput ?? null;
@@ -92,7 +92,7 @@ export function useFinalStepLatestPrompt(): string | undefined {
  * script's (a step whose `npm test` end condition ran for 2.3s reported "2.3s"
  * and no context bar, while its sibling steps without conditions were fine).
  *
- * Shared by WorkflowStepsPanel and PromptChipRail.
+ * Shared by WorkflowStepsPanel and StepChipRail.
  */
 export function useLatestStepOutput() {
   const latestEntries = useLatestQueuePromptEntries();

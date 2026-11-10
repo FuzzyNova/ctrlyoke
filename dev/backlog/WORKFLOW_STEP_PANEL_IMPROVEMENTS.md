@@ -31,12 +31,12 @@ designed with (3) in mind. Navigation for (1) and (2) goes through one new code 
 
 | #   | Problem                                                                                                                                                                                                                                                                                                                                          | Where                                                                                                                             |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| P1  | `Retry N of M` shows only while the step runs. `retryStates` is transient: it is keyed by queue step index only, set by `RETRY_ATTEMPT_CHANGED`, and cleared afterwards. A completed step does not show that it retried. The final step never shows retries.                                                                                     | `PromptStepDetails.tsx:126`, `workflowStore.ts` `setRetryState`/`clearRetryState`, `useMessageHandler.ts` `RETRY_ATTEMPT_CHANGED` |
+| P1  | `Retry N of M` shows only while the step runs. `retryStates` is transient: it is keyed by queue step index only, set by `RETRY_ATTEMPT_CHANGED`, and cleared afterwards. A completed step does not show that it retried. The final step never shows retries.                                                                                     | `StepDetailRows.tsx:126`, `workflowStore.ts` `setRetryState`/`clearRetryState`, `useMessageHandler.ts` `RETRY_ATTEMPT_CHANGED` |
 | P2  | Clicking a step scrolls to the target's anchor row (`scrollToTarget` → `anchorRowIndexByTarget`), which is the step's first output. There is no way to land on "Retry 2".                                                                                                                                                                        | `useStepClickHandler.ts`, `useOutputNavigation.ts` `scrollToTarget`                                                               |
 | P3  | In the output pane, attempt groups with more than one attempt start **collapsed** (`collapsedAttemptGroupKeys`, local `useState` in `useOutputRowsModel`). So the row for retry 2 often does not exist until the user expands the group.                                                                                                         | `useOutputRowsModel.ts:187-213`, `outputRows.ts` `getCollapsibleAttemptGroupKeys`                                                 |
-| P4  | Clicking the Final Step row only calls `selectFinalStep`. It never navigates the output. The same handler is duplicated in `WorkflowStepsPanel.handleFinalStepSelect` and `PromptChipRail.handleFinalStepClick`.                                                                                                                                 | `WorkflowStepsPanel.tsx:1027`, `PromptChipRail.tsx:694`                                                                           |
+| P4  | Clicking the Final Step row only calls `selectFinalStep`. It never navigates the output. The same handler is duplicated in `WorkflowStepsPanel.handleFinalStepSelect` and `StepChipRail.handleFinalStepClick`.                                                                                                                                 | `WorkflowStepsPanel.tsx:1027`, `StepChipRail.tsx:694`                                                                           |
 | P5  | Across multiple passes, there is no way to jump to "pass 2". The output already addresses each pass as its own target (`{ kind: FINAL_STEP, index: loopIndex }`), so only the UI is missing.                                                                                                                                                     | `outputProjection.ts` `toOutputMessageTarget`                                                                                     |
-| P6  | Every step row is mounted: done steps, pending sortable steps, and groups. Each row also has its own store subscriptions (`useSettingsStore` in `WorkflowStep`, `useIsStepInOutputView`, and so on). Mounting the panel and every resize frame both scale with step count.                                                                       | `WorkflowStepsPanel.tsx:1973-2200`                                                                                                |
+| P6  | Every step row is mounted: done steps, pending sortable steps, and groups. Each row also has its own store subscriptions (`useSettingsStore` in `WorkflowStepItem`, `useIsStepInOutputView`, and so on). Mounting the panel and every resize frame both scale with step count.                                                                       | `WorkflowStepsPanel.tsx:1973-2200`                                                                                                |
 | P7  | Read-only workflows cannot navigate. `handleStepClick` returns early when `isExternallyManaged`; the step list container gets `pointer-events-none` when `isLineageReadOnly` (deleted or system-generated), which blocks every click; the footer's `isSelectionReadOnly` blocks `onSelect`. Navigation and editing share one guard.              | `WorkflowStepsPanel.tsx:1021`, `:1861`, `FinalStepFooter.tsx` `isSelectionReadOnly`                                               |
 | P8  | After a manual re-run (set start position → edit → continue), clicking the step lands on its **first** output ever (`anchorRowIndexByTarget` is set once, at the target's first row), which is the superseded run, not the run the step row now describes.                                                                                       | `outputRows.ts:2535`                                                                                                              |
 | P9  | The steps panel never scrolls on its own. As the user scrolls the output, the in-view marker (bright number + rail bar) moves to steps that are off screen in the panel, so a fast scroll from step 20 into 21 or 22 shows no visible change in the panel. The panel has no "reveal step" path at all (no `scrollIntoView`, no `scrollToIndex`). | `useOutputViewportSteps.ts` → `uiStore.outputInViewTargetKeys`, `InOutputViewMarker.tsx`                                          |
@@ -58,7 +58,7 @@ interface StepAttemptSummary {
   runIndex: number; // manual re-run (0 = original run)
   attemptIndex: number; // retry within that run (0 = initial attempt)
   isStreaming: boolean;
-  durationSeconds?: number; // from the CliOutput, same source PromptStepDetails uses
+  durationSeconds?: number; // from the CliOutput, same source StepDetailRows uses
   tokenTotalLabel?: string; // formatTokenCount(resolveTokenTotal(...))
   status?: StepStatus; // terminal outcome of this attempt, if known
 }
@@ -122,11 +122,11 @@ clean re-run gets no accordion.
 └──────────────────────────────────────────────┘
 ```
 
-- **New component** `components/prompts/StepAttemptList.tsx`. It is shared by queue rows and
+- **New component** `components/steps/StepAttemptList.tsx`. It is shared by queue rows and
   the final-step footer (see below), keeping one implementation for both, as
-  `PromptStepDetails` already does for the metadata rows.
-- **Placement**: render it from `WorkflowStepRow`, after the `WorkflowStep` body and inside the
-  sortable wrapper, so it moves with a dragged row. Do not put it inside `WorkflowStep`'s own
+  `StepDetailRows` already does for the metadata rows.
+- **Placement**: render it from `WorkflowStepRow`, after the `WorkflowStepItem` body and inside the
+  sortable wrapper, so it moves with a dragged row. Do not put it inside `WorkflowStepItem`'s own
   `role="button"` container: nested interactive rows inside a pseudo-button cause the mobile
   hover/focus drift described in `webview-react-components.instructions.md`. Use native
   `<button>`s for the header and the attempt rows. `ParallelGroupPanel` renders members through
@@ -169,7 +169,7 @@ clean re-run gets no accordion.
 ### Final step: pass rows in the expanded footer
 
 - In `FinalStepFooter`'s expanded details, render `StepAttemptList` in **pass mode** when
-  `passCount >= 2`. It goes below everything `PromptStepDetails` renders (harness/model, stats,
+  `passCount >= 2`. It goes below everything `StepDetailRows` renders (harness/model, stats,
   the override chips row), inside the same content column, so it sits to the left of the
   `ContextWindowBar`, which is the same position as under a normal step. It has one row per
   pass, labelled `formatFinalPassLabel(n)`, with duration, tokens and status. Use the same max
@@ -203,11 +203,11 @@ clean re-run gets no accordion.
 - Newest pass at the bottom (chronological, matching the output). When a new pass starts and
   the list has not been scrolled up, keep it pinned to the bottom.
 
-### PromptStepDetails cleanup
+### StepDetailRows cleanup
 
-- **Remove** the running-only `Retry N of M` row (`PromptStepDetails.tsx:126`). The collapsed
+- **Remove** the running-only `Retry N of M` row (`StepDetailRows.tsx:126`). The collapsed
   accordion header now shows the same thing, so one place shows retry progress both during
-  and after the run. `PromptStepDetails` no longer needs the `retryState` prop; the accordion
+  and after the run. `StepDetailRows` no longer needs the `retryState` prop; the accordion
   reads `retryStates` for the live denominator.
 - Leave the compact stats row (duration · tokens · session) unchanged. It describes the
   **latest** attempt, which is what `useLatestStepOutput` already returns. State that in the row's
@@ -290,7 +290,7 @@ helper handles the deferred `requestAnimationFrame` scroll currently written inl
 | Pass's nested attempt row                          | `selectFinalStep`                         | `scrollToAttempt({FINAL_STEP, loopIndex}, {...})`                                                                                                       |
 
 - Add `useFinalStepClickHandler()` beside `useStepClickHandler()`, and use it from **both**
-  `WorkflowStepsPanel.handleFinalStepSelect` and `PromptChipRail.handleFinalStepClick`. These
+  `WorkflowStepsPanel.handleFinalStepSelect` and `StepChipRail.handleFinalStepClick`. These
   are duplicates today and both have the bug.
 - `latestPassLoopIndex` = the `loopIndex` of the newest final-step entry in the attempt index,
   not `finalStepLoopCount`. While pass N+1's queue loop is running, the final step has no
@@ -643,7 +643,7 @@ Settled with the user on 2026-11-09:
    header summarizes the latest attempt or pass ("Retry 3 of 5" while running, "Retry 3 ✓ · 4
    attempts" after), so retry progress is visible without expanding. This replaces an earlier
    "auto-open while running, auto-close when done" design: that design was more state and
-   shifted row heights mid-run. The header replaces `PromptStepDetails`' running-only
+   shifted row heights mid-run. The header replaces `StepDetailRows`' running-only
    `Retry N of M` row.
 2. **Read-only navigation**: navigation works in every read-only workflow: CLI-owned, owned by
    another VS Code window, commit-message generation, deleted, and history views. Only
@@ -666,5 +666,5 @@ Settled with the user on 2026-11-09:
 
 - Attempt-level in-view markers: extend `outputInViewTargetKeys` with attempt keys so the
   attempt row currently on screen gets an `InOutputViewBar`.
-- Apply the same attempt rows to the collapsed `PromptChipRail` (e.g. a popover per chip).
-- Have the collapsed `PromptChipRail` follow the output with Part 5's rule.
+- Apply the same attempt rows to the collapsed `StepChipRail` (e.g. a popover per chip).
+- Have the collapsed `StepChipRail` follow the output with Part 5's rule.

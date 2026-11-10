@@ -8,7 +8,7 @@
  * from a reloaded step, passes those suites without ever being reachable by a
  * user. This suite closes that gap for the two nested-object surfaces
  * (`preCondition.env`, `toolPermissions` allow/deny lists) most likely to hide
- * a frontend construction/read-back bug of the kind fixed in PromptEditor's
+ * a frontend construction/read-back bug of the kind fixed in StepEditor's
  * script-step payload and editorStore's script-step read-back.
  *
  * Flow: seed the editor with an override, drive the *real* env/tool-list
@@ -31,7 +31,7 @@ vi.mock("../../hooks/useCompatibilityDiagnostics", () => ({
   }),
 }));
 
-import { PromptEditor } from "@components/editor/PromptEditor";
+import { StepEditor } from "@components/editor/StepEditor";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -82,7 +82,7 @@ describe("PromptPropertiesDrawer — prompt-step persist/reload round trip", () 
       },
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     act(() => useUiStore.getState().openPromptPropertiesDrawer());
 
     // Drive the real Validation-tab environment row controls.

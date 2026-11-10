@@ -120,7 +120,7 @@ All scoped to `when: focusedView == 'ctrlyoke.dashboard'`. Source: `package.json
 Best for shortcuts that should work regardless of which element has focus inside the webview.
 
 ```typescript
-// Pattern used in PromptEditor.tsx, Modal.tsx, useUndoRedoKeyHandler.ts, OutputSection.tsx
+// Pattern used in StepEditor.tsx, Modal.tsx, useUndoRedoKeyHandler.ts, OutputSection.tsx
 useEffect(() => {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape" && someCondition) {
@@ -208,7 +208,7 @@ When a webview shortcut needs to trigger extension host logic, use `postMessage`
 | `Ctrl+Shift+F` / `Cmd+Shift+F`           | `useHistorySearchKeyHandler` (window, capture)             | Toggle the history search drawer (`HistorySearchDrawer`) — same action as the search button in `Header.tsx`. Fires even while a CodeMirror editor is focused: `createFindKeyHandlerExtension`'s own Ctrl/Cmd+F check ignores `shiftKey`, so this handler must win the capture phase before the event ever reaches the editor's DOM node, rather than deferring to it the way plain `Ctrl+F` below does.                                                                                                |
 | `Escape`                                 | `Modal`                                                    | Close the open modal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `Escape`                                 | `GlobalSettingsDrawer`                                     | Close the settings search row when it is open; otherwise close the global settings drawer.                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `Escape`                                 | `PromptEditor`                                             | Close the properties drawer                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `Escape`                                 | `StepEditor`                                             | Close the properties drawer                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `Escape`                                 | `HistorySearchDrawer`                                      | Close the history search drawer                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `Escape`                                 | `ContextMenu`                                              | Close the open context menu                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
@@ -255,7 +255,7 @@ Only shortcut-opened lists take keyboard focus; opening a dropdown with the mous
 
 ### Component-scoped `Enter`/`Space` activation
 
-Standard `role="button"` accessibility pattern (see Accessibility Conventions) applied throughout the dashboard, including: `SplitButton` (also `ArrowDown`/`ArrowUp` to navigate menu items, `Escape` to close and restore focus, `Tab` to close the dropdown), `RunSelector` (`Escape` to close), `SaveWorkflowDialog` (`Enter` to save), `WorkflowStatus` (`Enter` to confirm a workflow rename, `Escape` to cancel), `TemplateModal` (`Enter` to confirm template selection), `McpManagerSection` and `AgentSkillsManagerSection` (`Enter` to confirm inline edits), `FinalStepFooter`, `PromptChipRail`, `WorkflowStep`, `OutputRow`, `OutputMinimap` (select/expand items), `PanelBar`, `EditorSection`, `OutputSection`, `WorkflowPropertiesPanel`, `OutputSectionHeader` (toggle collapse/expand).
+Standard `role="button"` accessibility pattern (see Accessibility Conventions) applied throughout the dashboard, including: `SplitButton` (also `ArrowDown`/`ArrowUp` to navigate menu items, `Escape` to close and restore focus, `Tab` to close the dropdown), `RunSelector` (`Escape` to close), `SaveWorkflowDialog` (`Enter` to save), `WorkflowStatus` (`Enter` to confirm a workflow rename, `Escape` to cancel), `TemplateModal` (`Enter` to confirm template selection), `McpManagerSection` and `AgentSkillsManagerSection` (`Enter` to confirm inline edits), `FinalStepFooter`, `StepChipRail`, `WorkflowStepItem`, `OutputRow`, `OutputMinimap` (select/expand items), `PanelBar`, `EditorSection`, `OutputSection`, `WorkflowPropertiesPanel`, `OutputSectionHeader` (toggle collapse/expand).
 
 ---
 
@@ -293,7 +293,7 @@ terminal shell picker).
 **Do not apply it everywhere `"Ctrl+"` appears in a tooltip** — two categories
 are deliberately exempt:
 
-- `Ctrl+Enter` / `Ctrl+Shift+Enter` (Run/Queue, `PromptEditor.tsx`) stay
+- `Ctrl+Enter` / `Ctrl+Shift+Enter` (Run/Queue, `StepEditor.tsx`) stay
   literal `Ctrl` on every OS, including macOS — a deliberate branding choice
   (see the CodeMirror keymap section above), not an oversight.
 - Terminal control-bar labels (`TerminalControlBarEditor.tsx`) describe

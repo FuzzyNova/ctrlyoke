@@ -3,13 +3,13 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { FINAL_STEP_PHASES } from "../types/messages";
 import { getActiveOutputNavigationController } from "@utils/outputNavigation";
-import type { StepClickModifiers } from "../components/prompts/WorkflowStep";
+import type { StepClickModifiers } from "../components/steps/WorkflowStepItem";
 
 /**
  * Returns a `handleStepClick(index, modifiers)` callback that selects the prompt for
  * editing and scrolls the output panel to its anchor.
  *
- * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
+ * Single source of truth shared by WorkflowStepsPanel and StepChipRail.
  * Callers can add their own guards (e.g. isExternallyManaged) before invoking it.
  */
 export function useStepClickHandler() {

@@ -12,7 +12,7 @@ import type { PromptStep as CorePromptStep } from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 import type { WorkflowStep } from "@store/workflowStore";
-import type { PromptOverride } from "../components/prompts/PromptStepDetails";
+import type { StepOverrideChip } from "../components/steps/StepDetailRows";
 import { priorContextBadge } from "../components/shared/tabBadgeUtils";
 import {
   createDefaults,
@@ -80,7 +80,7 @@ function shorten(text: string, maxLength: number): string {
 
 function executionModeChip(
   mode: NonNullable<WorkflowStep["executionMode"]>
-): PromptOverride {
+): StepOverrideChip {
   const interactive = mode === EXECUTION_MODES.INTERACTIVE;
   return {
     label: interactive ? "Interactive" : "Headless",
@@ -91,7 +91,7 @@ function executionModeChip(
 
 function mcpServersChip(
   mcpServers: NonNullable<PromptStep["mcpServers"]> | null
-): PromptOverride {
+): StepOverrideChip {
   if (mcpServers === null) {
     return { label: "MCP: none", title: "MCP servers explicitly disabled" };
   }
@@ -116,7 +116,7 @@ function conditionChip(
   prefix: "ec" | "pc",
   field: "endCondition" | "preCondition",
   condition: PromptStep["endCondition"] | PromptStep["preCondition"]
-): PromptOverride | undefined {
+): StepOverrideChip | undefined {
   if (condition === null) return { label: `${prefix}: disabled` };
   if (!condition?.script) return undefined;
   return {
@@ -127,7 +127,7 @@ function conditionChip(
 
 interface ChipFieldConfig {
   /** The chip for the step's explicit value, or undefined when it renders none. */
-  chip: (step: PromptStep) => PromptOverride | undefined;
+  chip: (step: PromptStep) => StepOverrideChip | undefined;
   /** Adjusts a resolved value before comparing authored against inherited. */
   normalize?: (value: unknown) => unknown;
   /** The `↩ <id>` chip replaces this chip when a concrete session is pinned. */
@@ -283,7 +283,7 @@ export function buildStepOverrideChips(
   step: WorkflowStep,
   workflowProperties: WorkflowProperties,
   globalSettings: GlobalSettings
-): PromptOverride[] {
+): StepOverrideChip[] {
   if (isScriptWorkflowStep(step)) {
     return step.executionMode ? [executionModeChip(step.executionMode)] : [];
   }
@@ -312,7 +312,7 @@ export function buildStepOverrideChips(
       ? step.sessionId
       : undefined;
 
-  const chips: PromptOverride[] = [];
+  const chips: StepOverrideChip[] = [];
   const pinned: string[] = [];
   for (const field of CHIP_FIELD_NAMES) {
     const config: ChipFieldConfig = CHIP_FIELDS[field];

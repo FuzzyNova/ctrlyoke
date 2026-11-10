@@ -305,7 +305,7 @@ export function isUnstartedRunFile(workingFile: {
  * even when that step's outcome is a terminal failure that stops the workflow,
  * so a positional rule ("i < currentIndex → completed") mislabels the step that
  * actually failed as COMPLETED. That in turn fools the dashboard's
- * `usePromptStatus` stale-failure guard — which only suppresses painting the
+ * `useStepStatus` stale-failure guard — which only suppresses painting the
  * error badge on `currentIndex` when the *previous* step's recorded status is
  * already FAILED — into painting the error badge on the next, never-executed
  * step instead.

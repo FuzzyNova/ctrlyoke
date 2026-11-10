@@ -1,6 +1,6 @@
 /**
  * Workflow naming — pure functions shared between the extension backend
- * (`WorkflowInstance`) and the React webview (`PromptEditor`).
+ * (`WorkflowInstance`) and the React webview (`StepEditor`).
  *
  * Must remain free of `fs`, `vscode`, or any Node.js-specific APIs so it can
  * run in both environments without side effects.

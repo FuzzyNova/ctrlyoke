@@ -31,7 +31,7 @@ export { useScopedSelectAll } from "./useScopedSelectAll";
 export { useLanguageIntelligence } from "./useLanguageIntelligence";
 export { useDrawerTabOverrides } from "./useDrawerTabOverrides";
 export { useSettingsDrawerTabOverrides } from "./useSettingsDrawerTabOverrides";
-export { usePromptStatus } from "./usePromptStatus";
+export { useStepStatus } from "./useStepStatus";
 export { useContextPct } from "./useContextPct";
 export { useStepClickHandler } from "./useStepClickHandler";
 export {

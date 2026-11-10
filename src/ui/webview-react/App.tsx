@@ -70,7 +70,7 @@ import {
   EditorSection,
   WorkflowPropertiesPanel,
   CenterContentArea,
-  PromptChipRail,
+  StepChipRail,
   GlobalSettingsDrawer,
   StartupOverlay,
   WorkflowSwitchOverlay,
@@ -670,7 +670,7 @@ function App() {
                       }
                     >
                       <div className="w-[32px] h-full">
-                        <PromptChipRail onExpand={handleSidebarExpand} />
+                        <StepChipRail onExpand={handleSidebarExpand} />
                       </div>
                     </div>
                   )}

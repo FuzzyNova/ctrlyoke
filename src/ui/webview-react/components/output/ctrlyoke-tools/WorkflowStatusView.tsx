@@ -1,5 +1,5 @@
 import React from "react";
-import { StatusIcon } from "@components/prompts/StatusIcon";
+import { StatusIcon } from "@components/steps/StatusIcon";
 import { RawToolCallSection } from "./RawToolCallSection";
 import type { ToolCallExpansionSection } from "@root/types/DashboardConstants";
 import type { ToolCallExpansionState } from "@utils/toolCallLayout";

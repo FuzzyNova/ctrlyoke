@@ -196,7 +196,7 @@ export function useStepContextMenu({
 
   // Swaps a pending step with its neighbor. Used by the Move Up/Down menu
   // items — a keyboard/tap-friendly alternative to drag-to-reorder, notably
-  // for PromptChipRail which has no drag surface of its own.
+  // for StepChipRail which has no drag surface of its own.
   const moveQueueStep = useCallback(
     (
       pendingIndex: number,
@@ -417,7 +417,7 @@ export function useStepContextMenu({
         ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : "Cannot reorder steps while workflow is cancelling";
       // A running step stays pinned at pending position 0 (mirrors the drag
-      // pinning in WorkflowStepsPanel/PromptChipRail): it can't move, and
+      // pinning in WorkflowStepsPanel/StepChipRail): it can't move, and
       // nothing else can move into its slot.
       const moveUpBlockedByPin =
         executionOwnsCurrentStep(executionState, finalStepPhase) &&

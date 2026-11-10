@@ -165,7 +165,7 @@ function resolvedLine(
  * resolved execution properties (step → workflow → global precedence, same
  * as the properties drawer), the actual runtime session ID, and the same
  * context-window/token/cost figures shown in the step's hover tooltip
- * (`WorkflowStep.tsx`'s `tokenTooltip`) — that tooltip has no way to be
+ * (`WorkflowStepItem.tsx`'s `tokenTooltip`) — that tooltip has no way to be
  * copied on its own, which is the main reason this action exists. Reads
  * settings via `getState()` since it only needs a point-in-time snapshot at
  * the moment the menu item is invoked.

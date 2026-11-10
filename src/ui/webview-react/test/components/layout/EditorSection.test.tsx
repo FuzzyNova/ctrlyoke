@@ -36,8 +36,8 @@ const {
   isElementNarrow: { value: false },
 }));
 
-vi.mock("../../../components/editor/PromptEditor", () => ({
-  PromptEditor: ({
+vi.mock("../../../components/editor/StepEditor", () => ({
+  StepEditor: ({
     onPromptFileActionChange,
     onPromptFileContentChange,
   }: {

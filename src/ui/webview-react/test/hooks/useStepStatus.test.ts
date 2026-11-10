@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { usePromptStatus } from "@hooks/usePromptStatus";
+import { useStepStatus } from "@hooks/useStepStatus";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
@@ -11,7 +11,7 @@ beforeEach(() => {
   useWorkflowStore.temporal.getState().clear();
 });
 
-describe("usePromptStatus", () => {
+describe("useStepStatus", () => {
   it("uses recorded statuses for every member while a group is at currentStep", () => {
     useWorkflowStore.getState().loadWorkflow({
       fileName: "group.ctrlyoke.yaml",
@@ -26,7 +26,7 @@ describe("usePromptStatus", () => {
     useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
     useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.SENT);
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
     const getStatus = result.current;
 
     expect(getStatus(useWorkflowStore.getState().steps[0], 0)).toBe(
@@ -58,7 +58,7 @@ describe("usePromptStatus", () => {
     useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.SENT);
     useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.PENDING);
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
     const getStatus = result.current;
 
     expect(getStatus(useWorkflowStore.getState().steps[0], 0)).toBe(
@@ -92,7 +92,7 @@ describe("usePromptStatus", () => {
     useWorkflowStore.getState().setStepStatus(2, STEP_STATUS.COMPLETED);
     useWorkflowStore.getState().setStepStatus(3, STEP_STATUS.FAILED);
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
     const getStatus = result.current;
 
     expect(getStatus(useWorkflowStore.getState().steps[3], 3)).toBe(
@@ -115,7 +115,7 @@ describe("usePromptStatus", () => {
     });
     useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
     const getStatus = result.current;
 
     expect(getStatus(useWorkflowStore.getState().steps[1], 1)).toBe(
@@ -155,7 +155,7 @@ describe("usePromptStatus", () => {
     useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.FAILED);
     useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.COMPLETED);
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
     const getStatus = result.current;
     const steps = useWorkflowStore.getState().steps;
 
@@ -188,7 +188,7 @@ describe("usePromptStatus", () => {
     });
     useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
     expect(result.current(useWorkflowStore.getState().steps[0], 0)).toBe(
       STEP_STATUS.COMPLETED
     );
@@ -210,7 +210,7 @@ describe("usePromptStatus", () => {
     });
     useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
     const getStatus = result.current;
 
     expect(getStatus(useWorkflowStore.getState().steps[0], 0)).toBe(
@@ -241,7 +241,7 @@ describe("usePromptStatus", () => {
       finalStepPhase: FINAL_STEP_PHASES.QUEUE,
     });
 
-    const { result } = renderHook(() => usePromptStatus());
+    const { result } = renderHook(() => useStepStatus());
 
     expect(result.current(useWorkflowStore.getState().steps[1], 1)).toBe(
       STEP_STATUS.RUNNING

@@ -2,7 +2,7 @@ import React from "react";
 import { STEP_STATUS } from "../../types/messages";
 import type { HarnessId, StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
-import type { StepDetails } from "./WorkflowStep";
+import type { StepDetails } from "./WorkflowStepItem";
 import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { Icon } from "../shared/Icon";
 import { CopyButton } from "../shared/CopyButton";
@@ -14,13 +14,13 @@ import { formatClockDuration } from "../../utils/time";
  * label: short display text (e.g. "resume", "ec: my-script.js", "ctx: all")
  * title: optional full tooltip text for truncated/abbreviated values
  */
-export interface PromptOverride {
+export interface StepOverrideChip {
   label: string;
   title?: string;
   icon?: string;
 }
 
-interface PromptStepDetailsProps {
+interface StepDetailRowsProps {
   status: StepStatus;
   /** Harness ID for the icon shown before the harness label */
   harnessId?: HarnessId;
@@ -37,20 +37,20 @@ interface PromptStepDetailsProps {
     elapsed?: number;
   };
   /** Prompt-level property overrides to display as compact chips */
-  overrides?: PromptOverride[];
+  overrides?: StepOverrideChip[];
   /** Formatted attempt token total (e.g. "14.2k"), shown alongside duration/session ID regardless of compaction state */
   attemptTotalLabel?: string;
 }
 
 /**
- * PromptStepDetails - Shared secondary metadata rows for prompt display.
+ * StepDetailRows - Shared secondary metadata rows for prompt display.
  *
  * Renders harness/model info, retry state, compact stats (context %, session ID,
  * duration), end condition result, status message, and property overrides.
  * Used by both PromptStep and FinalStepFooter so future additions automatically
  * appear in both places.
  */
-export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
+export const StepDetailRows: React.FC<StepDetailRowsProps> = ({
   status,
   harnessId,
   harnessLabel,

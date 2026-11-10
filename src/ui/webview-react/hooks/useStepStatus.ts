@@ -9,12 +9,12 @@ import { isWorkflowRunning } from "../utils/status";
 import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
 
 /**
- * Returns a `getPromptStatus(prompt, index)` helper that derives the display
+ * Returns a `getStepStatus(prompt, index)` helper that derives the display
  * status for a prompt chip/row from live workflow state.
  *
- * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
+ * Single source of truth shared by WorkflowStepsPanel and StepChipRail.
  */
-export function usePromptStatus() {
+export function useStepStatus() {
   const { currentStep, executionState, steps, activeStepIndices } =
     useWorkflowStore();
   const parallelGroups = useWorkflowStore((state) => state.parallelGroups);
@@ -32,7 +32,7 @@ export function usePromptStatus() {
     parallelGroups,
   });
 
-  return function getPromptStatus(
+  return function getStepStatus(
     prompt: WorkflowStep | { status?: StepStatus },
     index: number
   ): StepStatus {

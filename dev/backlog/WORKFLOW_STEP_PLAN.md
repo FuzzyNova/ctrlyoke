@@ -1336,8 +1336,8 @@ Existing inline append behaviour (splicing steps into the current run and sessio
 ### Parent step row
 
 There is no `PromptItem.tsx`. Rows are `WorkflowStepRow` (`prompts/WorkflowStepRow.tsx`), which
-renders `WorkflowStepItem` (`prompts/WorkflowStep.tsx`), and script steps are a branch inside it
-(`WorkflowStep.tsx:310-343`). After Phase 0 that branch becomes a switch, and the sub-workflow arm
+renders `WorkflowStepItem` (`steps/WorkflowStepItem.tsx`), and script steps are a branch inside it
+(`WorkflowStepItem.tsx:310-343`). After Phase 0 that branch becomes a switch, and the sub-workflow arm
 renders:
 
 - a workflow icon, a **"Workflow"** badge, and the referenced file's name as the subtitle;
@@ -1373,7 +1373,7 @@ The dropdown needs no other change.
 
 - **Step-type toggle** (`layout/EditorSection.tsx:286-320`, `editorStore.setStepType`): a third
   **Workflow** option.
-- **`components/editor/PromptEditor.tsx`:** an `isSubWorkflowMode` path alongside `isScriptMode`
+- **`components/editor/StepEditor.tsx`:** an `isSubWorkflowMode` path alongside `isScriptMode`
   (`:308`). It shows a workflow-file field with a browse button (same picker split as above), an
   `onFail` select (reuse the script step's select component), and the shared name/color/enabled
   fields. All prompt-only and script-only sections are hidden. A **File / Inline** switch picks
@@ -1542,8 +1542,8 @@ finalStep:
 | `src/ui/WebviewMessageRouter.ts`                                                                                                         | `APPEND_FILE` handler passes `appendMode`                                                                                                                                                                                                          |
 | `src/extension.ts`, `package.json`                                                                                                       | `ctrlyoke.queueAsSubWorkflowFromContext` command and menu entry                                                                                                                                                                                    |
 | `src/cli.ts`, `src/cli/CliJsonResultBuilder.ts`                                                                                          | CLI launcher factory, child progress output, `subWorkflowRuns` in JSON                                                                                                                                                                             |
-| `src/ui/webview-react/components/prompts/WorkflowStep.tsx`, `WorkflowStepRow.tsx`                                                        | Sub-workflow row variant, live child badge, "Open run" link                                                                                                                                                                                        |
-| `src/ui/webview-react/components/layout/EditorSection.tsx`, `components/editor/PromptEditor.tsx`, `store/editorStore.ts`                 | Workflow step type, editor mode, `buildSubWorkflowProperties`                                                                                                                                                                                      |
+| `src/ui/webview-react/components/steps/WorkflowStepItem.tsx`, `WorkflowStepRow.tsx`                                                        | Sub-workflow row variant, live child badge, "Open run" link                                                                                                                                                                                        |
+| `src/ui/webview-react/components/layout/EditorSection.tsx`, `components/editor/StepEditor.tsx`, `store/editorStore.ts`                 | Workflow step type, editor mode, `buildSubWorkflowProperties`                                                                                                                                                                                      |
 | `src/ui/webview-react/hooks/useWorkflowContextMenu.tsx`, `components/workflow/WorkflowControls.tsx`, `hooks/useWorkflowFileMenuItems.ts` | "Queue workflow to run next…" / "Queue as sub-workflow…"                                                                                                                                                                                           |
 | `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`                                                                            | "Started by" label on child rows                                                                                                                                                                                                                   |
 | `src/core/ExecutionPreviewService.ts`, `ui/webview-react/utils/executionPreview.ts`                                                      | Single-entry preview                                                                                                                                                                                                                               |

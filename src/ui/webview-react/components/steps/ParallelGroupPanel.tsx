@@ -11,7 +11,7 @@ import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { WorkflowStep } from "@store/workflowStore";
-import type { StepClickModifiers } from "./WorkflowStep";
+import type { StepClickModifiers } from "./WorkflowStepItem";
 import {
   WorkflowStepRow,
   WorkflowStepRowFrame,
@@ -19,7 +19,7 @@ import {
   type StepContextMenuRequest,
   type StepHarnessModel,
 } from "./WorkflowStepRow";
-import type { PromptOverride } from "./WorkflowStep";
+import type { StepOverrideChip } from "./WorkflowStepItem";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
 import { StatusIcon } from "./StatusIcon";
 import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
@@ -49,7 +49,7 @@ export type ParallelGroupStatus =
  * bare string-literal comparison — `find-hardcoded-strings.mjs` flags
  * repeated flow-control literals, and other files reuse the spelling
  * "running" for unrelated concepts (step ids, token-total variants). Exported
- * so `PromptChipRail` can compare against the same derived status when it
+ * so `StepChipRail` can compare against the same derived status when it
  * draws its own whole-group highlight for the compact rail.
  */
 export const PARALLEL_GROUP_RUNNING_STATUS: ParallelGroupStatus = "running";
@@ -133,7 +133,7 @@ type ParallelGroupPanelProps = {
     step: WorkflowStep,
     status: StepStatus
   ) => StepHarnessModel;
-  getStepOverrides: (step: WorkflowStep) => PromptOverride[];
+  getStepOverrides: (step: WorkflowStep) => StepOverrideChip[];
   onStepClick: (index: number, modifiers: StepClickModifiers) => void;
   onSetStartPosition: (index: number) => void;
   onOpenContextMenu: (

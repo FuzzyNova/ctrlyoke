@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SortableWorkflowStepWrapper } from "@components/prompts/WorkflowStepRow";
+import { SortableWorkflowStepWrapper } from "@components/steps/WorkflowStepRow";
 import { useSettingsStore } from "@store/settingsStore";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import type { WorkflowStep } from "@store/workflowStore";

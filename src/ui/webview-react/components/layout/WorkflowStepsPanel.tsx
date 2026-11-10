@@ -19,7 +19,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
-  usePromptStatus,
+  useStepStatus,
   useStepClickHandler,
   useStepCapabilityContext,
   useStepContextMenu,
@@ -37,19 +37,19 @@ import { getHarnessDisplayName } from "../../types/messages";
 import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
 import type { HarnessId } from "../../types/messages";
 import {
-  type PromptOverride,
+  type StepOverrideChip,
   type StepClickModifiers,
-} from "../prompts/WorkflowStep";
-import { FinalStepFooter } from "../prompts/FinalStepFooter";
-import { PromptCounter } from "../prompts/PromptCounter";
-import { PromptChipRail } from "../prompts/PromptChipRail";
-import { PauseBoundary } from "../prompts/ExecutingStepHighlight";
+} from "../steps/WorkflowStepItem";
+import { FinalStepFooter } from "../steps/FinalStepFooter";
+import { StepCounter } from "../steps/StepCounter";
+import { StepChipRail } from "../steps/StepChipRail";
+import { PauseBoundary } from "../steps/ExecutingStepHighlight";
 import {
   WorkflowStepRow,
   WorkflowStepRowFrame,
   SortableWorkflowStepWrapper,
-} from "../prompts/WorkflowStepRow";
-import { ParallelGroupPanel } from "../prompts/ParallelGroupPanel";
+} from "../steps/WorkflowStepRow";
+import { ParallelGroupPanel } from "../steps/ParallelGroupPanel";
 import {
   getSelectionCapabilities,
   isStepExecutionLocked,
@@ -851,7 +851,7 @@ const WorkflowStepsPanelInner: React.FC<{
     pendingRewind,
   } = useUiStore();
 
-  const getPromptStatus = usePromptStatus();
+  const getStepStatus = useStepStatus();
   const stepClickHandler = useStepClickHandler();
   const getLatestOutput = useLatestStepOutput();
 
@@ -1010,7 +1010,7 @@ const WorkflowStepsPanelInner: React.FC<{
   // workflow or global settings change, so a pinned value that stops matching
   // the inherited one gets its chip back.
   const getStepOverrides = useCallback(
-    (step: (typeof steps)[0]): PromptOverride[] =>
+    (step: (typeof steps)[0]): StepOverrideChip[] =>
       buildStepOverrideChips(step, workflowProperties, globalSettings),
     [globalSettings, workflowProperties]
   );
@@ -1300,7 +1300,7 @@ const WorkflowStepsPanelInner: React.FC<{
         statuses={steps
           .slice(group.startIndex, group.endIndex + 1)
           .map((step, offset) =>
-            getPromptStatus(step, group.startIndex + offset)
+            getStepStatus(step, group.startIndex + offset)
           )}
         retryStates={retryStates}
         liveContextWindow={liveContextWindow ?? {}}
@@ -1341,7 +1341,7 @@ const WorkflowStepsPanelInner: React.FC<{
       finalStepPhase,
       executionState,
       getLatestOutput,
-      getPromptStatus,
+      getStepStatus,
       getStepHarnessModel,
       getStepOverrides,
       globalSettings.harnessColors,
@@ -1697,7 +1697,7 @@ const WorkflowStepsPanelInner: React.FC<{
     const step = steps[index];
     if (!step) return null;
     const slotNumber = resolveSlotNumber(activeDragId);
-    const status = getPromptStatus(step, index);
+    const status = getStepStatus(step, index);
     const harnessModel = getStepHarnessModel(step, status);
 
     const containerId = findPendingDragContainer(
@@ -1721,7 +1721,7 @@ const WorkflowStepsPanelInner: React.FC<{
           step: memberStep,
           harnessId: getStepHarnessModel(
             memberStep,
-            getPromptStatus(memberStep, memberIndex)
+            getStepStatus(memberStep, memberIndex)
           ).harnessId,
           offsetInGroup: offset,
         };
@@ -1794,7 +1794,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
   if (stepsCollapsed && !isMobileMode) {
     return (
-      <PromptChipRail
+      <StepChipRail
         onExpand={handleToggle}
         getStepHarnessModel={getStepHarnessModel}
       />
@@ -1843,7 +1843,7 @@ const WorkflowStepsPanelInner: React.FC<{
         </span>
         <div className="flex-1" />
         <span>
-          <PromptCounter narrow={isHeaderNarrow} />
+          <StepCounter narrow={isHeaderNarrow} />
         </span>
         {onRequestClose && (
           <ExitButton
@@ -2002,7 +2002,7 @@ const WorkflowStepsPanelInner: React.FC<{
                   return null;
                 }
                 const slotNumber = index + 1;
-                const status = getPromptStatus(step, index);
+                const status = getStepStatus(step, index);
                 const retryState = retryStates[index];
                 const latestOutput = getLatestOutput(index);
                 const isSelected = selectedStepIndices.has(index);
@@ -2117,7 +2117,7 @@ const WorkflowStepsPanelInner: React.FC<{
                       const step = steps[index];
                       if (!step) return null;
                       const isCurrentStep = index === currentStep;
-                      const status = getPromptStatus(step, index);
+                      const status = getStepStatus(step, index);
                       const retryState = retryStates[index];
                       const latestOutput = getLatestOutput(index);
                       const isCurrent = isStepExecuting(

@@ -186,7 +186,7 @@ export function isWorkflowRunning(state: ExecutionState): boolean {
  * `activeStepIndices` is the authoritative set and can hold several indices at
  * once (every live member of a parallel group), so it wins wherever it is
  * populated; `currentStep` is only the fallback for a run that has not
- * published one. This is deliberately the same rule `usePromptStatus` uses to
+ * published one. This is deliberately the same rule `useStepStatus` uses to
  * resolve the RUNNING *status*, and every surface that paints a running
  * affordance — step rows, a group's member rows, the collapsed chip rail —
  * must share it. When they disagreed, the step wearing the running outline was

@@ -7,9 +7,9 @@ import React from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import { StatusIcon } from "./StatusIcon";
 import { ContextWindowBar } from "./ContextWindowBar";
-import { PromptStepDetails } from "./PromptStepDetails";
-import type { PromptOverride } from "./PromptStepDetails";
-export type { PromptOverride };
+import { StepDetailRows } from "./StepDetailRows";
+import type { StepOverrideChip } from "./StepDetailRows";
+export type { StepOverrideChip };
 import type { HarnessId, StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import {
@@ -86,7 +86,7 @@ interface WorkflowStepProps {
   /** True when model is inherited (not set at prompt level) */
   modelIsDefault?: boolean;
   /** Prompt-level property overrides to display as compact chips */
-  overrides?: PromptOverride[];
+  overrides?: StepOverrideChip[];
   /** Whether this prompt can be used to set the start position */
   canSetStartPosition?: boolean;
   /** Callback when set start position is clicked */
@@ -339,7 +339,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               )}
               {/* Status details (duration, end condition) but no harness/model */}
               <div className={detailsClass}>
-                <PromptStepDetails
+                <StepDetailRows
                   status={status}
                   retryState={retryState}
                   latestOutput={latestOutput}
@@ -370,7 +370,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                 )}
               </div>
               <div className={detailsClass}>
-                <PromptStepDetails
+                <StepDetailRows
                   status={status}
                   harnessId={harnessId}
                   harnessLabel={harnessLabel}

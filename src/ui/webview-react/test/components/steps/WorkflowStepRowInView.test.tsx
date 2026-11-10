@@ -1,9 +1,9 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FinalStepFooter } from "@components/prompts/FinalStepFooter";
-import { PromptChipRail } from "@components/prompts/PromptChipRail";
+import { FinalStepFooter } from "@components/steps/FinalStepFooter";
+import { StepChipRail } from "@components/steps/StepChipRail";
 import type { WorkflowStep } from "@store/workflowStore";
-import { WorkflowStepRowFrame } from "@components/prompts/WorkflowStepRow";
+import { WorkflowStepRowFrame } from "@components/steps/WorkflowStepRow";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
@@ -67,7 +67,7 @@ describe("WorkflowStepRowFrame in-output-view marker", () => {
   });
 });
 
-describe("PromptChipRail in-output-view marker", () => {
+describe("StepChipRail in-output-view marker", () => {
   afterEach(() => {
     useUiStore.setState({ outputInViewTargetKeys: [] });
     useWorkflowStore.getState().resetWorkflow();
@@ -84,7 +84,7 @@ describe("PromptChipRail in-output-view marker", () => {
         getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index: 1 }),
       ],
     });
-    render(<PromptChipRail onExpand={vi.fn()} />);
+    render(<StepChipRail onExpand={vi.fn()} />);
 
     const numberOf = (index: number) =>
       document.querySelector(
@@ -174,7 +174,7 @@ describe("final step in-output-view marker", () => {
       executionState: EXECUTION_STATES.IDLE,
     });
     useUiStore.setState({ outputInViewTargetKeys: [finalKey(1)] });
-    render(<PromptChipRail onExpand={vi.fn()} />);
+    render(<StepChipRail onExpand={vi.fn()} />);
 
     expect(
       screen.getByTestId("final-step-chip-passes-in-view")

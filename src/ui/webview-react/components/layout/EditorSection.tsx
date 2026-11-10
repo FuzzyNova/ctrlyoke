@@ -11,7 +11,7 @@ import {
 import { useElementTier } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
-import { PromptEditor, type PromptFileAction } from "../editor/PromptEditor";
+import { StepEditor, type PromptFileAction } from "../editor/StepEditor";
 import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
 import { StepColorQuickPicker } from "../editor/StepColorQuickPicker";
 import { PanelBar, IconToggleButton } from "../shared";
@@ -65,7 +65,7 @@ function resolveEditorHeaderTier(width: number): EditorHeaderTier {
  * - Collapsible header with title and collapse button
  * - Mode indicator showing "New Prompt" or "Editing: Prompt N of M"
  * - Optional prompt name input in new prompt mode
- * - Contains PromptEditor component
+ * - Contains StepEditor component
  * - Handles section collapse state persistence
  */
 const EditorSectionInner: React.FC = () => {
@@ -146,7 +146,7 @@ const EditorSectionInner: React.FC = () => {
 
   // Steps preceding this prompt — folds into prior-context ($previous, $step:N)
   // token estimates. Editing queue step i: steps 0..i-1 precede it. New prompt
-  // or final step: every queue step precedes it. Mirrors PromptEditor.
+  // or final step: every queue step precedes it. Mirrors StepEditor.
   const stepCount =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
       ? selectionTarget.index
@@ -492,7 +492,7 @@ const EditorSectionInner: React.FC = () => {
 
       {/* Content area */}
       <div className="prompt-editor-wrapper flex flex-1 min-h-0 overflow-hidden relative">
-        <PromptEditor
+        <StepEditor
           isExternallyManaged={isExternallyManaged}
           isBulkMode={isBulkMode}
           bulkPlaceholder={bulkPlaceholder}

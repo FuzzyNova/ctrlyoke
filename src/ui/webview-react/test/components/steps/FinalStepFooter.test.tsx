@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FinalStepFooter } from "@components/prompts/FinalStepFooter";
+import { FinalStepFooter } from "@components/steps/FinalStepFooter";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { CliOutput, WorkflowStep } from "@store/workflowStore";
 

@@ -2,11 +2,11 @@ import React from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import { StatusIcon } from "./StatusIcon";
 import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
-import { PromptStepDetails } from "./PromptStepDetails";
+import { StepDetailRows } from "./StepDetailRows";
 import { ContextWindowBar } from "./ContextWindowBar";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
-import type { PromptOverride } from "./PromptStepDetails";
+import type { StepOverrideChip } from "./StepDetailRows";
 import {
   FINAL_STEP_PHASES,
   STEP_STATUS,
@@ -73,7 +73,7 @@ interface FinalStepFooterProps {
   /** Live context usage for the current final-step pass. */
   liveContextWindow?: { used: number; size: number };
   /** Prompt-level property overrides to display as compact chips */
-  overrides?: PromptOverride[];
+  overrides?: StepOverrideChip[];
   /** Right-click context menu handler */
   onContextMenu?: (x: number, y: number) => void;
 }
@@ -184,7 +184,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           {/* Layout: content column | (context bar) — matches WorkflowStep */}
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
-              {/* Prompt name / text — pl-5 matches PromptStepDetails indent */}
+              {/* Prompt name / text — pl-5 matches StepDetailRows indent */}
               <div className="text-xs leading-relaxed">
                 {truncate(getStepDisplayText(finalStep))}
               </div>
@@ -199,7 +199,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               )}
 
               {/* Shared metadata rows: harness/model (prompt only), stats, end condition, overrides */}
-              <PromptStepDetails
+              <StepDetailRows
                 status={effectiveStatus}
                 harnessId={isScriptStep(finalStep) ? undefined : harnessId}
                 harnessLabel={

@@ -5,7 +5,7 @@ export { OutputSection } from "./OutputSection";
 export { EditorSection } from "./EditorSection";
 export { WorkflowPropertiesPanel } from "./WorkflowPropertiesPanel";
 export { CenterContentArea } from "./CenterContentArea";
-export { PromptChipRail } from "../prompts/PromptChipRail";
+export { StepChipRail } from "../steps/StepChipRail";
 export { GlobalSettingsDrawer } from "./GlobalSettingsDrawer";
 export { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 export { StartupOverlay } from "./StartupOverlay";

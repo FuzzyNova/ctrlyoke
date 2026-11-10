@@ -1,5 +1,5 @@
 export { CodeMirrorEditor } from "./CodeMirrorEditor";
-export { PromptEditor } from "./PromptEditor";
+export { StepEditor } from "./StepEditor";
 export { PromptPropertiesDrawer } from "./PromptPropertiesDrawer";
 export { EditorFooter } from "./EditorFooter";
 export { FooterQuickPicker } from "./FooterQuickPicker";

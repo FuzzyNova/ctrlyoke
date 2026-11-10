@@ -79,7 +79,7 @@ import { buildPropertyUpdateValues } from "@utils/promptPropertyValues";
 import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
 import { Icon } from "../shared/Icon";
 
-interface PromptEditorProps {
+interface StepEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
   isExternallyManaged?: boolean;
   isBulkMode?: boolean;
@@ -136,7 +136,7 @@ function isOnlyColorChange(
 }
 
 /**
- * PromptEditor - Main prompt editing component
+ * StepEditor - Main prompt editing component
  *
  * Features:
  * - CodeMirror editor with spell checking and autocomplete
@@ -145,7 +145,7 @@ function isOnlyColorChange(
  * - Mode-aware actions (New vs Edit mode)
  * - State persistence to VS Code webview state
  */
-export const PromptEditor: React.FC<PromptEditorProps> = ({
+export const StepEditor: React.FC<StepEditorProps> = ({
   isExternallyManaged = false,
   isBulkMode = false,
   bulkPlaceholder,

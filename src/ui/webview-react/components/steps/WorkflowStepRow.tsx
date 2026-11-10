@@ -6,10 +6,10 @@ import { isScriptStep } from "@root/types/CtrlYokeTypes";
 import type { ExecutionState, StepStatus } from "../../types/messages";
 import {
   WorkflowStepItem,
-  type PromptOverride,
+  type StepOverrideChip,
   type StepDetails,
   type StepClickModifiers,
-} from "./WorkflowStep";
+} from "./WorkflowStepItem";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   ExecutingStepHighlight,
@@ -85,7 +85,7 @@ export type WorkflowStepRowProps = {
     step: WorkflowStep,
     status: StepStatus
   ) => StepHarnessModel;
-  getStepOverrides: (step: WorkflowStep) => PromptOverride[];
+  getStepOverrides: (step: WorkflowStep) => StepOverrideChip[];
   onStepClick: (index: number, modifiers: StepClickModifiers) => void;
   onSetStartPosition: (index: number) => void;
   onOpenContextMenu: (

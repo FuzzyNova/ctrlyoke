@@ -66,7 +66,7 @@ Ranked by uncovered statement count (biggest win first). Full report: `src/ui/we
 | `src/ui/webview-react/components/output/OutputRow.tsx`                            |   71.11% |         117 / 405 |
 | `src/ui/webview-react/hooks/useOutputScrollSeek.ts`                               |   33.33% |         116 / 174 |
 | `src/ui/webview-react/hooks/useDesktopLayout.ts`                                  |   54.85% |         107 / 237 |
-| `src/ui/webview-react/components/editor/PromptEditor.tsx`                         |   75.35% |         105 / 426 |
+| `src/ui/webview-react/components/editor/StepEditor.tsx`                         |   75.35% |         105 / 426 |
 | `src/ui/webview-react/components/output/OutputMinimap.tsx`                        |   46.66% |          96 / 180 |
 | `src/ui/webview-react/components/output/TerminalView.tsx`                         |   49.45% |          92 / 182 |
 | `src/ui/webview-react/components/workflow/TemplateModal.tsx`                      |   55.82% |          91 / 206 |

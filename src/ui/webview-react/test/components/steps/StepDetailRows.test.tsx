@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { PromptStepDetails } from "@components/prompts/PromptStepDetails";
+import { StepDetailRows } from "@components/steps/StepDetailRows";
 import { STEP_STATUS } from "@/types/messages";
 
-describe("PromptStepDetails retry label", () => {
+describe("StepDetailRows retry label", () => {
   it("shows the unlimited retry denominator as infinity", () => {
     render(
-      <PromptStepDetails
+      <StepDetailRows
         status={STEP_STATUS.RUNNING}
         retryState={{ currentRetry: 1, maxRetries: -1 }}
       />

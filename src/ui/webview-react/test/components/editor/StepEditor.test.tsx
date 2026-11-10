@@ -1,5 +1,5 @@
 /**
- * Tests for PromptEditor's EXECUTE_PROMPT submission addressing.
+ * Tests for StepEditor's EXECUTE_PROMPT submission addressing.
  *
  * A prompt-editor submission must carry the displayed run address and
  * optimistic revisions (`mutation`) so the backend appends to the exact run
@@ -49,9 +49,9 @@ vi.mock("../../../hooks/useCompatibilityDiagnostics", () => ({
 }));
 
 import {
-  PromptEditor,
+  StepEditor,
   type PromptFileAction,
-} from "@components/editor/PromptEditor";
+} from "@components/editor/StepEditor";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -114,9 +114,9 @@ function findNewWorkflowMessage(): Record<string, unknown> | undefined {
   )?.[0] as Record<string, unknown> | undefined;
 }
 
-describe("PromptEditor accessibility names", () => {
+describe("StepEditor accessibility names", () => {
   it("names the prompt editor and primary footer actions by role", () => {
-    render(<PromptEditor />);
+    render(<StepEditor />);
 
     expect(
       screen.getByRole("textbox", { name: "Prompt editor" })
@@ -129,7 +129,7 @@ describe("PromptEditor accessibility names", () => {
   });
 });
 
-describe("PromptEditor pending editor documents", () => {
+describe("StepEditor pending editor documents", () => {
   it("keeps the same pending placeholder document when a step moves indexes", () => {
     vi.stubGlobal(
       "FileReader",
@@ -147,7 +147,7 @@ describe("PromptEditor pending editor documents", () => {
     useEditorStore
       .getState()
       .selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index: 0 }, stepA);
-    const { container } = render(<PromptEditor />);
+    const { container } = render(<StepEditor />);
     fireEvent.paste(container.querySelector(".cm-content") as HTMLElement, {
       clipboardData: {
         items: [
@@ -198,7 +198,7 @@ describe("PromptEditor pending editor documents", () => {
   });
 });
 
-describe("PromptEditor bulk mode draft isolation", () => {
+describe("StepEditor bulk mode draft isolation", () => {
   it("shows an empty editor without changing prompt text or pending step drafts", async () => {
     const steps = [{ prompt: "one" }, { prompt: "two" }];
     useWorkflowStore.getState().setPrompts(steps);
@@ -209,7 +209,7 @@ describe("PromptEditor bulk mode draft isolation", () => {
     const pendingEditsBefore = useEditorStore.getState().pendingEdits;
 
     const { container } = render(
-      <PromptEditor isBulkMode bulkPlaceholder="2 prompts selected" />
+      <StepEditor isBulkMode bulkPlaceholder="2 prompts selected" />
     );
 
     await waitFor(() => {
@@ -226,7 +226,7 @@ describe("PromptEditor bulk mode draft isolation", () => {
   });
 });
 
-describe("PromptEditor workflow schema warnings", () => {
+describe("StepEditor workflow schema warnings", () => {
   it("renders schema warnings with the shared FieldDiagnostic component", () => {
     useWorkflowStore.setState({
       schemaWarnings: [
@@ -238,7 +238,7 @@ describe("PromptEditor workflow schema warnings", () => {
       ],
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
 
     expect(
       screen.getByText("Unknown property 'harnes' at /harnes.")
@@ -246,7 +246,7 @@ describe("PromptEditor workflow schema warnings", () => {
   });
 });
 
-describe("PromptEditor prior-context parallel-group boundary", () => {
+describe("StepEditor prior-context parallel-group boundary", () => {
   it("uses the group start for preview requests from a group member", async () => {
     const steps = Array.from({ length: 5 }, (_, index) => ({
       prompt: `step ${index + 1}`,
@@ -264,7 +264,7 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
         { prompt: "$previous:3" }
       );
 
-    const { container } = render(<PromptEditor />);
+    const { container } = render(<StepEditor />);
     const priorContextChip = await waitFor(() => {
       const chip = container.querySelector<HTMLElement>(
         '.cm-link[data-type="priorContext"]'
@@ -310,7 +310,7 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
         { prompt: "$previous:3" }
       );
 
-    const { container } = render(<PromptEditor />);
+    const { container } = render(<StepEditor />);
     const chip = container.querySelector<HTMLElement>(
       '.cm-link[data-type="priorContext"]'
     );
@@ -328,7 +328,7 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
   });
 });
 
-describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
+describe("StepEditor — EXECUTE_PROMPT run addressing", () => {
   it("inserts Run Next before the pending step when paused", async () => {
     const user = userEvent.setup();
     useWorkflowStore.setState({
@@ -343,7 +343,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     });
     useEditorStore.getState().setPromptText("insert before pending");
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     await user.click(screen.getByRole("button", { name: "Run" }));
 
     expect(findExecutePromptMessage()).toMatchObject({
@@ -361,7 +361,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     useEditorStore.getState().setPromptText("updated final prompt");
     useEditorStore.getState().setPromptName("   ");
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     await user.click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls.find(
@@ -388,7 +388,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 9,
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     await user.click(runButton);
 
@@ -426,7 +426,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 9,
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const updateButton = screen.getByRole("button", { name: "Update" });
     await user.click(updateButton);
 
@@ -475,7 +475,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 7,
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const updateButton = screen.getByRole("button", { name: "Update" });
     await user.click(updateButton);
 
@@ -532,7 +532,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 7,
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const updateButton = screen.getByRole("button", { name: "Update" });
     await user.click(updateButton);
 
@@ -579,7 +579,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 7,
     });
 
-    render(<PromptEditor isBulkMode canBulkUpdate />);
+    render(<StepEditor isBulkMode canBulkUpdate />);
     await user.click(screen.getByRole("button", { name: "Update" }));
 
     const messages = postMessageSpy.mock.calls.map(
@@ -619,7 +619,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 7,
     });
 
-    render(<PromptEditor isBulkMode canBulkUpdate />);
+    render(<StepEditor isBulkMode canBulkUpdate />);
     await user.click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls
@@ -637,7 +637,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     const user = userEvent.setup();
     useEditorStore.getState().setPromptText("fresh ephemeral prompt");
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     await user.click(runButton);
 
@@ -647,7 +647,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
   });
 });
 
-describe("PromptEditor — Run in New Workflow", () => {
+describe("StepEditor — Run in New Workflow", () => {
   it("posts the composed prompt payload and clears the draft", async () => {
     const user = userEvent.setup();
     useEditorStore.setState({
@@ -660,7 +660,7 @@ describe("PromptEditor — Run in New Workflow", () => {
       },
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     runButton.focus();
     await user.keyboard("{ArrowDown}");
@@ -701,7 +701,7 @@ describe("PromptEditor — Run in New Workflow", () => {
       },
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     runButton.focus();
     await user.keyboard("{ArrowDown}");
@@ -738,7 +738,7 @@ describe("PromptEditor — Run in New Workflow", () => {
     useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
     useEditorStore.getState().setScriptCommand("npm run deploy");
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Run" }));
 
     const properties = findExecutePromptMessage()?.properties as
@@ -758,7 +758,7 @@ describe("PromptEditor — Run in New Workflow", () => {
       workflowName: "Source workflow",
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     runButton.focus();
     await user.keyboard("{ArrowDown}");
@@ -792,7 +792,7 @@ describe("PromptEditor — Run in New Workflow", () => {
   });
 });
 
-describe("PromptEditor — Run in Parallel", () => {
+describe("StepEditor — Run in Parallel", () => {
   function enableParallelDispatch() {
     useUiStore.setState({ activeWorkflowId: "workflow-1" });
     useWorkflowStore.setState({
@@ -814,7 +814,7 @@ describe("PromptEditor — Run in Parallel", () => {
     enableParallelDispatch();
     useEditorStore.getState().setPromptText("run beside the active step");
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     runButton.focus();
     await user.keyboard("{ArrowDown}");
@@ -833,7 +833,7 @@ describe("PromptEditor — Run in Parallel", () => {
     enableParallelDispatch();
     useEditorStore.getState().setPromptText("keep this if admission fails");
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     runButton.focus();
     await user.keyboard("{ArrowDown}");
@@ -857,7 +857,7 @@ describe("PromptEditor — Run in Parallel", () => {
   });
 });
 
-describe("PromptEditor — Send Steer Message", () => {
+describe("StepEditor — Send Steer Message", () => {
   function enableSteerDispatch() {
     useUiStore.setState({ activeWorkflowId: "workflow-1" });
     useTerminalStore.setState({
@@ -881,7 +881,7 @@ describe("PromptEditor — Send Steer Message", () => {
 
   async function clickSteer() {
     const user = userEvent.setup();
-    render(<PromptEditor />);
+    render(<StepEditor />);
     const runButton = screen.getByRole("button", { name: "Run" });
     runButton.focus();
     await user.keyboard("{ArrowDown}");
@@ -934,11 +934,11 @@ describe("PromptEditor — Send Steer Message", () => {
   });
 });
 
-describe("PromptEditor — prompt-file action", () => {
+describe("StepEditor — prompt-file action", () => {
   function renderWithAction() {
     let action: PromptFileAction | null = null;
     render(
-      <PromptEditor
+      <StepEditor
         onPromptFileActionChange={(nextAction) => {
           action = nextAction;
         }}
@@ -1070,7 +1070,7 @@ describe("PromptEditor — prompt-file action", () => {
       .setPromptText("./.ctrlyoke/prompts/review.prompt.md");
     const onPromptFileContentChange = vi.fn();
     render(
-      <PromptEditor onPromptFileContentChange={onPromptFileContentChange} />
+      <StepEditor onPromptFileContentChange={onPromptFileContentChange} />
     );
 
     const latestValidationRequest = () => {
@@ -1166,7 +1166,7 @@ describe("PromptEditor — prompt-file action", () => {
   });
 });
 
-describe("PromptEditor — prompt secret grants", () => {
+describe("StepEditor — prompt secret grants", () => {
   it("posts a selected secret in the UPDATE_PROMPT payload", async () => {
     useSecretRegistryStore.getState().setEntries("workspace", [
       {
@@ -1185,7 +1185,7 @@ describe("PromptEditor — prompt secret grants", () => {
     useEditorStore.getState().setPromptText("updated prompt");
     useUiStore.getState().openPromptPropertiesDrawer();
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
     fireEvent.click(screen.getByRole("button", { name: /API_TOKEN/ }));
@@ -1213,7 +1213,7 @@ describe("PromptEditor — prompt secret grants", () => {
     useEditorStore.getState().setPromptText("updated prompt");
     useEditorStore.getState().setProperty("secrets", undefined);
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     await userEvent
       .setup()
       .click(screen.getByRole("button", { name: "Update" }));
@@ -1237,7 +1237,7 @@ describe("PromptEditor — prompt secret grants", () => {
     );
     useEditorStore.getState().setPromptText("Use !INLINE_TOKEN");
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     await userEvent
       .setup()
       .click(screen.getByRole("button", { name: "Update" }));
@@ -1251,7 +1251,7 @@ describe("PromptEditor — prompt secret grants", () => {
   });
 });
 
-describe("PromptEditor — script-step properties", () => {
+describe("StepEditor — script-step properties", () => {
   beforeEach(() => {
     // The step-color field only renders when step colors are enabled;
     // default them on so color-editing tests don't depend on leftover
@@ -1283,7 +1283,7 @@ describe("PromptEditor — script-step properties", () => {
     });
 
     expect(screen.queryByLabelText("script-step-env")).not.toBeInTheDocument();
-    render(<PromptEditor />);
+    render(<StepEditor />);
 
     expect(screen.getByLabelText("Name for DEPLOY_TOKEN")).toHaveValue(
       "DEPLOY_TOKEN"
@@ -1316,7 +1316,7 @@ describe("PromptEditor — script-step properties", () => {
 
   it("writes script-step color through the shared property path", async () => {
     prepareScriptEditor();
-    render(<PromptEditor />);
+    render(<StepEditor />);
 
     const color = screen.getByLabelText(/^Step Color, color:/);
     fireEvent.change(color, { target: { value: "#2468ac" } });
@@ -1342,7 +1342,7 @@ describe("PromptEditor — script-step properties", () => {
       .getState()
       .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.NONE);
     prepareScriptEditor();
-    render(<PromptEditor />);
+    render(<StepEditor />);
 
     expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();
 
@@ -1353,7 +1353,7 @@ describe("PromptEditor — script-step properties", () => {
 
   it("clears an inherited script-step color instead of writing the default hex", () => {
     prepareScriptEditor({ color: "#2468ac" });
-    render(<PromptEditor />);
+    render(<StepEditor />);
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -1370,7 +1370,7 @@ describe("PromptEditor — script-step properties", () => {
       errorBehavior: { onError: "continue" },
     });
     useEditorStore.getState().setScriptEnv({});
-    render(<PromptEditor />);
+    render(<StepEditor />);
     useEditorStore.setState({
       properties: {
         ...useEditorStore.getState().properties,
@@ -1410,7 +1410,7 @@ describe("PromptEditor — script-step properties", () => {
       },
     });
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Run" }));
 
     const message = postMessageSpy.mock.calls.find(
@@ -1428,7 +1428,7 @@ describe("PromptEditor — script-step properties", () => {
   });
 });
 
-describe("PromptEditor — image compatibility feedback", () => {
+describe("StepEditor — image compatibility feedback", () => {
   it("keeps image compatibility feedback beside the editable prompt", () => {
     useEditorStore
       .getState()
@@ -1437,7 +1437,7 @@ describe("PromptEditor — image compatibility feedback", () => {
         { prompt: "Review @screen.png", harness: HARNESS_IDS.CODEX_CLI }
       );
 
-    render(<PromptEditor />);
+    render(<StepEditor />);
 
     expect(
       screen.getByText(/Image prompt inputs are not supported/)
