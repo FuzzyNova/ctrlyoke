@@ -16,7 +16,7 @@ import { notifyUser } from "@utils/notifyUser";
 import { openWorkflowDryRun } from "@utils/executionPreview";
 import { generateId } from "@utils/string";
 import { workflowViewAddressKey } from "@utils/viewAddress";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useTerminalStore } from "@store/terminalStore";

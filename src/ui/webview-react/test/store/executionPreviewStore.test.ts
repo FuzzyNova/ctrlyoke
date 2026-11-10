@@ -9,7 +9,7 @@ import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 
 const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
-vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
+vi.mock("@messaging/sendMessage", () => ({ sendMessage }));
 
 const workflowKey = "workflow-a" as WorkflowKey;
 const address = {

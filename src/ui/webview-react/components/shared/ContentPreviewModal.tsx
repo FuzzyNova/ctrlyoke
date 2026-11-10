@@ -3,7 +3,7 @@ import { Modal } from "./Modal";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { isStandalone } from "@hooks/useVsCodeApi";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { downloadTextFile } from "@utils/download";
 import { CONTENT_PREVIEW_LANGUAGES } from "@root/types/DashboardConstants";

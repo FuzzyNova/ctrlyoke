@@ -9,7 +9,7 @@ import type {
   ManagedFile,
   ManagedTargetDirectory,
 } from "@root/types/WebviewMessageTypes";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 interface HarnessFileState {
   managedFiles: ManagedFile[];

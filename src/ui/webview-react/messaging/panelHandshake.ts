@@ -1,6 +1,6 @@
 import { MESSAGE_TYPES } from "@/types/messages";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
-import { getVsCodeApi, panelPageLoadId } from "./useVsCodeApi";
+import { getVsCodeApi, panelPageLoadId } from "@hooks/useVsCodeApi";
 
 let retryAttempt = 0;
 

@@ -22,7 +22,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { DryRunModal } from "@components/shared/DryRunModal";
 
 const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
-vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
+vi.mock("@messaging/sendMessage", () => ({ sendMessage }));
 
 const clipboardWriteText = vi.fn<(text: string) => Promise<void>>();
 

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import type { ShowChoiceRequestMessage } from "@root/types/WebviewMessageTypes";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { dequeueRequest, enqueueRequest } from "../utils/requestQueue";
 
 export type PendingChoiceRequest = ShowChoiceRequestMessage["request"];

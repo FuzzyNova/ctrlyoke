@@ -4,10 +4,9 @@
 
 export { useVsCodeApi, getVsCodeApi, isStandalone } from "./useVsCodeApi";
 export {
-  useMessageHandler,
-  sendMessage,
-  type UseMessageHandlerReturn,
-} from "./useMessageHandler";
+  useInboundMessageRouter,
+} from "@messaging/inboundMessageRouter";
+export { sendMessage } from "@messaging/sendMessage";
 export {
   useCompatibilityDiagnostics,
   type UseCompatibilityDiagnosticsResult,

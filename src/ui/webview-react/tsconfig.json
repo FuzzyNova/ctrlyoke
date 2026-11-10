@@ -26,6 +26,7 @@
       "@/*": ["./*"],
       "@components/*": ["./components/*"],
       "@hooks/*": ["./hooks/*"],
+      "@messaging/*": ["./messaging/*"],
       "@store/*": ["./store/*"],
       "@utils/*": ["./utils/*"],
       "@types/*": ["./types/*"],

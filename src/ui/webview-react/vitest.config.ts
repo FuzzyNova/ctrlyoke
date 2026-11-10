@@ -8,6 +8,7 @@ const aliases = {
   "@": path.resolve(__dirname),
   "@components": path.resolve(__dirname, "components"),
   "@hooks": path.resolve(__dirname, "hooks"),
+  "@messaging": path.resolve(__dirname, "messaging"),
   "@store": path.resolve(__dirname, "store"),
   "@utils": path.resolve(__dirname, "utils"),
   "@types": path.resolve(__dirname, "types"),

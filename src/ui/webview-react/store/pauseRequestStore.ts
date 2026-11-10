@@ -17,7 +17,7 @@
 import { create } from "zustand";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { MESSAGE_TYPES } from "../types/messages";
-import { sendMessage } from "../hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import {
   areWorkflowAddressesEqual,
   workflowViewAddressKey,

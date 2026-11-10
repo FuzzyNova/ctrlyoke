@@ -16,7 +16,7 @@
  * Scenarios are cheap — the module graph is only imported once per file.
  * Seeding stores directly is deliberate shorthand for the state a
  * `RUN_VIEW_LOADED` would produce; if a scenario needs message-driven fidelity,
- * dispatch real `MESSAGE_TYPES` events instead (see `useMessageHandler.test.ts`).
+ * dispatch real `MESSAGE_TYPES` events instead (see `../messaging/inboundMessageRouter.test.ts`).
  */
 import { StrictMode, Component, type ErrorInfo, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

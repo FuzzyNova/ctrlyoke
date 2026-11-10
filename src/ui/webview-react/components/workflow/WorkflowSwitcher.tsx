@@ -14,7 +14,7 @@ import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
 import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
-import { sendMessage } from "../../hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,

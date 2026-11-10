@@ -28,7 +28,7 @@ const { sendMessageMock } = vi.hoisted(() => ({
   sendMessageMock: vi.fn(),
 }));
 
-vi.mock("@hooks/useMessageHandler", () => ({
+vi.mock("@messaging/sendMessage", () => ({
   sendMessage: sendMessageMock,
 }));
 

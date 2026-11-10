@@ -31,7 +31,7 @@ import {
   formatWorktreeOutcome,
   type WorktreeOutcomeSeverity,
 } from "@root/utils/formatWorktreeOutcome";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { Icon } from "../shared/Icon";

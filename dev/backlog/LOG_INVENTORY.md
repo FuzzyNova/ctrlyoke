@@ -69,9 +69,9 @@ Ranked by call count (highest first).
 
 | File                                                                    | trace | debug | info | warn | error | Total |
 | ----------------------------------------------------------------------- | ----- | ----- | ---- | ---- | ----- | ----- |
-| `src/ui/webview-react/hooks/useMessageHandler.ts`                       |       | 10    | 11   | 1    | 1     | 23    |
+| `src/ui/webview-react/messaging/inboundMessageRouter.ts`                       |       | 10    | 11   | 1    | 1     | 23    |
 | `src/ui/webview-react/components/output/TerminalInstance.tsx`           | 5     | 10    | 1    |      | 1     | 17    |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`                 | 1     | 10    |      |      |       | 11    |
+| `src/ui/webview-react/messaging/terminalMessageHandlers.ts`                 | 1     | 10    |      |      |       | 11    |
 | `src/ui/webview-react/terminalRegistry.ts`                              | 3     | 7     |      | 1    |       | 11    |
 | `src/ui/webview-react/hooks/useDesktopLayout.ts`                        |       |       |      | 1    | 6     | 7     |
 | `src/ui/webview-react/store/workflowStore.ts`                           |       | 6     |      |      |       | 6     |
@@ -105,7 +105,7 @@ Ranked by call count (highest first).
 | `src/ui/webview-react/components/layout/StartupOverlay.tsx`             |       |       |      | 1    |       | 1     |
 | `src/ui/webview-react/components/settings/ServerSection.tsx`            |       |       |      | 1    |       | 1     |
 | `src/ui/webview-react/components/shared/ErrorBoundary.tsx`              |       |       |      |      | 1     | 1     |
-| `src/ui/webview-react/hooks/reconnectWatchdog.ts`                       |       |       |      | 1    |       | 1     |
+| `src/ui/webview-react/messaging/reconnectWatchdog.ts`                       |       |       |      | 1    |       | 1     |
 | `src/ui/webview-react/hooks/useLanguageIntelligence.ts`                 |       |       |      | 1    |       | 1     |
 | `src/ui/webview-react/hooks/useOutputExport.ts`                         |       |       |      |      | 1     | 1     |
 | `src/ui/webview-react/hooks/useOutputUndoActions.ts`                    |       |       |      |      | 1     | 1     |

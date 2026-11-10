@@ -62,7 +62,7 @@ rejected it:
 
 - **Production capture already exists, but is thrown away unless the hosted
   server is running.**
-  - `captureAndSendThemeVars` (`src/ui/webview-react/hooks/useMessageHandler.ts`)
+  - `captureAndSendThemeVars` (`src/ui/webview-react/messaging/sendMessage.ts`)
     reads the `--vscode-*` properties from `<html>`'s inline style and `:root`
     rules, adds the synthetic `--cy-color-theme-kind`, and posts
     `THEME_VARS_CAPTURED`.

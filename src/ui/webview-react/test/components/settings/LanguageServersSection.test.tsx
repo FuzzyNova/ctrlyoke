@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 const { sendMessageMock } = vi.hoisted(() => ({ sendMessageMock: vi.fn() }));
-vi.mock("@hooks/useMessageHandler", () => ({ sendMessage: sendMessageMock }));
+vi.mock("@messaging/sendMessage", () => ({ sendMessage: sendMessageMock }));
 
 import { LanguageServersSection } from "@components/settings/LanguageServersSection";
 import {

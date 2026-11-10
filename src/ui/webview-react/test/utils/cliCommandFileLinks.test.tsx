@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-vi.mock("@hooks/useMessageHandler", () => ({
+vi.mock("@messaging/sendMessage", () => ({
   openFile: vi.fn(),
 }));
 
-import { openFile } from "@hooks/useMessageHandler";
+import { openFile } from "@messaging/sendMessage";
 import {
   findCliFileReferenceRanges,
   renderCommandTextWithFileLinks,

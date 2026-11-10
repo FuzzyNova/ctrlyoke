@@ -17,7 +17,7 @@ import {
 import { useEditorStore, useIsStepMultiSelected } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import {
   useStepStatus,
   useContextPct,

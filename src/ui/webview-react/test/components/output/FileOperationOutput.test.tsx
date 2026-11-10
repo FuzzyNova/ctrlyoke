@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { useUiStore } from "@store/uiStore";
 
-vi.mock("@hooks/useMessageHandler", () => ({
+vi.mock("@messaging/sendMessage", () => ({
   openFile: vi.fn(),
 }));
 

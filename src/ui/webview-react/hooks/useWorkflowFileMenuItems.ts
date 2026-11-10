@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { type ContextMenuEntry } from "@components/shared/ContextMenu";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";

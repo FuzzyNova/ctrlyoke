@@ -183,7 +183,7 @@ function isAllowedWebviewToastCall(
   }
 
   return (
-    file === "src/ui/webview-react/hooks/useMessageHandler.ts" &&
+    file === "src/ui/webview-react/messaging/inboundMessageRouter.ts" &&
     (isMessageHandlerAssignment(node, "NOTIFICATION_EVENT") ||
       isMessageHandlerAssignment(node, "USER_FEEDBACK"))
   );

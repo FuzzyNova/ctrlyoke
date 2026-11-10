@@ -15,7 +15,7 @@ import { PROMPT_EDITOR_INSERT_MODES, MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { Modal } from "@components/shared/Modal";
 import { Button } from "@components/shared/Button";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 interface UseCommitHistoryContextMenuOptions {
   onRefresh: () => void;

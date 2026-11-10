@@ -7,7 +7,7 @@
  * two live regions by id, and a screen reader only speaks a region whose
  * content changed.
  *
- * Kept free of the output pipeline on purpose: `useMessageHandler` imports
+ * Kept free of the output pipeline on purpose: `messaging/inboundMessageRouter.ts` imports
  * this module, and pulling the announcement tracker in through it created an
  * import cycle with `@components/shared`.
  */

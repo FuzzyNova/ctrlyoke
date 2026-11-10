@@ -8,7 +8,7 @@ import {
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { AnimatedSection } from "@components/shared/AnimatedSection";
 import { SettingToggleRow } from "@components/shared/SettingToggleRow";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { StatusLineFormatEditor } from "./stats/StatusLineFormatEditor";
 import { StatusLineTrackingControls } from "./stats/StatusLineTrackingControls";
 

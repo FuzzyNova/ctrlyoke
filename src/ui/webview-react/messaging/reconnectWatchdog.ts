@@ -1,5 +1,5 @@
 import { useUiStore } from "@store/uiStore";
-import { isStandalone } from "./useVsCodeApi";
+import { isStandalone } from "@hooks/useVsCodeApi";
 import { retryPanelHandshake } from "./panelHandshake";
 import { WebviewLog } from "@utils/logger";
 

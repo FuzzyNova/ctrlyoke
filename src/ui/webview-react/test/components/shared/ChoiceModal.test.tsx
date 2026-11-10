@@ -9,7 +9,7 @@ import { useChoiceStore } from "@store/choiceStore";
 import { ChoiceModal } from "@components/shared/ChoiceModal";
 
 const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
-vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
+vi.mock("@messaging/sendMessage", () => ({ sendMessage }));
 
 beforeEach(() => {
   sendMessage.mockClear();

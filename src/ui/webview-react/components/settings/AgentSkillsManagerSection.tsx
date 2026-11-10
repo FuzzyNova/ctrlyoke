@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
 import { useHarnessFileStore } from "@store/harnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import {
   KEYBOARD_KEYS,
   HARNESS_IDS,

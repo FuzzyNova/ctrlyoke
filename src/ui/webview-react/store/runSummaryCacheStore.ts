@@ -6,7 +6,7 @@ import {
 import { MESSAGE_TYPES } from "../types/messages";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowKey, RunRef } from "@root/types/CtrlYokeTypes";
-import { sendMessage } from "../hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 let requestSequence = 0;
 

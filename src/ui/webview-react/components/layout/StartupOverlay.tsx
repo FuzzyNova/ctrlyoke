@@ -47,7 +47,7 @@ const STARTUP_SLOW_HINT_MS = 12000;
  * user edit made during startup gets overwritten by the arriving auto-load.
  *
  * Only STARTUP_COMPLETE (and this timeout) may dismiss it — see the
- * WORKFLOW_LOADED handler in `useMessageHandler` for why that message must not.
+ * WORKFLOW_LOADED handler in `useInboundMessageRouter` for why that message must not.
  */
 export const StartupOverlay: React.FC = () => {
   const startupReady = useUiStore((s) => s.startupReady);

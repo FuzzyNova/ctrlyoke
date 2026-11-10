@@ -15,7 +15,7 @@ import {
   type StatusLineSegment,
 } from "@root/utils/StatuslineFormat";
 import { AnimatedSection } from "@components/shared/AnimatedSection";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { Button } from "@components/shared/Button";
 import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { LocalTextInput } from "@components/shared/LocalInputs";

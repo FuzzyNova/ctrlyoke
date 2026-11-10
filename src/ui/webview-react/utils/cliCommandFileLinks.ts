@@ -9,7 +9,7 @@
  * the CLI, and copying it must reproduce that byte-for-byte.
  */
 import React from "react";
-import { openFile } from "@hooks/useMessageHandler";
+import { openFile } from "@messaging/sendMessage";
 import {
   FILE_EXTENSIONS,
   SEP,

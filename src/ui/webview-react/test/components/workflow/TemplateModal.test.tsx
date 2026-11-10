@@ -16,7 +16,7 @@ import {
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
 } from "@root/types/DashboardConstants";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { createMessageHandlers } from "@hooks/useMessageHandler";
+import { createMessageHandlers } from "@messaging/inboundMessageRouter";
 
 const postMessage = vi.fn();
 

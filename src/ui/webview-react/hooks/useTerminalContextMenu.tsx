@@ -4,7 +4,7 @@ import {
   type ContextMenuState,
 } from "../components/shared/ContextMenu";
 import { writeClipboardText } from "@utils/clipboard";
-import { sendMessage } from "./useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS } from "../types/messages";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../terminalRegistry";

@@ -12,7 +12,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MESSAGE_TYPES } from "../types/messages";
 import { countTokens } from "../utils/tokenizer";
-import { sendMessage } from "./useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { decodePriorContextTokenRef } from "@root/utils/FileReferenceParser";

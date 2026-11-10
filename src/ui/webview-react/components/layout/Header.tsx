@@ -10,7 +10,7 @@ import { useLongPress } from "@hooks/useLongPress";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useIsDisplayedWorkflowFavorite } from "@hooks/useIsDisplayedWorkflowFavorite";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { WebviewLog } from "@utils/logger";
 import { openWorkflowDryRun } from "@utils/executionPreview";
 import { startNewBlankWorkflow } from "@utils/newWorkflow";

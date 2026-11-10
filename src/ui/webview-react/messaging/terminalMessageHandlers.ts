@@ -12,21 +12,16 @@ import {
 } from "../types/messages";
 import { OUTPUT_TABS } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@utils/logger";
-import { useTerminalStore } from "../store/terminalStore";
-import { useUiStore } from "../store/uiStore";
+import { useTerminalStore } from "@store/terminalStore";
+import { useUiStore } from "@store/uiStore";
 import { terminalRegistry } from "../terminalRegistry";
-import { sendMessage } from "@hooks/useMessageHandler";
-import type { MessageHandlerMap } from "./useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
+import type { MessageHandlerMap } from "./inboundMessageRouter";
 import type {
   TerminalEndedMessage,
   TerminalStartedMessage,
 } from "@root/types/WebviewMessageTypes";
-import {
-  clearPanelReconnectWatchdog,
-  clearFreshPageReadySent,
-} from "./reconnectWatchdog";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
-import { reissueRunViewLoadAfterHostedReconnect } from "./useRunViewLoadWatchdog";
 
 const pendingAutoClaims = new Set<string>();
 
@@ -99,24 +94,6 @@ function requestTerminalControlClaim(
  * Register all terminal-related message handlers into the provided handler map.
  */
 export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
-  // --------------------------------------------------------------------------
-  // CLIENT_ID_ASSIGNED - Extension tells this client its own identity
-  // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.CLIENT_ID_ASSIGNED] = (message: any) => {
-    const { clientId } = message;
-    if (clientId) {
-      // Signal the HTML-level handshake watchdog that the extension connection
-      // succeeded so it does not retry the handshake unnecessarily.
-      window.__ctrlyokePanelHandshakeDone = true;
-      // Reset the fresh-page flag so future RECONNECT messages (e.g. on the
-      // next extension host restart) correctly schedule the retained-context
-      // reconnect watchdog.
-      clearFreshPageReadySent();
-      clearPanelReconnectWatchdog();
-      useUiStore.getState().setMyClientId(clientId as string);
-      reissueRunViewLoadAfterHostedReconnect();
-    }
-  };
   // --------------------------------------------------------------------------
   // TERMINAL_OUTPUT - PTY output data; route directly to xterm or buffer it
   // --------------------------------------------------------------------------

@@ -38,7 +38,7 @@ import {
   createImmediateTaskScheduler,
   createInboundMessageDispatcher,
   type InboundMessageDispatcher,
-} from "@hooks/inboundMessageDispatcher";
+} from "@messaging/inboundMessageDispatcher";
 
 const REPLY_TYPE = [...WINDOW_LISTENER_REPLY_TYPES][0];
 

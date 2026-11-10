@@ -8,7 +8,7 @@ import React, { memo } from "react";
 import { TextDiffView } from "@components/diff/TextDiffView";
 import { ToolDot } from "./ToolDot";
 import { ToolCallBlock } from "./ToolCallBlock";
-import { openFile } from "@hooks/useMessageHandler";
+import { openFile } from "@messaging/sendMessage";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";

@@ -191,7 +191,7 @@ Routes terminal messages between webview and PTY manager:
 
 ### 7. Terminal Message Handlers (webview)
 
-**File:** `src/ui/webview-react/hooks/terminalMessageHandlers.ts`
+**File:** `src/ui/webview-react/messaging/terminalMessageHandlers.ts`
 
 - **TERMINAL_OUTPUT:** If xterm exists in registry → `entry.term.write(data)` (zero React overhead). If not yet mounted → buffers in terminalStore `pendingOutput`, flushed on mount.
 - **TERMINAL_STARTED:** Registers session in terminalStore. For ai-cli, clears previous ai-cli session (only one per workflow at a time). Auto-switches to Terminal tab.
@@ -398,7 +398,7 @@ TerminalInstance ResizeObserver
 | `src/ui/webview-react/components/output/TerminalInstance.tsx` | Mount-point manager for xterm DOM             |
 | `src/ui/webview-react/components/output/TerminalView.tsx`     | Horizontal layout: canvas + session rail      |
 | `src/ui/webview-react/store/terminalStore.ts`                 | Zustand store for session metadata            |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`       | Webview-side message handlers                 |
+| `src/ui/webview-react/messaging/terminalMessageHandlers.ts`       | Webview-side message handlers                 |
 | `src/flightpath/harness/PtyProcessManager.ts`                 | Extension host PTY process manager            |
 | `src/ui/WebviewMessageRouter.ts`                              | Message routing (extension host ↔ webview)    |
 | `src/ui/DashboardBroadcastHub.ts`                             | Fan-out hub for terminal output to clients    |

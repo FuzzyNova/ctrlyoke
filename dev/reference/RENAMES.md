@@ -105,6 +105,19 @@ This ledger maps retired names to their current names. Historical implementation
 | `useNavHistoryStore` | `useRouteHistoryStore` | symbol | 3c | 2026-11-09 |
 | `src/ui/webview-react/navigation/browserHistoryStore.ts` | `src/ui/webview-react/navigation/browserHistoryCursorStore.ts` | file | 3c | 2026-11-09 |
 | `useBrowserHistoryStore` | `useBrowserHistoryCursorStore` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/hooks/useMessageHandler.ts` | `src/ui/webview-react/messaging/inboundMessageRouter.ts` | file | 4 | 2026-11-09 |
+| `useMessageHandler` | `useInboundMessageRouter` | symbol | 4 | 2026-11-09 |
+| `sendMessage` (`hooks/useMessageHandler.ts`) | `messaging/sendMessage.ts` | symbol | 4 | 2026-11-09 |
+| `openFile` (`hooks/useMessageHandler.ts`) | `messaging/sendMessage.ts` | symbol | 4 | 2026-11-09 |
+| `captureAndSendThemeVars` (`hooks/useMessageHandler.ts`) | `messaging/sendMessage.ts` | symbol | 4 | 2026-11-09 |
+| `src/ui/webview-react/hooks/inboundMessageDispatcher.ts` | `src/ui/webview-react/messaging/inboundMessageDispatcher.ts` | file | 4 | 2026-11-09 |
+| `src/ui/webview-react/hooks/panelHandshake.ts` | `src/ui/webview-react/messaging/panelHandshake.ts` | file | 4 | 2026-11-09 |
+| `src/ui/webview-react/hooks/panelInboundBuffer.ts` | `src/ui/webview-react/messaging/panelInboundBuffer.ts` | file | 4 | 2026-11-09 |
+| `src/ui/webview-react/hooks/reconnectWatchdog.ts` | `src/ui/webview-react/messaging/reconnectWatchdog.ts` | file | 4 | 2026-11-09 |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts` | `src/ui/webview-react/messaging/terminalMessageHandlers.ts` | file | 4 | 2026-11-09 |
+| `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` | `src/ui/webview-react/test/messaging/inboundMessageRouter.test.ts` | file | 4 | 2026-11-09 |
+| `src/ui/webview-react/test/hooks/inboundMessageDispatcher.test.ts` | `src/ui/webview-react/test/messaging/inboundMessageDispatcher.test.ts` | file | 4 | 2026-11-09 |
+| `src/ui/webview-react/test/hooks/panelHandshake.test.ts` | `src/ui/webview-react/test/messaging/panelHandshake.test.ts` | file | 4 | 2026-11-09 |
 
 ## Kept on purpose
 
@@ -112,6 +125,7 @@ This ledger maps retired names to their current names. Historical implementation
 - `useStepContextMenu`, `useFinalStepContextMenu`, `utils/stepContextMenuItems.ts`, and `StepContextMenuRequest` remain step-specific; the `FuzzyRanking` and completions matches for `useFinalStepContextMenu` stay unchanged.
 - `useSettingsDrawerTabOverrides`, `DrawerRow`, and `DrawerTabBar` remain settings-drawer names; `drawerRef` in `GlobalSettingsDrawer.tsx` remains drawer-specific.
 - `src/ui/webview-react/components/output/ctrlyoke-tools/WorkflowStatusView.tsx` and its tool-view symbols remain tool-status names; they are separate from the workflow header switcher.
+- `MESSAGE_TYPES.CLIENT_ID_ASSIGNED` and `MESSAGE_TYPES.CAPTURE_THEME_VARS` remain wire-message names; only their webview handler/helper locations changed. `useRunViewLoadWatchdog` remains a hook in `hooks/`.
 - Persisted and wire contracts: `PERSISTED_STORES.PROVIDER_USAGE = "provider-usage"`, `PROVIDER_USAGE_SCHEMA_VERSION`; `HARNESS_USAGE_ERROR_CODES` values (including `provider-refresh-failed`); `StatusLineFormatProvider` values (`claude`, `antigravity`, `copilot`, `qwen`); `COMPLETION_NOTIFICATION_*` / `NOTIFICATION_KINDS` values; `_runtime.finalStep.loopCount`, `OutputExecutionTarget.loopIndex`, and the `loop*` fields in `WebviewMessageTypes.ts` / `IDashboardSink.ts`.
 - On-disk and browser contracts: `TempFileManager` directory names and file prefixes, output-snapshot filename prefix and truncation markers; sessionStorage `ctrlyoke-panel-reconnect-retry-at`, `window.__ctrlyokePanelHandshake*`; zustand persist names `ctrlyoke-ui-state` and `ctrlyoke-workspace-viewer-state`.
 - `docs/guide/dashboard.md` screenshot name `step-context-menu-900x588.png` remains unchanged.

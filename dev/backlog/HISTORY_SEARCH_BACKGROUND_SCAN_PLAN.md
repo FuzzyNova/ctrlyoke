@@ -17,7 +17,7 @@ remaining behaviour, which is working as designed and still unsatisfying.
 > `routeQueue`/`beginHistorySearch`/`getHistorySearchListingKey`,
 > `HISTORY_SEARCH_DEBOUNCE_MS = 600` in `HistorySearchDrawer.tsx`,
 > `historySearchCacheMb` default 320). One correction: partial results are applied in
-> `hooks/useMessageHandler.ts`, which updates the `uiStore` search state.
+> `messaging/inboundMessageRouter.ts`, which updates the `uiStore` search state.
 
 > Last reviewed against code: 2026-10-26. Still not started; every cited symbol still
 > matches. Two precedents landed since that the design can lean on: `STOP_RUN` now overtakes
@@ -58,7 +58,7 @@ rather than as a deliberate lower bound.
 That is the right shape. The machinery for the _pushing_ half already exists:
 `HistorySearchIndexService.scanForMatches` takes `onPartialResultsFound`, and
 the router relays it as `SEARCH_HISTORY_PARTIAL_RESULTS`, which
-`useMessageHandler` applies to the `uiStore` search state exactly like a page
+`useInboundMessageRouter` applies to the `uiStore` search state exactly like a page
 response. What is missing is a scan that keeps
 running when no page request is waiting on it.
 

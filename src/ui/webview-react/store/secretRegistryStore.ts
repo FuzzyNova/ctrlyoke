@@ -9,7 +9,7 @@ import type {
   SecretDeletedMessage,
   SecretSetMessage,
 } from "@root/types/WebviewMessageTypes";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 export type SecretRegistryAction = SecretSetMessage | SecretDeletedMessage;
 

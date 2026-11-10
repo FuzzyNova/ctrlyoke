@@ -1,7 +1,7 @@
 import { getStepOutputText } from "../../../../utils/StepOutputText";
 import { StepOutputTextMode } from "../../../../types/DashboardConstants";
 /**
- * Tests for useMessageHandler — the single entry point for all messages
+ * Tests for useInboundMessageRouter — the single entry point for all messages
  * from the VS Code extension into the webview.
  *
  * Strategy: dispatch real window MessageEvents, assert store state mutations.
@@ -50,15 +50,15 @@ vi.mock("@utils/logger", () => ({
 }));
 
 import {
-  captureAndSendThemeVars,
   createMessageHandlers,
-  useMessageHandler,
-} from "@hooks/useMessageHandler";
-import * as reconnectWatchdog from "@hooks/reconnectWatchdog";
+  useInboundMessageRouter,
+} from "@messaging/inboundMessageRouter";
+import { captureAndSendThemeVars } from "@messaging/sendMessage";
+import * as reconnectWatchdog from "@messaging/reconnectWatchdog";
 import {
   drainPanelInboundBuffer,
   startPanelInboundBuffer,
-} from "@hooks/panelInboundBuffer";
+} from "@messaging/panelInboundBuffer";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -194,7 +194,7 @@ describe("WORKFLOW_UNLOADED new-step draft", () => {
     window.vscodeApi = vscodeApi;
     expect(getVsCodeApi()).toBe(vscodeApi);
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
     useEditorStore.getState().setStepEnabled(false);
     useEditorStore.getState().setScriptCommand("npm test");
@@ -266,7 +266,7 @@ describe("HARNESS_CAPABILITY_SNAPSHOT", () => {
 
 describe("FILE_SELECTED", () => {
   it("loads the workflow into workflowStore", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -284,7 +284,7 @@ describe("FILE_SELECTED", () => {
   });
 
   it("marks settingsStore.workflowLoaded = true", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -297,7 +297,7 @@ describe("FILE_SELECTED", () => {
   });
 
   it("marks editorStore.hasActiveQueue = true", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -313,7 +313,7 @@ describe("FILE_SELECTED", () => {
     // Prime history state
     useUiStore.getState().setHistoryView();
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -334,7 +334,7 @@ describe("FILE_SELECTED", () => {
       },
       displayedRunDirectory: "/runs/old-workflow/old-run",
     });
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -387,7 +387,7 @@ describe("FILE_SELECTED", () => {
       { fromStepIndex: 0, baseDefinitionRevision: 1 }
     );
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -415,7 +415,7 @@ describe("FILE_SELECTED", () => {
   });
 
   it("loads workflow properties included with the file selection payload", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -453,7 +453,7 @@ describe("FILE_SELECTED", () => {
       target: { kind: "queue", stepIndex: 0 },
     });
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -466,7 +466,7 @@ describe("FILE_SELECTED", () => {
   });
 
   it("clears cached edit drafts for the previous workflow while preserving the new-prompt draft", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       const editor = useEditorStore.getState();
@@ -508,7 +508,7 @@ describe("SESSION_RESTORED", () => {
   it.each([3, 4])(
     "applies a replay snapshot at an equal-or-higher definition revision (%s)",
     (definitionRevision) => {
-      renderHook(() => useMessageHandler());
+      renderHook(() => useInboundMessageRouter());
       const address = {
         workflowKey: "wf-session-replay" as never,
         kind: "run" as const,
@@ -545,7 +545,7 @@ describe("SESSION_RESTORED", () => {
   );
 
   it("does not let a lower-revision replay replace newer steps or disarm the guard", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-session-replay" as never,
       kind: "run" as const,
@@ -576,7 +576,7 @@ describe("SESSION_RESTORED", () => {
   });
 
   it("applies a revisionless session replace even when it looks regressive", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-being-left" as never,
       kind: "run" as const,
@@ -617,7 +617,7 @@ describe("SESSION_RESTORED", () => {
   });
 
   it("loads workflow properties included with the restored session payload", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
@@ -650,7 +650,7 @@ describe("SESSION_RESTORED", () => {
 
   it("clears the system-generated lockdown when restoring a new workflow", () => {
     useUiStore.setState({ viewedLineageIsSystemGenerated: true });
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
@@ -674,7 +674,7 @@ describe("SESSION_RESTORED", () => {
 
 describe("INIT", () => {
   it("stores the host capabilities advertised by INIT", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.INIT, {
@@ -689,7 +689,7 @@ describe("INIT", () => {
   });
 
   it("loads workflow when prompts are provided", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.INIT, {
@@ -707,7 +707,7 @@ describe("INIT", () => {
   });
 
   it("updates global settings", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.INIT, {
@@ -746,7 +746,7 @@ describe("INIT", () => {
 
 describe("OPEN_NEW_WORKFLOW_MODAL", () => {
   it("opens the custom-template form when requested by the command", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL, {
@@ -774,7 +774,7 @@ describe("OPEN_NEW_WORKFLOW_MODAL", () => {
 
 describe("TEMPLATE_CATALOG_LOADED", () => {
   it("stores the catalog without opening the new workflow modal", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED, {
@@ -798,7 +798,7 @@ describe("TEMPLATE_CATALOG_LOADED", () => {
 
 describe("DEFAULT_TEMPLATE_SET", () => {
   it("stores the effective template id and source after a scoped clear", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.DEFAULT_TEMPLATE_SET, {
@@ -822,7 +822,7 @@ describe("DEFAULT_TEMPLATE_SET", () => {
 
 describe("TEMPLATE_VARIABLE_DEFAULTS_SET", () => {
   it("replaces the template catalog and records the successful save scope", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const refreshedTemplate = {
       id: "saved-template",
       name: "Saved template",
@@ -873,7 +873,7 @@ describe("restart lifecycle", () => {
       .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setMyClientId("panel");
 
     act(() => {
@@ -898,7 +898,7 @@ describe("restart lifecycle", () => {
       .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setMyClientId("panel");
 
     act(() => {
@@ -918,7 +918,7 @@ describe("restart lifecycle", () => {
       .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.DEV_RESTARTING, {
@@ -940,7 +940,7 @@ describe("restart lifecycle", () => {
     // Simulate BootstrapApp having sent READY on this fresh page load.
     reconnectWatchdog.markFreshPageReadySent();
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.RECONNECT);
@@ -962,7 +962,7 @@ describe("restart lifecycle", () => {
     // clearFreshPageReadySent() is called in beforeEach, so the default state
     // is already false — no extra setup needed.
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.RECONNECT);
@@ -974,7 +974,7 @@ describe("restart lifecycle", () => {
   });
 
   it("clears freshPageReadySent flag when CLIENT_ID_ASSIGNED arrives", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     // Simulate fresh page having sent READY.
     reconnectWatchdog.markFreshPageReadySent();
@@ -1011,7 +1011,7 @@ describe("panel inbound buffer", () => {
     dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "panel" });
     expect(useUiStore.getState().myClientId).toBe("");
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     expect(useUiStore.getState().myClientId).toBe("panel");
     expect(window.__ctrlyokePanelHandshakeDone).toBe(true);
@@ -1022,13 +1022,13 @@ describe("panel inbound buffer", () => {
     dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "first" });
     dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "second" });
 
-    const { rerender, unmount } = renderHook(() => useMessageHandler());
+    const { rerender, unmount } = renderHook(() => useInboundMessageRouter());
     expect(useUiStore.getState().myClientId).toBe("second");
 
     useUiStore.getState().setMyClientId("live");
     rerender();
     unmount();
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     expect(useUiStore.getState().myClientId).toBe("live");
     expect(drainPanelInboundBuffer()).toEqual([]);
@@ -1044,7 +1044,7 @@ describe("WORKFLOW_LOADED", () => {
   // auto-load. Only STARTUP_COMPLETE may dismiss the overlay.
   it("enables the editing UI without dismissing the startup overlay", () => {
     useUiStore.setState({ startupReady: false });
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.WORKFLOW_LOADED);
@@ -1056,7 +1056,7 @@ describe("WORKFLOW_LOADED", () => {
   });
 
   it("leaves the overlay dismissed when startup already completed", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
@@ -1071,7 +1071,7 @@ describe("STARTUP_COMPLETE", () => {
   it("dismisses the startup overlay", () => {
     // resetUi() leaves startupReady alone, so clear it explicitly.
     useUiStore.setState({ startupReady: false });
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     expect(useUiStore.getState().startupReady).toBe(false);
 
@@ -1088,7 +1088,7 @@ describe("STARTUP_COMPLETE", () => {
     >;
     postMessageMock.mockClear();
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
@@ -1106,7 +1106,7 @@ describe("STARTUP_COMPLETE", () => {
     postMessageMock.mockClear();
     useUiStore.setState({ recentWorkflows: [], recentWorkflowsLoaded: false });
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
@@ -1124,7 +1124,7 @@ describe("STARTUP_COMPLETE", () => {
     postMessageMock.mockClear();
     useUiStore.getState().setRecentWorkflows([]);
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
@@ -1137,7 +1137,7 @@ describe("STARTUP_COMPLETE", () => {
 
   it("applies a pushed recent-workflow row", () => {
     useUiStore.getState().setRecentWorkflows([], 100);
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.RECENT_WORKFLOW_UPDATED, {
@@ -1170,7 +1170,7 @@ describe("STARTUP_COMPLETE", () => {
         "c:/dev/ctrlyoke/.ctrlyoke/.runs/example/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json"
       );
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
@@ -1188,7 +1188,7 @@ describe("STARTUP_COMPLETE", () => {
 
 describe("EXECUTION_STATE_CHANGED", () => {
   it("updates workflowStore executionState to RUNNING", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.EXECUTION_STATE_CHANGED, {
@@ -1202,7 +1202,7 @@ describe("EXECUTION_STATE_CHANGED", () => {
   });
 
   it("updates to PAUSED", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.EXECUTION_STATE_CHANGED, {
@@ -1216,7 +1216,7 @@ describe("EXECUTION_STATE_CHANGED", () => {
   });
 
   it("updates to STOPPED", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.EXECUTION_STATE_CHANGED, {
@@ -1236,7 +1236,7 @@ describe("EXECUTION_STATE_CHANGED", () => {
 
 describe("EXECUTION_COMPLETED", () => {
   it("sets executionState to COMPLETED", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.EXECUTION_COMPLETED);
@@ -1248,7 +1248,7 @@ describe("EXECUTION_COMPLETED", () => {
   });
 
   it("marks non-terminal prompt statuses completed", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -1270,7 +1270,7 @@ describe("EXECUTION_COMPLETED", () => {
   });
 
   it("releases the executing run so the header can offer Re-run immediately", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const runRef = "run-2026-07-20T12-00-00-000Z";
     useUiStore.setState({
       executionRunRef: runRef,
@@ -1328,7 +1328,7 @@ describe("NOTIFICATION_EVENT", () => {
   });
 
   it("keeps panel completion events native while delegating browser delivery", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     const fullSettings: FullGlobalSettings = {
       settings: {
@@ -1376,7 +1376,7 @@ describe("NOTIFICATION_EVENT", () => {
   });
 
   it("ignores malformed notification events", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.NOTIFICATION_EVENT, {
@@ -1464,7 +1464,7 @@ describe("USER_FEEDBACK", () => {
 
 describe("OPEN_HARNESS_DIR_RESULT", () => {
   it("opens the workspace viewer at the directory when OS reveal is unsupported", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT, {
@@ -1481,7 +1481,7 @@ describe("OPEN_HARNESS_DIR_RESULT", () => {
   });
 
   it("uses native panel feedback when the folder could not be opened", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT, {
@@ -1507,7 +1507,7 @@ describe("OPEN_HARNESS_DIR_RESULT", () => {
 
 describe("OUTPUT_HISTORY_LOADED", () => {
   it("keeps the output view live when the newest run history arrives during execution", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const persistedEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
@@ -1569,7 +1569,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
   });
 
   it("loads history when the manifest is completed even if the webview state is still running (race condition fix)", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
@@ -1596,7 +1596,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
   });
 
   it("opens output find with the pending history query and clears staged navigation", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     const address = {
       workflowKey: "wf-1" as never,
@@ -1649,7 +1649,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     // gating (isTerminalSessionInUseByActiveStep) depends on this being
     // fresh after switching to a running workflow, not left over from
     // whatever was previously displayed.
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     const address = {
       workflowKey: "wf-running" as never,
@@ -1671,7 +1671,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
   });
 
   it("defaults activeStepIndices to empty when a RUN_VIEW_LOADED snapshot omits it", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       useWorkflowStore.getState().setActiveStepIndices([3]);
@@ -1698,7 +1698,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
 
 describe("RUN_VIEW_LOADED navigation identity", () => {
   it("does not clear an optimistically selected run while its snapshot loads", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const source = {
       workflowKey: "wf-1" as never,
       kind: "run" as const,
@@ -1752,7 +1752,7 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
   });
 
   it("applies the snapshot when its own ACTIVE_WORKFLOW_CHANGED announcement precedes it", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const target = {
       workflowKey: "wf-switch" as never,
       kind: "run" as const,
@@ -1806,7 +1806,7 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
   });
 
   it("still cancels a stale pending request on a backend-initiated switch", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const target = {
       workflowKey: "wf-stale" as never,
       kind: "draft" as const,
@@ -1833,7 +1833,7 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
   });
 
   it("accepts a reconnect snapshot when retained content no longer matches its applied address", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const workflowId = "execution-mode-instance";
     const address = {
       workflowKey: "execution-mode" as never,
@@ -1886,7 +1886,7 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
   });
 
   it("hydrates an executing run's full history before overlaying buffered output", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const workflowId = "instance-atomic";
     const address = {
       workflowKey: "wf-atomic" as never,
@@ -1976,7 +1976,7 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
 
 describe("RUN_VIEW_LOADED same-view replay", () => {
   it("preserves step and live-entry identities when an identical snapshot is replayed", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-replay" as never,
       kind: "run" as const,
@@ -2039,7 +2039,7 @@ describe("RUN_VIEW_LOADED same-view replay", () => {
   });
 
   it("still clears runtime state when the snapshot carries a new definition revision", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-replay-rev" as never,
       kind: "run" as const,
@@ -2085,7 +2085,7 @@ describe("RUN_VIEW_LOADED same-view replay", () => {
   // the history on a revision bump erased the entry the client's own edit had
   // just recorded, and made the first undo throw away the rest of the stack.
   it("keeps the undo history when the same address advances a revision", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-replay-undo" as never,
       kind: "run" as const,
@@ -2125,7 +2125,7 @@ describe("RUN_VIEW_LOADED same-view replay", () => {
   });
 
   it("clears the undo history when a definition rollback restarts the epoch", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-replay-rollback" as never,
       kind: "run" as const,
@@ -2182,7 +2182,7 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
   // snapshot must not be allowed to revert the live execution state just
   // because the client was still addressed at the draft a moment ago.
   it("uses authoritative live execution state when the addressed file is stale", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     const draftAddress = {
       workflowKey: "wf-fresh" as never,
@@ -2255,7 +2255,7 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
   // must not depend on appliedViewAddress at all to catch this race, since
   // the promoted run's first-ever RUN_VIEW_LOADED is exactly this case.
   it("keeps RUNNING when a first-ever run snapshot arrives with a stale idle state and no prior applied view", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     const runAddress = {
       workflowKey: "wf-brand-new" as never,
@@ -2312,7 +2312,7 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
   // as a live run and wipes the history this same snapshot just loaded,
   // blanking the output pane with no path back short of a workflow switch.
   it("applies a completed reconnect snapshot when nothing is executing the lineage", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     const runAddress = {
       workflowKey: "wf-resumed" as never,
@@ -2364,7 +2364,7 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
   // A completed snapshot for an *older* run of a lineage whose newer run is
   // executing is likewise authoritative about that older run.
   it("applies a completed snapshot for a run other than the executing one", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     const olderRunAddress = {
       workflowKey: "wf-two-runs" as never,
@@ -2412,7 +2412,7 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
 
 describe("run view revision snapshots", () => {
   it("ignores a late requestless snapshot that would regress an appended run", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-1" as never,
       kind: "run" as const,
@@ -2482,7 +2482,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("ignores a requestless snapshot from an older definition revision", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-1" as never,
       kind: "run" as const,
@@ -2522,7 +2522,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("accepts an authoritative draft replay after switching to a newly loaded workflow", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "previous-workflow" as never,
@@ -2560,7 +2560,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("stores definition and descriptor revisions for the next addressed edit", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
@@ -2600,7 +2600,7 @@ describe("run view revision snapshots", () => {
     // The stale-snapshot guard must not treat the *previous* workflow's still
     // -resident 4-step content as "the current address" just because
     // displayedViewAddress now points at the 2-step target.
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const previousAddress = {
       workflowKey: "test" as never,
       kind: "run" as const,
@@ -2671,7 +2671,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("adopts a regressive snapshot's newer descriptor revision while ignoring its definition", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-1" as never,
       kind: "run" as const,
@@ -2715,7 +2715,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("accepts the explicit definition rollback produced by discarding a continuation", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-1" as never,
       kind: "run" as const,
@@ -2768,7 +2768,7 @@ describe("run view revision snapshots", () => {
     // snapshot must be judged against the revision whose content is actually
     // applied — otherwise a write that removed a step is discarded as
     // regressive and the deleted step stays on screen forever.
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = {
       workflowKey: "wf-1" as never,
       kind: "run" as const,
@@ -2817,7 +2817,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("re-arms the next edit with the revisions a write just produced", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
@@ -2843,7 +2843,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("does not let a write identity override a run switch still in flight", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const inFlight = { workflowKey: "wf-1" as never, kind: "run" as const };
 
     act(() => {
@@ -2871,7 +2871,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("still applies a write identity for the address a switch is loading", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
 
     act(() => {
@@ -2896,7 +2896,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("applies system-generated lockdown from the addressed run snapshot", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     // resetUi() (in the file-level beforeEach) does not clear
     // pendingRunViewRequestId, so a prior test's in-flight request ID can
     // otherwise leak in and make RUN_VIEW_LOADED look stale below.
@@ -2922,7 +2922,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("retires the run-view request a failure answers", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({ pendingRunViewRequestId: "run-view-7" });
 
     act(() => {
@@ -2941,7 +2941,7 @@ describe("run view revision snapshots", () => {
   // workflow that failed to load while the panels still rendered the previous
   // one, with every addressed control aimed at the wrong lineage.
   it("rolls the view back to the workflow still on screen when a load is rejected", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const previousAddress = {
       workflowKey: "wf-current" as never,
       kind: "draft" as const,
@@ -2983,7 +2983,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("keeps an unrelated run-view request pending on failure", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({ pendingRunViewRequestId: "run-view-8" });
 
     act(() => {
@@ -2997,7 +2997,7 @@ describe("run view revision snapshots", () => {
   });
 
   it("stops addressing the previous workflow when a new one is selected", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "previous-workflow" as never,
@@ -3033,7 +3033,7 @@ describe("WORKFLOW_ACTION_FAILED feedback host routing", () => {
 
       try {
         const [{ createMessageHandlers }, { useUiStore }] = await Promise.all([
-          import("@hooks/useMessageHandler"),
+          import("@messaging/inboundMessageRouter"),
           import("@store/uiStore"),
         ]);
         useUiStore.getState().resetUi();
@@ -3070,7 +3070,7 @@ describe("WORKTREE_MANAGEMENT_ACTION_RESULT error feedback", () => {
 
     try {
       const [{ createMessageHandlers }, { useUiStore }] = await Promise.all([
-        import("@hooks/useMessageHandler"),
+        import("@messaging/inboundMessageRouter"),
         import("@store/uiStore"),
       ]);
       useUiStore.getState().resetUi();
@@ -3104,7 +3104,7 @@ describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {
   };
 
   it("stores the pending confirmation so the UI can render its own modal", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED, {
@@ -3136,7 +3136,7 @@ describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {
     postMessageMock.mockClear();
 
     try {
-      renderHook(() => useMessageHandler());
+      renderHook(() => useInboundMessageRouter());
 
       act(() => {
         dispatch(MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED, {
@@ -3171,7 +3171,7 @@ describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {
 
 describe("history search messages", () => {
   it("ignores pages whose listing scope has been superseded", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setHistorySearchQuery("needle");
     useUiStore.getState().setHistorySearchListingId("active-listing");
     useUiStore.getState().setHistorySearchResults([], true);
@@ -3193,7 +3193,7 @@ describe("history search messages", () => {
   });
 
   it("opens the history search drawer when requested", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.OPEN_HISTORY_SEARCH);
@@ -3203,7 +3203,7 @@ describe("history search messages", () => {
   });
 
   it("clears the loading state when a regex times out", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       useUiStore.getState().setHistorySearchQuery("(a+)+$");
@@ -3223,7 +3223,7 @@ describe("history search messages", () => {
   });
 
   it("applies matching search results and ignores stale queries", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       useUiStore.getState().setHistorySearchQuery("needle");
@@ -3283,7 +3283,7 @@ describe("history search messages", () => {
   });
 
   it("applies results for a query typed with surrounding whitespace", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       // The store holds the raw input value; the request (and the response
@@ -3319,7 +3319,7 @@ describe("history search messages", () => {
   });
 
   it("applies partial results mid-scan without clearing the loading state", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       useUiStore.getState().setHistorySearchQuery("needle");
@@ -3362,7 +3362,7 @@ describe("history search messages", () => {
   });
 
   it("discards a partial push for a query the user has since moved on from", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       useUiStore.getState().setHistorySearchQuery("fresh");
@@ -3457,7 +3457,7 @@ describe("undo record update messages", () => {
 
 describe("active workflow summaries", () => {
   it("updates recent rows but keeps an older displayed run isolated from live summaries", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const olderRunRef = "run-2026-07-20T12-00-00-000Z" as never;
     const executingRunRef = "run-2026-07-20T13-00-00-000Z" as never;
     useUiStore.setState({
@@ -3551,7 +3551,7 @@ describe("active workflow summaries", () => {
   });
 
   it("accepts a workflow binding while the displayed run's execution is unknown", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({
       activeWorkflowId: null,
       displayedViewAddress: {
@@ -3572,7 +3572,7 @@ describe("active workflow summaries", () => {
   });
 
   it("ignores live workflow messages while viewing a known different run", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({
       activeWorkflowId: null,
       displayedViewAddress: {
@@ -3593,7 +3593,7 @@ describe("active workflow summaries", () => {
   });
 
   it("keeps live output isolated between hosted tabs with different selected runs", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const executingRunRef = "run-2026-07-20T13-00-00-000Z" as never;
     const historicalRunRef = "run-2026-07-20T12-00-00-000Z" as never;
     useUiStore.setState({
@@ -3637,7 +3637,7 @@ describe("active workflow summaries", () => {
   });
 
   it("keeps pausing workflows in loadedWorkflows", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.WORKFLOWS_LIST, {
@@ -3668,7 +3668,7 @@ describe("active workflow summaries", () => {
   });
 
   it("upserts pausing workflow summary updates into loadedWorkflows", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, {
@@ -3692,7 +3692,7 @@ describe("active workflow summaries", () => {
   });
 
   it("patches the matching recent-workflow row's state in place so the dropdown doesn't need a reopen", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       useUiStore.getState().setRecentWorkflows([
@@ -3735,7 +3735,7 @@ describe("active workflow summaries", () => {
 
 describe("PROGRESS_UPDATE", () => {
   it("updates currentStep and totalSteps", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.PROGRESS_UPDATE, { current: 2, total: 5 });
@@ -3753,7 +3753,7 @@ describe("PROGRESS_UPDATE", () => {
 describe("STEP_STATUS_CHANGED", () => {
   it("updates the status of the targeted step only", () => {
     // Load a workflow first so prompts array is populated
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -3780,7 +3780,7 @@ describe("STEP_STATUS_CHANGED", () => {
   });
 
   it("accepts a plain string status (not wrapped in state object)", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -3808,7 +3808,7 @@ describe("STEP_STATUS_CHANGED", () => {
 
 describe("CONTEXT_WINDOW_UPDATE", () => {
   it("stores live context for the currently running step", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -3834,7 +3834,7 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
   });
 
   it("stores live context for an active step after the group join index", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -3861,7 +3861,7 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
   });
 
   it("ignores late live context for a completed step", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -3906,7 +3906,7 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
   });
 
   it("keeps the previous step live context until durable tokens arrive", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -3959,7 +3959,7 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
   });
 
   it("stores live context for the active final-step pass and ignores terminal updates", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -4011,7 +4011,7 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
 
 describe("RETRY_ATTEMPT_CHANGED", () => {
   it("stores retry state in workflowStore", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED, {
@@ -4034,7 +4034,7 @@ describe("RETRY_ATTEMPT_CHANGED", () => {
 
 describe("STEPS_EXTENDED", () => {
   it("records one bulk enable as one undo entry and restores every step", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const initial = [
       makePrompt("first"),
       makePrompt("second", { enabled: false }),
@@ -4060,7 +4060,7 @@ describe("STEPS_EXTENDED", () => {
   });
 
   it("adopts the appended definition revision before execution completes", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-key" as never,
@@ -4086,7 +4086,7 @@ describe("STEPS_EXTENDED", () => {
   });
 
   it("does not regress the definition revision on a duplicate stale update", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({ displayedDefinitionRevision: 3 });
 
     act(() => {
@@ -4100,7 +4100,7 @@ describe("STEPS_EXTENDED", () => {
   });
 
   it("extends the prompts array", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -4124,7 +4124,7 @@ describe("STEPS_EXTENDED", () => {
   });
 
   it("preserves existing prompt statuses", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -4157,7 +4157,7 @@ describe("STEPS_EXTENDED", () => {
   });
 
   it("keeps multi-selection across runtime-only STEPS_EXTENDED updates", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
@@ -4179,7 +4179,7 @@ describe("STEPS_EXTENDED", () => {
   });
 
   it("records a step insert that arrives alongside a piggybacked executionState", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -4224,7 +4224,7 @@ describe("REORDER_PROMPTS_CONFIRMED", () => {
   }
 
   it("records one undo entry for a drag that reorders steps", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     loadTwoSteps();
 
     act(() => {
@@ -4242,7 +4242,7 @@ describe("REORDER_PROMPTS_CONFIRMED", () => {
   // halves through separate setters (with the group half paused to avoid
   // double-recording) left that gesture with no undo entry at all.
   it("records an undo entry for a drag that only changes group membership", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
@@ -4270,7 +4270,7 @@ describe("REORDER_PROMPTS_CONFIRMED", () => {
   // that follows the write is read as a view change and clears the entry
   // above right back out again.
   it("adopts the revision the reorder write produced", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     loadTwoSteps();
     useUiStore.setState({
       displayedViewAddress: {
@@ -4305,7 +4305,7 @@ describe("PROMPT_DELETED", () => {
   // run-addressed write has to be recognisable as a replay — otherwise it
   // clears live runtime state the persisted history cannot restore.
   it("adopts the revision the delete write produced", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
@@ -4337,7 +4337,7 @@ describe("PROMPT_DELETED", () => {
   });
 
   it("records one bulk delete as one undo entry and restores every deleted step", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const initial = [
       makePrompt("first"),
       makePrompt("second"),
@@ -4366,7 +4366,7 @@ describe("PROMPT_DELETED", () => {
   });
 
   it("ignores a delete for another workflow without adopting its revision", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "active.yaml",
@@ -4417,7 +4417,7 @@ describe("editor targets when the step list changes", () => {
   ])(
     "keeps or cancels the selected draft when deleting index $deletedIndex",
     ({ deletedIndex, expectedIndex }) => {
-      renderHook(() => useMessageHandler());
+      renderHook(() => useInboundMessageRouter());
       loadInitialSteps();
       useEditorStore.getState().enterEditMode(2, initialSteps[2]);
       useEditorStore.getState().setPromptText("unsaved third-step draft");
@@ -4447,7 +4447,7 @@ describe("editor targets when the step list changes", () => {
   );
 
   it("remaps active and cached drafts when a step is inserted", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     loadInitialSteps();
     const editor = useEditorStore.getState();
     editor.enterEditMode(1, initialSteps[1]);
@@ -4484,7 +4484,7 @@ describe("editor targets when the step list changes", () => {
   });
 
   it("follows step identities and cached drafts through a reorder", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     loadInitialSteps();
     const editor = useEditorStore.getState();
     editor.enterEditMode(1, initialSteps[1]);
@@ -4518,7 +4518,7 @@ describe("editor targets when the step list changes", () => {
 
 describe("workflow-scoped definition pushes", () => {
   it("ignores UPDATE_FINAL_PROMPT for a background workflow", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const activeFinalStep = makePrompt("active final");
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -4549,7 +4549,7 @@ describe("workflow-scoped definition pushes", () => {
 
 describe("STEP_UNDO_DATA_UPDATED", () => {
   it("ignores undo snapshots from a background workflow", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.setState({ activeWorkflowId: "wf-active" });
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const snapshot = { capturedAt: 1 } as any;
@@ -4604,7 +4604,7 @@ describe("narrow content pushes adopt their definition revision", () => {
   ];
 
   it.each(pushes)("$type advances the applied head", ({ type, payload }) => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
@@ -4635,7 +4635,7 @@ describe("narrow content pushes adopt their definition revision", () => {
 
 describe("EXECUTION_STARTED", () => {
   it("preserves step-zero output published before a continuation start", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useWorkflowStore.getState().loadWorkflow({
       fileName: "wf.yaml",
@@ -4673,7 +4673,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("syncs executionRunRef and the run's cached summary immediately on a continuation of the displayed run", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useWorkflowStore.getState().loadWorkflow({
       fileName: "wf.yaml",
@@ -4724,7 +4724,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("expands the output section and shows output for headless runs when auto-focus is enabled", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
@@ -4749,7 +4749,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("leaves the current view alone when headless auto-focus is disabled", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
@@ -4776,7 +4776,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("expands the output section and keeps terminal visible for terminal-reuse runs", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
@@ -4809,7 +4809,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("focuses output for headless steps and leaves interactive steps to TERMINAL_STARTED", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useSettingsStore
@@ -4852,7 +4852,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("does not expand or switch the output view for an interactive step that has not spawned a terminal", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
@@ -4875,7 +4875,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("preserves ai-cli sessions during append continuations until TERMINAL_STARTED reconciles them", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useTerminalStore.getState().addSession({
       id: "session-1",
@@ -4902,7 +4902,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("clears a pending rewind when another viewer continues the run", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.setState({
       pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 3 },
@@ -4922,7 +4922,7 @@ describe("EXECUTION_STARTED", () => {
   });
 
   it("clears ai-cli sessions on fresh non-reuse starts", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useTerminalStore.getState().addSession({
       id: "session-1",
@@ -4951,7 +4951,7 @@ describe("EXECUTION_STARTED", () => {
 
 describe("TERMINAL_STARTED", () => {
   it("marks the workflow terminal inactive after its last running session ends", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const setTerminalSessionActive = vi.spyOn(
       useUiStore.getState(),
       "setTerminalSessionActive"
@@ -4980,7 +4980,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("keeps terminal lifecycle messages live while viewing a historical run", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.setState({
@@ -5011,7 +5011,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("filters each MESSAGE_BATCH member as if it had arrived alone", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.setState({
@@ -5061,7 +5061,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("expands the output section and shows terminal when auto-focus is enabled", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
@@ -5088,7 +5088,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("does not switch views on terminal start when auto-focus is disabled", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
@@ -5113,7 +5113,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("updates existing session metadata when terminal reuse reuses the PTY", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
@@ -5160,7 +5160,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("applies the extension's terminal end status instead of re-deriving it from the exit code", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
@@ -5191,7 +5191,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("keeps existing AI CLI sessions when a different harness starts", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
@@ -5226,7 +5226,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("keeps the previous AI CLI session for the same harness", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
@@ -5264,7 +5264,7 @@ describe("TERMINAL_STARTED", () => {
   // explicitly when a new process takes over that terminal's AI session, rather
   // than the webview guessing from a same-harness TERMINAL_STARTED.
   it("drops only the session the extension removed", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     for (const sessionId of ["retained-session", "superseded-session"]) {
       act(() => {
@@ -5294,7 +5294,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("preserves same-harness parallel sessions as separate labeled tabs", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     for (const session of [
       {
@@ -5341,7 +5341,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("keeps multiple script PTY terminal tabs", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
@@ -5372,7 +5372,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("preserves parallel script PTYs as separate tabs", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
@@ -5404,7 +5404,7 @@ describe("TERMINAL_STARTED", () => {
   });
 
   it("keeps workflow-scoped controller arbitration for every replayed parallel session", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       for (const sessionId of ["parallel-1", "parallel-2"]) {
@@ -5444,7 +5444,7 @@ describe("TERMINAL_STARTED", () => {
     >;
     postMessageMock.mockClear();
 
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "browser:2" });
@@ -5498,7 +5498,7 @@ describe("CLI_WATCH_OUTPUT", () => {
   // and `appendLiveEntry`'s identity match made the end-condition script
   // overwrite the step's AI response instead of sitting beside it.
   it("recovers the execution phase of a watched condition script's output", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const workflowId = "cli-managed-instance";
 
     act(() => {
@@ -5561,7 +5561,7 @@ describe("CLI_WATCH_OUTPUT", () => {
 
 describe("cleanup", () => {
   it("stops handling messages after unmount", () => {
-    const { unmount } = renderHook(() => useMessageHandler());
+    const { unmount } = renderHook(() => useInboundMessageRouter());
     unmount();
 
     act(() => {
@@ -5577,7 +5577,7 @@ describe("cleanup", () => {
 
 describe("message passthroughs", () => {
   it("silently skips replies consumed by window listeners", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       for (const type of WINDOW_LISTENER_REPLY_TYPES) {
@@ -5591,7 +5591,7 @@ describe("message passthroughs", () => {
   });
 
   it("queues prompt-editor insert requests and opens the editor section", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     useUiStore.getState().setEditorCollapsed(true);
     useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
 
@@ -5617,7 +5617,7 @@ describe("message passthroughs", () => {
   });
 
   it("does not warn for context reference validation replies handled by the editor", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.CONTEXT_REFS_VALIDATION, {
@@ -5632,7 +5632,7 @@ describe("message passthroughs", () => {
   });
 
   it("does not warn for execute-prompt errors handled by the editor", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.EXECUTE_PROMPT_ERROR, {
@@ -5652,7 +5652,7 @@ describe("message passthroughs", () => {
 
 describe("PRIOR_CONTEXT_PREVIEW_RESULT", () => {
   it("opens the content preview modal with xml language", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT, {
@@ -5669,7 +5669,7 @@ describe("PRIOR_CONTEXT_PREVIEW_RESULT", () => {
   });
 
   it("includes the ref in the title", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT, {
@@ -5684,7 +5684,7 @@ describe("PRIOR_CONTEXT_PREVIEW_RESULT", () => {
   });
 
   it("does not warn about unknown message type", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT, {
@@ -5705,7 +5705,7 @@ describe("PRIOR_CONTEXT_PREVIEW_RESULT", () => {
 
 describe("MCP_CONFIG_PREVIEW_RESULT", () => {
   it("opens the content preview modal with json language when found", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT, {
@@ -5724,7 +5724,7 @@ describe("MCP_CONFIG_PREVIEW_RESULT", () => {
   });
 
   it("uses native panel feedback instead of a modal when not found", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT, {
@@ -5744,7 +5744,7 @@ describe("MCP_CONFIG_PREVIEW_RESULT", () => {
   });
 
   it("does not warn about unknown message type", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT, {
@@ -6002,7 +6002,7 @@ describe("attempt prompt on live CLI entries", () => {
       );
 
   it("keeps a queue step's prompt when its completed output replaces the placeholder", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -6036,7 +6036,7 @@ describe("attempt prompt on live CLI entries", () => {
   });
 
   it("keeps a finalStep pass's prompt when its completed output replaces the placeholder", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
@@ -6071,7 +6071,7 @@ describe("attempt prompt on live CLI entries", () => {
   });
 
   it("keeps the prompt of a CLI-managed run's attempt across watch updates", () => {
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     const workflowId = "wf-watched";
 
     act(() => {

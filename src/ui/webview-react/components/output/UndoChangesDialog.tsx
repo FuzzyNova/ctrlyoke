@@ -37,7 +37,7 @@ import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
-import { sendMessage } from "../../hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 export type { WorkflowStepEntry } from "../../utils/promptUndo";
 

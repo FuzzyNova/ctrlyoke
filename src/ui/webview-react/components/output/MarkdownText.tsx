@@ -19,7 +19,7 @@ import { visitParents } from "unist-util-visit-parents";
 import { toString as mdastToString } from "mdast-util-to-string";
 import type { Root, Text } from "mdast";
 import type { Pluggable, PluginTuple } from "unified";
-import { openFile } from "@hooks/useMessageHandler";
+import { openFile } from "@messaging/sendMessage";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { WebviewLog } from "@utils/logger";

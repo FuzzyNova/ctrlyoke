@@ -3,7 +3,7 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import {
   installPanelHandshakeRetry,
   retryPanelHandshake,
-} from "@hooks/panelHandshake";
+} from "@messaging/panelHandshake";
 import { getVsCodeApi, panelPageLoadId } from "@hooks/useVsCodeApi";
 
 describe("panel handshake retry", () => {

@@ -7,7 +7,7 @@ import type {
   RegistrySkillLocation,
   SkillUpdateCheckResult,
 } from "@root/types/WebviewMessageTypes";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 /** Results shown per page; skills.sh returns up to 50 per search. */
 export const SKILLS_REGISTRY_PAGE_SIZE = 10;

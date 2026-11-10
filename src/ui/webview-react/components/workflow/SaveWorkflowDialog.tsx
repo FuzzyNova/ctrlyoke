@@ -54,10 +54,10 @@ function joinSavePath(
  * Flow:
  *   User clicks Save button
  *   → extension receives SAVE_WORKFLOW_REQUEST, reads working file, replies with SAVE_WORKFLOW_DIALOG_DATA
- *   → useMessageHandler opens this dialog (openSaveWorkflowDialog)
+ *   → useInboundMessageRouter opens this dialog (openSaveWorkflowDialog)
  *   → user edits location / name / format, clicks Save
  *   → extension receives SAVE_WORKFLOW, writes file, replies with WORKFLOW_SAVED or WORKFLOW_SAVE_FAILED
- *   → useMessageHandler closes dialog (on success) or shows toast error (on failure)
+ *   → useInboundMessageRouter closes dialog (on success) or shows toast error (on failure)
  *
  * Toggling "Save as Template" swaps the location/name/format fields for a
  * template name + scope + format picker and posts SAVE_WORKFLOW_AS_TEMPLATE instead —

@@ -12,7 +12,7 @@ import {
   Separator,
   PanelImperativeHandle,
 } from "react-resizable-panels";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { useMobileTerminalBar } from "@hooks/useMobileTerminalBar";
 import { useLongPress } from "@hooks/useLongPress";
 import { useTerminalContextMenu } from "@hooks/useTerminalContextMenu";

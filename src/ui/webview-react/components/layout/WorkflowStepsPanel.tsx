@@ -61,7 +61,7 @@ import {
   FINAL_STEP_PHASES,
   type StepStatus,
 } from "../../types/messages";
-import { sendMessage } from "../../hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   DndContext,

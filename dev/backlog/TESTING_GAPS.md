@@ -54,7 +54,7 @@ Ranked by uncovered statement count (biggest win first). Full report: `src/ui/we
 | File                                                                              | Coverage | Uncovered / Total |
 | --------------------------------------------------------------------------------- | -------: | ----------------: |
 | `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                     |   59.65% |         376 / 932 |
-| `src/ui/webview-react/hooks/useMessageHandler.ts`                                 |   68.22% |        333 / 1048 |
+| `src/ui/webview-react/messaging/inboundMessageRouter.ts`                                 |   68.22% |        333 / 1048 |
 | `src/ui/webview-react/components/output/TerminalInstance.tsx`                     |     1.3% |         303 / 307 |
 | `src/ui/webview-react/components/workspace-viewer/WorkspaceSourceControlPane.tsx` |    0.46% |         216 / 217 |
 | `src/ui/webview-react/components/settings/McpManagerSection.tsx`                  |   61.25% |         167 / 431 |

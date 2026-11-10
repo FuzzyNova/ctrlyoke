@@ -86,7 +86,7 @@ function deepValueEqual(a: unknown, b: unknown): boolean {
  * never pollutes the undo stack.
  *
  * Used by both zundo's `equality` option below and the STEPS_EXTENDED handler
- * in useMessageHandler.ts. Previously each kept its own hand-written allow-list
+ * in messaging/inboundMessageRouter.ts. Previously each kept its own hand-written allow-list
  * of fields to compare, so any step property missing from *both* lists (e.g.
  * `resumeSession`, `mcpServers`, `toolPermissions`, `additionalArgs`) never
  * registered as undoable no matter which one edited it.

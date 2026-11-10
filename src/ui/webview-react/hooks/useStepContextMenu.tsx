@@ -5,7 +5,7 @@ import {
 } from "../components/shared/ContextMenu";
 import { ResetConfirmModal } from "../components/shared/ResetConfirmModal";
 import { ConfirmDeleteOperationModal } from "../components/shared/ConfirmDeleteOperationModal";
-import { sendMessage } from "./useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,

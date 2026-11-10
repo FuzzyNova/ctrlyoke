@@ -44,7 +44,7 @@ import {
   renderCommandForDisplay,
   type CommandDisplayShell,
 } from "@root/types/CommandDisplayFormatter";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useCompatibilityDiagnostics } from "@hooks/useCompatibilityDiagnostics";

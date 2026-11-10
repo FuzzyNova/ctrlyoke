@@ -11,7 +11,7 @@ import type {
   ManagedMcpServer,
   RegistryMcpEntry,
 } from "@root/types/WebviewMessageTypes";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 export const MCP_MANAGER_DISCOVERY_TABS = {
   LOCAL: "local",

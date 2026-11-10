@@ -18,7 +18,7 @@ import {
   type LanguageServerStatus,
 } from "@store/languageServerStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import {
   ScopeBadge,
   encodeManagerTarget,

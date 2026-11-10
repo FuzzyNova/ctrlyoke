@@ -5,9 +5,9 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import {
-  useMessageHandler,
-  captureAndSendThemeVars,
-} from "@hooks/useMessageHandler";
+  useInboundMessageRouter,
+} from "@messaging/inboundMessageRouter";
+import { captureAndSendThemeVars } from "@messaging/sendMessage";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useFontSizeSync } from "@hooks/useFontSizeSync";
 import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
@@ -407,7 +407,7 @@ function App() {
   // Track isMobile to detect layout transitions in render body below
   const wasMobileRef = useRef(isMobile);
   // Message handlers with full implementations
-  useMessageHandler();
+  useInboundMessageRouter();
   useUndoRedoKeyHandler();
   useNewWorkflowKeyHandler();
   useHistorySearchKeyHandler();

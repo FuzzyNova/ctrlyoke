@@ -1,7 +1,7 @@
 import { renderHook, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
-import { useMessageHandler } from "@hooks/useMessageHandler";
+import { useInboundMessageRouter } from "@messaging/inboundMessageRouter";
 import { useUiStore } from "@store/uiStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
@@ -75,7 +75,7 @@ describe("useRunViewLoadWatchdog", () => {
 
   it("reissues after the hosted transport reconnects", () => {
     renderHook(() => useRunViewLoadWatchdog());
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     let requestId = "";
     act(() => {
       requestId = useUiStore.getState().requestRunViewLoad(address, []);
@@ -100,7 +100,7 @@ describe("useRunViewLoadWatchdog", () => {
 
   it("does not give up while hosted transport is connected, and applies a late answer after disconnected give-up", () => {
     renderHook(() => useRunViewLoadWatchdog());
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     let requestId = "";
     act(() => {
       requestId = useUiStore.getState().requestRunViewLoad(address, []);
@@ -123,7 +123,7 @@ describe("useRunViewLoadWatchdog", () => {
 
   it("does not apply a retired answer after a newer navigation starts", () => {
     renderHook(() => useRunViewLoadWatchdog());
-    renderHook(() => useMessageHandler());
+    renderHook(() => useInboundMessageRouter());
     let retiredRequestId = "";
     act(() => {
       retiredRequestId = useUiStore.getState().requestRunViewLoad(address, []);

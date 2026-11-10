@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DuplicateWorkflowDialog } from "@components/workflow/DuplicateWorkflowDialog";
-import { createMessageHandlers } from "@hooks/useMessageHandler";
+import { createMessageHandlers } from "@messaging/inboundMessageRouter";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";

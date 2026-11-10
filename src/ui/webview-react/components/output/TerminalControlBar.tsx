@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { constrainPopupToViewport } from "@utils/dropdownUtils";

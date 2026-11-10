@@ -26,7 +26,7 @@ import {
   SplitButton,
   type SplitButtonOption,
 } from "@components/shared";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import { useSettingsStore } from "@store/settingsStore";

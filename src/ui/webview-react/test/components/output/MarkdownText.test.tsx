@@ -9,9 +9,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mock openFile so clicking file links doesn't try to post to vscode
-vi.mock("@hooks/useMessageHandler", async (importOriginal) => {
+vi.mock("@messaging/sendMessage", async (importOriginal) => {
   const original =
-    await importOriginal<typeof import("@hooks/useMessageHandler")>();
+    await importOriginal<typeof import("@messaging/sendMessage")>();
   return { ...original, openFile: vi.fn() };
 });
 
@@ -201,7 +201,7 @@ describe("MarkdownText", () => {
 
   it("calls openFile when file-ref button clicked", async () => {
     const user = userEvent.setup();
-    const { openFile } = await import("@hooks/useMessageHandler");
+    const { openFile } = await import("@messaging/sendMessage");
     render(<MarkdownText>Open src/utils/foo.ts now</MarkdownText>);
     const fileBtn = await screen.findByRole("button", { name: "Open file" });
     await user.click(fileBtn);
@@ -267,7 +267,7 @@ describe("MarkdownText", () => {
 
   it("opens Codex /abs/path drive markdown links as local file refs", async () => {
     const user = userEvent.setup();
-    const { openFile } = await import("@hooks/useMessageHandler");
+    const { openFile } = await import("@messaging/sendMessage");
     vi.mocked(openFile).mockClear();
 
     render(
@@ -288,7 +288,7 @@ describe("MarkdownText", () => {
 
   it("opens slash-prefixed Windows drive markdown links as local file refs", async () => {
     const user = userEvent.setup();
-    const { openFile } = await import("@hooks/useMessageHandler");
+    const { openFile } = await import("@messaging/sendMessage");
     vi.mocked(openFile).mockClear();
 
     render(

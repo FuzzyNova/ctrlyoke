@@ -115,12 +115,12 @@ function modelVariablesByHarness(
  * TemplateModal - Modal for creating a workflow from a template
  *
  * Data flow:
- *   1. Extension sends OPEN_NEW_WORKFLOW_MODAL → useMessageHandler opens modal via uiStore
+ *   1. Extension sends OPEN_NEW_WORKFLOW_MODAL → useInboundMessageRouter opens modal via uiStore
  *   2. Template list and default template already in uiStore.templates / uiStore.defaultTemplateId
  *   3. uiStore.currentTemplate holds the selected template (with variables list)
  *   4. On template change, modal updates uiStore.currentTemplate directly from the local list
  *   5. On submit, sends CREATE_WORKFLOW → extension creates a working file, loads it, sends WORKFLOW_CREATED
- *   6. WORKFLOW_CREATED → useMessageHandler closes modal
+ *   6. WORKFLOW_CREATED → useInboundMessageRouter closes modal
  *
  * Features:
  * - Template dropdown (Built-in / Custom / Actions groups)
@@ -154,7 +154,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     createWorkflowPendingRef.current = createWorkflowPending;
   }, [createWorkflowPending]);
 
-  // Data from uiStore (populated by useMessageHandler on OPEN_NEW_WORKFLOW_MODAL)
+  // Data from uiStore (populated by useInboundMessageRouter on OPEN_NEW_WORKFLOW_MODAL)
   const templates = useUiStore((s) => s.templates);
   const openCreateTemplateForm = useUiStore((s) => s.openCreateTemplateForm);
   const defaultTemplateId = useUiStore((s) => s.defaultTemplateId);

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from "react";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";

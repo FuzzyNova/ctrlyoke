@@ -13,7 +13,7 @@ import type {
   ManagedLanguageServerDefinition,
 } from "@root/types/WebviewMessageTypes";
 import type { LanguageServerCatalogEntry } from "@root/types/WebviewMessageTypes";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 
 export const LANGUAGE_SERVER_TABS = {
   CATALOG: "catalog",

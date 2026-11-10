@@ -6,24 +6,24 @@
  *
  * Features:
  * - Routes all extension messages to Zustand stores
- * - Provides sendMessage helper for outgoing messages
+ * - Applies inbound message state changes through centralized handlers
  * - Sets up message listener with proper cleanup
  */
-import { useEffect, useCallback, useMemo } from "react";
-import { getVsCodeApi, isStandalone, panelPageLoadId } from "./useVsCodeApi";
+import { useEffect, useMemo } from "react";
+import { getVsCodeApi, isStandalone, panelPageLoadId } from "@hooks/useVsCodeApi";
 import {
   useWorkflowStore,
   isStepContentEqual,
   type WorkflowStep,
-} from "../store/workflowStore";
+} from "@store/workflowStore";
 import {
   useSettingsStore,
   type WorkflowProperties,
-} from "../store/settingsStore";
-import { useUiStore, type TemplateInfo } from "../store/uiStore";
-import { useEditorStore } from "../store/editorStore";
-import { useRunSummaryCacheStore } from "../store/runSummaryCacheStore";
-import { useLanguageServerStore } from "../store/languageServerStore";
+} from "@store/settingsStore";
+import { useUiStore, type TemplateInfo } from "@store/uiStore";
+import { useEditorStore } from "@store/editorStore";
+import { useRunSummaryCacheStore } from "@store/runSummaryCacheStore";
+import { useLanguageServerStore } from "@store/languageServerStore";
 import {
   MESSAGE_TYPES,
   HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
@@ -58,20 +58,20 @@ import {
   isExecutionFinished,
   isWorkflowActive,
   isWorkflowRunning,
-} from "../utils/status";
-import { useTerminalStore } from "../store/terminalStore";
-import { useHarnessFileStore } from "../store/harnessFileStore";
-import { useMcpManagerStore } from "../store/mcpManagerStore";
-import { useSkillsRegistryStore } from "../store/skillsRegistryStore";
-import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
-import { useHarnessCapabilityStore } from "../store/harnessCapabilityStore";
-import { useHistoryTrashStore } from "../store/historyTrashStore";
-import { useExecutionPreviewStore } from "../store/executionPreviewStore";
-import { useHarnessUsageStore } from "../store/harnessUsageStore";
-import { useWorkspaceStatsStore } from "../store/workspaceStatsStore";
-import { useSecretRegistryStore } from "../store/secretRegistryStore";
-import { useBatchApprovalStore } from "../store/batchApprovalStore";
-import { useChoiceStore } from "../store/choiceStore";
+} from "@utils/status";
+import { useTerminalStore } from "@store/terminalStore";
+import { useHarnessFileStore } from "@store/harnessFileStore";
+import { useMcpManagerStore } from "@store/mcpManagerStore";
+import { useSkillsRegistryStore } from "@store/skillsRegistryStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
+import { useHistoryTrashStore } from "@store/historyTrashStore";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
+import { useSecretRegistryStore } from "@store/secretRegistryStore";
+import { useBatchApprovalStore } from "@store/batchApprovalStore";
+import { useChoiceStore } from "@store/choiceStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { drainPanelInboundBuffer } from "./panelInboundBuffer";
@@ -79,25 +79,24 @@ import { createInboundMessageDispatcher } from "./inboundMessageDispatcher";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
 import {
   clearPanelReconnectWatchdog,
+  clearFreshPageReadySent,
   schedulePanelReconnectWatchdog,
 } from "./reconnectWatchdog";
+import { reissueRunViewLoadAfterHostedReconnect } from "@hooks/useRunViewLoadWatchdog";
 import {
   getNotificationSeverityColor,
   handleCompletionNotificationEvent,
 } from "@utils/browserNotifications";
-import { announceAwaitingInput } from "../store/announcerStore";
+import { announceAwaitingInput } from "@store/announcerStore";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
   DERIVED_NOTIFICATION_EVENTS,
   NOTIFICATION_KINDS,
-  THEME_KINDS,
-  THEME_KIND_CSS_VAR,
   USER_FEEDBACK_SEVERITY,
   UX_SNAPSHOT_STATUSES,
   type UserFeedbackSeverity,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
-import { themeKindFromBodyClasses } from "@utils/themeKind";
 import type {
   CompletionNotificationEventPayload,
   UserFeedbackMessage,
@@ -107,7 +106,6 @@ import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { deriveStepStatusesFromRuntime } from "@root/utils/StepStatusDerivation";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
-import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
 import {
   areWorkflowAddressesEqual,
   workflowViewAddressKey,
@@ -117,6 +115,7 @@ import { navigateToWorkflowAddress } from "@utils/runNavigation";
 import { serializeRoute } from "@/navigation/route";
 import { notifyUser, showWebviewToast } from "@utils/notifyUser";
 import { notePanelMessage } from "@utils/memorySampler";
+import { sendMessage, captureAndSendThemeVars } from "./sendMessage";
 
 // ============================================================================
 // Types
@@ -172,11 +171,6 @@ function isUserFeedbackMessage(value: unknown): value is UserFeedbackMessage {
   );
 }
 
-export interface UseMessageHandlerReturn {
-  /** Send a message to the extension */
-  sendMessage: (type: string, payload?: Record<string, unknown>) => void;
-}
-
 /**
  * Messages whose state belongs to the live PTY transport rather than the
  * definition/output snapshot currently displayed by run navigation.
@@ -193,119 +187,6 @@ const RUN_VIEW_INDEPENDENT_MESSAGE_TYPES = new Set<string>([
 // ============================================================================
 // Send Message Helper
 // ============================================================================
-
-function getPanelLifecycleActionLabel(type: string): string | undefined {
-  switch (type) {
-    case MESSAGE_TYPES.RUN:
-    case MESSAGE_TYPES.EXECUTE_DRAFT:
-    case MESSAGE_TYPES.CONTINUE_RUN:
-    case MESSAGE_TYPES.SEED_NEW_RUN:
-    case MESSAGE_TYPES.START_NEW_RUN_INSTEAD:
-      return "run start requested";
-    case MESSAGE_TYPES.PREPARE_NEW_RUN:
-      return "new run preparation requested";
-    case MESSAGE_TYPES.RESUME_RUN:
-      return "run resume requested";
-    case MESSAGE_TYPES.PAUSE_RUN:
-      return "run pause requested";
-    case MESSAGE_TYPES.CANCEL_PAUSE_RUN:
-      return "run pause cancellation requested";
-    case MESSAGE_TYPES.STOP_RUN:
-    case MESSAGE_TYPES.STOP_CLI_RUN:
-      return "run stop requested";
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Send a message to the extension
- * Can be used outside of React components via direct import
- */
-export function sendMessage(
-  type: string,
-  payload?: Record<string, unknown>
-): void {
-  const vscode = getVsCodeApi();
-  const lifecycleActionLabel = getPanelLifecycleActionLabel(type);
-  if (lifecycleActionLabel) {
-    WebviewLog.info(`[panel] ${lifecycleActionLabel}`);
-  }
-  const definitionMutationTypes = new Set<string>([
-    MESSAGE_TYPES.UPDATE_PROMPT,
-    MESSAGE_TYPES.UPDATE_STEP_COLOR,
-    MESSAGE_TYPES.UPDATE_STEPS,
-    MESSAGE_TYPES.INSERT_WORKFLOW_STEP,
-    MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
-    MESSAGE_TYPES.DELETE_PROMPT,
-    MESSAGE_TYPES.REORDER_PROMPTS,
-    MESSAGE_TYPES.UNDO_REDO_SYNC,
-  ]);
-  const mutation = getWorkflowDefinitionMutation();
-  vscode.postMessage({
-    type,
-    ...payload,
-    ...(definitionMutationTypes.has(type) &&
-    !("mutation" in (payload ?? {})) &&
-    mutation
-      ? { mutation }
-      : {}),
-  });
-}
-
-// ============================================================================
-// Theme Capture Helper
-// ============================================================================
-
-/**
- * Captures all --vscode-* CSS custom properties from :root and posts them
- * back to the extension as THEME_VARS_CAPTURED so the server can forward
- * them to external browser clients.
- */
-export function captureAndSendThemeVars(
-  vscodeApi: ReturnType<typeof getVsCodeApi>
-): void {
-  const computedStyle = window.getComputedStyle(document.documentElement);
-  const vars: Record<string, string> = {};
-
-  // VS Code injects --vscode-* vars as inline styles on <html>; iterate those first.
-  const inlineStyle = document.documentElement.style;
-  for (let i = 0; i < inlineStyle.length; i++) {
-    const prop = inlineStyle.item(i);
-    if (prop.startsWith("--vscode-")) {
-      vars[prop] = computedStyle.getPropertyValue(prop).trim();
-    }
-  }
-
-  // Also scan stylesheet :root rules (picks up any theme vars defined via CSS files).
-  try {
-    for (const sheet of document.styleSheets) {
-      try {
-        for (const rule of sheet.cssRules) {
-          if (rule instanceof CSSStyleRule && rule.selectorText === ":root") {
-            for (const prop of rule.style) {
-              if (prop.startsWith("--vscode-")) {
-                vars[prop] = computedStyle.getPropertyValue(prop).trim();
-              }
-            }
-          }
-        }
-      } catch {
-        /* cross-origin sheet, skip */
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  // Capture theme kind from body class so browser-hosted clients can replicate it.
-  // Stored as a synthetic CSS custom property so it flows through the same
-  // cachedThemeVars / buildThemeStyleBlock pipeline as the --vscode-* vars.
-  vars[THEME_KIND_CSS_VAR] =
-    themeKindFromBodyClasses(document.body.classList) ?? THEME_KINDS.LIGHT;
-
-  vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
-}
 
 /**
  * Compile-time guard that the shared key list and this store's property shape
@@ -3560,6 +3441,21 @@ export function createMessageHandlers(
     captureAndSendThemeVars(getVsCodeApi());
   };
 
+  // CLIENT_ID_ASSIGNED - Extension tells this client its own identity.
+  // This is connection lifecycle state, not terminal transport.
+  handlers[MESSAGE_TYPES.CLIENT_ID_ASSIGNED] = (message: any) => {
+    const { clientId } = message;
+    if (!clientId) return;
+
+    // Signal the HTML-level handshake watchdog that the extension connection
+    // succeeded so it does not retry the handshake unnecessarily.
+    window.__ctrlyokePanelHandshakeDone = true;
+    clearFreshPageReadySent();
+    clearPanelReconnectWatchdog();
+    useUiStore.getState().setMyClientId(clientId as string);
+    reissueRunViewLoadAfterHostedReconnect();
+  };
+
   // ========================================================================
   // TERMINAL I/O
   // ========================================================================
@@ -3574,23 +3470,19 @@ export function createMessageHandlers(
 // ============================================================================
 
 /**
- * Hook to set up message handling for the ctrlyoke dashboard
+ * Hook to route messages from the extension into dashboard state.
  *
  * All message handlers are centralized in createMessageHandlers() function.
- * This hook sets up the message listener and provides a sendMessage helper.
+ * Outbound messages are sent through `messaging/sendMessage`.
  *
  * Usage:
  * ```tsx
  * function App() {
- *   useMessageHandler();
- *
- *   const handleRun = () => sendMessage(MESSAGE_TYPES.RUN);
- *
- *   return <button onClick={handleRun}>Run</button>;
+ *   useInboundMessageRouter();
  * }
  * ```
  */
-export function useMessageHandler(): UseMessageHandlerReturn {
+export function useInboundMessageRouter(): void {
   // Create handlers once (stable reference)
   const handlers = useMemo(() => createMessageHandlers(), []);
 
@@ -3646,29 +3538,4 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       dispatcher.dispose();
     };
   }, [handlers]);
-
-  // Memoize sendMessage to maintain stable reference
-  const sendMessageCallback = useCallback(
-    (type: string, payload?: Record<string, unknown>) => {
-      sendMessage(type, payload);
-    },
-    []
-  );
-
-  return { sendMessage: sendMessageCallback };
-}
-
-/**
- * Open a file in VS Code editor, or in the workspace viewer when running in browser mode.
- */
-export function openFile(path: string, line?: number): void {
-  if (isStandalone) {
-    useWorkspaceViewerStore.getState().openToFile(path, line, line);
-    return;
-  }
-  sendMessage(MESSAGE_TYPES.OPEN_FILE, {
-    path,
-    lineStart: line,
-    lineEnd: line,
-  });
 }

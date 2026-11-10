@@ -7,29 +7,13 @@ import {
 } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
-import { markFreshPageReadySent } from "@hooks/reconnectWatchdog";
-import { startPanelInboundBuffer } from "@hooks/panelInboundBuffer";
-import { installPanelHandshakeRetry } from "@hooks/panelHandshake";
+import { markFreshPageReadySent } from "@messaging/reconnectWatchdog";
+import { startPanelInboundBuffer } from "@messaging/panelInboundBuffer";
+import { installPanelHandshakeRetry } from "@messaging/panelHandshake";
 import { getErrorMessage } from "@root/utils/ErrorUtils";
+import { captureAndSendThemeVars } from "@messaging/sendMessage";
 
 type DashboardAppComponent = ComponentType;
-
-function captureAndSendThemeVars(
-  vscode: ReturnType<typeof useVsCodeApi>
-): void {
-  const computedStyle = window.getComputedStyle(document.documentElement);
-  const vars: Record<string, string> = {};
-  const inlineStyle = document.documentElement.style;
-
-  for (let i = 0; i < inlineStyle.length; i++) {
-    const prop = inlineStyle.item(i);
-    if (prop.startsWith("--vscode-")) {
-      vars[prop] = computedStyle.getPropertyValue(prop).trim();
-    }
-  }
-
-  vscode.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
-}
 
 export default function BootstrapApp() {
   const vscode = useVsCodeApi();
@@ -41,7 +25,7 @@ export default function BootstrapApp() {
   useEffect(() => {
     const initialPreferredViewAddress = initialPreferredViewAddressRef.current;
     // In standalone (browser) mode the shim sends READY at WebSocket open for
-    // server registration, and App.tsx sends it again after useMessageHandler
+    // server registration, and App.tsx sends it again after useInboundMessageRouter
     // mounts its window listener (to flush buffered inbound messages).
     // Sending READY here would call flushInbound() via queueMicrotask() before
     // App.tsx finishes its async import — dispatching SESSION_RESTORED and other
@@ -55,7 +39,7 @@ export default function BootstrapApp() {
     // server and breaking body-class-based icon inversion for subsequent connections.
     if (!isStandalone) {
       // Must start before READY: the extension can answer it before App (and
-      // useMessageHandler's listener) has loaded.
+      // useInboundMessageRouter's listener) has loaded.
       startPanelInboundBuffer();
       installPanelHandshakeRetry();
       vscode.postMessage({

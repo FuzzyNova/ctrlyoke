@@ -7,7 +7,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
-import { sendMessage } from "../hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import {
   PREVIEW_SCOPES,
   PREVIEW_STATUSES,

@@ -16,7 +16,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 - [x] 3a Component moves: `WorkflowSwitcher`, delete modals, `FileBrowserModal`, `HooksEditor`, `StepColorSwatch`
 - [x] 3b Output/diff components: `TextDiffView`, `SubagentSpawnOutput`, `SubmitCommitMessageView`, `ToolDot`, `InOutputView`, plus the Batch 3 deletions
 - [x] 3c Utils, hooks and stores: `stepClipboard` split, `usePropertiesTabOverrides`, store renames, `requestQueue`, history stores
-- [ ] 4 Webview `messaging/` module
+- [x] 4 Webview `messaging/` module
 - [ ] 5a `ICliProvider`/`*CliProvider` → `IHarnessAdapter`/`*HarnessAdapter`, and the instruction file rename
 - [ ] 5b `CliProviderUtils`/`CliProviderWorkflowContext`/`CliProviderPreparation`, and `RetryableAsyncCache` → `src/utils/`
 - [ ] 5c Quota collectors, `HarnessFlagHelpParser`, status-line format harness names, `HarnessModelUsage`
@@ -286,19 +286,18 @@ Independent items. Group them into two or three commits by folder.
 
 ### Batch 4: webview messaging module (own commit, larger)
 
-- `hooks/useMessageHandler.ts` (~3,700 lines). 49 files import it, almost all only for the
-  outbound `sendMessage`/`openFile`. Move those two to `messaging/sendMessage.ts`. Keep the
-  inbound router as `messaging/inboundMessageRouter.ts`, exporting `useInboundMessageRouter`
-  (called once from `App.tsx`). Delete `BootstrapApp.tsx`'s private copy of
-  `captureAndSendThemeVars` in favour of the shared one.
+- `messaging/inboundMessageRouter.ts` owns inbound messages and exports
+  `useInboundMessageRouter`, called once from `App.tsx`. `sendMessage`, `openFile`, and
+  `captureAndSendThemeVars` live in `messaging/sendMessage.ts`, shared by components and
+  `BootstrapApp.tsx`; the router no longer owns the outbound helpers.
 - Move the non-hook modules out of `hooks/` into the same `messaging/` folder:
   `inboundMessageDispatcher.ts`, `panelHandshake.ts`, `panelInboundBuffer.ts`,
   `reconnectWatchdog.ts`, `terminalMessageHandlers.ts`. Move the `CLIENT_ID_ASSIGNED` handler
   out of `terminalMessageHandlers.ts`, because it is connection identity, not terminal.
 - Add a `@messaging/*` alias in `tsconfig.json`, `vite.config.ts` and `vitest.config.ts`.
 - Add `src/ui/webview-react/messaging/**` to `webview-react-hooks.instructions.md`'s `applyTo`
-  (or give it its own section), then run `npm run generate-agent-files`. Seven instruction files
-  name `useMessageHandler`.
+  (or give it its own section), then run `npm run generate-agent-files`. Update live instruction
+  and backlog references and add the ledger rows in this batch.
 
 ### Batch 5: "provider" → harness terminology in harness code
 

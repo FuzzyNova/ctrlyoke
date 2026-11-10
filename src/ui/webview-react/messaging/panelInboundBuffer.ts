@@ -1,7 +1,7 @@
-import { isStandalone } from "./useVsCodeApi";
+import { isStandalone } from "@hooks/useVsCodeApi";
 
 // Holds extension → panel messages that arrive between BootstrapApp's early
-// READY and useMessageHandler attaching its window listener.
+// READY and useInboundMessageRouter attaching its window listener.
 //
 // BootstrapApp sends READY before it lazy-imports App, so the extension can
 // answer (INIT, CLIENT_ID_ASSIGNED, the startup replay) while no handler is

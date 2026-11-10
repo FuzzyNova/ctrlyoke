@@ -19,7 +19,7 @@ import {
   MESSAGE_TYPES,
   PICKER_SHORTCUT_TARGETS,
 } from "@root/types/DashboardConstants";
-import { sendMessage } from "@hooks/useMessageHandler";
+import { sendMessage } from "@messaging/sendMessage";
 import { buildHarnessChangeCascade } from "@utils/harnessChangeCascade";
 import { useUsagePercentDirection } from "@hooks/useUsagePercentDirection";
 import {
