@@ -118,6 +118,7 @@ import {
 import { BULK_EDITABLE_PROMPT_STEP_KEYS } from "@root/types/DashboardConstants";
 import { useBulkSelectionGates } from "../../hooks/useBulkSelectionGates";
 import { useModelDropdownHiding } from "../../hooks/useModelDropdownHiding";
+import { modelSummaryLabel } from "../../utils/modelLabels";
 
 /** Drawer fields whose own controls render a "(mixed)" state; others show inherit. */
 const MIXED_AWARE_DRAWER_KEYS: ReadonlySet<string> = new Set([
@@ -258,9 +259,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
   const models = getModelsForHarness(currentHarness);
   const modelHiding = useModelDropdownHiding(currentHarness, models);
   const resolvedModelValue = getEffectiveModel(currentHarness);
-  const resolvedModelLabel =
-    models.find((m) => m.value === resolvedModelValue)?.label ??
-    resolvedModelValue;
+  const resolvedModelLabel = modelSummaryLabel(resolvedModelValue, models);
   const defaultModelLabel = harnessScopedFallbackLabel(
     fallbackHarness,
     resolvedHarness,
@@ -751,6 +750,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                       : models.map((m) => ({
                           value: m.value,
                           label: m.label,
+                          description: m.description,
                         }))),
                   ]}
                   {...modelHiding}

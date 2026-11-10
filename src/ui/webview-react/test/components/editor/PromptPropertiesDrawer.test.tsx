@@ -23,6 +23,8 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   HOOK_EVENT_NAMES,
+  MODEL_NONE_LABELS,
+  MODEL_OPTION_VALUES,
   PERMISSION_MODES,
   PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_KEYWORDS,
@@ -161,6 +163,17 @@ describe("PromptPropertiesDrawer harness-scoped fallbacks", () => {
     expect(
       screen.getByRole("button", { name: /^Additional Args/ })
     ).toHaveTextContent("Inherit (Custom)");
+  });
+
+  it("reads an inherited none model as Harness default", () => {
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("model", MODEL_OPTION_VALUES.NONE);
+    renderHarnessDrawer();
+
+    expect(screen.getByRole("button", { name: /^Model/ })).toHaveTextContent(
+      `Inherit (${MODEL_NONE_LABELS.SHORT})`
+    );
   });
 
   it("labels the fallback Default with the step harness's setting on another harness", () => {

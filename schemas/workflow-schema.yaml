@@ -653,9 +653,11 @@ $defs:
           applies only to steps that run on the workflow's harness; a step on another harness that
           omits model uses that harness's defaults.models setting. Some harnesses replace a model
           they don't support with their default and log a warning, while others pass it through and
-          the harness CLI may reject it. Use 'none' (the None option) to skip the --model flag
-          entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional -
-          defaults to the active harness model setting.
+          the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no
+          model flag, so the harness CLI uses its own configured default model; it is also the
+          out-of-the-box defaults.models value for every harness. Use it as well when you pass the
+          model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults
+          to the harness's defaults.models setting.
         examples:
           - claude-fable-5
           - claude-fable-5.1

@@ -1,4 +1,4 @@
-import { HARNESS_IDS, MODEL_OPTION_VALUES } from "../types/DashboardConstants";
+import { HARNESS_IDS, MODEL_NONE_OPTION } from "../types/DashboardConstants";
 import type { CapabilitiesModel } from "../types/CapabilitiesTypes";
 import {
   getCliSupportedModelIdsSync,
@@ -15,7 +15,7 @@ import {
 } from "./ModelConstants";
 
 /**
- * Model options for every harness, `None` first. The dashboard's model
+ * Model options for every harness, `MODEL_NONE_OPTION` first. The dashboard's model
  * pickers and VS Code's workflow-file `model` completions read this one list.
  * An option the harness hides from its own picker carries `hidden: true`.
  */
@@ -26,7 +26,7 @@ export function buildHarnessModelOptions(): Record<
   const cliModelIds = getCliSupportedModelIdsSync();
   const hiddenModels = new Set(["copilot-fast"]);
 
-  const noneOption = { value: MODEL_OPTION_VALUES.NONE, label: "None" };
+  const noneOption = { ...MODEL_NONE_OPTION };
 
   const copilotCliOptions = [
     noneOption,

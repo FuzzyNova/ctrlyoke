@@ -18,6 +18,7 @@ import { useModelDropdownHiding } from "../../hooks/useModelDropdownHiding";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import { harnessScopedFallbackLabel } from "../../utils/harnessScopedFallback";
+import { modelSummaryLabel } from "../../utils/modelLabels";
 import { Icon } from "../shared/Icon";
 
 interface ModelQuickPickerProps {
@@ -57,9 +58,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
   const modelHiding = useModelDropdownHiding(resolvedHarness, models);
 
   const resolvedModelValue = getEffectiveModel(resolvedHarness);
-  const resolvedModelLabel =
-    models.find((m) => m.value === resolvedModelValue)?.label ??
-    resolvedModelValue;
+  const resolvedModelLabel = modelSummaryLabel(resolvedModelValue, models);
   const defaultModelLabel = harnessScopedFallbackLabel(
     resolvedHarness,
     workflowHarness,
@@ -70,7 +69,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
     modelValue === MIXED_VALUE
       ? "(mixed)"
       : modelValue
-        ? (models.find((m) => m.value === modelValue)?.label ?? modelValue)
+        ? modelSummaryLabel(modelValue, models)
         : resolvedModelLabel || "None";
 
   return (
@@ -117,7 +116,11 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
           { value: INHERIT_DEFAULT_OPTION, label: defaultModelLabel },
           ...(models.length === 0
             ? [{ value: "", label: "Loading models...", disabled: true }]
-            : models.map((m) => ({ value: m.value, label: m.label }))),
+            : models.map((m) => ({
+                value: m.value,
+                label: m.label,
+                description: m.description,
+              }))),
         ]}
         {...modelHiding}
         nonHideableValues={[INHERIT_DEFAULT_OPTION, ""]}

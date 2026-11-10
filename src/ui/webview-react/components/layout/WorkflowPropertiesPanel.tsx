@@ -1796,6 +1796,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         : currentHarnessModels.map((m) => ({
                             value: m.value,
                             label: m.label,
+                            description: m.description,
                           }))
                     }
                     {...modelHiding}

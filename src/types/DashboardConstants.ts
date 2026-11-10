@@ -3250,6 +3250,26 @@ export const MODEL_OPTION_VALUES = {
   NONE: "none",
 } as const;
 
+/**
+ * Labels for the `none` model option. Every harness defaults to it (see
+ * `DEFAULT_MODELS`), so a first-time user sees it in every model picker; the
+ * label and description say it means "the harness picks", not "no model".
+ * `SHORT` is for places that wrap the label, such as `Inherit (…)` and the
+ * footer quick picker.
+ */
+export const MODEL_NONE_LABELS = {
+  OPTION: "None (harness default)",
+  SHORT: "Harness default",
+  DESCRIPTION: "No model flag is passed",
+} as const;
+
+/** The `none` entry that leads every harness's model option list. */
+export const MODEL_NONE_OPTION = {
+  value: MODEL_OPTION_VALUES.NONE,
+  label: MODEL_NONE_LABELS.OPTION,
+  description: MODEL_NONE_LABELS.DESCRIPTION,
+} as const;
+
 // ============================================================================
 // DEFAULT MODELS - The model a harness runs when neither the step, the
 // workflow nor `defaults.models` names one. `CTRLYOKE_SETTINGS_DEFAULTS`
@@ -3274,10 +3294,10 @@ export const DEFAULT_MODELS = {
 
 // ============================================================================
 // CLI MODEL OPTION LISTS - Derived from ModelConstants (single source of truth)
-// Each list includes a leading "None" option for the settings UI.
+// Each list leads with `MODEL_NONE_OPTION` for the settings UI.
 // ============================================================================
 export const CLAUDE_CLI_MODELS = [
-  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
+  MODEL_NONE_OPTION,
   ...MC_CLAUDE_CLI_MODELS.map((id) => ({
     value: id,
     label: CLAUDE_CLI_MODEL_LABELS[id] ?? id,
@@ -3285,7 +3305,7 @@ export const CLAUDE_CLI_MODELS = [
 ];
 
 export const CODEX_CLI_MODELS = [
-  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
+  MODEL_NONE_OPTION,
   ...MC_CODEX_CLI_MODELS.map((id) => ({
     value: id,
     label: CODEX_CLI_MODEL_LABELS[id] ?? id,
@@ -3293,7 +3313,7 @@ export const CODEX_CLI_MODELS = [
 ];
 
 export const ANTIGRAVITY_CLI_MODELS = [
-  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
+  MODEL_NONE_OPTION,
   ...MC_ANTIGRAVITY_CLI_MODELS.map((id) => ({
     value: id,
     label: ANTIGRAVITY_CLI_MODEL_LABELS[id] ?? id,

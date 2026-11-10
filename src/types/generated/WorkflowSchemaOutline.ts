@@ -65,7 +65,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "model": {
         "valueKind": "string",
-        "description": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. Use 'none' (the None option) to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to the active harness model setting."
+        "description": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting."
       },
       "executionMode": {
         "valueKind": "string",
@@ -369,7 +369,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "model": {
         "valueKind": "string",
-        "description": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. Use 'none' (the None option) to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to the active harness model setting."
+        "description": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting."
       },
       "executionMode": {
         "valueKind": "string",

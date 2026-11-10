@@ -195,9 +195,14 @@ additional arguments, so they follow the rule above until you choose new ones.
 
 ### `model: none`
 
-`model: none` (**None** in the model picker) passes no model flag, so the
-harness uses its own default model. Use it when you pass the model yourself in
-`additionalArgs`, for example a custom model string your harness accepts. Each
+`model: none` (**None (harness default)** in the model picker) passes no model
+flag, so the harness uses its own default model: whatever you have configured
+in that harness's CLI. It is the out-of-the-box value of
+[`defaults.models`](/reference/settings#defaults-models) for every harness, so a
+new workflow shows it until you pick a model. Inside **Inherit (…)** and on the
+footer's model button it reads **Harness default**. Also use it when you pass
+the model yourself in `additionalArgs`, for example a custom model string your
+harness accepts. Each
 harness page has a **Model selection** section listing where its models come
 from.
 

@@ -2,6 +2,8 @@
 export interface CapabilitiesModel {
   value: string;
   label: string;
+  /** Shown under the label in dashboard pickers and in the option's tooltip. */
+  description?: string;
   /**
    * The harness keeps this model out of its own default picker (Codex's
    * `model/list` `hidden` flag; Claude's pinned versions, which its picker
