@@ -1,5 +1,8 @@
 import * as path from "path";
-import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
+import {
+  IHarnessAdapter,
+  HarnessConfig,
+} from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HOOK_CONFIG_TYPES,

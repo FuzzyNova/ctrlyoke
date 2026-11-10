@@ -5,7 +5,10 @@ import {
   type SecretStore,
 } from "../platform/SecretStore";
 import { createNodeSecretStore } from "../platform/NodeSecretStore";
-import { NodePlatformAdapter, type ResolvedCliConfig } from "../platform/NodePlatformAdapter";
+import {
+  NodePlatformAdapter,
+  type ResolvedCliConfig,
+} from "../platform/NodePlatformAdapter";
 import {
   MissingSecretsError,
   getWorkflowSecretGrants,

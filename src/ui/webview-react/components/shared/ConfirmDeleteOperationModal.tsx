@@ -24,14 +24,9 @@ interface ConfirmDeleteOperationModalProps {
  * - "Don't ask me again" checkbox that persists to VS Code settings
  * - Reads confirmDeleteOperations from global settings (defaults to true = always ask)
  */
-export const ConfirmDeleteOperationModal: React.FC<ConfirmDeleteOperationModalProps> = ({
-  isOpen,
-  title,
-  message,
-  detail,
-  onConfirm,
-  onCancel,
-}) => {
+export const ConfirmDeleteOperationModal: React.FC<
+  ConfirmDeleteOperationModalProps
+> = ({ isOpen, title, message, detail, onConfirm, onCancel }) => {
   const vscode = useVsCodeApi();
   const { globalSettings } = useSettingsStore();
   // "Don't ask again" checkbox: checked means confirmDeleteOperations = false

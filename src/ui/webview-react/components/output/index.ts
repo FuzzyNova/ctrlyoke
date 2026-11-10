@@ -15,7 +15,10 @@ export {
   WebSearchOutput,
   GenericToolCallOutput,
 } from "./ToolCallOutput";
-export { SubagentSpawnOutput, SUBAGENT_LABEL_PREFIX } from "./SubagentSpawnOutput";
+export {
+  SubagentSpawnOutput,
+  SUBAGENT_LABEL_PREFIX,
+} from "./SubagentSpawnOutput";
 export { BashOutput } from "./BashOutput";
 export { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 export { ParallelGroupHeaderRowView } from "./ParallelGroupHeaderRowView";

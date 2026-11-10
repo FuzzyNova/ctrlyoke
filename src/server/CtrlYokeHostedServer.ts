@@ -749,7 +749,7 @@ export class CtrlYokeHostedServer
     // the instant the PANEL's own auto-load settles, with no regard for whether
     // any given browser client's READY has made it through the extension's
     // serialized routeQueue yet. Forwarding it here races ahead of that
-    // client's own replay (SESSION_RESTORED/WORKFLOWS_LIST) — useMessageHandler's
+    // client's own replay (SESSION_RESTORED/WORKFLOWS_LIST) — useInboundMessageRouter's
     // STARTUP_COMPLETE handler then sees no fileName/activeWorkflowWorkingFilePath
     // and creates a blank workflow. Every browser client already gets its own
     // correctly-sequenced STARTUP_COMPLETE from DashboardMessageRouter's
@@ -3205,7 +3205,7 @@ export class CtrlYokeHostedServer
     // NOTE: We intentionally do NOT inject a server-side synthetic READY here.
     // Browser-client registration belongs to standalone-shim.js: it sends READY
     // when the socket opens, buffers replay messages, then flushes them only
-    // after React posts its own READY and useMessageHandler is listening.
+    // after React posts its own READY and useInboundMessageRouter is listening.
   }
 
   private broadcast(message: unknown): void {

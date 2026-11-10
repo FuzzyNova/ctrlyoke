@@ -7,7 +7,10 @@ import { QWEN_SANDBOX_ENV } from "./QwenProtocolConstants";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { randomUUID } from "crypto";
-import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
+import {
+  IHarnessAdapter,
+  HarnessConfig,
+} from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
@@ -126,9 +129,8 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
   static readonly CLI_VERSION_COMMAND = `${QwenHarnessAdapter.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${QwenHarnessAdapter.CLI_COMMAND} --help`;
 
-  private static readonly statuslineManager = StatuslineManager.forStatusLineHarness(
-    STATUS_LINE_HARNESS_IDS.QWEN
-  );
+  private static readonly statuslineManager =
+    StatuslineManager.forStatusLineHarness(STATUS_LINE_HARNESS_IDS.QWEN);
 
   /** The real system settings each launch's hook settings file copies. */
   private readonly systemSettingsBasePath: string;
@@ -342,7 +344,9 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       mcpPreparation.mutations.length > 0
     ) {
       args.push(...mcpPreparation.cliArgs);
-      Log.debug("[QwenHarnessAdapter] ctrlyoke MCP config added inline for Qwen");
+      Log.debug(
+        "[QwenHarnessAdapter] ctrlyoke MCP config added inline for Qwen"
+      );
     }
 
     // Note: Headless-specific flags (--output-format) are added by
@@ -922,7 +926,9 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * @returns Version string if available
    */
   async getVersion(): Promise<string | undefined> {
-    return HarnessAdapterUtils.getCliVersion(QwenHarnessAdapter.CLI_VERSION_COMMAND);
+    return HarnessAdapterUtils.getCliVersion(
+      QwenHarnessAdapter.CLI_VERSION_COMMAND
+    );
   }
 
   /**

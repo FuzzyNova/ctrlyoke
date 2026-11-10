@@ -65,7 +65,9 @@ export class LicenseSettingsHandlers {
     );
   }
 
-  async handleRequestLicenseMachines(ctx: DashboardClientContext): Promise<void> {
+  async handleRequestLicenseMachines(
+    ctx: DashboardClientContext
+  ): Promise<void> {
     const action = MESSAGE_TYPES.REQUEST_LICENSE_MACHINES;
     try {
       const machines = await this.listStoredLicenseMachines();

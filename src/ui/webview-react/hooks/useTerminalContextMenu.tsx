@@ -23,9 +23,7 @@ export function useTerminalContextMenu({
   isSessionInUse,
   onClose,
 }: UseTerminalContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const openContextMenu = useCallback(
     (x: number, y: number) => {

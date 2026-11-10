@@ -30,7 +30,8 @@ import type {
 } from "../types/UsageTypes";
 import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 
-export type DashboardClient = IDashboardRegistryEvents & Partial<IDashboardSink>;
+export type DashboardClient = IDashboardRegistryEvents &
+  Partial<IDashboardSink>;
 
 /**
  * Broadcasts dashboard updates to every registered dashboard client.

@@ -109,7 +109,9 @@ export class McpManagerService {
     });
   }
 
-  async handleRequestRegistryServers(ctx: DashboardClientContext): Promise<void> {
+  async handleRequestRegistryServers(
+    ctx: DashboardClientContext
+  ): Promise<void> {
     try {
       await this.emitManagedRegistryServers(ctx);
     } catch (error) {

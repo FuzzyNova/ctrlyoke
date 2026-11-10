@@ -27,9 +27,7 @@ export function useCommitHistoryContextMenu({
   onRefresh,
   onCheckoutError,
 }: UseCommitHistoryContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [pendingCheckout, setPendingCheckout] =
     useState<WorkspaceCommitLogEntry | null>(null);
 
@@ -143,10 +141,7 @@ export function useCommitHistoryContextMenu({
   const commitHistoryContextMenuPortal = (
     <>
       {contextMenu && (
-        <ContextMenu
-          {...contextMenu}
-          onClose={() => setContextMenu(null)}
-        />
+        <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
       )}
       <Modal
         isOpen={pendingCheckout !== null}

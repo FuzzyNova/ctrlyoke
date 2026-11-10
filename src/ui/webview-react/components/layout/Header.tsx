@@ -36,10 +36,7 @@ import { RerunConfirmModal } from "../shared/RerunConfirmModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { DryRunModal } from "../shared/DryRunModal";
-import {
-  ContextMenu,
-  type ContextMenuState,
-} from "../shared/ContextMenu";
+import { ContextMenu, type ContextMenuState } from "../shared/ContextMenu";
 import {
   HEADER_BUTTON_SIZES,
   HEADER_RUN_SLOT_FIT_CLASSES,

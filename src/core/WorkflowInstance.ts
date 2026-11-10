@@ -889,9 +889,13 @@ export class WorkflowInstance
       ...this.promptQueue.getWorkflowFile(),
       steps: this.promptQueue.getWorkflowFile().steps ?? [],
     };
-    const resolvedTarget = SettingsPropertyResolver.resolveTarget(prompt, workflow, {
-      hostCanProvidePty: this.hostCanProvidePty,
-    });
+    const resolvedTarget = SettingsPropertyResolver.resolveTarget(
+      prompt,
+      workflow,
+      {
+        hostCanProvidePty: this.hostCanProvidePty,
+      }
+    );
     const diagnostics = analyzeCompatibility({
       workflow,
       executionTargets: [

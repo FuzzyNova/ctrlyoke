@@ -1674,10 +1674,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   );
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative min-w-0 ${className}`}
-    >
+    <div ref={containerRef} className={`relative min-w-0 ${className}`}>
       {/* Editing Mode */}
       {isEditing ? (
         <input

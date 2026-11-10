@@ -4,9 +4,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
-import {
-  useInboundMessageRouter,
-} from "@messaging/inboundMessageRouter";
+import { useInboundMessageRouter } from "@messaging/inboundMessageRouter";
 import { captureAndSendThemeVars } from "@messaging/sendMessage";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useFontSizeSync } from "@hooks/useFontSizeSync";
@@ -279,7 +277,9 @@ function App() {
   // the drawer reads as pushing the panel open; closing it hands the previous
   // height back. It never shrinks the panel — an editor already taller than
   // that is left exactly as it is.
-  const promptPropertiesDrawerOpen = useUiStore((s) => s.promptPropertiesDrawerOpen);
+  const promptPropertiesDrawerOpen = useUiStore(
+    (s) => s.promptPropertiesDrawerOpen
+  );
   useEffect(() => {
     const context = editorExpansionContextRef.current();
     // A re-toggle inside the animation window measures a height that is

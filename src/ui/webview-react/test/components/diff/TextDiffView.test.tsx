@@ -221,7 +221,11 @@ describe("TextDiffView", () => {
     });
 
     const { container } = render(
-      <TextDiffView oldContent="" newContent={"new\n"} globallyCollapsed={false} />
+      <TextDiffView
+        oldContent=""
+        newContent={"new\n"}
+        globallyCollapsed={false}
+      />
     );
 
     expect(mockToRdvFromContent).toHaveBeenCalledWith("", "new\n");

@@ -260,15 +260,15 @@ through `CtrlYokeConfigService`, are the only source of truth.
 Exact names should follow the current area conventions, but responsibilities
 should remain separated:
 
-| Area                                                                                     | Responsibility                                        |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `src/ui/prompt-suggestions/`                                                             | Service and VS Code LM provider adapter               |
-| `src/types/`                                                                             | Shared request/result/message contracts and constants |
+| Area                                                                                       | Responsibility                                        |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `src/ui/prompt-suggestions/`                                                               | Service and VS Code LM provider adapter               |
+| `src/types/`                                                                               | Shared request/result/message contracts and constants |
 | `src/ui/DashboardMessageRouter.ts` or a focused handler (cf. `PromptEditorSupportService`) | Route capability/request/cancel messages              |
-| `src/ui/webview-react/hooks/`                                                            | Webview request state and settings controller         |
-| `src/ui/webview-react/utils/promptSuggestions/`                                          | CodeMirror state, decoration, and commands            |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                            | Thin integration only                                 |
-| `schemas/settings-schema.json` + `src/types/CtrlYokeSettings.ts`, defaults, settings UI  | Opt-in automatic mode and provider status             |
+| `src/ui/webview-react/hooks/`                                                              | Webview request state and settings controller         |
+| `src/ui/webview-react/utils/promptSuggestions/`                                            | CodeMirror state, decoration, and commands            |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                              | Thin integration only                                 |
+| `schemas/settings-schema.json` + `src/types/CtrlYokeSettings.ts`, defaults, settings UI    | Opt-in automatic mode and provider status             |
 
 ## Testing strategy
 

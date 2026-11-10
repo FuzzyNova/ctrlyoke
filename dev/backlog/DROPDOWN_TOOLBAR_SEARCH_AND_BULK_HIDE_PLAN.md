@@ -19,12 +19,12 @@ The hide feature is implemented four times. Each one renders `DropdownHiddenTogg
 partitions with `useHideableOptions`, and all four should get the same toolbar so they
 stay identical:
 
-| Component                                     | Used by                                                                                                                                   |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Component                                     | Used by                                                                                                                                         |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `components/shared/CustomSelect.tsx`          | Model, Agent, Permissions, Context, Execution-mode footer pickers (inline); PromptPropertiesDrawer, WorkflowPropertiesPanel, settings (trigger) |
-| `components/shared/MultiCheckboxDropdown.tsx` | Workflow- and prompt-level skills (trigger only)                                                                                          |
-| `components/shared/SkillsSelect.tsx`          | SkillsQuickPicker (inline) and its trigger mode                                                                                           |
-| `components/shared/HarnessDropdown.tsx`       | HarnessQuickPicker (inline) and its trigger mode                                                                                          |
+| `components/shared/MultiCheckboxDropdown.tsx` | Workflow- and prompt-level skills (trigger only)                                                                                                |
+| `components/shared/SkillsSelect.tsx`          | SkillsQuickPicker (inline) and its trigger mode                                                                                                 |
+| `components/shared/HarnessDropdown.tsx`       | HarnessQuickPicker (inline) and its trigger mode                                                                                                |
 
 The user named the first two, plus the footer versions. Those footer versions are
 `CustomSelect`, `SkillsSelect` and `HarnessDropdown` in `inline` mode. Leaving

@@ -146,7 +146,7 @@ and the recent rows in `WorkflowList.tsx`), beside the favorite/delete buttons:
   - Save / Remove.
 
 Prefer a **popover over the row's own accordion**: the dropdown is already dense
-and width-locked (`syncWorkflowRowWidthLock` in `WorkflowStatus.tsx`), and an
+and width-locked (`syncWorkflowRowWidthLock` in `WorkflowSwitcher.tsx`), and an
 inline accordion that pushes siblings down fights that layout. A popover keyed to
 the row avoids reflow.
 
@@ -154,11 +154,11 @@ the row avoids reflow.
 
 Add a **"Scheduled" section** to the dropdown, structured exactly like the
 existing **"Running workflows"** section (`WorkflowList.tsx`, fed by
-`runningSectionWorkflows` in `WorkflowStatus.tsx`): a header + a list of scheduled
+`runningSectionWorkflows` in `WorkflowSwitcher.tsx`): a header + a list of scheduled
 workflows with their next-run time and an enable/disable toggle. This reuses the
 section/filter machinery already present and gives an at-a-glance "what's
 scheduled" without a new page. A `schedule`-state filter can slot into the
-existing `MultiCheckboxDropdown` filter row in `WorkflowStatus.tsx`.
+existing `MultiCheckboxDropdown` filter row in `WorkflowSwitcher.tsx`.
 
 ### Dedicated page — later, only if needed
 
@@ -383,7 +383,7 @@ ripples across:
   (`schedule?`, `nextRunAt?`) and store actions.
 - `src/ui/webview-react/components/workflow/` — `WorkflowList.tsx` +
   `RunningWorkflowItem.tsx` (row icon), a new `ScheduleEditor` popover, and the
-  "Scheduled" section in `WorkflowStatus.tsx`. Include a plain-language note in
+  "Scheduled" section in `WorkflowSwitcher.tsx`. Include a plain-language note in
   the editor that runs only fire while ctrlyoke/VS Code (or the server) is
   running.
 - Tests: scheduler + next-run util in `src/test/**`; UI in

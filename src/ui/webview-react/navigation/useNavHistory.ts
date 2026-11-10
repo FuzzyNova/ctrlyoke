@@ -12,7 +12,11 @@
  */
 import { useCallback } from "react";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
-import { useRouteHistoryStore, canGoBack, canGoForward } from "./routeHistoryStore";
+import {
+  useRouteHistoryStore,
+  canGoBack,
+  canGoForward,
+} from "./routeHistoryStore";
 import {
   useBrowserHistoryCursorStore,
   canGoBackBrowser,

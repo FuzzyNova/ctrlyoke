@@ -1401,7 +1401,9 @@ export class CliIntegration extends HarnessIntegration {
 
   private notifyStatuslineInstall(
     result:
-      | ReturnType<NonNullable<IHarnessAdapter["consumeStatuslineInstallResult"]>>
+      | ReturnType<
+          NonNullable<IHarnessAdapter["consumeStatuslineInstallResult"]>
+        >
       | undefined
   ): void {
     if (!result) {

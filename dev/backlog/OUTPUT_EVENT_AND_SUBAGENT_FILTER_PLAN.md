@@ -289,7 +289,7 @@ The step plan's rules carry over unchanged, applied to the new dimensions:
   a kind or subagent filter is active. Check `generateMarkdownExport`'s input
   while implementing; if it only takes messages, filter structured events out of
   a copy of each message rather than teaching the exporter about rows. Since `bf0ed0557`,
-  `buildOutputRows` computes an attempt's copy text (`getCliTextForCopy`) once, on the stats
+  `buildOutputRows` computes an attempt's copy text (`getStepAssistantTextForCopy`) once, on the stats
   row, and caches it per finished output; a filtered copy must bypass or key that cache by the
   filter, not reuse the unfiltered text.
 - **Minimap**: unchanged. It stays step-level. File-edit marks for filtered-out

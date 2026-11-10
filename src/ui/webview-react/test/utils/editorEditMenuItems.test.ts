@@ -23,10 +23,7 @@ function createView(doc: string, anchor: number, head = anchor): EditorView {
   return view;
 }
 
-function item(
-  items: ContextMenuEntry[],
-  label: string
-): ContextMenuItem {
+function item(items: ContextMenuEntry[], label: string): ContextMenuItem {
   const found = items.find(
     (entry): entry is ContextMenuItem =>
       "label" in entry && entry.label === label

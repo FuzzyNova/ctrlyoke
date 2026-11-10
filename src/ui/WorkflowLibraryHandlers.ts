@@ -658,7 +658,9 @@ export class WorkflowLibraryHandlers {
         plan: analysis.plan,
       });
       for (const warning of writeResult.warnings) {
-        Log.warn(`[WorkflowLibraryHandlers] Save As bundle warning: ${warning}`);
+        Log.warn(
+          `[WorkflowLibraryHandlers] Save As bundle warning: ${warning}`
+        );
       }
 
       Log.info(`[WorkflowLibraryHandlers] Saved workflow to: ${absolutePath}`);
@@ -881,7 +883,10 @@ export class WorkflowLibraryHandlers {
         templates: this.toWireTemplates(templates),
       });
     } catch (error) {
-      Log.error("[WorkflowLibraryHandlers] Failed to load template catalog:", error);
+      Log.error(
+        "[WorkflowLibraryHandlers] Failed to load template catalog:",
+        error
+      );
       this.sendActionFailure(
         pm,
         "load templates",
@@ -926,7 +931,10 @@ export class WorkflowLibraryHandlers {
         scope,
       });
     } catch (error) {
-      Log.error("[WorkflowLibraryHandlers] Failed to set default template:", error);
+      Log.error(
+        "[WorkflowLibraryHandlers] Failed to set default template:",
+        error
+      );
     }
   }
 
@@ -1268,7 +1276,9 @@ export class WorkflowLibraryHandlers {
   ): Promise<void> {
     const manager = this.getManager();
     if (!manager) {
-      Log.error("[WorkflowLibraryHandlers] WorkflowOrchestrator not initialized");
+      Log.error(
+        "[WorkflowLibraryHandlers] WorkflowOrchestrator not initialized"
+      );
       return;
     }
 
@@ -1306,7 +1316,10 @@ export class WorkflowLibraryHandlers {
         : { workflows: [], seq: nextRecentWorkflowsSequence() };
       pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, ...list });
     } catch (error) {
-      Log.error("[WorkflowLibraryHandlers] Failed to get recent workflows:", error);
+      Log.error(
+        "[WorkflowLibraryHandlers] Failed to get recent workflows:",
+        error
+      );
       pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, workflows: [] });
     }
   }
@@ -1379,7 +1392,9 @@ export class WorkflowLibraryHandlers {
     if (!workspaceRoot) {
       return NO_WORKFLOW_KEYS;
     }
-    Log.info(`[WorkflowLibraryHandlers] Clear all history requested by ${clientId}`);
+    Log.info(
+      `[WorkflowLibraryHandlers] Clear all history requested by ${clientId}`
+    );
     try {
       const { entry, skippedLive, failed } = await new HistoryTrashRepository(
         workspaceRoot

@@ -46,53 +46,53 @@ const INITIAL_STATE: NavHistoryState = {
   future: [],
 };
 
-export const useRouteHistoryStore = create<NavHistoryState & NavHistoryActions>()(
-  (set, get) => ({
-    ...INITIAL_STATE,
+export const useRouteHistoryStore = create<
+  NavHistoryState & NavHistoryActions
+>()((set, get) => ({
+  ...INITIAL_STATE,
 
-    record(route) {
-      const { past, current } = get();
-      if (current && routesEqual(current, route)) return;
-      set({
-        past: current ? [...past, current] : past,
-        current: route,
-        future: [],
-      });
-    },
+  record(route) {
+    const { past, current } = get();
+    if (current && routesEqual(current, route)) return;
+    set({
+      past: current ? [...past, current] : past,
+      current: route,
+      future: [],
+    });
+  },
 
-    replace(route) {
-      set({ current: route });
-    },
+  replace(route) {
+    set({ current: route });
+  },
 
-    back() {
-      const { past, current, future } = get();
-      if (past.length === 0) return null;
-      const previous = past[past.length - 1];
-      set({
-        past: past.slice(0, -1),
-        current: previous,
-        future: current ? [current, ...future] : future,
-      });
-      return previous;
-    },
+  back() {
+    const { past, current, future } = get();
+    if (past.length === 0) return null;
+    const previous = past[past.length - 1];
+    set({
+      past: past.slice(0, -1),
+      current: previous,
+      future: current ? [current, ...future] : future,
+    });
+    return previous;
+  },
 
-    forward() {
-      const { past, current, future } = get();
-      if (future.length === 0) return null;
-      const next = future[0];
-      set({
-        past: current ? [...past, current] : past,
-        current: next,
-        future: future.slice(1),
-      });
-      return next;
-    },
+  forward() {
+    const { past, current, future } = get();
+    if (future.length === 0) return null;
+    const next = future[0];
+    set({
+      past: current ? [...past, current] : past,
+      current: next,
+      future: future.slice(1),
+    });
+    return next;
+  },
 
-    reset() {
-      set({ ...INITIAL_STATE });
-    },
-  })
-);
+  reset() {
+    set({ ...INITIAL_STATE });
+  },
+}));
 
 /** Selector: whether a `back()` step is possible. */
 export const canGoBack = (s: NavHistoryState): boolean => s.past.length > 0;

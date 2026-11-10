@@ -320,7 +320,7 @@
       return;
     }
 
-    // All other messages: dispatch to useMessageHandler via window.addEventListener('message', ...).
+    // All other messages: dispatch to useInboundMessageRouter via window.addEventListener('message', ...).
     // Messages that arrive before React sends READY are buffered so initial state
     // cannot be lost during refresh or slow bundle startup.
     dispatchToReact(msg);
@@ -541,7 +541,7 @@
       const hasQueuedReady = pendingOutbound.some(isReadyMessage);
       // Register this WebSocket with the extension immediately. Any replay this
       // triggers is buffered below until React posts its own READY, so no state
-      // is delivered before useMessageHandler has installed its listener.
+      // is delivered before useInboundMessageRouter has installed its listener.
       if (!hasQueuedReady) {
         sendReadyIfNeeded(socket);
       }

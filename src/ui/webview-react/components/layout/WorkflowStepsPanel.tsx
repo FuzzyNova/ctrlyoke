@@ -89,7 +89,10 @@ import {
   type StepColorGroupMember,
 } from "../../utils/stepColor";
 import { buildWorkflowStepEnabledState } from "@utils/stepEnabledToggle";
-import { isEditableClipboardTarget, writeClipboardText } from "@utils/clipboard";
+import {
+  isEditableClipboardTarget,
+  writeClipboardText,
+} from "@utils/clipboard";
 import {
   readWorkflowStepFromClipboard,
   serializeWorkflowStepText,

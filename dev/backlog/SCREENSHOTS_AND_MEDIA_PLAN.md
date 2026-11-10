@@ -714,7 +714,7 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 ### 15. Run history: the workflow list, history search, and a reopened run
 
 - **What:** the point that ctrlyoke keeps every session on every harness and lets you search,
-  reopen, continue and rerun it. Three stills: the workflow list (`WorkflowStatus.tsx`'s
+  reopen, continue and rerun it. Three stills: the workflow list (`WorkflowSwitcher.tsx`'s
   dropdown) open over the hero run, with favorites and run counts; history search
   (`HistorySearchDrawer.tsx`) for "per IP" narrowed to responses, which lists how Claude Code,
   Qwen Code, OpenCode, Codex and Antigravity answered the same rate-limiting task; and the

@@ -2,7 +2,10 @@ import * as path from "path";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
-import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
+import {
+  IHarnessAdapter,
+  HarnessConfig,
+} from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
@@ -123,9 +126,8 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
   static readonly CLI_VERSION_COMMAND = `${ClaudeHarnessAdapter.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${ClaudeHarnessAdapter.CLI_COMMAND} --help`;
 
-  private static readonly statuslineManager = StatuslineManager.forStatusLineHarness(
-    STATUS_LINE_HARNESS_IDS.CLAUDE
-  );
+  private static readonly statuslineManager =
+    StatuslineManager.forStatusLineHarness(STATUS_LINE_HARNESS_IDS.CLAUDE);
 
   /** Tracks per-prompt hook settings files for cleanup */
   private hookSettingsPaths: string[] = [];

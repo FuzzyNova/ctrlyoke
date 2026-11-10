@@ -81,9 +81,7 @@ export function useWorkflowContextMenu({
   onDelete,
   onCloseDropdown,
 }: UseWorkflowContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const activeTerminalWorkflows = useTerminalStore(
     (state) => state.activeTerminalWorkflows
   );

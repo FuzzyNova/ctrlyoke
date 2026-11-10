@@ -10,9 +10,7 @@ import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAda
 import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
-import {
-  HarnessAdapterUtils,
-} from "../../core/harness/shared/HarnessAdapterUtils";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
@@ -267,7 +265,9 @@ suite("HarnessAdapterUtils", () => {
       ],
       undefined,
       undefined,
-      HarnessAdapterUtils.createMcpSecretConfigOptions((name) => `{env:${name}}`)
+      HarnessAdapterUtils.createMcpSecretConfigOptions(
+        (name) => `{env:${name}}`
+      )
     );
 
     assert.strictEqual(
@@ -328,9 +328,12 @@ suite("HarnessAdapterUtils", () => {
   });
 
   test("creates a restrictive substitution strategy for non-expanding providers", () => {
-    const options = HarnessAdapterUtils.createMcpSecretConfigOptions(undefined, {
-      API_TOKEN: "secret-value",
-    });
+    const options = HarnessAdapterUtils.createMcpSecretConfigOptions(
+      undefined,
+      {
+        API_TOKEN: "secret-value",
+      }
+    );
     assert.deepStrictEqual(options, {
       mode: "substitute",
       resolvedValues: { API_TOKEN: "secret-value" },

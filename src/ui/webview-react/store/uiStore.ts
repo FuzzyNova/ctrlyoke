@@ -1591,11 +1591,15 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       togglePromptPropertiesDrawer: () =>
-        set((state) => ({ promptPropertiesDrawerOpen: !state.promptPropertiesDrawerOpen })),
+        set((state) => ({
+          promptPropertiesDrawerOpen: !state.promptPropertiesDrawerOpen,
+        })),
 
-      openPromptPropertiesDrawer: () => set({ promptPropertiesDrawerOpen: true }),
+      openPromptPropertiesDrawer: () =>
+        set({ promptPropertiesDrawerOpen: true }),
 
-      closePromptPropertiesDrawer: () => set({ promptPropertiesDrawerOpen: false }),
+      closePromptPropertiesDrawer: () =>
+        set({ promptPropertiesDrawerOpen: false }),
 
       // ============================================================================
       // SETTINGS PANEL

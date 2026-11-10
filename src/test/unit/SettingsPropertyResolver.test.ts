@@ -243,7 +243,10 @@ suite("SettingsPropertyResolver Tests", () => {
           } as PromptFile;
           const context = SettingsPropertyResolver.createContext();
           const pure = resolveExecutionProperties(prompt, workflow, context);
-          const backend = SettingsPropertyResolver.resolveTarget(prompt, workflow);
+          const backend = SettingsPropertyResolver.resolveTarget(
+            prompt,
+            workflow
+          );
           const expected = tier.usePrompt
             ? fixture.prompt
             : tier.useWorkflow
@@ -881,7 +884,8 @@ suite("SettingsPropertyResolver Tests", () => {
         EXECUTION_MODES.INTERACTIVE
       );
       assert.strictEqual(
-        SettingsPropertyResolver.resolve({ prompt: "test" }, workflow).executionMode,
+        SettingsPropertyResolver.resolve({ prompt: "test" }, workflow)
+          .executionMode,
         EXECUTION_MODES.HEADLESS
       );
       assert.strictEqual(

@@ -113,9 +113,7 @@ export function useOutputContextMenu({
   finalStep,
   onOpenFind,
 }: UseOutputContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const openContextMenu = useCallback(
     (x: number, y: number, scrollContainer: HTMLDivElement) => {

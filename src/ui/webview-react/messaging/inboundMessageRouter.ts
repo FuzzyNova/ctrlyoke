@@ -10,7 +10,11 @@
  * - Sets up message listener with proper cleanup
  */
 import { useEffect, useMemo } from "react";
-import { getVsCodeApi, isStandalone, panelPageLoadId } from "@hooks/useVsCodeApi";
+import {
+  getVsCodeApi,
+  isStandalone,
+  panelPageLoadId,
+} from "@hooks/useVsCodeApi";
 import {
   useWorkflowStore,
   isStepContentEqual,

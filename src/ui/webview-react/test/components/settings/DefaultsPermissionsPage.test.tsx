@@ -86,7 +86,9 @@ function createSettings(): FullGlobalSettings {
 
 describe("DefaultsPermissionsPage compatibility summary", () => {
   beforeEach(() => {
-    useHarnessCapabilityStore.getState().setCapabilitySnapshot(createSnapshot());
+    useHarnessCapabilityStore
+      .getState()
+      .setCapabilitySnapshot(createSnapshot());
   });
 
   it("summarizes supported and mode-only harnesses while keeping both fields editable", () => {

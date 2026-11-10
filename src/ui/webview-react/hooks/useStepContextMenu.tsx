@@ -15,9 +15,7 @@ import {
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { executionOwnsCurrentStep } from "@utils/status";
-import {
-  buildWorkflowStepEnabledUpdate,
-} from "@utils/stepEnabledToggle";
+import { buildWorkflowStepEnabledUpdate } from "@utils/stepEnabledToggle";
 import { readWorkflowStepFromClipboard } from "@utils/workflowStepSerialization";
 import {
   getStepSessionDetails,
@@ -160,9 +158,7 @@ export function useStepContextMenu({
     : SHELL_WORKFLOW_ID;
   const hiddenOutputKeys =
     hiddenOutputTargets[outputFilterWorkflowKey]?.keys ?? EMPTY_TARGET_KEYS;
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
   const [pendingDeleteIndices, setPendingDeleteIndices] = useState<
     number[] | null
@@ -875,9 +871,7 @@ export function usePasteToEndContextMenu({
   executionState,
   totalSteps,
 }: UsePasteToEndContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const openPasteToEndMenu = useCallback(
     (x: number, y: number) => {

@@ -7,7 +7,10 @@ import {
   RUNNER_IDS,
   WORKSPACE_FILE_CHANGE_KINDS,
 } from "../types/DashboardConstants";
-import { NodePlatformAdapter, type ResolvedCliConfig } from "./NodePlatformAdapter";
+import {
+  NodePlatformAdapter,
+  type ResolvedCliConfig,
+} from "./NodePlatformAdapter";
 import { NodeFileWatcherFactory } from "./NodeFileWatcher";
 import { FileKeyValueStore } from "./FileKeyValueStore";
 import { NodeDashboardHostActions } from "./NodeDashboardHostActions";

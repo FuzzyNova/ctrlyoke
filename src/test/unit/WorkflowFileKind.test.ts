@@ -6,7 +6,7 @@ import {
 } from "../../utils/WorkflowFileKind";
 import { CTRLYOKE_FILE_KINDS } from "../../types/DashboardConstants";
 
-suite("CtrlYokeFileKind", () => {
+suite("WorkflowFileKind", () => {
   test("classifies workflow and prompt files by basename suffix", () => {
     const cases: Array<[string, string | null]> = [
       ["flow.ctrlyoke.yaml", CTRLYOKE_FILE_KINDS.WORKFLOW_YAML],

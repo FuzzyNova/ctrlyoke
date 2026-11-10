@@ -88,9 +88,7 @@ export function useFinalStepContextMenu({
     : SHELL_WORKFLOW_ID;
   const hiddenOutputKeys =
     hiddenOutputTargets[outputFilterWorkflowKey]?.keys ?? EMPTY_TARGET_KEYS;
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const openFinalStepContextMenu = useCallback(
     (x: number, y: number) => {

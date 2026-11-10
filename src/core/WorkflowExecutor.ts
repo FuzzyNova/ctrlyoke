@@ -2969,11 +2969,12 @@ export class WorkflowExecutor {
       const timestampMs = Date.now();
 
       // ─── Interactive mode: run inside a PTY so the user can provide input ────
-      const resolvedExecutionMode = SettingsPropertyResolver.resolveExecutionMode(
-        step,
-        this.promptQueue.getWorkflowFile(),
-        { hostCanProvidePty: context.hostCanProvidePty }
-      );
+      const resolvedExecutionMode =
+        SettingsPropertyResolver.resolveExecutionMode(
+          step,
+          this.promptQueue.getWorkflowFile(),
+          { hostCanProvidePty: context.hostCanProvidePty }
+        );
       await this.promptQueue.persistRuntimeMetadata(
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? stepIndex
@@ -5427,9 +5428,13 @@ export class WorkflowExecutor {
       return "next target: script";
     }
 
-    let resolvedProperties = SettingsPropertyResolver.resolve(nextStep, workflowFile, {
-      hostCanProvidePty: context.hostCanProvidePty,
-    });
+    let resolvedProperties = SettingsPropertyResolver.resolve(
+      nextStep,
+      workflowFile,
+      {
+        hostCanProvidePty: context.hostCanProvidePty,
+      }
+    );
     const vars = workflowFile.vars;
     if (vars && Object.keys(vars).length > 0) {
       resolvedProperties = VarSubstitutor.applyToResolvedProperties(

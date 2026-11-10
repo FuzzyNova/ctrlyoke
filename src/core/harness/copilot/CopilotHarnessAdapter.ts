@@ -7,7 +7,10 @@ import * as path from "path";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
-import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
+import {
+  IHarnessAdapter,
+  HarnessConfig,
+} from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
@@ -114,9 +117,8 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
   static readonly CLI_VERSION_COMMAND = `${CopilotHarnessAdapter.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${CopilotHarnessAdapter.CLI_COMMAND} --help`;
 
-  private static readonly statuslineManager = StatuslineManager.forStatusLineHarness(
-    STATUS_LINE_HARNESS_IDS.COPILOT
-  );
+  private static readonly statuslineManager =
+    StatuslineManager.forStatusLineHarness(STATUS_LINE_HARNESS_IDS.COPILOT);
 
   readonly config: HarnessConfig = {
     name: "copilot",
@@ -863,7 +865,8 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
    */
   async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
     try {
-      const hookDir = await CopilotHarnessAdapter.resolveHooksDir(workspaceRoot);
+      const hookDir =
+        await CopilotHarnessAdapter.resolveHooksDir(workspaceRoot);
       const files = await fs.readdir(hookDir);
       const hasOtherHookFiles = files.some(
         (f) => f.startsWith("ctrlyoke-") && f.endsWith(".json")

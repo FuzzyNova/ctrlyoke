@@ -172,7 +172,7 @@ step, not in `setup`. The schema description for `setup` should say so when
 - Add `"checkout"` to the `WorktreeField` union, thread it through
   `handleWorktreeFieldChange`, the reset path and `worktreeObjectConfig`, and
   apply the same in `DefaultsHarnessPage.tsx`.
-- `WorkflowStatus.tsx` and `DryRunModal.tsx` show `checkout → branch` when
+- `WorkflowSwitcher.tsx` and `DryRunModal.tsx` show `checkout → branch` when
   `checkout` is set, plus a "will switch from `<current>`" line or the
   dirty-slot blocker in Dry Run (`previewExecutionWorkspace`).
 

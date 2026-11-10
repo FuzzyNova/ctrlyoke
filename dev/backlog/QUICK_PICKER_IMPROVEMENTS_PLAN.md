@@ -12,7 +12,7 @@
 > `WorkflowPropertiesPanel.tsx`, ~20 `UPDATE_WORKFLOW_PROPERTY` posts plus
 > `setUndoWorkflowProperties` near `:811`/`:831`), target-aware pickers, and
 > workflow-override trigger styling. `PermissionsQuickPicker`, `ContextQuickPicker`,
-> `ExecutionModeQuickPicker` and `StepColorQuickPicker` were added to the footer since this
+> `ExecutionModeQuickPicker` and `StepColorSwatch` were added to the footer since this
 > plan was written; they are out of v1 scope per Non-Goals.
 >
 > Last reviewed against code: 2026-10-26 (still accurate; no target-scope work has landed).

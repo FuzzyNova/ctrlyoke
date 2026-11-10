@@ -402,7 +402,10 @@ export class DashboardSettingsSync {
       this.capabilitiesWriteQueue = write.catch(() => {});
       await write;
     } catch (err) {
-      Log.warn("[DashboardSettingsSync] Failed to write capabilities.json:", err);
+      Log.warn(
+        "[DashboardSettingsSync] Failed to write capabilities.json:",
+        err
+      );
     }
   }
 
@@ -1198,7 +1201,8 @@ export class DashboardSettingsSync {
     }
 
     const { harnessId, restoreCustomCommand } = request;
-    const statuslineProvider = StatuslineManager.statusLineHarnessIdForHarness(harnessId);
+    const statuslineProvider =
+      StatuslineManager.statusLineHarnessIdForHarness(harnessId);
     let manager: StatuslineManagerLike;
     let currentSettings: StatusLineHarnessSettings;
     try {

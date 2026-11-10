@@ -2571,8 +2571,9 @@ export class WorkflowOrchestrator {
           )
         : "";
     const service = new ExecutionPreviewService({
-      defaults: SettingsPropertyResolver.createContext({ hostCanProvidePty: true })
-        .defaults,
+      defaults: SettingsPropertyResolver.createContext({
+        hostCanProvidePty: true,
+      }).defaults,
       capabilities: await this.compatibilityRegistry.getSnapshot(),
       getHarness: (harnessId, executionWorkspace) =>
         this.getExecutionPreviewHarness(harnessId, executionWorkspace),

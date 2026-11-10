@@ -3,9 +3,7 @@
  */
 
 export { useVsCodeApi, getVsCodeApi, isStandalone } from "./useVsCodeApi";
-export {
-  useInboundMessageRouter,
-} from "@messaging/inboundMessageRouter";
+export { useInboundMessageRouter } from "@messaging/inboundMessageRouter";
 export { sendMessage } from "@messaging/sendMessage";
 export {
   useCompatibilityDiagnostics,

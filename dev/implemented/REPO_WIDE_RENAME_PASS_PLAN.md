@@ -1,6 +1,8 @@
 # Repo-Wide Rename Pass
 
-**Status:** Every staged chunk has landed. Awaiting review before moving this plan to `dev/implemented/`.
+**Status:** Implemented 2026-11-09 (Batches 1–8 and the deletions; `TempFileManager` deferred).
+Every rename is recorded in `dev/reference/RENAMES.md`. The names below are the names **before**
+the pass, so read each table's left column as the old name.
 
 ## Progress
 
@@ -8,9 +10,9 @@ Staged 2026-11-09 as one workflow step per chunk below, run in this order. Each 
 own box in the commit that lands it, and adds its ledger rows to `dev/reference/RENAMES.md`.
 
 - [x] 1a `StepContextMenu` → `ContextMenu`, and create the ledger plus its `copilot-instructions.md` line
-- [x] 1b `PropertiesDrawer` → `PromptPropertiesDrawer`, uiStore state, `WorkflowPropertiesPanel` panel names
+- [x] 1b `PropertiesDrawer` → `PromptPropertiesDrawer`, uiStore state, `WorkflowPropertiesPanel` drawer names
 - [x] 8 Final-step pass-count names
-- [x] 2 "prompt" → "step" in the step-list and editor components (`components/steps/` → `components/steps/`)
+- [x] 2 "prompt" → "step" in the step-list and editor components (`components/prompts/` → `components/steps/`)
 - [x] 3a Component moves: `WorkflowSwitcher`, delete modals, `FileBrowserModal`, `HooksEditor`, `StepColorSwatch`
 - [x] 3b Output/diff components: `TextDiffView`, `SubagentSpawnOutput`, `SubmitCommitMessageView`, `ToolDot`, `InOutputView`, plus the Batch 3 deletions
 - [x] 3c Utils, hooks and stores: `stepClipboard` split, `usePropertiesTabOverrides`, store renames, `requestQueue`, history stores
@@ -23,7 +25,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 - [x] 7 Folder moves that change which instruction file applies
 
 Paths in Batches 3–8 are written against the tree before this pass. Where an earlier batch has
-already moved a file (Batch 2 moves `components/steps/` to `components/steps/`), look the new
+already moved a file (Batch 2 moves `components/prompts/` to `components/steps/`), look the new
 path up in the ledger.
 
 ### Procedure for each staged step
@@ -91,7 +93,7 @@ applies. The known traps:
 | zustand persist names (`ctrlyoke-ui-state`, `ctrlyoke-workspace-viewer-state`)                                                          | Persisted, and not derived from file names                                                                                  |
 | `docs/guide/dashboard.md` `step-context-menu-900x588.png`                                                                               | It really is a screenshot of the step menu                                                                                  |
 
-Log prefixes (`[CopilotHarnessAdapter]`, `[WorkflowCommandHandler]`, …) follow their class name.
+Log prefixes (`[CopilotCliProvider]`, `[WorkflowCommandHandler]`, …) follow their class name.
 The session log is not one of the contracts listed in `CLAUDE.md`, so renaming them is fine.
 Mention it in the commit body so nobody is surprised when an old grep stops matching.
 
@@ -126,9 +128,9 @@ replace would break them. For each rename:
 
 **Problem:** `dev/implemented/` (296 docs), `dev/bugs/implemented/` (813), `dev/rejected/` and
 `dev/research/` use names that this pass retires: 383 of those docs mention at least one. Someone reading an old design doc greps for
-`WorkflowLibraryHandlers` and finds nothing. The scale is real. By file count, `CliProvider` appears
-in 71 implemented plans and 61 fixed bugs, `StepEditor` in 54 and 28, `useMessageHandler` in
-48 and 23, and `WorkflowLibraryHandlers` in 40 and 9.
+`WorkflowSerializer` and finds nothing. The scale is real. By file count, `CliProvider` appears
+in 71 implemented plans and 61 fixed bugs, `PromptEditor` in 54 and 28, `useMessageHandler` in
+48 and 23, and `WorkflowSerializer` in 40 and 9.
 
 **Decision: don't find-and-replace history. Keep a ledger that makes the old names
 searchable.** Rewriting those docs would damage the thing they exist for:
@@ -143,7 +145,7 @@ searchable.** Rewriting those docs would damage the thing they exist for:
   `StepContextMenu` _because_ that's no longer true. A replace can't tell a reference from a
   claim.
 - **It's the substring trap again, at a larger scale and with no compiler.** Prose, code
-  fences and quoted log lines (`[CopilotHarnessAdapter] …`) have no type checker. A mistaken
+  fences and quoted log lines (`[CopilotCliProvider] …`) have no type checker. A mistaken
   `useStepContextMenu` → `useContextMenu` in a doc fails silently.
 - **It's churn with no review signal.** Hundreds of history docs would change, burying each
   batch's real diff, and every future rename would have to repeat it.
@@ -216,11 +218,11 @@ is a small core/CLI naming fix. Earlier batches don't block later ones, except w
   `StepContextMenuRequest`, and the `FuzzyRanking`/completions references, which match
   `useFinalStepContextMenu`.
 
-**1b. `PropertiesDrawer` → `PromptPropertiesDrawer`** (`components/editor/PromptPropertiesDrawer.tsx`)
+**1b. `PropertiesDrawer` → `PromptPropertiesDrawer`** (`components/editor/PropertiesDrawer.tsx`)
 
 - File, component, `PropertiesDrawerProps`, CSS class `properties-drawer` (unused by any
   selector).
-- Code: `components/editor/index.ts`, `StepEditor.tsx`. Comments in `FooterQuickPicker`,
+- Code: `components/editor/index.ts`, `PromptEditor.tsx`. Comments in `FooterQuickPicker`,
   `HarnessDropdown`, `ScriptConditionEditor`, `permissionUtils`, `useDrawerTabOverrides`,
   `editorStore`, `dropdownNamespaces`, `editorAutoExpand`,
   `src/test/integration/{helpers/propertyRoundTrip.ts,promptPropertyRoundTrip.integration.test.ts}`.
@@ -228,8 +230,8 @@ is a small core/CLI naming fix. Earlier batches don't block later ones, except w
   (8 `describe` titles), plus strings in `test/integration/promptStepUiPersistRoundTrip.test.tsx`.
 - uiStore state moves with it: `propertiesDrawerOpen`, `toggle/open/closePropertiesDrawer` →
   `promptPropertiesDrawerOpen`, `toggle/open/closePromptPropertiesDrawer`. **Safe:** it is not in
-  `partialize` and `resetUi` clears it. Callers: `App.tsx`, `StepEditor.tsx`, `editorStore.ts`,
-  `uiStore.test.ts`, `StepEditor.test.tsx`, `promptStepUiPersistRoundTrip.test.tsx`.
+  `partialize` and `resetUi` clears it. Callers: `App.tsx`, `PromptEditor.tsx`, `editorStore.ts`,
+  `uiStore.test.ts`, `PromptEditor.test.tsx`, `promptStepUiPersistRoundTrip.test.tsx`.
 - Docs: `.github/instructions/webview-react-components.instructions.md:13`,
   `dev/backlog/{CUSTOM_TOOLTIPS,DROPDOWN_TOOLBAR_SEARCH_AND_BULK_HIDE,TEMPLATE_AUTHORING_MODE}_PLAN.md`.
   `TESTING_GAPS.md` is regenerated by `npm run test:coverage`.
@@ -244,19 +246,19 @@ stays correct: that drawer really is prompt-only (`editorStore.ts:811` closes it
 
 | Current                                        | Proposed                             | Evidence                                                                                                        |
 | ---------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `components/editor/StepEditor.tsx`           | `StepEditor.tsx`                     | `isScriptMode` branch, ~170 "script" mentions, embeds `ScriptConditionEditor`                                   |
-| `components/prompts/` folder                  | `components/steps/`                  | `WorkflowStepItem.tsx`: "Renders both AI prompt steps and script steps"                                             |
-| `StepChipRail`                               | `StepChipRail`                       | One chip per step, uses `isScriptWorkflowStep`                                                                  |
-| `StepCounter`                                | `StepCounter`                        | Counts all `steps`                                                                                              |
-| `StepDetailRows`                            | `StepDetailRows`                     | Rendered in both the script and the prompt branch. An interface named `StepDetails` already exists, so not that |
-| `StepOverrideChip`                               | `StepOverrideChip`                   | Pairs with the existing `utils/stepOverrideChips.ts`                                                            |
-| `components/prompts/WorkflowStep.tsx`             | `WorkflowStepItem.tsx` (file only)   | Exports `WorkflowStepItem`; the file name reads like the `WorkflowStep` data type                               |
-| `hooks/useStepStatus.ts` (`getStepStatus`) | `useStepStatus.ts` / `getStepStatus` | Takes any `WorkflowStep`; siblings `useStepClickHandler` and `useContextPct` already say "step"                 |
+| `components/editor/PromptEditor.tsx`           | `StepEditor.tsx`                     | `isScriptMode` branch, ~170 "script" mentions, embeds `ScriptConditionEditor`                                   |
+| `components/prompts/` folder                   | `components/steps/`                  | `WorkflowStep.tsx`: "Renders both AI prompt steps and script steps"                                             |
+| `PromptChipRail`                               | `StepChipRail`                       | One chip per step, uses `isScriptWorkflowStep`                                                                  |
+| `PromptCounter`                                | `StepCounter`                        | Counts all `steps`                                                                                              |
+| `PromptStepDetails`                            | `StepDetailRows`                     | Rendered in both the script and the prompt branch. An interface named `StepDetails` already exists, so not that |
+| `PromptOverride`                               | `StepOverrideChip`                   | Pairs with the existing `utils/stepOverrideChips.ts`                                                            |
+| `components/prompts/WorkflowStep.tsx`          | `WorkflowStepItem.tsx` (file only)   | Exports `WorkflowStepItem`; the file name reads like the `WorkflowStep` data type                               |
+| `hooks/usePromptStatus.ts` (`getPromptStatus`) | `useStepStatus.ts` / `getStepStatus` | Takes any `WorkflowStep`; siblings `useStepClickHandler` and `useContextPct` already say "step"                 |
 
 The folder move touches `layout/WorkflowStepsPanel.tsx`, `layout/index.ts`,
 `ctrlyoke-tools/WorkflowStatusView.tsx`, `hooks/useStepClickHandler.ts`,
-`utils/stepOverrideChips.ts`, and moves `test/components/steps/` → `test/components/steps/`.
-`useStepStatus` is named in `orchestration.instructions.md`. Keep `utils/prompt.ts`'s
+`utils/stepOverrideChips.ts`, and moves `test/components/prompts/` → `test/components/steps/`.
+`usePromptStatus` is named in `orchestration.instructions.md`. Keep `utils/prompt.ts`'s
 `PromptStep` out of this batch, because it is a wider data-model name. Revisit it separately.
 
 ### Batch 3: misnamed or misplaced webview modules
@@ -272,11 +274,11 @@ Independent items. Group them into two or three commits by folder.
 | `components/editor/HooksEditor.tsx`                                                                               | `components/shared/HooksEditor.tsx`                                                                           | Used by the prompt drawer, `WorkflowPropertiesPanel` and `DefaultsHooksPage`                                                                                                                                                                                                                                                                                                                 |
 | `components/editor/StepColorQuickPicker.tsx`                                                                      | `StepColorSwatch.tsx` in `layout/`                                                                            | Not a `FooterQuickPicker`. It's an `<input type="color">` header control used only by `layout/EditorSection.tsx`                                                                                                                                                                                                                                                                             |
 | `components/workflow/FileBrowserModal.tsx`, `workspace-viewer/fileBrowserShared.tsx`                              | move both to `components/shared/`                                                                             | Generic picker opened from settings, export, save, template and location dialogs                                                                                                                                                                                                                                                                                                             |
-| `components/steps/InOutputViewMarker.tsx`                                                                       | `InOutputView.tsx`                                                                                            | Exports `InOutputViewBar` and hooks; nothing is called a "Marker"                                                                                                                                                                                                                                                                                                                            |
+| `components/prompts/InOutputViewMarker.tsx`                                                                       | `InOutputView.tsx`                                                                                            | Exports `InOutputViewBar` and hooks; nothing is called a "Marker"                                                                                                                                                                                                                                                                                                                            |
 | `components/output/SubagentSpawn.tsx`                                                                             | `SubagentSpawnOutput.tsx`                                                                                     | Matches its export and the folder's `*Output.tsx` pattern                                                                                                                                                                                                                                                                                                                                    |
 | `SubmitCommitMessageBody` in `ctrlyoke-tools/StepMutationViews.tsx`                                               | own file `SubmitCommitMessageView.tsx`                                                                        | Not a step mutation                                                                                                                                                                                                                                                                                                                                                                          |
 | `ToolDot` in `output/FileOperationOutput.tsx`                                                                     | own file `output/ToolDot.tsx`                                                                                 | Shared by `OutputRow`, `ToolCallOutput`, `AskUserQuestionOutput` and `ToolCallBlock` (the same first-consumer problem as `StepContextMenu`)                                                                                                                                                                                                                                                  |
-| `hooks/useDrawerTabOverrides.ts`                                                                                  | `usePropertiesTabOverrides.ts`                                                                                | Easily confused with `useSettingsDrawerTabOverrides`. This one resolves workflow/prompt property inheritance for `StepEditor` and `WorkflowPropertiesPanel`                                                                                                                                                                                                                                |
+| `hooks/useDrawerTabOverrides.ts`                                                                                  | `usePropertiesTabOverrides.ts`                                                                                | Easily confused with `useSettingsDrawerTabOverrides`. This one resolves workflow/prompt property inheritance for `PromptEditor` and `WorkflowPropertiesPanel`                                                                                                                                                                                                                                |
 | `store/compatibilityStore.ts` (`useCompatibilityStore`)                                                           | `harnessCapabilityStore.ts` / `useHarnessCapabilityStore`                                                     | Holds only the capability snapshot. The diagnostics live in `useCompatibilityDiagnostics`. Not persisted                                                                                                                                                                                                                                                                                     |
 | `store/useHarnessFileStore.ts`, `useLanguageServerStore.ts`, `useMcpManagerStore.ts`, `useSkillsRegistryStore.ts` | `harnessFileStore.ts` etc. (file names only)                                                                  | The other 19 stores use `xStore.ts` for the file and `useXStore` for the hook                                                                                                                                                                                                                                                                                                                |
 | `store/requestQueue.ts`                                                                                           | `utils/requestQueue.ts`                                                                                       | 8 lines of FIFO helpers, not a store                                                                                                                                                                                                                                                                                                                                                         |
@@ -284,18 +286,19 @@ Independent items. Group them into two or three commits by folder.
 
 ### Batch 4: webview messaging module (own commit, larger)
 
-- `messaging/inboundMessageRouter.ts` owns inbound messages and exports
-  `useInboundMessageRouter`, called once from `App.tsx`. `sendMessage`, `openFile`, and
-  `captureAndSendThemeVars` live in `messaging/sendMessage.ts`, shared by components and
-  `BootstrapApp.tsx`; the router no longer owns the outbound helpers.
+- `hooks/useMessageHandler.ts` (~3,700 lines). 49 files import it, almost all only for the
+  outbound `sendMessage`/`openFile`. Move those two to `messaging/sendMessage.ts`. Keep the
+  inbound router as `messaging/inboundMessageRouter.ts`, exporting `useInboundMessageRouter`
+  (called once from `App.tsx`). Delete `BootstrapApp.tsx`'s private copy of
+  `captureAndSendThemeVars` in favour of the shared one.
 - Move the non-hook modules out of `hooks/` into the same `messaging/` folder:
   `inboundMessageDispatcher.ts`, `panelHandshake.ts`, `panelInboundBuffer.ts`,
   `reconnectWatchdog.ts`, `terminalMessageHandlers.ts`. Move the `CLIENT_ID_ASSIGNED` handler
   out of `terminalMessageHandlers.ts`, because it is connection identity, not terminal.
 - Add a `@messaging/*` alias in `tsconfig.json`, `vite.config.ts` and `vitest.config.ts`.
 - Add `src/ui/webview-react/messaging/**` to `webview-react-hooks.instructions.md`'s `applyTo`
-  (or give it its own section), then run `npm run generate-agent-files`. Update live instruction
-  and backlog references and add the ledger rows in this batch.
+  (or give it its own section), then run `npm run generate-agent-files`. Seven instruction files
+  name `useMessageHandler`.
 
 ### Batch 5: "provider" → harness terminology in harness code
 
@@ -305,12 +308,12 @@ only; see the contracts table for which strings stay.**
 
 | Current                                                                                                                                                                                                                                                                                                                                          | Proposed                                                                    | Size / notes                                                                                                                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shared/interfaces/IHarnessAdapter.ts`, `{claude,codex,copilot,opencode,qwen,antigravity}/*HarnessAdapter.ts`, `HeadlessSourceModeAdapter`                                                                                                                                                                                                            | `IHarnessAdapter`, `ClaudeHarnessAdapter`, …                                | ~33 + ~48 files. Tests `*HarnessAdapter.test.ts`, `HarnessAdapterArgumentCharacterization.test.ts`, `HarnessAdapterPreparation.test.ts`. Updated CLI file globs in `scripts/dev-host.mjs` and `scripts/generate-testing-gaps.mjs`                      |
+| `shared/interfaces/ICliProvider.ts`, `{claude,codex,copilot,opencode,qwen,antigravity}/*CliProvider.ts`, `HeadlessSourceModeProvider`                                                                                                                                                                                                            | `IHarnessAdapter`, `ClaudeHarnessAdapter`, …                                | ~33 + ~48 files. Tests `*CliProvider.test.ts`, `CliProviderArgumentCharacterization.test.ts`, `CliProviderPreparation.test.ts`. Comments in `scripts/dev-host.mjs:137` (`*CliProvider.ts` glob) and `scripts/generate-testing-gaps.mjs:48`                      |
 | `shared/CliProviderUtils.ts`, `CliProviderWorkflowContext`, `CliProviderPreparation`                                                                                                                                                                                                                                                             | `HarnessAdapterUtils`, `HarnessAdapterWorkflowContext`, …                   | 24 files. `scripts/dev-host.mjs:35` references `CliProviderUtils.runVersionCommand`. Move the generic `RetryableAsyncCache` out of it into `src/utils/`                                                                                                         |
-| `.github/instructions/harness-cli-providers.instructions.md`                                                                                                                                                                                                                                                                                     | `harness-adapters.instructions.md`                                          | Done in 5a; ran `npm run generate-agent-files`. The globs are folder-based and don't change                                                                                                                                                                            |
+| `.github/instructions/harness-cli-providers.instructions.md`                                                                                                                                                                                                                                                                                     | `harness-adapters.instructions.md`                                          | Then run `npm run generate-agent-files`. The globs are folder-based and don't change                                                                                                                                                                            |
 | `shared/usage/IHarnessUsageProvider`, `usage/providers/*UsageProvider`, `ObservedOnlyUsageProvider`, `createDefaultHarnessUsageProviders`                                                                                                                                                                                                        | `IHarnessQuotaCollector`, `usage/collectors/*QuotaCollector`, …             | The interface doc already says "quota collectors". **Keep `provider-usage` and the error-code strings**                                                                                                                                                         |
 | `shared/HarnessFlagCompletionProvider.ts`                                                                                                                                                                                                                                                                                                        | `HarnessFlagHelpParser.ts`                                                  | No provider class; it parses `--help` and exports `getHarnessFlagCompletions()`. 3 importers plus its test                                                                                                                                                      |
-| `src/utils/StatuslineFormat.ts` `STATUS_LINE_FORMAT_PROVIDERS` / `StatusLineFormatProvider`; `StatusLineTrackingControls.providerForHarness`, `STATUS_LINE_FORMAT_PROVIDER_BY_HARNESS`; the `provider` prop on `StatusLineFormatEditor`/`StatusLinePreview`; `StatuslineManager.providerForHarness`/`forProvider`; `DashboardSettingsSync.ts:1216` | `StatusLineFormatHarness`, a `harness` prop, `toStatusLineFormatHarness`, … | Consider folding into `STATUS_LINE_HARNESS_IDS` to drop the mapping table. **Keep the string values.** Leave `src/scripts/ctrlyoke-statusline-wrapper.js`'s `STATUSLINE_PROVIDERS` alone, or rename only its local variable (it is a separately shipped script) |
+| `src/utils/StatuslineFormat.ts` `STATUS_LINE_FORMAT_PROVIDERS` / `StatusLineFormatProvider`; `StatusLineTrackingControls.providerForHarness`, `STATUS_LINE_FORMAT_PROVIDER_BY_HARNESS`; the `provider` prop on `StatusLineFormatEditor`/`StatusLinePreview`; `StatuslineManager.providerForHarness`/`forProvider`; `WebviewSettingsSync.ts:1216` | `StatusLineFormatHarness`, a `harness` prop, `toStatusLineFormatHarness`, … | Consider folding into `STATUS_LINE_HARNESS_IDS` to drop the mapping table. **Keep the string values.** Leave `src/scripts/ctrlyoke-statusline-wrapper.js`'s `STATUSLINE_PROVIDERS` alone, or rename only its local variable (it is a separately shipped script) |
 | `src/types/CliOutputTypes.ts` `ProviderModelUsage`                                                                                                                                                                                                                                                                                               | `HarnessModelUsage`                                                         | Type name only. The `modelUsage` field is unchanged                                                                                                                                                                                                             |
 
 Leave `hasExplicitProviderQuotaDetails` (`harnessUsageDisplay.ts`) as it is. It refers to API
@@ -323,7 +326,7 @@ quota providers, which is correct.
 | `src/ui/IDashboardProvider.ts`                                                        | `IDashboardRegistryEvents`, optionally moved to `src/types/`                | Not a VS Code provider. A set of `notifyWorkflow*` calls plus `postMessage`. Its doc names classes that don't exist (`CtrlYokeServer`) or no longer depend on it. Named in `ui.instructions.md:13`                                                                                                                                                                                                                                   |
 | `src/ui/WebviewMessageRouter.ts`, `WebviewSettingsSync.ts`, `WebviewClientContext.ts` | `DashboardMessageRouter`, `DashboardSettingsSync`, `DashboardClientContext` | `DashboardApplication` builds them for both panel and hosted clients. Move `PostMessageFn` and `HarnessStatus` out of `WebviewSettingsSync.ts` (e.g. into `DashboardClientEndpoint.ts`). Named in `ui.instructions.md` and `copilot-instructions.md` (the `routeQueue` paragraph). **Do not** rename `WebviewMessageTypes.ts`: 216 files, an `applyTo` glob, `find-dead-methods.mjs`, and "webview" is the established protocol name |
 | `src/ui/WebviewUserInteractionPort.ts`                                                | `DashboardUserInteractionPort`                                              | One per client, hosted browsers included                                                                                                                                                                                                                                                                                                                                                                                             |
-| `src/ui/notifications/CompletionNotificationFactory.ts`                             | `NotificationEventFactory.ts`, moved to `src/core/notifications/`           | Also builds hook and test notifications. `src/types/IDashboardSink.ts` imports it, so `types` depends on `ui/`. "Completion" clashes with `src/completions/`. Rename `COMPLETION_NOTIFICATION_SEVERITY`/`CompletionNotificationSeverity` → `NOTIFICATION_SEVERITY`/`NotificationSeverity` (symbols only). Delete the `@deprecated CompletionNotificationEvent` alias (last user: `WebPushService.ts`)                                                       |
+| `src/ui/notifications/CompletionNotificationFactory.ts`                               | `NotificationEventFactory.ts`, moved to `src/core/notifications/`           | Also builds hook and test notifications. `src/types/IDashboardSink.ts` imports it, so `types` depends on `ui/`. "Completion" clashes with `src/completions/`. Rename `COMPLETION_NOTIFICATION_SEVERITY`/`CompletionNotificationSeverity` → `NOTIFICATION_SEVERITY` (symbols only). Delete the `@deprecated CompletionNotificationEvent` alias (last user: `WebPushService.ts`)                                                       |
 | `src/ui/WorkflowSerializer.ts`                                                        | `WorkflowLibraryHandlers.ts`                                                | ~40 `handle*` handlers covering save/export, templates, browse dialogs, recents, favorites, history trash and run deletion. Named in `ui.instructions.md` and `test.instructions.md:96`                                                                                                                                                                                                                                              |
 | `src/ui/OutputSnapshotService.ts`                                                     | `OutputCaptureAttachments.ts`                                               | Two functions, not a service, and "snapshot" clashes with `WorkspaceSnapshotService`. Rename `TempFileManager.createOutputSnapshotFile` → `createOutputCaptureFile` with it. **Keep the filename prefix strings**                                                                                                                                                                                                                    |
 | `src/platform/CliAdapter.ts`                                                          | `NodePlatformAdapter.ts`                                                    | Used by the hosted server (`NodeHostServices`) and by `CommitMessageGenerator.ts:509` inside the extension, so it isn't CLI-only. Matches its `Node*` siblings. Fix the stale `PlatformAdapter.ts:9` comment. Keep `ResolvedCliConfig`, which really is CLI-flag config. Named in `cli-binary` and `platform` instructions                                                                                                           |
@@ -351,7 +354,7 @@ instruction-file paragraphs to the file that now covers them.
 
 **Decision (2026-11-09): don't rename the `loop*` contract names. Fix the few names that
 hold the wrong kind of number.** One small commit. It doesn't depend on the other batches.
-Some of the files it names are renamed by Batches 2 and 3 (`StepChipRail`,
+Some of the files it names are renamed by Batches 2 and 3 (`PromptChipRail`,
 `InOutputViewMarker.tsx`). If those batches land first, look up the new names in the ledger.
 
 #### Why the contract names stay
@@ -369,7 +372,7 @@ the wire through to its consumer:
 
 Renaming any of these means a schema bump plus a migration of every timeline file, and users
 get nothing for it. The webview mirrors (`workflowStore.finalStepLoopCount`, the
-`setFinalStepStatus` parameter, the `loopCount` prop on `FinalStepFooter`/`StepChipRail`)
+`setFinalStepStatus` parameter, the `loopCount` prop on `FinalStepFooter`/`PromptChipRail`)
 should keep the contract's name too. A grep for `loopCount` then follows the value from the
 run file all the way to the badge. A different name partway along would break that grep at
 the boundary.
@@ -437,7 +440,7 @@ Each is small enough to ride with the batch that touches the same area.
   says "only manages temp files", but it owns the persistent `.ctrlyoke/attachments/` store.
   The fix is to split out an `AttachmentStore`, which is a design change rather than a rename,
   so it doesn't belong in a mechanical pass. Batch 6a still renames
-  `createOutputCaptureFile` → `createOutputCaptureFile`. If the split is done later, keep the
+  `createOutputSnapshotFile` → `createOutputCaptureFile`. If the split is done later, keep the
   on-disk names. Named in `copilot-instructions.md`, `extension.instructions.md` and
   `utils.instructions.md`.
 

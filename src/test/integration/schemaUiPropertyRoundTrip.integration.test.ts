@@ -703,7 +703,7 @@ suite("Schema -> dashboard property round trip", () => {
 
   /**
    * The matrix above states a contract. This states the user-visible symptom:
-   * the exact payload `PromptEditor.handleUpdate` posts for a script step whose
+   * the exact payload `StepEditor.handleUpdate` posts for a script step whose
    * editable controls are all at their loaded values, against a step a person
    * (or the CLI) hand-authored. Kept concrete so the regression is legible
    * without reading the surface table.
@@ -813,7 +813,7 @@ suite("Schema -> dashboard property round trip", () => {
         ];
       });
 
-      // PromptEditor.handleUpdate, script branch: the user changed nothing.
+      // StepEditor.handleUpdate, script branch: the user changed nothing.
       await harness.routeUpdatePrompt({
         index: 0,
         text: "npm run deploy",

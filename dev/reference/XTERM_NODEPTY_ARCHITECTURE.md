@@ -398,9 +398,9 @@ TerminalInstance ResizeObserver
 | `src/ui/webview-react/components/output/TerminalInstance.tsx` | Mount-point manager for xterm DOM             |
 | `src/ui/webview-react/components/output/TerminalView.tsx`     | Horizontal layout: canvas + session rail      |
 | `src/ui/webview-react/store/terminalStore.ts`                 | Zustand store for session metadata            |
-| `src/ui/webview-react/messaging/terminalMessageHandlers.ts`       | Webview-side message handlers                 |
+| `src/ui/webview-react/messaging/terminalMessageHandlers.ts`   | Webview-side message handlers                 |
 | `src/flightpath/harness/PtyProcessManager.ts`                 | Extension host PTY process manager            |
-| `src/ui/DashboardMessageRouter.ts`                              | Message routing (extension host ↔ webview)    |
+| `src/ui/DashboardMessageRouter.ts`                            | Message routing (extension host ↔ webview)    |
 | `src/ui/DashboardBroadcastHub.ts`                             | Fan-out hub for terminal output to clients    |
 | `src/flightpath/harness/shared/CliTransportCoordinator.ts`    | Spawns interactive PTY, routes I/O            |
 

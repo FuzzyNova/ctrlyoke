@@ -44,9 +44,7 @@ type ContextMenuProps = ContextMenuState & { onClose: () => void };
 
 const DEFAULT_MENU_LABEL = "Context menu";
 
-function isDividerEntry(
-  item: ContextMenuEntry
-): item is ContextMenuDivider {
+function isDividerEntry(item: ContextMenuEntry): item is ContextMenuDivider {
   return "type" in item && item.type === "divider";
 }
 

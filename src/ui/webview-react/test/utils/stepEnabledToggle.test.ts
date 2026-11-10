@@ -8,7 +8,10 @@ import {
 describe("stepEnabledToggle", () => {
   it("clears the enabled flag instead of persisting enabled=true", () => {
     expect(
-      buildWorkflowStepEnabledUpdate({ prompt: "Prompt step", enabled: false }, true)
+      buildWorkflowStepEnabledUpdate(
+        { prompt: "Prompt step", enabled: false },
+        true
+      )
     ).toEqual({
       text: "Prompt step",
       promptName: "",

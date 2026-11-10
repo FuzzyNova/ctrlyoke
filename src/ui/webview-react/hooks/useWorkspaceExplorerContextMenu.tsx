@@ -74,9 +74,7 @@ export function useWorkspaceExplorerContextMenu({
 }: UseWorkspaceExplorerContextMenuOptions) {
   const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
   const buildWorkflowFileMenuItems = useWorkflowFileMenuItems();
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<WorkspaceEntry | null>(
     null
   );
@@ -290,10 +288,7 @@ export function useWorkspaceExplorerContextMenu({
   const explorerContextMenuPortal = (
     <>
       {contextMenu ? (
-        <ContextMenu
-          {...contextMenu}
-          onClose={() => setContextMenu(null)}
-        />
+        <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
       ) : null}
       <WorkspaceFileDeleteConfirmModal
         isOpen={pendingDelete !== null}

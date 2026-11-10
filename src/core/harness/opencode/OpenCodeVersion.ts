@@ -10,7 +10,9 @@ export { isOpenCodeV2Version, OPENCODE_VERSION_COMMAND };
 export type OpenCodeVersionProbe = () => Promise<string | undefined>;
 
 const installedVersionProbe: OpenCodeVersionProbe = () =>
-  HarnessAdapterUtils.getCliVersion(OPENCODE_VERSION_COMMAND, { timeoutMs: 5000 });
+  HarnessAdapterUtils.getCliVersion(OPENCODE_VERSION_COMMAND, {
+    timeoutMs: 5000,
+  });
 
 let versionProbe: OpenCodeVersionProbe = installedVersionProbe;
 

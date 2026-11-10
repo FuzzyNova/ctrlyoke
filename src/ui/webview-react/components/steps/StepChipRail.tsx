@@ -62,9 +62,7 @@ import {
 import { buildStepHoverTooltip } from "@root/utils/TokenFormatting";
 import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
 import type { StepHarnessModel } from "./WorkflowStepRow";
-import {
-  buildWorkflowStepEnabledState,
-} from "@utils/stepEnabledToggle";
+import { buildWorkflowStepEnabledState } from "@utils/stepEnabledToggle";
 import { isScriptWorkflowStep } from "@utils/workflowStepSerialization";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {

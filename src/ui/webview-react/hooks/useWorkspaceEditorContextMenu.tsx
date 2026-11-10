@@ -106,9 +106,7 @@ export function useWorkspaceEditorContextMenu({
   filePath,
 }: UseWorkspaceEditorContextMenuOptions): UseWorkspaceEditorContextMenuResult {
   const buildWorkflowFileMenuItems = useWorkflowFileMenuItems();
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const openContextMenu = useCallback(
     (x: number, y: number, fromTouch = false) => {

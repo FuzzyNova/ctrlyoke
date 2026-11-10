@@ -515,7 +515,10 @@ export class EndConditionHandler {
     }
 
     reportEndConditionEvaluated({
-      harness: SettingsPropertyResolver.resolveHarnessValue(prompt.harness, undefined),
+      harness: SettingsPropertyResolver.resolveHarnessValue(
+        prompt.harness,
+        undefined
+      ),
       result: evaluationResult.errored
         ? "error"
         : evaluationResult.passed
