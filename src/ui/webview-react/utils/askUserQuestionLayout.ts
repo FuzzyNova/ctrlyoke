@@ -22,7 +22,7 @@ export interface AskUserQuestionTextBlock {
   notesRange?: [number, number];
 }
 
-export function buildAskUserQuestionTextBlock(
+function buildAskUserQuestionTextBlock(
   entry: AskUserQuestionEntry
 ): AskUserQuestionTextBlock {
   let text = "";

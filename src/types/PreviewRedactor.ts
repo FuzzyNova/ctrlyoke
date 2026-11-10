@@ -21,7 +21,7 @@ export interface RedactionRule {
 
 export const REDACTION_MARKER = "[REDACTED]";
 
-export const REDACTION_RULES: readonly RedactionRule[] = [
+const REDACTION_RULES: readonly RedactionRule[] = [
   {
     id: "private-key",
     pattern:

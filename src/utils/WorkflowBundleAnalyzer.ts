@@ -41,7 +41,6 @@ export const BUNDLE_GENERATED_STORES = {
 
 export type BundleGeneratedStore =
   (typeof BUNDLE_GENERATED_STORES)[keyof typeof BUNDLE_GENERATED_STORES];
-export type BundleReferenceSyntax = "@" | "selection" | "symbol";
 
 export interface BundleDiagnostic {
   code: string;

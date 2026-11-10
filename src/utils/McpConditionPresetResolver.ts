@@ -7,7 +7,7 @@ import type {
 import type { McpConditionPresetUse } from "./McpToolDefinitions";
 
 /** Maximum size of one caller-provided environment value for a preset. */
-export const MCP_CONDITION_PARAM_MAX_LENGTH = 4096;
+const MCP_CONDITION_PARAM_MAX_LENGTH = 4096;
 
 type ConditionField = "endCondition" | "preCondition";
 

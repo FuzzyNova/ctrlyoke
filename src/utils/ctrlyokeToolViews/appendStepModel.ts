@@ -50,7 +50,7 @@ const APPEND_STEP_DESTINATIONS = {
   QUEUE: "queue",
   ACTIVE_PARALLEL_GROUP: "activeParallelGroup",
 } as const;
-export const APPEND_STEP_DEFAULT_HARNESS_LABEL = "Workflow default";
+const APPEND_STEP_DEFAULT_HARNESS_LABEL = "Workflow default";
 
 type AppendStepDestination =
   (typeof APPEND_STEP_DESTINATIONS)[keyof typeof APPEND_STEP_DESTINATIONS];

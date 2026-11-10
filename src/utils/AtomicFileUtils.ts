@@ -51,7 +51,7 @@ const TRANSIENT_SHARING_CODES = new Set<string>([
  * this module exists for, short enough that a genuinely denied write surfaces
  * while the user is still looking at what triggered it.
  */
-export const DEFAULT_RENAME_BUDGET_MS = 500;
+const DEFAULT_RENAME_BUDGET_MS = 500;
 
 /**
  * Window for a write whose failure aborts a running workflow.

@@ -177,7 +177,7 @@ type PendingDropTarget =
       itemIndex: number;
     };
 
-export function resolvePendingDropTarget(
+function resolvePendingDropTarget(
   state: PendingDragState,
   overId: string
 ): PendingDropTarget | undefined {
@@ -231,7 +231,7 @@ export function resolvePendingDropTarget(
  * the group closes, and `WorkflowExecutor.broadcastProgress` publishes that
  * index rather than a count of settled steps.
  */
-export function straddlingParallelGroup(
+function straddlingParallelGroup(
   currentStep: number,
   parallelGroups: readonly ParallelGroupDefinition[]
 ): ParallelGroupDefinition | undefined {

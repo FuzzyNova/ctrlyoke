@@ -32,7 +32,7 @@ import { Icon } from "../shared/Icon";
  */
 export const FILE_BROWSER_GRID_TEMPLATE =
   "1.25rem minmax(0, 1fr) clamp(6.25rem, 22%, 7.5rem)";
-export const FILE_BROWSER_GRID_TEMPLATE_NARROW =
+const FILE_BROWSER_GRID_TEMPLATE_NARROW =
   "1.25rem minmax(0, 1fr) clamp(3.5rem, 24%, 4.5rem)";
 
 /**

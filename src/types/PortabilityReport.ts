@@ -156,7 +156,7 @@ export function buildPortabilityReport({
 }
 
 /** Stable identity for a compatibility finding; message text is excluded. */
-export function getPortabilityDiagnosticIdentity(
+function getPortabilityDiagnosticIdentity(
   diagnostic: CompatibilityDiagnostic
 ): string {
   return JSON.stringify([

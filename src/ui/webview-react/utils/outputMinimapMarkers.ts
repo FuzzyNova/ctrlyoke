@@ -13,7 +13,7 @@
  */
 
 /** Painted (and clickable) height of a single step's pill, in rail pixels. */
-export const OUTPUT_MINIMAP_PILL_PX = 4;
+const OUTPUT_MINIMAP_PILL_PX = 4;
 /**
  * Minimum painted height of a marker holding several steps, so a group whose
  * members sit on almost the same pixel still reads as fatter than one pill.

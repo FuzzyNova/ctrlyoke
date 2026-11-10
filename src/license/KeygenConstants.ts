@@ -1,4 +1,7 @@
-/** Public Keygen identifiers shared by the extension and the landing site. */
+/**
+ * Public Keygen identifiers shared by the extension and the landing site.
+ * @public `KEYGEN_ACCOUNT_ID` is imported by `netlify/functions/keygen-webhook.ts`.
+ */
 export const KEYGEN_ACCOUNT_ID = "6ed6209c-6633-4444-9d43-ab4a473e2f28";
 export const KEYGEN_PRODUCT_ID = "f4af3c3b-4350-4a6e-af09-744797abb4b0";
 export const KEYGEN_PRO_POLICY_ID = "da0764ce-6577-419a-862d-128efdbfc329";

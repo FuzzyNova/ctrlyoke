@@ -20,7 +20,7 @@ import {
  * prompt and the CLI's `run` gate / `trust-workspace-settings` command.
  * `configService` must already have this workspace's backend set.
  */
-export async function getWorkspaceSettingsTrustStates(
+async function getWorkspaceSettingsTrustStates(
   workspaceRoot: string,
   registry: Pick<
     McpRegistryFileManager,
@@ -40,20 +40,11 @@ export async function getWorkspaceSettingsTrustStates(
   });
 }
 
-/** Requests this workspace makes that the user has never decided on. */
-export async function getPendingWorkspaceSettingsTrustRequests(
-  workspaceRoot: string
-): Promise<WorkspaceSensitiveSettingRequest[]> {
-  return (await getWorkspaceSettingsTrustStates(workspaceRoot))
-    .filter((state) => state.decision === undefined)
-    .map((state) => state.request);
-}
-
 /**
  * Record decisions for this workspace, then notify settings subscribers so
  * the dashboard re-reads the now (un)withheld values.
  */
-export async function recordWorkspaceSettingsTrustDecisions(
+async function recordWorkspaceSettingsTrustDecisions(
   workspaceRoot: string,
   approved: readonly WorkspaceSensitiveSettingRequest[],
   denied: readonly WorkspaceSensitiveSettingRequest[],

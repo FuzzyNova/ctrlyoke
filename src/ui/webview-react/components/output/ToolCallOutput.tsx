@@ -5,8 +5,8 @@
  * events (edit / write / read / delete) are handled by FileOperationOutput.tsx.
  * The diff renderer lives in TextDiffView.tsx.
  *
- * Re-exports from FileOperationOutput and TextDiffView are preserved for
- * backward compatibility with existing consumers.
+ * Re-exports from FileOperationOutput are preserved for backward
+ * compatibility with existing consumers.
  */
 import React, { useId, useState } from "react";
 import { extractKeyParameters } from "@utils/outputUtils";
@@ -25,7 +25,6 @@ import {
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
 import { CollapsibleOutputSection } from "./CollapsibleOutputSection";
 import { ToolDot } from "./ToolDot";
-export { ToolDot } from "./ToolDot";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 import type { ToolResult, WebSearchData } from "../../types/cliEvents";
@@ -47,7 +46,6 @@ export {
   FileReadOutput,
   FileDeleteOutput,
 } from "./FileOperationOutput";
-export { TextDiffView } from "@components/diff/TextDiffView";
 
 // ── Status helper ─────────────────────────────────────────────────────────────
 

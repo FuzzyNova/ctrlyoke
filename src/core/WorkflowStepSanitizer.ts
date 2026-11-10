@@ -125,7 +125,7 @@ export function buildDefinitionSnapshot(
  * stripped down to one (`originalFile`, `workflowName`, `startedAt`, `_runtime`
  * and the other working-file-only fields are dropped).
  */
-export const AUTHORED_WORKFLOW_FIELDS = [
+const AUTHORED_WORKFLOW_FIELDS = [
   PROMPT_PROPERTIES.PROMPT,
   PROMPT_PROPERTIES.STEPS,
   PROMPT_PROPERTIES.FINAL_STEP,
@@ -139,7 +139,7 @@ export const AUTHORED_WORKFLOW_FIELDS = [
  * fields absent from a step are skipped). Anything missing from this list is
  * silently dropped on save.
  */
-export const AUTHORED_STEP_FIELDS = [
+const AUTHORED_STEP_FIELDS = [
   PROMPT_PROPERTIES.NAME,
   PROMPT_PROPERTIES.ENABLED,
   PROMPT_PROPERTIES.COLOR,

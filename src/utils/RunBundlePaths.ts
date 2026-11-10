@@ -25,7 +25,7 @@ import { escapeRegExp } from "./TextUtils";
 /** Stands in for the exporting workspace root inside a bundle. */
 export const BUNDLE_WORKSPACE_TOKEN = "${workspaceFolder}";
 /** Stands in for the exporter's home directory inside a bundle. */
-export const BUNDLE_HOME_TOKEN = "~";
+const BUNDLE_HOME_TOKEN = "~";
 
 /** One or more separators; a doubled `\\` is JSON nested inside a string. */
 const SEPARATOR = String.raw`[\\/]+`;
@@ -110,7 +110,7 @@ export function createPortablePathRewriter(
 }
 
 /** Replaces the home folder's name where a home path survived without its separators. */
-export const BUNDLE_USER_TOKEN = "<user>";
+const BUNDLE_USER_TOKEN = "<user>";
 
 /** Matches `value` in any letter case without the `i` flag, which would also fold the lookahead. */
 function anyCase(value: string): string {

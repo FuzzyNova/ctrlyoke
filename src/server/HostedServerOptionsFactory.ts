@@ -69,9 +69,7 @@ export function createHostedServerOptions(
   };
 }
 
-export function notifyRemoteAccessBlocked(
-  sink: UserFeedbackSink | undefined
-): void {
+function notifyRemoteAccessBlocked(sink: UserFeedbackSink | undefined): void {
   notifyUserFeedback(
     sink,
     USER_FEEDBACK_SEVERITY.WARNING,

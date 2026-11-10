@@ -17,7 +17,7 @@ import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { isExecutionOwnerState } from "./WorkflowInstanceRegistry";
 
 /** How long the status bar shows a completed run before returning to idle. */
-export const RECENT_COMPLETION_DISPLAY_MS = 5000;
+const RECENT_COMPLETION_DISPLAY_MS = 5000;
 
 /** The summary fields the tracker reads from a workflow instance. */
 export type WorkflowActivitySource = Pick<

@@ -63,7 +63,7 @@ export class HistorySearchMatcherCancelledError extends Error {
   }
 }
 
-export const REGEX_MATCH_TIMEOUT_MS = 1000;
+const REGEX_MATCH_TIMEOUT_MS = 1000;
 
 export const HISTORY_SEARCH_MATCHER_MESSAGE_TYPES = {
   INIT: "init",
@@ -247,7 +247,7 @@ class HistorySearchMatcherWorkerClient {
   }
 }
 
-export class SubstringHistorySearchMatcher implements HistorySearchMatcher {
+class SubstringHistorySearchMatcher implements HistorySearchMatcher {
   readonly requiredLiteral: string;
   private readonly loweredQuery: string;
 

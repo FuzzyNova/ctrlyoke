@@ -43,7 +43,7 @@ import { wrappedTextLines } from "./shared";
 export const CTRLYOKE_TOOL_HEADING_SEPARATOR = " · ";
 
 /** Header text for a ctrlyoke tool view: the tool the agent called, then what it returned. */
-export function ctrlYokeToolHeading(tool: string, summary: string): string {
+function ctrlYokeToolHeading(tool: string, summary: string): string {
   return `${tool}${CTRLYOKE_TOOL_HEADING_SEPARATOR}${summary}`;
 }
 

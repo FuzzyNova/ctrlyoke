@@ -1,4 +1,4 @@
-export const SENT_PROMPT_HEADER = "Prompt sent to running terminal:";
+const SENT_PROMPT_HEADER = "Prompt sent to running terminal:";
 
 /**
  * A command row split into its static header (only for prompts written into a

@@ -98,9 +98,7 @@ export function needsRiskAcknowledgement(
 }
 
 /** Whether every audit provider passed the skill; unaudited does not count. */
-export function hasPassedAudits(
-  audit: RegistrySkillAuditState | undefined
-): boolean {
+function hasPassedAudits(audit: RegistrySkillAuditState | undefined): boolean {
   return Boolean(audit && !audit.loading) && !needsRiskAcknowledgement(audit);
 }
 

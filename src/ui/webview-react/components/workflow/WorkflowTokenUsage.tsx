@@ -41,7 +41,7 @@ export function hasWorkflowTokenUsage(
 }
 
 /** Builds the usage tooltip shared by all workflow and run rows. */
-export function workflowTokenTotalsTooltip(
+function workflowTokenTotalsTooltip(
   totals: WorkflowTokenTotals | undefined
 ): string | undefined {
   const accessibleLabel = workflowTokenTotalsAccessibleLabel(totals);

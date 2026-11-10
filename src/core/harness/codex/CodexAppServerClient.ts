@@ -13,7 +13,7 @@ import {
   type StdioProbeSpawn,
 } from "../shared/StdioProbe";
 
-export const CODEX_APP_SERVER_PROBE_TIMEOUT_MS = 5_000;
+const CODEX_APP_SERVER_PROBE_TIMEOUT_MS = 5_000;
 
 /** Codex app-server `account.type` value for a ChatGPT-authenticated session. */
 const CODEX_ACCOUNT_TYPE_CHATGPT = "chatgpt";

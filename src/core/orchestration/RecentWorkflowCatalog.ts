@@ -32,7 +32,7 @@ import type { OutputHistoryManager } from "./OutputHistoryManager";
 import type { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 /** Delay that coalesces a burst of state changes into one row rebuild. */
-export const RECENT_WORKFLOW_PUBLISH_DELAY_MS = 150;
+const RECENT_WORKFLOW_PUBLISH_DELAY_MS = 150;
 
 let lastRecentWorkflowsSequence = 0;
 

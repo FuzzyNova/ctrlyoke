@@ -33,7 +33,7 @@ export const SCM_GRAPH_TRUNK_COLOR_CLASS = {
 } as const;
 
 /** The commit graph's rotating branch palette (VS Code's scmGraph.foreground1-5). */
-export const SCM_GRAPH_BRANCH_COLOR_CLASSES = [
+const SCM_GRAPH_BRANCH_COLOR_CLASSES = [
   "text-scm-graph-fg1",
   "text-scm-graph-fg2",
   "text-scm-graph-fg3",

@@ -404,7 +404,7 @@ export const MCP_STEP_UPDATE_FIELDS = Object.keys(
 ) as (keyof McpStepUpdateArguments)[];
 
 /** Fields edit_step may clear; condition preset references are intentionally excluded. */
-export const MCP_STEP_CLEARABLE_FIELDS = MCP_STEP_UPDATE_FIELDS.filter(
+const MCP_STEP_CLEARABLE_FIELDS = MCP_STEP_UPDATE_FIELDS.filter(
   (field) => !(MCP_CONDITION_PRESET_FIELDS as readonly string[]).includes(field)
 );
 

@@ -137,52 +137,6 @@ export async function confirmExternalFileTrust(
   }
 }
 
-/**
- * One-time batch approval for a workspace's requested external file roots
- * (`permissions.trustedExternalRoots` at workspace scope). Shows a
- * single scrollable, reviewable dashboard modal — never one popup per root — listing
- * every root that has no recorded decision yet for this workspace identity.
- * Each item defaults checked ("Trust"); unchecking an item before confirming
- * records a "deny" for it instead. Dismissing the modal records no
- * decision at all, so the user is asked again next time. Requires VS Code
- * Workspace Trust first — untrusted workspaces are skipped entirely and
- * retried once trust is granted (see the `onDidGrantWorkspaceTrust` listener
- * in `extension.ts`). See
- * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md ("Additional Decisions
- * (2026-07-13)").
- */
-export async function promptBatchApprovalForPendingWorkspaceExternalRoots(
-  workspaceRoot: string,
-  port: UserInteractionPort = new NullUserInteractionPort(),
-  store: Pick<
-    ExternalRootsTrustStore,
-    "getApprovedRoots" | "getPendingRoots" | "setDecisions"
-  > = externalRootsTrustStore,
-  isWorkspaceTrusted: () => boolean = () => true
-): Promise<void> {
-  if (!isWorkspaceTrusted()) {
-    return;
-  }
-
-  const workspaceIdentity =
-    ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-  const pendingRoots = ConfigurationUtils.getPendingWorkspaceExternalFileRoots(
-    workspaceIdentity,
-    store
-  );
-  if (pendingRoots.length === 0) {
-    return;
-  }
-
-  await promptBatchApprovalForPendingRoots(
-    workspaceIdentity,
-    pendingRoots,
-    `This workspace requests ${pendingRoots.length} external file root(s)`,
-    port,
-    store
-  );
-}
-
 export async function promptBatchApprovalForPendingWorkflowExternalRoots(
   workspaceRoot: string,
   workflowSourcePath: string,

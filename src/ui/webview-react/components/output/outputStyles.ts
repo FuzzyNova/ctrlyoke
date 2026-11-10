@@ -36,7 +36,7 @@ export const OUTPUT_BLOCK_BASE = `${OUTPUT_BLOCK_CHROME} my-(--spacing-sm)`;
 export const OUTPUT_STEP_LEAD_BLOCK_BASE = `${OUTPUT_BLOCK_CHROME} mt-(--cy-output-step-lead-gap) mb-(--spacing-sm)`;
 
 /** Width of the per-row step identity bar painted by `getStepIdentityBarStyle`. */
-export const STEP_IDENTITY_BAR_WIDTH_PX = 2;
+const STEP_IDENTITY_BAR_WIDTH_PX = 2;
 
 /**
  * Gap between the pane's true left edge and the start of the identity bar.
@@ -51,7 +51,7 @@ export const STEP_IDENTITY_BAR_WIDTH_PX = 2;
  * instead, since `StatusMessage` paints its own severity border and needs
  * clearance so that border doesn't sit flush against the identity bar.
  */
-export const STEP_IDENTITY_BAR_OFFSET_PX = 1;
+const STEP_IDENTITY_BAR_OFFSET_PX = 1;
 
 /**
  * Background for a row's step identity bar.

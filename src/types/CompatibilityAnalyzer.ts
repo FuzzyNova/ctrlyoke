@@ -292,9 +292,7 @@ export function analyzeCompatibility({
  * such as CLI validation and the React analyzer. Runtime execution replaces
  * this with the prompt preparer's resolved full-file attachment list.
  */
-export function getPromptImageFileRefs(
-  prompt: string
-): readonly string[] | undefined {
+function getPromptImageFileRefs(prompt: string): readonly string[] | undefined {
   const imageFileRefs = parseAllFileReferences(prompt)
     .filter(
       (reference) =>

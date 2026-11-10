@@ -49,7 +49,7 @@ export type OpenCodeMcpServer =
 export type OpenCodeMcpEntries = Record<string, OpenCodeMcpServer>;
 
 export const OPENCODE_INLINE_CONFIG_MAX_BYTES = 32 * 1024;
-export const OPENCODE_CONFIG_SUBSTITUTION_PATTERN = /\{(?:env|file):/iu;
+const OPENCODE_CONFIG_SUBSTITUTION_PATTERN = /\{(?:env|file):/iu;
 
 /** Permission keys from the user config layers below OPENCODE_CONFIG_CONTENT. */
 export interface OpenCodePermissionCollisionContext {

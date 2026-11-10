@@ -35,7 +35,7 @@ import {
 import { migrateToCurrent } from "./FormatMigrations";
 import { hasErrnoCode } from "./ErrorUtils";
 
-export const PROJECT_METADATA_FILE_NAME = "project.json";
+const PROJECT_METADATA_FILE_NAME = "project.json";
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 const REGISTRY_LOCK_NAME = ".registry";
@@ -175,7 +175,7 @@ async function registerUserProject(
 }
 
 /** Resolve the private project-state directory used by user-scoped history. */
-export function userProjectStatesRoot(): string {
+function userProjectStatesRoot(): string {
   return userProjectsRoot();
 }
 

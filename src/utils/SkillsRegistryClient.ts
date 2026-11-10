@@ -38,7 +38,7 @@ import topSkillsSnapshotData from "./generated/skillsShTopSkills.json";
 type FetchFn = typeof fetch;
 
 /** Dev override for the skills.sh base URL, like the CLI's `SKILLS_API_URL`. */
-export const SKILLS_API_URL_ENV = "CTRLYOKE_SKILLS_API_URL";
+const SKILLS_API_URL_ENV = "CTRLYOKE_SKILLS_API_URL";
 
 const GITHUB_API_URL = "https://api.github.com";
 const GITHUB_RAW_URL = "https://raw.githubusercontent.com";
@@ -48,9 +48,9 @@ const USER_AGENT = "ctrlyoke-skills-registry";
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /** The most results one search asks skills.sh for. */
-export const SKILLS_SEARCH_LIMIT = 50;
+const SKILLS_SEARCH_LIMIT = 50;
 /** skills.sh rejects shorter queries with HTTP 400. */
-export const SKILLS_SEARCH_MIN_QUERY_LENGTH = 2;
+const SKILLS_SEARCH_MIN_QUERY_LENGTH = 2;
 
 /** SKILL.md files whose frontmatter may be read to match a slug. */
 /** Safety bound for unusually large repositories; the UI reports when reached. */
@@ -194,7 +194,7 @@ export function sanitizeRegistryText(
   return clean.length > maxLength ? `${clean.slice(0, maxLength - 1)}…` : clean;
 }
 
-export function isValidSkillSource(source: string): boolean {
+function isValidSkillSource(source: string): boolean {
   return (
     SOURCE_PATTERN.test(source) &&
     source.split("/").every((part) => part !== "." && part !== "..")
@@ -202,7 +202,7 @@ export function isValidSkillSource(source: string): boolean {
 }
 
 /** A slug safe to use as a folder name: no separators, not `.`/`..`. */
-export function isValidSkillSlug(slug: string): boolean {
+function isValidSkillSlug(slug: string): boolean {
   return (
     SLUG_PATTERN.test(slug) &&
     slug.length <= MAX_NAME_LENGTH &&
@@ -359,7 +359,7 @@ interface CachedGitTree {
 }
 
 /** Parse a GitHub `git/trees?recursive=1` body. */
-export function parseGitTreeResponse(data: unknown): GitTreeEntry[] {
+function parseGitTreeResponse(data: unknown): GitTreeEntry[] {
   if (!isPlainObject(data) || !Array.isArray(data.tree)) {
     throw new SkillsRegistryError(
       `${REGISTRY_SERVICES.GITHUB} returned an unexpected repository tree`

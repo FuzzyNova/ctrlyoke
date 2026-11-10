@@ -128,7 +128,7 @@ export function workflowStatusStepName(step: WorkflowStatusStep): string {
   );
 }
 
-export function workflowStatusStepText(step: WorkflowStatusStep): string {
+function workflowStatusStepText(step: WorkflowStatusStep): string {
   return step.type === STEP_TYPES.SCRIPT
     ? (step.script ?? "")
     : (step.prompt ?? "");

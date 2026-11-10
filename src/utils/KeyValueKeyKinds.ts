@@ -37,7 +37,7 @@ export function getVariableKeyErrors(keys: readonly string[]): string[] {
 }
 
 /** Return the parser/editor diagnostic for a case-insensitive variable collision. */
-export function getVariableCaseCollisionError(key: string): string {
+function getVariableCaseCollisionError(key: string): string {
   return `Variable names must not differ only by case ("${key}")`;
 }
 

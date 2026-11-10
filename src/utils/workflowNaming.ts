@@ -7,7 +7,7 @@
  */
 
 /** Name used when a draft yields no usable words. */
-export const EPHEMERAL_PROMPT_WORKFLOW_NAME = "Ephemeral Prompt";
+const EPHEMERAL_PROMPT_WORKFLOW_NAME = "Ephemeral Prompt";
 
 /** How many leading words of a draft become the derived workflow name. */
 const WORKFLOW_NAME_WORD_COUNT = 5;

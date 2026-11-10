@@ -60,7 +60,7 @@ export function getProtectedFailureIndices(
   }).indices;
 }
 
-export function hasTerminalStepRuntime(step: WorkflowStep): boolean {
+function hasTerminalStepRuntime(step: WorkflowStep): boolean {
   return step._runtime?.completedAt !== undefined;
 }
 

@@ -203,8 +203,6 @@ interface CodeMirrorEditorProps {
   onFocusApplied?: (nonce: number) => void;
 }
 
-export type { ContextReferenceValidationResult };
-
 interface PendingPlaceholder {
   documentKey?: string;
   from: number;
@@ -2571,7 +2569,7 @@ export function createConditionOutputLintExtension(
 }
 
 /** Warn about harness shell escapes in prompt text and offer dashboard fixes. */
-export function createHarnessShellEscapeLintExtension(
+function createHarnessShellEscapeLintExtension(
   modeRef: React.RefObject<CodeMirrorEditorMode>,
   convertToScriptRef?: React.RefObject<((command: string) => void) | undefined>
 ) {
@@ -2712,7 +2710,7 @@ function findChipRange(
  * menu opens and re-checked when an item runs, so an edit that lands while the
  * menu is open can't make Send as Plain Text wrap the wrong text.
  */
-export function buildEditorReferenceChipMenuItems(
+function buildEditorReferenceChipMenuItems(
   chip: HTMLElement,
   view: EditorView,
   openLink: (target: HTMLElement, view: EditorView) => boolean

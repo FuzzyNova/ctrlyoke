@@ -10,7 +10,7 @@
  * between pieces cannot split a word or sentence. Without it, consecutive
  * messages run together ("...in the trash.All of these...").
  */
-export const RESPONSE_TEXT_SEPARATOR = "\n\n";
+const RESPONSE_TEXT_SEPARATOR = "\n\n";
 
 /**
  * Append `addition` to `existing`, inserting {@link RESPONSE_TEXT_SEPARATOR}

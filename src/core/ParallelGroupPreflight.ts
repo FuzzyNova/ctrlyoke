@@ -109,7 +109,7 @@ export interface ParallelGroupMemberPreflightOptions extends ParallelGroupPrefli
   readonly reservedMembers?: readonly ParallelGroupPreflightMember[];
 }
 
-export class ParallelGroupPreflightError extends Error {
+class ParallelGroupPreflightError extends Error {
   constructor(readonly result: ParallelGroupPreflightResult) {
     super(formatParallelGroupPreflightFailure(result));
     this.name = "ParallelGroupPreflightError";
@@ -402,7 +402,7 @@ export async function preflightParallelGroup(
   };
 }
 
-export function formatParallelGroupPreflightFailure(
+function formatParallelGroupPreflightFailure(
   result: ParallelGroupPreflightResult
 ): string {
   return [

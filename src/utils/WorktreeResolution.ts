@@ -2,7 +2,6 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import {
   WORKTREE_CONFIG_ORIGINS,
   WORKTREE_MODES,
-  type WorktreeMode,
 } from "../types/DashboardConstants";
 import type {
   WorktreeConfig,
@@ -114,8 +113,4 @@ export async function resolveWorktreeForWorkspace(
     origin: selection.origin,
     notice: `Configured worktree default did not apply: ${reason}`,
   };
-}
-
-export function isWorktreeMode(value: WorktreeMode): boolean {
-  return value === WORKTREE_MODES.MANAGED || value === WORKTREE_MODES.NAMED;
 }

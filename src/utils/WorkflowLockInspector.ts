@@ -342,5 +342,3 @@ export async function readWorkflowLockOwnershipInspection(
   const lock = await readWorkflowLock(workspaceRoot, workflowKey);
   return inspectWorkflowLockOwnership(lock, observer, options);
 }
-
-export { isProcessAlive } from "./LockSafetyPrimitives";

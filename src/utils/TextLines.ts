@@ -34,7 +34,7 @@ import * as fs from "fs";
  * Matches a line break and nothing else: CRLF, a lone CR, or a lone LF. Never
  * U+2028/U+2029. Identical to `DefaultSplit` in `@codemirror/state`.
  */
-export const LINE_BREAK_PATTERN = /\r\n?|\n/;
+const LINE_BREAK_PATTERN = /\r\n?|\n/;
 
 const CARRIAGE_RETURN = "\r";
 

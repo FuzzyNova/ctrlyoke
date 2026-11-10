@@ -1,7 +1,7 @@
 import React from "react";
 
 /** Small all-caps link styling for a field action sitting right-aligned on the field's label row. */
-export const LABEL_ACTION_LINK_CLASS =
+const LABEL_ACTION_LINK_CLASS =
   "text-xxs font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors bg-transparent border-0 p-0";
 
 /** Muted all-caps text that shares a label row with a {@link LabelActionLink}. */

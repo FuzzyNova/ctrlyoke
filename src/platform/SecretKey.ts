@@ -54,7 +54,7 @@ export function userSecretMetadataKey(name: string): string {
 }
 
 /** Build a workspace-scoped metadata key from the stable workspace hash. */
-export function workspaceSecretMetadataKey(
+function workspaceSecretMetadataKey(
   workspaceHash: string,
   name: string
 ): string {

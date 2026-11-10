@@ -14,7 +14,7 @@ import { RunReplaySession } from "./RunReplaySession";
  *
  * The media capture host sets these (media/lib/devHost.ts).
  */
-export const RUN_REPLAY_ENV = {
+const RUN_REPLAY_ENV = {
   /** The run bundle directory to replay. */
   BUNDLE: "CTRLYOKE_DEV_REPLAY",
   /** Multiplies recorded timing (default 1); 0 jumps straight to the end state. */

@@ -99,9 +99,7 @@ export class UnapprovedSecretGrantsError extends Error {
   }
 }
 
-export function formatUnapprovedSecretGrantError(
-  names: readonly string[]
-): string {
+function formatUnapprovedSecretGrantError(names: readonly string[]): string {
   return names
     .map(
       (name) =>

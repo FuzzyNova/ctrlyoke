@@ -30,7 +30,7 @@ import type {
   StepReorderOptions,
 } from "./StepCommandDefinitions";
 
-export const CLI_STEP_MUTATION_JSON_SCHEMA_VERSION = 1 as const;
+const CLI_STEP_MUTATION_JSON_SCHEMA_VERSION = 1 as const;
 
 const STEP_MUTATION_OPERATIONS = {
   EDIT: "edit",

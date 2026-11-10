@@ -1,7 +1,4 @@
-import {
-  LANGUAGE_SERVER_INSTALL_KINDS,
-  type LanguageServerInstallKind,
-} from "../../types/DashboardConstants";
+import { LANGUAGE_SERVER_INSTALL_KINDS } from "../../types/DashboardConstants";
 
 export interface LanguageServerNpmInstallRecipe {
   kind: typeof LANGUAGE_SERVER_INSTALL_KINDS.NPM;
@@ -385,5 +382,3 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
     install: npmInstall(["@docker/language-server"], "docker-language-server"),
   },
 ];
-
-export type { LanguageServerInstallKind };

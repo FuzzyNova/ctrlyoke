@@ -137,7 +137,7 @@ export function analyzeCliCompatibility(
   };
 }
 
-export function isCliValidationFailure(
+function isCliValidationFailure(
   diagnostic: CompatibilityDiagnostic,
   strictPolicy?: CliValidateStrictPolicy
 ): boolean {

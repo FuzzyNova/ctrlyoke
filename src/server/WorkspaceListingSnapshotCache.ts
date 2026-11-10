@@ -5,14 +5,13 @@ import type {
 } from "../types/HostedWorkspaceViewerTypes";
 
 /** Default idle lifetime for an immutable workspace directory listing. */
-export const WORKSPACE_LISTING_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const WORKSPACE_LISTING_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
 
 /** Maximum number of listing snapshots retained by one hosted server. */
-export const WORKSPACE_LISTING_SNAPSHOT_MAX_COUNT = 32;
+const WORKSPACE_LISTING_SNAPSHOT_MAX_COUNT = 32;
 
 /** Soft aggregate target for retained listing metadata. */
-export const WORKSPACE_LISTING_SNAPSHOT_MAX_ESTIMATED_METADATA_BYTES =
-  8 * 1024 * 1024;
+const WORKSPACE_LISTING_SNAPSHOT_MAX_ESTIMATED_METADATA_BYTES = 8 * 1024 * 1024;
 
 export interface WorkspaceEntryMetadata {
   size?: number;

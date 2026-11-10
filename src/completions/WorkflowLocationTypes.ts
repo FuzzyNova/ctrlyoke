@@ -120,7 +120,7 @@ export function valueAt(root: unknown, path: WorkflowPath): unknown {
 }
 
 /** How many leading segments address a step (0 = the workflow root itself). */
-export function stepPrefixLength(path: WorkflowPath): number {
+function stepPrefixLength(path: WorkflowPath): number {
   if (path[0] === PROMPT_PROPERTIES.FINAL_STEP) return 1;
   if (path[0] === PROMPT_PROPERTIES.STEPS && typeof path[1] === "number") {
     return path[2] === PROMPT_PROPERTIES.PARALLEL && typeof path[3] === "number"
@@ -190,10 +190,7 @@ export function classifyWorkflowObject(
 }
 
 /** Keys of the object at `objectPath`, for `siblingKeys`. */
-export function getObjectKeys(
-  objectPath: WorkflowPath,
-  root: unknown
-): string[] {
+function getObjectKeys(objectPath: WorkflowPath, root: unknown): string[] {
   const node = valueAt(root, objectPath);
   return isRecord(node) ? Object.keys(node) : [];
 }

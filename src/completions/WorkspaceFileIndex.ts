@@ -141,7 +141,7 @@ const CHANGE_BATCH_MS = 200;
 const REBUILD_STALE_MS = 5 * 60_000;
 /** How often the initial walk publishes what it has found so far. */
 const BUILD_PROGRESS_MS = 250;
-export const FILE_INDEX_WORKER_HEAP_MB = 2048;
+const FILE_INDEX_WORKER_HEAP_MB = 2048;
 /**
  * Share of the heap one store may fill with walked paths. A rebuild holds the
  * old store and its replacement at once, plus the walk's own lists, so two

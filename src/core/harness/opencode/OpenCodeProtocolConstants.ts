@@ -141,7 +141,7 @@ export const OPENCODE_V2_CONTENT_TYPES = {
 } as const;
 
 /** First OpenCode release with the V2 CLI, plugin API and server. */
-export const OPENCODE_V2_MIN_VERSION = "2.0.0";
+const OPENCODE_V2_MIN_VERSION = "2.0.0";
 
 /** `opencode --version`: `1.19.5` on OpenCode 1, `opencode v2.2.5` on OpenCode 2. */
 export const OPENCODE_VERSION_COMMAND = "opencode --version";

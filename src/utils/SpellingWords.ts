@@ -4,7 +4,7 @@
  * `spelling.words` item constraints in `schemas/settings-schema.json`.
  */
 
-export const SPELLING_WORD_MAX_LENGTH = 64;
+const SPELLING_WORD_MAX_LENGTH = 64;
 
 /** Why a candidate custom word was rejected, or `null` when it is valid. */
 export function getSpellingWordError(word: string): string | null {

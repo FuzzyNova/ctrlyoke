@@ -9,7 +9,7 @@ let frozenLocation: RunHistoryLocation | undefined;
  * the whole message, because the trailing location varies — see
  * {@link isRunHistoryLocationFrozenError}.
  */
-export const RUN_HISTORY_LOCATION_FROZEN_ERROR_PREFIX =
+const RUN_HISTORY_LOCATION_FROZEN_ERROR_PREFIX =
   "Run history location is already frozen";
 
 /** Freeze the process-wide run-history location after configuration bootstrap. */

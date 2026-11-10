@@ -1441,7 +1441,7 @@ const HISTORY_SEARCH_DEFAULT_LIMIT = 20;
 const HISTORY_SEARCH_MAX_LIMIT = 100;
 const HISTORY_SEARCH_DEFAULT_SNIPPET_CHARS = 100;
 const HISTORY_SEARCH_MIN_QUERY_LENGTH = 2;
-export const CLI_HISTORY_SEARCH_JSON_SCHEMA_VERSION = 1 as const;
+const CLI_HISTORY_SEARCH_JSON_SCHEMA_VERSION = 1 as const;
 
 export async function searchHistoryCommand(
   query: string,

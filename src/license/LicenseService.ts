@@ -17,18 +17,12 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 import { LICENSE_SOURCES, type LicenseSource } from "./LicenseSources";
 
 export {
-  CHECKOUT_ELIGIBLE_VALIDATION_CODES,
-  KEYGEN_ACCOUNT_ID,
   KEYGEN_ACCOUNT_PUBLIC_KEY_HEX,
   KEYGEN_API_BASE_URL,
   KEYGEN_ENTERPRISE_POLICY_ID,
   KEYGEN_PRODUCT_ID,
   KEYGEN_PRO_POLICY_ID,
-  KEYGEN_VALID_POLICY_IDS,
-  LICENSE_CERTIFICATE_BEGIN,
-  LICENSE_CERTIFICATE_END,
   LICENSE_FILE_TTL_MS,
-  LICENSE_VALIDATION_CODES,
 } from "./KeygenConstants";
 
 /** Secret-store keys used by the licensing service. */
@@ -40,13 +34,13 @@ export const LICENSE_MACHINE_ID_SECRET_KEY = "ctrlyoke.pro.machine-id";
 export const LICENSE_MACHINE_FINGERPRINT_SECRET_KEY =
   "ctrlyoke.pro.machine-fingerprint";
 
-export const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
-export const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
-export const REMOTE_ACCESS_TRIAL_MS = 14 * 24 * 60 * 60 * 1000;
+const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
+const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
+const REMOTE_ACCESS_TRIAL_MS = 14 * 24 * 60 * 60 * 1000;
 export const REMOTE_ACCESS_TRIAL_START_KEY =
   "ctrlyoke.remoteAccessTrialStartedAt";
 /** Allow normal client/server clock skew without weakening the file TTL. */
-export const LICENSE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const LICENSE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 /** Background refresh cadence for long-lived extension hosts. */
 export const LICENSE_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** Initial retry delay after a failed refresh within the TTL window. */

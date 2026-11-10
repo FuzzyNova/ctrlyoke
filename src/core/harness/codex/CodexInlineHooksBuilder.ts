@@ -179,7 +179,7 @@ export function canonicalizeJson(value: unknown): unknown {
     }, {});
 }
 
-export function toInlineTomlValue(value: unknown): string {
+function toInlineTomlValue(value: unknown): string {
   if (typeof value === "string") {
     return quoteTomlBasicString(value);
   }
@@ -213,7 +213,7 @@ export function toInlineTomlValue(value: unknown): string {
   return `{ ${entries} }`;
 }
 
-export function buildCodexHookKey(
+function buildCodexHookKey(
   keySource: string,
   event: string,
   groupIndex: number,
@@ -245,7 +245,7 @@ export function getCodexEventKeyLabel(event: string): string {
   }
 }
 
-export function serializeCodexInlineTrustOverride(
+function serializeCodexInlineTrustOverride(
   state: Record<string, CodexHookStateEntry>
 ): string[] {
   if (Object.keys(state).length === 0) {

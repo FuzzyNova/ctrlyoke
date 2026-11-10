@@ -20,7 +20,6 @@ export {
   formatFinalStepSelector,
   formatHistoryTargetSelector,
   isFinalStepSelectorText,
-  matchesHistoryShowStep,
   parseCliStepIndex,
   parseHistoryShowAttempt,
   parseHistoryShowStep,

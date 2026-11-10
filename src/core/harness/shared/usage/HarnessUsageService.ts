@@ -34,7 +34,7 @@ import { ObservedHarnessUsageStore } from "./ObservedHarnessUsageStore";
 import type { IHarnessQuotaCollector } from "./IHarnessQuotaCollector";
 import { createDefaultHarnessQuotaCollectors } from "./collectors";
 
-export const PROVIDER_USAGE_SCHEMA_VERSION =
+const PROVIDER_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROVIDER_USAGE];
 
 export const HARNESS_USAGE_ERROR_CODES = {
@@ -42,10 +42,6 @@ export const HARNESS_USAGE_ERROR_CODES = {
   PROVIDER_REFRESH_FAILED: "provider-refresh-failed",
   PROVIDER_USAGE_WRITE_FAILED: "provider-usage-write-failed",
 } as const;
-
-export interface HarnessUsageUpdateSink {
-  updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void;
-}
 
 export interface HarnessUsageServiceOptions {
   isEnabled?: () => boolean;

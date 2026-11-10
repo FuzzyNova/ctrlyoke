@@ -106,7 +106,7 @@ interface GitSearchCache {
   timestamp: number;
 }
 
-export function mapSymbolKindToCompletionKind(kind: LspSymbolKind): number {
+function mapSymbolKindToCompletionKind(kind: LspSymbolKind): number {
   switch (kind) {
     case LspSymbolKind.File:
       return COMPLETION_ITEM_KINDS.FILE;

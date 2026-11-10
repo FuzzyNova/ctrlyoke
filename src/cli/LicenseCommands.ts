@@ -59,7 +59,7 @@ export function createCliLicenseCommandDependencies(): LicenseCommandDependencie
   };
 }
 
-export async function buildLicenseStatus(
+async function buildLicenseStatus(
   dependencies: LicenseCommandDependencies
 ): Promise<CliLicenseStatus> {
   const { licenseService, secretStore } = dependencies;
@@ -93,7 +93,7 @@ const SOURCE_LABELS: Record<LicenseSource, string> = {
   [LICENSE_SOURCES.OFFLINE_FILE]: "offline license file",
 };
 
-export function formatLicenseStatus(status: CliLicenseStatus): string {
+function formatLicenseStatus(status: CliLicenseStatus): string {
   const tier =
     status.tier === LICENSE_TIERS.PRO
       ? status.enterprise

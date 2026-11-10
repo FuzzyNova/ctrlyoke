@@ -111,7 +111,7 @@ export interface CapabilityDeclaration {
  * The live suite (`npm run test:harness`) that proves a capability claim
  * against the real CLI, one case per claim.
  */
-export const CAPABILITY_SUITE_REFERENCE =
+const CAPABILITY_SUITE_REFERENCE =
   "src/test/harness/capabilities.harness.test.ts";
 
 /** Evidence for a claim the capability suite proves. */
@@ -144,8 +144,6 @@ export interface PermissionCapabilityDescriptor {
   deniedTools: CapabilityDeclaration;
 }
 
-export type PermissionCapabilityKey = keyof PermissionCapabilityDescriptor;
-
 export interface CapabilityDomainDescriptorMap {
   promptInputs: {
     images: CapabilityDeclaration;
@@ -168,9 +166,6 @@ export const SANDBOX_CAVEAT_CODE = {
   QWEN_UNUSABLE: "qwen-sandbox-unusable",
   OPENCODE_UNUSABLE: "opencode-sandbox-unusable",
 } as const;
-export const SANDBOX_CAVEAT_CODES: ReadonlySet<string> = new Set(
-  Object.values(SANDBOX_CAVEAT_CODE)
-);
 export type SandboxCaveatCode =
   (typeof SANDBOX_CAVEAT_CODE)[keyof typeof SANDBOX_CAVEAT_CODE];
 
@@ -300,7 +295,7 @@ export type CompatibilityCaveatCode =
  * other caveat is a reason the capability is limited, and its message must be
  * a "because …" clause so it reads after any sentence it is appended to.
  */
-export const ADVISORY_CAVEAT_CODES = {
+const ADVISORY_CAVEAT_CODES = {
   CLAUDE_PREAPPROVED_SETTINGS:
     PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS,
 } as const;
@@ -541,6 +536,8 @@ export function getCompatibilityDiagnosticRemediation(
  * authored-workflow diagnostics, but do not have an installed version or a
  * workflow consumer from which to build a diagnostic. Keep that mapping here
  * so those consumers do not grow a second capability taxonomy.
+ *
+ * @public Loaded from the compiled `out/` by `scripts/generate-compatibility-docs.mjs`.
  */
 export function getCompatibilityDeclarationRemediation(
   domain: CapabilityDomain,

@@ -69,7 +69,7 @@ export function fuzzyMatchRanges(text: string, query: string): number[] {
 const ORDER_TIEBREAK_SPAN = 1e-6;
 
 /** Score one fuzzysort multi-key result using the shared secondary-key weight. */
-export function scoreFuzzyMatch(result: KeysResult<unknown>): number {
+function scoreFuzzyMatch(result: KeysResult<unknown>): number {
   let best = 0;
   result.forEach(({ score }, index) => {
     const weighted = index === 0 ? score : score * SECONDARY_KEY_WEIGHT;

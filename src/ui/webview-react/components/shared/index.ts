@@ -20,7 +20,6 @@ export { CopyButton } from "./CopyButton";
 export {
   LabelActionLink,
   FieldLabelRow,
-  LABEL_ACTION_LINK_CLASS,
   LABEL_ACTION_NOTE_CLASS,
 } from "./LabelActionLink";
 export { ExecutionStateBadge } from "./ExecutionStateBadge";

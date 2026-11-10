@@ -77,7 +77,7 @@ const PROMPT_MARKDOWN_SPAN_CONTEXT: PromptDiagnosticContext = {
  * unknown. A `.prompt.md` body gets {@link PROMPT_MARKDOWN_SPAN_CONTEXT} for
  * the same reason.
  */
-export function getSpanContext(
+function getSpanContext(
   span: WorkflowTextSpan,
   root: unknown,
   settingsPreCondition?: unknown

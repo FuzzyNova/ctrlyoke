@@ -6,7 +6,6 @@ import {
 import type { FinalStepRuntimeState, QueueState } from "../types/CtrlYokeTypes";
 import { selectTerminalFailure } from "../utils/TerminalFailure";
 export { selectTerminalFailure } from "../utils/TerminalFailure";
-export type { TerminalFailure } from "../utils/TerminalFailure";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { exitQuietlyOnClosedPipe } from "./CliClosedPipe";

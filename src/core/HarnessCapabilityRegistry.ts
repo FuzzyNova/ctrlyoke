@@ -28,9 +28,9 @@ import {
 import { detectHarness } from "./harness/shared/HarnessDetection";
 import type { IHarnessAdapter } from "./harness/shared/interfaces/IHarnessAdapter";
 
-export const HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1;
+const HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1;
 
-export const DEFAULT_ENABLED_CAPABILITY_DOMAINS: readonly CapabilityDomain[] = [
+const DEFAULT_ENABLED_CAPABILITY_DOMAINS: readonly CapabilityDomain[] = [
   CAPABILITY_DOMAINS.PERMISSIONS,
   CAPABILITY_DOMAINS.SANDBOX,
   CAPABILITY_DOMAINS.PROMPT_INPUTS,

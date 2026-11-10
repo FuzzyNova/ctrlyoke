@@ -1560,7 +1560,7 @@ function assertPendingReorderIsSafe(
  * helper only keeps legacy, ID-less callers from attempting an obviously unsafe
  * prefix splice before that validator runs.
  */
-export function immutablePrefixLength(steps: WorkflowStep[]): number {
+function immutablePrefixLength(steps: WorkflowStep[]): number {
   let boundary = 0;
   steps.forEach((step, index) => {
     if (step._runtime?.completedAt !== undefined) {

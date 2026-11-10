@@ -158,7 +158,7 @@ function defaultFetcher(
 }
 
 /** Derive the stable label used by the diff header from the navigated ref. */
-export function gitRefDiffLabel(ref: string): string {
+function gitRefDiffLabel(ref: string): string {
   const normalizedRef = normalizeRef(ref);
   const shortRef = normalizedRef.startsWith("~")
     ? normalizedRef.slice(1)

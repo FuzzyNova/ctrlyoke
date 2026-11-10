@@ -57,7 +57,7 @@ function waitFor(ms: number, signal: AbortSignal): Promise<boolean> {
  * like a launched CLI, and the recorded attempt then streams in with its
  * original relative timing before the response completes.
  */
-export class ReplayIntegration extends HarnessIntegration {
+class ReplayIntegration extends HarnessIntegration {
   private playback?: AbortController;
   private lastOutput?: CliOutput;
   private lastFailed = false;
@@ -198,7 +198,7 @@ export class ReplayIntegration extends HarnessIntegration {
 }
 
 /** A script run answered from the recording; nothing is spawned. */
-export class ReplayScriptProcessRunner extends ScriptProcessRunner {
+class ReplayScriptProcessRunner extends ScriptProcessRunner {
   private readonly playback = new AbortController();
 
   constructor(

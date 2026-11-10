@@ -10,9 +10,6 @@ export const STEP_TIMELINE_ENTRY_KINDS = {
   COMMAND: "command",
 } as const;
 
-export type StepTimelineEntryKind =
-  (typeof STEP_TIMELINE_ENTRY_KINDS)[keyof typeof STEP_TIMELINE_ENTRY_KINDS];
-
 export type StepTimelineEntry =
   | {
       kind: typeof STEP_TIMELINE_ENTRY_KINDS.PAYLOAD;

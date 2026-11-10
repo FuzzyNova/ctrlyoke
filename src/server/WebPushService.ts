@@ -21,7 +21,7 @@ const PUSH_SEND_RESULT = {
   FAILURE: "failure",
   REMOVED: "removed",
 } as const;
-export const PUSH_ACCESS_DENIED_MESSAGE =
+const PUSH_ACCESS_DENIED_MESSAGE =
   "Push-to-phone notifications are part of ctrlyoke Pro. Your localhost notifications remain free; start a trial or view Pro pricing at https://ctrlyoke.dev/pricing/.";
 
 export interface WebPushSubscriptionPayload {

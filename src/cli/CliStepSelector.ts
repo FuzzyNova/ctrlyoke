@@ -6,7 +6,7 @@ import {
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 
 /** Upper bound on distinct indices one `--step` list may name. */
-export const MAX_HISTORY_SHOW_STEP_INDICES = 10_000;
+const MAX_HISTORY_SHOW_STEP_INDICES = 10_000;
 
 export type CliHistoryShowStepSelector =
   | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndices: number[] }
@@ -95,32 +95,6 @@ export function parseHistoryShowAttempt(
     );
   }
   return { kind: HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER, number };
-}
-
-export function matchesHistoryShowStep(
-  target: OutputExecutionTarget,
-  selector: CliHistoryShowStepSelector | undefined,
-  options: { latest?: boolean; running?: boolean } = {}
-): boolean {
-  if (!selector) return true;
-  if (selector.kind === FINAL_STEP_PHASES.QUEUE) {
-    return (
-      target.kind === FINAL_STEP_PHASES.QUEUE &&
-      selector.stepIndices.includes(target.stepIndex)
-    );
-  }
-  if (selector.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-    const passMatches =
-      selector.passNumber === undefined ||
-      (selector.passNumber === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST
-        ? options.latest === true
-        : target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-          target.loopIndex === selector.passNumber - 1);
-    return target.kind === FINAL_STEP_PHASES.FINAL_STEP && passMatches;
-  }
-  return selector.kind === HISTORY_SHOW_STEP_SELECTORS.LATEST
-    ? options.latest === true
-    : options.running === true;
 }
 
 export function parseCliStepIndex(value: string): number {

@@ -4,7 +4,7 @@
  * storage keys built from a name live in `platform/SecretKey.ts`.
  */
 
-export const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 /**
  * Human-readable description of `SECRET_NAME_PATTERN`, shown to users instead of the raw

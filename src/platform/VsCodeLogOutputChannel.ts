@@ -84,7 +84,7 @@ export class SafeLogOutputChannel implements LogOutputSink, vscode.Disposable {
  * Map VS Code's LogLevel enum to our internal LogLevel.
  * VS Code log levels (ordered least to most verbose): Off, Error, Warning, Info, Debug, Trace.
  */
-export function fromVsCodeLogLevel(vsCodeLevel: vscode.LogLevel): LogLevel {
+function fromVsCodeLogLevel(vsCodeLevel: vscode.LogLevel): LogLevel {
   switch (vsCodeLevel) {
     case vscode.LogLevel.Off:
       return LogLevel.OFF;

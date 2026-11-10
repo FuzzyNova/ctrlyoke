@@ -27,7 +27,7 @@ import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import { escapeRegExp } from "../../../utils/TextUtils";
 import { getAntigravitySettingsPath } from "../shared/StatuslineManager";
 
-export const ANTIGRAVITY_RULE_LIST_KINDS = {
+const ANTIGRAVITY_RULE_LIST_KINDS = {
   ALLOW: "allow",
   DENY: "deny",
 } as const;

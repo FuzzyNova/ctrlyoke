@@ -84,7 +84,7 @@ export interface NodeHostServices {
 }
 
 /** Construct the Node equivalents of the host-owned services used by the dashboard. */
-export async function createNodeHostServices(options: {
+async function createNodeHostServices(options: {
   cwd: string;
   mode: ExecutionMode;
   /** Shared with the caller's pre-start license check; built here otherwise. */

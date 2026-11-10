@@ -63,9 +63,7 @@ export function assertStartedStepPositionsPreserved(
 }
 
 /** Generate a run-local step identity that is not already in the supplied set. */
-export function generateStepId(
-  existingIds: ReadonlySet<string> = new Set()
-): string {
+function generateStepId(existingIds: ReadonlySet<string> = new Set()): string {
   let stepId = crypto.randomUUID();
   while (existingIds.has(stepId)) {
     stepId = crypto.randomUUID();

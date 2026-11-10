@@ -150,7 +150,7 @@ export function reorderMovesProtectedFailure(
 }
 
 /** Queue index of the failed step that continuation will run again. */
-export function getResumableTerminalFailureIndex(state: {
+function getResumableTerminalFailureIndex(state: {
   executionState: string | undefined;
   currentIndex: number | undefined;
   steps: readonly (StepWithRuntimeStatus & {

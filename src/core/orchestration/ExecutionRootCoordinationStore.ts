@@ -722,10 +722,3 @@ export async function resolveCoordinationBoardScope(
 ): Promise<CoordinationBoardScope> {
   return readScopeStorage(await resolveExecutionRootScope(executionRoot));
 }
-
-export async function appendCoordinationEntry(
-  executionRoot: string,
-  entry: CoordinationEntryInput
-): Promise<CoordinationEntry> {
-  return new ExecutionRootCoordinationStore(executionRoot).append(entry);
-}

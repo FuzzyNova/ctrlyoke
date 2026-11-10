@@ -105,7 +105,6 @@ import { migrateToCurrent } from "../../utils/FormatMigrations";
 
 export type WorktreeMode =
   typeof WORKTREE_MODES.MANAGED | typeof WORKTREE_MODES.NAMED;
-export type WorktreeManagerMode = WorktreeMode;
 export const WORKTREE_ORIGINS = {
   CREATED: "created",
   DISCOVERED: "discovered",
@@ -286,7 +285,7 @@ export interface WorktreeSetupRunner {
 type WorktreeSetupRunnerArgs = Parameters<WorktreeSetupRunner["run"]>[0];
 
 /** Headless setup transport used when no live reporter is available. */
-export class DefaultWorktreeSetupRunner implements WorktreeSetupRunner {
+class DefaultWorktreeSetupRunner implements WorktreeSetupRunner {
   async run({
     executionRoot,
     command,

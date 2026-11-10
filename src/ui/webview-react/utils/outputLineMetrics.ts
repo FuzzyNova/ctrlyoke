@@ -56,7 +56,7 @@ export const OUTPUT_ROW_GROUP_END_PADDING = 7;
  * The identity bar is an inset box shadow, so it adds no measured geometry and
  * does not need an estimator allowance.
  */
-export const OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT = 20;
+const OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT = 20;
 
 /** Fallback output font size when a caller has no `ui.outputFontSize` to hand. */
 export const DEFAULT_OUTPUT_FONT_SIZE =
@@ -64,7 +64,7 @@ export const DEFAULT_OUTPUT_FONT_SIZE =
 /** Fallback pane width when the output pane has not been measured yet. */
 export const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
 /** Never estimate against a width narrower than this — it explodes line counts. */
-export const MIN_OUTPUT_CONTENT_WIDTH = 240;
+const MIN_OUTPUT_CONTENT_WIDTH = 240;
 /** Width bucket used to avoid retaining one geometry entry per pixel resize. */
 export const OUTPUT_CONTENT_WIDTH_BUCKET = 32;
 /** Minimum output width before diffs use split view. */

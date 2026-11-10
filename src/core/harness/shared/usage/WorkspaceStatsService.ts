@@ -33,9 +33,9 @@ import {
 import { hasErrnoCode } from "../../../../utils/ErrorUtils";
 
 /** Keep manifest reads aligned with OutputHistoryManager's run-list scanner. */
-export const WORKSPACE_STATS_READ_BATCH_SIZE = 32;
+const WORKSPACE_STATS_READ_BATCH_SIZE = 32;
 
-export const WORKSPACE_STATS_ERROR_CODES = {
+const WORKSPACE_STATS_ERROR_CODES = {
   STORE_READ_FAILED: "workspace-stats-store-read-failed",
   LINEAGE_COUNT_FAILED: "workspace-stats-lineage-count-failed",
   BACKFILL_FAILED: "workspace-stats-backfill-failed",

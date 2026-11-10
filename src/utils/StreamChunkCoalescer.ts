@@ -18,13 +18,13 @@
  */
 
 /** How long a chunk may sit buffered before it is released. */
-export const STREAM_CHUNK_FLUSH_INTERVAL_MS = 100;
+const STREAM_CHUNK_FLUSH_INTERVAL_MS = 100;
 /**
  * Size at which the buffer is released immediately rather than waiting out the
  * interval, so a process that dumps megabytes at once still streams rather than
  * arriving in one payload.
  */
-export const STREAM_CHUNK_FLUSH_MAX_CHARS = 32_768;
+const STREAM_CHUNK_FLUSH_MAX_CHARS = 32_768;
 
 export interface StreamChunkCoalescerOptions {
   /** Test seam; production uses STREAM_CHUNK_FLUSH_INTERVAL_MS. */

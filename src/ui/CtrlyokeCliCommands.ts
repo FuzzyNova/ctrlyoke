@@ -35,12 +35,12 @@ import {
 import type { UserInteractionPort } from "./UserInteractionPort";
 
 /** npm package name the CLI is published under. */
-export const CTRLYOKE_NPM_PACKAGE = "ctrlyoke";
+const CTRLYOKE_NPM_PACKAGE = "ctrlyoke";
 
 const INSTALL_CLI_TERMINAL_NAME = "ctrlyoke CLI";
 
 /** `npm install -g ctrlyoke@<version>`, pinned so the CLI matches the extension. */
-export function buildCliInstallCommand(version: string): string {
+function buildCliInstallCommand(version: string): string {
   return `npm install -g ${CTRLYOKE_NPM_PACKAGE}@${version}`;
 }
 

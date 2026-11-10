@@ -17,10 +17,7 @@ export function generateOwnerToken(): string {
 }
 
 /** Return whether a heartbeat has exceeded the shared staleness threshold. */
-export function isHeartbeatStale(
-  lastHeartbeat: number,
-  now = Date.now()
-): boolean {
+function isHeartbeatStale(lastHeartbeat: number, now = Date.now()): boolean {
   return now - lastHeartbeat > STALE_HEARTBEAT_MS;
 }
 

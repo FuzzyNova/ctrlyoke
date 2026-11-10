@@ -7,10 +7,7 @@ import type {
 } from "./IToolPermissionMapper";
 import type { ISandboxMapper } from "./ISandboxMapper";
 import type { HarnessAdapterPreparation } from "./PreparedMutation";
-export type {
-  HarnessAdapterPreparation,
-  PreparedMutation,
-} from "./PreparedMutation";
+export type { HarnessAdapterPreparation } from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type { HarnessVersionPolicy } from "../../../../utils/HarnessVersion";
 import type {

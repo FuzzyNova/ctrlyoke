@@ -35,7 +35,7 @@ export const DRAG_HANDLE_TOUCH_ACTION_STYLE: CSSProperties = {
  * for that index — keep both halves here so the panel and `ParallelGroupPanel`
  * cannot drift apart on the format.
  */
-export const STEP_DRAG_ID_PREFIX = "step-pending-";
+const STEP_DRAG_ID_PREFIX = "step-pending-";
 
 export function stepDragId(absoluteIndex: number): string {
   return `${STEP_DRAG_ID_PREFIX}${absoluteIndex}`;
@@ -55,7 +55,7 @@ export function absoluteIndexFromStepDragId(id: string): number {
  * a unit, and a step dropped on it lands *beside* the group rather than inside
  * it (dropping on a member row is what joins a group).
  */
-export const GROUP_DRAG_ID_PREFIX = "group-";
+const GROUP_DRAG_ID_PREFIX = "group-";
 
 export function groupDragId(groupId: string): string {
   return `${GROUP_DRAG_ID_PREFIX}${groupId}`;

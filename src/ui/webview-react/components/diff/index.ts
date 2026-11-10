@@ -26,5 +26,4 @@ export {
   DIFF_CHANGE_LABEL,
   fromDiffKind,
   fromPromptChangeType,
-  fromRdvDiffType,
 } from "./diffChangeType";

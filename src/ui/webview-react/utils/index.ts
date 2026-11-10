@@ -94,9 +94,7 @@ export { countTokens } from "./tokenizer";
 export {
   ALL_WORKFLOW_HARNESSES,
   ALL_WORKFLOW_STATES,
-  DATE_INPUT_FORMATTER,
   DEFAULT_DATE_RANGE_FILTER,
-  formatDateInput,
   getDateEndMs,
   getDatePresetRange,
   getDateStartMs,

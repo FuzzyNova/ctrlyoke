@@ -1,13 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "entry": [
-    ".vscode-test.mjs",
     "scripts/**/*.{js,mjs,ts}",
-    "src/test/runTest.ts",
-    "src/test/suite/index.ts",
     "src/test/**/*.test.ts",
-    "src/ui/webview-react/scripts/bootstrapScript.ts",
-    "src/ui/webview-react/scripts/moduleLoaderScript.ts",
     "src/ui/webview-react/test/**/*.test.{ts,tsx}",
     "src/types/WebviewMessageTypes.ts",
     "src/types/CtrlYokeTypes.ts",
@@ -16,7 +11,6 @@
     "src/types/WorkflowTimelineTypes.ts",
     "src/types/HostedWorkspaceViewerTypes.ts",
     "src/types/DashboardConstants.ts",
-    "src/platform/vscode-shim.ts",
     "src/ui/webview-react/types/messages.ts",
     "src/ui/webview-react/types/cliEvents.ts",
     "src/ui/webview-react/types/dropdownNamespaces.ts",
@@ -52,9 +46,10 @@
     "src/server/standalone-shim.js",
     "src/server/ctrlyoke-service-worker.js",
     "src/templates/**",
-    "src/ui/webview-react/vite-env.d.ts",
+    "src/license/LemonSqueezyConstants.ts",
     "src/core/harness/shared/interfaces/index.ts",
     "src/platform/index.ts",
+    "src/ui/webview-react/components/diff/index.ts",
     "src/ui/webview-react/components/editor/index.ts",
     "src/ui/webview-react/components/index.ts",
     "src/ui/webview-react/components/steps/index.ts",
@@ -68,5 +63,13 @@
     "src/ui/webview-react/types/index.ts",
     "src/ui/webview-react/utils/index.ts"
   ],
-  "ignoreDependencies": ["@vscode/codicons", "typo-js"]
+  "ignoreDependencies": ["@vscode/codicons", "typo-js"],
+  "ignoreBinaries": ["where.exe", "opencode"],
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  },
+  "ignoreIssues": {
+    "src/types/DashboardConstants.ts": ["duplicates"]
+  }
 }

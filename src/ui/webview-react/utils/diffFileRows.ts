@@ -41,7 +41,7 @@ export const DIFF_FILE_CARD_HEADER_VERTICAL_PADDING = 8;
 export const DIFF_FILE_CARD_HEADER_LINE_HEIGHT = 16;
 
 /** The card header displays the basename and directory on separate lines. */
-export const DIFF_FILE_CARD_PATH_LINE_COUNT = 2;
+const DIFF_FILE_CARD_PATH_LINE_COUNT = 2;
 
 /** `.gap-0.5` separates the optional note from the path row. */
 export const DIFF_FILE_CARD_NOTE_GAP = 2;
@@ -510,10 +510,6 @@ export function projectDiffFileListRows(
   }
 
   return addInterRowSpacing(rows);
-}
-
-export function diffFileListRowKey(row: DiffFileListRow): string {
-  return row.key;
 }
 
 export function diffFileListRowGapClass(row: DiffFileListRow): string {

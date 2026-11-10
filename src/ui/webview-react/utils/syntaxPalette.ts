@@ -45,7 +45,7 @@ export function syntaxRoleVariable(role: SyntaxRole): string {
 }
 
 /** CSS colour value for a role, e.g. `var(--cy-syntax-keyword)`. */
-export function syntaxRoleColor(role: SyntaxRole): string {
+function syntaxRoleColor(role: SyntaxRole): string {
   return `var(${syntaxRoleVariable(role)})`;
 }
 
@@ -80,7 +80,7 @@ interface SyntaxRoleSpec {
  * refractor's markdown grammar aliases `title` to `important`, so the
  * markdown entries come last.
  */
-export const SYNTAX_ROLE_SPECS: readonly SyntaxRoleSpec[] = [
+const SYNTAX_ROLE_SPECS: readonly SyntaxRoleSpec[] = [
   {
     role: SYNTAX_ROLES.KEYWORD,
     tags: [

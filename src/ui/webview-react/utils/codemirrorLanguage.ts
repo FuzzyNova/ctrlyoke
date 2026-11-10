@@ -167,7 +167,7 @@ export function createPromptMarkdownExtension(): Extension {
 }
 
 /** Keep a transient, unclosed fence visually live until it has a closer. */
-export function createUnclosedFenceColorOverride(): Extension {
+function createUnclosedFenceColorOverride(): Extension {
   return [
     ViewPlugin.fromClass(
       class {

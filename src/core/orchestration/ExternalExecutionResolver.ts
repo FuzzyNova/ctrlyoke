@@ -265,20 +265,6 @@ export class ExternalExecutionResolver {
   }
 }
 
-/** Convenience function for callers that do not need to retain a resolver object. */
-export function resolveExternalExecution(
-  workingFilePath: string,
-  workspaceRoot: string,
-  observer: RunnerHostIdentity,
-  options: ExternalExecutionResolverOptions = {}
-): Promise<ExternalExecutionResolution> {
-  return new ExternalExecutionResolver(
-    workspaceRoot,
-    observer,
-    options
-  ).resolve(workingFilePath);
-}
-
 async function readWorkingFile(workingFilePath: string): Promise<unknown> {
   const content = await fs.readFile(workingFilePath, "utf8");
   return JSON.parse(content) as unknown;

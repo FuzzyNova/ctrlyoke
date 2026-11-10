@@ -4,7 +4,7 @@
  * Keep this dependency-free because it is shared by extension-host and
  * webview code.
  */
-export const TOOL_PATTERN_REGEX = /^([a-zA-Z_][a-zA-Z0-9_-]*)(\(.*\))?$/;
+const TOOL_PATTERN_REGEX = /^([a-zA-Z_][a-zA-Z0-9_-]*)(\(.*\))?$/;
 
 export interface ToolPatternSyntaxIssues {
   /** Whether the pattern does not match TOOL_PATTERN_REGEX. */
@@ -23,7 +23,7 @@ export interface ToolPatternSyntaxIssues {
  * @returns [toolName, args] or null if the pattern does not match the
  * expected format.
  */
-export function parseToolPattern(pattern: string): [string, string] | null {
+function parseToolPattern(pattern: string): [string, string] | null {
   const match = pattern.match(TOOL_PATTERN_REGEX);
   if (!match) {
     return null;

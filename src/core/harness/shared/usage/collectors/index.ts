@@ -16,12 +16,3 @@ export function createDefaultHarnessQuotaCollectors(): IHarnessQuotaCollector[] 
     new AntigravityQuotaCollector(),
   ];
 }
-
-export {
-  AntigravityQuotaCollector,
-  ClaudeQuotaCollector,
-  CodexQuotaCollector,
-  CopilotQuotaCollector,
-  OpenCodeQuotaCollector,
-  QwenQuotaCollector,
-};

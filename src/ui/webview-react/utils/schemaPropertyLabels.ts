@@ -20,7 +20,7 @@ function writeLiteral(
  * tooltips cannot be styled (no bold, no max-width), so paragraph breaks are
  * the only structure available to keep long help text scannable.
  */
-export function tooltipParagraphs(
+function tooltipParagraphs(
   ...sections: ReadonlyArray<string | undefined>
 ): string {
   return sections

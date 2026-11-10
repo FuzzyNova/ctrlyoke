@@ -10,23 +10,11 @@ import {
 } from "../../../types/CompatibilityTypes";
 import {
   EFFECTIVE_SANDBOX_KINDS,
-  type EffectiveSandboxKind,
   type HarnessId,
   type SandboxRequest,
 } from "../../../types/DashboardConstants";
 
 const SANDBOX_PLAN_REFERENCE = "dev/implemented/HARNESS_SANDBOX_PLAN.md";
-
-/** What a step's `sandbox` request means before harness detail: on, off or the harness's own settings. */
-export function effectiveSandboxKind(
-  request: SandboxRequest | undefined
-): EffectiveSandboxKind {
-  return request === true
-    ? EFFECTIVE_SANDBOX_KINDS.ON
-    : request === false
-      ? EFFECTIVE_SANDBOX_KINDS.OFF
-      : EFFECTIVE_SANDBOX_KINDS.HARNESS;
-}
 
 /** `sandbox: null` (or unset): no sandbox flags, the harness's own settings apply. */
 export function harnessSettingSandbox(detail?: string): SandboxApplication {

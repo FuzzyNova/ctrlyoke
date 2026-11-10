@@ -1,6 +1,6 @@
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
 
-export const COMMIT_GRAPH_COLOR_COUNT = 5;
+const COMMIT_GRAPH_COLOR_COUNT = 5;
 
 /** Reserved for the mainline (first-parent) chain; never assigned by rotation. */
 export const TRUNK_COLOR_INDEX = 0;

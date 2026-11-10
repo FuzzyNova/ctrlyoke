@@ -1,18 +1,9 @@
-import type { DiffType } from "react-diff-view";
 import type { DiffKind } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   DIFF_CHANGE_TYPES,
   type DiffChangeType,
 } from "@root/types/DashboardConstants";
 import type { PromptChangeType } from "@root/types/OutputHistoryTypes";
-
-const RDV_DIFF_TYPES = {
-  ADD: "add",
-  DELETE: "delete",
-  MODIFY: "modify",
-  RENAME: "rename",
-  COPY: "copy",
-} as const;
 
 export const DIFF_CHANGE_LABEL: Record<DiffChangeType, string> = {
   [DIFF_CHANGE_TYPES.CREATED]: "created",
@@ -49,14 +40,6 @@ const DIFF_KIND_MAP: Record<DiffKind, DiffChangeType> = {
   untracked: DIFF_CHANGE_TYPES.CREATED,
 };
 
-const RDV_DIFF_TYPE_MAP: Record<DiffType, DiffChangeType> = {
-  [RDV_DIFF_TYPES.ADD]: DIFF_CHANGE_TYPES.CREATED,
-  [RDV_DIFF_TYPES.DELETE]: DIFF_CHANGE_TYPES.DELETED,
-  [RDV_DIFF_TYPES.MODIFY]: DIFF_CHANGE_TYPES.MODIFIED,
-  [RDV_DIFF_TYPES.RENAME]: DIFF_CHANGE_TYPES.RENAMED,
-  [RDV_DIFF_TYPES.COPY]: DIFF_CHANGE_TYPES.RENAMED,
-};
-
 export function fromPromptChangeType(
   changeType: PromptChangeType
 ): DiffChangeType {
@@ -65,8 +48,4 @@ export function fromPromptChangeType(
 
 export function fromDiffKind(changeKind: DiffKind): DiffChangeType {
   return DIFF_KIND_MAP[changeKind];
-}
-
-export function fromRdvDiffType(diffType: DiffType): DiffChangeType {
-  return RDV_DIFF_TYPE_MAP[diffType];
 }

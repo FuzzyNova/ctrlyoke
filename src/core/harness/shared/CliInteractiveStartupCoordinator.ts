@@ -22,7 +22,7 @@ export interface CliInteractiveStartupTimeouts {
   lateStartRecoveryPollMs?: number;
 }
 
-export function getCliInteractiveStartupTimeouts(
+function getCliInteractiveStartupTimeouts(
   startupTimeouts?: CliInteractiveStartupTimeouts
 ): Required<CliInteractiveStartupTimeouts> {
   const configuredSoftTimeoutMs =

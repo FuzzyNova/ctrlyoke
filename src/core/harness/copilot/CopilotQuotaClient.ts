@@ -17,7 +17,7 @@ import {
   normalizeCopilotAccountQuota,
 } from "./CopilotUsageNormalization";
 
-export const COPILOT_QUOTA_PROBE_TIMEOUT_MS = 5_000;
+const COPILOT_QUOTA_PROBE_TIMEOUT_MS = 5_000;
 
 const COPILOT_SERVER_ARGS = [
   "--headless",

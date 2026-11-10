@@ -42,9 +42,7 @@ export function isExecutionOwnerState(status: QueueState["status"]): boolean {
   return ACTIVE_EXECUTION_STATES.has(status);
 }
 
-export function isSpentExecutionOwnerState(
-  status: QueueState["status"]
-): boolean {
+function isSpentExecutionOwnerState(status: QueueState["status"]): boolean {
   return (
     status === EXECUTION_STATES.COMPLETED ||
     status === EXECUTION_STATES.ERROR ||

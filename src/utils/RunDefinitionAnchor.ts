@@ -198,7 +198,7 @@ function definitionStep(step: unknown): unknown {
  * stamp. Returned as a detached JSON copy, so it hashes exactly like the bytes
  * a reader parses.
  */
-export function extractRunDefinition(workingFile: unknown): RunDefinition {
+function extractRunDefinition(workingFile: unknown): RunDefinition {
   const definition: RunDefinition = {};
   if (!isRecord(workingFile)) {
     return definition;
@@ -252,7 +252,7 @@ function stepIdentityOf(definition: RunDefinition): string {
   ]);
 }
 
-export function hashRunDefinition(definition: RunDefinition): string {
+function hashRunDefinition(definition: RunDefinition): string {
   return crypto
     .createHash("sha256")
     .update(stableStringify(authoredDefinition(definition)))
@@ -276,7 +276,7 @@ function changedFields(trusted: unknown, current: unknown): string[] {
 }
 
 /** What an outside change touched, for warnings: workflow fields, then steps, then the final step. */
-export function diffRunDefinitions(
+function diffRunDefinitions(
   trusted: RunDefinition,
   current: RunDefinition
 ): RunDefinitionChange[] {
@@ -582,21 +582,6 @@ function judge(
     definitionHash,
     changes: diffRunDefinitions(anchor.definition, definition),
   };
-}
-
-/** Compare an already-parsed working file with its anchor. */
-export async function verifyRunDefinition(
-  workingFilePath: string,
-  workingFile: unknown
-): Promise<RunDefinitionVerdict> {
-  const layout = WorkflowPaths.definitionAnchorLayout(workingFilePath);
-  if (!layout) {
-    return { status: RUN_DEFINITION_INTEGRITY.UNANCHORABLE };
-  }
-  return judge(
-    await readAnchorEstablishingBaseline(workingFilePath, layout),
-    workingFile
-  );
 }
 
 /**

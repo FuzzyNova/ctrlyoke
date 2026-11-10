@@ -23,7 +23,7 @@ export const CTRLYOKE_BIN_DIRNAME = "bin";
 const BUNDLE_OUT_DIRNAME = "out";
 
 /** POSIX shim filenames; each has a `.cmd` sibling for Windows. */
-export const CTRLYOKE_POSIX_SHIMS = ["ctrlyoke", "ctrlyoke-mcp"] as const;
+const CTRLYOKE_POSIX_SHIMS = ["ctrlyoke", "ctrlyoke-mcp"] as const;
 
 /** Canonical spelling of the PATH environment variable. */
 const PATH_ENV_KEY = "PATH";
@@ -43,7 +43,7 @@ export function resolvePackageRootFromEntry(entryFile: string): string {
 }
 
 /** `<packageRoot>/bin`. */
-export function resolveCtrlyokeBinDirectory(packageRoot: string): string {
+function resolveCtrlyokeBinDirectory(packageRoot: string): string {
   return path.join(packageRoot, CTRLYOKE_BIN_DIRNAME);
 }
 

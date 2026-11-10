@@ -30,7 +30,7 @@ import { isPathWithinDirectory } from "../../utils/PathSecurity";
 /** Small JSON bundle files are materialized and parsed in one allocation. */
 const MAX_BUNDLE_FILE_BYTES = 64 * 1024 * 1024;
 /** A single JSONL event is bounded while the events file itself is streamed. */
-export const MAX_EVENT_LINE_BYTES = 64 * 1024 * 1024;
+const MAX_EVENT_LINE_BYTES = 64 * 1024 * 1024;
 
 export interface ReadRunBundleOptions {
   /** Override for tests that need to exercise the per-event limit cheaply. */

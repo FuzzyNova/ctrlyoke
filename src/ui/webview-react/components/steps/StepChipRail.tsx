@@ -118,7 +118,7 @@ export type ChipSegment =
  * already derives its own status/props from its absolute index — so there is
  * nothing a done/pending split would add.
  */
-export function buildChipSegments(
+function buildChipSegments(
   stepCount: number,
   parallelGroups: readonly ParallelGroupDefinition[]
 ): ChipSegment[] {

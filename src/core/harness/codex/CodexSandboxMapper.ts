@@ -22,7 +22,7 @@ import {
   nativeSandboxCapabilities,
 } from "../shared/SandboxCapabilities";
 
-export const CODEX_SANDBOX_CAPABILITIES: SandboxCapabilityDescriptor =
+const CODEX_SANDBOX_CAPABILITIES: SandboxCapabilityDescriptor =
   nativeSandboxCapabilities(
     "phase-0-results-2026-11-03-macos",
     [">=0.166.0"],

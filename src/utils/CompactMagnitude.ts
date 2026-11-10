@@ -1,5 +1,5 @@
 /** Shared compact token-count units, ordered from smallest to largest. */
-export const TOKEN_COUNT_UNIT_LADDER = [
+const TOKEN_COUNT_UNIT_LADDER = [
   { threshold: 1_000, divisor: 1_000, suffix: "k" },
   { threshold: 1_000_000, divisor: 1_000_000, suffix: "M" },
   { threshold: 1_000_000_000, divisor: 1_000_000_000, suffix: "B" },

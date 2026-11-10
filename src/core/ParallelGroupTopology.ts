@@ -688,7 +688,7 @@ function assertPendingOrder(
  * existing parallel group. The requested order is relative to the pending
  * suffix, while group ranges use absolute workflow indices.
  */
-export function assertParallelGroupsRemainContiguousAfterReorder(
+function assertParallelGroupsRemainContiguousAfterReorder(
   topology: ParallelGroupTopology,
   currentIndex: number,
   newPendingOrder: number[]

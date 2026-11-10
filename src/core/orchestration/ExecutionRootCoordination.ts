@@ -30,7 +30,7 @@ import {
 
 export const COORDINATION_CLI_LEASE_TTL_MS =
   DEFAULT_COORDINATION_SETTINGS.cliParticipantTtlMinutes * 60 * 1_000;
-export const DEFAULT_COORDINATION_CLI_PARTICIPANT_TTL_MINUTES =
+const DEFAULT_COORDINATION_CLI_PARTICIPANT_TTL_MINUTES =
   DEFAULT_COORDINATION_SETTINGS.cliParticipantTtlMinutes;
 
 export interface CoordinationParticipantRegistration {

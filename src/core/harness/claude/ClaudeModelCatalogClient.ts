@@ -9,7 +9,7 @@ import {
   type StdioProbeSpawn,
 } from "../shared/StdioProbe";
 
-export const CLAUDE_MODEL_CATALOG_TIMEOUT_MS = 10_000;
+const CLAUDE_MODEL_CATALOG_TIMEOUT_MS = 10_000;
 
 /** The pseudo-entry Claude puts first; ctrlyoke's own "None" covers it. */
 const CLAUDE_DEFAULT_MODEL_VALUE = "default";

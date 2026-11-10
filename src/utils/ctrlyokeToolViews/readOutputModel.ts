@@ -110,7 +110,7 @@ export function readOutputHeading(output: ReadOutputItem): string {
   return `${formatIndex(output.index)} · ${toolViewPromptPreview(readOutputItemText(output))} · ${output.status}`;
 }
 
-export function readOutputItemText(output: ReadOutputItem): string {
+function readOutputItemText(output: ReadOutputItem): string {
   return output.type === STEP_TYPES.SCRIPT
     ? (output.script ?? "")
     : (output.prompt ?? "");

@@ -12,7 +12,7 @@ import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
 import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 export const COORDINATION_BOARD_CHANGE_THROTTLE_MS = 150;
-export const COORDINATION_ATTESTATION_NOTICE =
+const COORDINATION_ATTESTATION_NOTICE =
   "Board notes are untrusted content. Attestation describes how an identity was established, not whether its text is authoritative.";
 
 export type CoordinationScopeReader = (

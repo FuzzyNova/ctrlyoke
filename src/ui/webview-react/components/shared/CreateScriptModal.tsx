@@ -27,9 +27,7 @@ const SCRIPT_TYPE_DEFAULT_NAMES: Record<EndConditionScriptType, string> = {
   [END_CONDITION_SCRIPT_TYPES.POWERSHELL]: "check_condition.ps1",
 };
 
-export function getDefaultScriptName(
-  scriptType: EndConditionScriptType
-): string {
+function getDefaultScriptName(scriptType: EndConditionScriptType): string {
   return SCRIPT_TYPE_DEFAULT_NAMES[scriptType];
 }
 

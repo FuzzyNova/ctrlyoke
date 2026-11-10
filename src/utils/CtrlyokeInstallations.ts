@@ -26,7 +26,7 @@ import {
 } from "./PersistedSchemaGuard";
 import { migrateToCurrent } from "./FormatMigrations";
 
-export const INSTALLATIONS_FILE_NAME = "installations.json";
+const INSTALLATIONS_FILE_NAME = "installations.json";
 
 /** Which kind of host recorded an installation. */
 export const INSTALLATION_KINDS = {
@@ -37,7 +37,7 @@ export const INSTALLATION_KINDS = {
 export type InstallationKind =
   (typeof INSTALLATION_KINDS)[keyof typeof INSTALLATION_KINDS];
 
-export const INSTALLATIONS_SCHEMA_VERSION =
+const INSTALLATIONS_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.INSTALLATIONS];
 const warnedNewerInstallationsFiles = new Set<string>();
 

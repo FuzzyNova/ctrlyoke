@@ -2,7 +2,6 @@ import { create } from "zustand";
 import {
   LANGUAGE_SERVER_STATUSES,
   MESSAGE_TYPES,
-  SETTING_SCOPES,
   type SettingWriteScope,
 } from "@/types/messages";
 import type { LanguageServerDefinition } from "@root/types/CtrlYokeSettings";
@@ -178,5 +177,3 @@ export const useLanguageServerStore = create<State>((set) => ({
   requestApproval: () => sendMessage(MESSAGE_TYPES.REQUEST_LSP_APPROVAL),
   stop: (id) => sendMessage(MESSAGE_TYPES.STOP_LSP_SERVER, { id }),
 }));
-
-export const LANGUAGE_SERVER_DEFAULT_SCOPE = SETTING_SCOPES.WORKSPACE;

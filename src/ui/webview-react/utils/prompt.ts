@@ -11,7 +11,6 @@ import {
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 
 export type EndConditionCompareSource = CompareSource;
-export type { ScriptOperator };
 
 /**
  * End condition configuration

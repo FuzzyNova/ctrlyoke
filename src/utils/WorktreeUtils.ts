@@ -87,7 +87,7 @@ export function createWorktreeDirectoryName(
   return `${slugifyWorktreeName(readableName)}-${hash}`;
 }
 
-export function createRepositoryIdentity(
+function createRepositoryIdentity(
   repositoryName: string,
   canonicalCommonDirectory: string
 ): string {
@@ -132,10 +132,7 @@ export interface WorktreeRootResolution {
   tier: "explicit" | "sibling" | "fallback";
 }
 
-export function expandExplicitRoot(
-  value: string,
-  homeDirectory: string
-): string {
+function expandExplicitRoot(value: string, homeDirectory: string): string {
   const trimmed = value.trim();
   if (trimmed === "~") return homeDirectory;
   if (trimmed.startsWith(`~${path.sep}`) || trimmed.startsWith("~/")) {
@@ -233,21 +230,6 @@ export async function resolveWorktreeRoot(
     discoveredWorktrees: options.discoveredWorktrees,
   });
   return { root: path.resolve(fallback), tier: "fallback" };
-}
-
-/** Resolve a worktree root using the user-scope settings value. */
-export async function resolveConfiguredWorktreeRoot(
-  sourceCheckoutRoot: string,
-  options: Omit<
-    WorktreeRootResolutionOptions,
-    "sourceCheckoutRoot" | "explicitRoot"
-  > = {}
-): Promise<WorktreeRootResolution> {
-  return resolveWorktreeRoot({
-    ...options,
-    sourceCheckoutRoot,
-    explicitRoot: ConfigurationUtils.getWorktreeRoot(),
-  });
 }
 
 export interface WorktreePlacementPreview {
@@ -430,15 +412,6 @@ export async function evaluateWorkspaceEligibility(
   return { eligible: true, repositories, repository };
 }
 
-export async function assertWorkspaceEligibility(
-  namedRoots: readonly ResolverWorkspaceFolder[],
-  stateRoot?: string
-): Promise<WorkspaceEligibility> {
-  const result = await evaluateWorkspaceEligibility(namedRoots, stateRoot);
-  if (!result.eligible) throw new Error(result.reason);
-  return result;
-}
-
 /** Run one short Git-admin mutation under the repository's common-directory lock. */
 export async function withWorktreeMutationLock<T>(
   commonDirectory: string,
@@ -452,15 +425,4 @@ export async function withWorktreeMutationLock<T>(
     action,
     options
   );
-}
-
-/** Convenience form for callers that have a checkout rather than its common dir. */
-export async function withRepositoryWorktreeMutationLock<T>(
-  repositoryRoot: string,
-  action: () => Promise<T>
-): Promise<T> {
-  const common = await gitCommonDir(repositoryRoot);
-  if (!common)
-    throw new Error("Cannot resolve the repository Git common directory.");
-  return withWorktreeMutationLock(common, action);
 }

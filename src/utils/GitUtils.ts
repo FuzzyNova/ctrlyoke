@@ -347,7 +347,6 @@ const execFileAsync = async (
 };
 
 export const GIT_COMMAND_TIMEOUT_MS = GIT_TIMEOUT_MS;
-export const GIT_COMMAND_MAX_BUFFER = GIT_MAX_BUFFER;
 
 /**
  * Longest git failure message `describeGitFailure` returns. Hook output (a
@@ -640,12 +639,6 @@ export async function getFileHistoryCommits(
   return parseFileHistoryCommitOutput(stdout);
 }
 
-export interface BoundedFileHistoryResult {
-  commits: FileHistoryCommitInfo[];
-  timedOut: boolean;
-  complete: boolean;
-}
-
 export interface FileHistoryCommitWalk {
   readAt(
     index: number,
@@ -774,72 +767,6 @@ export function createFileHistoryCommitWalk(
       waiter?.();
     },
   };
-}
-
-/** Stream a bounded --follow walk, preserving complete rows received at deadline. */
-export async function getFileHistoryCommitsBounded(
-  workspaceRoot: string,
-  gitPath: string,
-  limit: number,
-  skip: number,
-  ref: string,
-  fullRefNames: boolean,
-  timeoutMs: number
-): Promise<BoundedFileHistoryResult> {
-  const args = [
-    "-C",
-    workspaceRoot,
-    "log",
-    "--follow",
-    "-z",
-    "--name-status",
-    "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
-  ];
-  if (fullRefNames) args.push("--decorate=full");
-  if (skip > 0) args.push(`--skip=${skip}`);
-  args.push("-n", String(limit));
-  if (ref.trim()) args.push("--end-of-options", ref.trim());
-  args.push("--", literalGitPathspec(gitPath));
-  gitCommandObserverForTests?.("git", args);
-
-  const chunks: Buffer[] = [];
-  const child = (
-    fileHistorySpawnForTests ??
-    ((file, spawnArgs) =>
-      spawn(file, [...spawnArgs], { stdio: ["ignore", "pipe", "pipe"] }))
-  )("git", args);
-  let timedOut = false;
-  return new Promise<BoundedFileHistoryResult>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, timeoutMs);
-    child.stdout?.on("data", (chunk: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    let stderr = "";
-    child.stderr?.on("data", (chunk: Buffer | string) => {
-      stderr += String(chunk);
-    });
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.once("close", (code) => {
-      clearTimeout(timer);
-      const stdout = Buffer.concat(chunks).toString("utf8");
-      const commits = parseFileHistoryCommitOutput(stdout);
-      if (!timedOut && code !== 0) {
-        reject(
-          new Error(
-            stderr.trim() || `git log --follow exited with code ${code}`
-          )
-        );
-        return;
-      }
-      resolve({ commits, timedOut, complete: !timedOut });
-    });
-  });
 }
 
 function parseFileHistoryCommitOutput(stdout: string): FileHistoryCommitInfo[] {
@@ -1236,7 +1163,7 @@ export function buildWorkingTreeDiffArgs(
   ];
 }
 
-export function buildWorkingTreeStatusArgs(
+function buildWorkingTreeStatusArgs(
   workspaceRoot: string,
   pathspecs?: readonly string[]
 ): string[] {

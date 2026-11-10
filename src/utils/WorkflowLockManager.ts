@@ -31,11 +31,6 @@ import {
 import { generateOwnerToken, isOwnerStale } from "./LockSafetyPrimitives";
 import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
-export {
-  HEARTBEAT_INTERVAL_MS,
-  STALE_HEARTBEAT_MS,
-} from "./LockSafetyPrimitives";
-
 const ACQUIRE_TIMEOUT_MS = 5_000;
 const ACQUIRE_RETRY_DELAY_MS = 50;
 

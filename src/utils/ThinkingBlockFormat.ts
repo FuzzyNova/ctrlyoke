@@ -97,7 +97,7 @@ export function formatThinkingLabel(data: ThinkingBlock): string {
  * Streamed deltas of the same label coalesce; a redacted block is only ever
  * combined with another redacted block.
  */
-export function canMergeThinkingBlocks(
+function canMergeThinkingBlocks(
   previous: ThinkingBlock,
   next: ThinkingBlock
 ): boolean {

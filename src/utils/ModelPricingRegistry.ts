@@ -35,7 +35,7 @@ interface ModelPricingCorrection {
  * `scripts/sync-model-pricing.mjs` checks every correction against fresh
  * upstream data and fails once a correction is stale or no longer needed.
  */
-export const MODEL_PRICING_CORRECTIONS =
+const MODEL_PRICING_CORRECTIONS =
   modelPricingCorrectionData as readonly ModelPricingCorrection[];
 
 const DATA = modelPricingRegistryData as ModelPricingRegistryData;

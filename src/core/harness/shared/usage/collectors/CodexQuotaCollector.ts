@@ -11,10 +11,10 @@ import {
 } from "../../../codex/CodexAppServerClient";
 
 export const CODEX_APP_SERVER_UNSUPPORTED = "codex-app-server-unsupported";
-export const CODEX_APP_SERVER_PROBE_FAILED = "codex-app-server-probe-failed";
+const CODEX_APP_SERVER_PROBE_FAILED = "codex-app-server-probe-failed";
 
 /** Current documented app-server support is gated to the rechecked CLI line. */
-export const CODEX_APP_SERVER_MIN_VERSION = {
+const CODEX_APP_SERVER_MIN_VERSION = {
   major: 0,
   minor: 146,
 } as const;
@@ -44,7 +44,7 @@ function parseVersion(
     : undefined;
 }
 
-export function isCodexAppServerVersionSupported(
+function isCodexAppServerVersionSupported(
   version: string | undefined
 ): boolean {
   const parsed = parseVersion(version);

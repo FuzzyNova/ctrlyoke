@@ -48,11 +48,7 @@ export {
   findUnknownConditionOutputFields,
   findCodeRanges,
   isInCodeRange,
-  type ConditionOutputRef,
   type ContextReferenceMatch,
-  type ContextReferenceType,
-  type InlinePriorContextRange,
-  type UnknownConditionOutputFieldRef,
 } from "../../../utils/PromptReferenceScanner";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
@@ -410,7 +406,7 @@ export function referenceBasename(path: string): string {
 }
 
 // Compact label for a ~git reference; the full hash remains in the title.
-export function gitReferenceLabel(gitRef: string): string {
+function gitReferenceLabel(gitRef: string): string {
   if (gitRef === GIT_CHANGE_KINDS.DIFF || gitRef === GIT_CHANGE_KINDS.STAGED) {
     return gitRef;
   }
@@ -420,7 +416,7 @@ export function gitReferenceLabel(gitRef: string): string {
 }
 
 // Codicon for a ~git reference, matching its completion item's icon.
-export function gitReferenceIcon(gitRef: string): string {
+function gitReferenceIcon(gitRef: string): string {
   if (gitRef === GIT_CHANGE_KINDS.DIFF || gitRef === GIT_CHANGE_KINDS.STAGED) {
     return GIT_REFERENCE_ICONS[gitRef];
   }
@@ -429,7 +425,7 @@ export function gitReferenceIcon(gitRef: string): string {
     : GIT_REFERENCE_ICONS[GIT_CHANGE_KINDS.COMMIT];
 }
 
-export const PRIOR_CONTEXT_CHIP_LABELS: Record<
+const PRIOR_CONTEXT_CHIP_LABELS: Record<
   Exclude<
     InlinePriorContextRef["kind"],
     typeof PRIOR_CONTEXT_REFERENCE_KINDS.STEP
@@ -443,7 +439,7 @@ export const PRIOR_CONTEXT_CHIP_LABELS: Record<
 };
 
 /** Compact chip label for a prior-context ref, e.g. "previous 3", "step 1-3". */
-export function priorContextChipLabel(ref: InlinePriorContextRef): string {
+function priorContextChipLabel(ref: InlinePriorContextRef): string {
   const suffix =
     ref.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? " · summary" : "";
   switch (ref.kind) {
@@ -534,7 +530,7 @@ function describeContextReferenceChip(
   }
 }
 
-export function describePriorContextChip(
+function describePriorContextChip(
   range: InlinePriorContextRange,
   docText: string
 ): Omit<AtomicReferenceChip, "from" | "to"> {

@@ -36,10 +36,6 @@ import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
 import { isStepExecutionLocked } from "@utils/stepCapabilities";
-export {
-  isStepExecutionLocked,
-  hasTerminalStepRuntime,
-} from "@utils/stepCapabilities";
 
 export type ParallelGroupStatus =
   "running" | "failed" | "cancelled" | "completed" | "skipped" | "pending";

@@ -83,7 +83,7 @@ export interface AttemptCostCalculationResult {
  * `ModelPricingRegistry.ts`) — there is no hand-maintained price table in
  * this codebase to fall back to.
  */
-export function getModelPricing(
+function getModelPricing(
   harnessId: HarnessId,
   modelId: string,
   pricingOverride?: ModelPricingOverride

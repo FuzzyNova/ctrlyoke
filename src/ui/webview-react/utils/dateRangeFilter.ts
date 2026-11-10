@@ -28,7 +28,7 @@ export const DEFAULT_DATE_RANGE_FILTER: DateRangeFilter = {
   to: "",
 };
 
-export const DATE_INPUT_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+const DATE_INPUT_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
@@ -49,7 +49,7 @@ export const WORKFLOW_HARNESS_OPTIONS = ALL_WORKFLOW_HARNESSES.map(
   })
 );
 
-export function formatDateInput(timestamp: number): string {
+function formatDateInput(timestamp: number): string {
   return DATE_INPUT_FORMATTER.format(new Date(timestamp));
 }
 

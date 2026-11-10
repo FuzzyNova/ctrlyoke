@@ -83,29 +83,6 @@ export async function getCtrlYokeSlashCompletions(
   return [...skillItems, ...mcpItems].sort(compareCompletionItems);
 }
 
-/** Get discovered ctrlyoke skill completions for a typed skill-name prefix. */
-export async function getSkillTokenCompletions(
-  workspaceRoot: string | undefined,
-  namePrefix = ""
-): Promise<SkillTokenCompletionItem[]> {
-  const { skills } = await getDiscoveredSlashTokenSources(workspaceRoot);
-  return createSkillTokenCompletions(skills, namePrefix).sort(
-    compareCompletionItems
-  );
-}
-
-/** Get registry-backed ctrlyoke MCP completions for a typed server-name prefix. */
-export async function getMcpTokenCompletions(
-  workspaceRoot: string | undefined,
-  namePrefix = ""
-): Promise<McpTokenCompletionItem[]> {
-  const { managedServers } =
-    await getDiscoveredSlashTokenSources(workspaceRoot);
-  return createMcpTokenCompletions(managedServers, namePrefix).sort(
-    compareCompletionItems
-  );
-}
-
 function parseSlashTokenCompletionContext(
   prefix: string
 ): SlashTokenCompletionContext | undefined {

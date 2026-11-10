@@ -18,10 +18,10 @@
  */
 
 /** Characters that are legal inside a filename, as a character-class body. */
-export const REFERENCE_BOUNDARY_CHARS = "\\p{L}\\p{N}_+=@#$%^&!~-";
+const REFERENCE_BOUNDARY_CHARS = "\\p{L}\\p{N}_+=@#$%^&!~-";
 
 /** Matches exactly one boundary character. */
-export const REFERENCE_BOUNDARY_CHAR_RE = new RegExp(
+const REFERENCE_BOUNDARY_CHAR_RE = new RegExp(
   `[${REFERENCE_BOUNDARY_CHARS}]`,
   "u"
 );

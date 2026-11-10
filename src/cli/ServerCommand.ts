@@ -261,7 +261,7 @@ export async function checkHttpsRemoteAccess(
   return `Remote access is a Pro feature. ${skipped}`;
 }
 
-export async function serverCommand(options: ServerOptions): Promise<void> {
+async function serverCommand(options: ServerOptions): Promise<void> {
   // Taken first, before anything can spawn a process that would inherit it.
   const environmentLicense = await takeEnvironmentLicenseKey();
   const cwd = path.resolve(options.cwd ?? process.cwd());

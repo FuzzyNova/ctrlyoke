@@ -14,7 +14,7 @@ const SECRET_DIRECTORY_MODE = 0o700;
 const NON_OWNER_PERMISSION_BITS = 0o077;
 
 /** Where the Node hosts keep secrets when no OS credential store is available. */
-export function defaultSecretFilePath(): string {
+function defaultSecretFilePath(): string {
   return path.join(ctrlyokeStateHome(), SECRET_FILE_NAME);
 }
 

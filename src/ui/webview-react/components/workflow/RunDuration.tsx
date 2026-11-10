@@ -8,7 +8,7 @@ import {
 } from "../../utils/time";
 
 /** Tooltip shared by every run-time display. */
-export const RUN_DURATION_TITLE = "Run time (excludes pauses)";
+const RUN_DURATION_TITLE = "Run time (excludes pauses)";
 
 /**
  * The phrase a settled run time contributes to a row's accessible name. Only

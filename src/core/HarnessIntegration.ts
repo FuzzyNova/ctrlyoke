@@ -103,9 +103,7 @@ export interface PriorContextFileChange {
 }
 
 /** Build the deterministic summary projection of a full prior-context item. */
-export function summarizePriorContextItem(
-  item: PriorContextItem
-): PriorContextItem {
+function summarizePriorContextItem(item: PriorContextItem): PriorContextItem {
   if (item.detail !== PRIOR_CONTEXT_DETAILS.SUMMARY) return item;
   const summary: PriorContextItem = { ...item };
   delete summary.earlierAttempts;

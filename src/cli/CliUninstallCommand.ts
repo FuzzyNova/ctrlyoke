@@ -96,7 +96,7 @@ export function formatCliUninstallInfo(info: CliUninstallInfo): string {
   return lines.join("\n");
 }
 
-export function formatCliUninstallFailures(info: CliUninstallInfo): string {
+function formatCliUninstallFailures(info: CliUninstallInfo): string {
   return [
     ...info.failedHarnesses.map(
       ({ harnessId, message }) =>
