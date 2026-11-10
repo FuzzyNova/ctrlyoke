@@ -86,7 +86,14 @@ rather than continuing the pattern.
 
 ## Project Status
 
-Pre-release — No backward compatibility constraints. Prioritize clean architecture and bold improvements.
+Released — `0.2.0` shipped publicly on October 20, 2026 (VS Code Marketplace, npm, public repo). Users now have workflow files, settings, run history and CI scripts that depend on ctrlyoke, so **a breaking change to anything a user writes, stores or scripts against must ship with its compatibility path in the same commit**:
+
+- **Workflow and settings schemas**: follow "Changing the schemas" in `CONTRIBUTING.md` — `npm run schema:bump` first, then a migration in `src/utils/FormatMigrations.ts` and a fixture. Renaming or removing a field, narrowing a type, or changing a meaning or default is a bump.
+- **Persisted state** (run files, timeline, locks, registries and every other file carrying a `schemaVersion`): bump that format's version and keep reading the older version (migrate on read). A file written by a newer ctrlyoke stays read-only (`src/utils/PersistedSchemaGuard.ts`).
+- **CLI `--json` envelopes, exit codes, flags, MCP tools, command IDs and setting keys**: change additively within the current `schemaVersion`; a breaking change needs a new version or a deprecated alias that keeps the old form working.
+- Record every behavior change users will notice under the release's **Changed** heading in `CHANGELOG.md`.
+
+Internal code is still free to change: refactor boldly behind those contracts and keep the architecture clean.
 
 ## Key Principles
 
