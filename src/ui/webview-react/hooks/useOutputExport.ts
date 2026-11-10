@@ -12,7 +12,7 @@ import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
 } from "@utils/outputProjection";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { MESSAGE_TYPES } from "@/types/messages";

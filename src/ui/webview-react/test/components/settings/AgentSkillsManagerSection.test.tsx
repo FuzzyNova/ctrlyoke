@@ -11,7 +11,7 @@ vi.mock("@hooks/useMessageHandler", () => ({
 }));
 
 import { AgentSkillsManagerSection } from "@components/settings/AgentSkillsManagerSection";
-import { useHarnessFileStore } from "@store/useHarnessFileStore";
+import { useHarnessFileStore } from "@store/harnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
 import {
   HARNESS_FILE_TYPES,

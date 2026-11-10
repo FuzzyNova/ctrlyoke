@@ -1,7 +1,7 @@
 import { MCP_SERVER_IDS, SETTING_SCOPES } from "@root/types/DashboardConstants";
 import type { WorkflowValueDataSource } from "@root/completions/WorkflowFileCompletionCore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
-import { useMcpManagerStore } from "@store/useMcpManagerStore";
+import { useMcpManagerStore } from "@store/mcpManagerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { isHarnessId } from "@root/types/DashboardConstants";
 

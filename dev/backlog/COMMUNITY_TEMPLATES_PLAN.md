@@ -197,7 +197,7 @@ error?: string; localTemplateId?: string }`).
 
 ### Webview store: `useCommunityTemplatesStore`
 
-Mirrors `useMcpManagerStore.ts`: `index: CommunityTemplateEntry[] |
+Mirrors `mcpManagerStore.ts`: `index: CommunityTemplateEntry[] |
 undefined`, `isLoading`, `error`, `query`, `installingIds: Set<string>`
 (per-row spinner, since install is per-item and can be slow, unlike the MCP
 tab's single loading flag). Actions: `requestIndex()`, `installTemplate(id,

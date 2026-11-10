@@ -24,7 +24,7 @@
     "src/ui/webview-react/store/settingsStore.ts",
     "src/ui/webview-react/store/terminalStore.ts",
     "src/ui/webview-react/store/uiStore.ts",
-    "src/ui/webview-react/store/useMcpManagerStore.ts",
+    "src/ui/webview-react/store/mcpManagerStore.ts",
     "src/ui/webview-react/store/workflowStore.ts",
     "src/ui/webview-react/store/workspaceViewerStore.ts",
     "src/ui/webview-react/terminalRegistry.ts",

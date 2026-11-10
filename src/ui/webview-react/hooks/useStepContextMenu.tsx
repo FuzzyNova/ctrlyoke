@@ -17,8 +17,8 @@ import { useEditorStore } from "@store/editorStore";
 import { executionOwnsCurrentStep } from "@utils/status";
 import {
   buildWorkflowStepEnabledUpdate,
-  readWorkflowStepFromClipboard,
-} from "@utils/stepClipboard";
+} from "@utils/stepEnabledToggle";
+import { readWorkflowStepFromClipboard } from "@utils/workflowStepSerialization";
 import {
   getStepSessionDetails,
   type StepRuntimeMetaSnapshot,

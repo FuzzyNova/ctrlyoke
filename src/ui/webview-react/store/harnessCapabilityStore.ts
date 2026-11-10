@@ -19,7 +19,7 @@ const initialState: CompatibilityState = {
 };
 
 /** Client cache for backend-owned capability facts. */
-export const useCompatibilityStore = create<
+export const useHarnessCapabilityStore = create<
   CompatibilityState & CompatibilityActions
 >((set) => ({
   ...initialState,

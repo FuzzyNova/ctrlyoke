@@ -18,8 +18,8 @@ import {
   getWorkflowStepRawText,
   isScriptWorkflowStep,
   serializeWorkflowStepText,
-  writeClipboardText,
-} from "./stepClipboard";
+} from "./workflowStepSerialization";
+import { writeClipboardText } from "./clipboard";
 import {
   buildStepMetadataClipboardText,
   type StepRuntimeMetaSnapshot,

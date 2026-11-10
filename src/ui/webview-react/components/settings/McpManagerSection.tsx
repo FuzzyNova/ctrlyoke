@@ -3,7 +3,7 @@ import {
   MCP_MANAGER_DISCOVERY_TABS,
   MCP_MANAGER_REMOTE_SORTS,
   useMcpManagerStore,
-} from "@store/useMcpManagerStore";
+} from "@store/mcpManagerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {

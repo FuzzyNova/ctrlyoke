@@ -19,7 +19,7 @@ import {
   getWorstSkillAudit,
   needsRiskAcknowledgement,
 } from "@components/settings/SkillsRegistryPanel";
-import { useSkillsRegistryStore } from "@store/useSkillsRegistryStore";
+import { useSkillsRegistryStore } from "@store/skillsRegistryStore";
 import {
   DATA_SOURCES,
   MESSAGE_TYPES,

@@ -3,7 +3,7 @@ import {
   SELECT_ALL_SCOPE_ATTRIBUTE,
   SELECT_ALL_SCOPES,
 } from "@root/types/DashboardConstants";
-import { isEditableClipboardTarget } from "@utils/stepClipboard";
+import { isEditableClipboardTarget } from "@utils/clipboard";
 
 /**
  * Confines Ctrl/Cmd+A to the dashboard region the user is working in.

@@ -8,7 +8,7 @@ import { LanguageServersSection } from "@components/settings/LanguageServersSect
 import {
   useLanguageServerStore,
   LANGUAGE_SERVER_TABS,
-} from "@store/useLanguageServerStore";
+} from "@store/languageServerStore";
 import {
   LANGUAGE_SERVER_STATUSES,
   MESSAGE_TYPES,

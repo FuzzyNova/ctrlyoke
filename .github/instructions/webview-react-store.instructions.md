@@ -13,6 +13,7 @@ Stores are split by ownership, not by screen. Extend the store that owns the dat
 - `settingsStore` keeps both raw global settings and workflow overrides. Effective-value helpers are the canonical inheritance path.
 - `terminalStore` tracks session metadata only; xterm instances, DOM, and replay buffers stay outside Zustand in `terminalRegistry.ts`.
 - `workspaceViewerStore` persists modal state and file drafts. Its file keys are normalized workspace-relative forward-slash paths so navigation from output/search/diff reuses the same cache entries.
+- Keep store module filenames in the `xStore.ts` form and their hook names in the `useXStore` form. The capability snapshot cache lives in `harnessCapabilityStore.ts` / `useHarnessCapabilityStore` and remains transient, without Zustand persistence. The harness file, language server, MCP manager, and skills registry store files use their domain names while retaining their established hook names.
 </ownership>
 
 <gotchas>

@@ -64,8 +64,8 @@ import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
 import type { StepHarnessModel } from "./WorkflowStepRow";
 import {
   buildWorkflowStepEnabledState,
-  isScriptWorkflowStep,
-} from "@utils/stepClipboard";
+} from "@utils/stepEnabledToggle";
+import { isScriptWorkflowStep } from "@utils/workflowStepSerialization";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   ExecutingStepHighlight,

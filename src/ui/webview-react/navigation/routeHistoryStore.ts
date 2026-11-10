@@ -46,7 +46,7 @@ const INITIAL_STATE: NavHistoryState = {
   future: [],
 };
 
-export const useNavHistoryStore = create<NavHistoryState & NavHistoryActions>()(
+export const useRouteHistoryStore = create<NavHistoryState & NavHistoryActions>()(
   (set, get) => ({
     ...INITIAL_STATE,
 

@@ -29,7 +29,7 @@ export { useNewWorkflowKeyHandler } from "./useNewWorkflowKeyHandler";
 export { useHistorySearchKeyHandler } from "./useHistorySearchKeyHandler";
 export { useScopedSelectAll } from "./useScopedSelectAll";
 export { useLanguageIntelligence } from "./useLanguageIntelligence";
-export { useDrawerTabOverrides } from "./useDrawerTabOverrides";
+export { usePropertiesTabOverrides } from "./usePropertiesTabOverrides";
 export { useSettingsDrawerTabOverrides } from "./useSettingsDrawerTabOverrides";
 export { useStepStatus } from "./useStepStatus";
 export { useContextPct } from "./useContextPct";

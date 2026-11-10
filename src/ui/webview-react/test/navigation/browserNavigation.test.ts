@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { setupBrowserNavigation } from "@/navigation/browserNavigation";
-import { useBrowserHistoryStore } from "@/navigation/browserHistoryStore";
+import { useBrowserHistoryCursorStore } from "@/navigation/browserHistoryCursorStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -15,7 +15,7 @@ beforeEach(() => {
     runSummaries: [],
     executionRunRef: null,
   });
-  useBrowserHistoryStore.getState().reset();
+  useBrowserHistoryCursorStore.getState().reset();
   window.history.replaceState({}, "", "/?token=t");
 });
 
@@ -42,7 +42,7 @@ describe("setupBrowserNavigation", () => {
       startLine: undefined,
       endLine: undefined,
     });
-    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(0);
   });
 
   it("sets the document title from the initial URL", () => {
@@ -86,7 +86,7 @@ describe("setupBrowserNavigation", () => {
       undefined
     );
 
-    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(0);
     expect(new URLSearchParams(window.location.search).get("workflowKey")).toBe(
       null
     );
@@ -104,7 +104,7 @@ describe("setupBrowserNavigation", () => {
         undefined
       );
 
-    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(0);
     expect(new URLSearchParams(window.location.search).get("workflowKey")).toBe(
       "old"
     );
@@ -136,7 +136,7 @@ describe("setupBrowserNavigation", () => {
       undefined
     );
 
-    expect(useBrowserHistoryStore.getState()).toMatchObject({
+    expect(useBrowserHistoryCursorStore.getState()).toMatchObject({
       idx: 1,
       length: 2,
     });
@@ -156,7 +156,7 @@ describe("setupBrowserNavigation", () => {
     // The explorer pane settles the selected file (without a line range).
     useWorkspaceViewerStore.setState({ selectedFilePath: "src/a.ts" });
 
-    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(0);
     expect(window.location.search).toContain("lines=10-20");
   });
 
@@ -181,7 +181,7 @@ describe("setupBrowserNavigation", () => {
     // Simulate the explorer pane settling into a directory.
     useWorkspaceViewerStore.getState().setExplorerPath("src");
 
-    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(1);
     expect(window.location.search).toContain("dir=src");
     expect(window.location.search).toContain("token=t");
   });
@@ -193,7 +193,7 @@ describe("setupBrowserNavigation", () => {
     useWorkspaceViewerStore.getState().setSearchQuery("use state");
     useWorkspaceViewerStore.getState().setSearchScope("content");
 
-    expect(useBrowserHistoryStore.getState()).toMatchObject({
+    expect(useBrowserHistoryCursorStore.getState()).toMatchObject({
       idx: 0,
       length: 1,
     });
@@ -205,7 +205,7 @@ describe("setupBrowserNavigation", () => {
     );
 
     useWorkspaceViewerStore.getState().openToFile("src/useState.ts");
-    expect(useBrowserHistoryStore.getState()).toMatchObject({
+    expect(useBrowserHistoryCursorStore.getState()).toMatchObject({
       idx: 1,
       length: 2,
     });
@@ -233,7 +233,7 @@ describe("setupBrowserNavigation", () => {
     // Simulate a commit/ref diff becoming active (as openToGitRef would).
     useWorkspaceViewerStore.setState({ diffRef: "abc123" });
 
-    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(1);
     expect(window.location.search).toContain("ref=abc123");
   });
 
@@ -251,7 +251,7 @@ describe("setupBrowserNavigation", () => {
     const wv = useWorkspaceViewerStore.getState();
     expect(wv.activeTab).toBe("sourceControl");
     expect(wv.selectedDiffPath).toBe("src/c.ts");
-    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(1);
   });
 
   it("does not push stale file entries while a popstate file route settles", () => {
@@ -267,7 +267,7 @@ describe("setupBrowserNavigation", () => {
     useWorkspaceViewerStore.getState().clearPendingNavigation();
     useWorkspaceViewerStore.setState({ selectedFilePath: "src/b.ts" });
 
-    expect(useBrowserHistoryStore.getState()).toMatchObject({
+    expect(useBrowserHistoryCursorStore.getState()).toMatchObject({
       idx: 1,
       length: 2,
     });
@@ -285,7 +285,7 @@ describe("setupBrowserNavigation", () => {
     // The explorer consumes pendingNavigation before it selects the requested
     // file. That transient old-file state must not become a fresh URL entry.
     useWorkspaceViewerStore.getState().clearPendingNavigation();
-    expect(useBrowserHistoryStore.getState()).toMatchObject({
+    expect(useBrowserHistoryCursorStore.getState()).toMatchObject({
       idx: 0,
       length: 2,
     });
@@ -294,7 +294,7 @@ describe("setupBrowserNavigation", () => {
     );
 
     useWorkspaceViewerStore.setState({ selectedFilePath: "src/a.ts" });
-    expect(useBrowserHistoryStore.getState()).toMatchObject({
+    expect(useBrowserHistoryCursorStore.getState()).toMatchObject({
       idx: 0,
       length: 2,
     });
@@ -332,7 +332,7 @@ describe("setupBrowserNavigation", () => {
     const viewer = useWorkspaceViewerStore.getState();
 
     viewer.showLanguageReferences(origin);
-    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(1);
     expect(new URLSearchParams(window.location.search).get("refs")).toBe(
       "src/a.ts:3:5"
     );
@@ -340,7 +340,7 @@ describe("setupBrowserNavigation", () => {
     viewer.selectLanguageReference({ path: "src/b.ts", line: 9 });
     viewer.selectLanguageReference({ path: "src/b.ts", line: 20 });
 
-    expect(useBrowserHistoryStore.getState().idx).toBe(3);
+    expect(useBrowserHistoryCursorStore.getState().idx).toBe(3);
     const params = new URLSearchParams(window.location.search);
     expect(params.get("file")).toBe("src/b.ts");
     expect(params.get("lines")).toBe("20-20");

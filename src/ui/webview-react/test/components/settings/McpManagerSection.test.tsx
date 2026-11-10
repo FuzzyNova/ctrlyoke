@@ -14,7 +14,7 @@ import { McpManagerSection } from "@components/settings/McpManagerSection";
 import {
   MCP_MANAGER_DISCOVERY_TABS,
   useMcpManagerStore,
-} from "@store/useMcpManagerStore";
+} from "@store/mcpManagerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import {

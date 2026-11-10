@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import { Icon } from "./Icon";
 
 /** How long the check mark replaces the copy icon after a successful copy. */

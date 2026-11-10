@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  useNavHistoryStore,
+  useRouteHistoryStore,
   canGoBack,
   canGoForward,
-} from "@/navigation/navHistoryStore";
+} from "@/navigation/routeHistoryStore";
 import type { Route } from "@/navigation/route";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 beforeEach(() => {
-  useNavHistoryStore.getState().reset();
+  useRouteHistoryStore.getState().reset();
 });
 
 function store() {
-  return useNavHistoryStore.getState();
+  return useRouteHistoryStore.getState();
 }
 
 const A: Route = {

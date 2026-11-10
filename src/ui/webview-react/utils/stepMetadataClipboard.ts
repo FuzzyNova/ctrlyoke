@@ -11,7 +11,7 @@ import {
   sandboxModeApplies,
   sandboxValueLabel,
 } from "@root/types/DashboardConstants";
-import { isScriptWorkflowStep } from "./stepClipboard";
+import { isScriptWorkflowStep } from "./workflowStepSerialization";
 import { formatClockDuration } from "./time";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */

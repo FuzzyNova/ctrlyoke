@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import type { PropertyValues, EditorSelectionTarget } from "@store/editorStore";
@@ -37,7 +37,7 @@ export interface UseCompatibilityDiagnosticsResult {
   executionTargets: CompatibilityExecutionTarget[];
   portabilityReport: PortabilityReport | null;
   capabilitySnapshot: ReturnType<
-    typeof useCompatibilityStore.getState
+    typeof useHarnessCapabilityStore.getState
   >["capabilitySnapshot"];
   isChecking: boolean;
   snapshotStatus: "checking" | "ready";
@@ -132,10 +132,10 @@ export function useCompatibilityDiagnostics(
   const promptProperties = options.promptProperties;
   const promptTarget = options.promptTarget;
   const includePortabilityReport = options.includePortabilityReport ?? false;
-  const capabilitySnapshot = useCompatibilityStore(
+  const capabilitySnapshot = useHarnessCapabilityStore(
     (state) => state.capabilitySnapshot
   );
-  const snapshotStatus = useCompatibilityStore(
+  const snapshotStatus = useHarnessCapabilityStore(
     (state) => state.capabilitySnapshotStatus
   );
 

@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  useBrowserHistoryStore,
+  useBrowserHistoryCursorStore,
   canGoBackBrowser,
   canGoForwardBrowser,
-} from "@/navigation/browserHistoryStore";
+} from "@/navigation/browserHistoryCursorStore";
 
 beforeEach(() => {
-  useBrowserHistoryStore.getState().reset();
+  useBrowserHistoryCursorStore.getState().reset();
 });
 
 function state() {
-  return useBrowserHistoryStore.getState();
+  return useBrowserHistoryCursorStore.getState();
 }
 
-describe("browserHistoryStore", () => {
+describe("browserHistoryCursorStore", () => {
   it("starts at idx 0 / length 1 with no back or forward", () => {
     expect(state().idx).toBe(0);
     expect(state().length).toBe(1);

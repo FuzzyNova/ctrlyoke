@@ -2,7 +2,7 @@ import { EditorSelection, type EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { selectAll, selectLine } from "@codemirror/commands";
 import type { ContextMenuEntry } from "@components/shared/ContextMenu";
-import { readClipboardText, writeClipboardText } from "@utils/stepClipboard";
+import { readClipboardText, writeClipboardText } from "@utils/clipboard";
 
 const NO_SELECTION_TITLE = "No text selected";
 const READ_ONLY_TITLE = "Editor is read-only";

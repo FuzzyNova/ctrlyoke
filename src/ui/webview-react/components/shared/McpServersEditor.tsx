@@ -22,7 +22,7 @@ import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
-import { useMcpManagerStore } from "../../store/useMcpManagerStore";
+import { useMcpManagerStore } from "../../store/mcpManagerStore";
 import { useUiStore } from "@store/uiStore";
 import { findLiteralCredentialEnvKeys } from "./KeyValueMapHelpers";
 import { FieldDiagnostic } from "./FieldDiagnostic";

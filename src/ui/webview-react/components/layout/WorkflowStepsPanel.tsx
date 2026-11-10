@@ -88,13 +88,12 @@ import {
   resolveStepColor,
   type StepColorGroupMember,
 } from "../../utils/stepColor";
+import { buildWorkflowStepEnabledState } from "@utils/stepEnabledToggle";
+import { isEditableClipboardTarget, writeClipboardText } from "@utils/clipboard";
 import {
-  buildWorkflowStepEnabledState,
-  isEditableClipboardTarget,
   readWorkflowStepFromClipboard,
   serializeWorkflowStepText,
-  writeClipboardText,
-} from "@utils/stepClipboard";
+} from "@utils/workflowStepSerialization";
 import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 import { buildStepOverrideChips } from "@utils/stepOverrideChips";
 import {

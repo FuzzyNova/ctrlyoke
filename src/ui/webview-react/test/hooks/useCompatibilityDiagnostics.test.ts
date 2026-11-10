@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { useCompatibilityDiagnostics } from "@hooks/useCompatibilityDiagnostics";
 import { PROPERTY_DEFAULTS, type PropertyValues } from "@store/editorStore";
-import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
@@ -78,7 +78,7 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
 }
 
 function resetStores(): void {
-  useCompatibilityStore.getState().resetCapabilitySnapshot();
+  useHarnessCapabilityStore.getState().resetCapabilitySnapshot();
   useSettingsStore.getState().resetSettings();
   useWorkflowStore.setState({
     steps: [],
@@ -132,7 +132,7 @@ describe("useCompatibilityDiagnostics", () => {
     useWorkflowStore.setState({
       steps: [{ prompt: "Review @screen.png", harness: HARNESS_IDS.CODEX_CLI }],
     });
-    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(snapshot);
 
     const { result } = renderHook(() => useCompatibilityDiagnostics());
     expect(result.current.diagnostics.map((item) => item.capability)).toContain(
@@ -168,7 +168,7 @@ describe("useCompatibilityDiagnostics", () => {
         },
       ],
     });
-    useCompatibilityStore.getState().setCapabilitySnapshot(makeSnapshot());
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(makeSnapshot());
 
     const { result } = renderHook(() => useCompatibilityDiagnostics());
     expect(result.current.diagnostics).toEqual([]);
@@ -202,7 +202,7 @@ describe("useCompatibilityDiagnostics", () => {
     useWorkflowStore.setState({
       steps: [{ prompt: "Use tools", harness: HARNESS_IDS.CODEX_CLI }],
     });
-    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(snapshot);
 
     const { result } = renderHook(() => useCompatibilityDiagnostics());
     const workflow: PromptFile = {
@@ -273,7 +273,7 @@ describe("useCompatibilityDiagnostics", () => {
       mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
     });
     useWorkflowStore.setState({ steps: [{ prompt: "Use MCP" }] });
-    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(snapshot);
 
     const { result } = renderHook(() => useCompatibilityDiagnostics());
     expect(result.current.diagnostics.map(projectDiagnostic)).toEqual([
@@ -322,7 +322,7 @@ describe("useCompatibilityDiagnostics", () => {
         { prompt: "Inherited Codex" },
       ],
     });
-    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(snapshot);
 
     const { result } = renderHook(() => useCompatibilityDiagnostics());
     const aggregate = workflowPermissionDiagnostic(
@@ -364,7 +364,7 @@ describe("useCompatibilityDiagnostics", () => {
       },
     });
     useWorkflowStore.setState({ steps: [{ prompt: "Use tools" }] });
-    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(snapshot);
 
     let promptProperties: PropertyValues = {
       ...PROPERTY_DEFAULTS,
@@ -402,7 +402,7 @@ describe("useCompatibilityDiagnostics", () => {
         { prompt: "Runs on Codex", harness: HARNESS_IDS.CODEX_CLI },
       ],
     });
-    useCompatibilityStore.getState().setCapabilitySnapshot(makeSnapshot());
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(makeSnapshot());
 
     let index = 0;
     const { result, rerender } = renderHook(() =>

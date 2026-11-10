@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { NavHistoryControls } from "@components/shared/NavHistoryControls";
-import { useNavHistoryStore } from "@/navigation/navHistoryStore";
+import { useRouteHistoryStore } from "@/navigation/routeHistoryStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { Route } from "@/navigation/route";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
@@ -15,7 +15,7 @@ const A: Route = {
 const B: Route = { viewer: "explorer", file: "src/a.ts" };
 
 beforeEach(() => {
-  useNavHistoryStore.getState().reset();
+  useRouteHistoryStore.getState().reset();
   useWorkspaceViewerStore.getState().reset();
 });
 
@@ -30,24 +30,24 @@ describe("NavHistoryControls", () => {
   });
 
   it("enables back once there is a previous entry", () => {
-    useNavHistoryStore.getState().record(A);
-    useNavHistoryStore.getState().record(B);
+    useRouteHistoryStore.getState().record(A);
+    useRouteHistoryStore.getState().record(B);
     render(<NavHistoryControls />);
     expect(backButton()).toBeEnabled();
     expect(forwardButton()).toBeDisabled();
   });
 
   it("walks the stack on back and forward clicks", () => {
-    useNavHistoryStore.getState().record(A);
-    useNavHistoryStore.getState().record(B);
+    useRouteHistoryStore.getState().record(A);
+    useRouteHistoryStore.getState().record(B);
     render(<NavHistoryControls />);
 
     fireEvent.click(backButton());
-    expect(useNavHistoryStore.getState().current).toEqual(A);
+    expect(useRouteHistoryStore.getState().current).toEqual(A);
     expect(forwardButton()).toBeEnabled();
 
     fireEvent.click(forwardButton());
-    expect(useNavHistoryStore.getState().current).toEqual(B);
+    expect(useRouteHistoryStore.getState().current).toEqual(B);
     expect(forwardButton()).toBeDisabled();
   });
 });

@@ -65,7 +65,7 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
-import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { useHistoryTrashStore } from "@store/historyTrashStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
@@ -141,7 +141,7 @@ beforeEach(() => {
   useEditorStore.getState().resetEditor();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   useWorkspaceStatsStore.setState({ snapshot: undefined });
-  useCompatibilityStore.getState().resetCapabilitySnapshot();
+  useHarnessCapabilityStore.getState().resetCapabilitySnapshot();
   handleCompletionNotificationEventMock.mockReset();
   webviewWarnMock.mockReset();
   sessionStorage.clear();
@@ -249,11 +249,11 @@ describe("HARNESS_CAPABILITY_SNAPSHOT", () => {
     } as any;
 
     for (const standalone of [false, true]) {
-      useCompatibilityStore.getState().resetCapabilitySnapshot();
+      useHarnessCapabilityStore.getState().resetCapabilitySnapshot();
       createMessageHandlers(standalone)[
         MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT
       ]({ data: { snapshot } } as any);
-      expect(useCompatibilityStore.getState().capabilitySnapshot).toBe(
+      expect(useHarnessCapabilityStore.getState().capabilitySnapshot).toBe(
         snapshot
       );
     }

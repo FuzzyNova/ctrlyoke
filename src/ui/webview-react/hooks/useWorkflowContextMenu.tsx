@@ -11,7 +11,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   type WorkflowDeleteScope,
 } from "@root/types/DashboardConstants";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import { notifyUser } from "@utils/notifyUser";
 import { openWorkflowDryRun } from "@utils/executionPreview";
 import { generateId } from "@utils/string";

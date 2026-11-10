@@ -14,7 +14,7 @@ import {
 } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
-import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
+import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
 import { useActiveInteractiveSession } from "../../hooks/useActiveInteractiveSession";
@@ -276,7 +276,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     )
     .map((diagnostic) => toFieldDiagnostic(diagnostic));
 
-  const drawerTabOverrides = useDrawerTabOverrides(
+  const drawerTabOverrides = usePropertiesTabOverrides(
     workflowProperties,
     globalSettings,
     properties,

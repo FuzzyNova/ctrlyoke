@@ -27,7 +27,7 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useScrollFocusedFieldIntoView } from "../../hooks/useScrollFocusedFieldIntoView";
 import { useIsViewingDeletedWorkflow } from "../../hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "../../hooks/useIsSystemGeneratedWorkflow";
-import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
+import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { usePickerShortcutRequest } from "../../hooks/usePickerShortcutRequest";
 import {
@@ -1451,7 +1451,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     [vscode, effectiveHarness]
   );
 
-  const tabOverrides = useDrawerTabOverrides(
+  const tabOverrides = usePropertiesTabOverrides(
     workflowProperties,
     globalSettings,
     undefined,

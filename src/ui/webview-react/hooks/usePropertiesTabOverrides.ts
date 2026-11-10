@@ -18,7 +18,7 @@ import {
  * - WorkflowPropertiesPanel: omit promptProperties → resolves workflow → global
  * - PromptPropertiesDrawer: pass promptProperties → resolves prompt → workflow → global
  */
-export function useDrawerTabOverrides(
+export function usePropertiesTabOverrides(
   workflowProperties: WorkflowProperties,
   globalSettings: GlobalSettings,
   promptProperties?: PropertyValues,

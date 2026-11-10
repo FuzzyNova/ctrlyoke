@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { COPY_FEEDBACK_MS, CopyButton } from "@components/shared/CopyButton";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 
-vi.mock("@utils/stepClipboard", () => ({
+vi.mock("@utils/clipboard", () => ({
   writeClipboardText: vi.fn(() => Promise.resolve()),
 }));
 

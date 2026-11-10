@@ -24,7 +24,7 @@ interface BrowserHistoryActions {
 
 const INITIAL_STATE: BrowserHistoryState = { idx: 0, length: 1 };
 
-export const useBrowserHistoryStore = create<
+export const useBrowserHistoryCursorStore = create<
   BrowserHistoryState & BrowserHistoryActions
 >()((set) => ({
   ...INITIAL_STATE,

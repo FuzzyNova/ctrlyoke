@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import { REFERENCE_CHIP_MENU_LABELS } from "@utils/referenceChipMenu";
 import { AtomicReferenceChip } from "@components/output/AtomicReferenceChip";
 import { findAtomicReferences } from "@utils/atomicReferences";
@@ -46,7 +46,7 @@ function renderReference(
   return { descriptor, onOpen };
 }
 
-vi.mock("@utils/stepClipboard", () => ({
+vi.mock("@utils/clipboard", () => ({
   writeClipboardText: vi.fn(() => Promise.resolve()),
 }));
 

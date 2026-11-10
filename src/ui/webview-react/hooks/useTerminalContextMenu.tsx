@@ -3,7 +3,7 @@ import {
   ContextMenu,
   type ContextMenuState,
 } from "../components/shared/ContextMenu";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import { sendMessage } from "./useMessageHandler";
 import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS } from "../types/messages";
 import type { TerminalSession } from "@store/terminalStore";

@@ -12,7 +12,7 @@ import type {
   HarnessCapabilityRegistrySnapshot,
   EffectivePermissionCapabilityState,
 } from "@root/types/CompatibilityTypes";
-import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
@@ -86,7 +86,7 @@ function createSettings(): FullGlobalSettings {
 
 describe("DefaultsPermissionsPage compatibility summary", () => {
   beforeEach(() => {
-    useCompatibilityStore.getState().setCapabilitySnapshot(createSnapshot());
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(createSnapshot());
   });
 
   it("summarizes supported and mode-only harnesses while keeping both fields editable", () => {

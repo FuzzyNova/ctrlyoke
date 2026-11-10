@@ -18,7 +18,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { applyRoute, isApplyingRoute } from "./applyRoute";
-import { useBrowserHistoryStore } from "./browserHistoryStore";
+import { useBrowserHistoryCursorStore } from "./browserHistoryCursorStore";
 import { deriveCurrentRoute } from "./navState";
 import { currentWorkflowTitle, routeTitle } from "./navTitle";
 import {
@@ -82,7 +82,7 @@ export function setupBrowserNavigation(): () => void {
 
   // Canonicalize the entry URL and stamp it as index 0.
   window.history.replaceState({ idx: 0 }, "", urlForRoute(initialRoute));
-  useBrowserHistoryStore.getState().reset();
+  useBrowserHistoryCursorStore.getState().reset();
   updateTitle(initialRoute);
 
   let lastRoute: Route = initialRoute;
@@ -137,7 +137,7 @@ export function setupBrowserNavigation(): () => void {
     if (isSearchStateChange(lastRoute, route)) {
       lastRoute = route;
       updateTitle(route);
-      const { idx } = useBrowserHistoryStore.getState();
+      const { idx } = useBrowserHistoryCursorStore.getState();
       window.history.replaceState({ idx }, "", urlForRoute(route));
       return;
     }
@@ -148,13 +148,13 @@ export function setupBrowserNavigation(): () => void {
     updateTitle(route);
 
     if (replace) {
-      const { idx } = useBrowserHistoryStore.getState();
+      const { idx } = useBrowserHistoryCursorStore.getState();
       window.history.replaceState({ idx }, "", urlForRoute(route));
       return;
     }
-    const idx = useBrowserHistoryStore.getState().idx + 1;
+    const idx = useBrowserHistoryCursorStore.getState().idx + 1;
     window.history.pushState({ idx }, "", urlForRoute(route));
-    useBrowserHistoryStore.getState().set({ idx, length: idx + 1 });
+    useBrowserHistoryCursorStore.getState().set({ idx, length: idx + 1 });
   };
 
   const handlePopState = (event: PopStateEvent): void => {
@@ -162,7 +162,7 @@ export function setupBrowserNavigation(): () => void {
     lastRoute = route;
     pendingPopRoute = route;
     const state = event.state as { idx?: number } | null;
-    useBrowserHistoryStore
+    useBrowserHistoryCursorStore
       .getState()
       .setIdx(typeof state?.idx === "number" ? state.idx : 0);
     applyRoute(

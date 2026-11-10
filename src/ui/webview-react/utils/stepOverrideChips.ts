@@ -20,7 +20,7 @@ import {
   toCoreWorkflow,
 } from "@utils/coreWorkflowAdapter";
 import { schemaTitle } from "@utils/schemaPropertyLabels";
-import { isScriptWorkflowStep } from "@utils/stepClipboard";
+import { isScriptWorkflowStep } from "@utils/workflowStepSerialization";
 
 /** Visible length of a session ID in chips and banners. */
 const SESSION_ID_PREVIEW_LENGTH = 8;

@@ -11,7 +11,7 @@ import { useEffect } from "react";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { useNavHistoryStore } from "./navHistoryStore";
+import { useRouteHistoryStore } from "./routeHistoryStore";
 import { deriveCurrentRoute } from "./navState";
 import { isApplyingRoute } from "./applyRoute";
 import { setupBrowserNavigation } from "./browserNavigation";
@@ -20,7 +20,7 @@ import { isSearchStateChange } from "./route";
 function recordCurrentRoute(): void {
   if (isApplyingRoute()) return;
   const route = deriveCurrentRoute();
-  const history = useNavHistoryStore.getState();
+  const history = useRouteHistoryStore.getState();
   if (history.current && isSearchStateChange(history.current, route)) {
     history.replace(route);
   } else {

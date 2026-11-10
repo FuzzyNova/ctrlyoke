@@ -7,7 +7,7 @@ import {
   EDITOR_FONT_SIZE_VSCODE,
 } from "@root/types/DashboardConstants";
 import type { GlobalSettings } from "@store/settingsStore";
-import { useDrawerTabOverrides } from "@hooks/useDrawerTabOverrides";
+import { usePropertiesTabOverrides } from "@hooks/usePropertiesTabOverrides";
 import { useSettingsDrawerTabOverrides } from "@hooks/useSettingsDrawerTabOverrides";
 import { getPermissionTabOverride } from "@components/shared/tabBadgeUtils";
 
@@ -58,7 +58,7 @@ const globalSettings: GlobalSettings = {
 describe("drawer permission tab override callers", () => {
   it("preserves the shape swap in the workflow-properties drawer caller", () => {
     const { result } = renderHook(() =>
-      useDrawerTabOverrides({}, globalSettings)
+      usePropertiesTabOverrides({}, globalSettings)
     );
 
     expect(result.current.permissions).toEqual(
@@ -82,7 +82,7 @@ describe("drawer permission tab override callers", () => {
 
   it("keeps the configured MCP icon while adding a compatibility badge", () => {
     const { result } = renderHook(() =>
-      useDrawerTabOverrides(
+      usePropertiesTabOverrides(
         { mcpServers: ["ctrlyoke"] },
         globalSettings,
         undefined,

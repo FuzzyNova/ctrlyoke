@@ -81,6 +81,30 @@ This ledger maps retired names to their current names. Historical implementation
 | `src/ui/webview-react/components/workflow/FileBrowserModal.tsx` | `src/ui/webview-react/components/shared/FileBrowserModal.tsx` | file | 3a | 2026-11-09 |
 | `src/ui/webview-react/test/components/workflow/FileBrowserModal.test.tsx` | `src/ui/webview-react/test/components/shared/FileBrowserModal.test.tsx` | file | 3a | 2026-11-09 |
 | `src/ui/webview-react/components/workspace-viewer/fileBrowserShared.tsx` | `src/ui/webview-react/components/shared/fileBrowserShared.tsx` | file | 3a | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`readClipboardText`) | `src/ui/webview-react/utils/clipboard.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`writeClipboardText`) | `src/ui/webview-react/utils/clipboard.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`isEditableClipboardTarget`) | `src/ui/webview-react/utils/clipboard.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`WorkflowStepUpdateRequest`) | `src/ui/webview-react/utils/stepEnabledToggle.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`buildWorkflowStepEnabledUpdate`) | `src/ui/webview-react/utils/stepEnabledToggle.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`buildWorkflowStepEnabledState`) | `src/ui/webview-react/utils/stepEnabledToggle.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`isScriptWorkflowStep`) | `src/ui/webview-react/utils/workflowStepSerialization.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`getWorkflowStepRawText`) | `src/ui/webview-react/utils/workflowStepSerialization.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`serializeWorkflowStepText`) | `src/ui/webview-react/utils/workflowStepSerialization.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`parseWorkflowStepClipboardText`) | `src/ui/webview-react/utils/workflowStepSerialization.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/utils/stepClipboard.ts` (`readWorkflowStepFromClipboard`) | `src/ui/webview-react/utils/workflowStepSerialization.ts` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/hooks/useDrawerTabOverrides.ts` | `src/ui/webview-react/hooks/usePropertiesTabOverrides.ts` | file | 3c | 2026-11-09 |
+| `useDrawerTabOverrides` | `usePropertiesTabOverrides` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/store/compatibilityStore.ts` | `src/ui/webview-react/store/harnessCapabilityStore.ts` | file | 3c | 2026-11-09 |
+| `useCompatibilityStore` | `useHarnessCapabilityStore` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/store/useHarnessFileStore.ts` | `src/ui/webview-react/store/harnessFileStore.ts` | file | 3c | 2026-11-09 |
+| `src/ui/webview-react/store/useLanguageServerStore.ts` | `src/ui/webview-react/store/languageServerStore.ts` | file | 3c | 2026-11-09 |
+| `src/ui/webview-react/store/useMcpManagerStore.ts` | `src/ui/webview-react/store/mcpManagerStore.ts` | file | 3c | 2026-11-09 |
+| `src/ui/webview-react/store/useSkillsRegistryStore.ts` | `src/ui/webview-react/store/skillsRegistryStore.ts` | file | 3c | 2026-11-09 |
+| `src/ui/webview-react/store/requestQueue.ts` | `src/ui/webview-react/utils/requestQueue.ts` | file | 3c | 2026-11-09 |
+| `src/ui/webview-react/navigation/navHistoryStore.ts` | `src/ui/webview-react/navigation/routeHistoryStore.ts` | file | 3c | 2026-11-09 |
+| `useNavHistoryStore` | `useRouteHistoryStore` | symbol | 3c | 2026-11-09 |
+| `src/ui/webview-react/navigation/browserHistoryStore.ts` | `src/ui/webview-react/navigation/browserHistoryCursorStore.ts` | file | 3c | 2026-11-09 |
+| `useBrowserHistoryStore` | `useBrowserHistoryCursorStore` | symbol | 3c | 2026-11-09 |
 
 ## Kept on purpose
 

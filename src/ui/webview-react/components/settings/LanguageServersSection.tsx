@@ -16,7 +16,7 @@ import {
   useLanguageServerStore,
   LANGUAGE_SERVER_TABS,
   type LanguageServerStatus,
-} from "@store/useLanguageServerStore";
+} from "@store/languageServerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {

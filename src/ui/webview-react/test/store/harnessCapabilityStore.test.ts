@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import type { HarnessCapabilityRegistrySnapshot } from "@root/types/CompatibilityTypes";
 import { CAPABILITY_DOMAINS } from "@root/types/DashboardConstants";
 
-describe("compatibilityStore", () => {
+describe("harnessCapabilityStore", () => {
   beforeEach(() => {
-    useCompatibilityStore.getState().resetCapabilitySnapshot();
+    useHarnessCapabilityStore.getState().resetCapabilitySnapshot();
   });
 
   it("starts in a neutral checking state", () => {
-    const state = useCompatibilityStore.getState();
+    const state = useHarnessCapabilityStore.getState();
 
     expect(state.capabilitySnapshot).toBeNull();
     expect(state.capabilitySnapshotStatus).toBe("checking");
@@ -22,9 +22,9 @@ describe("compatibilityStore", () => {
       harnesses: {} as HarnessCapabilityRegistrySnapshot["harnesses"],
     };
 
-    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+    useHarnessCapabilityStore.getState().setCapabilitySnapshot(snapshot);
 
-    expect(useCompatibilityStore.getState()).toMatchObject({
+    expect(useHarnessCapabilityStore.getState()).toMatchObject({
       capabilitySnapshot: snapshot,
       capabilitySnapshotStatus: "ready",
     });

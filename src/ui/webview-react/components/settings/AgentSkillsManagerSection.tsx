@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
-import { useHarnessFileStore } from "@store/useHarnessFileStore";
+import { useHarnessFileStore } from "@store/harnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {

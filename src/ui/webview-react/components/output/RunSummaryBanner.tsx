@@ -16,7 +16,7 @@ import {
   RunDuration,
   type RunDurationValue,
 } from "@components/workflow/RunDuration";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import type { ExecutionState } from "@root/types/DashboardConstants";
 import { RUN_IMPORT_SOURCE_KINDS } from "@root/types/RunBundleTypes";
 import type {

@@ -9,7 +9,7 @@ import {
   type RegistrySkillReview,
   type RegistrySkillReviewEntry,
   type RegistrySkillUpdateReview,
-} from "@store/useSkillsRegistryStore";
+} from "@store/skillsRegistryStore";
 import {
   DATA_SOURCES,
   KEYBOARD_KEYS,

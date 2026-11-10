@@ -1,5 +1,5 @@
 import type { ContextMenuEntry } from "@components/shared/ContextMenu";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 
 export const REFERENCE_CHIP_MENU_LABELS = {
   GO_TO: "Go to Reference",

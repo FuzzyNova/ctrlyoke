@@ -3,7 +3,7 @@ import {
   ContextMenu,
   type ContextMenuState,
 } from "../components/shared/ContextMenu";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 import type { OutputMessage } from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "../types/cliEvents";

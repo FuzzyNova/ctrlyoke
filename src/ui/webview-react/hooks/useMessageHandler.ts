@@ -23,7 +23,7 @@ import {
 import { useUiStore, type TemplateInfo } from "../store/uiStore";
 import { useEditorStore } from "../store/editorStore";
 import { useRunSummaryCacheStore } from "../store/runSummaryCacheStore";
-import { useLanguageServerStore } from "../store/useLanguageServerStore";
+import { useLanguageServerStore } from "../store/languageServerStore";
 import {
   MESSAGE_TYPES,
   HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
@@ -60,11 +60,11 @@ import {
   isWorkflowRunning,
 } from "../utils/status";
 import { useTerminalStore } from "../store/terminalStore";
-import { useHarnessFileStore } from "../store/useHarnessFileStore";
-import { useMcpManagerStore } from "../store/useMcpManagerStore";
-import { useSkillsRegistryStore } from "../store/useSkillsRegistryStore";
+import { useHarnessFileStore } from "../store/harnessFileStore";
+import { useMcpManagerStore } from "../store/mcpManagerStore";
+import { useSkillsRegistryStore } from "../store/skillsRegistryStore";
 import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
-import { useCompatibilityStore } from "../store/compatibilityStore";
+import { useHarnessCapabilityStore } from "../store/harnessCapabilityStore";
 import { useHistoryTrashStore } from "../store/historyTrashStore";
 import { useExecutionPreviewStore } from "../store/executionPreviewStore";
 import { useHarnessUsageStore } from "../store/harnessUsageStore";
@@ -2074,7 +2074,7 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT] = (message) => {
     const snapshot = message.data?.snapshot;
     if (snapshot) {
-      useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+      useHarnessCapabilityStore.getState().setCapabilitySnapshot(snapshot);
     }
   };
 

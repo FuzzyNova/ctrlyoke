@@ -44,7 +44,7 @@ import type {
   ContextMenuItem,
 } from "@components/shared/ContextMenu";
 import { REFERENCE_CHIP_MENU_LABELS } from "@utils/referenceChipMenu";
-import { writeClipboardText } from "@utils/stepClipboard";
+import { writeClipboardText } from "@utils/clipboard";
 import { EDITOR_PLACEHOLDER_TEXT } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { act } from "react";
@@ -2843,8 +2843,8 @@ describe("keyboardTooltipSpace", () => {
   });
 });
 
-vi.mock("@utils/stepClipboard", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@utils/stepClipboard")>()),
+vi.mock("@utils/clipboard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@utils/clipboard")>()),
   writeClipboardText: vi.fn(() => Promise.resolve()),
 }));
 

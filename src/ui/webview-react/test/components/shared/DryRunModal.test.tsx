@@ -15,7 +15,7 @@ import {
   PREVIEW_TRUNCATION_REASONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
-import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -241,7 +241,7 @@ describe("DryRunModal", () => {
     useExecutionPreviewStore.getState().reset();
     useWorkflowStore.getState().resetWorkflow();
     useSettingsStore.getState().resetSettings();
-    useCompatibilityStore.getState().resetCapabilitySnapshot();
+    useHarnessCapabilityStore.getState().resetCapabilitySnapshot();
     clipboardWriteText.mockReset();
     clipboardWriteText.mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -323,7 +323,7 @@ describe("DryRunModal", () => {
         deniedTools: [],
       },
     });
-    useCompatibilityStore
+    useHarnessCapabilityStore
       .getState()
       .setCapabilitySnapshot(makeCapabilitySnapshot());
     openPreview({ kind: "workflow" });

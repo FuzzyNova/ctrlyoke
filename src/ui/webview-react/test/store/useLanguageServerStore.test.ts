@@ -7,7 +7,7 @@ import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
 import {
   useLanguageServerStore,
   LANGUAGE_SERVER_TABS,
-} from "@store/useLanguageServerStore";
+} from "@store/languageServerStore";
 
 describe("useLanguageServerStore", () => {
   beforeEach(() => {

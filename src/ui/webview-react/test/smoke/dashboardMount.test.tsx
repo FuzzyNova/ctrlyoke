@@ -26,7 +26,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
-import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useEditorStore } from "@store/editorStore";
 import { EXECUTION_STATES, FINAL_STEP_PHASES } from "@/types/messages";
@@ -250,7 +250,7 @@ describe("dashboard mount smoke", () => {
     });
 
     mountDashboard("dry run portability report mount");
-    expect(useCompatibilityStore.getState().capabilitySnapshotStatus).toBe(
+    expect(useHarnessCapabilityStore.getState().capabilitySnapshotStatus).toBe(
       "checking"
     );
   });

@@ -4,7 +4,7 @@ const { sendMessageMock } = vi.hoisted(() => ({ sendMessageMock: vi.fn() }));
 vi.mock("@hooks/useMessageHandler", () => ({ sendMessage: sendMessageMock }));
 
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
-import { useMcpManagerStore } from "@store/useMcpManagerStore";
+import { useMcpManagerStore } from "@store/mcpManagerStore";
 
 describe("useMcpManagerStore", () => {
   beforeEach(() => {

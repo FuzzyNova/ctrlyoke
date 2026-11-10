@@ -18,7 +18,7 @@ export {
 } from "./editorStore";
 export { useSettingsStore } from "./settingsStore";
 export { useSecretRegistryStore } from "./secretRegistryStore";
-export { useCompatibilityStore } from "./compatibilityStore";
+export { useHarnessCapabilityStore } from "./harnessCapabilityStore";
 export { useExecutionPreviewStore } from "./executionPreviewStore";
 export { useTerminalStore } from "./terminalStore";
 export { useWorkspaceViewerStore } from "./workspaceViewerStore";
@@ -28,7 +28,7 @@ export {
   MCP_MANAGER_REMOTE_SORTS,
   type McpManagerDiscoveryTab,
   type McpManagerRemoteSort,
-} from "./useMcpManagerStore";
+} from "./mcpManagerStore";
 export type { TerminalSession, SessionKind } from "./terminalStore";
 
 // Types from workflowStore
@@ -62,7 +62,7 @@ export type {
   CapabilitySnapshotStatus,
   CompatibilityState,
   CompatibilityActions,
-} from "./compatibilityStore";
+} from "./harnessCapabilityStore";
 export type {
   ExecutionPreviewStatus,
   ExecutionPreviewState,
