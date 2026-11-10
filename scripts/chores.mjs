@@ -84,6 +84,25 @@ function runCommand(command, args = [], options = {}) {
 }
 
 /**
+ * Run a command and resolve with its stdout ("" if it fails to run).
+ */
+function captureCommandOutput(command, args = []) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd: ROOT_DIR,
+      stdio: ["ignore", "pipe", "ignore"],
+      shell: true,
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.on("close", () => resolve(output));
+    child.on("error", () => resolve(""));
+  });
+}
+
+/**
  * Check if CLI tool is installed
  */
 async function checkCliInstalled(command, name) {
@@ -167,7 +186,9 @@ async function checkCliUpdates() {
   logInfo("  - Claude CLI:      claude update");
   logInfo("  - Codex CLI:       codex update");
   logInfo("  - Qwen CLI:        npm install -g @qwen-code/qwen-code@latest");
-  logInfo("  - OpenCode CLI:    opencode upgrade");
+  logInfo(
+    "  - OpenCode CLI:    opencode upgrade (on 1.x, first switch to npm @opencode/cli)"
+  );
   logInfo("  - Antigravity CLI: agy update");
 }
 
@@ -249,6 +270,17 @@ async function updateClis() {
       logSuccess("OpenCode CLI updated");
     } catch {
       logWarning("OpenCode CLI upgrade may have failed");
+    }
+    // `opencode upgrade` never crosses a major version, so a copy from the
+    // `opencode-ai` npm package or the v1 install script stays on 1.x.
+    const opencodeVersion = await captureCommandOutput("opencode", [
+      "--version",
+    ]);
+    if (/^v?1\./.test(opencodeVersion.trim())) {
+      logWarning(
+        `OpenCode is still ${opencodeVersion.trim()}. Releases are tested against OpenCode 2: ` +
+          "run 'npm uninstall -g opencode-ai' and 'npm install -g @opencode/cli'."
+      );
     }
   }
 

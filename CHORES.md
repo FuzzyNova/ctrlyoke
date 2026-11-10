@@ -93,11 +93,18 @@ Qwen's standalone installer.
 
 #### OpenCode CLI
 
-Use the built-in upgrade command, which works however the CLI was installed:
+Test against OpenCode 2. `opencode upgrade` only updates within the major version that is
+installed: a copy from the `opencode-ai` npm package or `opencode.ai/install` stays on 1.x (npm's
+`opencode-ai` stops at 1.19.5), and `npm outdated -g` reports it as current. If
+`opencode --version` prints 1.x, replace it with the OpenCode 2 package first:
 
 ```bash
 # Check current version
 opencode --version
+
+# One time, if it is 1.x: switch to OpenCode 2
+npm uninstall -g opencode-ai
+npm install -g @opencode/cli
 
 # Update to latest
 opencode upgrade
