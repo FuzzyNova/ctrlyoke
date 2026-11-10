@@ -183,7 +183,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
       // headless steps were cut short); 1.1.20 stopped benign tool errors
       // failing `-p` runs; 1.1.10 made `Stop` hooks and `--model` work.
       minimum: "1.4.10",
-      testedWith: "1.5.3",
+      testedWith: "1.5.4",
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,

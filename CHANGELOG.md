@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-10
+
 ### Changed
 
 - **A step with no model now runs the harness's own default model.** When neither the step, the workflow nor [`defaults.models`](https://ctrlyoke.dev/docs/reference/settings#defaults-models) names a model, ctrlyoke passes no `--model` flag, so each CLI uses the model from its own configuration, which is always one your account can use. Before, ctrlyoke pinned one model per harness. Copilot's pin, `claude-sonnet-4.6`, is no longer served, so every Copilot step without a model failed. If you relied on the old pins, set `defaults.models` to them: `sonnet` for Claude, `gpt-6-luna` for Codex, `opencode/big-pickle` for OpenCode, `qwen3.5-plus` for Qwen and `gemini-3.8-flash-medium` for Antigravity. Antigravity's own default can be Claude Sonnet, whose small quota one long workflow can use up for about a day.
-
+- **Tested with the latest harness CLIs.** The compatibility docs' "Tested with" row now lists
+  Copilot CLI 1.0.108, Claude Code 2.1.322, Codex 0.167.0, OpenCode 2.2.7, Qwen Code 0.27.1 and
+  Antigravity 1.5.4.
 - Step headers in the output pane are now always one line, shortening a long step name or model name with `…` (hover the title for the full text); a narrow pane shows the harness and model only in that tooltip. A pinned step header shows one prompt line instead of two, so it never takes more than two lines, and its bottom border is thicker. When space runs out, the **View N changes** link on a step header, a parallel group header or the output toolbar now shortens to **View N**, then to just the count, then to just the diff icon, instead of being cut off mid-word. On a step header the step name shortens before the link does. In a very narrow dashboard the header hides its Undo and Redo buttons (their keyboard shortcuts still work) so Search and Settings stay on screen.
 - Workflow failure notifications now include the failing step and reason, with one completion notice per stop; the CLI also keeps stopping reasons on stderr and in its JSON `error` field, and the duplicate error popup is gone.
 - Failed workflow step rows now show the failure reason when the workflow stops, as well as when it continues after the failure.
