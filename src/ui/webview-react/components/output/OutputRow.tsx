@@ -103,7 +103,6 @@ import {
 } from "@utils/outputFind";
 import {
   hasFileRedoInstruction,
-  getPromptChangeLabelParts,
   resolveSnapshotFileMatch,
 } from "@utils/promptUndo";
 import { workflowViewAddressKey } from "@utils/viewAddress";
@@ -166,6 +165,7 @@ import {
   formatScriptOutputTailToggleLabel,
 } from "@utils/outputTruncation";
 import { Icon } from "../shared/Icon";
+import { PromptChangesButton } from "../shared/PromptChangesButton";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
 import {
   OUTPUT_COPY_BUTTON_LABELS,
@@ -1395,15 +1395,21 @@ StructuredEventContent.displayName = "StructuredEventContent";
 
 // The header is always exactly one line, in the stream and in its sticky copy,
 // so the pinned block never grows past one header line plus one prompt line.
-// Nothing wraps: the title and actions columns start at their single-line
-// width (`flex-auto`, basis auto) and shrink in proportion, and within the
-// title only the step name and the harness/model label can shrink, each
-// truncating with an ellipsis (the title's tooltip has the full text).
+// Nothing wraps. Within the title only the step name and the harness/model
+// label can shrink, each truncating with an ellipsis (the title's tooltip has
+// the full text); the change button in the actions steps down from `View N` to
+// `N` to its icon instead (`PromptChangesButton`).
+// The row is a two-track grid, not flex, to settle which of the two gives way
+// first. Flex shrinks the title and the actions in proportion to their
+// widths, so a long step name starved the short change label down to its icon
+// while the name still had ~180px. A `minmax(0, max-content)` title track
+// and an `auto` actions track keep the change label whole until the step
+// name is nearly gone.
 // `estimateCliHeaderHeight` relies on the fixed height.
 const CLI_HEADER_ROW_CLASS =
-  "font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 items-center gap-x-(--spacing-sm) whitespace-nowrap";
+  "font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) grid min-w-0 grid-cols-[minmax(0,max-content)_auto] items-center justify-between gap-x-(--spacing-sm) whitespace-nowrap";
 const CLI_HEADER_TITLE_CLASS =
-  "flex min-w-0 flex-auto items-center gap-x-1 overflow-hidden";
+  "flex min-w-0 items-center gap-x-1 overflow-hidden";
 /** The step label (`[⌨ Step 2]`): never shrinks, so the step stays identifiable. */
 const CLI_HEADER_LABEL_CLASS = "inline-flex shrink-0 items-center gap-1";
 /** The step name: the first thing to give way, with an ellipsis. */
@@ -1446,9 +1452,6 @@ const CliHeaderRowView: React.FC<{
 }) => {
   const { output } = row;
   const promptUndoSummary = row.promptUndo?.summary;
-  const promptUndoLabel = promptUndoSummary
-    ? getPromptChangeLabelParts(promptUndoSummary, row.narrowLayout)
-    : null;
   // A narrow pane leaves the start time to the row's tooltip.
   const timestamp =
     output.timestampMs && !row.narrowLayout
@@ -1482,8 +1485,8 @@ const CliHeaderRowView: React.FC<{
     </button>
   );
   // The pin always ends the line. When the title and the actions can't share
-  // it at full width, the change viewer's label truncates; hide + pin never
-  // shrink.
+  // it at full width, the change button steps down to a shorter label; hide +
+  // pin never shrink.
   const renderActions = (changesButton?: React.ReactNode) => (
     <div className="flex min-w-0 items-center justify-end gap-x-2 font-normal">
       {changesButton}
@@ -1663,25 +1666,15 @@ const CliHeaderRowView: React.FC<{
       </span>
       {renderActions(
         promptUndoSummary && promptUndoSummary.total > 0 && (
-          <button
-            type="button"
+          <PromptChangesButton
+            summary={promptUndoSummary}
+            compact={row.narrowLayout}
             disabled={Boolean(row.undoReadOnlyReason)}
             onClick={() => onPromptView?.(row)}
-            style={{ touchAction: "manipulation" }}
             title={row.undoReadOnlyReason ?? promptUndoSummary.title}
-            aria-label={row.undoReadOnlyReason ?? promptUndoSummary.label}
-            className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
-          >
-            <Icon name="diff" className="shrink-0" />
-            <span className="min-w-0 truncate">
-              {promptUndoLabel?.main}
-              {promptUndoLabel?.undone && (
-                <span className="text-terminal-ansiGreen">
-                  {promptUndoLabel.undone}
-                </span>
-              )}
-            </span>
-          </button>
+            ariaLabel={row.undoReadOnlyReason ?? promptUndoSummary.label}
+            className="gap-1 text-link-fg hover:text-link-active-fg transition-colors"
+          />
         )
       )}
     </div>

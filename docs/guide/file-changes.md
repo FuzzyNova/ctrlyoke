@@ -31,7 +31,8 @@ Once a step stops running, links to its changes appear in the output:
 ![The output pane with View 6 changes in the toolbar and View 3 changes on the review step's header, and an "Edited notesStore.ts" block with its diff expanded and its own Undo button](/screenshots/file-changes-output-pane-1596x1148.png)
 
 The link counts the files, and adds "(K undone)" in green when you've undone
-some of them. In a narrow output pane the toolbar link shortens to **View N**.
+some of them. In a narrow output pane the links shorten to **View N**, and
+where even that doesn't fit, to just the count and then just the diff icon.
 
 The step and workflow links are hidden while the run you're watching is still
 running, because the files are still changing. They come back when the run

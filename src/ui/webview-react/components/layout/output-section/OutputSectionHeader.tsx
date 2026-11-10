@@ -2,11 +2,9 @@ import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
 import { FONT_SIZE_LIMITS } from "@root/types/CtrlYokeSettings";
 import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
+import { PromptChangesButton } from "@components/shared/PromptChangesButton";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
-import {
-  getPromptChangeLabelParts,
-  type PromptChangeSummary,
-} from "@utils/promptUndo";
+import type { PromptChangeSummary } from "@utils/promptUndo";
 import type { TerminalSession } from "@store/terminalStore";
 import { Icon } from "../../shared/Icon";
 import { READ_LAST_RESPONSE_SHORTCUT } from "@hooks/useReadLastResponseKeyHandler";
@@ -87,17 +85,12 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   outputFontSize,
   onOutputFontSizeChange,
 }) => {
-  const workflowChangeLabel = getPromptChangeLabelParts(
-    workflowChangeSummary,
-    useCompactLabels
-  );
-
   return (
     <div
       ref={refCallback}
       className="relative z-header cy-no-select flex items-center justify-between gap-(--spacing-sm) h-[30px] pl-2 pr-1 border-b border-panel-border shrink-0 bg-sidebar-bg"
     >
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
           className="flex appearance-none items-center gap-1 border-0 bg-transparent p-0 text-description-fg transition-colors hover:text-foreground"
@@ -225,7 +218,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
       </div>
 
       <div
-        className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}
+        className={`ml-auto flex min-w-0 items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}
       >
         {activeOutputTab === OUTPUT_TABS.TERMINAL && (
           <>
@@ -277,24 +270,15 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               </button>
             )}
             {workflowChangeSummary.total > 0 && (
-              <button
-                type="button"
-                className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0"
-                style={{ touchAction: "manipulation" }}
-                title={workflowChangeSummary.title}
-                aria-label={workflowChangeSummary.label}
+              <PromptChangesButton
+                summary={workflowChangeSummary}
+                compact={useCompactLabels}
                 onClick={onWorkflowView}
-              >
-                <Icon name="diff" className="codicon-lg shrink-0" />
-                <span className="text-nowrap">
-                  {workflowChangeLabel.main}
-                  {workflowChangeLabel.undone && (
-                    <span className="text-terminal-ansiGreen">
-                      {workflowChangeLabel.undone}
-                    </span>
-                  )}
-                </span>
-              </button>
+                title={workflowChangeSummary.title}
+                ariaLabel={workflowChangeSummary.label}
+                className="gap-0.5 px-1 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors"
+                iconClassName="codicon-lg"
+              />
             )}
             {/* For screen-reader and keyboard users, so it stays out of sight
                 until focused; Alt+L does the same from anywhere. */}

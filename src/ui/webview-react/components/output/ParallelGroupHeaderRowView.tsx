@@ -8,13 +8,10 @@ import {
   type ParallelGroupHeaderRow,
 } from "@utils/outputRows";
 import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
-import { Icon } from "../shared/Icon";
+import { PromptChangesButton } from "../shared/PromptChangesButton";
 import { StepHeaderPinButton } from "./StepHeaderPinButton";
 
 const SHELL_WORKFLOW_ID = "_shell";
-
-const ACTION_CLASS =
-  "inline-flex min-w-0 max-w-full items-center gap-1 transition-colors";
 
 const CHIP_CLASS = "rounded-sm border px-1.5 py-0.5";
 const CHIP_PRESSED_CLASS = "border-focus-border text-foreground";
@@ -97,22 +94,16 @@ export const ParallelGroupHeaderRowView: React.FC<
         </span>
         <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1">
           {promptUndoSummary && promptUndoSummary.total > 0 && onView && (
-            <button
-              type="button"
-              className={`${ACTION_CLASS} text-link-fg hover:text-link-active-fg`}
-              style={{ touchAction: "manipulation" }}
+            <PromptChangesButton
+              summary={promptUndoSummary}
+              className="max-w-full gap-1 transition-colors text-link-fg hover:text-link-active-fg"
               title={parallelGroupActionTooltip(
                 promptUndoSummary.title,
                 row.members.length
               )}
-              aria-label={promptUndoSummary.label}
+              ariaLabel={promptUndoSummary.label}
               onClick={() => onView(row)}
-            >
-              <Icon name="diff" className="shrink-0" />
-              <span className="min-w-0 truncate">
-                {promptUndoSummary.label}
-              </span>
-            </button>
+            />
           )}
           <StepHeaderPinButton />
         </div>

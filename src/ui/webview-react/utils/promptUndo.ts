@@ -1363,10 +1363,16 @@ export function createPromptChangeSummary(
   };
 }
 
+/** A change label split so the "(N undone)" suffix can be styled apart. */
+export interface PromptChangeLabelParts {
+  main: string;
+  undone: string;
+}
+
 export function getPromptChangeLabelParts(
   summary: PromptChangeSummary,
   compact = false
-): { main: string; undone: string } {
+): PromptChangeLabelParts {
   if (compact) return { main: summary.compactLabel, undone: "" };
   const suffixStart = summary.label.indexOf(" (");
   return suffixStart < 0
@@ -1375,6 +1381,25 @@ export function getPromptChangeLabelParts(
         main: summary.label.slice(0, suffixStart),
         undone: summary.label.slice(suffixStart),
       };
+}
+
+/**
+ * The labels a change button steps down through as its room shrinks, widest
+ * first: the full label (unless `compact`), `View N`, `N`, then nothing (the
+ * diff icon alone). A button shows the widest one that fits rather than
+ * truncating any of them.
+ */
+export function getPromptChangeLabelSteps(
+  summary: PromptChangeSummary,
+  compact = false
+): PromptChangeLabelParts[] {
+  const shortLabel = getPromptChangeLabelParts(summary, true);
+  return [
+    ...(compact ? [] : [getPromptChangeLabelParts(summary)]),
+    shortLabel,
+    { main: String(summary.total), undone: "" },
+    { main: "", undone: "" },
+  ];
 }
 
 /**
