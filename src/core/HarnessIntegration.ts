@@ -57,7 +57,7 @@ import {
   HARNESS_SHELL_ESCAPE_PREFIX,
   isHarnessShellEscape,
 } from "../utils/HarnessShellEscape";
-import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "./notifications/NotificationEventFactory";
 import { HarnessAdapterUtils } from "./harness/shared/HarnessAdapterUtils";
 import type { DisposableRegistry } from "./HostPorts";
 

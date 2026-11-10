@@ -6,7 +6,7 @@ import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder"
 import { TempFileManager } from "../utils/TempFileManager";
 
 /** Write an output capture to the workspace attachment store. */
-export async function writeOutputSnapshotAttachment(
+export async function writeOutputCaptureAttachment(
   getWorkspaceRoot: () => string,
   entry: OutputCaptureEntry
 ): Promise<string> {
@@ -16,7 +16,7 @@ export async function writeOutputSnapshotAttachment(
   }
 
   const tempFileManager = new TempFileManager(workspaceRoot);
-  const absolutePath = await tempFileManager.createOutputSnapshotFile(
+  const absolutePath = await tempFileManager.createOutputCaptureFile(
     entry.text,
     entry.channel,
     entry.range,
@@ -33,7 +33,7 @@ export async function writeOutputSnapshotAttachment(
  * VS Code completion command and the dashboard message handler share the
  * cache-consumption and attachment-writing behavior.
  */
-export async function savePendingOutputSnapshot(
+export async function savePendingOutputCapture(
   getWorkspaceRoot: () => string,
   captureId: string
 ): Promise<string> {
@@ -41,5 +41,5 @@ export async function savePendingOutputSnapshot(
   if (!entry) {
     throw new Error("Output capture expired — try again");
   }
-  return writeOutputSnapshotAttachment(getWorkspaceRoot, entry);
+  return writeOutputCaptureAttachment(getWorkspaceRoot, entry);
 }

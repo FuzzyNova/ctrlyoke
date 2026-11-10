@@ -19,7 +19,7 @@ import {
   notifyUserFeedback,
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
-import type { WebviewClientContext } from "./WebviewClientContext";
+import type { DashboardClientContext } from "./DashboardClientContext";
 import type { TerminalStartedMessage } from "../types/WebviewMessageTypes";
 
 type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
@@ -52,11 +52,11 @@ export class TerminalMessageHandlers {
    * dispose+recreate cycle that caused "briefly see scrollback then goes blank".
    * Browser clients have no separate reconnect loop and use orchestrator replay.
    */
-  shouldSkipClientReadyReplay(ctx: WebviewClientContext): boolean {
+  shouldSkipClientReadyReplay(ctx: DashboardClientContext): boolean {
     return ctx.clientId === PANEL_CLIENT_ID;
   }
 
-  reconnectPanel(ctx: WebviewClientContext): void {
+  reconnectPanel(ctx: DashboardClientContext): void {
     const ptyManager = this.getPtyManager();
     if (!ptyManager) return;
 
@@ -92,7 +92,7 @@ export class TerminalMessageHandlers {
     }
   }
 
-  handleInput(ctx: WebviewClientContext, message: any): void {
+  handleInput(ctx: DashboardClientContext, message: any): void {
     const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.data) return;
     const session = ptyManager.getSession(message.sessionId as string);
@@ -104,7 +104,7 @@ export class TerminalMessageHandlers {
     );
   }
 
-  handleResize(ctx: WebviewClientContext, message: any): void {
+  handleResize(ctx: DashboardClientContext, message: any): void {
     const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.cols || !message.rows)
       return;
@@ -127,7 +127,7 @@ export class TerminalMessageHandlers {
     });
   }
 
-  handleViewportHint(ctx: WebviewClientContext, message: any): void {
+  handleViewportHint(ctx: DashboardClientContext, message: any): void {
     const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.cols || !message.rows) return;
     // Store the viewport under THIS client's id. spawnPty reads only the
@@ -140,7 +140,7 @@ export class TerminalMessageHandlers {
     );
   }
 
-  handleSpawnShell(ctx: WebviewClientContext, message: any): void {
+  handleSpawnShell(ctx: DashboardClientContext, message: any): void {
     const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.workflowId) return;
     const workflowId = message.workflowId as string;
@@ -235,7 +235,7 @@ export class TerminalMessageHandlers {
     );
   }
 
-  handleClaimControl(ctx: WebviewClientContext, message: any): void {
+  handleClaimControl(ctx: DashboardClientContext, message: any): void {
     const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.workflowId) return;
     const session = ptyManager.assignController(
@@ -255,7 +255,7 @@ export class TerminalMessageHandlers {
 
   private isController(
     session: PtySession,
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): boolean {
     // An unowned session accepts input from any client until one claims control.
     return (

@@ -352,7 +352,7 @@ Build a minimal VSIX whose tool window is a WebView2 pointed at a manually start
 - **Partly done:** a server-wide capability list already exists.
   `DASHBOARD_HOST_CAPABILITIES` in `DashboardConstants.ts` is derived from which optional
   `DashboardHostActions` methods a host implements (`getDashboardHostCapabilities`). It is
-  sent as `hostCapabilities` in the settings payload (`WebviewSettingsSync.ts`) and stored in
+  sent as `hostCapabilities` in the settings payload (`DashboardSettingsSync.ts`) and stored in
   `uiStore` (d0e62a32e).
 - **Remaining:** replace the boolean `isStandalone` (`useVsCodeApi.ts`; about 88
   references across 27 dashboard files as of 2026-10-26) with those capabilities, and add any missing ones

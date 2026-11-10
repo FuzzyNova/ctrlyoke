@@ -41,7 +41,7 @@ Do not turn this folder into a second workspace-viewer git service. The hosted w
 <commitMessageGenerationTracker>
 - This is a passive in-memory singleton, not persistence and not history.
 - Writers currently live outside `src/git/`: `ScmCommitCommand` and `HostedWorkspaceViewerService`.
-- Readers/subscribers include `CtrlYokeWebviewProvider` and `WebviewSettingsSync`, and the record shape is mirrored in webview message types. Change the interface, producers, and consumers together.
+- Readers/subscribers include `CtrlYokeWebviewProvider` and `DashboardSettingsSync`, and the record shape is mirrored in webview message types. Change the interface, producers, and consumers together.
 </commitMessageGenerationTracker>
 
 <gitCommitter>

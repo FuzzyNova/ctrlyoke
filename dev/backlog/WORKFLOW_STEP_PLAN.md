@@ -475,7 +475,7 @@ unreliable):
 
 The previous draft claimed the resolution order was "same as promptStep" and listed
 `.ctrlyoke/workflows/`. That directory is not a candidate today, and ctrlyoke does not own a
-durable workflows folder (`src/ui/WorkflowSerializer.ts:415`). Resolve the `workflow` value with
+durable workflows folder (`src/ui/WorkflowLibraryHandlers.ts:415`). Resolve the `workflow` value with
 `PromptFileResolver.resolvePath`. Its candidates (`getCandidates`) are: absolute path, then the
 source definition's directory (trusted roots only), then the workspace root or named root, then
 `<workspaceRoot>/.ctrlyoke/`, then a candidate resolved against the run's `sourceCheckoutRoot`
@@ -1322,7 +1322,7 @@ still parsed once up front to fail fast on schema errors; its steps are not used
 
 All of them send the existing `APPEND_FILE` message (`WebviewMessageTypes.ts:2286`) with a new
 optional `appendMode` field. There is no new message type. The handler is
-`WebviewMessageRouter.ts:875`, not `CtrlYokeWebviewProvider.ts`, which only forwards messages. The
+`DashboardMessageRouter.ts:875`, not `CtrlYokeWebviewProvider.ts`, which only forwards messages. The
 hosted server shares that router through `DashboardApplication`, so hosted parity comes free.
 Picking the file follows the existing split: VS Code uses a native picker via
 `selectWorkspacePath`; hosted mode uses `WorkflowFilePickerModal`.
@@ -1539,7 +1539,7 @@ finalStep:
 | `src/templates/skills/ctrlyoke-syntax/SKILL.md`, `src/templates/agents/ctrlyoke-tech-support.agent.md`                                   | Workflow-step `$previous` documentation                                                                                                                                                                                                            |
 | Run manifest writer (where `manifest.json` is built)                                                                                     | `parentRun` (D7)                                                                                                                                                                                                                                   |
 | `src/core/WorkflowOrchestrator.ts`, `WorkflowInstanceRegistry.ts`                                                                        | Launcher factory via `createExternalWorkflowInstance`; `appendFromFileForClient` `appendMode` routing                                                                                                                                              |
-| `src/ui/WebviewMessageRouter.ts`                                                                                                         | `APPEND_FILE` handler passes `appendMode`                                                                                                                                                                                                          |
+| `src/ui/DashboardMessageRouter.ts`                                                                                                         | `APPEND_FILE` handler passes `appendMode`                                                                                                                                                                                                          |
 | `src/extension.ts`, `package.json`                                                                                                       | `ctrlyoke.queueAsSubWorkflowFromContext` command and menu entry                                                                                                                                                                                    |
 | `src/cli.ts`, `src/cli/CliJsonResultBuilder.ts`                                                                                          | CLI launcher factory, child progress output, `subWorkflowRuns` in JSON                                                                                                                                                                             |
 | `src/ui/webview-react/components/steps/WorkflowStepItem.tsx`, `WorkflowStepRow.tsx`                                                        | Sub-workflow row variant, live child badge, "Open run" link                                                                                                                                                                                        |

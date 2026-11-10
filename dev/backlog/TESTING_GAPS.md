@@ -16,12 +16,12 @@ Ranked by uncovered statement count (biggest win first). Full report: `coverage/
 | `src/core/WorkflowInstance.ts`                          |   71.24% |       1594 / 5544 |
 | `src/ui/CtrlYokeWebviewProvider.ts`                     |       0% |       1429 / 1429 |
 | `src/server/CtrlYokeHostedServer.ts`                    |   54.13% |       1291 / 2815 |
-| `src/ui/WebviewMessageRouter.ts`                        |   61.39% |       1076 / 2787 |
+| `src/ui/DashboardMessageRouter.ts`                        |   61.39% |       1076 / 2787 |
 | `src/ui/PromptEditorSupportService.ts`                  |   41.38% |        874 / 1491 |
 | `src/dev/DevCommands.ts`                                |       0% |         698 / 698 |
 | `src/scripts/ctrlyoke-opencode-plugin.ts`               |       0% |         649 / 649 |
 | `src/core/WorkflowExecutor.ts`                          |   90.59% |        522 / 5548 |
-| `src/ui/WorkflowSerializer.ts`                          |   73.43% |        455 / 1713 |
+| `src/ui/WorkflowLibraryHandlers.ts`                          |   73.43% |        455 / 1713 |
 | `src/core/orchestration/WorktreeManager.ts`             |   86.93% |        443 / 3392 |
 | `src/git/CommitMessageGenerator.ts`                     |   45.01% |         436 / 793 |
 | `src/core/harness/codex/CodexLogParser.ts`              |   75.53% |        427 / 1745 |
@@ -34,7 +34,7 @@ Ranked by uncovered statement count (biggest win first). Full report: `coverage/
 | `src/ui/DashboardBroadcastHub.ts`                       |   32.95% |         358 / 534 |
 | `src/ui/PostMessageDashboardSink.ts`                    |   31.08% |         357 / 518 |
 | `src/utils/ModelRegistry.ts`                            |   35.88% |         343 / 535 |
-| `src/ui/WebviewSettingsSync.ts`                         |    80.8% |        343 / 1787 |
+| `src/ui/DashboardSettingsSync.ts`                         |    80.8% |        343 / 1787 |
 | `src/utils/WorkspaceSnapshotService.ts`                 |   76.45% |        324 / 1376 |
 | `src/core/harness/qwen/QwenLogParser.ts`                |   75.43% |        309 / 1258 |
 | `src/utils/McpDiscoveryUtils.ts`                        |   70.58% |        308 / 1047 |

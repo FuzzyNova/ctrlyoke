@@ -36,9 +36,9 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
-import type { WebviewSettingsSync } from "./WebviewSettingsSync";
-import type { WorkflowSerializer } from "./WorkflowSerializer";
-import type { WebviewMessageRouter } from "./WebviewMessageRouter";
+import type { DashboardSettingsSync } from "./DashboardSettingsSync";
+import type { WorkflowLibraryHandlers } from "./WorkflowLibraryHandlers";
+import type { DashboardMessageRouter } from "./DashboardMessageRouter";
 import type {
   ContextReferenceValidationOptions,
   ContextReferenceValidationResult,
@@ -49,12 +49,12 @@ import type {
   WorkflowViewAddress,
   WorktreeRunProjection,
 } from "../types/CtrlYokeTypes";
-import type { PostMessageFn } from "./WebviewSettingsSync";
+import type { PostMessageFn } from "./DashboardClientEndpoint";
 import type { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { retryWithBackoff } from "../utils/RetryUtils";
 import type { SecretRegistryService } from "./SecretRegistryService";
-import type { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
+import type { DashboardUserInteractionPort } from "./DashboardUserInteractionPort";
 import type { UserInteractionPort } from "./UserInteractionPort";
 import type { ContextMenuPromptEditorInsertSink } from "../completions/ContextMenuReferenceCommands";
 import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
@@ -64,7 +64,7 @@ import type { DashboardApplication } from "./DashboardApplication";
 export type { CliOutput } from "../types/WebviewMessageTypes";
 
 // Re-export HarnessStatus for external consumers
-export type { HarnessStatus } from "./WebviewSettingsSync";
+export type { HarnessStatus } from "./DashboardClientEndpoint";
 
 /** Panel HTML rebuilds allowed before a READY proves the bundle can mount. */
 const MAX_PANEL_HTML_REBUILDS = 2;
@@ -107,11 +107,11 @@ export class CtrlYokeWebviewProvider
   private readonly dashboardApplication: DashboardApplication;
 
   // Delegate classes
-  private readonly settingsSync: WebviewSettingsSync;
-  private readonly serializer: WorkflowSerializer;
-  private readonly router: WebviewMessageRouter;
+  private readonly settingsSync: DashboardSettingsSync;
+  private readonly serializer: WorkflowLibraryHandlers;
+  private readonly router: DashboardMessageRouter;
   private readonly secretRegistry: SecretRegistryService;
-  private readonly interactionPort: WebviewUserInteractionPort;
+  private readonly interactionPort: DashboardUserInteractionPort;
   private readonly routeMessagePost: PostMessageFn = (reply) =>
     this.postMessage(reply);
   // IDashboardSink message shapes are single-sourced here. Pure sink methods
@@ -829,7 +829,7 @@ export class CtrlYokeWebviewProvider
   }
 
   // Workflow-registry notifications reach the panel through
-  // `DashboardApplication` (the orchestrator's `IDashboardProvider`), not here.
+  // `DashboardApplication` (the orchestrator's `IDashboardRegistryEvents`), not here.
 
   /** Notify webview that the active (displayed) workflow changed. */
   public notifyActiveWorkflowChanged(workflowId: string): void {
@@ -1006,7 +1006,7 @@ export class CtrlYokeWebviewProvider
   /**
    * Open new workflow modal in the webview, pre-loaded with the template list
    * and default template (same data the "From Template" dropdown button sends
-   * via NEW_WORKFLOW — see WorkflowSerializer.handleNewWorkflow).
+   * via NEW_WORKFLOW — see WorkflowLibraryHandlers.handleNewWorkflow).
    */
   public async openNewWorkflowModal(options?: {
     openCreateTemplateForm?: boolean;

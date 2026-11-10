@@ -14,14 +14,14 @@ import {
   isWorkflowCompletionTransition,
   notificationIdentityPrefix,
   type HookArtifact,
-} from "../../ui/notifications/CompletionNotificationFactory";
+} from "../../core/notifications/NotificationEventFactory";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   RunSecretRedactor,
   secretRedactionService,
 } from "../../utils/SecretRedactionService";
 
-suite("CompletionNotificationFactory", () => {
+suite("NotificationEventFactory", () => {
   const createHookArtifact = (
     overrides: Partial<HookArtifact> = {}
   ): HookArtifact => ({

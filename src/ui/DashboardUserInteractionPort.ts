@@ -11,11 +11,11 @@ import type {
  * VS Code webview-backed implementation of UserInteractionPort. Posts
  * host-neutral prompt messages to a dashboard client and resolves the pending
  * promise when the matching response arrives (see the handlers wired from
- * WebviewMessageRouter). `isClientReady` should
+ * DashboardMessageRouter). `isClientReady` should
  * reflect whether the panel webview exists AND has completed its READY
  * handshake — posting to a not-yet-ready webview would silently hang.
  */
-export class WebviewUserInteractionPort implements UserInteractionPort {
+export class DashboardUserInteractionPort implements UserInteractionPort {
   private readonly pending = new Map<
     string,
     (result: BatchApprovalResult | undefined) => void

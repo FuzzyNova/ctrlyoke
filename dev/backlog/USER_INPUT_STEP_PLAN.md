@@ -253,7 +253,7 @@ prompt-step branch wherever the step-type union is switched on
    (new `MESSAGE_TYPES.USER_INPUT_STEP_ANSWERED`, carrying `stepIndex`/`workflowId`/
    `answer`) — the same requestId/await-a-postMessage-response shape already used by
    `ScriptConditionEditor`'s `CREATE_END_CONDITION_SCRIPT` /
-   `END_CONDITION_SCRIPT_CREATED` round trip, and by `WebviewMessageRouter` for other
+   `END_CONDITION_SCRIPT_CREATED` round trip, and by `DashboardMessageRouter` for other
    command acks.
 5. If `timeout` is set, race the promise against a timer; on timeout apply `onTimeout`.
 6. Resolve the action from `onAnswer[answer] ?? CONDITION_ACTIONS.CONTINUE`, persist the

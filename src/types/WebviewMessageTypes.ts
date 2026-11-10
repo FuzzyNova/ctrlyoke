@@ -34,7 +34,7 @@ import {
   type ScriptOutputSource,
   type ExecutionPhase,
   type UndoFileAction,
-  type CompletionNotificationSeverity,
+  type NotificationSeverity,
   type UserFeedbackSeverity,
   type DashboardHostAction,
   type DashboardHostCapability,
@@ -2087,7 +2087,7 @@ export interface GlobalSettingUpdatedMessage {
 export interface CompletionNotificationEventPayload {
   id: string;
   kind: NotificationKind;
-  severity: CompletionNotificationSeverity;
+  severity: NotificationSeverity;
   workflowId: string;
   stepIndex?: number;
   title: string;
@@ -2145,7 +2145,7 @@ export interface SearchHistoryResultsMessage extends HistorySearchResponse {
  * `hasMore: true` since the scan that produced it hasn't finished. Superseded
  * by the eventual SEARCH_HISTORY_RESULTS for the same request, and by nothing
  * else — a push for a since-superseded query must be dropped the same way the
- * final response is (see WebviewMessageRouter's SEARCH_HISTORY handler).
+ * final response is (see DashboardMessageRouter's SEARCH_HISTORY handler).
  */
 export interface SearchHistoryPartialResultsMessage extends HistorySearchResponse {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS;

@@ -4,7 +4,7 @@ import * as nodeFs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { PromptEditorSupportService } from "../../ui/PromptEditorSupportService";
-import { createWebviewClientContext } from "../../ui/WebviewClientContext";
+import { createDashboardClientContext } from "../../ui/DashboardClientContext";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import {
@@ -44,7 +44,7 @@ suite("PromptEditorSupportService", () => {
     );
 
     await service.handleAttachmentTokenCountRequest(
-      createWebviewClientContext("test-client", (message) =>
+      createDashboardClientContext("test-client", (message) =>
         emitted.push(message)
       ),
       ["@src/one.ts", "@src/two.ts"]
@@ -70,7 +70,7 @@ suite("PromptEditorSupportService", () => {
     );
 
     await service.handleAttachmentTokenCountRequest(
-      createWebviewClientContext("test-client", (message) =>
+      createDashboardClientContext("test-client", (message) =>
         emitted.push(message)
       ),
       ["@src/one.ts", "@src/two.ts"]
@@ -115,7 +115,7 @@ suite("PromptEditorSupportService", () => {
         () => undefined
       );
       await service.handleAttachmentTokenCountRequest(
-        createWebviewClientContext("test-client", (message) =>
+        createDashboardClientContext("test-client", (message) =>
           emitted.push(message)
         ),
         ["#selection:large.log:1-1"]
@@ -146,7 +146,7 @@ suite("PromptEditorSupportService", () => {
         }) as any,
       () => undefined
     );
-    const ctx = createWebviewClientContext("test-client", (message) =>
+    const ctx = createDashboardClientContext("test-client", (message) =>
       emitted.push(message)
     );
 
@@ -192,7 +192,7 @@ suite("PromptEditorSupportService", () => {
         () => undefined,
         () => undefined
       );
-      const ctx = createWebviewClientContext("test-client", (message) =>
+      const ctx = createDashboardClientContext("test-client", (message) =>
         emitted.push(message)
       );
       await service.handleAttachmentTokenCountRequest(
@@ -239,7 +239,7 @@ suite("PromptEditorSupportService", () => {
       () => undefined
     );
     await service.handleFileRefValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       "./.ctrlyoke/prompts/review.prompt.md",
@@ -259,7 +259,7 @@ suite("PromptEditorSupportService", () => {
       () => undefined
     );
     await service.handleFileRefValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       "./.ctrlyoke/prompts/missing.prompt.md",
@@ -288,7 +288,7 @@ suite("PromptEditorSupportService", () => {
       () => undefined
     );
     await service.handleFileRefValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       "./.ctrlyoke/prompts/empty.prompt.md",
@@ -355,7 +355,7 @@ suite("PromptEditorSupportService", () => {
       items: Array<{ insertText: string }>;
     }> = [];
     await service.handleCompletionRequest(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         if (message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE)
           responses.push(message as (typeof responses)[number]);
       }),
@@ -404,7 +404,7 @@ suite("PromptEditorSupportService", () => {
       items: Array<{ label: string; status?: boolean; insertText?: string }>;
     }> = [];
     await service.handleCompletionRequest(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         if (message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE)
           responses.push(message as (typeof responses)[number]);
       }),
@@ -451,7 +451,7 @@ suite("PromptEditorSupportService", () => {
       () => undefined
     );
     await service.handleFileRefValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       "./.ctrlyoke/prompts/zero.prompt.md",
@@ -489,7 +489,7 @@ suite("PromptEditorSupportService", () => {
     );
 
     await service.handleContextRefsValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       [{ id: "asset", type: "file", path: "./workflow.assets/shot.png" }]
@@ -555,7 +555,7 @@ suite("PromptEditorSupportService", () => {
 
     const emitted: Array<{ results: Array<{ symbolKind?: number }> }> = [];
     await service.handleContextRefsValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message as (typeof emitted)[number]);
       }),
       [reference]
@@ -576,7 +576,7 @@ suite("PromptEditorSupportService", () => {
     );
 
     await service.handleContextRefsValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       [{ id: "asset", type: "file", path: "./workflow.assets/shot.png" }]
@@ -601,7 +601,7 @@ suite("PromptEditorSupportService", () => {
     );
 
     await service.handleContextRefsValidation(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       [
@@ -633,7 +633,7 @@ suite("PromptEditorSupportService", () => {
     );
 
     await service.handleScriptCompletionRequest(
-      createWebviewClientContext("browser:1", (message) => {
+      createDashboardClientContext("browser:1", (message) => {
         emitted.push(message);
       }),
       "git st",
@@ -666,7 +666,7 @@ suite("PromptEditorSupportService", () => {
       () => undefined
     );
     await service.handleScriptCompletionRequest(
-      createWebviewClientContext("test-client", (message) => {
+      createDashboardClientContext("test-client", (message) => {
         emitted.push(message);
       }),
       "npm ",
@@ -709,7 +709,7 @@ suite("PromptEditorSupportService", () => {
         () => undefined
       );
       await service.handleHarnessFlagCompletionRequest(
-        createWebviewClientContext("browser:1", (message) => {
+        createDashboardClientContext("browser:1", (message) => {
           emitted.push(message);
         }),
         HARNESS_IDS.COPILOT_CLI,
@@ -754,7 +754,7 @@ suite("PromptEditorSupportService", () => {
         () => undefined
       );
       await service.handleHarnessFlagCompletionRequest(
-        createWebviewClientContext("test-client", (message) => {
+        createDashboardClientContext("test-client", (message) => {
           emitted.push(message);
         }),
         HARNESS_IDS.COPILOT_CLI,
@@ -800,7 +800,7 @@ suite("PromptEditorSupportService", () => {
         () => undefined
       );
       await service.handleHarnessFlagCompletionRequest(
-        createWebviewClientContext("test-client", (message) => {
+        createDashboardClientContext("test-client", (message) => {
           emitted.push(message);
         }),
         HARNESS_IDS.COPILOT_CLI,
@@ -834,7 +834,7 @@ suite("PromptEditorSupportService", () => {
     );
 
     await service.handleBranchListRequest(
-      createWebviewClientContext("browser:1", (message) => {
+      createDashboardClientContext("browser:1", (message) => {
         emitted.push(message);
       }),
       "feat/",

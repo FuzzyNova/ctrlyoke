@@ -8,7 +8,7 @@
 > `server.themeLight`/`server.themeDark`, or theme ID on `THEME_VARS_CAPTURED`. The
 > "Current state" section was re-verified and still holds: capture is forwarded
 > only through the single `setThemeVarsCapturedCallback` slot
-> (`WebviewMessageRouter.ts:357`, installed/cleared in `extension.ts` around
+> (`DashboardMessageRouter.ts:357`, installed/cleared in `extension.ts` around
 > `:1752`/`:1780`), `sanitizeThemeVars` lives in `CtrlYokeHostedServer.ts`, and
 > `ctrlyoke.dumpCssVars` is still the separate dev implementation. Added that
 > `DashboardApplication.requestThemeCapture()` is a further existing capture trigger,
@@ -23,7 +23,7 @@
 > dropdowns belong next to it.
 
 Last reviewed against code: 2026-10-26. Still not started. Line references updated: the
-callback slot is `WebviewMessageRouter.setThemeVarsCapturedCallback` (~`:480`), now set
+callback slot is `DashboardMessageRouter.setThemeVarsCapturedCallback` (~`:480`), now set
 through `CtrlYokeWebviewProvider.setThemeVarsCapturedCallback`, which forwards to both the
 panel router and the `DashboardApplication` router; `extension.ts` installs it at ~`:1877`
 and clears it at ~`:1913`, and posts `CAPTURE_THEME_VARS` on theme change at ~`:719`.
@@ -68,7 +68,7 @@ rejected it:
     `THEME_VARS_CAPTURED`.
   - `extension.ts` posts `CAPTURE_THEME_VARS` on
     `onDidChangeActiveColorTheme`, and again when the hosted server starts.
-  - `WebviewMessageRouter` accepts `THEME_VARS_CAPTURED` only from
+  - `DashboardMessageRouter` accepts `THEME_VARS_CAPTURED` only from
     `PANEL_CLIENT_ID` and forwards it to `themeVarsCapturedCallback`.
   - That callback is installed only when the hosted server starts
     (`setThemeVarsCapturedCallback` → `hostedServer.updateThemeVars`). Without
@@ -175,7 +175,7 @@ capture arrives (replacing Stage 7b's fixed defaults).
   unchanged-hash skip, `storageVersion` mismatch starts clean.
 - Router/extension wiring: a panel capture persists with no hosted server
   running; a non-panel `THEME_VARS_CAPTURED` never persists (extend the
-  existing `WebviewSettingsSync.test.ts` scoping test).
+  existing `DashboardSettingsSync.test.ts` scoping test).
 - Server: `auto` emits both media blocks from the chosen snapshots; a missing
   snapshot falls back to the bundled theme of the same kind.
 - Capture parity check from Design 1 (one-off, recorded in the commit that

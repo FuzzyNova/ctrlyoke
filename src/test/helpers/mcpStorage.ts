@@ -17,7 +17,7 @@ import { isRunHistoryLocationFrozenError } from "../../utils/RunHistoryStoragePo
  * hosts on every run using the previous run's recorded per-file timings, so two
  * files that shared a host today may not tomorrow. An unguarded second caller
  * therefore fails intermittently and lands in whichever file lost the toss —
- * exactly how `WebviewSettingsSync` came to fail while `McpServer` passed.
+ * exactly how `DashboardSettingsSync` came to fail while `McpServer` passed.
  *
  * The freeze itself is not undone: the location is `"user"` for the whole
  * extension-host run (`suite/index.ts`), and every test that needs a different

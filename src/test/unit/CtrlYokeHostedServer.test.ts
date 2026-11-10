@@ -37,7 +37,7 @@ import {
   buildTestNotificationEvent,
   type CtrlYokeNotificationEvent,
   type HookArtifact,
-} from "../../ui/notifications/CompletionNotificationFactory";
+} from "../../core/notifications/NotificationEventFactory";
 import { CompletionNotificationTracker } from "../../ui/notifications/CompletionNotificationTracker";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {

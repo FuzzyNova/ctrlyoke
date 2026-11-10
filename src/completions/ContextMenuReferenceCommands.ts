@@ -15,7 +15,7 @@ import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getOutputChannelSlug } from "./CompletionHelpers";
 import { mapSymbolKindToReferenceKind } from "./CompletionCore";
-import { writeOutputSnapshotAttachment } from "../ui/OutputSnapshotService";
+import { writeOutputCaptureAttachment } from "../ui/OutputCaptureAttachments";
 import type { OutputCaptureEntry } from "./OutputCaptureCache";
 import { confirmExternalFileTrust } from "../ui/ExternalRootsApproval";
 import type { UserInteractionPort } from "../ui/UserInteractionPort";
@@ -441,12 +441,12 @@ export class ContextMenuReferenceCommands {
       channel: getOutputChannelSlug(editor.document),
       range,
     };
-    // writeOutputSnapshotAttachment already returns a quoted/normalized
-    // reference value (same contract as savePendingOutputSnapshot, whose only
+    // writeOutputCaptureAttachment already returns a quoted/normalized
+    // reference value (same contract as savePendingOutputCapture, whose only
     // other caller prepends '@' itself) — do not re-run it through
     // buildFileReference, which would quote an already-quoted path a second
     // time whenever the channel name contains a space.
-    const referenceValue = await writeOutputSnapshotAttachment(
+    const referenceValue = await writeOutputCaptureAttachment(
       this.getWorkspaceRoot,
       entry
     );

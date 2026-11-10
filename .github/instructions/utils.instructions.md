@@ -47,6 +47,6 @@ This folder has a few important seams:
 <relatedFiles>
 - `src/config/CtrlYokeConfigService.ts` — backing config service that `ConfigurationUtils` wraps
 - `src/core/HarnessIntegration.ts` — shared prior-context XML builder used by `PriorContextPreviewBuilder`
-- `src/ui/WebviewSettingsSync.ts` and `src/ui/McpManagerService.ts` — heavy consumers of MCP/config/discovery utils
+- `src/ui/DashboardSettingsSync.ts` and `src/ui/McpManagerService.ts` — heavy consumers of MCP/config/discovery utils
 - `src/completions/CompletionHelpers.ts` and `src/completions/ContextReferenceBuilder.ts` — editor-side consumers of parsing/discovery/model helpers
 </relatedFiles>

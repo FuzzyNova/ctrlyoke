@@ -1304,14 +1304,14 @@ export type CompletionNotificationKind =
 // ============================================================================
 // COMPLETION NOTIFICATION SEVERITY - Visual/system notification level
 // ============================================================================
-export const COMPLETION_NOTIFICATION_SEVERITY = {
+export const NOTIFICATION_SEVERITY = {
   INFO: "info",
   WARNING: "warning",
   ERROR: "error",
 } as const;
 
-export type CompletionNotificationSeverity =
-  (typeof COMPLETION_NOTIFICATION_SEVERITY)[keyof typeof COMPLETION_NOTIFICATION_SEVERITY];
+export type NotificationSeverity =
+  (typeof NOTIFICATION_SEVERITY)[keyof typeof NOTIFICATION_SEVERITY];
 
 // ============================================================================
 // NOTIFICATION OUTCOME KINDS - Notification monitor result classifications

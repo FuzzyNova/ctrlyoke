@@ -1,22 +1,22 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { createWebviewClientContext } from "../../ui/WebviewClientContext";
+import { createDashboardClientContext } from "../../ui/DashboardClientContext";
 import {
   EXTERNAL_FILE_TRUST_SCOPES,
   MESSAGE_TYPES,
 } from "../../types/DashboardConstants";
 import { promptBatchApprovalForPendingRoots } from "../../ui/ExternalRootsApproval";
-import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
+import { DashboardUserInteractionPort } from "../../ui/DashboardUserInteractionPort";
 
 suite("Core feedback migration", () => {
   test("emits a scoped failure only through the initiating client transport", () => {
     const firstClient: unknown[] = [];
     const secondClient: unknown[] = [];
     const contexts = [
-      createWebviewClientContext("browser:1", (message) => {
+      createDashboardClientContext("browser:1", (message) => {
         firstClient.push(message);
       }),
-      createWebviewClientContext("browser:2", (message) => {
+      createDashboardClientContext("browser:2", (message) => {
         secondClient.push(message);
       }),
     ];
@@ -34,7 +34,7 @@ suite("Core feedback migration", () => {
   test("routes workflow root approval and choices only to the requesting tab", async () => {
     const firstClient: unknown[] = [];
     const secondClient: unknown[] = [];
-    const firstPort = new WebviewUserInteractionPort(
+    const firstPort = new DashboardUserInteractionPort(
       (message) => firstClient.push(message),
       () => true
     );

@@ -3,8 +3,8 @@ import * as assert from "assert";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import { WorkflowStepHandlers } from "../../ui/WorkflowStepHandlers";
 import { WorkflowMutationCoordinator } from "../../ui/WorkflowMutationCoordinator";
-import type { WebviewClientContext } from "../../ui/WebviewClientContext";
-import type { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
+import type { DashboardClientContext } from "../../ui/DashboardClientContext";
+import type { DashboardSettingsSync } from "../../ui/DashboardSettingsSync";
 import {
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
@@ -53,7 +53,7 @@ function makeOrchestrator(overrides: Record<string, unknown>) {
 
 function makeCtx(
   emit: (message: unknown) => void = () => {}
-): WebviewClientContext {
+): DashboardClientContext {
   return {
     clientId: "panel",
     postMessage: () => undefined,
@@ -72,7 +72,7 @@ suite("WorkflowStepHandlers — steer messages", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
 
@@ -99,7 +99,7 @@ suite("WorkflowStepHandlers — steer messages", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
 
@@ -140,7 +140,7 @@ suite("WorkflowStepHandlers — bulk step updates", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
     const message = {
@@ -175,7 +175,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
 
@@ -198,7 +198,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
 
@@ -220,7 +220,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
 
@@ -242,7 +242,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
 
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
 
@@ -264,7 +264,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
     const pendingGroups = [
@@ -296,7 +296,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     });
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
-      {} as WebviewSettingsSync,
+      {} as DashboardSettingsSync,
       coordinator
     );
 

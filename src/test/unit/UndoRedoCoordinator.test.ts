@@ -13,7 +13,7 @@ import {
   UNDO_FILE_ACTIONS,
   OUTPUT_HISTORY_KINDS,
 } from "../../types/DashboardConstants";
-import type { PostMessageFn } from "../../ui/WebviewSettingsSync";
+import type { PostMessageFn } from "../../ui/DashboardClientEndpoint";
 import type { UnifiedDiffHunk } from "../../types/CliOutputTypes";
 import type {
   RunRef,

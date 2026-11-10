@@ -37,7 +37,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { ExternalExecutionResolver } from "../../core/orchestration/ExternalExecutionResolver";
 import { TypedEmitter } from "../../utils/TypedEmitter";
-import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
+import { DashboardUserInteractionPort } from "../../ui/DashboardUserInteractionPort";
 import { initPtyProcessManager } from "../../core/harness/PtyProcessManager";
 import { MockPlatform } from "../helpers/mockHarness";
 import {
@@ -597,7 +597,7 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
       const internal = orchestrator as any;
       const sent: unknown[] = [];
       const requests: unknown[] = [];
-      const port = new WebviewUserInteractionPort(
+      const port = new DashboardUserInteractionPort(
         (message) => requests.push(message),
         () => true
       );

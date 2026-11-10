@@ -24,7 +24,7 @@ remaining behaviour, which is working as designed and still unsatisfying.
 > `routeQueue` (`e4331059f`), and when the index is still building, the `SEARCH_HISTORY`
 > handler fires a detached re-search after `enqueueWorkspaceRefresh` that emits
 > `SEARCH_HISTORY_RESULTS` outside the queue, guarded only by the listing's abort signal
-> (`fdecf81a1`, `WebviewMessageRouter.ts`). That detached re-search is the first code path
+> (`fdecf81a1`, `DashboardMessageRouter.ts`). That detached re-search is the first code path
 > that can scan a listing alongside a page request, so the scan session below should absorb
 > it (and the no-concurrent-scan test should cover it).
 
@@ -65,7 +65,7 @@ running when no page request is waiting on it.
 ## The blocker: `routeQueue`
 
 **Every webview message funnels through one `routeQueue` promise chain per
-`WebviewMessageRouter`.** A search handler that keeps scanning holds that
+`DashboardMessageRouter`.** A search handler that keeps scanning holds that
 chain, so run-view loads, settings writes, and workflow mutations all wait
 behind it. This is not a theoretical concern — it is precisely why the
 predecessor plan's option D (cancel superseded searches) had to abort

@@ -1,13 +1,13 @@
 import {
   COMPLETION_NOTIFICATION_KINDS,
-  COMPLETION_NOTIFICATION_SEVERITY,
+  NOTIFICATION_SEVERITY,
   EXECUTION_STATES,
   IN_FLIGHT_EXECUTION_STATES,
   NOTIFICATION_EVENT_MODES,
   NOTIFICATION_KINDS,
   DERIVED_NOTIFICATION_EVENTS,
   STEP_STATUS,
-  type CompletionNotificationSeverity,
+  type NotificationSeverity,
   type ExecutionState,
   type HookEvent,
   type DerivedNotificationEvent,
@@ -27,7 +27,7 @@ import { secretRedactionService } from "../../utils/SecretRedactionService";
 export interface CtrlYokeNotificationEvent {
   id: string;
   kind: NotificationKind;
-  severity: CompletionNotificationSeverity;
+  severity: NotificationSeverity;
   workflowId: string;
   /** Stable execution target when the event came from a promoted run. */
   address?: WorkflowRunAddress;
@@ -48,9 +48,6 @@ export interface CtrlYokeNotificationEvent {
   /** Tool name for preToolUse / postToolUse hook events. */
   toolName?: string;
 }
-
-/** @deprecated Use CtrlYokeNotificationEvent */
-export type CompletionNotificationEvent = CtrlYokeNotificationEvent;
 
 /**
  * Raw artifact written by a hook script when CTRLYOKE_NOTIFY_HOOK_EVENTS is set.
@@ -110,13 +107,13 @@ function notificationIdentity(summary: WorkflowSummary): string {
 
 export function buildTestNotificationEvent(
   url?: string
-): CompletionNotificationEvent {
+): CtrlYokeNotificationEvent {
   const eventId = `test:${Date.now()}`;
 
   return {
     id: eventId,
     kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
-    severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
+    severity: NOTIFICATION_SEVERITY.INFO,
     workflowId: "test",
     title: "ctrlyoke - Test Notification",
     body: "Developer test notification",
@@ -146,7 +143,7 @@ export function isWorkflowCompletionTransition(
 
 export function buildWorkflowCompletionNotification(
   input: WorkflowNotificationInput
-): CompletionNotificationEvent | undefined {
+): CtrlYokeNotificationEvent | undefined {
   const { summary, settings, url } = input;
   const state = summary.executionState;
 
@@ -175,8 +172,8 @@ export function buildWorkflowCompletionNotification(
     id: `${notificationIdentity(summary)}:workflow:${state}`,
     kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
     severity: isFailure
-      ? COMPLETION_NOTIFICATION_SEVERITY.ERROR
-      : COMPLETION_NOTIFICATION_SEVERITY.INFO,
+      ? NOTIFICATION_SEVERITY.ERROR
+      : NOTIFICATION_SEVERITY.INFO,
     workflowId: summary.id,
     address:
       summary.workflowKey && summary.runRef
@@ -191,7 +188,7 @@ export function buildWorkflowCompletionNotification(
 
 export function buildPromptCompletionNotification(
   input: PromptNotificationInput
-): CompletionNotificationEvent | undefined {
+): CtrlYokeNotificationEvent | undefined {
   const { summary, steps, stepIndex, stepStatus, settings, url } = input;
 
   if (
@@ -227,8 +224,8 @@ export function buildPromptCompletionNotification(
     id: `${notificationIdentity(summary)}:prompt:${stepIndex}:${stepStatus.state}`,
     kind: COMPLETION_NOTIFICATION_KINDS.PROMPT,
     severity: isFailure
-      ? COMPLETION_NOTIFICATION_SEVERITY.ERROR
-      : COMPLETION_NOTIFICATION_SEVERITY.INFO,
+      ? NOTIFICATION_SEVERITY.ERROR
+      : NOTIFICATION_SEVERITY.INFO,
     workflowId: summary.id,
     address:
       summary.workflowKey && summary.runRef
@@ -429,8 +426,8 @@ export function buildHookNotificationEvent(
     id,
     kind: NOTIFICATION_KINDS.HOOK,
     severity: isDecisionHookFailure
-      ? COMPLETION_NOTIFICATION_SEVERITY.ERROR
-      : COMPLETION_NOTIFICATION_SEVERITY.INFO,
+      ? NOTIFICATION_SEVERITY.ERROR
+      : NOTIFICATION_SEVERITY.INFO,
     workflowId: artifact.workflowId,
     title: isDecisionHookFailure
       ? "ctrlyoke - Decision hook failed"

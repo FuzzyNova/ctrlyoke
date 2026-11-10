@@ -58,8 +58,9 @@ import { CTRLYOKE_VERSION } from "../utils/BuildConfig";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkspaceSnapshotContentMessage } from "../types/WebviewMessageTypes";
-import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
-import type { WorkflowSerializer } from "./WorkflowSerializer";
+import type { DashboardSettingsSync } from "./DashboardSettingsSync";
+import type { PostMessageFn } from "./DashboardClientEndpoint";
+import type { WorkflowLibraryHandlers } from "./WorkflowLibraryHandlers";
 import type {
   DeleteMcpFromHarnessMessage,
   DeleteMcpRegistryServerMessage,
@@ -140,9 +141,9 @@ import { SecretRegistryService } from "./SecretRegistryService";
 import { TerminalMessageHandlers } from "./TerminalMessageHandlers";
 import { WorkflowStepHandlers } from "./WorkflowStepHandlers";
 import {
-  createWebviewClientContext,
-  type WebviewClientContext,
-} from "./WebviewClientContext";
+  createDashboardClientContext,
+  type DashboardClientContext,
+} from "./DashboardClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { HistorySearchCancelledError } from "../core/orchestration/HistorySearchIndexService";
 import {
@@ -160,7 +161,7 @@ import {
   LicenseSettingsHandlers,
   type LicenseActionService,
 } from "./LicenseSettingsHandlers";
-import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
+import { DashboardUserInteractionPort } from "./DashboardUserInteractionPort";
 
 function isValidOutputExecutionTarget(
   value: unknown
@@ -183,7 +184,7 @@ function isValidOutputExecutionTarget(
  */
 type WebviewMessageHandler = (
   message: any,
-  ctx: WebviewClientContext
+  ctx: DashboardClientContext
 ) => void | Promise<void>;
 
 type DispatchTable = Map<string, WebviewMessageHandler>;
@@ -286,7 +287,7 @@ function getRunAddressKey(address: unknown): string | undefined {
 
 /**
  * The history searches one client currently has in flight, all of them for
- * the same `listingKey`. See `WebviewMessageRouter.beginHistorySearch`.
+ * the same `listingKey`. See `DashboardMessageRouter.beginHistorySearch`.
  */
 interface HistorySearchClientRegistration {
   listingKey: string;
@@ -375,15 +376,15 @@ function describeWorktreeActionSuccess(
 }
 
 /**
- * WebviewMessageRouter
+ * DashboardMessageRouter
  *
  * Dispatch table replacing the giant switch statement in CtrlYokeWebviewProvider.
  * Routes incoming webview messages to the appropriate handler on the provider,
- * WebviewSettingsSync, or WorkflowSerializer.
+ * DashboardSettingsSync, or WorkflowLibraryHandlers.
  *
  * Each handler function is registered in the dispatch table at construction time.
  */
-export class WebviewMessageRouter {
+export class DashboardMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
   // Run-start messages waiting in `routeQueue`, counted per run key (see
   // `getRunStartKey`). A STOP_RUN skips the queue only while its run has none.
@@ -396,7 +397,7 @@ export class WebviewMessageRouter {
   private nextLoadRunViewConnectionId = 1;
   private readonly clientInteractionPorts = new Map<
     string,
-    WebviewUserInteractionPort
+    DashboardUserInteractionPort
   >();
   private readonly clientRouteEpochs = new Map<string, number>();
   private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
@@ -430,8 +431,8 @@ export class WebviewMessageRouter {
 
   constructor(
     private readonly defaultPostMessage: PostMessageFn,
-    private readonly settingsSync: WebviewSettingsSync,
-    private readonly serializer: WorkflowSerializer,
+    private readonly settingsSync: DashboardSettingsSync,
+    private readonly serializer: WorkflowLibraryHandlers,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
     private readonly historySearchService: HistorySearchService,
     private readonly callbacks: WebviewRouterCallbacks,
@@ -513,7 +514,7 @@ export class WebviewMessageRouter {
    *
    * The sending client's scope is resolved once, here, and then passed by value
    * to the handler. Handlers must not reach back to the router for it — see
-   * {@link WebviewClientContext} for why holding it as router state was unsafe.
+   * {@link DashboardClientContext} for why holding it as router state was unsafe.
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
     const clientId = options?.clientTag ?? PANEL_CLIENT_ID;
@@ -534,7 +535,7 @@ export class WebviewMessageRouter {
       clientId,
       postMessage
     );
-    let ctx = createWebviewClientContext(
+    let ctx = createDashboardClientContext(
       clientId,
       postMessage,
       interactionPort
@@ -763,17 +764,17 @@ export class WebviewMessageRouter {
   private getClientInteractionPort(
     clientId: string,
     postMessage: PostMessageFn
-  ): WebviewUserInteractionPort {
+  ): DashboardUserInteractionPort {
     const existing = this.clientInteractionPorts.get(clientId);
     if (existing) return existing;
 
-    const port = new WebviewUserInteractionPort(postMessage, () => true);
+    const port = new DashboardUserInteractionPort(postMessage, () => true);
     this.clientInteractionPorts.set(clientId, port);
     return port;
   }
 
   private async completeBrowserReadyAfterStartup(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     orchestrator: WorkflowOrchestrator
   ): Promise<void> {
     try {
@@ -794,14 +795,14 @@ export class WebviewMessageRouter {
       this.settingsSync.sendStartupComplete(ctx.postMessage);
     } catch (error) {
       Log.error(
-        `[WebviewMessageRouter] browser READY follow-up failed clientId=${ctx.clientId}: ${getErrorMessage(error)}`
+        `[DashboardMessageRouter] browser READY follow-up failed clientId=${ctx.clientId}: ${getErrorMessage(error)}`
       );
     }
   }
 
   private async routeSingleMessage(
     message: any,
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     try {
       const handler = this.handlers.get(message.type);
@@ -809,13 +810,13 @@ export class WebviewMessageRouter {
         await handler(message, ctx);
       } else {
         Log.warn(
-          `[WebviewMessageRouter] Unknown message type: ${message.type}`
+          `[DashboardMessageRouter] Unknown message type: ${message.type}`
         );
       }
     } catch (error) {
       const errorMsg = getErrorMessage(error);
       Log.error(
-        `[WebviewMessageRouter] Error handling webview message (${message.type}):`,
+        `[DashboardMessageRouter] Error handling webview message (${message.type}):`,
         errorMsg
       );
       // An addressed mutation that throws here never reached its success path,
@@ -946,7 +947,7 @@ export class WebviewMessageRouter {
         );
         if (shouldHandleReady === false) {
           Log.debug(
-            "[WebviewMessageRouter] Ignoring duplicate panel READY for the current webview"
+            "[DashboardMessageRouter] Ignoring duplicate panel READY for the current webview"
           );
           return;
         }
@@ -1467,7 +1468,7 @@ export class WebviewMessageRouter {
         } catch (error) {
           const errorMessage = getErrorMessage(error);
           Log.error(
-            "[WebviewMessageRouter] Failed to create end-condition script:",
+            "[DashboardMessageRouter] Failed to create end-condition script:",
             errorMessage
           );
           ctx.emit({
@@ -1500,7 +1501,7 @@ export class WebviewMessageRouter {
         )
         .catch((error) => {
           Log.error(
-            "[WebviewMessageRouter] Failed to run prompt in new workflow:",
+            "[DashboardMessageRouter] Failed to run prompt in new workflow:",
             error
           );
           ctx.emit({
@@ -1995,7 +1996,7 @@ export class WebviewMessageRouter {
   }
 
   private emitSecretRegistryFailure(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: string,
     error: unknown,
     hideDetails = false
@@ -2214,7 +2215,7 @@ export class WebviewMessageRouter {
             );
         } catch (error) {
           Log.warn(
-            `[WebviewMessageRouter] Snapshot content request failed: ${getErrorMessage(error)}`
+            `[DashboardMessageRouter] Snapshot content request failed: ${getErrorMessage(error)}`
           );
         }
         ctx.emit({
@@ -2345,7 +2346,7 @@ export class WebviewMessageRouter {
             .catch((error: unknown) => {
               if (error instanceof HistorySearchCancelledError) return;
               Log.warn(
-                `[WebviewMessageRouter] history search refresh failed: query="${query}" error=${getErrorMessage(error)}`
+                `[DashboardMessageRouter] history search refresh failed: query="${query}" error=${getErrorMessage(error)}`
               );
             })
             .finally(() => releaseFollowUp?.());
@@ -2356,7 +2357,7 @@ export class WebviewMessageRouter {
           // late reply here would overwrite the newer query's results in
           // the webview's uiStore. Say nothing.
           Log.debug(
-            `[WebviewMessageRouter] history search superseded: clientId=${ctx.clientId} query="${query}"`
+            `[DashboardMessageRouter] history search superseded: clientId=${ctx.clientId} query="${query}"`
           );
           return;
         }
@@ -2768,7 +2769,7 @@ export class WebviewMessageRouter {
       } catch (error) {
         const errorMessage = getErrorMessage(error);
         Log.error(
-          "[WebviewMessageRouter] Failed to retry harness detection:",
+          "[DashboardMessageRouter] Failed to retry harness detection:",
           errorMessage
         );
         ctx.emit({
@@ -2878,7 +2879,7 @@ export class WebviewMessageRouter {
           typeof message.restoreCustomCommand !== "boolean"
         ) {
           Log.warn(
-            "[WebviewMessageRouter] Rejected unsupported statusline tracking disable request"
+            "[DashboardMessageRouter] Rejected unsupported statusline tracking disable request"
           );
           return;
         }
@@ -2895,7 +2896,7 @@ export class WebviewMessageRouter {
       async (message, ctx) => {
         if (typeof message.useDifferentFormatPerHarness !== "boolean") {
           Log.warn(
-            "[WebviewMessageRouter] Rejected unsupported statusline format mode request"
+            "[DashboardMessageRouter] Rejected unsupported statusline format mode request"
           );
           return;
         }
@@ -2909,7 +2910,7 @@ export class WebviewMessageRouter {
 
     const sendWorktreeManagementState = async (
       refresh: boolean,
-      ctx: WebviewClientContext,
+      ctx: DashboardClientContext,
       requestId?: string
     ): Promise<void> => {
       const orchestrator = this.getOrchestrator();
@@ -3400,7 +3401,7 @@ export class WebviewMessageRouter {
         );
       } catch (err) {
         Log.warn(
-          `[WebviewMessageRouter] SWITCH_WORKFLOW per-client replay failed: ${err}`
+          `[DashboardMessageRouter] SWITCH_WORKFLOW per-client replay failed: ${err}`
         );
       }
     });
@@ -3483,7 +3484,7 @@ export class WebviewMessageRouter {
         await this.getOrchestrator()?.requestVscodeStop(workflowId);
       if (result === "timed-out") {
         Log.warn(
-          `[WebviewMessageRouter] sibling VS Code stop request timed out for "${workflowId}"`
+          `[DashboardMessageRouter] sibling VS Code stop request timed out for "${workflowId}"`
         );
       }
     });
@@ -3647,7 +3648,7 @@ export class WebviewMessageRouter {
   // ============================================================================
 
   private handleWebviewLog(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     level: WebviewLogLevel,
     message: string
   ): void {
@@ -3698,7 +3699,7 @@ export class WebviewMessageRouter {
   private async sendRunImportPreview(
     bundleDir: string,
     requestId: string,
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     try {
       const preview = await new RunImportPreviewService().preview(
@@ -3738,7 +3739,7 @@ export class WebviewMessageRouter {
   }
 
   private async runHostAction(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: DashboardHostActionResultMessage["action"],
     result: Promise<ActionResult>
   ): Promise<void> {
@@ -3758,7 +3759,7 @@ export class WebviewMessageRouter {
   }
 
   private replyHostAction(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: DashboardHostActionResultMessage["action"],
     status: DashboardHostActionResultMessage["status"] = DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
     message?: string
@@ -3827,7 +3828,7 @@ export interface WebviewRouterCallbacks {
   onPanelReady?: (pageLoadId: string | undefined) => boolean;
   /**
    * Forward the panel's decision for one batch-approval request (see
-   * UserInteractionPort) back to the WebviewUserInteractionPort that raised
+   * UserInteractionPort) back to the DashboardUserInteractionPort that raised
    * it. `result` is undefined when the request was dismissed with no
    * decision made.
    */

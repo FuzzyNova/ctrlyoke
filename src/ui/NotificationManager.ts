@@ -8,7 +8,7 @@ import type {
 } from "../types/CtrlYokeTypes";
 import type { DashboardClient } from "./DashboardBroadcastHub";
 import {
-  COMPLETION_NOTIFICATION_SEVERITY,
+  NOTIFICATION_SEVERITY,
   type StepStatus,
 } from "../types/DashboardConstants";
 import {
@@ -17,7 +17,7 @@ import {
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
   type CtrlYokeNotificationEvent,
-} from "./notifications/CompletionNotificationFactory";
+} from "../core/notifications/NotificationEventFactory";
 import { CompletionNotificationTracker } from "./notifications/CompletionNotificationTracker";
 import {
   showErrorMessage,
@@ -137,7 +137,7 @@ export class NotificationManager implements DashboardClient {
       return;
     }
 
-    if (event.severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR) {
+    if (event.severity === NOTIFICATION_SEVERITY.ERROR) {
       void showErrorMessage(
         event.title,
         { detail: event.body },
@@ -154,7 +154,7 @@ export class NotificationManager implements DashboardClient {
       return;
     }
 
-    if (event.severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING) {
+    if (event.severity === NOTIFICATION_SEVERITY.WARNING) {
       void showWarningMessage(
         event.title,
         { detail: event.body },

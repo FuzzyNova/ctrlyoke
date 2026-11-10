@@ -146,6 +146,7 @@ This ledger maps retired names to their current names. Historical implementation
 - `src/ui/webview-react/components/output/ctrlyoke-tools/WorkflowStatusView.tsx` and its tool-view symbols remain tool-status names; they are separate from the workflow header switcher.
 - `MESSAGE_TYPES.CLIENT_ID_ASSIGNED` and `MESSAGE_TYPES.CAPTURE_THEME_VARS` remain wire-message names; only their webview handler/helper locations changed. `useRunViewLoadWatchdog` remains a hook in `hooks/`.
 - Persisted and wire contracts: `PERSISTED_STORES.PROVIDER_USAGE = "provider-usage"`, `PROVIDER_USAGE_SCHEMA_VERSION`; `HARNESS_USAGE_ERROR_CODES` values (including `provider-refresh-failed`); `StatusLineFormatHarness` values (`claude`, `antigravity`, `copilot`, `qwen`); `COMPLETION_NOTIFICATION_*` / `NOTIFICATION_KINDS` values; `_runtime.finalStep.loopCount`, `OutputExecutionTarget.loopIndex`, and the `loop*` fields in `WebviewMessageTypes.ts` / `IDashboardSink.ts`.
+- Notification wire values (`COMPLETION_NOTIFICATION_*` and `NOTIFICATION_KINDS`) and output-capture filename prefixes/truncation markers remain unchanged; only their TypeScript identifiers and source locations moved.
 - On-disk and browser contracts: `TempFileManager` directory names and file prefixes, output-snapshot filename prefix and truncation markers; sessionStorage `ctrlyoke-panel-reconnect-retry-at`, `window.__ctrlyokePanelHandshake*`; zustand persist names `ctrlyoke-ui-state` and `ctrlyoke-workspace-viewer-state`.
 - `docs/guide/dashboard.md` screenshot name `step-context-menu-900x588.png` remains unchanged.
 | `src/core/harness/shared/interfaces/ICliProvider.ts` | `src/core/harness/shared/interfaces/IHarnessAdapter.ts` | file | 5a | 2026-11-09 |
@@ -180,3 +181,30 @@ This ledger maps retired names to their current names. Historical implementation
 | `CliProviderWorkflowContext` | `HarnessAdapterWorkflowContext` | symbol | 5b | 2026-11-09 |
 | `CliProviderPreparation` | `HarnessAdapterPreparation` | symbol | 5b | 2026-11-09 |
 | `RetryableAsyncCache` (`src/core/harness/shared/CliProviderUtils.ts`) | `src/utils/RetryableAsyncCache.ts` | symbol / module | 5b | 2026-11-09 |
+| `src/ui/IDashboardProvider.ts` | `src/types/IDashboardRegistryEvents.ts` | file | 6a | 2026-11-09 |
+| `IDashboardProvider` | `IDashboardRegistryEvents` | symbol | 6a | 2026-11-09 |
+| `src/ui/WebviewMessageRouter.ts` | `src/ui/DashboardMessageRouter.ts` | file | 6a | 2026-11-09 |
+| `src/ui/WebviewSettingsSync.ts` | `src/ui/DashboardSettingsSync.ts` | file | 6a | 2026-11-09 |
+| `src/ui/WebviewClientContext.ts` | `src/ui/DashboardClientContext.ts` | file | 6a | 2026-11-09 |
+| `WebviewMessageRouter` | `DashboardMessageRouter` | symbol | 6a | 2026-11-09 |
+| `WebviewSettingsSync` | `DashboardSettingsSync` | symbol | 6a | 2026-11-09 |
+| `WebviewSettingsSyncHost` | `DashboardSettingsSyncHost` | symbol | 6a | 2026-11-09 |
+| `WebviewClientContext` | `DashboardClientContext` | symbol | 6a | 2026-11-09 |
+| `createWebviewClientContext` | `createDashboardClientContext` | symbol | 6a | 2026-11-09 |
+| `PostMessageFn`, `HarnessStatus` (`DashboardSettingsSync.ts`) | `DashboardClientEndpoint.ts` | symbol / type | 6a | 2026-11-09 |
+| `src/ui/WebviewUserInteractionPort.ts` | `src/ui/DashboardUserInteractionPort.ts` | file | 6a | 2026-11-09 |
+| `WebviewUserInteractionPort` | `DashboardUserInteractionPort` | symbol | 6a | 2026-11-09 |
+| `src/ui/notifications/CompletionNotificationFactory.ts` | `src/core/notifications/NotificationEventFactory.ts` | file | 6a | 2026-11-09 |
+| `src/test/unit/CompletionNotificationFactory.test.ts` | `src/test/unit/NotificationEventFactory.test.ts` | file | 6a | 2026-11-09 |
+| `COMPLETION_NOTIFICATION_SEVERITY` | `NOTIFICATION_SEVERITY` | symbol | 6a | 2026-11-09 |
+| `CompletionNotificationSeverity` | `NotificationSeverity` | symbol | 6a | 2026-11-09 |
+| `CompletionNotificationEvent` | removed; callers use `CtrlYokeNotificationEvent` | symbol | 6a | 2026-11-09 |
+| `src/ui/WorkflowSerializer.ts` | `src/ui/WorkflowLibraryHandlers.ts` | file | 6a | 2026-11-09 |
+| `src/test/unit/WorkflowSerializer.test.ts` | `src/test/unit/WorkflowLibraryHandlers.test.ts` | file | 6a | 2026-11-09 |
+| `WorkflowSerializer` | `WorkflowLibraryHandlers` | symbol | 6a | 2026-11-09 |
+| `src/ui/OutputSnapshotService.ts` | `src/ui/OutputCaptureAttachments.ts` | file | 6a | 2026-11-09 |
+| `src/test/unit/OutputSnapshotService.test.ts` | `src/test/unit/OutputCaptureAttachments.test.ts` | file | 6a | 2026-11-09 |
+| `OutputSnapshotService` | `OutputCaptureAttachments` | symbol | 6a | 2026-11-09 |
+| `writeOutputSnapshotAttachment` | `writeOutputCaptureAttachment` | symbol | 6a | 2026-11-09 |
+| `savePendingOutputSnapshot` | `savePendingOutputCapture` | symbol | 6a | 2026-11-09 |
+| `TempFileManager.createOutputSnapshotFile` | `TempFileManager.createOutputCaptureFile` | symbol | 6a | 2026-11-09 |

@@ -6,7 +6,7 @@ import * as path from "path";
 import * as yaml from "js-yaml";
 import * as vscode from "vscode";
 import { suite, test } from "mocha";
-import { WorkflowSerializer } from "../../ui/WorkflowSerializer";
+import { WorkflowLibraryHandlers } from "../../ui/WorkflowLibraryHandlers";
 import type { DashboardHostActions, KeyValueStore } from "../../core/HostPorts";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
@@ -66,7 +66,7 @@ class RecordingMemento implements KeyValueStore {
   }
 }
 
-function createWorkflowSerializer(
+function createWorkflowLibraryHandlers(
   postMessage: (message: any) => void,
   templateManager: any,
   getManager: () => WorkflowOrchestrator | undefined,
@@ -78,12 +78,12 @@ function createWorkflowSerializer(
   > = {
     openWorkspaceTarget: async () => ({ status: "opened" }),
   }
-): WorkflowSerializer {
+): WorkflowLibraryHandlers {
   const roots = (vscode.workspace.workspaceFolders ?? []).map((folder) => ({
     name: folder.name,
     fsPath: folder.uri.fsPath,
   }));
-  return new WorkflowSerializer(
+  return new WorkflowLibraryHandlers(
     postMessage,
     templateManager,
     getManager,
@@ -287,7 +287,7 @@ async function withWorkspace(
   }
 }
 
-suite("WorkflowSerializer", () => {
+suite("WorkflowLibraryHandlers", () => {
   test("toggling a favorite preserves the allocated run descriptor revision", async () => {
     await withWorkspace(
       "ctrlyoke-favorite-revision-",
@@ -302,7 +302,7 @@ suite("WorkflowSerializer", () => {
           workspaceRoot,
           lineage.workflowKey
         );
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           () => undefined,
           {} as any,
           () => undefined,
@@ -344,7 +344,7 @@ suite("WorkflowSerializer", () => {
 
   test("loads the template catalog without opening the new-workflow modal", async () => {
     const messages: any[] = [];
-    const serializer = createWorkflowSerializer(
+    const serializer = createWorkflowLibraryHandlers(
       (message) => messages.push(message),
       {
         getAvailableTemplates: async () => [
@@ -422,7 +422,7 @@ suite("WorkflowSerializer", () => {
           };
         }) as typeof configService.get;
 
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -506,7 +506,7 @@ suite("WorkflowSerializer", () => {
                   "blank",
               }
             : originalGet.call(configService, key)) as typeof configService.get;
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -589,7 +589,7 @@ suite("WorkflowSerializer", () => {
           getTemplateInfo: async () => singleVariableTemplate,
           getAvailableTemplates: async () => [singleVariableTemplate],
         };
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           () => undefined,
           manager,
           () => undefined,
@@ -632,7 +632,7 @@ suite("WorkflowSerializer", () => {
           getTemplateInfo: async () => singleVariableTemplate,
           getAvailableTemplates: async () => [singleVariableTemplate],
         };
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           () => undefined,
           manager,
           () => undefined,
@@ -682,7 +682,7 @@ suite("WorkflowSerializer", () => {
             },
           ],
         };
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           manager,
           () => undefined,
@@ -736,7 +736,7 @@ suite("WorkflowSerializer", () => {
           getTemplateInfo: async () => pairTemplate,
           getAvailableTemplates: async () => [pairTemplate],
         };
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           manager,
           () => undefined,
@@ -800,7 +800,7 @@ suite("WorkflowSerializer", () => {
           getTemplateInfo: async () => twoVariableTemplate,
           getAvailableTemplates: async () => [twoVariableTemplate],
         };
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           () => undefined,
           manager,
           () => undefined,
@@ -849,7 +849,7 @@ suite("WorkflowSerializer", () => {
           getTemplateInfo: async () => undefined,
           getAvailableTemplates: async () => [],
         };
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           () => undefined,
           manager,
           () => undefined,
@@ -916,7 +916,7 @@ suite("WorkflowSerializer", () => {
         };
 
         const messages: unknown[] = [];
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -997,7 +997,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -1065,7 +1065,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           () => undefined,
           {} as any,
           () =>
@@ -1151,7 +1151,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {
             saveWorkflowAsTemplate: async (
@@ -1263,7 +1263,7 @@ suite("WorkflowSerializer", () => {
           } as WorkflowViewAddress;
           const outputPath = path.join(workspaceRoot, "saved.ctrlyoke.yaml");
           let templateWorkflow: Record<string, unknown> | undefined;
-          const serializer = createWorkflowSerializer(
+          const serializer = createWorkflowLibraryHandlers(
             () => undefined,
             {
               saveWorkflowAsTemplate: async (
@@ -1355,7 +1355,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           () => undefined,
           {} as any,
           () =>
@@ -1496,7 +1496,7 @@ suite("WorkflowSerializer", () => {
         );
 
         const messages: any[] = [];
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -1707,7 +1707,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {
             saveWorkflowAsTemplate: async () => {
@@ -1781,7 +1781,7 @@ suite("WorkflowSerializer", () => {
           ],
           configurable: true,
         });
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -1845,7 +1845,7 @@ suite("WorkflowSerializer", () => {
         workflowKey: "workflow-stale-1",
         kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
-      const serializer = createWorkflowSerializer(
+      const serializer = createWorkflowLibraryHandlers(
         (message) => messages.push(message),
         {} as any,
         () =>
@@ -1932,7 +1932,7 @@ suite("WorkflowSerializer", () => {
           JSON.stringify({ steps: [{ prompt: "No generated references" }] }),
           "utf8"
         );
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -2066,7 +2066,7 @@ suite("WorkflowSerializer", () => {
           lineage.workflowKey,
           run
         );
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -2118,7 +2118,7 @@ suite("WorkflowSerializer", () => {
         );
 
         const messages: any[] = [];
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -2170,7 +2170,7 @@ suite("WorkflowSerializer", () => {
           );
 
         const messages: any[] = [];
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -2208,7 +2208,7 @@ suite("WorkflowSerializer", () => {
         await writeDraftWorkingFile(workspaceRoot, lineage.workflowKey, 1_000);
 
         const messages: any[] = [];
-        const serializer = createWorkflowSerializer(
+        const serializer = createWorkflowLibraryHandlers(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -2289,7 +2289,7 @@ suite("WorkflowSerializer", () => {
           await fs.writeFile(runFilePath, JSON.stringify(runFile));
 
           const messages: any[] = [];
-          const serializer = createWorkflowSerializer(
+          const serializer = createWorkflowLibraryHandlers(
             (message) => messages.push(message),
             {} as any,
             () => undefined,
@@ -2343,7 +2343,7 @@ suite("WorkflowSerializer", () => {
           );
 
           const messages: any[] = [];
-          const serializer = createWorkflowSerializer(
+          const serializer = createWorkflowLibraryHandlers(
             (message) => messages.push(message),
             {} as any,
             () => undefined,
@@ -2388,8 +2388,8 @@ suite("WorkflowSerializer", () => {
         preferLatestRunForDraft: boolean
       ) => Promise<void>,
       forgetRunActivity?: (workflowKey: WorkflowKey) => void
-    ): WorkflowSerializer {
-      return createWorkflowSerializer(
+    ): WorkflowLibraryHandlers {
+      return createWorkflowLibraryHandlers(
         (message) => messages.push(message),
         {} as any,
         () =>

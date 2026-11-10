@@ -234,7 +234,7 @@ It contains:
 
 Register the new keys in `settingsCatalog.ts` so settings search finds them. Install, import,
 uninstall and list messages go in `WebviewMessageTypes.ts`, with matching handlers in the
-`WebviewMessageRouter`. The host pushes the installed-dictionary list to every client after any
+`DashboardMessageRouter`. The host pushes the installed-dictionary list to every client after any
 change.
 
 ## 9. Delivery

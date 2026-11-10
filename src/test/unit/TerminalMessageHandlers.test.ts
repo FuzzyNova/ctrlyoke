@@ -14,7 +14,7 @@ import {
   SESSION_KINDS,
 } from "../../types/DashboardConstants";
 import { TerminalMessageHandlers } from "../../ui/TerminalMessageHandlers";
-import { createWebviewClientContext } from "../../ui/WebviewClientContext";
+import { createDashboardClientContext } from "../../ui/DashboardClientContext";
 
 class FakePty implements IPty {
   readonly pid = 1;
@@ -58,7 +58,7 @@ suite("TerminalMessageHandlers panel reconnect", () => {
     session.bufferChunk("buffered terminal output");
 
     const emitted: unknown[] = [];
-    const context = createWebviewClientContext("panel", (message) => {
+    const context = createDashboardClientContext("panel", (message) => {
       emitted.push(message);
     });
     const handlers = new TerminalMessageHandlers(
@@ -105,7 +105,7 @@ suite("TerminalMessageHandlers shell spawn cwd", () => {
     );
 
     handlers.handleSpawnShell(
-      createWebviewClientContext("panel", () => {}),
+      createDashboardClientContext("panel", () => {}),
       {
         workflowId: "workflow-1",
         cwd: path.join(worktreeRoot, "client-chosen"),
@@ -163,7 +163,7 @@ suite("TerminalMessageHandlers controller hand-back on reconnect", () => {
         onExit: () => {},
       });
     const ctx = (clientId: string) =>
-      createWebviewClientContext(clientId, () => {});
+      createDashboardClientContext(clientId, () => {});
     const claim = (clientId: string, sessionId: string) =>
       handlers.handleClaimControl(ctx(clientId), {
         workflowId: WORKFLOW_ID,

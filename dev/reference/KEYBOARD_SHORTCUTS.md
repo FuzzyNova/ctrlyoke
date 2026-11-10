@@ -178,7 +178,7 @@ Prec.highest(
 
 ### Triggering extension host actions from the webview
 
-When a webview shortcut needs to trigger extension host logic, use `postMessage` with constants from `src/types/messages.ts`, handled in `WebviewMessageRouter.ts`.
+When a webview shortcut needs to trigger extension host logic, use `postMessage` with constants from `src/types/messages.ts`, handled in `DashboardMessageRouter.ts`.
 
 ---
 

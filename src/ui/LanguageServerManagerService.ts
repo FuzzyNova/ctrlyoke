@@ -28,7 +28,7 @@ import {
   describeLspUserConfigPaths,
 } from "../utils/HarnessLspExporter";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
-import type { WebviewClientContext } from "./WebviewClientContext";
+import type { DashboardClientContext } from "./DashboardClientContext";
 import { getErrorMessage } from "../utils/ErrorUtils";
 
 export type LanguageServerSpawn = typeof spawn;
@@ -122,7 +122,7 @@ function detectWorkspaceLanguages(
 }
 
 export class LanguageServerManagerService {
-  private readonly clients = new Map<string, WebviewClientContext>();
+  private readonly clients = new Map<string, DashboardClientContext>();
   private readonly statuses = new Map<string, LanguageServerStatusChange>();
   private definitions: Array<{
     id: string;
@@ -162,7 +162,7 @@ export class LanguageServerManagerService {
     this.clients.delete(clientId);
   }
 
-  async handleRequestServers(ctx: WebviewClientContext): Promise<void> {
+  async handleRequestServers(ctx: DashboardClientContext): Promise<void> {
     this.clients.set(ctx.clientId, ctx);
     const [definitions, probes] = await Promise.all([
       this.readDefinitions(),
@@ -174,7 +174,7 @@ export class LanguageServerManagerService {
   }
 
   async handleRequestLocalScan(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     _message: RequestLspLocalScanMessage
   ): Promise<void> {
     const result = await safeDiscoverLocalLanguageServers(
@@ -189,7 +189,7 @@ export class LanguageServerManagerService {
   }
 
   async handleExport(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ExportLspDefinitionMessage
   ): Promise<void> {
     try {
@@ -225,7 +225,7 @@ export class LanguageServerManagerService {
   }
 
   async handleSave(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: SaveLspDefinitionMessage
   ): Promise<void> {
     await this.validateAndWrite(message.id, message.definition, message.scope);
@@ -233,7 +233,7 @@ export class LanguageServerManagerService {
   }
 
   async handleDelete(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: DeleteLspDefinitionMessage
   ): Promise<void> {
     const settings = this.getScopedLanguageServers(message.scope);
@@ -247,7 +247,7 @@ export class LanguageServerManagerService {
   }
 
   async handleInstall(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: InstallLspServerMessage
   ): Promise<void> {
     const catalog = LANGUAGE_SERVER_CATALOG.find(
@@ -346,7 +346,7 @@ export class LanguageServerManagerService {
   }
 
   async handleRestart(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RestartLspServerMessage
   ): Promise<void> {
     try {
@@ -362,7 +362,7 @@ export class LanguageServerManagerService {
     }
   }
 
-  async handleRequestApproval(ctx: WebviewClientContext): Promise<void> {
+  async handleRequestApproval(ctx: DashboardClientContext): Promise<void> {
     try {
       if (!this.host)
         throw new Error("The language server host is unavailable.");
@@ -377,7 +377,7 @@ export class LanguageServerManagerService {
     }
   }
 
-  async handleStop(ctx: WebviewClientContext, id: string): Promise<void> {
+  async handleStop(ctx: DashboardClientContext, id: string): Promise<void> {
     try {
       if (!this.host)
         throw new Error("The language server host is unavailable.");
@@ -397,7 +397,7 @@ export class LanguageServerManagerService {
     for (const client of this.clients.values()) client.emit(message);
   }
 
-  private async emitUpdate(ctx: WebviewClientContext): Promise<void> {
+  private async emitUpdate(ctx: DashboardClientContext): Promise<void> {
     this.definitions = await this.readDefinitions();
     this.probes = await this.probeCatalog();
     ctx.emit(this.createUpdate(this.definitions, this.probes));

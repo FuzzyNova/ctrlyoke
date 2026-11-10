@@ -8,7 +8,7 @@
 >
 > - **Done differently (§4):** the token counter exists. `EditorFooter.tsx` shows a count from `useAttachmentTokenCount` (aade9c7c0), which uses `src/ui/webview-react/utils/tokenizer.ts` (`gpt-tokenizer`) and asks the extension for counts of expanded attachments. It needs no LM provider, so it also works in the hosted dashboard. §4 is kept as background only.
 > - **Settings (§6):** the proposed settings are now framed for `schemas/settings-schema.json` + `src/types/CtrlYokeSettings.ts`. `package.json` `contributes.configuration` is not a settings surface.
-> - **Message handling (§1, §6):** dashboard requests are dispatched in `src/ui/WebviewMessageRouter.ts`, not `CtrlYokeWebviewProvider.ts`.
+> - **Message handling (§1, §6):** dashboard requests are dispatched in `src/ui/DashboardMessageRouter.ts`, not `CtrlYokeWebviewProvider.ts`.
 > - **Stale model list:** the Copilot model-family table is from March 2026. Select models through `selectChatModels` at runtime. Don't hardcode families.
 > - **`copilot-chat` boundary:** these are authoring aids that make bounded, user-initiated `vscode.lm` requests. That is the "public API" direction named in `dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`. Any design that runs workflow steps through `vscode.lm`, or treats it as a seventh harness, would recreate the removed `copilot-chat` harness and is out of scope. Option B's `CtrlYokeManager.runHeadless` never existed. A headless harness path for authoring aids would need a new one-shot API.
 > - **Canonical plan:** prompt suggestions and Improve Prompt are owned by [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](PROMPT_AUTHORING_SUGGESTIONS_PLAN.md).
@@ -17,7 +17,7 @@
 > `vscode.lm` feature must meet the reconsideration conditions in
 > `COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md` (explicit user initiation, the API's consent
 > flow, rate-limit handling, stop controls). The focused precedent for a prompt-editor
-> handler is `src/ui/PromptEditorSupportService.ts`, routed by `WebviewMessageRouter`.
+> handler is `src/ui/PromptEditorSupportService.ts`, routed by `DashboardMessageRouter`.
 
 ---
 
@@ -71,7 +71,7 @@ const tokenCount = await model.countTokens(messages, cancellationToken);
 The webview (`CodeMirrorEditor.tsx`, React components) **cannot** call `vscode.lm` directly. All LM requests must be:
 
 1. Triggered by the webview via `vscode.postMessage({ type: 'SOME_REQUEST', ... })`
-2. Handled in the extension host (a handler registered in `src/ui/WebviewMessageRouter.ts`'s dispatch table)
+2. Handled in the extension host (a handler registered in `src/ui/DashboardMessageRouter.ts`'s dispatch table)
 3. Results streamed back via `panel.webview.postMessage({ type: 'SOME_RESPONSE', chunk: '...' })`
 
 This is the same pattern already used for completions (`REQUEST_COMPLETIONS` / `COMPLETIONS_RESPONSE`).
@@ -91,7 +91,7 @@ Call `vscode.lm` directly from the extension host using whichever free Copilot m
 ```
 User clicks "Improve Prompt"
   → webview postMessage({ type: 'IMPROVE_PROMPT_REQUEST', prompt: currentText })
-  → WebviewMessageRouter dispatches to the prompt-editor handler
+  → DashboardMessageRouter dispatches to the prompt-editor handler
   → selectChatModels({ vendor: 'copilot', family: 'gpt-4o-mini' })
   → sendRequest([system context, user prompt], {}, token)
   → stream chunks back: postMessage({ type: 'IMPROVE_PROMPT_CHUNK', chunk })
@@ -269,7 +269,7 @@ COUNT_TOKENS_RESPONSE: 'countTokensResponse',
 Message payload types also belong in `src/types/WebviewMessageTypes.ts`. Drop
 the `COUNT_TOKENS_*` pair, because the token count is computed locally (§4).
 
-### New Extension-Side Handler (registered in `src/ui/WebviewMessageRouter.ts`)
+### New Extension-Side Handler (registered in `src/ui/DashboardMessageRouter.ts`)
 
 A new `LmFeatureHandler` class (the canonical plan places it under `src/ui/prompt-suggestions/`) that:
 

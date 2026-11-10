@@ -9,7 +9,7 @@ import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { stripLeadingBom } from "../utils/TextUtils";
-import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../core/notifications/NotificationEventFactory";
 import { LICENSE_UI, NODE_ERROR_CODES } from "../types/DashboardConstants";
 import { getErrorMessage, getErrnoCode } from "../utils/ErrorUtils";
 
@@ -212,7 +212,7 @@ export class WebPushService {
   }
 
   async sendNotification(
-    event: CompletionNotificationEvent
+    event: CtrlYokeNotificationEvent
   ): Promise<{ sent: number; removed: number; failed: number }> {
     await this.assertRemoteAccess();
     // Keep the registry phases serialized in-process, but let other service

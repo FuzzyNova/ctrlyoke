@@ -5,7 +5,7 @@ import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { HarnessFileMessageService } from "../../ui/HarnessFileMessageService";
 import { HarnessFileManager } from "../../utils/HarnessFileManager";
-import { createWebviewClientContext } from "../../ui/WebviewClientContext";
+import { createDashboardClientContext } from "../../ui/DashboardClientContext";
 import {
   HARNESS_FILE_TYPES,
   HARNESS_IDS,
@@ -40,7 +40,7 @@ suite("HarnessFileMessageService", () => {
   let service: HarnessFileMessageService;
 
   const ctx = () =>
-    createWebviewClientContext("test-client", (message) => {
+    createDashboardClientContext("test-client", (message) => {
       posted.push(message);
     });
 

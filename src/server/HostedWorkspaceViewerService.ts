@@ -747,7 +747,7 @@ export class HostedWorkspaceViewerService {
   // top level listing every root by folder name (see `listRoots()`), and every
   // path below that level is folder-name-prefixed (`root2/src/index.ts`) —
   // the same stored-ref convention used by `resolveNamedRelativePath`
-  // elsewhere (PromptLinkProvider, WebviewMessageRouter, ContextExpander), so
+  // elsewhere (PromptLinkProvider, DashboardMessageRouter, ContextExpander), so
   // reference links clicked in the hosted browser resolve identically to how
   // they resolve in the VS Code panel.
 

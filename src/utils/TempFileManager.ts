@@ -212,7 +212,7 @@ export class TempFileManager {
    * @param targetDir Absolute destination directory (normally attachments)
    * @returns Absolute path to the written (or reused) file
    */
-  async createOutputSnapshotFile(
+  async createOutputCaptureFile(
     text: string,
     channel: string,
     range: { startLine: number; endLine: number } | undefined,

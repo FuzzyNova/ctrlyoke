@@ -3,7 +3,7 @@ import type {
   BatchedDashboardMessage,
   MessageBatchMessage,
 } from "../types/WebviewMessageTypes";
-import type { PostMessageFn } from "./WebviewSettingsSync";
+import type { PostMessageFn } from "./DashboardClientEndpoint";
 
 /**
  * Runs `emit` with a collecting send function and delivers everything it sent

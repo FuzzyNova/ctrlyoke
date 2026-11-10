@@ -121,17 +121,17 @@ suite("TempFileManager", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  suite("createOutputSnapshotFile", () => {
+  suite("createOutputCaptureFile", () => {
     test("writes readable range and full-channel filenames", async () => {
       manager = freshManager();
       const dir = manager.getAttachmentsDir();
-      const rangePath = await manager.createOutputSnapshotFile(
+      const rangePath = await manager.createOutputCaptureFile(
         "selected output",
         "agenthost",
         { startLine: 17, endLine: 28 },
         dir
       );
-      const fullPath = await manager.createOutputSnapshotFile(
+      const fullPath = await manager.createOutputCaptureFile(
         "whole output",
         "agenthost",
         undefined,
@@ -157,13 +157,13 @@ suite("TempFileManager", () => {
       manager = freshManager();
       const dir = manager.getAttachmentsDir();
       const tail = "z".repeat(MAX_OUTPUT_SNAPSHOT_BYTES);
-      const first = await manager.createOutputSnapshotFile(
+      const first = await manager.createOutputCaptureFile(
         `a${tail}`,
         "agenthost",
         undefined,
         dir
       );
-      const second = await manager.createOutputSnapshotFile(
+      const second = await manager.createOutputCaptureFile(
         `b${tail}`,
         "agenthost",
         undefined,
@@ -184,7 +184,7 @@ suite("TempFileManager", () => {
     test("refreshes mtime on a dedup hit", async () => {
       manager = freshManager();
       const dir = manager.getAttachmentsDir();
-      const filePath = await manager.createOutputSnapshotFile(
+      const filePath = await manager.createOutputCaptureFile(
         "touch-me",
         "agenthost",
         undefined,
@@ -194,7 +194,7 @@ suite("TempFileManager", () => {
       const stale = new Date(Date.now() - 60 * 60 * 1000);
       await fs.promises.utimes(filePath, stale, stale);
       const before = (await fs.promises.stat(filePath)).mtimeMs;
-      await manager.createOutputSnapshotFile(
+      await manager.createOutputCaptureFile(
         "touch-me",
         "agenthost",
         undefined,

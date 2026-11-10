@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
-  COMPLETION_NOTIFICATION_SEVERITY,
+  NOTIFICATION_SEVERITY,
   OUTPUT_TABS,
   SEARCH_HISTORY_ERROR_CODES,
   THEME_KINDS,
@@ -31,9 +31,9 @@ const { webviewWarnMock } = vi.hoisted(() => ({
 
 vi.mock("@utils/browserNotifications", () => ({
   getNotificationSeverityColor: (severity: string) =>
-    severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR
+    severity === NOTIFICATION_SEVERITY.ERROR
       ? "error"
-      : severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING
+      : severity === NOTIFICATION_SEVERITY.WARNING
         ? "warning"
         : "info",
   handleCompletionNotificationEvent: handleCompletionNotificationEventMock,

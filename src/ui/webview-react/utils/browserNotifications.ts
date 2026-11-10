@@ -2,7 +2,7 @@ import {
   BROWSER_NOTIFICATION_MODES,
   BROWSER_NOTIFICATION_PERMISSION_STATES,
   DOCUMENT_VISIBILITY_STATES,
-  COMPLETION_NOTIFICATION_SEVERITY,
+  NOTIFICATION_SEVERITY,
   HOSTED_ICON_PATHS,
   HOSTED_TOKEN_HEADER,
   SERVICE_WORKER_BADGE_MESSAGE_TYPES,
@@ -376,10 +376,10 @@ function base64UrlToUint8Array(value: string): Uint8Array {
 export function getNotificationSeverityColor(
   severity: CompletionNotificationEventPayload["severity"]
 ): UserFeedbackSeverity {
-  if (severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR) {
+  if (severity === NOTIFICATION_SEVERITY.ERROR) {
     return USER_FEEDBACK_SEVERITY.ERROR;
   }
-  if (severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING) {
+  if (severity === NOTIFICATION_SEVERITY.WARNING) {
     return USER_FEEDBACK_SEVERITY.WARNING;
   }
   return USER_FEEDBACK_SEVERITY.INFO;

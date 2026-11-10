@@ -31,7 +31,7 @@ import {
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
 import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 import { HookEventMonitor } from "./HookEventMonitor";
-import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../../notifications/NotificationEventFactory";
 import { configService } from "../../../config/CtrlYokeConfigService";
 import {
   resolveHookNotificationPlan,
@@ -45,7 +45,7 @@ import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
 import { InteractiveTurnStartWatchdog } from "./InteractiveTurnStartWatchdog";
-import type { HookArtifact } from "../../../ui/notifications/CompletionNotificationFactory";
+import type { HookArtifact } from "../../notifications/NotificationEventFactory";
 import { buildSessionResumeWarning } from "./SessionResumeWarning";
 import { CliTransportError } from "./CliTransportError";
 import type { ExecutionPlanBuilder } from "./ExecutionPlanBuilder";

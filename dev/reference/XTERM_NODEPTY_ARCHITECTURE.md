@@ -27,7 +27,7 @@ FlightPath embeds a full terminal experience in its dashboard using **xterm.js**
   │ postMessage              │ postMessage
   │                          ▼
   │  ┌───────────────────────────────────────────────┐
-  │  │ WebviewMessageRouter (extension host)         │
+  │  │ DashboardMessageRouter (extension host)         │
   │  │  - TERMINAL_INPUT  → ptyManager.writeToSession│
   │  │  - TERMINAL_RESIZE → ptyManager.resizeSession │
   │  │  - TERMINAL_SPAWN_SHELL → ptyManager.spawnShell│
@@ -172,9 +172,9 @@ class PtySession {
 
 **Reconnect buffer:** Every PTY output chunk is buffered in a ring buffer (max 50,000 bytes). When a webview reconnects (reload, panel reposition), this bounded buffer is replayed immediately so the user sees previous output without waiting for new PTY data. It remains available for later panel/browser replay and failure-output capture.
 
-### 6. `WebviewMessageRouter` (extension host)
+### 6. `DashboardMessageRouter` (extension host)
 
-**File:** `src/ui/WebviewMessageRouter.ts`
+**File:** `src/ui/DashboardMessageRouter.ts`
 
 Routes terminal messages between webview and PTY manager:
 
@@ -254,12 +254,12 @@ Routes terminal messages between webview and PTY manager:
 
 1. Webview JS context destroyed → all React components, stores, registry gone
 2. Extension host PTY sessions **survive** (running in extension host process)
-3. Webview reinitializes → `WebviewMessageRouter` handles `CLIENT_READY`
+3. Webview reinitializes → `DashboardMessageRouter` handles `CLIENT_READY`
 4. Router iterates `ptyManager.getAllSessions()` → resends `TERMINAL_STARTED` + replay reconnect buffer for every session
 
 **Result:** Terminal output is restored from the reconnect buffer. The xterm DOM is recreated. Input routing is re-registered via mount effects.
 
-**Code path:** `WebviewMessageRouter.ts` lines ~227-248
+**Code path:** `DashboardMessageRouter.ts` lines ~227-248
 
 ```typescript
 const ptyManager = getPtyProcessManager();
@@ -329,7 +329,7 @@ The issue is that **the reconnect buffer is only flushed once on webview reload*
 
 **Symptom:** Moving the webview panel (e.g., from sidebar to activity bar) causes VS Code to destroy and recreate the webview → all xterm instances lost.
 
-**Root cause:** VS Code's webview lifecycle management destroys the `<webview>` element when the panel changes position. The webview's JS context is completely destroyed and recreated. The `CLIENT_READY` handler in `WebviewMessageRouter` handles this correctly — it replays all active PTY sessions from the reconnect buffer.
+**Root cause:** VS Code's webview lifecycle management destroys the `<webview>` element when the panel changes position. The webview's JS context is completely destroyed and recreated. The `CLIENT_READY` handler in `DashboardMessageRouter` handles this correctly — it replays all active PTY sessions from the reconnect buffer.
 
 **Why this actually works:** The reconnect buffer mechanism is designed for exactly this scenario. The PTY processes survive in the extension host, the ring buffer holds recent output, and `CLIENT_READY` replays everything.
 
@@ -363,7 +363,7 @@ PTY onData(chunk)
 TerminalInstance mount effect
   → entry.term.onData(input)
     → sendMessage(TERMINAL_INPUT, { workflowId, sessionId, data: input })
-      → WebviewMessageRouter.TERMINAL_INPUT handler
+      → DashboardMessageRouter.TERMINAL_INPUT handler
         → ptyManager.writeToSession(sessionId, data)
           → session.pty.write(data)  // sends bytes to native PTY
 ```
@@ -374,7 +374,7 @@ TerminalInstance mount effect
 TerminalInstance ResizeObserver
   → fitAddon.fit()  // fits xterm to container
   → sendMessage(TERMINAL_RESIZE, { workflowId, sessionId, cols, rows })
-    → WebviewMessageRouter.TERMINAL_RESIZE handler
+    → DashboardMessageRouter.TERMINAL_RESIZE handler
       → ptyManager.resizeSession(sessionId, cols, rows)
         → session.pty.resize(cols, rows)  // notifies child process via SIGWINCH
 ```
@@ -400,7 +400,7 @@ TerminalInstance ResizeObserver
 | `src/ui/webview-react/store/terminalStore.ts`                 | Zustand store for session metadata            |
 | `src/ui/webview-react/messaging/terminalMessageHandlers.ts`       | Webview-side message handlers                 |
 | `src/flightpath/harness/PtyProcessManager.ts`                 | Extension host PTY process manager            |
-| `src/ui/WebviewMessageRouter.ts`                              | Message routing (extension host ↔ webview)    |
+| `src/ui/DashboardMessageRouter.ts`                              | Message routing (extension host ↔ webview)    |
 | `src/ui/DashboardBroadcastHub.ts`                             | Fan-out hub for terminal output to clients    |
 | `src/flightpath/harness/shared/CliTransportCoordinator.ts`    | Spawns interactive PTY, routes I/O            |
 
@@ -412,7 +412,7 @@ TerminalInstance ResizeObserver
 
 When `ACTIVE_WORKFLOW_CHANGED` fires, have the extension host check for active PTY sessions for the newly-active workflow and replay their reconnect buffers:
 
-**Extension host side** (`WebviewMessageRouter.ts`):
+**Extension host side** (`DashboardMessageRouter.ts`):
 
 ```typescript
 table.set(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, async (msg) => {
@@ -453,4 +453,4 @@ VS Code manages webview elements as follows:
 - **Tab switch (within same panel):** Webview is hidden/shown. JS context preserved. `onDidChangeViewState()` fires with `visible` flag.
 - **Extension reload (F5):** Full destruction. Extension host restarts.
 
-FlightPath's `WebviewMessageRouter` handles reload via the `CLIENT_READY` message, which triggers replay of all active PTY sessions from their reconnect buffers.
+FlightPath's `DashboardMessageRouter` handles reload via the `CLIENT_READY` message, which triggers replay of all active PTY sessions from their reconnect buffers.

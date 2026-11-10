@@ -21,7 +21,7 @@ import type {
   WorkflowStopReason,
 } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
-import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../core/notifications/NotificationEventFactory";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 

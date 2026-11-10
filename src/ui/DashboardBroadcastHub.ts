@@ -21,16 +21,16 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
-import type { IDashboardProvider } from "./IDashboardProvider";
+import type { IDashboardRegistryEvents } from "../types/IDashboardRegistryEvents";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
-import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../core/notifications/NotificationEventFactory";
 import type {
   HarnessUsageSnapshot,
   WorkspaceStatsSnapshot,
 } from "../types/UsageTypes";
 import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 
-export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
+export type DashboardClient = IDashboardRegistryEvents & Partial<IDashboardSink>;
 
 /**
  * Broadcasts dashboard updates to every registered dashboard client.
@@ -41,7 +41,7 @@ export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
  * to broadcasting workflow-registry events and generic messages.
  */
 export class DashboardBroadcastHub
-  implements IDashboardProvider, IDashboardSink
+  implements IDashboardRegistryEvents, IDashboardSink
 {
   private readonly clients: DashboardClient[] = [];
   private readonly summaryListeners: Array<(summary: WorkflowSummary) => void> =

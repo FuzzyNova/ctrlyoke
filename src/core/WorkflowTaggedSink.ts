@@ -1,5 +1,5 @@
 import type { IDashboardSink } from "../types/IDashboardSink";
-import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "./notifications/NotificationEventFactory";
 import type {
   CliEvent,
   UndoExecutionTarget,

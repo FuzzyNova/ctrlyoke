@@ -89,7 +89,7 @@ import {
 } from "@utils/browserNotifications";
 import { announceAwaitingInput } from "@store/announcerStore";
 import {
-  COMPLETION_NOTIFICATION_SEVERITY,
+  NOTIFICATION_SEVERITY,
   DERIVED_NOTIFICATION_EVENTS,
   NOTIFICATION_KINDS,
   USER_FEEDBACK_SEVERITY,
@@ -148,9 +148,9 @@ function isCompletionNotificationEvent(
     typeof event.title === "string" &&
     typeof event.body === "string" &&
     typeof event.tag === "string" &&
-    (event.severity === COMPLETION_NOTIFICATION_SEVERITY.INFO ||
-      event.severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING ||
-      event.severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR)
+    (event.severity === NOTIFICATION_SEVERITY.INFO ||
+      event.severity === NOTIFICATION_SEVERITY.WARNING ||
+      event.severity === NOTIFICATION_SEVERITY.ERROR)
   );
 }
 

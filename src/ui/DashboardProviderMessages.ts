@@ -1,5 +1,5 @@
 /**
- * The messages behind `IDashboardProvider`'s workflow-registry notifications.
+ * The messages behind `IDashboardRegistryEvents`'s workflow-registry notifications.
  *
  * Every dashboard client (the VS Code panel through `DashboardApplication`
  * and browser tabs through `CtrlYokeHostedServer`) sends the same payload for

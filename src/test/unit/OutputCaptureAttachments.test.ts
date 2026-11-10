@@ -3,13 +3,13 @@ import * as fs from "fs";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import {
-  savePendingOutputSnapshot,
-  writeOutputSnapshotAttachment,
-} from "../../ui/OutputSnapshotService";
+  savePendingOutputCapture,
+  writeOutputCaptureAttachment,
+} from "../../ui/OutputCaptureAttachments";
 import { outputCaptureCache } from "../../completions/OutputCaptureCache";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
-suite("OutputSnapshotService", () => {
+suite("OutputCaptureAttachments", () => {
   const workspaceRoots: string[] = [];
 
   afterEach(() => {
@@ -27,7 +27,7 @@ suite("OutputSnapshotService", () => {
   test("writes a direct output attachment and returns its relative value", async () => {
     const workspaceRoot = createWorkspaceRoot();
 
-    const relativePath = await writeOutputSnapshotAttachment(
+    const relativePath = await writeOutputCaptureAttachment(
       () => workspaceRoot,
       {
         text: "selected output",
@@ -57,7 +57,7 @@ suite("OutputSnapshotService", () => {
       channel: "agenthost",
     });
 
-    const relativePath = await savePendingOutputSnapshot(
+    const relativePath = await savePendingOutputCapture(
       () => workspaceRoot,
       captureId
     );
@@ -74,7 +74,7 @@ suite("OutputSnapshotService", () => {
       "cached output"
     );
     await assert.rejects(
-      () => savePendingOutputSnapshot(() => workspaceRoot, captureId),
+      () => savePendingOutputCapture(() => workspaceRoot, captureId),
       /Output capture expired — try again/
     );
   });

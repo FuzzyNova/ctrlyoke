@@ -484,7 +484,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     };
     // The dashboard flow for a brand-new workflow: the first property edit
     // eagerly creates the ephemeral working file, then persists the property
-    // (mirrors WebviewSettingsSync.handleUpdateWorkflowProperties).
+    // (mirrors DashboardSettingsSync.handleUpdateWorkflowProperties).
     await harness.instance.ensureEphemeralWorkingFile({
       initialProperties: { preCondition },
     });

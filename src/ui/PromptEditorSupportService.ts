@@ -80,7 +80,7 @@ import {
 } from "../completions/CompletionCore";
 import { getCtrlYokeSlashCompletions } from "../completions/SlashTokenCompletionHelpers";
 import { fromViewerPath, toViewerPath } from "../platform/WorkspaceViewerPath";
-import { savePendingOutputSnapshot } from "./OutputSnapshotService";
+import { savePendingOutputCapture } from "./OutputCaptureAttachments";
 import {
   getScriptCommandCompletions,
   parseScriptCompletionContext,
@@ -101,7 +101,7 @@ import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { PromptFileParser } from "../core/PromptFileParser";
 import type { CtrlYokeFileKind } from "../types/DashboardConstants";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
-import type { WebviewClientContext } from "./WebviewClientContext";
+import type { DashboardClientContext } from "./DashboardClientContext";
 import type { SecretRegistryService } from "./SecretRegistryService";
 
 interface CursorArgumentToken {
@@ -222,8 +222,8 @@ type ContextReferenceToValidate = Omit<
  * completions, reference validation, pasted-image storage, inline image
  * previews, file/prior-context opening, and attachment token counting.
  *
- * These handlers need nothing from `WebviewMessageRouter` beyond "which client
- * am I" (supplied per call as a {@link WebviewClientContext}), the workspace
+ * These handlers need nothing from `DashboardMessageRouter` beyond "which client
+ * am I" (supplied per call as a {@link DashboardClientContext}), the workspace
  * root, and — for the prior-context paths only — the orchestrator. The dispatch
  * table itself stays in the router; entries there are thin delegations to this
  * service.
@@ -297,7 +297,7 @@ export class PromptEditorSupportService {
   }
 
   async handleCompletionRequest(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     trigger: string,
     prefix: string,
     position: number,
@@ -407,7 +407,7 @@ export class PromptEditorSupportService {
   }
 
   async handleScriptCompletionRequest(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     text: string,
     position: number,
     seq: number
@@ -455,7 +455,7 @@ export class PromptEditorSupportService {
   }
 
   async handleHarnessFlagCompletionRequest(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     harnessId: HarnessId,
     text: string,
     position: number,
@@ -489,7 +489,7 @@ export class PromptEditorSupportService {
   }
 
   async handlePermissionCompletionRequest(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     text: string,
     position: number,
     seq: number
@@ -518,7 +518,7 @@ export class PromptEditorSupportService {
   }
 
   async handleBranchListRequest(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     filterText: string,
     seq: number
   ): Promise<void> {
@@ -541,7 +541,7 @@ export class PromptEditorSupportService {
   }
 
   private emitCompletionsResponse(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     items: PlainCompletionItem[],
     position: number,
     seq: number | undefined,
@@ -636,7 +636,7 @@ export class PromptEditorSupportService {
    * lineage descriptor, never from the run-storage working copy.
    */
   async handleFileRefValidation(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     filePath: string,
     seq?: number,
     _address?: unknown
@@ -685,7 +685,7 @@ export class PromptEditorSupportService {
   }
 
   async handleConvertPromptToFile(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: {
       seq?: number;
       text?: string;
@@ -734,7 +734,7 @@ export class PromptEditorSupportService {
   }
 
   async handleOpenPromptFile(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     filePath: string
   ): Promise<void> {
     try {
@@ -825,7 +825,7 @@ export class PromptEditorSupportService {
    * TempFileManager.getAttachmentsDir / createPastedImageFile).
    */
   async handleSavePastedImage(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: {
       seq?: number;
       dataBase64?: string;
@@ -887,7 +887,7 @@ export class PromptEditorSupportService {
 
   /** Save a pending output capture and reply with the workspace-relative reference. */
   async handleSaveOutputSnapshot(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: { seq?: number; captureId?: string }
   ): Promise<void> {
     const { seq } = message;
@@ -896,7 +896,7 @@ export class PromptEditorSupportService {
         throw new Error("Missing output capture id");
       }
 
-      const relativePath = await savePendingOutputSnapshot(
+      const relativePath = await savePendingOutputCapture(
         this.getWorkspaceRoot,
         message.captureId
       );
@@ -942,7 +942,7 @@ export class PromptEditorSupportService {
    *   allow `img-src data:`.
    */
   async handleFilePreviewUriRequest(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: {
       seq?: number;
       relativePath?: string;
@@ -1026,7 +1026,7 @@ export class PromptEditorSupportService {
   }
 
   async handleContextRefsValidation(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     references: ContextReferenceToValidate[],
     seq?: number
   ): Promise<void> {
@@ -1351,7 +1351,7 @@ export class PromptEditorSupportService {
   }
 
   async handleOpenFile(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     relativePath: string,
     lineStart?: number,
     lineEnd?: number
@@ -1456,7 +1456,7 @@ export class PromptEditorSupportService {
    * user-controlled input, so there's nothing to prompt-trust.
    */
   async handleOpenSettingsFile(
-    _ctx: WebviewClientContext,
+    _ctx: DashboardClientContext,
     scope: SettingWriteScope
   ): Promise<void> {
     const filePath =
@@ -1473,7 +1473,7 @@ export class PromptEditorSupportService {
   }
 
   async handleOpenSkill(
-    _ctx: WebviewClientContext,
+    _ctx: DashboardClientContext,
     skillName: string
   ): Promise<void> {
     const workspaceRoot = this.getWorkspaceRoot();
@@ -1494,7 +1494,7 @@ export class PromptEditorSupportService {
 
   /** Build the prior-context XML preview without opening it in an editor. */
   async buildPriorContextContent(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     ref: string,
     stepCount: number
   ): Promise<string> {
@@ -1538,7 +1538,7 @@ export class PromptEditorSupportService {
    * Uses the same buildPriorContextXmlFromItems codepath as live harness injection.
    */
   async handleOpenPriorContext(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     ref: string,
     stepCount: number
   ): Promise<void> {
@@ -1576,7 +1576,7 @@ export class PromptEditorSupportService {
    * viewer path). The response echoes it so the webview can key its cache.
    */
   async handleAttachmentTokenCountRequest(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     references: string[],
     sourceDefinitionPath?: string
   ): Promise<void> {
@@ -1706,7 +1706,7 @@ export class PromptEditorSupportService {
   }
 
   private async getViewSourceDefinitionDir(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     trustedRoots: readonly string[] | undefined
   ): Promise<string | undefined> {
     const sourceDefinitionPath =

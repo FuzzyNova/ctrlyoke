@@ -122,7 +122,7 @@ interface HistorySearchScanCursor {
 
 /**
  * Thrown when a search is abandoned because a newer search for the same
- * client superseded it (see `WebviewMessageRouter`'s SEARCH_HISTORY handler).
+ * client superseded it (see `DashboardMessageRouter`'s SEARCH_HISTORY handler).
  * Callers must not treat this as a search failure — in particular,
  * `HistorySearchService.search` must not fall back to a disk scan for it.
  */

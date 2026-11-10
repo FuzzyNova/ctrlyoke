@@ -5,7 +5,7 @@
 
 > **2026-10-10 audit:** Not started. Refreshed stale code references
 > (`TemplateManager`, `PromptFileParser`, `McpDiscoveryUtils`,
-> `WebviewMessageRouter`, `DashboardConstants` line numbers; `ALL_TABS` moved to
+> `DashboardMessageRouter`, `DashboardConstants` line numbers; `ALL_TABS` moved to
 > `components/settings/settingsTabs.ts`; `McpManagerService` now takes only a
 > `workspaceRoot` accessor). Noted that `_templateMeta` has
 > `additionalProperties: false` and no `tags` field, so `author`/`tags` both need
@@ -162,9 +162,9 @@ webhook is a fast-follow if that's ever a real complaint.
 
 New `src/ui/CommunityTemplateService.ts`, constructed the same way
 `McpManagerService` is (a `workspaceRoot` accessor; the per-request
-`WebviewClientContext` is passed to each handler, not the constructor),
-wired into `WebviewMessageRouter.ts` next to `this.mcpManager`
-(`src/ui/WebviewMessageRouter.ts:386`, `:451`, dispatch near `:1686`).
+`DashboardClientContext` is passed to each handler, not the constructor),
+wired into `DashboardMessageRouter.ts` next to `this.mcpManager`
+(`src/ui/DashboardMessageRouter.ts:386`, `:451`, dispatch near `:1686`).
 
 Responsibilities:
 

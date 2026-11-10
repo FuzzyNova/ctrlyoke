@@ -12,7 +12,7 @@ import {
   OUTPUT_HISTORY_KINDS,
 } from "../types/DashboardConstants";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
-import type { PostMessageFn } from "./WebviewSettingsSync";
+import type { PostMessageFn } from "./DashboardClientEndpoint";
 import type {
   RunRef,
   WorkflowKey,

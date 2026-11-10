@@ -749,8 +749,8 @@ suite("SourceAuditCounters", () => {
 
   test("shared UI services stay outside the VS Code boundary", function () {
     for (const file of [
-      "src/ui/WorkflowSerializer.ts",
-      "src/ui/WebviewSettingsSync.ts",
+      "src/ui/WorkflowLibraryHandlers.ts",
+      "src/ui/DashboardSettingsSync.ts",
       "src/ui/PromptEditorSupportService.ts",
       "src/ui/HarnessFileMessageService.ts",
     ]) {

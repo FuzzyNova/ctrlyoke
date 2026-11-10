@@ -487,7 +487,7 @@ export class PtyProcessManager {
   private streamingFlushes = new Map<string, () => void>();
   /**
    * workflowId → clientId that should become the controller for the next PTY session
-   * spawned for that workflow. Set by the WebviewMessageRouter when a client triggers
+   * spawned for that workflow. Set by the DashboardMessageRouter when a client triggers
    * a run, consumed (and cleared) at spawn time.
    */
   private pendingControllers = new Map<string, string>();

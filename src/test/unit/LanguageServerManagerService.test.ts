@@ -18,7 +18,7 @@ import {
   LanguageServerManagerService,
   type LanguageServerStatusSource,
 } from "../../ui/LanguageServerManagerService";
-import type { WebviewClientContext } from "../../ui/WebviewClientContext";
+import type { DashboardClientContext } from "../../ui/DashboardClientContext";
 
 function backend(
   data: PartialCtrlYokeSettings,
@@ -44,7 +44,7 @@ suite("LanguageServerManagerService", () => {
   let originalStateHome: string | undefined;
   let binDirectory: string;
   const messages: unknown[] = [];
-  const context = (clientId = "browser:1"): WebviewClientContext => ({
+  const context = (clientId = "browser:1"): DashboardClientContext => ({
     clientId,
     postMessage: (message) => messages.push(message),
     emit: (message) => messages.push(message),

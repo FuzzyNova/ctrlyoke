@@ -1,4 +1,4 @@
-import type { PostMessageFn } from "./WebviewSettingsSync";
+import type { PostMessageFn } from "./DashboardClientEndpoint";
 import type { UserInteractionPort } from "./UserInteractionPort";
 
 /**
@@ -19,7 +19,7 @@ import type { UserInteractionPort } from "./UserInteractionPort";
  * never reach back to the router for "the current client"; there is no such
  * thing, only the client this message came from.
  */
-export interface WebviewClientContext {
+export interface DashboardClientContext {
   /** Identifies the sending client, e.g. `PANEL_CLIENT_ID` or "browser:1". */
   readonly clientId: string;
   /** Transport back to the sending client, and only that client. */
@@ -32,7 +32,7 @@ export interface WebviewClientContext {
    * Set only for a SEARCH_HISTORY message. Aborted by the router the instant
    * a newer SEARCH_HISTORY message arrives from the same client, so the
    * handler's in-flight scan can stop scanning a query the client no longer
-   * wants — see `WebviewMessageRouter.route`.
+   * wants — see `DashboardMessageRouter.route`.
    */
   readonly historySearchAbortSignal?: AbortSignal;
   readonly deferHistorySearchRelease?: () => () => void;
@@ -43,11 +43,11 @@ export interface WebviewClientContext {
   readonly completionAbortSignal?: AbortSignal;
 }
 
-export function createWebviewClientContext(
+export function createDashboardClientContext(
   clientId: string,
   postMessage: PostMessageFn,
   interactionPort?: UserInteractionPort
-): WebviewClientContext {
+): DashboardClientContext {
   return {
     clientId,
     postMessage,

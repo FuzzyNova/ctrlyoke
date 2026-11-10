@@ -15,7 +15,7 @@ import type {
   StatusMessageSeverity,
 } from "./DashboardConstants";
 import type { WorkspaceSnapshot } from "./OutputHistoryTypes";
-import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../core/notifications/NotificationEventFactory";
 import type { HarnessUsageSnapshot } from "./UsageTypes";
 
 /**

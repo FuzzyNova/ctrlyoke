@@ -17,7 +17,7 @@ import {
   type SecretRegistryMcpReference,
   type SecretRegistryWorkflowReference,
 } from "../../ui/SecretRegistryService";
-import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
+import { DashboardMessageRouter } from "../../ui/DashboardMessageRouter";
 
 const OPENAI_API_KEY = "OPENAI_API_KEY";
 
@@ -336,7 +336,7 @@ suite("SecretRegistryService", () => {
     const store = new InMemorySecretStore();
     const service = serviceFor(store, {});
     const messages: unknown[] = [];
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       (message: unknown) => messages.push(message),
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,
@@ -371,7 +371,7 @@ suite("SecretRegistryService", () => {
     const store = new InMemorySecretStore();
     const service = serviceFor(store, { [OPENAI_API_KEY]: "sk-live" });
     const messages: unknown[] = [];
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       (message: unknown) => messages.push(message),
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,
@@ -415,7 +415,7 @@ suite("SecretRegistryService", () => {
     });
     const firstClientMessages: unknown[] = [];
     const secondClientMessages: unknown[] = [];
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       () => {},
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,

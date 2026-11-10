@@ -161,7 +161,7 @@ const KNOWN_UNRELATED_LITERALS = new Set([
   // GitUtils.ts checks Git's top-level CLI subcommand.
   "worktree",
   // "user": harness transcript roles in CodexLogParser.ts and QwenLogParser.test.ts
-  // are unrelated to the user settings scope in WebviewSettingsSync.test.ts.
+  // are unrelated to the user settings scope in DashboardSettingsSync.test.ts.
   "user",
 ]);
 

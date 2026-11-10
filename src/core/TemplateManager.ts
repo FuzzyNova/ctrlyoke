@@ -744,7 +744,7 @@ export class TemplateManager {
     template: Record<string, unknown>,
     format: WorkflowFileFormat
   ): string {
-    // No `$schema` key or YAML modeline — see WorkflowSerializer's save path.
+    // No `$schema` key or YAML modeline — see WorkflowLibraryHandlers's save path.
     if (format === WORKFLOW_FILE_FORMATS.YAML) {
       return jsYaml.dump(template, {
         lineWidth: -1,
@@ -869,7 +869,7 @@ export class TemplateManager {
 
   /**
    * Save a workflow's current values as a new custom template — a literal
-   * snapshot, not a parameterized starter. The caller (WorkflowSerializer)
+   * snapshot, not a parameterized starter. The caller (WorkflowLibraryHandlers)
    * supplies the already-cleaned workflow content (runtime fields stripped,
    * same allowlist used when saving a plain workflow file); the user hand-edits
    * the result afterward to swap in {placeholder} variables, same as any

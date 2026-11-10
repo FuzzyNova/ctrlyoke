@@ -15,7 +15,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import { getErrorChainMessage, getErrorMessage } from "../utils/ErrorUtils";
 import { Log } from "../utils/Log";
-import type { WebviewClientContext } from "./WebviewClientContext";
+import type { DashboardClientContext } from "./DashboardClientContext";
 
 /** The license-service surface needed by dashboard license actions. */
 export interface LicenseActionService {
@@ -34,7 +34,7 @@ export class LicenseSettingsHandlers {
 
   async handleActivateLicenseKey(
     message: ActivateLicenseKeyMessage,
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     await this.runAction(
       ctx,
@@ -46,7 +46,7 @@ export class LicenseSettingsHandlers {
 
   async handleImportLicenseFile(
     message: ImportLicenseFileMessage,
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     await this.runAction(
       ctx,
@@ -56,7 +56,7 @@ export class LicenseSettingsHandlers {
     );
   }
 
-  async handleDeactivateLicense(ctx: WebviewClientContext): Promise<void> {
+  async handleDeactivateLicense(ctx: DashboardClientContext): Promise<void> {
     await this.runAction(
       ctx,
       MESSAGE_TYPES.DEACTIVATE_LICENSE,
@@ -65,7 +65,7 @@ export class LicenseSettingsHandlers {
     );
   }
 
-  async handleRequestLicenseMachines(ctx: WebviewClientContext): Promise<void> {
+  async handleRequestLicenseMachines(ctx: DashboardClientContext): Promise<void> {
     const action = MESSAGE_TYPES.REQUEST_LICENSE_MACHINES;
     try {
       const machines = await this.listStoredLicenseMachines();
@@ -77,7 +77,7 @@ export class LicenseSettingsHandlers {
   }
 
   async handleRequestLicenseSeatUsage(
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     const action = MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE;
     try {
@@ -98,7 +98,7 @@ export class LicenseSettingsHandlers {
 
   async handleDeactivateLicenseMachine(
     message: DeactivateLicenseMachineMessage,
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     const action = MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE;
     try {
@@ -117,7 +117,7 @@ export class LicenseSettingsHandlers {
   }
 
   private async runAction<T>(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: string,
     operation: () => Promise<T>,
     successMessage: string
@@ -151,7 +151,7 @@ export class LicenseSettingsHandlers {
   }
 
   private sendMachines(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     machines: LicenseMachineSummary[]
   ): void {
     const message: LicenseMachinesUpdatedMessage = {
@@ -162,7 +162,7 @@ export class LicenseSettingsHandlers {
   }
 
   private sendSuccess(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: string,
     message: string
   ): void {
@@ -170,7 +170,7 @@ export class LicenseSettingsHandlers {
   }
 
   private sendError(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: string,
     error: unknown
   ): void {
@@ -190,7 +190,7 @@ export class LicenseSettingsHandlers {
   }
 
   private sendResult(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     result: Omit<LicenseActionResultMessage, "type">
   ): void {
     ctx.postMessage({ type: MESSAGE_TYPES.LICENSE_ACTION_RESULT, ...result });

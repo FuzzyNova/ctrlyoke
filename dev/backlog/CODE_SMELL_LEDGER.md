@@ -32,7 +32,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
 - **2026-11-08, pass 3** — reviewed pass 2's three refactors (behavior preserved). Cleaned
   up: removed `isFileNotFoundError(error, code)`, a pure alias of `hasErrnoCode`, and
   folded paired `!hasErrnoCode(e, A) && !hasErrnoCode(e, B)` checks into the variadic
-  form. Fixed directly: merge-outcome literals in `WorktreeManager`/`WebviewMessageRouter`
+  form. Fixed directly: merge-outcome literals in `WorktreeManager`/`DashboardMessageRouter`
   now use `WORKTREE_MERGE_OUTCOMES`; `confirmMutation` copied in `HistoryCommands` and
   `SecretCommands` now lives in `src/cli/CliPrompt.ts` (with a `CliConfirmIo` base
   interface); three inline newer-schema refusals (`mcp-server.ts`,
@@ -225,7 +225,7 @@ still deferred.
     later.
 
 - Hosted harness snapshot publish in `CtrlYokeHostedServer` vs
-  `src/ui/WebviewSettingsSync.ts` (delta vs full map, missing-registry guard).
+  `src/ui/DashboardSettingsSync.ts` (delta vs full map, missing-registry guard).
   _2026-11-09: no bug; the webview store merges both forms. Left over from the
   dashboard-message cleanup, which shared the registry messages only._
 - Optional hosted-server hardening: a `Referrer-Policy: no-referrer` header, so the

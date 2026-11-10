@@ -18,7 +18,7 @@ import { Transform, type TransformCallback } from "stream";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { FileWatcher, FileWatcherFactory } from "../core/HostPorts";
 import type { DashboardClientEndpoint } from "../ui/DashboardClientEndpoint";
-import type { IDashboardProvider } from "../ui/IDashboardProvider";
+import type { IDashboardRegistryEvents } from "../types/IDashboardRegistryEvents";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
@@ -91,7 +91,7 @@ import {
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
   type CtrlYokeNotificationEvent,
-} from "../ui/notifications/CompletionNotificationFactory";
+} from "../core/notifications/NotificationEventFactory";
 import { CompletionNotificationTracker } from "../ui/notifications/CompletionNotificationTracker";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
@@ -353,7 +353,7 @@ function createSecretRedactingLineTransform(): Transform {
 }
 
 export class CtrlYokeHostedServer
-  implements IDashboardProvider, IDashboardSink
+  implements IDashboardRegistryEvents, IDashboardSink
 {
   /**
    * When a new client connects we probe all existing sockets for liveness and
@@ -742,7 +742,7 @@ export class CtrlYokeHostedServer
     hub.addClient(this);
   }
 
-  // ── IDashboardProvider — broadcast all orchestrator events ────────────────
+  // ── IDashboardRegistryEvents — broadcast all orchestrator events ────────────────
 
   postMessage(message: unknown): void {
     // STARTUP_COMPLETE from DashboardBroadcastHub.notifyStartupComplete() fires
@@ -752,7 +752,7 @@ export class CtrlYokeHostedServer
     // client's own replay (SESSION_RESTORED/WORKFLOWS_LIST) — useMessageHandler's
     // STARTUP_COMPLETE handler then sees no fileName/activeWorkflowWorkingFilePath
     // and creates a blank workflow. Every browser client already gets its own
-    // correctly-sequenced STARTUP_COMPLETE from WebviewMessageRouter's
+    // correctly-sequenced STARTUP_COMPLETE from DashboardMessageRouter's
     // completeBrowserReadyAfterStartup() once ITS replay finishes, so the
     // broadcast copy is both redundant and unsafe for browser sockets — drop it.
     if (

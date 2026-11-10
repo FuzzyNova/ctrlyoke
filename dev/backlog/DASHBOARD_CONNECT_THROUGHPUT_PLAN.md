@@ -60,7 +60,7 @@ That is roughly 7,600 file reads for one request. They are fanned out through
 an unbounded `Promise.all` and saturate libuv's threadpool, which every other
 fs call (including the run view a client is waiting on) then queues behind.
 The router does not await the handler (`GET_RECENT_WORKFLOWS` in
-`WebviewMessageRouter`), so overlapping requests build in parallel rather than
+`DashboardMessageRouter`), so overlapping requests build in parallel rather than
 coalescing.
 
 The reply is about 1 MB for 1,448 entries, and every dropdown open on every
@@ -102,7 +102,7 @@ they only help when the two are known to agree; with the queue delay gone,
 receipt time is off only by network transit.
 
 The original analysis follows. Every message from every client, the panel included, goes through
-`WebviewMessageRouter`'s single serialized `routeQueue`. That includes
+`DashboardMessageRouter`'s single serialized `routeQueue`. That includes
 `LOG_MESSAGE`, which the browser sends for every `WebviewLog` line. So:
 
 - Browser log lines are timestamped when the queue reaches them, not when they

@@ -5,8 +5,8 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
-import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
-import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
+import { DashboardSettingsSync } from "../../ui/DashboardSettingsSync";
+import { DashboardMessageRouter } from "../../ui/DashboardMessageRouter";
 import { CtrlYokeMCPServer } from "../../mcp-server";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
@@ -83,7 +83,7 @@ function makeOrchestrator(
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-suite("WebviewSettingsSync", () => {
+suite("DashboardSettingsSync", () => {
   const codexInstallCommand = new CodexHarnessAdapter().config.installCommand;
   const tempPaths: string[] = [];
   const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
@@ -151,8 +151,8 @@ suite("WebviewSettingsSync", () => {
       managers: Partial<Record<StatusLineHarnessId, FakeStatuslineManager>>,
       messages: unknown[],
       feedback: unknown[] = []
-    ): WebviewSettingsSync {
-      const sync = new WebviewSettingsSync(
+    ): DashboardSettingsSync {
+      const sync = new DashboardSettingsSync(
         (message) => messages.push(message),
         () =>
           ({
@@ -471,7 +471,7 @@ suite("WebviewSettingsSync", () => {
           providerWrites.push({ provider, format: settings.format });
         };
 
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           () => {},
           () => undefined
         );
@@ -535,7 +535,7 @@ suite("WebviewSettingsSync", () => {
           providerWrites.push(settings.format);
         };
 
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           () => {},
           () => undefined
         );
@@ -577,7 +577,7 @@ suite("WebviewSettingsSync", () => {
           writes.push(value);
         };
 
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           () => {},
           () => undefined
         );
@@ -601,7 +601,7 @@ suite("WebviewSettingsSync", () => {
           writes++;
         };
 
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           () => {},
           () => undefined
         );
@@ -620,7 +620,7 @@ suite("WebviewSettingsSync", () => {
   suite("notifyHarnessAvailability", () => {
     test("should forward provider install guidance with availability updates", () => {
       const messages: any[] = [];
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         (message) => messages.push(message),
         () => undefined
       );
@@ -648,7 +648,7 @@ suite("WebviewSettingsSync", () => {
         harnesses: {},
       };
       let refreshed: string | undefined;
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         (message) => messages.push(message),
         () =>
           ({
@@ -727,7 +727,7 @@ suite("WebviewSettingsSync", () => {
         process.env.CTRLYOKE_WORKING_FILE = runFilePath;
         await fs.mkdir(path.dirname(capabilitiesPath), { recursive: true });
 
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           () => {},
           () => undefined,
           undefined,
@@ -805,7 +805,7 @@ suite("WebviewSettingsSync", () => {
         CAPABILITIES_FILE
       );
       await fs.mkdir(path.dirname(capabilitiesPath), { recursive: true });
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () => undefined,
         undefined,
@@ -914,7 +914,7 @@ suite("WebviewSettingsSync", () => {
     test("sends INIT without coordination scope when its snapshot times out", async () => {
       const messages: any[] = [];
       const postMessage = (message: any) => messages.push(message);
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         postMessage,
         () =>
           ({
@@ -937,7 +937,7 @@ suite("WebviewSettingsSync", () => {
     test("sends the requesting client's own workflow, not the panel's", async () => {
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeViewOrchestrator({
           [PANEL_CLIENT_ID]: "panel-workflow",
           "browser:1": "browser-workflow",
@@ -958,7 +958,7 @@ suite("WebviewSettingsSync", () => {
     test("sends an empty workflow to a client with no view of its own", async () => {
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeViewOrchestrator({ [PANEL_CLIENT_ID]: "panel-workflow" })
       );
 
@@ -978,7 +978,7 @@ suite("WebviewSettingsSync", () => {
 
     test("advertises no optional actions for a host without optional methods", async () => {
       const messages: any[] = [];
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         (message) => messages.push(message),
         () => makeViewOrchestrator({}),
         undefined,
@@ -997,7 +997,7 @@ suite("WebviewSettingsSync", () => {
 
     test("advertises the methods implemented by the VS Code host", async () => {
       const messages: any[] = [];
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         (message) => messages.push(message),
         () => makeViewOrchestrator({}),
         undefined,
@@ -1024,7 +1024,7 @@ suite("WebviewSettingsSync", () => {
     test("withholds host-screen actions from a hosted browser client of the VS Code host", async () => {
       const messages: any[] = [];
       const postMessage = (message: any) => messages.push(message);
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         postMessage,
         () => makeViewOrchestrator({}),
         undefined,
@@ -1056,7 +1056,7 @@ suite("WebviewSettingsSync", () => {
       // Nothing is bound in the viewer registry — the state the panel gets here
       // comes from the instance `getActiveInstance()` creates on demand, which
       // is the one client legitimately entitled to that fallback.
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeViewOrchestrator({ [PANEL_CLIENT_ID]: "panel-workflow" }, [])
       );
 
@@ -1083,7 +1083,7 @@ suite("WebviewSettingsSync", () => {
       }) as typeof configService.getScoped;
       try {
         const messages: any[] = [];
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           (message) => messages.push(message),
           () => undefined
         );
@@ -1132,7 +1132,7 @@ suite("WebviewSettingsSync", () => {
 
         const messages: any[] = [];
         const postMessage = (msg: any) => messages.push(msg);
-        const sync = new WebviewSettingsSync(postMessage, () => undefined);
+        const sync = new DashboardSettingsSync(postMessage, () => undefined);
 
         await sync.handleGlobalSettingsLoadRequest(postMessage);
 
@@ -1172,7 +1172,7 @@ suite("WebviewSettingsSync", () => {
           value: undefined,
           configurable: true,
         });
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           (message) => messages.push(message),
           () => undefined
         );
@@ -1224,7 +1224,7 @@ suite("WebviewSettingsSync", () => {
 
         const messages: any[] = [];
         const postMessage = (msg: any) => messages.push(msg);
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           postMessage,
           () => undefined,
           undefined,
@@ -1327,7 +1327,7 @@ suite("WebviewSettingsSync", () => {
 
         const messages: any[] = [];
         const postMessage = (msg: any) => messages.push(msg);
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           postMessage,
           () => undefined,
           undefined,
@@ -1429,7 +1429,7 @@ suite("WebviewSettingsSync", () => {
 
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeOrchestrator(filePath)
       );
 
@@ -1538,7 +1538,7 @@ suite("WebviewSettingsSync", () => {
 
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeOrchestrator(filePath)
       );
 
@@ -1597,7 +1597,7 @@ suite("WebviewSettingsSync", () => {
 
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeOrchestrator(instancePath, viewedPath)
       );
 
@@ -1621,7 +1621,7 @@ suite("WebviewSettingsSync", () => {
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
       // A promoted draft's file is deleted; the address can name it briefly.
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeOrchestrator(instancePath, tempFile("deleted-draft"))
       );
 
@@ -1636,7 +1636,7 @@ suite("WebviewSettingsSync", () => {
     test("should send no messages when orchestrator has no working file path", async () => {
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(postMessage, () =>
+      const sync = new DashboardSettingsSync(postMessage, () =>
         makeOrchestrator(undefined)
       );
 
@@ -1652,7 +1652,7 @@ suite("WebviewSettingsSync", () => {
     test("should send no messages when orchestrator is unavailable", async () => {
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(postMessage, () => undefined);
+      const sync = new DashboardSettingsSync(postMessage, () => undefined);
 
       await sync.sendWorkflowPropertiesToSettings(postMessage, "panel");
 
@@ -1672,7 +1672,7 @@ suite("WebviewSettingsSync", () => {
   // sendWorkflowPropertiesToSettings() call the properties panel stays blank after
   // switching to an existing workflow via the recent workflows dropdown.
   // ────────────────────────────────────────────────────────────────────────────
-  suite("WebviewMessageRouter — LOAD_WORKFLOW handler", () => {
+  suite("DashboardMessageRouter — LOAD_WORKFLOW handler", () => {
     test("should call sendWorkflowPropertiesToSettings after loading an existing workflow", async () => {
       let sendPropsCalled = false;
 
@@ -1691,7 +1691,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         {} as any,
@@ -1740,7 +1740,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         {} as any,
@@ -1786,7 +1786,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         mockSerializer,
@@ -1812,7 +1812,7 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
-  suite("WebviewMessageRouter — READY handler", () => {
+  suite("DashboardMessageRouter — READY handler", () => {
     test("tells sendInitialState which client the INIT is for", async () => {
       const initClientIds: string[] = [];
 
@@ -1822,7 +1822,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         {} as any,
@@ -1854,7 +1854,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         {} as any,
@@ -1896,7 +1896,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         {} as any,
@@ -1935,7 +1935,7 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
-  suite("WebviewMessageRouter — CREATE_WORKFLOW handler", () => {
+  suite("DashboardMessageRouter — CREATE_WORKFLOW handler", () => {
     test("should sync seeded properties after creating a workflow from a template", async () => {
       let sendPropsCalled = false;
 
@@ -1952,7 +1952,7 @@ suite("WebviewSettingsSync", () => {
         handleCreateWorkflow: async () => true,
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         mockSerializer,
@@ -1982,7 +1982,7 @@ suite("WebviewSettingsSync", () => {
         handleCreateWorkflow: async () => false,
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         mockSerializer,
@@ -1997,9 +1997,9 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
-  suite("WebviewMessageRouter — THEME_VARS_CAPTURED handler", () => {
+  suite("DashboardMessageRouter — THEME_VARS_CAPTURED handler", () => {
     function makeRouter() {
-      return new WebviewMessageRouter(
+      return new DashboardMessageRouter(
         () => {},
         {} as any,
         {} as any,
@@ -2044,8 +2044,8 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
-  suite("WebviewMessageRouter — GENERATE_SERVER_CERT handler", () => {
-    test("should forward the active scope to WebviewSettingsSync", async () => {
+  suite("DashboardMessageRouter — GENERATE_SERVER_CERT handler", () => {
+    test("should forward the active scope to DashboardSettingsSync", async () => {
       let receivedScope: SettingWriteScope | undefined;
 
       const mockSettingsSync = {
@@ -2057,7 +2057,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         {} as any,
@@ -2079,8 +2079,8 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
-  suite("WebviewMessageRouter — DOWNLOAD_SERVER_CERT handler", () => {
-    test("should forward the requesting client's postMessage to WebviewSettingsSync", async () => {
+  suite("DashboardMessageRouter — DOWNLOAD_SERVER_CERT handler", () => {
+    test("should forward the requesting client's postMessage to DashboardSettingsSync", async () => {
       let received: any;
       const sentinelPostMessage = () => {};
 
@@ -2090,7 +2090,7 @@ suite("WebviewSettingsSync", () => {
         },
       } as any;
 
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         mockSettingsSync,
         {} as any,
@@ -2150,7 +2150,7 @@ suite("WebviewSettingsSync", () => {
           setCalls.push({ key, value, scope });
         }) as typeof configService.set;
 
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           () => {},
           () => undefined
         );
@@ -2455,7 +2455,7 @@ suite("WebviewSettingsSync", () => {
   });
 });
 
-suite("WebviewSettingsSync bind-address licensing gate", () => {
+suite("DashboardSettingsSync bind-address licensing gate", () => {
   test("only permits non-loopback bind writes with remote access", async () => {
     const originalSet = configService.set;
     const writes: Array<{ key: string; value: unknown }> = [];
@@ -2476,7 +2476,7 @@ suite("WebviewSettingsSync bind-address licensing gate", () => {
 
       for (const testCase of cases) {
         const messages: unknown[] = [];
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           (message) => messages.push(message),
           () => undefined,
           undefined,
@@ -2542,7 +2542,7 @@ suite("WebviewSettingsSync bind-address licensing gate", () => {
       ];
 
       for (const testCase of cases) {
-        const sync = new WebviewSettingsSync(
+        const sync = new DashboardSettingsSync(
           () => undefined,
           () => undefined,
           undefined,
@@ -2575,12 +2575,12 @@ suite("WebviewSettingsSync bind-address licensing gate", () => {
   });
 });
 
-suite("WebviewSettingsSync SPELLING_ADD_WORD", () => {
+suite("DashboardSettingsSync SPELLING_ADD_WORD", () => {
   /** Route configService reads and writes of spelling.words through a fake store. */
   async function withSpellingStore(
     initial: Partial<Record<SettingWriteScope, string[]>>,
     run: (
-      sync: WebviewSettingsSync,
+      sync: DashboardSettingsSync,
       store: Partial<Record<SettingWriteScope, string[]>>
     ) => Promise<void>
   ): Promise<void> {
@@ -2602,7 +2602,7 @@ suite("WebviewSettingsSync SPELLING_ADD_WORD", () => {
         await new Promise((resolve) => setTimeout(resolve, 5));
         store[scope] = value as string[];
       }) as typeof configService.set;
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () => undefined
       );
@@ -2645,7 +2645,7 @@ suite("WebviewSettingsSync SPELLING_ADD_WORD", () => {
   });
 });
 
-suite("WebviewSettingsSync global setting write failures", () => {
+suite("DashboardSettingsSync global setting write failures", () => {
   test("notifies the user and reloads settings when the write rejects", async () => {
     const originalSet = configService.set;
     const feedback: unknown[] = [];
@@ -2654,7 +2654,7 @@ suite("WebviewSettingsSync global setting write failures", () => {
       configService.set = async () => {
         throw new Error("settings file contains invalid JSON");
       };
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () =>
           ({
@@ -2686,7 +2686,7 @@ suite("WebviewSettingsSync global setting write failures", () => {
   });
 });
 
-suite("WebviewMessageRouter — UPDATE_GLOBAL_SETTING handler", () => {
+suite("DashboardMessageRouter — UPDATE_GLOBAL_SETTING handler", () => {
   test("awaits a rejected settings handler before completing the route", async () => {
     let rejectHandler!: (error: Error) => void;
     const handlerPromise = new Promise<void>((_resolve, reject) => {
@@ -2695,7 +2695,7 @@ suite("WebviewMessageRouter — UPDATE_GLOBAL_SETTING handler", () => {
     const mockSettingsSync = {
       handleUpdateGlobalSetting: () => handlerPromise,
     } as any;
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       () => {},
       mockSettingsSync,
       {} as any,
@@ -2724,7 +2724,7 @@ suite("WebviewMessageRouter — UPDATE_GLOBAL_SETTING handler", () => {
   });
 });
 
-suite("WebviewSettingsSync external root decisions", () => {
+suite("DashboardSettingsSync external root decisions", () => {
   test("approves a newly browsed workspace root immediately", async () => {
     const originalSet = configService.set;
     const originalShowOpenDialog = vscode.window.showOpenDialog;
@@ -2759,7 +2759,7 @@ suite("WebviewSettingsSync external root decisions", () => {
         decisions.push(args);
       }) as typeof externalRootsTrustStore.setDecisions;
 
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () => undefined,
         undefined,
@@ -2819,7 +2819,7 @@ suite("WebviewSettingsSync external root decisions", () => {
         decisions.push(args);
       }) as typeof externalRootsTrustStore.setDecisions;
 
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () =>
           ({
@@ -2901,7 +2901,7 @@ suite("WebviewSettingsSync external root decisions", () => {
       externalRootsTrustStore.setDecisions =
         (async () => {}) as typeof externalRootsTrustStore.setDecisions;
 
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () =>
           ({
@@ -2971,7 +2971,7 @@ suite("WebviewSettingsSync external root decisions", () => {
         decisions.push(args);
       }) as typeof externalRootsTrustStore.setDecisions;
 
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () => undefined,
         undefined,
@@ -3021,7 +3021,7 @@ suite("WebviewSettingsSync external root decisions", () => {
         decisions.push(args);
       }) as typeof externalRootsTrustStore.setDecisions;
 
-      const sync = new WebviewSettingsSync(
+      const sync = new DashboardSettingsSync(
         () => {},
         () => undefined,
         undefined,
@@ -3059,7 +3059,7 @@ function externalRootTestPath(name: string): string {
   );
 }
 
-suite("WebviewMessageRouter stable run actions", () => {
+suite("DashboardMessageRouter stable run actions", () => {
   const runAddress = {
     workflowKey: "workflow-a" as never,
     kind: "run" as const,
@@ -3086,7 +3086,7 @@ suite("WebviewMessageRouter stable run actions", () => {
       resumeAtRun: async () => calls.push("resume"),
       stopAtRun: async () => calls.push("stop"),
     } as any;
-    return new WebviewMessageRouter(
+    return new DashboardMessageRouter(
       () => {},
       {} as any,
       {} as any,
@@ -3219,7 +3219,7 @@ suite("WebviewMessageRouter stable run actions", () => {
         };
       },
     } as any;
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       (message: unknown) => emitted.push(message),
       {} as any,
       {} as any,
@@ -3269,7 +3269,7 @@ suite("WebviewMessageRouter stable run actions", () => {
         hasSuffixEdits: true,
       }),
     } as any;
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       (message: unknown) => emitted.push(message),
       {} as any,
       {} as any,
@@ -3309,7 +3309,7 @@ suite("WebviewMessageRouter stable run actions", () => {
       isInitialized: () => true,
       startNewRunInsteadAtRun: async () => ({ hasSuffixEdits: true }),
     } as any;
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       (message: unknown) => emitted.push(message),
       {} as any,
       {} as any,
@@ -3344,7 +3344,7 @@ suite("WebviewMessageRouter stable run actions", () => {
   });
 });
 
-suite("WebviewMessageRouter APPEND_FILE routing", () => {
+suite("DashboardMessageRouter APPEND_FILE routing", () => {
   const runAddress = {
     workflowKey: "workflow-a" as never,
     kind: "run" as const,
@@ -3353,7 +3353,7 @@ suite("WebviewMessageRouter APPEND_FILE routing", () => {
 
   // Fully-qualified so the router's workspace-relative resolution is the
   // identity here — these tests are about mutation routing, and path resolution
-  // has its own coverage in WebviewMessageRouter.test.ts.
+  // has its own coverage in DashboardMessageRouter.test.ts.
   const absoluteDir = path.sep === "\\" ? "C:\\fake" : "/fake";
 
   function makeRouter(calls: Array<{ mutation: unknown; filePath: unknown }>) {
@@ -3362,7 +3362,7 @@ suite("WebviewMessageRouter APPEND_FILE routing", () => {
         calls.push({ mutation, filePath });
       },
     } as any;
-    return new WebviewMessageRouter(
+    return new DashboardMessageRouter(
       () => {},
       {} as any,
       {} as any,
@@ -3416,7 +3416,7 @@ suite("WebviewMessageRouter APPEND_FILE routing", () => {
  * superseded `definitionRevision` — the exact wedge `reportActionFailure`
  * exists to prevent.
  */
-suite("WebviewMessageRouter client scoping", () => {
+suite("DashboardMessageRouter client scoping", () => {
   const draftAddress = {
     workflowKey: "workflow-a" as never,
     kind: "draft" as const,
@@ -3447,7 +3447,7 @@ suite("WebviewMessageRouter client scoping", () => {
       },
     } as any;
 
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       (message: unknown) => panelMessages.push(message),
       {} as any,
       {} as any,

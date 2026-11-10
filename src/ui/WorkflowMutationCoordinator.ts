@@ -7,20 +7,20 @@ import { Log } from "../utils/Log";
 import { RunDidNotPrepareError } from "../core/orchestration/RunLifecycleService";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkflowDefinitionMutation } from "../types/WebviewMessageTypes";
-import type { WebviewClientContext } from "./WebviewClientContext";
+import type { DashboardClientContext } from "./DashboardClientContext";
 
 /**
  * The addressed-mutation / revision-republish protocol shared by every
- * definition-writing message handler delegated by `WebviewMessageRouter`.
+ * definition-writing message handler delegated by `DashboardMessageRouter`.
  *
  * Every definition write must leave the originating client holding the
  * revisions its *next* mutation needs (`publishViewIdentity`), and every
  * rejected write must both report the failure and re-publish those revisions
  * (`reportActionFailure`) — otherwise a single conflict wedges every later
  * edit on that address, because the client keeps retrying with a superseded
- * `definitionRevision`. `WebviewMessageRouter.routeSingleMessage`'s catch-all
+ * `definitionRevision`. `DashboardMessageRouter.routeSingleMessage`'s catch-all
  * also calls `reportActionFailure`, which is why this must be a shared
- * collaborator taking `WebviewClientContext` per call rather than living
+ * collaborator taking `DashboardClientContext` per call rather than living
  * inside a single handler file.
  */
 export class WorkflowMutationCoordinator {
@@ -40,7 +40,7 @@ export class WorkflowMutationCoordinator {
    * lineage view (address, run summaries, workflow name).
    */
   async finishWorkflowPropertiesMutation(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: { mutation?: unknown },
     createdWorkingFile: boolean
   ): Promise<void> {
@@ -53,7 +53,7 @@ export class WorkflowMutationCoordinator {
 
   /** Validate a promoted-run edit in place, or step this client onto its draft. */
   async prepareDefinitionMutation(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: {
       mutation?: unknown;
     }
@@ -70,7 +70,7 @@ export class WorkflowMutationCoordinator {
 
   /** Keep workflow settings on an executing run's own definition head. */
   async prepareWorkflowPropertiesMutation(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: {
       mutation?: unknown;
     }
@@ -100,7 +100,7 @@ export class WorkflowMutationCoordinator {
    * Draft/ephemeral edits have no such broadcast and still need it.
    */
   async refreshDefinitionMutationView(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message?: {
       mutation?: unknown;
     }
@@ -129,7 +129,7 @@ export class WorkflowMutationCoordinator {
    * left holding a superseded `definitionRevision` has its next edit rejected
    * as a conflict.
    */
-  async publishViewIdentity(ctx: WebviewClientContext): Promise<void> {
+  async publishViewIdentity(ctx: DashboardClientContext): Promise<void> {
     const identity = await this.getOrchestrator()?.publishViewIdentityToViewers(
       ctx.clientId
     );
@@ -149,7 +149,7 @@ export class WorkflowMutationCoordinator {
    * Re-publishing turns a wedge into a single failed attempt.
    */
   async reportActionFailure(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: string,
     error: unknown,
     requestId?: string
@@ -171,7 +171,7 @@ export class WorkflowMutationCoordinator {
    * restart, which launched a whole run seconds after VS Code came back. Pause /
    * cancel-pause / stop stay ungated: they only ever reduce activity.
    */
-  canStartRun(ctx: WebviewClientContext, action: string): boolean {
+  canStartRun(ctx: DashboardClientContext, action: string): boolean {
     if (this.getOrchestrator()?.isInitialized()) {
       return true;
     }
@@ -187,7 +187,7 @@ export class WorkflowMutationCoordinator {
   }
 
   showRunActionFailure(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: string,
     error: unknown
   ): void {

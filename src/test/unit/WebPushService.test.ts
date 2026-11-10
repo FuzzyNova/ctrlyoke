@@ -5,7 +5,7 @@ import { suite, test, setup, teardown } from "mocha";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   COMPLETION_NOTIFICATION_KINDS,
-  COMPLETION_NOTIFICATION_SEVERITY,
+  NOTIFICATION_SEVERITY,
   LICENSE_UI,
 } from "../../types/DashboardConstants";
 import {
@@ -227,7 +227,7 @@ suite("WebPushService", () => {
       title: "Done",
       body: "Workflow complete",
       tag: "workflow-1",
-      severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
+      severity: NOTIFICATION_SEVERITY.INFO,
       kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
       workflowId: "workflow-1",
       url: "https://example.com",
@@ -369,7 +369,7 @@ function createEvent() {
     title: "Done",
     body: "Workflow complete",
     tag: "workflow-1",
-    severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
+    severity: NOTIFICATION_SEVERITY.INFO,
     kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
     workflowId: "workflow-1",
     url: "https://example.com",

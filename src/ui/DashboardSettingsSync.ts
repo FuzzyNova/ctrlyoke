@@ -17,7 +17,6 @@ import {
   WORKFLOW_PROPERTY_KEYS,
   STATUS_LINE_HARNESS_IDS,
   type HarnessId,
-  type HarnessStatusString,
   type SettingWriteScope,
   USER_FEEDBACK_SEVERITY,
   isStatusLineHarnessId,
@@ -95,21 +94,7 @@ import {
 import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 import { toHarnessStatusInfo } from "../core/harness/shared/HarnessDetection";
 
-/**
- * Harness availability status
- */
-export interface HarnessStatus {
-  available: boolean;
-  status: HarnessStatusString;
-  message?: string;
-  /** Provider-owned CLI install command shown by the dashboard. */
-  installCommand?: string;
-}
-
-/**
- * Callback for posting messages to the webview.
- */
-export type PostMessageFn = (message: any) => void;
+import type { HarnessStatus, PostMessageFn } from "./DashboardClientEndpoint";
 
 export interface WorkflowExternalRootIdentity {
   workspaceRoot: string;
@@ -122,7 +107,7 @@ type StatuslineManagerFactory = (
 
 type LicenseAccessFactory = () => Promise<LicenseAccessState>;
 
-export interface WebviewSettingsSyncHost {
+export interface DashboardSettingsSyncHost {
   readonly getWorkspaceRoot: () => string | undefined;
   readonly getNamedRoots: () => readonly NamedRoot[];
   readonly selectWorkspacePath?: DashboardHostActions["selectWorkspacePath"];
@@ -137,7 +122,7 @@ const REMOTE_TLS_SETTING_KEYS = [
 ] as const;
 
 /**
- * WebviewSettingsSync
+ * DashboardSettingsSync
  *
  * Manages all settings/configuration reading, building, and broadcasting
  * between the VS Code extension and the React webview.
@@ -150,7 +135,7 @@ const REMOTE_TLS_SETTING_KEYS = [
  * - Workflow property updates (pending and persisted)
  * - Config get/set handlers with security allowlist
  */
-export class WebviewSettingsSync {
+export class DashboardSettingsSync {
   private capabilitiesWriteQueue: Promise<void> = Promise.resolve();
   /** Serializes SPELLING_ADD_WORD read-append-write cycles. */
   private spellingAddWordQueue: Promise<void> = Promise.resolve();
@@ -206,7 +191,7 @@ export class WebviewSettingsSync {
       harnessId
     ) => StatuslineManager.forHarness(harnessId),
     private readonly getLicenseAccess?: LicenseAccessFactory,
-    private readonly host: WebviewSettingsSyncHost = {
+    private readonly host: DashboardSettingsSyncHost = {
       getWorkspaceRoot: () => undefined,
       getNamedRoots: () => [],
     },
@@ -244,7 +229,7 @@ export class WebviewSettingsSync {
 
       this.sendAgentsUpdate(postMessage);
     } catch (error) {
-      Log.warn("[WebviewSettingsSync] Failed to discover agents:", error);
+      Log.warn("[DashboardSettingsSync] Failed to discover agents:", error);
     }
   }
 
@@ -262,7 +247,7 @@ export class WebviewSettingsSync {
 
       this.sendSkillsUpdate(postMessage);
     } catch (error) {
-      Log.warn("[WebviewSettingsSync] Failed to discover skills:", error);
+      Log.warn("[DashboardSettingsSync] Failed to discover skills:", error);
     }
   }
 
@@ -285,7 +270,7 @@ export class WebviewSettingsSync {
       .map(([id, s]) => `${id}=${s.status}`)
       .join(", ");
     Log.debug(
-      `[WebviewSettingsSync] sendInitialState() clientId=${clientId} — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
+      `[DashboardSettingsSync] sendInitialState() clientId=${clientId} — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
     );
 
     const workflowState = this.getCurrentState(clientId);
@@ -295,7 +280,7 @@ export class WebviewSettingsSync {
         await this.getOrchestrator()?.getCoordinationScopeSnapshot?.(clientId);
     } catch (error) {
       Log.warn(
-        "[WebviewSettingsSync] Failed to load coordination scope for INIT:",
+        "[DashboardSettingsSync] Failed to load coordination scope for INIT:",
         error
       );
     }
@@ -417,7 +402,7 @@ export class WebviewSettingsSync {
       this.capabilitiesWriteQueue = write.catch(() => {});
       await write;
     } catch (err) {
-      Log.warn("[WebviewSettingsSync] Failed to write capabilities.json:", err);
+      Log.warn("[DashboardSettingsSync] Failed to write capabilities.json:", err);
     }
   }
 
@@ -445,7 +430,7 @@ export class WebviewSettingsSync {
       );
     } catch (error) {
       Log.warn(
-        "[WebviewSettingsSync] Failed to publish harness capability snapshot:",
+        "[DashboardSettingsSync] Failed to publish harness capability snapshot:",
         error
       );
     }
@@ -545,7 +530,7 @@ export class WebviewSettingsSync {
       );
     } catch (error) {
       Log.error(
-        "[WebviewSettingsSync] Failed to send workflow properties to settings:",
+        "[DashboardSettingsSync] Failed to send workflow properties to settings:",
         error
       );
       // Send empty properties so the panel doesn't display stale values from the
@@ -600,8 +585,8 @@ export class WebviewSettingsSync {
   // ============================================================================
 
   async handleHarnessChange(harness: string): Promise<void> {
-    if (!WebviewSettingsSync.VALID_HARNESSES.includes(harness as any)) {
-      Log.warn(`[WebviewSettingsSync] Invalid harness: ${harness}`);
+    if (!DashboardSettingsSync.VALID_HARNESSES.includes(harness as any)) {
+      Log.warn(`[DashboardSettingsSync] Invalid harness: ${harness}`);
       return;
     }
 
@@ -686,7 +671,7 @@ export class WebviewSettingsSync {
 
       if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
         Log.warn(
-          `[WebviewSettingsSync] handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
+          `[DashboardSettingsSync] handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
         );
         return false;
       }
@@ -797,7 +782,7 @@ export class WebviewSettingsSync {
   ): Promise<void> {
     if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
       Log.warn(
-        `[WebviewSettingsSync] Rejected config read for non-ctrlyoke key: ${key}`
+        `[DashboardSettingsSync] Rejected config read for non-ctrlyoke key: ${key}`
       );
       return;
     }
@@ -818,7 +803,7 @@ export class WebviewSettingsSync {
   async handleUpdateConfig(key: string, value: unknown): Promise<void> {
     if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
       Log.warn(
-        `[WebviewSettingsSync] Rejected config write for non-ctrlyoke key: ${key}`
+        `[DashboardSettingsSync] Rejected config write for non-ctrlyoke key: ${key}`
       );
       return;
     }
@@ -1477,7 +1462,7 @@ export class WebviewSettingsSync {
         this.reportGlobalSettingFailure(error);
       } else {
         Log.error(
-          "[WebviewSettingsSync] Could not reload global settings after a failed write.",
+          "[DashboardSettingsSync] Could not reload global settings after a failed write.",
           getErrorMessage(error)
         );
       }
@@ -1522,7 +1507,7 @@ export class WebviewSettingsSync {
     const trimmed = typeof word === "string" ? word.trim() : "";
     const error = getSpellingWordError(trimmed);
     if (error) {
-      Log.warn(`[WebviewSettingsSync] Not adding spelling word: ${error}`);
+      Log.warn(`[DashboardSettingsSync] Not adding spelling word: ${error}`);
       return;
     }
     if (scope !== CONFIG_SCOPE.USER && scope !== CONFIG_SCOPE.WORKSPACE) {
@@ -1671,7 +1656,7 @@ export class WebviewSettingsSync {
         : undefined;
     if (!workspaceRoot || !workflowSourcePath) {
       Log.debug(
-        `[WebviewSettingsSync] Unable to record workflow external-root decisions for ${clientId}: workflow identity unavailable`
+        `[DashboardSettingsSync] Unable to record workflow external-root decisions for ${clientId}: workflow identity unavailable`
       );
       return;
     }
@@ -1835,7 +1820,7 @@ export class WebviewSettingsSync {
       );
     } catch (error) {
       Log.error(
-        "[WebviewSettingsSync] Failed to save server certificate:",
+        "[DashboardSettingsSync] Failed to save server certificate:",
         error
       );
       this.emitMessage(

@@ -37,7 +37,7 @@ import type {
   InstallRegistrySkillMessage,
   SkillUpdateCheckResult,
 } from "../types/WebviewMessageTypes";
-import type { WebviewClientContext } from "./WebviewClientContext";
+import type { DashboardClientContext } from "./DashboardClientContext";
 
 /**
  * Agent/skill file-manager message handlers (the dashboard's "Agents & Skills"
@@ -45,9 +45,9 @@ import type { WebviewClientContext } from "./WebviewClientContext";
  * a harness directory, reveal a target directory in the OS file explorer, and
  * search and install skills from the skills.sh registry.
  *
- * These handlers need nothing from `WebviewMessageRouter` beyond the workspace
+ * These handlers need nothing from `DashboardMessageRouter` beyond the workspace
  * root and "which client am I" (supplied per call as a
- * {@link WebviewClientContext}). The dispatch table itself stays in the router;
+ * {@link DashboardClientContext}). The dispatch table itself stays in the router;
  * entries there are thin delegations to this service.
  */
 export class HarnessFileMessageService {
@@ -68,7 +68,7 @@ export class HarnessFileMessageService {
    * those too.
    */
   private async runFileOp(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     fileType: HarnessFileType,
     op: (workspaceRoot: string) => Promise<void>
   ): Promise<void> {
@@ -110,7 +110,7 @@ export class HarnessFileMessageService {
   }
 
   async handleRequestHarnessFiles(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RequestHarnessFilesMessage
   ): Promise<void> {
     ctx.emit({
@@ -123,7 +123,7 @@ export class HarnessFileMessageService {
   }
 
   async handleExportToHarness(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ExportToHarnessMessage
   ): Promise<void> {
     await this.runFileOp(ctx, message.fileType, (workspaceRoot) =>
@@ -139,7 +139,7 @@ export class HarnessFileMessageService {
   }
 
   async handleImportToCtrlYoke(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ImportToCtrlYokeMessage
   ): Promise<void> {
     await this.runFileOp(ctx, message.fileType, (workspaceRoot) =>
@@ -153,7 +153,7 @@ export class HarnessFileMessageService {
   }
 
   async handleDeleteFromHarness(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: DeleteFromHarnessMessage
   ): Promise<void> {
     await this.runFileOp(ctx, message.fileType, (workspaceRoot) =>
@@ -168,7 +168,7 @@ export class HarnessFileMessageService {
   }
 
   async handleSyncAllToHarness(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: SyncAllToHarnessMessage
   ): Promise<void> {
     await this.runFileOp(ctx, message.fileType, async (workspaceRoot) => {
@@ -186,7 +186,7 @@ export class HarnessFileMessageService {
   }
 
   async handleDeleteAllFromHarness(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: DeleteAllFromHarnessMessage
   ): Promise<void> {
     await this.runFileOp(ctx, message.fileType, (workspaceRoot) =>
@@ -200,7 +200,7 @@ export class HarnessFileMessageService {
   }
 
   async handleSkillsRegistrySearch(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RequestSkillsRegistrySearchMessage
   ): Promise<void> {
     if (!message.query.trim()) {
@@ -236,7 +236,7 @@ export class HarnessFileMessageService {
   }
 
   async handleSkillsRegistryAudits(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RequestSkillsRegistryAuditsMessage
   ): Promise<void> {
     const skills = (message.skills ?? []).slice(
@@ -250,7 +250,7 @@ export class HarnessFileMessageService {
   }
 
   async handleRegistrySkillLocation(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RequestRegistrySkillLocationMessage
   ): Promise<void> {
     const { source, slug } = message;
@@ -279,7 +279,7 @@ export class HarnessFileMessageService {
    * whichever type it is showing by then.
    */
   async handleInstallRegistrySkill(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: InstallRegistrySkillMessage
   ): Promise<void> {
     const { location } = message;
@@ -330,7 +330,7 @@ export class HarnessFileMessageService {
    * (which an update would replace). Always answers, one result per skill.
    */
   async handleSkillsRegistryUpdateCheck(
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     let results: SkillUpdateCheckResult[] = [];
     try {
@@ -387,7 +387,7 @@ export class HarnessFileMessageService {
   }
 
   async handleOpenHarnessDir(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: OpenHarnessDirMessage
   ): Promise<void> {
     const workspaceRoot = this.getWorkspaceRoot();

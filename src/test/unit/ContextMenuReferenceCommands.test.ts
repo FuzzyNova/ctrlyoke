@@ -613,7 +613,7 @@ suite("ContextMenuReferenceCommands", () => {
   test("builds a single, non-double-quoted reference when the channel name has a space", async () => {
     // Real output channels commonly have spaces in their display name (e.g.
     // "Extension Host", "GitHub Copilot Chat"), which getOutputChannelSlug
-    // carries into the attachment filename. writeOutputSnapshotAttachment
+    // carries into the attachment filename. writeOutputCaptureAttachment
     // already returns a quoted reference value, so re-quoting it would
     // produce a malformed "@""..."" token instead of a single "@"..."".
     const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-");

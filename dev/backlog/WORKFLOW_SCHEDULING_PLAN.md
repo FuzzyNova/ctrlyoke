@@ -180,7 +180,7 @@ section for management. Not option B first. Not option C at all (for scheduling)
 Store `schedule` on the **lineage descriptor**
 (`<runsRoot>/<workflowKey>/workflow.json`, type `WorkflowLineageDescriptor` in
 `CtrlYokeTypes.ts`), exactly like `isFavorite` already is — see
-`WorkflowSerializer.handleToggleFavorite`, which goes through
+`WorkflowLibraryHandlers.handleToggleFavorite`, which goes through
 `WorkflowLineageRepository.updateDescriptor`, the descriptor's only writer. It
 must not go on a run's `workflow.ctrlyoke.json`: that file is one run's
 immutable-ish working copy, and a schedule spans runs. This is the right home
@@ -190,7 +190,7 @@ because:
   (`draft/workflow.ctrlyoke.json`), so anything in the recent-workflows list can
   carry a schedule.
 - **The scheduler bootstraps off work the host already does.**
-  `RecentWorkflowCatalog.list` (behind `WorkflowSerializer.handleGetRecentWorkflows`)
+  `RecentWorkflowCatalog.list` (behind `WorkflowLibraryHandlers.handleGetRecentWorkflows`)
   enumerates `lineageRepository.listLineageKeys()` and reads each descriptor. The
   scheduler uses the same repository pass once at startup: **any descriptor whose
   `schedule` is present and `enabled` gets armed.** No separate discovery glob. That
@@ -373,7 +373,7 @@ ripples across:
   `EXECUTE_DRAFT` handlers). **Do not** wire
   the scheduler in `extension.ts` or the hosted/standalone servers individually —
   that would defeat the single-source point.
-- `src/ui/WorkflowSerializer.ts` — get/set-schedule handlers (mirror the
+- `src/ui/WorkflowLibraryHandlers.ts` — get/set-schedule handlers (mirror the
   favorite/`handleToggleFavorite` pattern); include `schedule`/`nextRunAt` in the
   rows `RecentWorkflowCatalog` builds (`RecentWorkflowEntry`).
 - `src/types/WebviewMessageTypes.ts` + `DashboardConstants` `MESSAGE_TYPES` —

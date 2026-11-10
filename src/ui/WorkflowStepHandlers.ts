@@ -30,23 +30,23 @@ import { Log } from "../utils/Log";
 import { logUserFeedback } from "../core/UserFeedbackSink";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { restoreClearedWorkflowProperties } from "../utils/WorkflowPropertyPatch";
-import type { WebviewClientContext } from "./WebviewClientContext";
-import type { WebviewSettingsSync } from "./WebviewSettingsSync";
+import type { DashboardClientContext } from "./DashboardClientContext";
+import type { DashboardSettingsSync } from "./DashboardSettingsSync";
 import type { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
 
 /**
  * Step-definition mutations and stable-address run lifecycle actions delegated
- * by {@link WebviewMessageRouter}.
+ * by {@link DashboardMessageRouter}.
  */
 export class WorkflowStepHandlers {
   constructor(
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
-    private readonly settingsSync: WebviewSettingsSync,
+    private readonly settingsSync: DashboardSettingsSync,
     private readonly mutationCoordinator: WorkflowMutationCoordinator
   ) {}
 
   async handleExecutePrompt(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: any
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -92,7 +92,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleSendSteerMessage(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: SendSteerMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -124,7 +124,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleUpdatePrompt(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: UpdatePromptMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -187,7 +187,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleUpdateStepColor(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: UpdateStepColorMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -211,7 +211,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleUpdateSteps(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: UpdateStepsMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -235,7 +235,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleInsertWorkflowStep(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: InsertWorkflowStepMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -267,7 +267,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleUpdateFinalStep(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: any
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -298,7 +298,7 @@ export class WorkflowStepHandlers {
    * already been applied; references are never rewritten.
    */
   private emitShiftedReferenceWarning(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     operation: string,
     warning: string | undefined
   ): void {
@@ -317,7 +317,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleDeletePrompt(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: DeletePromptMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -350,7 +350,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleReorderPrompts(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ReorderPromptsMessage
   ): Promise<void> {
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
@@ -371,7 +371,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleUpdateWorkflowProperty(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: any
   ): Promise<void> {
     await this.mutationCoordinator.prepareWorkflowPropertiesMutation(
@@ -394,7 +394,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleUpdateWorkflowProperties(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: any
   ): Promise<void> {
     await this.mutationCoordinator.prepareWorkflowPropertiesMutation(
@@ -419,7 +419,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleUndoRedoSync(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: any
   ): Promise<void> {
     try {
@@ -442,7 +442,7 @@ export class WorkflowStepHandlers {
   }
 
   private async syncUndoRedo(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: any
   ): Promise<void> {
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
@@ -550,7 +550,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleExecuteDraft(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ExecuteDraftMessage
   ): Promise<void> {
     if (!this.mutationCoordinator.canStartRun(ctx, "run draft")) return;
@@ -567,7 +567,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleSeedNewRun(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: SeedNewRunMessage
   ): Promise<void> {
     if (!this.mutationCoordinator.canStartRun(ctx, "re-run")) return;
@@ -586,7 +586,7 @@ export class WorkflowStepHandlers {
   }
 
   async handlePrepareNewRun(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: PrepareNewRunMessage
   ): Promise<void> {
     try {
@@ -604,7 +604,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleStartNewRunInstead(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: StartNewRunInsteadMessage
   ): Promise<void> {
     if (!this.mutationCoordinator.canStartRun(ctx, "start new run")) return;
@@ -638,7 +638,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleContinueRun(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ContinueRunMessage
   ): Promise<void> {
     if (!this.mutationCoordinator.canStartRun(ctx, "continue run")) return;
@@ -655,7 +655,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleAppendAndContinue(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: AppendAndContinueRunMessage
   ): Promise<void> {
     if (!this.mutationCoordinator.canStartRun(ctx, "append and continue")) {
@@ -679,7 +679,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleRunExecutionControl(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RunExecutionControlMessage
   ): Promise<void> {
     if (
@@ -712,7 +712,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleSetStartPosition(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: SetStartPositionMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -752,7 +752,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleDiscardContinuation(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: DiscardContinuationMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -792,7 +792,7 @@ export class WorkflowStepHandlers {
   }
 
   async handleResolveRunDefinitionChange(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ResolveRunDefinitionChangeMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();

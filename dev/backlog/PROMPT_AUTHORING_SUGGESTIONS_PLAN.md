@@ -264,7 +264,7 @@ should remain separated:
 | ---------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | `src/ui/prompt-suggestions/`                                                             | Service and VS Code LM provider adapter               |
 | `src/types/`                                                                             | Shared request/result/message contracts and constants |
-| `src/ui/WebviewMessageRouter.ts` or a focused handler (cf. `PromptEditorSupportService`) | Route capability/request/cancel messages              |
+| `src/ui/DashboardMessageRouter.ts` or a focused handler (cf. `PromptEditorSupportService`) | Route capability/request/cancel messages              |
 | `src/ui/webview-react/hooks/`                                                            | Webview request state and settings controller         |
 | `src/ui/webview-react/utils/promptSuggestions/`                                          | CodeMirror state, decoration, and commands            |
 | `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                            | Thin integration only                                 |

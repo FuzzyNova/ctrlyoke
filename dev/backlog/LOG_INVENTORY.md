@@ -22,10 +22,10 @@ Ranked by call count (highest first).
 | `src/core/orchestration/ExternalRunWatchCoordinator.ts`       |       | 3     | 10   | 25   | 1     |            | 39    |
 | `src/extension.ts`                                            | 1     | 10    | 11   | 12   | 3     |            | 37    |
 | `src/core/WorkflowExecutor.ts`                                | 4     |       | 16   | 12   | 3     |            | 35    |
-| `src/ui/WebviewMessageRouter.ts`                              | 2     | 5     | 6    | 8    | 9     |            | 30    |
+| `src/ui/DashboardMessageRouter.ts`                              | 2     | 5     | 6    | 8    | 9     |            | 30    |
 | `src/core/orchestration/WorkflowStartupPipeline.ts`           |       | 12    | 6    | 3    | 5     |            | 26    |
 | `src/core/PromptQueue.ts`                                     | 2     | 7     | 13   | 2    | 2     |            | 26    |
-| `src/ui/WorkflowSerializer.ts`                                |       | 4     | 3    | 6    | 12    |            | 25    |
+| `src/ui/WorkflowLibraryHandlers.ts`                                |       | 4     | 3    | 6    | 12    |            | 25    |
 | `src/core/harness/shared/interfaces/INotificationMonitor.ts`  | 14    | 4     | 2    | 4    |       |            | 24    |
 | `src/core/orchestration/HistorySearchIndexService.ts`         |       | 12    | 10   | 2    |       |            | 24    |
 | `src/core/harness/CliIntegration.ts`                          |       | 7     | 7    | 5    | 2     | 2          | 23    |
@@ -42,7 +42,7 @@ Ranked by call count (highest first).
 | `src/core/orchestration/WorkflowInstanceRegistry.ts`          |       | 15    | 1    | 1    |       |            | 17    |
 | `src/core/WorkingFileManager.ts`                              | 4     |       | 5    | 5    | 2     |            | 16    |
 | `src/dev/DevCommands.ts`                                      | 4     |       | 7    |      | 5     |            | 16    |
-| `src/ui/WebviewSettingsSync.ts`                               |       | 2     |      | 9    | 5     |            | 16    |
+| `src/ui/DashboardSettingsSync.ts`                               |       | 2     |      | 9    | 5     |            | 16    |
 | `src/core/orchestration/historySearchRebuildWorker.ts`        |       | 4     | 7    | 3    | 1     |            | 15    |
 | `src/core/orchestration/HistoryTrashRepository.ts`            |       |       | 7    | 8    |       |            | 15    |
 | `src/core/EndConditionEvaluator.ts`                           | 1     | 3     | 4    |      | 6     |            | 14    |

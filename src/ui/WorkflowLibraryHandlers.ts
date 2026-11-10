@@ -49,7 +49,7 @@ import {
   TRASH_ENTRY_GONE_MESSAGE,
 } from "../utils/HistoryTrashDescriptions";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
-import type { PostMessageFn } from "./WebviewSettingsSync";
+import type { PostMessageFn } from "./DashboardClientEndpoint";
 import type { WorkflowViewAddress, WorkflowKey } from "../types/CtrlYokeTypes";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
@@ -69,7 +69,7 @@ import type {
 } from "../core/HostPorts";
 
 /**
- * WorkflowSerializer
+ * WorkflowLibraryHandlers
  *
  * Handles all workflow persistence operations:
  * - Save workflow to disk (YAML/JSON)
@@ -86,7 +86,7 @@ const LAST_TEMPLATE_BROWSE_DIR_KEY = "ctrlyoke.lastTemplateBrowseDir";
 
 const NO_WORKFLOW_KEYS: ReadonlySet<WorkflowKey> = new Set();
 
-export class WorkflowSerializer {
+export class WorkflowLibraryHandlers {
   private readonly lineageRepository = new WorkflowLineageRepository();
   private readonly recentWorkflowCatalog = new RecentWorkflowCatalog(
     this.lineageRepository,
@@ -177,7 +177,7 @@ export class WorkflowSerializer {
     if (
       expectedAddress &&
       (!viewedAddress ||
-        !WorkflowSerializer.addressesEqual(viewedAddress, expectedAddress))
+        !WorkflowLibraryHandlers.addressesEqual(viewedAddress, expectedAddress))
     ) {
       return undefined;
     }
@@ -658,10 +658,10 @@ export class WorkflowSerializer {
         plan: analysis.plan,
       });
       for (const warning of writeResult.warnings) {
-        Log.warn(`[WorkflowSerializer] Save As bundle warning: ${warning}`);
+        Log.warn(`[WorkflowLibraryHandlers] Save As bundle warning: ${warning}`);
       }
 
-      Log.info(`[WorkflowSerializer] Saved workflow to: ${absolutePath}`);
+      Log.info(`[WorkflowLibraryHandlers] Saved workflow to: ${absolutePath}`);
 
       // Remember this directory so the next unsaved workflow's Save As
       // defaults here instead of the repo root.
@@ -680,7 +680,7 @@ export class WorkflowSerializer {
       });
     } catch (error) {
       const msg = getErrorMessage(error);
-      Log.error("[WorkflowSerializer] Failed to save workflow:", error);
+      Log.error("[WorkflowLibraryHandlers] Failed to save workflow:", error);
       this.sendSaveFailure(pm, msg, requestId);
     }
   }
@@ -740,7 +740,7 @@ export class WorkflowSerializer {
 
       for (const warning of analysis.plan.warnings) {
         Log.warn(
-          `[WorkflowSerializer] Template export warning: ${warning.message}`
+          `[WorkflowLibraryHandlers] Template export warning: ${warning.message}`
         );
       }
 
@@ -756,7 +756,7 @@ export class WorkflowSerializer {
     } catch (error) {
       const msg = getErrorMessage(error);
       Log.error(
-        "[WorkflowSerializer] Failed to save workflow as template:",
+        "[WorkflowLibraryHandlers] Failed to save workflow as template:",
         error
       );
       this.sendSaveFailure(pm, msg, requestId);
@@ -797,7 +797,7 @@ export class WorkflowSerializer {
       }
 
       Log.debug(
-        `[WorkflowSerializer] handleExportOutput: requesting save path, defaultPath=${defaultPath}, contentLength=${content.length}`
+        `[WorkflowLibraryHandlers] handleExportOutput: requesting save path, defaultPath=${defaultPath}, contentLength=${content.length}`
       );
 
       const selectedPath = await this.hostActions.selectWorkspacePath?.({
@@ -815,12 +815,12 @@ export class WorkflowSerializer {
         await fs.writeFile(selectedPath, content, "utf-8");
       } else {
         Log.debug(
-          "[WorkflowSerializer] handleExportOutput: save dialog cancelled by user"
+          "[WorkflowLibraryHandlers] handleExportOutput: save dialog cancelled by user"
         );
       }
     } catch (error) {
       const msg = getErrorMessage(error);
-      Log.error("[WorkflowSerializer] Failed to export output:", error);
+      Log.error("[WorkflowLibraryHandlers] Failed to export output:", error);
       this.sendActionFailure(
         pm,
         "export output",
@@ -881,7 +881,7 @@ export class WorkflowSerializer {
         templates: this.toWireTemplates(templates),
       });
     } catch (error) {
-      Log.error("[WorkflowSerializer] Failed to load template catalog:", error);
+      Log.error("[WorkflowLibraryHandlers] Failed to load template catalog:", error);
       this.sendActionFailure(
         pm,
         "load templates",
@@ -902,7 +902,7 @@ export class WorkflowSerializer {
         template,
       });
     } catch (error) {
-      Log.error("[WorkflowSerializer] Failed to load template:", error);
+      Log.error("[WorkflowLibraryHandlers] Failed to load template:", error);
     }
   }
 
@@ -926,7 +926,7 @@ export class WorkflowSerializer {
         scope,
       });
     } catch (error) {
-      Log.error("[WorkflowSerializer] Failed to set default template:", error);
+      Log.error("[WorkflowLibraryHandlers] Failed to set default template:", error);
     }
   }
 
@@ -1021,7 +1021,7 @@ export class WorkflowSerializer {
       });
     } catch (error) {
       Log.error(
-        "[WorkflowSerializer] Failed to set template variable defaults:",
+        "[WorkflowLibraryHandlers] Failed to set template variable defaults:",
         error
       );
     }
@@ -1102,7 +1102,7 @@ export class WorkflowSerializer {
         await this.hostActions.openWorkspaceTarget({ path: templatePath });
       } catch (openError) {
         Log.warn(
-          `[WorkflowSerializer] Failed to open newly created template: ${openError}`
+          `[WorkflowLibraryHandlers] Failed to open newly created template: ${openError}`
         );
       }
 
@@ -1174,7 +1174,7 @@ export class WorkflowSerializer {
         status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
       } as const;
       Log.debug(
-        `[WorkflowSerializer] Native template picker unavailable (${unsupported.status}); browser picker remains active.`
+        `[WorkflowLibraryHandlers] Native template picker unavailable (${unsupported.status}); browser picker remains active.`
       );
       return;
     }
@@ -1238,7 +1238,7 @@ export class WorkflowSerializer {
         status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
       } as const;
       Log.debug(
-        `[WorkflowSerializer] Native save-location picker unavailable (${unsupported.status}); browser picker remains active.`
+        `[WorkflowLibraryHandlers] Native save-location picker unavailable (${unsupported.status}); browser picker remains active.`
       );
       return;
     }
@@ -1268,7 +1268,7 @@ export class WorkflowSerializer {
   ): Promise<void> {
     const manager = this.getManager();
     if (!manager) {
-      Log.error("[WorkflowSerializer] WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowLibraryHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -1306,7 +1306,7 @@ export class WorkflowSerializer {
         : { workflows: [], seq: nextRecentWorkflowsSequence() };
       pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, ...list });
     } catch (error) {
-      Log.error("[WorkflowSerializer] Failed to get recent workflows:", error);
+      Log.error("[WorkflowLibraryHandlers] Failed to get recent workflows:", error);
       pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, workflows: [] });
     }
   }
@@ -1321,7 +1321,7 @@ export class WorkflowSerializer {
     try {
       await this.getManager()?.loadWorkingFile(filePath);
     } catch (error) {
-      Log.error("[WorkflowSerializer] Failed to load workflow:", error);
+      Log.error("[WorkflowLibraryHandlers] Failed to load workflow:", error);
       this.sendActionFailure(
         pm,
         "load workflow",
@@ -1341,7 +1341,7 @@ export class WorkflowSerializer {
       );
     } catch (error) {
       Log.error(
-        "[WorkflowSerializer] Failed to toggle workflow favorite:",
+        "[WorkflowLibraryHandlers] Failed to toggle workflow favorite:",
         error
       );
     }
@@ -1366,7 +1366,7 @@ export class WorkflowSerializer {
   ): Promise<ReadonlySet<WorkflowKey>> {
     if (confirmation !== CLEAR_HISTORY_CONFIRMATION_PHRASE) {
       Log.warn(
-        `[WorkflowSerializer] Refused Clear all history from ${clientId}: confirmation phrase missing`
+        `[WorkflowLibraryHandlers] Refused Clear all history from ${clientId}: confirmation phrase missing`
       );
       this.sendActionFailure(
         postMessage,
@@ -1379,7 +1379,7 @@ export class WorkflowSerializer {
     if (!workspaceRoot) {
       return NO_WORKFLOW_KEYS;
     }
-    Log.info(`[WorkflowSerializer] Clear all history requested by ${clientId}`);
+    Log.info(`[WorkflowLibraryHandlers] Clear all history requested by ${clientId}`);
     try {
       const { entry, skippedLive, failed } = await new HistoryTrashRepository(
         workspaceRoot
@@ -1399,14 +1399,14 @@ export class WorkflowSerializer {
       }
       if (skippedLive.length > 0) {
         Log.info(
-          `[WorkflowSerializer] Clear all history kept live workflows: ${skippedLive.join(", ")}`
+          `[WorkflowLibraryHandlers] Clear all history kept live workflows: ${skippedLive.join(", ")}`
         );
       }
       await this.handleGetRecentWorkflows(postMessage);
       return new Set(entry?.items.map((item) => item.workflowKey));
     } catch (error) {
       Log.error(
-        "[WorkflowSerializer] Failed to clear workflow history:",
+        "[WorkflowLibraryHandlers] Failed to clear workflow history:",
         error
       );
       this.sendActionFailure(
@@ -1469,7 +1469,7 @@ export class WorkflowSerializer {
       return entry !== undefined;
     } catch (error) {
       Log.warn(
-        `[WorkflowSerializer] handleRemoveWorkflowHistory: could not delete ${address.workflowKey}: ${getErrorMessage(error)}`
+        `[WorkflowLibraryHandlers] handleRemoveWorkflowHistory: could not delete ${address.workflowKey}: ${getErrorMessage(error)}`
       );
       this.sendActionFailure(
         postMessage,
@@ -1569,7 +1569,7 @@ export class WorkflowSerializer {
       }
     } catch (error) {
       Log.warn(
-        `[WorkflowSerializer] Recently deleted ${action} failed: ${getErrorMessage(error)}`
+        `[WorkflowLibraryHandlers] Recently deleted ${action} failed: ${getErrorMessage(error)}`
       );
       reply(false, getErrorMessage(error));
     }

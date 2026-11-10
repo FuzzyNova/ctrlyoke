@@ -29,17 +29,18 @@ import {
   workflowSummaryUpdatedMessage,
 } from "./DashboardProviderMessages";
 import type { DashboardClientEndpoint } from "./DashboardClientEndpoint";
-import type { IDashboardProvider } from "./IDashboardProvider";
+import type { IDashboardRegistryEvents } from "../types/IDashboardRegistryEvents";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
-import { WebviewSettingsSync, type PostMessageFn } from "./WebviewSettingsSync";
-import { WorkflowSerializer } from "./WorkflowSerializer";
+import { DashboardSettingsSync } from "./DashboardSettingsSync";
+import type { PostMessageFn } from "./DashboardClientEndpoint";
+import { WorkflowLibraryHandlers } from "./WorkflowLibraryHandlers";
 import {
-  WebviewMessageRouter,
+  DashboardMessageRouter,
   type WebviewRouterHostDependencies,
-} from "./WebviewMessageRouter";
+} from "./DashboardMessageRouter";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { SecretRegistryService } from "./SecretRegistryService";
-import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
+import { DashboardUserInteractionPort } from "./DashboardUserInteractionPort";
 import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import {
   getPtyProcessManager,
@@ -102,13 +103,13 @@ export interface DashboardApplicationOptions {
 /** Shared dashboard services and protocol application, independent of a view transport. */
 export class DashboardApplication
   extends PostMessageDashboardSink
-  implements DashboardClientEndpoint, IDashboardProvider
+  implements DashboardClientEndpoint, IDashboardRegistryEvents
 {
-  readonly settingsSync: WebviewSettingsSync;
-  readonly serializer: WorkflowSerializer;
-  readonly router: WebviewMessageRouter;
+  readonly settingsSync: DashboardSettingsSync;
+  readonly serializer: WorkflowLibraryHandlers;
+  readonly router: DashboardMessageRouter;
   readonly secretRegistry: SecretRegistryService;
-  readonly interactionPort: WebviewUserInteractionPort;
+  readonly interactionPort: DashboardUserInteractionPort;
   private readonly historySearchService = new HistorySearchService();
   private workflowOrchestrator?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
@@ -124,11 +125,11 @@ export class DashboardApplication
       secretStore: options.secretStore,
       getWorkspaceRoot: options.getWorkspaceRoot,
     });
-    this.interactionPort = new WebviewUserInteractionPort(
+    this.interactionPort = new DashboardUserInteractionPort(
       options.interactionPostMessage ?? postMessage,
       options.isInteractionClientReady ?? options.isPanelReady
     );
-    this.settingsSync = new WebviewSettingsSync(
+    this.settingsSync = new DashboardSettingsSync(
       postMessage,
       getOrchestrator,
       options.getDevStatus,
@@ -156,7 +157,7 @@ export class DashboardApplication
         serverControl: options.serverControl,
       }
     );
-    this.serializer = new WorkflowSerializer(
+    this.serializer = new WorkflowLibraryHandlers(
       postMessage,
       options.templateManager,
       getOrchestrator,
@@ -169,7 +170,7 @@ export class DashboardApplication
         getTrustedRoots: options.getTrustedRoots,
       }
     );
-    this.router = new WebviewMessageRouter(
+    this.router = new DashboardMessageRouter(
       postMessage,
       this.settingsSync,
       this.serializer,

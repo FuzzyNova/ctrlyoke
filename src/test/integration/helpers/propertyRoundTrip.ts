@@ -13,10 +13,10 @@ import {
   MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../../types/DashboardConstants";
-import { WebviewSettingsSync } from "../../../ui/WebviewSettingsSync";
+import { DashboardSettingsSync } from "../../../ui/DashboardSettingsSync";
 import { WorkflowMutationCoordinator } from "../../../ui/WorkflowMutationCoordinator";
 import { WorkflowStepHandlers } from "../../../ui/WorkflowStepHandlers";
-import { createWebviewClientContext } from "../../../ui/WebviewClientContext";
+import { createDashboardClientContext } from "../../../ui/DashboardClientContext";
 import type {
   WorkflowKey,
   RunRef,
@@ -34,7 +34,7 @@ import type {
  * Message-contract integration harness for the property/prompt round trip.
  *
  * These helpers drive the *real* extension-side persistence pipeline
- * (`prepare*Mutation` -> `WebviewSettingsSync` -> `WorkflowOrchestrator` ->
+ * (`prepare*Mutation` -> `DashboardSettingsSync` -> `WorkflowOrchestrator` ->
  * `WorkingFileManager` -> disk) using the exact `postMessage` payloads the
  * `WorkflowPropertiesPanel`/`PromptPropertiesDrawer` components emit. No React, no
  * browser, and — for an idle promoted run — no real `WorkflowInstance`: the
@@ -169,7 +169,7 @@ export async function createPromotedRun(
 export interface RoundTripHarness {
   /** Messages posted back to the "client" (fake `postMessage`). */
   readonly sentMessages: Array<Record<string, unknown>>;
-  /** Mirrors `WebviewMessageRouter.handleUpdateWorkflowProperty`. */
+  /** Mirrors `DashboardMessageRouter.handleUpdateWorkflowProperty`. */
   routeWorkflowPropertyUpdate(property: string, value: unknown): Promise<void>;
   /** Same, but with a caller-supplied mutation (for stale-revision tests). */
   routeWorkflowPropertyUpdateWith(
@@ -185,11 +185,11 @@ export interface RoundTripHarness {
   ): Promise<void>;
   /** Mirrors the dashboard's Re-run handler. */
   routeSeedNewRun(message: SeedNewRunMessage): Promise<void>;
-  /** Mirrors `WebviewMessageRouter.handleUpdateWorkflowProperties`. */
+  /** Mirrors `DashboardMessageRouter.handleUpdateWorkflowProperties`. */
   routeWorkflowPropertiesUpdate(
     properties: Record<string, unknown>
   ): Promise<void>;
-  /** Mirrors `WebviewMessageRouter.handleUpdatePrompt`. */
+  /** Mirrors `DashboardMessageRouter.handleUpdatePrompt`. */
   routeUpdatePrompt(message: {
     index: number;
     text: string;
@@ -197,7 +197,7 @@ export interface RoundTripHarness {
     promptName?: string;
     clearProperties?: string[];
   }): Promise<void>;
-  /** Mirrors `WebviewMessageRouter.handleUpdateFinalStep`. */
+  /** Mirrors `DashboardMessageRouter.handleUpdateFinalStep`. */
   routeUpdateFinalPrompt(message: {
     finalStep: WorkflowStep | null;
     clearProperties?: string[];
@@ -225,7 +225,7 @@ export interface RoundTripHarness {
 
 /**
  * Seed a lightweight orchestrator bound to `run`, wire a real
- * `WebviewSettingsSync`, and expose router-shaped routing helpers.
+ * `DashboardSettingsSync`, and expose router-shaped routing helpers.
  */
 export function createRoundTripHarness(
   workspace: string,
@@ -278,7 +278,7 @@ export function createRoundTripHarness(
     throw new Error("An idle run edit must not fork a draft / new instance");
   };
 
-  const settingsSync = new WebviewSettingsSync(fakePost, () => orchestrator);
+  const settingsSync = new DashboardSettingsSync(fakePost, () => orchestrator);
 
   const runFilePath = () =>
     WorkflowPaths.runFilePath(workspace, run.workflowKey, run.runRef);
@@ -328,7 +328,7 @@ export function createRoundTripHarness(
     settingsSync,
     mutationCoordinator
   );
-  const clientContext = createWebviewClientContext(TEST_CLIENT_ID, fakePost);
+  const clientContext = createDashboardClientContext(TEST_CLIENT_ID, fakePost);
 
   const staleMutationContext =
     async (): Promise<WorkflowDefinitionMutation> => {

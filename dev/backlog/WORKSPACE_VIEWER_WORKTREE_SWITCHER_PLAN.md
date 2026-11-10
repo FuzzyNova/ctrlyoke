@@ -26,7 +26,7 @@ Two pieces of work:
 
 Since 2026-11-08 a user shell opened from a workflow's Terminal tab starts in
 that workflow's execution root (`WorkflowInstance.getExecutionRoot()`,
-resolved host-side in `WebviewMessageRouter.resolveShellCwd`; the client no
+resolved host-side in `DashboardMessageRouter.resolveShellCwd`; the client no
 longer sends a `cwd`). That already handles the quick-check cases that
 motivated part of this plan, in both VS Code and the browser: `git status`,
 `git log`, resolving a merge, or running a build in the worktree a run is

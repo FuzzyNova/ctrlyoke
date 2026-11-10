@@ -822,7 +822,7 @@ describe("WorkflowPropertiesPanel undo/redo", () => {
  *  - messages cross the boundary as JSON, so `undefined` members never arrive
  *    and a patch's deletes travel as an explicit key list that
  *    `restoreClearedWorkflowProperties` re-materializes on arrival;
- *  - `WebviewSettingsSync.handleUpdateWorkflowProperties` returns early on an
+ *  - `DashboardSettingsSync.handleUpdateWorkflowProperties` returns early on an
  *    empty patch and otherwise delegates to `applyWorkflowPropertyWrites`
  *    (`WorkingFileManager.ts`), which replaces a key's value wholesale and
  *    only deletes when the patch carries an explicit `undefined`;

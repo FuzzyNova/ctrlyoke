@@ -46,7 +46,7 @@ export async function detectHarness(
 
 /**
  * Project a detection report into the dashboard's status payload. Shared by
- * the VS Code panel (`WebviewSettingsSync`) and the hosted server so the two
+ * the VS Code panel (`DashboardSettingsSync`) and the hosted server so the two
  * transports cannot drift.
  */
 export function toHarnessStatusInfo(

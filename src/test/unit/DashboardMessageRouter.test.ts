@@ -1,5 +1,5 @@
 /**
- * WebviewMessageRouter — client-supplied workflow file paths.
+ * DashboardMessageRouter — client-supplied workflow file paths.
  *
  * Dashboard clients name workflow files by path in two messages: LOAD_WORKFLOW
  * ("Load from File") and APPEND_FILE ("Queue from File"). Neither path is
@@ -13,7 +13,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
+import { DashboardMessageRouter } from "../../ui/DashboardMessageRouter";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
@@ -65,11 +65,11 @@ function buildRouter(
   },
   getNamedRoots: () => NamedRoot[] = getVsCodeNamedWorkspaceRoots,
   completionCore?: import("../../completions/CompletionCore").CompletionCore
-): WebviewMessageRouter {
+): DashboardMessageRouter {
   const settingsSync = {
     sendWorkflowPropertiesToSettings: async () => {},
   } as any;
-  return new WebviewMessageRouter(
+  return new DashboardMessageRouter(
     defaultPostMessage,
     settingsSync,
     {} as any,
@@ -88,7 +88,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-suite("WebviewMessageRouter — completion routing", () => {
+suite("DashboardMessageRouter — completion routing", () => {
   test("routes completions while a queued handler is still running", async () => {
     const slow = deferred<unknown>();
     const completion = deferred<unknown[]>();
@@ -264,7 +264,7 @@ suite("WebviewMessageRouter — completion routing", () => {
   });
 });
 
-suite("WebviewMessageRouter — run bundle import", () => {
+suite("DashboardMessageRouter — run bundle import", () => {
   test("opens the native directory picker and replies with an import preview", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "run-import-router-"));
     const selected = path.join(root, "missing.ctrlyokerun");
@@ -302,7 +302,7 @@ suite("WebviewMessageRouter — run bundle import", () => {
   });
 });
 
-suite("WebviewMessageRouter — run export", () => {
+suite("DashboardMessageRouter — run export", () => {
   test("answers a run export preflight on the requesting hosted client", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-export-route-")
@@ -425,7 +425,7 @@ suite("WebviewMessageRouter — run export", () => {
   });
 });
 
-suite("WebviewMessageRouter — standalone editor file routing", () => {
+suite("DashboardMessageRouter — standalone editor file routing", () => {
   test("routes conversion, attachment, and preview requests while the queue is blocked", async () => {
     const slow = deferred<unknown>();
     const router = buildRouter(
@@ -513,7 +513,7 @@ suite("WebviewMessageRouter — standalone editor file routing", () => {
   });
 });
 
-suite("WebviewMessageRouter — Stop skips the route queue", () => {
+suite("DashboardMessageRouter — Stop skips the route queue", () => {
   const runA = {
     kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
     workflowKey: "wf",
@@ -664,7 +664,7 @@ class FakeLicenseActionService implements LicenseActionService {
   }
 }
 
-suite("WebviewMessageRouter — dashboard host actions", () => {
+suite("DashboardMessageRouter — dashboard host actions", () => {
   test("dispatches LSP local scans to the language server manager", async () => {
     const sent: unknown[] = [];
     const router = buildRouter(
@@ -1054,7 +1054,7 @@ suite("WebviewMessageRouter — dashboard host actions", () => {
   });
 });
 
-suite("WebviewMessageRouter — client workflow file paths", () => {
+suite("DashboardMessageRouter — client workflow file paths", () => {
   test("LOAD_WORKFLOW resolves a workspace-relative path to an absolute one", async () => {
     const loaded: string[] = [];
     const router = buildRouter({
@@ -1152,7 +1152,7 @@ suite("WebviewMessageRouter — client workflow file paths", () => {
   });
 });
 
-suite("WebviewMessageRouter — new workflow failure feedback", () => {
+suite("DashboardMessageRouter — new workflow failure feedback", () => {
   test("restores the draft and emits a warning when starting a new workflow fails", async () => {
     const messages: unknown[] = [];
     const router = buildRouter(
@@ -1185,7 +1185,7 @@ suite("WebviewMessageRouter — new workflow failure feedback", () => {
   });
 });
 
-suite("WebviewMessageRouter — native feedback", () => {
+suite("DashboardMessageRouter — native feedback", () => {
   test("delegates each severity to the existing VS Code feedback sink", async () => {
     const calls: string[] = [];
     const sink = new VsCodeUserFeedbackSink({
@@ -1193,7 +1193,7 @@ suite("WebviewMessageRouter — native feedback", () => {
       showWarningMessage: () => calls.push("warning"),
       showErrorMessage: () => calls.push("error"),
     });
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       () => {},
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,
@@ -1224,7 +1224,7 @@ suite("WebviewMessageRouter — native feedback", () => {
 
   test("ignores malformed feedback payloads", async () => {
     const received: unknown[] = [];
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       () => {},
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,
@@ -1252,7 +1252,7 @@ suite("WebviewMessageRouter — native feedback", () => {
   });
 });
 
-suite("WebviewMessageRouter — statusline tracking", () => {
+suite("DashboardMessageRouter — statusline tracking", () => {
   test("forwards the typed disable request for both supported harnesses", async () => {
     const received: Array<{
       harnessId: string;
@@ -1272,7 +1272,7 @@ suite("WebviewMessageRouter — statusline tracking", () => {
         received.push({ ...request, postMessage });
       },
     } as any;
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       () => {},
       settingsSync,
       {} as any,
@@ -1319,7 +1319,7 @@ suite("WebviewMessageRouter — statusline tracking", () => {
   test("reloads full settings after saving template variable defaults", async () => {
     const calls: string[] = [];
     const postMessage = () => {};
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       () => {},
       {
         sendWorkflowPropertiesToSettings: async () => {},
@@ -1353,7 +1353,7 @@ suite("WebviewMessageRouter — statusline tracking", () => {
 
   test("rejects unsupported harness ids before dispatch", async () => {
     let calls = 0;
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       () => {},
       {
         sendWorkflowPropertiesToSettings: async () => {},
@@ -1377,7 +1377,7 @@ suite("WebviewMessageRouter — statusline tracking", () => {
   });
 });
 
-suite("WebviewMessageRouter — end-condition script creation", () => {
+suite("DashboardMessageRouter — end-condition script creation", () => {
   test("delegates to the evaluator and replies only to the initiating client", async () => {
     const created: string[] = [];
     const panelMessages: unknown[] = [];
@@ -1453,7 +1453,7 @@ suite("WebviewMessageRouter — end-condition script creation", () => {
   });
 });
 
-suite("WebviewMessageRouter — harness detection retry", () => {
+suite("DashboardMessageRouter — harness detection retry", () => {
   test("retries detection and replies only to the initiating client", async () => {
     const panelMessages: unknown[] = [];
     const browserMessages: unknown[] = [];
@@ -1490,11 +1490,11 @@ suite("WebviewMessageRouter — harness detection retry", () => {
   });
 });
 
-suite("WebviewMessageRouter — workspace statistics", () => {
+suite("DashboardMessageRouter — workspace statistics", () => {
   const snapshot = { workflowCount: 2 } as any;
 
   function makeStatsRouter(emitted: unknown[], calls: string[]) {
-    return new WebviewMessageRouter(
+    return new DashboardMessageRouter(
       (message: unknown) => emitted.push(message),
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,
@@ -1545,7 +1545,7 @@ suite("WebviewMessageRouter — workspace statistics", () => {
   });
 });
 
-suite("WebviewMessageRouter — workflow variant delivery", () => {
+suite("DashboardMessageRouter — workflow variant delivery", () => {
   const originalCreateWorkflowVariant =
     WorkflowVariantService.prototype.createWorkflowVariant;
 
@@ -1666,7 +1666,7 @@ suite("WebviewMessageRouter — workflow variant delivery", () => {
  * requestId, including the paths that decline to do any work.
  */
 suite(
-  "WebviewMessageRouter — LOAD_RUN_VIEW always answers its requestId",
+  "DashboardMessageRouter — LOAD_RUN_VIEW always answers its requestId",
   () => {
     test("joins a duplicate in-flight requestId for the same client", async () => {
       let resolveLoad!: () => void;
@@ -1674,7 +1674,7 @@ suite(
         resolveLoad = resolve;
       });
       let loadCount = 0;
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,
@@ -1718,7 +1718,7 @@ suite(
         type: MESSAGE_TYPES.RUN_VIEW_LOADED,
         requestId: "run-view-reconnect",
       };
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         () => {},
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,
@@ -1780,7 +1780,7 @@ suite(
 
     test("replies with a failure when the orchestrator is not available yet", async () => {
       const emitted: any[] = [];
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         (message: unknown) => emitted.push(message),
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,
@@ -1814,7 +1814,7 @@ suite(
 
     test("replies with a failure when the addressed view cannot be read", async () => {
       const emitted: any[] = [];
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         (message: unknown) => emitted.push(message),
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,
@@ -1847,10 +1847,10 @@ suite(
   }
 );
 
-suite("WebviewMessageRouter — execution preview transport", () => {
+suite("DashboardMessageRouter — execution preview transport", () => {
   test("redacts the preview immediately before emitting it", async () => {
     const emitted: any[] = [];
-    const router = new WebviewMessageRouter(
+    const router = new DashboardMessageRouter(
       (message: unknown) => emitted.push(message),
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,
@@ -1925,7 +1925,7 @@ suite("WebviewMessageRouter — execution preview transport", () => {
   });
 });
 
-suite("WebviewMessageRouter — workspace snapshot content", () => {
+suite("DashboardMessageRouter — workspace snapshot content", () => {
   test("routes an addressed file request and returns the correlated content", async () => {
     const emitted: any[] = [];
     let call: unknown;
@@ -2022,7 +2022,7 @@ suite("WebviewMessageRouter — workspace snapshot content", () => {
   });
 });
 
-suite("WebviewMessageRouter — license actions", () => {
+suite("DashboardMessageRouter — license actions", () => {
   test("delegates license actions and refreshes machines after deactivation", async () => {
     const messages: any[] = [];
     const service = new FakeLicenseActionService();
@@ -2190,7 +2190,7 @@ suite("WebviewMessageRouter — license actions", () => {
     }
 
     function buildSearchRouter(recorded: RecordedSearch[]): {
-      router: WebviewMessageRouter;
+      router: DashboardMessageRouter;
       restore: () => void;
       emitted: any[];
     } {
@@ -2244,7 +2244,7 @@ suite("WebviewMessageRouter — license actions", () => {
         enqueueWorkspaceRefresh: () => Promise.resolve(),
         waitForActiveRefresh: () => Promise.resolve({ failed: false }),
       };
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         (message) => emitted.push(message),
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,
@@ -2623,7 +2623,7 @@ suite("WebviewMessageRouter — license actions", () => {
             )
           ),
       };
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         (message) => emitted.push(message),
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,
@@ -2676,7 +2676,7 @@ suite("WebviewMessageRouter — license actions", () => {
         search: () =>
           Promise.reject(new HistorySearchRegexTimeoutError("(a+)+$")),
       };
-      const router = new WebviewMessageRouter(
+      const router = new DashboardMessageRouter(
         (message) => emitted.push(message),
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,

@@ -1039,7 +1039,7 @@ Pattern scan across all 3,378 commits on all refs:
       (`ghp_…`) and Slack (`xox…`) token shapes: **zero hits.**
 - [x] PEM `BEGIN … PRIVATE KEY` blocks: two hits, both test fixtures — a literal
       `secret-material` placeholder in `PreviewRedactor.test.ts` and a format
-      regex in `WebviewSettingsSync.test.ts`. Not credentials.
+      regex in `DashboardSettingsSync.test.ts`. Not credentials.
 - [x] Tracked `.ctrlyoke/` content carries no credentials (`mcp/servers.json`
       holds no keys; `settings.json` is untracked).
 - [x] `deploy-preview.yml` triggers on `push`, **not** `pull_request_target`, so

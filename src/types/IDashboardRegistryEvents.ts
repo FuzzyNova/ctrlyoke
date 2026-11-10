@@ -2,19 +2,19 @@ import type {
   ParallelGroupDefinition,
   WorkflowSummary,
   CoordinationScopeSnapshot,
-} from "../types/CtrlYokeTypes";
-import type { CliOutput } from "../types/WebviewMessageTypes";
-import type { HarnessId } from "../types/DashboardConstants";
-import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
+} from "./CtrlYokeTypes";
+import type { CliOutput } from "./WebviewMessageTypes";
+import type { HarnessId } from "./DashboardConstants";
+import type { HarnessAvailabilityReport } from "./WebviewMessageTypes";
 
 /**
  * Platform-agnostic interface for pushing workflow state updates to the dashboard.
- * Implemented by CtrlYokeWebviewProvider (VS Code) and CtrlYokeServer (standalone).
+ * Implemented by the dashboard application, broadcast hub, and hosted server.
  *
- * WorkflowOrchestrator depends only on this interface — never on the concrete
- * CtrlYokeWebviewProvider — so it can be reused in non-VS Code contexts.
+ * WorkflowOrchestrator depends only on this interface, so it can be reused
+ * across dashboard hosts.
  */
-export interface IDashboardProvider {
+export interface IDashboardRegistryEvents {
   // ── Workflow registry events ──────────────────────────────────────────────
 
   /** Notify that a new workflow was registered in the running registry. */

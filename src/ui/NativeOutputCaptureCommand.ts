@@ -5,7 +5,7 @@ import {
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { Log } from "../utils/Log";
-import { savePendingOutputSnapshot } from "./OutputSnapshotService";
+import { savePendingOutputCapture } from "./OutputCaptureAttachments";
 
 type NativeOutputCaptureDocument = Pick<
   vscode.TextDocument,
@@ -130,7 +130,7 @@ export function registerNativeOutputCaptureCommand(
   getWorkspaceRoot: () => string,
   reportError: ReportError,
   saveOutputSnapshot: SaveOutputSnapshot = (captureId) =>
-    savePendingOutputSnapshot(getWorkspaceRoot, captureId)
+    savePendingOutputCapture(getWorkspaceRoot, captureId)
 ): vscode.Disposable {
   return vscode.commands.registerCommand(
     VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,

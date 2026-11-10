@@ -1,6 +1,6 @@
 import type { WorkflowSummary } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES, STEP_STATUS } from "../../types/DashboardConstants";
-import { notificationIdentityPrefix } from "./CompletionNotificationFactory";
+import { notificationIdentityPrefix } from "../../core/notifications/NotificationEventFactory";
 
 /** Owns per-client completion notification history and workflow summaries. */
 export class CompletionNotificationTracker {

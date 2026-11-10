@@ -4,7 +4,7 @@ import {
   buildHookNotificationEvent,
   type CtrlYokeNotificationEvent,
   type HookArtifact,
-} from "../../../ui/notifications/CompletionNotificationFactory";
+} from "../../notifications/NotificationEventFactory";
 import { configService } from "../../../config/CtrlYokeConfigService";
 import { Log } from "../../../utils/Log";
 

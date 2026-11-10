@@ -23,7 +23,7 @@ import {
   resolveCtrlYokeMcpInvocation,
 } from "../utils/McpRegistryFileManager";
 import { REDACTION_MARKER } from "../types/PreviewRedactor";
-import type { WebviewClientContext } from "./WebviewClientContext";
+import type { DashboardClientContext } from "./DashboardClientContext";
 
 /** Never send literal MCP env/header values back through the preview modal. */
 function redactMcpConfigPreview(config: unknown): string {
@@ -56,7 +56,7 @@ function redactMcpConfigPreview(config: unknown): string {
  * servers in local harness configs and the remote registry, and export/remove
  * server definitions in harness config files.
  *
- * The dispatch table remains in {@link WebviewMessageRouter}; this service owns
+ * The dispatch table remains in {@link DashboardMessageRouter}; this service owns
  * the filesystem/discovery behavior and only needs a workspace root plus the
  * originating client's reply context.
  */
@@ -74,7 +74,7 @@ export class McpManagerService {
   }
 
   private async emitManagedRegistryServers(
-    ctx: WebviewClientContext
+    ctx: DashboardClientContext
   ): Promise<void> {
     // The manager edits the registry files as written, including workspace
     // entries still awaiting approval; execution paths read them gated.
@@ -87,7 +87,7 @@ export class McpManagerService {
     });
   }
 
-  private async emitLocalScan(ctx: WebviewClientContext): Promise<void> {
+  private async emitLocalScan(ctx: DashboardClientContext): Promise<void> {
     const result = await safeDiscoverLocalMcpServers(this.getWorkspaceRoot());
     ctx.emit({
       type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
@@ -98,7 +98,7 @@ export class McpManagerService {
   }
 
   private emitActionFailure(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     action: string,
     error: string
   ): void {
@@ -109,7 +109,7 @@ export class McpManagerService {
     });
   }
 
-  async handleRequestRegistryServers(ctx: WebviewClientContext): Promise<void> {
+  async handleRequestRegistryServers(ctx: DashboardClientContext): Promise<void> {
     try {
       await this.emitManagedRegistryServers(ctx);
     } catch (error) {
@@ -119,7 +119,7 @@ export class McpManagerService {
   }
 
   async handleSaveRegistryServer(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: SaveMcpRegistryServerMessage
   ): Promise<void> {
     try {
@@ -139,7 +139,7 @@ export class McpManagerService {
   }
 
   async handleDeleteRegistryServer(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: DeleteMcpRegistryServerMessage
   ): Promise<void> {
     try {
@@ -151,12 +151,12 @@ export class McpManagerService {
     }
   }
 
-  async handleRequestLocalScan(ctx: WebviewClientContext): Promise<void> {
+  async handleRequestLocalScan(ctx: DashboardClientContext): Promise<void> {
     await this.emitLocalScan(ctx);
   }
 
   async handleRequestRegistrySearch(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RequestMcpRegistrySearchMessage
   ): Promise<void> {
     const result = await safeFetchMcpRegistry({
@@ -174,7 +174,7 @@ export class McpManagerService {
   }
 
   async handleExportToHarness(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: ExportMcpToHarnessMessage
   ): Promise<void> {
     try {
@@ -199,7 +199,7 @@ export class McpManagerService {
   }
 
   async handleDeleteFromHarness(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: DeleteMcpFromHarnessMessage
   ): Promise<void> {
     try {
@@ -227,7 +227,7 @@ export class McpManagerService {
    * throwing — the modal surfaces that as "not found" instead of erroring.
    */
   async handleRequestMcpConfigPreview(
-    ctx: WebviewClientContext,
+    ctx: DashboardClientContext,
     message: RequestMcpConfigPreviewMessage
   ): Promise<void> {
     const mcpServerName = message.mcpServerName;

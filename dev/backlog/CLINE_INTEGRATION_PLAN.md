@@ -825,7 +825,7 @@ and `src/extension.ts` (only if Cline needs a startup sweep of leftover global c
 - [ ] `src/utils/SessionValidator.ts`: Cline task IDs are numeric millisecond
       timestamps, not UUIDs — add an explicit case
 - [ ] `src/utils/{HarnessDirectoryUtils,McpDiscoveryUtils,HarnessMcpExporter,TokenSemantics}.ts`
-- [ ] UI: `src/ui/WebviewSettingsSync.ts`, `src/ui/PromptEditorSupportService.ts`,
+- [ ] UI: `src/ui/DashboardSettingsSync.ts`, `src/ui/PromptEditorSupportService.ts`,
       `src/ui/webview-react/store/settingsStore.ts`, `components/shared/HarnessIcon.tsx`,
       `components/settings/{settingsCatalog.ts,McpManagerSection.tsx,AdvancedPermissionsSection.tsx,stats/StatusLineTrackingControls.tsx}`
       (`ModelPricingEditor.tsx` iterates `HARNESS_IDS` and needs no edit)

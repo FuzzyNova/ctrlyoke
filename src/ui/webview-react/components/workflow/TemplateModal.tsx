@@ -363,7 +363,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   }, []);
 
   // Submit the inline create-template form — fully webview-driven, no native VS Code UI
-  // (see WorkflowSerializer.handleCreateCustomTemplate for why this matters for browser clients).
+  // (see WorkflowLibraryHandlers.handleCreateCustomTemplate for why this matters for browser clients).
   const handleCreateTemplateSubmit = useCallback(() => {
     const error = validateSafeName(
       newTemplateName,
