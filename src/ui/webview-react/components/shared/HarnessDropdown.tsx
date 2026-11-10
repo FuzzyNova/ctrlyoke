@@ -248,7 +248,7 @@ export interface HarnessDropdownProps {
   showDefault?: boolean;
   /** Label for the "Default" sentinel option. Defaults to "Default". */
   defaultLabel?: string;
-  /** Show availability status dots. Default true. Pass false in PropertiesDrawer. */
+  /** Show availability status dots. Default true. Pass false in PromptPropertiesDrawer. */
   showStatus?: boolean;
   /** Required when showStatus is true. */
   harnessStatus?: Record<string, HarnessAvailabilityStatus>;
@@ -480,7 +480,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           </button>
         </div>
       )}
-      {/* "Default" sentinel (PropertiesDrawer / FooterQuickPicker) */}
+      {/* "Default" sentinel (PromptPropertiesDrawer / FooterQuickPicker) */}
       {showDefault && (
         <div
           {...{ [LISTBOX_OPTION_VALUE_ATTRIBUTE]: INHERIT_DEFAULT_OPTION }}

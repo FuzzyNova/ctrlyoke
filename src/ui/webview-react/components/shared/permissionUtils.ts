@@ -3,7 +3,7 @@ import { PERMISSION_MODES } from "@root/types/DashboardConstants";
 import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 
 /**
- * Build the "Default (X)" label for the Permissions dropdown in PropertiesDrawer.
+ * Build the "Default (X)" label for the Permissions dropdown in PromptPropertiesDrawer.
  * Workflow-level value takes precedence; globalValue is the fallback when workflow
  * has no override (undefined), reflecting the full three-tier inheritance chain.
  */

@@ -1,5 +1,5 @@
 /**
- * UI-driven persist/reload round trip for PropertiesDrawer-authored prompt-step
+ * UI-driven persist/reload round trip for PromptPropertiesDrawer-authored prompt-step
  * overrides.
  *
  * `src/test/integration/*.integration.test.ts` proves the *backend* persists a
@@ -54,7 +54,7 @@ beforeEach(() => {
     executionState: EXECUTION_STATES.IDLE,
   });
   useSecretRegistryStore.getState().resetSecretRegistry();
-  useUiStore.setState({ propertiesDrawerOpen: false });
+  useUiStore.setState({ promptPropertiesDrawerOpen: false });
   (
     window.vscodeApi as unknown as { postMessage: typeof postMessageSpy }
   ).postMessage = postMessageSpy;
@@ -67,7 +67,7 @@ function findUpdatePromptMessage(): Record<string, unknown> | undefined {
   )?.[0] as Record<string, unknown> | undefined;
 }
 
-describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
+describe("PromptPropertiesDrawer — prompt-step persist/reload round trip", () => {
   it("preCondition env and tool-permission lists survive a save -> reload cycle", async () => {
     useEditorStore.setState({
       selectionTarget: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
@@ -83,7 +83,7 @@ describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
     });
 
     render(<PromptEditor />);
-    act(() => useUiStore.getState().openPropertiesDrawer());
+    act(() => useUiStore.getState().openPromptPropertiesDrawer());
 
     // Drive the real Validation-tab environment row controls.
     fireEvent.click(screen.getByRole("tab", { name: "Validation" }));

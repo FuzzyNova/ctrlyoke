@@ -279,7 +279,7 @@ function App() {
   // the drawer reads as pushing the panel open; closing it hands the previous
   // height back. It never shrinks the panel — an editor already taller than
   // that is left exactly as it is.
-  const propertiesDrawerOpen = useUiStore((s) => s.propertiesDrawerOpen);
+  const promptPropertiesDrawerOpen = useUiStore((s) => s.promptPropertiesDrawerOpen);
   useEffect(() => {
     const context = editorExpansionContextRef.current();
     // A re-toggle inside the animation window measures a height that is
@@ -297,7 +297,7 @@ function App() {
       return () => window.clearTimeout(timer);
     };
 
-    if (propertiesDrawerOpen) {
+    if (promptPropertiesDrawerOpen) {
       // Already holding the panel open — a re-render, not a fresh open.
       if (drawerExpansionRef.current) return;
       if (!context) return;
@@ -341,7 +341,7 @@ function App() {
     expansionSettledAtRef.current = Date.now() + DRAWER_EXPANSION_SETTLE_MS;
     animateEditorHeightPx(context, targetPx, totalPx);
     return scheduleSettledRemeasure();
-  }, [propertiesDrawerOpen]);
+  }, [promptPropertiesDrawerOpen]);
 
   // Mobile overlay closing animation state.
   // When true, the overlay stays mounted but plays a slide-out animation.

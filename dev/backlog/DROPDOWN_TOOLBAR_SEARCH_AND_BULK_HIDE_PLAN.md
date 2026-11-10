@@ -21,7 +21,7 @@ stay identical:
 
 | Component                                     | Used by                                                                                                                                   |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `components/shared/CustomSelect.tsx`          | Model, Agent, Permissions, Context, Execution-mode footer pickers (inline); PropertiesDrawer, WorkflowPropertiesPanel, settings (trigger) |
+| `components/shared/CustomSelect.tsx`          | Model, Agent, Permissions, Context, Execution-mode footer pickers (inline); PromptPropertiesDrawer, WorkflowPropertiesPanel, settings (trigger) |
 | `components/shared/MultiCheckboxDropdown.tsx` | Workflow- and prompt-level skills (trigger only)                                                                                          |
 | `components/shared/SkillsSelect.tsx`          | SkillsQuickPicker (inline) and its trigger mode                                                                                           |
 | `components/shared/HarnessDropdown.tsx`       | HarnessQuickPicker (inline) and its trigger mode                                                                                          |
@@ -219,9 +219,9 @@ onUnhideOptions?: (values: string[]) => void;
 When a caller omits them, the component falls back to calling `onHideOption` /
 `onUnhideOption` once per value, so every existing call site gets the feature without
 changes. Update the shared wiring to pass the bulk store actions:
-`useModelDropdownHiding` (Model pickers in the footer, PropertiesDrawer and
+`useModelDropdownHiding` (Model pickers in the footer, PromptPropertiesDrawer and
 WorkflowPropertiesPanel) and the inline wiring in AgentQuickPicker, HarnessQuickPicker,
-SkillsQuickPicker, PropertiesDrawer, WorkflowPropertiesPanel, CommitSection,
+SkillsQuickPicker, PromptPropertiesDrawer, WorkflowPropertiesPanel, CommitSection,
 HarnessesSection and TemplateModal. That makes each action a single store write and a
 single persisted-state flush. If the inline wirings turn out to be identical apart from
 the namespace, fold them into one `useDropdownHiding(namespace)` hook alongside

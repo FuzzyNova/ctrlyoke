@@ -103,7 +103,7 @@ description and have no tooltip, which is today's behaviour, since mobile browse
    keyboard focus, Escape, flipping, `aria-describedby`).
 2. Move the schema-backed surfaces, where the long tooltips are:
    - `FormField` in `WorkflowPropertiesPanel`;
-   - the `PropertiesDrawer` labels;
+   - the `PromptPropertiesDrawer` labels;
    - option rows in `CustomSelect`, `MultiCheckboxDropdown`, `SkillsSelect`, `HarnessDropdown` and
      `PriorContextSelect`;
    - the other callers of `schemaTitle` (`ScriptConditionEditor`, `ErrorBehaviorEditor`,

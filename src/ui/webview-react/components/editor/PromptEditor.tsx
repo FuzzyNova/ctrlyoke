@@ -24,7 +24,7 @@ import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { defineWorkflowVariable } from "@utils/workflowVars";
 import { CodeMirrorEditor } from "./CodeMirrorEditor";
-import { PropertiesDrawer } from "./PropertiesDrawer";
+import { PromptPropertiesDrawer } from "./PromptPropertiesDrawer";
 import { StepColorField } from "./StepColorField";
 import { EditorFooter } from "./EditorFooter";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
@@ -217,9 +217,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     parallelGroups,
   } = useWorkflowStore();
   const {
-    propertiesDrawerOpen,
-    togglePropertiesDrawer,
-    closePropertiesDrawer,
+    promptPropertiesDrawerOpen,
+    togglePromptPropertiesDrawer,
+    closePromptPropertiesDrawer,
     activeWorkflowId,
   } = useUiStore();
   useSettingsStore(); // Keep store initialized for reactive updates
@@ -228,7 +228,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const activeInteractiveSession =
     useActiveInteractiveSession(activeWorkflowId);
 
-  // ── Drawer tab state (lifted from PropertiesDrawer for footer tab bar) ─────
+  // ── Drawer tab state (lifted from PromptPropertiesDrawer for footer tab bar) ─────
   const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(
     DRAWER_PAGES.HARNESS
   );
@@ -244,10 +244,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Reset to first tab when drawer opens for a new prompt
   useEffect(() => {
-    if (propertiesDrawerOpen) {
+    if (promptPropertiesDrawerOpen) {
       setDrawerActivePage(DRAWER_PAGES.HARNESS);
     }
-  }, [propertiesDrawerOpen, selectionTarget]);
+  }, [promptPropertiesDrawerOpen, selectionTarget]);
 
   const drawerCurrentHarness = (properties.harness ??
     workflowProperties.harness ??
@@ -476,14 +476,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Close drawer on ESC key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === KEYBOARD_KEYS.ESCAPE && propertiesDrawerOpen) {
-        closePropertiesDrawer();
+      if (e.key === KEYBOARD_KEYS.ESCAPE && promptPropertiesDrawerOpen) {
+        closePromptPropertiesDrawer();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [propertiesDrawerOpen, closePropertiesDrawer]);
+  }, [promptPropertiesDrawerOpen, closePromptPropertiesDrawer]);
 
   const getPropertyValues = useCallback(
     (includeNullsForDefaults = false) =>
@@ -1441,7 +1441,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       />
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
-        // overflow-clip (not overflow-hidden): PropertiesDrawer's closed-state
+        // overflow-clip (not overflow-hidden): PromptPropertiesDrawer's closed-state
         // `translateY` pushes its transformed box below this wrapper's own
         // bounds, which — per the CSS scrollable-overflow spec — still counts
         // toward this element's scrollable overflow even though it's clipped
@@ -1493,9 +1493,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           />
 
           {/* Properties Drawer (slides up from bottom, overlays only editor) */}
-          <PropertiesDrawer
-            isOpen={propertiesDrawerOpen}
-            onClose={closePropertiesDrawer}
+          <PromptPropertiesDrawer
+            isOpen={promptPropertiesDrawerOpen}
+            onClose={closePromptPropertiesDrawer}
             activePage={drawerActivePage}
             onRequestPage={handleCompatibilityReview}
             hasPreCondition={hasPreCondition}
@@ -1658,8 +1658,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}
         onCancel={handleCancel}
-        onToggleProperties={togglePropertiesDrawer}
-        propertiesOpen={propertiesDrawerOpen}
+        onToggleProperties={togglePromptPropertiesDrawer}
+        propertiesOpen={promptPropertiesDrawerOpen}
         isExternallyManaged={isExternallyManaged}
         externalReadOnlyLabel={externalReadOnlyLabel}
         drawerActivePage={drawerActivePage}

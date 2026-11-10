@@ -6,7 +6,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PropertiesDrawer } from "@components/editor/PropertiesDrawer";
+import { PromptPropertiesDrawer } from "@components/editor/PromptPropertiesDrawer";
 import {
   PROPERTY_DEFAULTS,
   useEditorStore,
@@ -41,7 +41,7 @@ function resetStores(): void {
 
 function renderHarnessDrawer() {
   return render(
-    <PropertiesDrawer
+    <PromptPropertiesDrawer
       isOpen
       onClose={() => undefined}
       activePage={DRAWER_PAGES.HARNESS}
@@ -51,7 +51,7 @@ function renderHarnessDrawer() {
 
 function renderValidationDrawer() {
   return render(
-    <PropertiesDrawer
+    <PromptPropertiesDrawer
       isOpen
       onClose={() => undefined}
       activePage={DRAWER_PAGES.VALIDATION}
@@ -61,7 +61,7 @@ function renderValidationDrawer() {
 
 function renderPermissionsDrawer() {
   return render(
-    <PropertiesDrawer
+    <PromptPropertiesDrawer
       isOpen
       onClose={() => undefined}
       activePage={DRAWER_PAGES.PERMISSIONS}
@@ -81,7 +81,7 @@ function chooseExecutionMode(label: string): void {
   fireEvent.click(screen.getByRole("button", { name: optionNames[label] }));
 }
 
-describe("PropertiesDrawer landmark", () => {
+describe("PromptPropertiesDrawer landmark", () => {
   beforeEach(() => {
     resetStores();
   });
@@ -135,7 +135,7 @@ describe("PropertiesDrawer landmark", () => {
   });
 });
 
-describe("PropertiesDrawer harness-scoped fallbacks", () => {
+describe("PromptPropertiesDrawer harness-scoped fallbacks", () => {
   beforeEach(() => {
     resetStores();
     const settings = useSettingsStore.getState();
@@ -181,7 +181,7 @@ describe("PropertiesDrawer harness-scoped fallbacks", () => {
   });
 });
 
-describe("PropertiesDrawer execution mode", () => {
+describe("PromptPropertiesDrawer execution mode", () => {
   beforeEach(() => {
     resetStores();
   });
@@ -298,7 +298,7 @@ describe("PropertiesDrawer execution mode", () => {
   });
 });
 
-describe("PropertiesDrawer sandbox", () => {
+describe("PromptPropertiesDrawer sandbox", () => {
   beforeEach(() => {
     resetStores();
   });
@@ -415,7 +415,7 @@ describe("PropertiesDrawer sandbox", () => {
   });
 });
 
-describe("PropertiesDrawer reset all to inherit", () => {
+describe("PromptPropertiesDrawer reset all to inherit", () => {
   beforeEach(() => {
     resetStores();
   });
@@ -469,7 +469,7 @@ describe("PropertiesDrawer reset all to inherit", () => {
   });
 });
 
-describe("PropertiesDrawer Dry Run entry point", () => {
+describe("PromptPropertiesDrawer Dry Run entry point", () => {
   beforeEach(resetStores);
 
   afterEach(cleanup);
@@ -487,7 +487,7 @@ describe("PropertiesDrawer Dry Run entry point", () => {
   });
 });
 
-describe("PropertiesDrawer secrets", () => {
+describe("PromptPropertiesDrawer secrets", () => {
   beforeEach(resetStores);
 
   afterEach(cleanup);
@@ -549,7 +549,7 @@ describe("PropertiesDrawer secrets", () => {
   });
 });
 
-describe("PropertiesDrawer resume session", () => {
+describe("PromptPropertiesDrawer resume session", () => {
   const GUID = "63017930-45b0-4ec4-8094-8a57751e905b";
 
   beforeEach(() => {
@@ -560,7 +560,7 @@ describe("PropertiesDrawer resume session", () => {
 
   function renderContextDrawer() {
     return render(
-      <PropertiesDrawer
+      <PromptPropertiesDrawer
         isOpen
         onClose={() => undefined}
         activePage={DRAWER_PAGES.CONTEXT}

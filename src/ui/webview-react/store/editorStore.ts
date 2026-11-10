@@ -787,9 +787,9 @@ export const useEditorStore = create<
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
-      // Close PropertiesDrawer when entering script step edit mode (unless pending edit had prompt mode open)
+      // Close PromptPropertiesDrawer when entering script step edit mode (unless pending edit had prompt mode open)
       if (!pendingEdit || pendingEdit.stepType === STEP_TYPES.SCRIPT) {
-        useUiStore.getState().closePropertiesDrawer();
+        useUiStore.getState().closePromptPropertiesDrawer();
       }
     } else {
       // Prompt step: populate promptText, clear scriptCommand/script properties, set stepType to prompt
@@ -1153,7 +1153,7 @@ export const useEditorStore = create<
     if (type === STEP_TYPES.SCRIPT) {
       // Switching to script: just flip the type flag, preserve promptText for round-trip
       set({ stepType: STEP_TYPES.SCRIPT, isDirty: true });
-      useUiStore.getState().closePropertiesDrawer();
+      useUiStore.getState().closePromptPropertiesDrawer();
     } else {
       // Switching to prompt: just flip the type flag, preserve scriptCommand for round-trip
       set({ stepType: STEP_TYPES.PROMPT, isDirty: true });

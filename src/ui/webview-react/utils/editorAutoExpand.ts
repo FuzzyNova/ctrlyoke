@@ -56,7 +56,7 @@ export const DRAWER_EXPANSION_FRACTION = 0.5;
 
 /**
  * Duration and easing of the drawer's own slide — `transition-transform
- * duration-300` in `PropertiesDrawer.tsx`, plus Tailwind's default timing
+ * duration-300` in `PromptPropertiesDrawer.tsx`, plus Tailwind's default timing
  * function. The editor panel is resized over the same pair so the drawer
  * reads as pushing the panel open instead of following a snap; change them
  * together or the two halves visibly drift apart.

@@ -10,7 +10,7 @@ Staged 2026-11-09 as one workflow step per chunk below, run in this order. Each 
 own box in the commit that lands it, and adds its ledger rows to `dev/reference/RENAMES.md`.
 
 - [x] 1a `StepContextMenu` → `ContextMenu`, and create the ledger plus its `copilot-instructions.md` line
-- [ ] 1b `PropertiesDrawer` → `PromptPropertiesDrawer`, uiStore state, `WorkflowPropertiesPanel` drawer names
+- [x] 1b `PropertiesDrawer` → `PromptPropertiesDrawer`, uiStore state, `WorkflowPropertiesPanel` panel names
 - [ ] 8 Final-step pass-count names
 - [ ] 2 "prompt" → "step" in the step-list and editor components (`components/prompts/` → `components/steps/`)
 - [ ] 3a Component moves: `WorkflowSwitcher`, delete modals, `FileBrowserModal`, `HooksEditor`, `StepColorSwatch`
@@ -218,7 +218,7 @@ is a small core/CLI naming fix. Earlier batches don't block later ones, except w
   `StepContextMenuRequest`, and the `FuzzyRanking`/completions references, which match
   `useFinalStepContextMenu`.
 
-**1b. `PropertiesDrawer` → `PromptPropertiesDrawer`** (`components/editor/PropertiesDrawer.tsx`)
+**1b. `PropertiesDrawer` → `PromptPropertiesDrawer`** (`components/editor/PromptPropertiesDrawer.tsx`)
 
 - File, component, `PropertiesDrawerProps`, CSS class `properties-drawer` (unused by any
   selector).

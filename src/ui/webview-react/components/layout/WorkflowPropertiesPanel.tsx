@@ -141,7 +141,7 @@ import { findKeyValueRowValueInput } from "../shared/KeyValueRowsEditor";
 import { schemaAriaLabel, schemaFieldTitle } from "@utils/schemaPropertyLabels";
 import { commitWorkflowVars } from "@utils/workflowVars";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
-const SETTINGS_DRAWER_BREAKPOINT = 400;
+const WORKFLOW_PANEL_BREAKPOINT = 400;
 const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
@@ -420,8 +420,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   }, [effectiveEndCondition]);
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
-  const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
-    SETTINGS_DRAWER_BREAKPOINT
+  const [panelRef, isNarrow] = useElementNarrow<HTMLDivElement>(
+    WORKFLOW_PANEL_BREAKPOINT
   );
 
   // Keeps whichever field the user is typing in visible after the mobile
@@ -1656,7 +1656,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   return (
     <div
-      ref={drawerRef}
+      ref={panelRef}
       role="region"
       aria-label="Workflow Properties"
       className="flex flex-col h-full bg-sidebar-bg overflow-x-hidden cy-no-select"

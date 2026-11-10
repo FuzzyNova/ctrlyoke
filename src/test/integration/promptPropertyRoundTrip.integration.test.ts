@@ -10,7 +10,7 @@ import {
 } from "./helpers/propertyRoundTrip";
 
 /**
- * Message-contract round trip for PropertiesDrawer edits: a per-step override
+ * Message-contract round trip for PromptPropertiesDrawer edits: a per-step override
  * committed as the prompt editor posts it (UPDATE_PROMPT with `{ index, text,
  * properties, clearProperties }`) must land on that step in the addressed run's
  * definition head — and "inherit" (clearProperties) must remove the override

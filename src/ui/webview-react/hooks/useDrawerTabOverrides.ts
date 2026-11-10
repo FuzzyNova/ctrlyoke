@@ -16,7 +16,7 @@ import {
  * Computes tab icon overrides for DrawerTabBar based on resolved property state.
  *
  * - WorkflowPropertiesPanel: omit promptProperties → resolves workflow → global
- * - PropertiesDrawer: pass promptProperties → resolves prompt → workflow → global
+ * - PromptPropertiesDrawer: pass promptProperties → resolves prompt → workflow → global
  */
 export function useDrawerTabOverrides(
   workflowProperties: WorkflowProperties,

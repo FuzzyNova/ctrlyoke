@@ -1,6 +1,6 @@
 export { CodeMirrorEditor } from "./CodeMirrorEditor";
 export { PromptEditor } from "./PromptEditor";
-export { PropertiesDrawer } from "./PropertiesDrawer";
+export { PromptPropertiesDrawer } from "./PromptPropertiesDrawer";
 export { EditorFooter } from "./EditorFooter";
 export { FooterQuickPicker } from "./FooterQuickPicker";
 export { HarnessQuickPicker } from "./HarnessQuickPicker";

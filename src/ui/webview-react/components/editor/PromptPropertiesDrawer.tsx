@@ -130,7 +130,7 @@ import { buildHarnessChangeCascade } from "../../utils/harnessChangeCascade";
 import { harnessScopedFallbackLabel } from "../../utils/harnessScopedFallback";
 import { inheritsWorkflowHarnessScopedValues } from "@root/types/ExecutionPropertyResolver";
 
-interface PropertiesDrawerProps {
+interface PromptPropertiesDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   activePage: DrawerPage;
@@ -139,7 +139,7 @@ interface PropertiesDrawerProps {
 }
 
 /**
- * PropertiesDrawer - Slide-up panel for prompt properties
+ * PromptPropertiesDrawer - Slide-up panel for prompt properties
  *
  * Layout (two-column grid throughout, matching WorkflowPropertiesPanel ordering):
  * - Row 1: Harness + Model
@@ -148,7 +148,7 @@ interface PropertiesDrawerProps {
  * - Row 4: Allow Dynamic Extension + Resume Session (with paired Session ID)
  * - End Condition section (full width)
  */
-export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
+export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
   isOpen,
   onClose,
   activePage,
@@ -613,7 +613,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       /* duration-300: App.tsx grows the editor panel over the same duration
          and easing (DRAWER_EXPANSION_ANIMATION_MS / _EASING) so the panel
          moves with this slide rather than snapping ahead of it. */
-      className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-panel h-full flex flex-col overflow-hidden ${
+      className={`prompt-properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-panel h-full flex flex-col overflow-hidden ${
         isOpen ? "translate-y-0" : ""
       }`}
       role="region"

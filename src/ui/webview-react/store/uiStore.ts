@@ -575,7 +575,7 @@ interface UiState {
   lastMobileSizes: MobilePanelSizes;
 
   // Drawer state
-  propertiesDrawerOpen: boolean;
+  promptPropertiesDrawerOpen: boolean;
 
   // Settings panel collapse
   settingsCollapsed: boolean;
@@ -973,9 +973,9 @@ interface UiActions {
   setLastMobileSizes: (sizes: Partial<MobilePanelSizes>) => void;
 
   // Drawer toggles
-  togglePropertiesDrawer: () => void;
-  openPropertiesDrawer: () => void;
-  closePropertiesDrawer: () => void;
+  togglePromptPropertiesDrawer: () => void;
+  openPromptPropertiesDrawer: () => void;
+  closePromptPropertiesDrawer: () => void;
 
   // Settings panel
   toggleSettingsCollapse: () => void;
@@ -1351,7 +1351,7 @@ const initialState: UiState = {
   undoDialogDiffsCollapsed: true, // dialog defaults collapsed independently
   lastDesktopSizes: { ...DEFAULT_DESKTOP_SIZES },
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
-  propertiesDrawerOpen: false,
+  promptPropertiesDrawerOpen: false,
   settingsCollapsed: false,
   outputScrollTargets: {},
   hiddenOutputTargets: {},
@@ -1590,12 +1590,12 @@ export const useUiStore = create<UiState & UiActions>()(
       // DRAWER TOGGLES
       // ============================================================================
 
-      togglePropertiesDrawer: () =>
-        set((state) => ({ propertiesDrawerOpen: !state.propertiesDrawerOpen })),
+      togglePromptPropertiesDrawer: () =>
+        set((state) => ({ promptPropertiesDrawerOpen: !state.promptPropertiesDrawerOpen })),
 
-      openPropertiesDrawer: () => set({ propertiesDrawerOpen: true }),
+      openPromptPropertiesDrawer: () => set({ promptPropertiesDrawerOpen: true }),
 
-      closePropertiesDrawer: () => set({ propertiesDrawerOpen: false }),
+      closePromptPropertiesDrawer: () => set({ promptPropertiesDrawerOpen: false }),
 
       // ============================================================================
       // SETTINGS PANEL
@@ -2811,7 +2811,7 @@ export const useUiStore = create<UiState & UiActions>()(
           duplicateWorkflowRequest: null,
           duplicateWorkflowError: null,
           fileBrowserState: null,
-          propertiesDrawerOpen: false,
+          promptPropertiesDrawerOpen: false,
           newWorkflowModalOpen: false,
           createWorkflowPending: false,
           openCreateTemplateForm: false,

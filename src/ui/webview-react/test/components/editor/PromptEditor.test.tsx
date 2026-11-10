@@ -1183,7 +1183,7 @@ describe("PromptEditor — prompt secret grants", () => {
         { prompt: "old prompt" }
       );
     useEditorStore.getState().setPromptText("updated prompt");
-    useUiStore.getState().openPropertiesDrawer();
+    useUiStore.getState().openPromptPropertiesDrawer();
 
     render(<PromptEditor />);
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));

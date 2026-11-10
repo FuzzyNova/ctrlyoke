@@ -36,7 +36,7 @@ import type {
  * These helpers drive the *real* extension-side persistence pipeline
  * (`prepare*Mutation` -> `WebviewSettingsSync` -> `WorkflowOrchestrator` ->
  * `WorkingFileManager` -> disk) using the exact `postMessage` payloads the
- * `WorkflowPropertiesPanel`/`PropertiesDrawer` components emit. No React, no
+ * `WorkflowPropertiesPanel`/`PromptPropertiesDrawer` components emit. No React, no
  * browser, and — for an idle promoted run — no real `WorkflowInstance`: the
  * run-addressed writes take the static `WorkingFileManager.*AtRun` path.
  *

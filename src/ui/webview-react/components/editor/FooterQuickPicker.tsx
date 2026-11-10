@@ -54,7 +54,7 @@ interface FooterQuickPickerProps {
  *
  * Used by HarnessQuickPicker, ModelQuickPicker, AgentQuickPicker, and
  * SkillsQuickPicker to provide quick inline access to prompt properties
- * directly from the EditorFooter without opening PropertiesDrawer.
+ * directly from the EditorFooter without opening PromptPropertiesDrawer.
  */
 export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
   isNarrow,

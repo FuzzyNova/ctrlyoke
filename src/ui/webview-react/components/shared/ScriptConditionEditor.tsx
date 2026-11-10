@@ -428,7 +428,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const { affUri, dicUri } = getDictionaryUris();
 
   // scriptStep-only: resolved inherited execution mode (workflow -> global settings),
-  // used to label the "Inherit" option the same way PropertiesDrawer labels it for prompt steps.
+  // used to label the "Inherit" option the same way PromptPropertiesDrawer labels it for prompt steps.
   const resolvedExecutionMode = useSettingsStore(
     (s) => s.workflowProperties.executionMode ?? s.globalSettings.executionMode
   );

@@ -244,18 +244,18 @@ describe("toggleDiffsCollapsed", () => {
 
 describe("properties drawer", () => {
   it("opens and closes", () => {
-    expect(store().propertiesDrawerOpen).toBe(false);
-    store().openPropertiesDrawer();
-    expect(store().propertiesDrawerOpen).toBe(true);
-    store().closePropertiesDrawer();
-    expect(store().propertiesDrawerOpen).toBe(false);
+    expect(store().promptPropertiesDrawerOpen).toBe(false);
+    store().openPromptPropertiesDrawer();
+    expect(store().promptPropertiesDrawerOpen).toBe(true);
+    store().closePromptPropertiesDrawer();
+    expect(store().promptPropertiesDrawerOpen).toBe(false);
   });
 
-  it("togglePropertiesDrawer flips state", () => {
-    store().togglePropertiesDrawer();
-    expect(store().propertiesDrawerOpen).toBe(true);
-    store().togglePropertiesDrawer();
-    expect(store().propertiesDrawerOpen).toBe(false);
+  it("togglePromptPropertiesDrawer flips state", () => {
+    store().togglePromptPropertiesDrawer();
+    expect(store().promptPropertiesDrawerOpen).toBe(true);
+    store().togglePromptPropertiesDrawer();
+    expect(store().promptPropertiesDrawerOpen).toBe(false);
   });
 });
 
@@ -1434,7 +1434,7 @@ describe("resetUi", () => {
     expect(store().saveWorkflowDialogOpen).toBe(false);
     expect(store().isLoading).toBe(false);
     expect(store().toastQueue).toEqual([]);
-    expect(store().propertiesDrawerOpen).toBe(false);
+    expect(store().promptPropertiesDrawerOpen).toBe(false);
   });
 });
 

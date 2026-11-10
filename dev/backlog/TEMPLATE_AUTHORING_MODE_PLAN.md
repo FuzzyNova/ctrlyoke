@@ -20,7 +20,7 @@ Let a user edit a template **as a template** in the dashboard:
   template", lists the variable names so the user can see what is available, and
   has a button that opens a **template variable manager** (add, remove, edit
   variables).
-- In `WorkflowPropertiesPanel.tsx` and `PropertiesDrawer.tsx`, dropdowns put
+- In `WorkflowPropertiesPanel.tsx` and `PromptPropertiesDrawer.tsx`, dropdowns put
   compatible template variables at the top of their options: harness dropdowns
   offer harness and text variables, model dropdowns offer model and text variables
   (e.g. `{developerModel}`), and so on.

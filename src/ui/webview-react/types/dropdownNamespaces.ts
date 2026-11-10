@@ -15,7 +15,7 @@ import {
  * Using per-harness model namespaces means hiding a model in one harness context
  * has zero effect on other harnesses.
  *
- * Both WorkflowPropertiesPanel and PropertiesDrawer share these constants so hidden state
+ * Both WorkflowPropertiesPanel and PromptPropertiesDrawer share these constants so hidden state
  * is always in sync between the two panels.
  */
 export const DROPDOWN_NAMESPACES = {
@@ -61,7 +61,7 @@ export function resolveHiddenDropdownValues(
 
 /**
  * Generate Resume Session dropdown options.
- * PropertiesDrawer includes a "Default" option with dynamic label.
+ * PromptPropertiesDrawer includes a "Default" option with dynamic label.
  * WorkflowPropertiesPanel uses only Yes/No (computes effective value separately).
  */
 export function getResumeSessionOptions(defaultLabel?: string) {
@@ -86,7 +86,7 @@ export interface ResumeSessionSelection {
 /**
  * Single source for what a Resume Session dropdown change does to the paired
  * Session ID, shared by every surface that renders the two together
- * (`PropertiesDrawer`, `ContextQuickPicker`).
+ * (`PromptPropertiesDrawer`, `ContextQuickPicker`).
  *
  * The Session ID is only *reachable* while the selection is "yes" — every other
  * selection greys the input out and shows either the inherited value or nothing.
