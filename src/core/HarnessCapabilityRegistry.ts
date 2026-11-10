@@ -26,7 +26,7 @@ import {
   type HarnessVersionPolicy,
 } from "../utils/HarnessVersion";
 import { detectHarness } from "./harness/shared/HarnessDetection";
-import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./harness/shared/interfaces/IHarnessAdapter";
 
 export const HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1;
 
@@ -49,7 +49,7 @@ export interface HarnessCapabilityDocumentationFacts {
 }
 
 export interface HarnessCapabilitySource {
-  readonly provider: Pick<ICliProvider, "config" | "capabilities"> & {
+  readonly provider: Pick<IHarnessAdapter, "config" | "capabilities"> & {
     checkAvailability(): Promise<boolean>;
     getVersion?(): Promise<string | undefined>;
   };

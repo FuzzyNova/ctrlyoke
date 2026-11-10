@@ -7,7 +7,7 @@ import { QWEN_SANDBOX_ENV } from "./QwenProtocolConstants";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { randomUUID } from "crypto";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
@@ -114,17 +114,17 @@ const QWEN_IMAGE_INPUT_CAPABILITY = {
  *
  * Usage:
  * ```typescript
- * const provider = new QwenCliProvider();
+ * const provider = new QwenHarnessAdapter();
  * const integration = new CliIntegration(provider, platform, registerWithContext);
  * ```
  */
-export class QwenCliProvider implements ICliProvider {
+export class QwenHarnessAdapter implements IHarnessAdapter {
   probeResumableSession(sessionId: string): SessionProbeResult {
     return this.logParser.probeSessionId(sessionId);
   }
   private static readonly CLI_COMMAND = "qwen";
-  static readonly CLI_VERSION_COMMAND = `${QwenCliProvider.CLI_COMMAND} --version`;
-  static readonly CLI_HELP_COMMAND = `${QwenCliProvider.CLI_COMMAND} --help`;
+  static readonly CLI_VERSION_COMMAND = `${QwenHarnessAdapter.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${QwenHarnessAdapter.CLI_COMMAND} --help`;
 
   private static readonly statuslineManager = StatuslineManager.forProvider(
     STATUS_LINE_HARNESS_IDS.QWEN
@@ -138,8 +138,8 @@ export class QwenCliProvider implements ICliProvider {
   private readonly hookSettingsPaths = new Set<string>();
 
   private readonly statuslineRegistration = new ProviderStatuslineRegistration({
-    manager: QwenCliProvider.statuslineManager,
-    logPrefix: "QwenCliProvider",
+    manager: QwenHarnessAdapter.statuslineManager,
+    logPrefix: "QwenHarnessAdapter",
     harnessLabel: "Qwen",
     snapshotPrefix: "qwen",
     tokenEnvironmentVariable: "CTRLYOKE_QWEN_STATUSLINE_TOKEN",
@@ -342,7 +342,7 @@ export class QwenCliProvider implements ICliProvider {
       mcpPreparation.mutations.length > 0
     ) {
       args.push(...mcpPreparation.cliArgs);
-      Log.debug("[QwenCliProvider] ctrlyoke MCP config added inline for Qwen");
+      Log.debug("[QwenHarnessAdapter] ctrlyoke MCP config added inline for Qwen");
     }
 
     // Note: Headless-specific flags (--output-format) are added by
@@ -364,13 +364,13 @@ export class QwenCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("--resume", sessionId!);
-      Log.info(`[QwenCliProvider] Resuming session: ${sessionId}`);
+      Log.info(`[QwenHarnessAdapter] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.warn(
-        "[QwenCliProvider] Resume requested but no session ID available"
+        "[QwenHarnessAdapter] Resume requested but no session ID available"
       );
     } else {
-      Log.info("[QwenCliProvider] Starting new session");
+      Log.info("[QwenHarnessAdapter] Starting new session");
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args)
@@ -380,7 +380,7 @@ export class QwenCliProvider implements ICliProvider {
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
       Log.info(
-        `[QwenCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+        `[QwenHarnessAdapter] Extra CLI args applied (${appendTokens.length} tokens)`
       );
     }
 
@@ -392,7 +392,7 @@ export class QwenCliProvider implements ICliProvider {
     // Permission preparation is similarly dispatched by CliIntegration — not here.
 
     Log.trace(
-      `[QwenCliProvider] Qwen CLI arguments: ${JSON.stringify(redactMcpConfigArgs(args))}`
+      `[QwenHarnessAdapter] Qwen CLI arguments: ${JSON.stringify(redactMcpConfigArgs(args))}`
     );
 
     return {
@@ -644,7 +644,7 @@ export class QwenCliProvider implements ICliProvider {
             await fs.mkdir(path.dirname(settingsPath), { recursive: true });
             await fs.writeFile(settingsPath, content, "utf-8");
             this.hookSettingsPaths.add(settingsPath);
-            Log.debug(`[QwenCliProvider] ${description}: ${settingsPath}`);
+            Log.debug(`[QwenHarnessAdapter] ${description}: ${settingsPath}`);
           },
           restore: async () => {
             await fs.unlink(settingsPath).catch(() => undefined);
@@ -912,7 +912,7 @@ export class QwenCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     return CliProviderUtils.checkCliAvailability(
-      QwenCliProvider.CLI_VERSION_COMMAND
+      QwenHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
 
@@ -922,7 +922,7 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Version string if available
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion(QwenCliProvider.CLI_VERSION_COMMAND);
+    return CliProviderUtils.getCliVersion(QwenHarnessAdapter.CLI_VERSION_COMMAND);
   }
 
   /**

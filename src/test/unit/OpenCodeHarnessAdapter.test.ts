@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import {
   resolveOpenCodePermissionCollisionContext,
   type OpenCodePermissionCollisionContext,
@@ -26,13 +26,13 @@ import {
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
 
-suite("OpenCodeCliProvider", () => {
+suite("OpenCodeHarnessAdapter", () => {
   test("does not pass a fallback model when the OpenCode default is none", async () => {
     const original = ConfigurationUtils.getOpenCodeCliModel;
     ConfigurationUtils.getOpenCodeCliModel = () => "none";
     try {
       for (const model of ["claude-sonnet-4-6", undefined, ""]) {
-        const preparation = await new OpenCodeCliProvider().planCliArgs(
+        const preparation = await new OpenCodeHarnessAdapter().planCliArgs(
           {} as never,
           false,
           process.cwd(),
@@ -52,7 +52,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("uses bracketed paste and avoids terminal reuse for any exclamation mark", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
 
     assert.strictEqual(
       provider.canSendPromptToRunningTerminal("thanks!"),
@@ -94,7 +94,7 @@ suite("OpenCodeCliProvider", () => {
       await parser.probeSessionId("bad-json", "/workspace"),
       "unknown"
     );
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     assert.strictEqual(
       provider.isRecoverableSessionError("Error: Session not found"),
       true
@@ -120,7 +120,7 @@ suite("OpenCodeCliProvider", () => {
   }
 
   test("builds the inline config shape for every permission mode", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const extensionPath = path.join(os.tmpdir(), "opencode-inline-extension");
     const pluginPath = path.resolve(
       extensionPath,
@@ -165,7 +165,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("rewrites colliding top-level and nested keys until they are novel", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const config = provider.buildInlineConfig({
       extensionPath: "extension",
       permissionCollisionContext: collisionContext(
@@ -190,7 +190,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("avoids scalar/object type mismatches by rewriting the tool key", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const config = provider.buildInlineConfig({
       extensionPath: "extension",
       permissionCollisionContext: collisionContext(["*", "bash"]),
@@ -209,7 +209,7 @@ suite("OpenCodeCliProvider", () => {
     const takenKeys = Array.from({ length: 1001 }, (_, index) =>
       "*".repeat(index + 1)
     );
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const config = provider.buildInlineConfig({
       extensionPath: "extension",
       permissionCollisionContext: collisionContext(takenKeys),
@@ -224,7 +224,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("does not pass OpenCode substitution tokens through permission or MCP values", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const config = provider.buildInlineConfig({
       extensionPath: "extension",
       toolPermissions: {
@@ -259,7 +259,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("passes prepared MCP server ids to the execution log parser", async () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const preparation = await provider.planMcpConfigArgs(
       "mcp-server.js",
       "workspace",
@@ -296,7 +296,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("refuses to expose an oversized inline config", async () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     await provider.prepareToolPermissions(
       {
         mode: PERMISSION_MODES.CUSTOM,
@@ -319,7 +319,7 @@ suite("OpenCodeCliProvider", () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-inline-collision-")
     );
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     try {
       await fs.writeFile(
         path.join(workspaceRoot, "opencode.json"),
@@ -437,7 +437,7 @@ suite("OpenCodeCliProvider", () => {
           projectRoot,
           environment
         );
-        const config = new OpenCodeCliProvider().buildInlineConfig({
+        const config = new OpenCodeHarnessAdapter().buildInlineConfig({
           extensionPath: workspaceRoot,
           toolPermissions: {
             mode: PERMISSION_MODES.ALLOW_ALL,
@@ -543,7 +543,7 @@ suite("OpenCodeCliProvider", () => {
         headers: { Authorization: "Bearer token" },
       },
     ];
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     try {
       const inlineConfig = provider.buildInlineConfig({
         extensionPath,
@@ -579,7 +579,7 @@ suite("OpenCodeCliProvider", () => {
     );
     const extensionPath = path.join(workspaceRoot, "extension");
     try {
-      const provider = new OpenCodeCliProvider();
+      const provider = new OpenCodeHarnessAdapter();
       await provider.getMcpConfigArgs(
         undefined,
         workspaceRoot,
@@ -723,7 +723,7 @@ suite("OpenCodeCliProvider", () => {
         return JSON.stringify({ info: { id: sessionId }, messages: [] });
       }
     );
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     Object.defineProperty(provider, "logParser", { value: logParser });
     const collector = new CliResponseCollector({
       provider,
@@ -783,7 +783,7 @@ suite("OpenCodeCliProvider", () => {
       await fs.writeFile(pluginSourcePath, "export default {};\n", "utf8");
 
       for (const isInteractive of [false, true]) {
-        const provider = new OpenCodeCliProvider();
+        const provider = new OpenCodeHarnessAdapter();
         await provider.buildCliArgs(
           { prompt: "test" },
           isInteractive,
@@ -816,7 +816,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("keeps the completion plugin when notification is the only unsupported user hook", async () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const extensionPath = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-notification-extension-")
     );
@@ -868,7 +868,7 @@ suite("OpenCodeCliProvider", () => {
       "scripts",
       "ctrlyoke-opencode-plugin.ts"
     );
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const warnings: string[] = [];
     const originalWarn = Log.warn;
 
@@ -963,7 +963,7 @@ suite("OpenCodeCliProvider", () => {
     } as any;
 
     try {
-      const headlessProvider = new OpenCodeCliProvider();
+      const headlessProvider = new OpenCodeHarnessAdapter();
       await headlessProvider.buildCliArgs(
         { prompt: "headless" },
         false,
@@ -977,7 +977,7 @@ suite("OpenCodeCliProvider", () => {
         { workspaceRoot, workingFilePath }
       );
 
-      const interactiveProvider = new OpenCodeCliProvider();
+      const interactiveProvider = new OpenCodeHarnessAdapter();
       await interactiveProvider.buildCliArgs(
         { prompt: "interactive" },
         true,
@@ -1020,7 +1020,7 @@ suite("OpenCodeCliProvider", () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-inline-reset-")
     );
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const extensionPath = path.join(workspaceRoot, "extension");
     const firstContext = {
       promptIndex: 0,
@@ -1079,7 +1079,7 @@ suite("OpenCodeCliProvider", () => {
   // OpenCode's TUI ignores --prompt when --session is also given
   // (anomalyco/opencode#21829), so the plugin submits a resumed prompt.
   test("hands a resumed interactive prompt to the plugin instead of --prompt", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const baseArgs = [
       OPENCODE_CLI_FLAGS.MODEL,
       "opencode/big-pickle",
@@ -1101,7 +1101,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("passes --prompt for a new session and drops a previous resumed prompt", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     provider.buildInteractiveArgs(
       [OPENCODE_CLI_FLAGS.SESSION, "ses_resumed"],
       "second step"
@@ -1129,7 +1129,7 @@ suite("OpenCodeCliProvider", () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-inline-files-")
     );
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
 
     try {
       await provider.buildCliArgs(
@@ -1167,7 +1167,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("formatFileReference drops the @ prefix so the TUI cannot reinterpret it as an agent mention", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
 
     assert.strictEqual(
       provider.formatFileReference(".ctrlyoke/temp/prompt.md"),
@@ -1180,7 +1180,7 @@ suite("OpenCodeCliProvider", () => {
   });
 
   test("builds native file arguments only for headless image attachments", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     assert.deepStrictEqual(
       provider.buildImageAttachmentArgs(
         ["shots/one.png", "shots/two.jpg"],

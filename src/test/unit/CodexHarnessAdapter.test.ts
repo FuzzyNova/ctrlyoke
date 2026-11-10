@@ -7,7 +7,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { parse } from "smol-toml";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
 import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
 import {
@@ -35,7 +35,7 @@ function makeWorkflowContext(resumeSession?: boolean): {
 
 // ============================================================================
 
-suite("CodexCliProvider", () => {
+suite("CodexHarnessAdapter", () => {
   test("approval flags follow the permission mode alone, and only interactively", () => {
     const mapper = new CodexToolPermissionMapper();
     const cases = [
@@ -136,7 +136,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("passes external roots to --add-dir except under read-only", async () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     const roots = [path.resolve("workspace/extra"), path.resolve("approved")];
     const addDirs = async (resolvedProperties: Record<string, unknown>) => {
       const args = await provider.buildCliArgs(
@@ -187,7 +187,7 @@ suite("CodexCliProvider", () => {
       const plainGit = fsSync.realpathSync(path.join(plain, ".git"));
       const linkedGit = path.join(plainGit, "worktrees", "linked");
 
-      const provider = new CodexCliProvider();
+      const provider = new CodexHarnessAdapter();
       const addDirs = async (
         workspaceRoot: string,
         resolvedProperties: Record<string, unknown>
@@ -247,7 +247,7 @@ suite("CodexCliProvider", () => {
     const previous = process.env.CODEX_HOME;
     process.env.CODEX_HOME = home;
     try {
-      const provider = new CodexCliProvider();
+      const provider = new CodexHarnessAdapter();
       const rolloutDir = path.join(home, "sessions", "2026", "11", "01");
       await fs.mkdir(rolloutDir, { recursive: true });
       await fs.writeFile(
@@ -278,7 +278,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("emits user hook timeout in native seconds", () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     const hooks = (provider as any).buildUserHooksSection([
       { event: "stop", command: "node slow.js", timeoutSec: 9 },
     ]);
@@ -286,7 +286,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("preserves backslashes in user MCP args and environment values", async () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     const args = ["server.js", String.raw`\\d+`];
     const env = { DOMAIN_USER: String.raw`CORP\\alice` };
     const preparation = await provider.planMcpConfigArgs(
@@ -308,7 +308,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("skips an unrepresentable MCP server and keeps ctrlyoke and valid servers", async () => {
-    const preparation = await new CodexCliProvider().planMcpConfigArgs(
+    const preparation = await new CodexHarnessAdapter().planMcpConfigArgs(
       ".ctrlyoke-mcp-server",
       "/workspace",
       undefined,
@@ -346,7 +346,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("does not add the working directory as an extra Codex directory", async () => {
-    const args = await new CodexCliProvider().buildCliArgs(
+    const args = await new CodexHarnessAdapter().buildCliArgs(
       {} as any,
       true,
       "/ext",
@@ -359,7 +359,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("sanitizes MCP server IDs consistently in config and approval overrides", async () => {
-    const preparation = await new CodexCliProvider().planMcpConfigArgs(
+    const preparation = await new CodexHarnessAdapter().planMcpConfigArgs(
       undefined,
       "/workspace",
       undefined,
@@ -398,7 +398,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("skips MCP server IDs that collide after Codex key sanitization", async () => {
-    const preparation = await new CodexCliProvider().planMcpConfigArgs(
+    const preparation = await new CodexHarnessAdapter().planMcpConfigArgs(
       undefined,
       "/workspace",
       undefined,
@@ -417,7 +417,7 @@ suite("CodexCliProvider", () => {
   });
 
   test("sends tool-permission MCP denials as the attached server's disabled_tools", async () => {
-    const args = await new CodexCliProvider().buildCliArgs(
+    const args = await new CodexHarnessAdapter().buildCliArgs(
       {} as any,
       false,
       "/ext",
@@ -465,7 +465,7 @@ suite("CodexCliProvider", () => {
 
   suite("MCP capability declaration", () => {
     test("declares native per-server filtering for server-owned denials", () => {
-      const filtering = new CodexCliProvider().capabilities.mcp
+      const filtering = new CodexHarnessAdapter().capabilities.mcp
         ?.perServerToolFiltering;
 
       assert.deepStrictEqual(
@@ -484,7 +484,7 @@ suite("CodexCliProvider", () => {
   });
 
   suite("buildCliSuffix", () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
 
     test("returns ['resume', sessionId] when resumeSession=true and sessionId is set", () => {
       const result = provider.buildCliSuffix(
@@ -529,7 +529,7 @@ suite("CodexCliProvider", () => {
     // readable trace of it. additionalArgs follow, so a user's own
     // `-c model_reasoning_summary=...` still wins (Codex keeps the last -c).
     for (const isInteractive of [true, false]) {
-      const args = await new CodexCliProvider().buildCliArgs(
+      const args = await new CodexHarnessAdapter().buildCliArgs(
         {} as any,
         isInteractive,
         "/ext",
@@ -553,7 +553,7 @@ suite("CodexCliProvider", () => {
   });
 
   suite("buildCliArgs resume ordering", () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
 
     test("does not include 'resume' token in buildCliArgs output when resumeSession=true", async () => {
       // The "resume" subcommand must NOT be added by buildCliArgs — it belongs in
@@ -668,7 +668,7 @@ suite("CodexCliProvider", () => {
   });
 
   suite("buildNotificationHookArgs", () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
 
     test("emits notification and user hooks as inline trusted overrides", async () => {
       const workspaceRoot = await fs.mkdtemp(
@@ -781,7 +781,7 @@ suite("CodexCliProvider", () => {
   });
 
   suite("log-sourced headless mode", () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
 
     test("selects the session log and reads thread.started from stdout", () => {
       assert.strictEqual(provider.headlessSource, "log");

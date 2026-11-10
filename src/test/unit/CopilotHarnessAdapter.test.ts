@@ -4,7 +4,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
@@ -25,7 +25,7 @@ function createProperties(
   };
 }
 
-suite("CopilotCliProvider", () => {
+suite("CopilotHarnessAdapter", () => {
   test("probes Copilot session logs by ID only", async () => {
     const home = await makeTempDir("copilot-probe-");
     const oldHome = process.env.HOME;
@@ -33,7 +33,7 @@ suite("CopilotCliProvider", () => {
     process.env.HOME = home;
     process.env.USERPROFILE = home;
     try {
-      const provider = new CopilotCliProvider();
+      const provider = new CopilotHarnessAdapter();
       const sessionDir = path.join(
         home,
         ".copilot",
@@ -70,7 +70,7 @@ suite("CopilotCliProvider", () => {
   ];
   for (const [description, mcpServers] of mcpServerCases) {
     test(`auto-approves ctrlyoke MCP tools with ${description}`, async () => {
-      const provider = new CopilotCliProvider();
+      const provider = new CopilotHarnessAdapter();
       const preparation = await provider.planCliArgs(
         { prompt: "use the queue" } as PromptStep,
         false,
@@ -90,7 +90,7 @@ suite("CopilotCliProvider", () => {
   }
 
   test("qualifies MCP autoApprove tool names with their server ID", async () => {
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     const preparation = await provider.planCliArgs(
       { prompt: "create an issue" } as PromptStep,
       false,
@@ -115,7 +115,7 @@ suite("CopilotCliProvider", () => {
   });
 
   test("skips unsafe MCP autoApprove server IDs and reports diagnostics", async () => {
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     const preparation = await provider.planCliArgs(
       { prompt: "create an issue" } as PromptStep,
       false,
@@ -145,7 +145,7 @@ suite("CopilotCliProvider", () => {
   });
 
   test("skips MCP autoApprove tool names containing permission delimiters", async () => {
-    const preparation = await new CopilotCliProvider().planCliArgs(
+    const preparation = await new CopilotHarnessAdapter().planCliArgs(
       { prompt: "approve tool" } as PromptStep,
       false,
       process.cwd(),
@@ -175,7 +175,7 @@ suite("CopilotCliProvider", () => {
   });
 
   test("reads session state from the --config-dir a step passes", async () => {
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     const workspaceRoot = process.cwd();
     const plan = (additionalArgs?: string) =>
       provider.planCliArgs(
@@ -214,7 +214,7 @@ suite("CopilotCliProvider", () => {
   });
 
   test("uses a unique OTel path per invocation and cleans up every path", async () => {
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     const plan = () =>
       provider.planCliArgs(
         { prompt: "use the queue" } as PromptStep,
@@ -273,7 +273,7 @@ suite("CopilotCliProvider", () => {
       const workspaceRoot = path.join(repoRoot, "packages", "app");
       await fs.mkdir(workspaceRoot, { recursive: true });
 
-      const provider = new CopilotCliProvider();
+      const provider = new CopilotHarnessAdapter();
       const preparation = await provider.planNotificationHookArgs(
         process.cwd(),
         workspaceRoot,

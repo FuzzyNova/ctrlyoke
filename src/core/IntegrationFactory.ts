@@ -5,13 +5,13 @@ import {
 import { HARNESS_IDS, type HarnessId } from "../types/DashboardConstants";
 import { HarnessIntegration } from "./HarnessIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
-import { CopilotCliProvider } from "./harness/copilot/CopilotCliProvider";
-import { ClaudeCliProvider } from "./harness/claude/ClaudeCliProvider";
-import { CodexCliProvider } from "./harness/codex/CodexCliProvider";
-import { OpenCodeCliProvider } from "./harness/opencode/OpenCodeCliProvider";
-import { QwenCliProvider } from "./harness/qwen/QwenCliProvider";
-import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProvider";
-import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
+import { CopilotHarnessAdapter } from "./harness/copilot/CopilotHarnessAdapter";
+import { ClaudeHarnessAdapter } from "./harness/claude/ClaudeHarnessAdapter";
+import { CodexHarnessAdapter } from "./harness/codex/CodexHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "./harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHarnessAdapter } from "./harness/qwen/QwenHarnessAdapter";
+import { AntigravityHarnessAdapter } from "./harness/antigravity/AntigravityHarnessAdapter";
+import type { IHarnessAdapter } from "./harness/shared/interfaces/IHarnessAdapter";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import type { HarnessQuotaSnapshot } from "../types/UsageTypes";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
@@ -65,20 +65,20 @@ export class IntegrationFactory {
    * integration. This is the single HarnessId-to-provider source used by the
    * capability registry; it intentionally performs no CLI calls.
    */
-  static createCapabilityProvider(harness: HarnessId): ICliProvider {
+  static createCapabilityProvider(harness: HarnessId): IHarnessAdapter {
     switch (harness) {
       case HARNESS_IDS.CLAUDE_CLI:
-        return new ClaudeCliProvider();
+        return new ClaudeHarnessAdapter();
       case HARNESS_IDS.CODEX_CLI:
-        return new CodexCliProvider();
+        return new CodexHarnessAdapter();
       case HARNESS_IDS.OPENCODE_CLI:
-        return new OpenCodeCliProvider();
+        return new OpenCodeHarnessAdapter();
       case HARNESS_IDS.QWEN_CLI:
-        return new QwenCliProvider();
+        return new QwenHarnessAdapter();
       case HARNESS_IDS.ANTIGRAVITY_CLI:
-        return new AntigravityCliProvider();
+        return new AntigravityHarnessAdapter();
       case HARNESS_IDS.COPILOT_CLI:
-        return new CopilotCliProvider();
+        return new CopilotHarnessAdapter();
       default:
         throw new Error(`Unknown harness: ${harness}`);
     }
@@ -109,7 +109,7 @@ export class IntegrationFactory {
     registerWithContext: boolean = true,
     executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     return new CliIntegration(
       provider,
       this.platform,
@@ -126,7 +126,7 @@ export class IntegrationFactory {
     registerWithContext: boolean = true,
     executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
     return new CliIntegration(
       provider,
       this.platform,
@@ -143,7 +143,7 @@ export class IntegrationFactory {
     registerWithContext: boolean = true,
     executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
-    const provider = new CodexCliProvider(this.onProviderUsageUpdate);
+    const provider = new CodexHarnessAdapter(this.onProviderUsageUpdate);
     return new CliIntegration(
       provider,
       this.platform,
@@ -160,7 +160,7 @@ export class IntegrationFactory {
     registerWithContext: boolean = true,
     executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     return new CliIntegration(
       provider,
       this.platform,
@@ -177,7 +177,7 @@ export class IntegrationFactory {
     registerWithContext: boolean = true,
     executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
     return new CliIntegration(
       provider,
       this.platform,
@@ -194,7 +194,7 @@ export class IntegrationFactory {
     registerWithContext: boolean = true,
     executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     return new CliIntegration(
       provider,
       this.platform,

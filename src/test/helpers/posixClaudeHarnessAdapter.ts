@@ -1,4 +1,4 @@
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
 import { ClaudeSandboxMapper } from "../../core/harness/claude/ClaudeSandboxMapper";
 
 /**
@@ -7,6 +7,6 @@ import { ClaudeSandboxMapper } from "../../core/harness/claude/ClaudeSandboxMapp
  * (Claude has no Bash sandbox there), so tests of the sandbox settings
  * themselves use this instead.
  */
-export class PosixClaudeCliProvider extends ClaudeCliProvider {
+export class PosixClaudeHarnessAdapter extends ClaudeHarnessAdapter {
   override readonly sandboxMapper = new ClaudeSandboxMapper("darwin");
 }

@@ -1,4 +1,4 @@
-import type { CliExecutionSidecar } from "../shared/interfaces/ICliProvider";
+import type { CliExecutionSidecar } from "../shared/interfaces/IHarnessAdapter";
 import { StatuslineSnapshotWatcher } from "../shared/StatuslineSnapshotWatcher";
 import {
   parseClaudeQuotaSnapshot,

@@ -20,7 +20,7 @@ import {
   type HeadlessLogTail,
   type HeadlessProcessResult,
 } from "./HeadlessLogTail";
-import type { ICliProvider } from "./interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 import type { BaseCliEvent } from "./interfaces/ILogParser";
 import { mergeSubagentOutput } from "./mergeSubagentOutput";
 
@@ -59,7 +59,7 @@ const STDERR_FAILURE_MAX_LENGTH = 600;
 
 export interface CliResponseCollectorDeps {
   provider: Pick<
-    ICliProvider,
+    IHarnessAdapter,
     | "augmentParsedOutput"
     | "extractSessionIdFromLogs"
     | "extractSessionIdFromStdout"

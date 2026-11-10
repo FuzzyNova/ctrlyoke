@@ -146,7 +146,7 @@ export class QwenNotificationMonitor
   /**
    * Build hook configuration for Qwen Code CLI.
    *
-   * Returns a JSON object that QwenCliProvider merges into .qwen/settings.json.
+   * Returns a JSON object that QwenHarnessAdapter merges into .qwen/settings.json.
    * Registers SessionStart, UserPromptSubmit, and Stop.
    * UserPromptSubmit is the reliable start signal (SessionStart may not fire on
    * fast `-i` prompts due to fire-and-forget useEffect timing in AppContainer).

@@ -26,7 +26,7 @@ const OPENCODE_HOOK_VERIFICATION = capabilitySuiteVerification([">=1.3.16"]);
  *
  * Completion detection strategy: OpenCode TypeScript plugin system.
  *
- * OpenCodeCliProvider registers the extension plugin through inline config. The plugin listens for
+ * OpenCodeHarnessAdapter registers the extension plugin through inline config. The plugin listens for
  * session.created, session.idle, and session.busy events, then writes:
  *
  *   {sessionId}-start.json → on session.created (for early session ID capture)

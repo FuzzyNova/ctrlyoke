@@ -30,7 +30,7 @@ Ranked by call count (highest first).
 | `src/core/orchestration/HistorySearchIndexService.ts`         |       | 12    | 10   | 2    |       |            | 24    |
 | `src/core/harness/CliIntegration.ts`                          |       | 7     | 7    | 5    | 2     | 2          | 23    |
 | `src/core/harness/shared/CliInteractiveStartupCoordinator.ts` |       | 5     | 10   | 2    | 5     |            | 22    |
-| `src/core/harness/copilot/CopilotCliProvider.ts`              | 1     | 10    | 3    | 7    |       |            | 21    |
+| `src/core/harness/copilot/CopilotHarnessAdapter.ts`              | 1     | 10    | 3    | 7    |       |            | 21    |
 | `src/core/orchestration/OutputHistoryManager.ts`              | 2     | 1     |      | 15   | 2     |            | 20    |
 | `src/utils/ContextExpander.ts`                                | 8     | 2     |      | 7    | 3     |            | 20    |
 | `src/core/harness/copilot/CopilotLogParser.ts`                | 4     | 13    |      | 2    |       |            | 19    |
@@ -46,14 +46,14 @@ Ranked by call count (highest first).
 | `src/core/orchestration/historySearchRebuildWorker.ts`        |       | 4     | 7    | 3    | 1     |            | 15    |
 | `src/core/orchestration/HistoryTrashRepository.ts`            |       |       | 7    | 8    |       |            | 15    |
 | `src/core/EndConditionEvaluator.ts`                           | 1     | 3     | 4    |      | 6     |            | 14    |
-| `src/core/harness/codex/CodexCliProvider.ts`                  |       | 4     | 3    | 7    |       |            | 14    |
+| `src/core/harness/codex/CodexHarnessAdapter.ts`                  |       | 4     | 3    | 7    |       |            | 14    |
 | `src/core/harness/qwen/QwenLogParser.ts`                      | 3     | 9     |      | 1    |       |            | 13    |
 | `src/core/harness/shared/HeadlessLogTail.ts`                  | 9     | 4     |      |      |       |            | 13    |
-| `src/core/harness/claude/ClaudeCliProvider.ts`                |       | 4     | 3    | 5    |       |            | 12    |
+| `src/core/harness/claude/ClaudeHarnessAdapter.ts`                |       | 4     | 3    | 5    |       |            | 12    |
 | `src/core/harness/claude/ClaudeLogParser.ts`                  | 3     | 8     |      | 1    |       |            | 12    |
 | `src/core/harness/CliLogMonitor.ts`                           | 3     | 3     | 3    | 3    |       |            | 12    |
 | `src/core/harness/codex/CodexLogParser.ts`                    | 5     | 4     |      | 2    |       |            | 11    |
-| `src/core/harness/opencode/OpenCodeCliProvider.ts`            |       | 1     | 4    | 6    |       |            | 11    |
+| `src/core/harness/opencode/OpenCodeHarnessAdapter.ts`            |       | 1     | 4    | 6    |       |            | 11    |
 | `src/core/harness/PtyProcessManager.ts`                       | 1     | 9     |      | 1    |       |            | 11    |
 | `src/core/harness/shared/CliTransportCoordinator.ts`          | 1     | 1     | 7    | 1    | 1     |            | 11    |
 

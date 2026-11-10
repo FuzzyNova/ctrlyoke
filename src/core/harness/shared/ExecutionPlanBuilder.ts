@@ -20,9 +20,9 @@ import {
   type CliResolvedCommand,
 } from "./CliLauncherResolver";
 import type {
-  ICliProvider,
+  IHarnessAdapter,
   CliProviderPreparation,
-} from "./interfaces/ICliProvider";
+} from "./interfaces/IHarnessAdapter";
 import type {
   PermissionContext,
   ToolPermissionApplication,
@@ -54,7 +54,7 @@ import {
 } from "./UserHookEnvironment";
 
 export interface ExecutionPlanBuilderDeps {
-  readonly provider: ICliProvider;
+  readonly provider: IHarnessAdapter;
   readonly getWorkspaceRoot: () => string | undefined;
   readonly getWorkspaceRoots: () => readonly string[];
   readonly getApprovedExternalRoots?: (

@@ -9,10 +9,10 @@ import * as fs from "fs/promises";
 import * as fsSync from "fs";
 import { createHash, randomUUID } from "crypto";
 import {
-  ICliProvider,
+  IHarnessAdapter,
   HarnessConfig,
   type CliExecutionSidecarDeps,
-} from "../shared/interfaces/ICliProvider";
+} from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HOOK_CONFIG_TYPES,
@@ -125,11 +125,11 @@ interface AntigravityHookOwner {
 
 type AntigravityHookOwners = Record<string, AntigravityHookOwner>;
 
-export class AntigravityCliProvider implements ICliProvider {
+export class AntigravityHarnessAdapter implements IHarnessAdapter {
   private readonly hookOwnerToken = generateOwnerToken();
   private static readonly CLI_COMMAND = "agy";
-  static readonly CLI_VERSION_COMMAND = `${AntigravityCliProvider.CLI_COMMAND} --version`;
-  static readonly CLI_HELP_COMMAND = `${AntigravityCliProvider.CLI_COMMAND} --help`;
+  static readonly CLI_VERSION_COMMAND = `${AntigravityHarnessAdapter.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${AntigravityHarnessAdapter.CLI_COMMAND} --help`;
 
   /**
    * Shared singleton tracker for parallel-safe MCP management. Unlike Qwen
@@ -159,10 +159,10 @@ export class AntigravityCliProvider implements ICliProvider {
   /** Best-effort startup recovery for groups left by killed processes. */
   static async sweepOrphanedGlobalHooks(): Promise<void> {
     try {
-      await new AntigravityCliProvider().sweepGlobalHooks();
+      await new AntigravityHarnessAdapter().sweepGlobalHooks();
     } catch (error) {
       Log.warn(
-        `[AntigravityCliProvider] Failed to sweep orphaned global hooks: ${error}`
+        `[AntigravityHarnessAdapter] Failed to sweep orphaned global hooks: ${error}`
       );
     }
   }
@@ -231,8 +231,8 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityStreamJsonUsageAccumulator();
 
   private readonly statuslineRegistration = new ProviderStatuslineRegistration({
-    manager: AntigravityCliProvider.statuslineManager,
-    logPrefix: "AntigravityCliProvider",
+    manager: AntigravityHarnessAdapter.statuslineManager,
+    logPrefix: "AntigravityHarnessAdapter",
     harnessLabel: "Antigravity",
     snapshotPrefix: "agy",
     tokenEnvironmentVariable: "CTRLYOKE_AGY_STATUSLINE_TOKEN",
@@ -351,13 +351,13 @@ export class AntigravityCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("--conversation", sessionId!);
-      Log.info(`[AntigravityCliProvider] Resuming session: ${sessionId}`);
+      Log.info(`[AntigravityHarnessAdapter] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.warn(
-        "[AntigravityCliProvider] Resume requested but no session ID available"
+        "[AntigravityHarnessAdapter] Resume requested but no session ID available"
       );
     } else {
-      Log.info("[AntigravityCliProvider] Starting new session");
+      Log.info("[AntigravityHarnessAdapter] Starting new session");
     }
 
     if (workspaceRoot) {
@@ -545,7 +545,7 @@ export class AntigravityCliProvider implements ICliProvider {
     };
 
     Log.trace(
-      `[AntigravityCliProvider] Context window from statusline: ${usage.contextWindowUsedTokens}/${usage.contextWindowSize} tokens`
+      `[AntigravityHarnessAdapter] Context window from statusline: ${usage.contextWindowUsedTokens}/${usage.contextWindowSize} tokens`
     );
     return {
       ...output,
@@ -737,7 +737,7 @@ export class AntigravityCliProvider implements ICliProvider {
     // (ref-counted — only removed when no other workflow needs them). Uses the
     // same workflow key as getMcpConfigArgs. Safe to call even when MCP was
     // never registered.
-    await AntigravityCliProvider.mcpTracker.unregisterWorkflow(
+    await AntigravityHarnessAdapter.mcpTracker.unregisterWorkflow(
       workflowKey,
       workspaceRoot
     );
@@ -764,7 +764,7 @@ export class AntigravityCliProvider implements ICliProvider {
       });
     } catch (error) {
       Log.warn(
-        `[AntigravityCliProvider] Failed to clean up Antigravity hooks in ${hooksPath}: ${error}`
+        `[AntigravityHarnessAdapter] Failed to clean up Antigravity hooks in ${hooksPath}: ${error}`
       );
     }
   }
@@ -802,7 +802,7 @@ export class AntigravityCliProvider implements ICliProvider {
 
   async getVersion(): Promise<string | undefined> {
     return CliProviderUtils.getCliVersion(
-      AntigravityCliProvider.CLI_VERSION_COMMAND,
+      AntigravityHarnessAdapter.CLI_VERSION_COMMAND,
       {
         parseVersion: (stdout) => {
           const match = stdout.match(/(\d+\.\d+\.\d+)/);
@@ -944,14 +944,14 @@ export class AntigravityCliProvider implements ICliProvider {
             path: path.join(workspaceRoot, ".agents", "mcp_config.json"),
             description: "Register Antigravity MCP servers",
             apply: async () => {
-              await AntigravityCliProvider.mcpTracker.registerServers(
+              await AntigravityHarnessAdapter.mcpTracker.registerServers(
                 workflowKey,
                 workspaceRoot,
                 mcpEntries,
                 hasSecretMcpValues ? { fileMode: 0o600 } : undefined
               );
               Log.debug(
-                "[AntigravityCliProvider] Antigravity MCP servers written to .agents/mcp_config.json"
+                "[AntigravityHarnessAdapter] Antigravity MCP servers written to .agents/mcp_config.json"
               );
             },
           },
@@ -960,7 +960,7 @@ export class AntigravityCliProvider implements ICliProvider {
       };
     } catch (error) {
       Log.warn(
-        `[AntigravityCliProvider] Failed to register Antigravity MCP servers: ${error}`
+        `[AntigravityHarnessAdapter] Failed to register Antigravity MCP servers: ${error}`
       );
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }

@@ -10,7 +10,7 @@
 > version string `versionPolicy` should key on). The ctrlyoke-side design was corrected
 > to match today's code: there is no `Harness` enum or per-provider
 > `ResponseParser`/`TuiStreamProcessor`; headless stdout goes through
-> `ICliProvider.parseHeadlessStdout()` → `ILogParser.extractResponse()`; permission
+> `IHarnessAdapter.parseHeadlessStdout()` → `ILogParser.extractResponse()`; permission
 > mappers implement `prepare()`/`capabilities`; `HarnessConfig` needs `harnessId` and
 > `versionPolicy`; and `package.json` is not a settings surface. §5.2 Steps 6–9 were
 > replaced with the current registration checklist (taken from where `qwen-cli` is
@@ -308,7 +308,7 @@ cline --continue "Pick up where we left off"
 
 ```
 src/core/harness/cline/
-├── ClineCliProvider.ts           # ICliProvider: config, capabilities, args, parseHeadlessStdout
+├── ClineHarnessAdapter.ts           # IHarnessAdapter: config, capabilities, args, parseHeadlessStdout
 ├── ClineLogParser.ts             # extends BaseLogParser: event → UniversalCliOutput mapping,
 │                                 #   task-storage discovery, classifyUserEvent
 ├── ClineNotificationMonitor.ts   # INotificationMonitor (no hooks in Phase 1)
@@ -319,11 +319,11 @@ src/core/harness/cline/
 
 > 2026-10-10: there is no separate `ResponseParser` per provider any more. Every
 > current provider (`src/core/harness/{claude,codex,copilot,opencode,qwen,antigravity}/`)
-> has `*CliProvider`, `*LogParser`, `*NotificationMonitor`, `*ToolPermissionMapper`, and
+> has `*HarnessAdapter`, `*LogParser`, `*NotificationMonitor`, `*ToolPermissionMapper`, and
 > `*ProtocolConstants`. Headless stdout records are converted by
-> `ICliProvider.parseHeadlessStdout()` into the log parser's event vocabulary and then
+> `IHarnessAdapter.parseHeadlessStdout()` into the log parser's event vocabulary and then
 > mapped by the **same** `ILogParser.extractResponse()` used for interactive logs
-> (`harness-cli-providers.instructions.md` → "one mapping in the provider's
+> (`harness-adapters.instructions.md` → "one mapping in the provider's
 > `ILogParser`"). Read the sample code in Steps 2 and 5 and Appendix C with that in
 > mind: the `say`-event switch belongs in `ClineLogParser`, not a response parser.
 > Unit tests go in `src/test/unit/Cline*.test.ts` and fixtures in
@@ -331,14 +331,14 @@ src/core/harness/cline/
 
 ### 5.2 Implementation Checklist
 
-#### Step 1: ClineCliProvider.ts (2-3 hours)
+#### Step 1: ClineHarnessAdapter.ts (2-3 hours)
 
 **Purpose:** Aggregate all Cline-specific components into a single provider descriptor
 
 **Key Fields:**
 
 ```typescript
-export class ClineCliProvider implements ICliProvider {
+export class ClineHarnessAdapter implements IHarnessAdapter {
   readonly config: HarnessConfig = {
     name: "cline",
     harnessId: HARNESS_IDS.CLINE_CLI,
@@ -371,7 +371,7 @@ export class ClineCliProvider implements ICliProvider {
 
 **Implementation:**
 
-- [ ] Create class implementing `ICliProvider`
+- [ ] Create class implementing `IHarnessAdapter`
 - [ ] Define `config` (incl. `harnessId`, `versionPolicy`) and `capabilities`
 - [ ] Set `shouldStreamHeadlessOutput: true`
 - [ ] Wire up monitor, mapper, logParser
@@ -388,7 +388,7 @@ export class ClineCliProvider implements ICliProvider {
       (cf. `SettingsJsonMcpTracker`) rather than per-run adds — prefer a process-local
       config flag if current Cline offers one
 
-**Reference:** `src/core/harness/claude/ClaudeCliProvider.ts`
+**Reference:** `src/core/harness/claude/ClaudeHarnessAdapter.ts`
 
 ---
 
@@ -398,7 +398,7 @@ export class ClineCliProvider implements ICliProvider {
 
 > 2026-10-10: `ResponseParserBase` no longer exists. Put this switch in
 > `ClineLogParser.extractResponse()` / `extractStructuredEventsFromEvent()` (returning
-> `UniversalCliOutput` / `CliEvent[]`), fed by `ClineCliProvider.parseHeadlessStdout()`
+> `UniversalCliOutput` / `CliEvent[]`), fed by `ClineHarnessAdapter.parseHeadlessStdout()`
 > in headless mode and by task-storage reads in interactive mode. The `say` kind
 > strings belong in `ClineProtocolConstants.ts`. Map tool names via
 > `CliEventMapper.ts`, and use `augmentParsedOutput()` for any post-parse token/session
@@ -502,7 +502,7 @@ export class ClineResponseParser extends ResponseParserBase {
 - [ ] Handle `api_req_started` events for model info
 - [ ] Map Cline event format to ctrlyoke `CliEvent` interface
 
-**Reference:** `OpenCodeCliProvider.parseHeadlessStdout` + `OpenCodeLogParser` (stdout-sourced JSONL); `ClaudeCliProvider`/`ClaudeLogParser` (stream-json)
+**Reference:** `OpenCodeHarnessAdapter.parseHeadlessStdout` + `OpenCodeLogParser` (stdout-sourced JSONL); `ClaudeHarnessAdapter`/`ClaudeLogParser` (stream-json)
 
 ---
 
@@ -764,7 +764,7 @@ export class ClineLogParser implements ILogParser {
 
 **`src/core/IntegrationFactory.ts`:**
 
-- [ ] `createCapabilityProvider()` switch → `new ClineCliProvider()` (single
+- [ ] `createCapabilityProvider()` switch → `new ClineHarnessAdapter()` (single
       HarnessId→provider source for `HarnessCapabilityRegistry` and `detectHarness`)
 - [ ] `createClineCli(registerWithContext, executionWorkspace?)` passing the same
       `CliIntegration` constructor arguments as the other `create*Cli` methods
@@ -785,7 +785,7 @@ harness-specific branch), `src/core/harness/shared/usage/providers/` +
 `src/core/harness/shared/CliNotificationMonitor.ts` (`shouldQuoteNodeCommand`, if Cline's
 hook runner passes commands through without shell quote parsing, as Qwen and Antigravity do),
 and `src/extension.ts` (only if Cline needs a startup sweep of leftover global config, cf.
-`AntigravityCliProvider.sweepOrphanedGlobalHooks()`).
+`AntigravityHarnessAdapter.sweepOrphanedGlobalHooks()`).
 
 **Hooks (if Cline exposes any):** `src/scripts/ctrlyoke-cline-hook.js` built on
 `ctrlyoke-hook-utils.js`, and the `NotificationHookScripts.test.ts` cases.
@@ -847,7 +847,7 @@ and `src/extension.ts` (only if Cline needs a startup sweep of leftover global c
 - [ ] `config.versionPolicy` entry and `dev/reference/HARNESS_VERSION_SUPPORT.md`;
       `scripts/chores.mjs` `update-clis`
 - [ ] Project instructions: add `src/core/harness/cline/**` to the `applyTo` of
-      `.github/instructions/harness-cli-providers.instructions.md`, the routing table in
+      `.github/instructions/harness-adapters.instructions.md`, the routing table in
       `CLAUDE.md`, and the "exactly six" harness statements in
       `.github/copilot-instructions.md` (and `AGENTS.md` if it repeats them)
 
@@ -1085,7 +1085,7 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 
 **Files:**
 
-- `src/test/unit/ClineCliProvider.test.ts` (args, `parseHeadlessStdout`, session ID)
+- `src/test/unit/ClineHarnessAdapter.test.ts` (args, `parseHeadlessStdout`, session ID)
 - `src/test/unit/ClineLogParser.test.ts`
 - `src/test/unit/ClineToolPermissionMapper.test.ts`
 - Fixture coverage in `src/test/suite/harness/LogParsers.test.ts`
@@ -1267,7 +1267,7 @@ steps:
 
 > 2026-10-10: these March 2026 samples predate the current interfaces. The class names
 > `ClineResponseParser`/`ResponseParserBase` are obsolete — the parsing switch lives in
-> `ClineLogParser` (extending `BaseLogParser`), fed by `ClineCliProvider.parseHeadlessStdout()`.
+> `ClineLogParser` (extending `BaseLogParser`), fed by `ClineHarnessAdapter.parseHeadlessStdout()`.
 > Keep the event-shape handling; discard the class scaffolding.
 
 ### C.1 Sample Response Parser

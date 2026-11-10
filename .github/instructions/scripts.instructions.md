@@ -38,5 +38,5 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 - Prefer extending `ctrlyoke-hook-utils.js` rather than re-implementing stdin parsing, decision-hook forwarding, artifact writing, or logger setup in each script.
 - These scripts are integration glue, not business-logic hosts: keep them tiny, synchronous, and tolerant of malformed input. Fatal argument/parse errors should `console.error(...)` + `process.exit(1)`, not throw.
 - Preserve the current write pattern (`fs.writeFileSync`) for notification/artifact files; monitors poll for complete files and then delete them.
-- When adding a new harness, decide first whether it follows the stdin-hook model or the OpenCode-style plugin model; the deployment/wiring contract lives in the corresponding `*CliProvider`, not inside the script.
+- When adding a new harness, decide first whether it follows the stdin-hook model or the OpenCode-style plugin model; the deployment/wiring contract lives in the corresponding `*HarnessAdapter`, not inside the script.
 </guidelines>

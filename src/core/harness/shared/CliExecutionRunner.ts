@@ -29,7 +29,7 @@ import {
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
-import type { ICliProvider } from "./interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 import { HookEventMonitor } from "./HookEventMonitor";
 import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
 import { configService } from "../../../config/CtrlYokeConfigService";
@@ -73,7 +73,7 @@ interface CliResponseCollectorLike {
 }
 
 export interface CliExecutionRunnerDeps {
-  provider: ICliProvider;
+  provider: IHarnessAdapter;
   executionPlanBuilder: Pick<ExecutionPlanBuilder, "plan" | "apply">;
   transportCoordinator: CliExecutionTransportCoordinator;
   failureTracker: CliFailureTracker;

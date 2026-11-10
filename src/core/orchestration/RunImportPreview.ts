@@ -36,7 +36,7 @@ import {
 import { parseAtReferences } from "../../utils/FileReferenceParser";
 import { execGit } from "../../utils/GitUtils";
 import { readRunBundleHeader, type RunBundleHeader } from "./RunBundleReader";
-import type { ICliProvider } from "../harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "../harness/shared/interfaces/IHarnessAdapter";
 
 interface PreviewRuntime extends PromptFile {
   _runtime?: {
@@ -58,7 +58,7 @@ export interface RunImportPreviewDependencies {
   }>;
   createProvider?: (
     harness: import("../../types/DashboardConstants").HarnessId
-  ) => ICliProvider;
+  ) => IHarnessAdapter;
   isSecretApproved?: (workspaceRoot: string, name: string) => boolean;
   git?: (workspaceRoot: string, args: readonly string[]) => Promise<string>;
   lineageRepository?: Pick<

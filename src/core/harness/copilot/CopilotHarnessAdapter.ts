@@ -7,7 +7,7 @@ import * as path from "path";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
@@ -105,14 +105,14 @@ const COPILOT_IMAGE_INPUT_CAPABILITY = {
  *
  * Usage:
  * ```typescript
- * const provider = new CopilotCliProvider();
+ * const provider = new CopilotHarnessAdapter();
  * const integration = new CliIntegration(provider, context);
  * ```
  */
-export class CopilotCliProvider implements ICliProvider {
+export class CopilotHarnessAdapter implements IHarnessAdapter {
   private static readonly CLI_COMMAND = "copilot";
-  static readonly CLI_VERSION_COMMAND = `${CopilotCliProvider.CLI_COMMAND} --version`;
-  static readonly CLI_HELP_COMMAND = `${CopilotCliProvider.CLI_COMMAND} --help`;
+  static readonly CLI_VERSION_COMMAND = `${CopilotHarnessAdapter.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${CopilotHarnessAdapter.CLI_COMMAND} --help`;
 
   private static readonly statuslineManager = StatuslineManager.forProvider(
     STATUS_LINE_HARNESS_IDS.COPILOT
@@ -206,8 +206,8 @@ export class CopilotCliProvider implements ICliProvider {
   /** Every invocation's OTel export file, retained for end-of-workflow cleanup. */
   private readonly otelFilePaths: string[] = [];
   private readonly statuslineRegistration = new ProviderStatuslineRegistration({
-    manager: CopilotCliProvider.statuslineManager,
-    logPrefix: "CopilotCliProvider",
+    manager: CopilotHarnessAdapter.statuslineManager,
+    logPrefix: "CopilotHarnessAdapter",
     harnessLabel: "Copilot",
     snapshotPrefix: "copilot",
     tokenEnvironmentVariable: "CTRLYOKE_COPILOT_STATUSLINE_TOKEN",
@@ -306,7 +306,7 @@ export class CopilotCliProvider implements ICliProvider {
           workspaceRoot,
           PATH_CONSTANTS.CTRLYOKE_DIR,
           PATH_CONSTANTS.TEMP_DIR,
-          CopilotCliProvider.buildOtelFileName(
+          CopilotHarnessAdapter.buildOtelFileName(
             workflowContext?.promptIndex ?? 0,
             statusLineToken,
             workflowContext?.workingFilePath
@@ -341,7 +341,7 @@ export class CopilotCliProvider implements ICliProvider {
       ...mcpPreparation.diagnostics,
     ];
     const warnSkippedAutoApproval = (message: string): void => {
-      Log.warn(`[CopilotCliProvider] ${message}`);
+      Log.warn(`[CopilotHarnessAdapter] ${message}`);
       diagnostics.push({
         code: "mcp.autoApprove.skipped",
         severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
@@ -366,7 +366,7 @@ export class CopilotCliProvider implements ICliProvider {
         hasCtrlYokeServer(workflowContext.resolvedProperties)
       ) {
         args.push("--allow-tool", "ctrlyoke");
-        Log.debug("[CopilotCliProvider] ctrlyoke MCP tools auto-approved");
+        Log.debug("[CopilotHarnessAdapter] ctrlyoke MCP tools auto-approved");
       }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
@@ -385,7 +385,7 @@ export class CopilotCliProvider implements ICliProvider {
             // Approve all tools from this server
             args.push("--allow-tool", server.id);
             Log.debug(
-              `[CopilotCliProvider] Auto-approved all tools from MCP server: ${server.id}`
+              `[CopilotHarnessAdapter] Auto-approved all tools from MCP server: ${server.id}`
             );
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
@@ -404,7 +404,7 @@ export class CopilotCliProvider implements ICliProvider {
               args.push("--allow-tool", copilotPattern);
             }
             Log.debug(
-              `[CopilotCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
+              `[CopilotHarnessAdapter] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
             );
           }
         }
@@ -424,7 +424,7 @@ export class CopilotCliProvider implements ICliProvider {
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
       Log.info(
-        `[CopilotCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+        `[CopilotHarnessAdapter] Extra CLI args applied (${appendTokens.length} tokens)`
       );
     }
 
@@ -463,16 +463,16 @@ export class CopilotCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("--resume", sessionId!);
-      Log.info(`[CopilotCliProvider] Resuming session: ${sessionId}`);
+      Log.info(`[CopilotHarnessAdapter] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.warn(
-        "[CopilotCliProvider] Resume requested but no session ID available"
+        "[CopilotHarnessAdapter] Resume requested but no session ID available"
       );
     } else {
-      Log.info("[CopilotCliProvider] Starting new session");
+      Log.info("[CopilotHarnessAdapter] Starting new session");
     }
 
-    Log.trace(`[CopilotCliProvider] CLI arguments: ${JSON.stringify(args)}`);
+    Log.trace(`[CopilotHarnessAdapter] CLI arguments: ${JSON.stringify(args)}`);
 
     return {
       cliArgs: args,
@@ -515,7 +515,7 @@ export class CopilotCliProvider implements ICliProvider {
   /** The `--model` value for a step, or `undefined` for no flag. */
   private validateAndGetModel(requestedModel?: string): string | undefined {
     return resolveCliModelFlag(requestedModel, {
-      logLabel: "CopilotCliProvider",
+      logLabel: "CopilotHarnessAdapter",
       defaultModel: ConfigurationUtils.getCopilotCliModel(),
       recognize: (model) => (isCliModelSupported(model) ? model : undefined),
     });
@@ -578,12 +578,12 @@ export class CopilotCliProvider implements ICliProvider {
         ]),
       ]
     );
-    const hookFileName = CopilotCliProvider.buildHookFileName(
+    const hookFileName = CopilotHarnessAdapter.buildHookFileName(
       promptIndex,
       workingFilePath
     );
     const hookPath = path.join(
-      await CopilotCliProvider.resolveHooksDir(workspaceRoot),
+      await CopilotHarnessAdapter.resolveHooksDir(workspaceRoot),
       hookFileName
     );
     return {
@@ -664,12 +664,12 @@ export class CopilotCliProvider implements ICliProvider {
               workspaceRoot
             ),
           };
-    const hookFileName = CopilotCliProvider.buildHookFileName(
+    const hookFileName = CopilotHarnessAdapter.buildHookFileName(
       promptIndex,
       workingFilePath
     );
     const hookPath = path.join(
-      await CopilotCliProvider.resolveHooksDir(workspaceRoot),
+      await CopilotHarnessAdapter.resolveHooksDir(workspaceRoot),
       hookFileName
     );
     return {
@@ -709,7 +709,7 @@ export class CopilotCliProvider implements ICliProvider {
         hooksRoot = toplevel;
       } else {
         Log.warn(
-          `[CopilotCliProvider] Git toplevel "${toplevel}" does not contain workspace "${realWorkspaceRoot}"; writing Copilot hooks under the workspace`
+          `[CopilotHarnessAdapter] Git toplevel "${toplevel}" does not contain workspace "${realWorkspaceRoot}"; writing Copilot hooks under the workspace`
         );
       }
     }
@@ -863,7 +863,7 @@ export class CopilotCliProvider implements ICliProvider {
    */
   async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
     try {
-      const hookDir = await CopilotCliProvider.resolveHooksDir(workspaceRoot);
+      const hookDir = await CopilotHarnessAdapter.resolveHooksDir(workspaceRoot);
       const files = await fs.readdir(hookDir);
       const hasOtherHookFiles = files.some(
         (f) => f.startsWith("ctrlyoke-") && f.endsWith(".json")
@@ -917,9 +917,9 @@ export class CopilotCliProvider implements ICliProvider {
       await fs.writeFile(hookPath, content, "utf-8");
 
       this.hookFilePaths.push(hookPath);
-      Log.debug(`[CopilotCliProvider] Created hook file: ${hookPath}`);
+      Log.debug(`[CopilotHarnessAdapter] Created hook file: ${hookPath}`);
     } catch (error) {
-      Log.warn(`[CopilotCliProvider] Failed to create hook file: ${error}`);
+      Log.warn(`[CopilotHarnessAdapter] Failed to create hook file: ${error}`);
     }
   }
 
@@ -1157,7 +1157,7 @@ export class CopilotCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     return CliProviderUtils.checkCliAvailability(
-      CopilotCliProvider.CLI_VERSION_COMMAND,
+      CopilotHarnessAdapter.CLI_VERSION_COMMAND,
       {
         retryWindowsFileLockErrors: true,
       }
@@ -1171,7 +1171,7 @@ export class CopilotCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     return CliProviderUtils.getCliVersion(
-      CopilotCliProvider.CLI_VERSION_COMMAND,
+      CopilotHarnessAdapter.CLI_VERSION_COMMAND,
       {
         retryWindowsFileLockErrors: true,
       }
@@ -1247,7 +1247,7 @@ export class CopilotCliProvider implements ICliProvider {
         ? `, context ${otelUsage.contextWindowUsedTokens}/${otelUsage.contextWindowSize}`
         : "";
       Log.debug(
-        `[CopilotCliProvider] Token usage from OTel: ${otelUsage.inputTokens} input/${otelUsage.outputTokens} output/${otelUsage.cachedInputTokens ?? 0} cached/${otelUsage.cacheCreatedTokens ?? 0} cache-created${contextSummary}`
+        `[CopilotHarnessAdapter] Token usage from OTel: ${otelUsage.inputTokens} input/${otelUsage.outputTokens} output/${otelUsage.cachedInputTokens ?? 0} cached/${otelUsage.cacheCreatedTokens ?? 0} cache-created${contextSummary}`
       );
       const cachedInputTokens =
         output.metadata.usage?.cachedInputTokens ?? otelUsage.cachedInputTokens;
@@ -1288,7 +1288,7 @@ export class CopilotCliProvider implements ICliProvider {
     const sessionId = enrichedOutput.metadata.sessionId;
     if (!sessionId) {
       Log.debug(
-        `[CopilotCliProvider] augmentParsedOutput: no sessionId in parsed metadata`
+        `[CopilotHarnessAdapter] augmentParsedOutput: no sessionId in parsed metadata`
       );
       return enrichedOutput;
     }
@@ -1300,7 +1300,7 @@ export class CopilotCliProvider implements ICliProvider {
     if (contextData) {
       const { currentTokens, tokenLimit } = contextData;
       Log.debug(
-        `[CopilotCliProvider] Context window from session log: ${currentTokens}/${tokenLimit ?? "unknown"} tokens`
+        `[CopilotHarnessAdapter] Context window from session log: ${currentTokens}/${tokenLimit ?? "unknown"} tokens`
       );
       return {
         ...enrichedOutput,
@@ -1324,13 +1324,13 @@ export class CopilotCliProvider implements ICliProvider {
       await this.logParser.extractContextFromProcessLog(sessionId);
     if (!processCtx) {
       Log.debug(
-        `[CopilotCliProvider] No context window data available for session ${sessionId}`
+        `[CopilotHarnessAdapter] No context window data available for session ${sessionId}`
       );
       return enrichedOutput;
     }
 
     Log.debug(
-      `[CopilotCliProvider] Context window from process log: ${processCtx.used}/${processCtx.size} tokens`
+      `[CopilotHarnessAdapter] Context window from process log: ${processCtx.used}/${processCtx.size} tokens`
     );
     return {
       ...enrichedOutput,
@@ -1357,7 +1357,7 @@ export class CopilotCliProvider implements ICliProvider {
     );
     if (!logPath) {
       Log.debug(
-        "[CopilotCliProvider] Could not discover session log for prompt"
+        "[CopilotHarnessAdapter] Could not discover session log for prompt"
       );
       return undefined;
     }

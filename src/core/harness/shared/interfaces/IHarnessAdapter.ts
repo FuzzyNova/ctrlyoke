@@ -121,14 +121,14 @@ export interface HarnessConfig {
 }
 
 /**
- * Main CLI harness provider - each CLI harness must implement this
+ * Main CLI harness adapter - each CLI harness must implement this
  *
  * This is the core contract for CLI integration. All harness-specific logic
  * is encapsulated in implementations of this interface.
  *
  * @example
  * ```typescript
- * class CopilotCliProvider implements ICliProvider {
+ * class CopilotHarnessAdapter implements IHarnessAdapter {
  *   readonly config: HarnessConfig = { ... };
  *   readonly notificationMonitor = new CopilotNotificationMonitor();
  *   readonly toolPermissionMapper = new CopilotToolPermissionMapper();
@@ -143,7 +143,7 @@ export interface HarnessConfig {
  * }
  * ```
  */
-export interface ICliProvider {
+export interface IHarnessAdapter {
   /**
    * The per-launch run ID and notification directory, exactly as given to the
    * harness process in CTRLYOKE_RUN_ID / CTRLYOKE_NOTIFY_DIR. Called before

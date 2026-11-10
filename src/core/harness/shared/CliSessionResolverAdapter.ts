@@ -11,7 +11,7 @@ import {
 } from "../../../utils/PropertyResolver";
 import { SessionResolver } from "../../../utils/SessionResolver";
 import { SessionValidator } from "../../../utils/SessionValidator";
-import type { ICliProvider } from "./interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 import { buildSessionResumeWarning } from "./SessionResumeWarning";
 
 export interface CliSessionResolution {
@@ -25,7 +25,7 @@ export interface CliSessionResolution {
 
 export interface CliSessionResolverAdapterDeps {
   getIntegrationHarness: () => HarnessId;
-  provider: ICliProvider;
+  provider: IHarnessAdapter;
   getWorkspaceRoot: () => string | undefined;
 }
 

@@ -304,7 +304,7 @@ export class CopilotLogParser extends BaseLogParser {
   private otelPendingLine = "";
   /** Preserves UTF-8 characters whose bytes straddle incremental reads. */
   private otelDecoder = new StringDecoder("utf8");
-  /** Path set by CopilotCliProvider once it generates a per-invocation OTel export path. */
+  /** Path set by CopilotHarnessAdapter once it generates a per-invocation OTel export path. */
   private otelFilePath: string | undefined;
   /** The step's `--config-dir`, which Copilot prefers over `COPILOT_HOME`. */
   private configDir: string | undefined;
@@ -351,7 +351,7 @@ export class CopilotLogParser extends BaseLogParser {
    * Register (or clear) the OTel export file for this invocation.
    * Resets all OTel tracking state — must be called once per invocation, even when
    * no path is available, so a previous invocation's state never leaks into this one
-   * (the parser instance is reused across prompts by CopilotCliProvider).
+   * (the parser instance is reused across prompts by CopilotHarnessAdapter).
    */
   setOtelFilePath(filePath: string | undefined): void {
     this.otelFilePath = filePath;
@@ -1079,14 +1079,14 @@ export class CopilotLogParser extends BaseLogParser {
    * @returns Always false - Use sessionEnd hook for reliable completion detection
    *
    * @see CopilotNotificationMonitor for interactive mode completion
-   * @see CopilotCliProvider.executePrompt for headless mode completion
+   * @see CopilotHarnessAdapter.executePrompt for headless mode completion
    */
   isComplete(_event: BaseCliEvent): boolean {
     // NEVER detect completion from log files for Copilot - use hooks instead!
     // Reason: assistant.turn_end fires after EACH tool call, not at final completion.
     //
     // For reliable completion detection:
-    // - Interactive mode: sessionEnd hook configured in CopilotCliProvider
+    // - Interactive mode: sessionEnd hook configured in CopilotHarnessAdapter
     // - Headless mode: Process exit signals completion
     return false;
   }
@@ -1961,7 +1961,7 @@ export class CopilotLogParser extends BaseLogParser {
    * but accepting it here is forward-compatible if persistence changes. A trailing
    * `session.shutdown` can update currentTokens but cannot supply a missing limit.
    *
-   * Used by CopilotCliProvider.augmentParsedOutput() to patch missing input token
+   * Used by CopilotHarnessAdapter.augmentParsedOutput() to patch missing input token
    * data in JSON-mode headless output.
    *
    * @param sessionId - Session UUID from the `result` event in JSONL stdout
@@ -2035,7 +2035,7 @@ export class CopilotLogParser extends BaseLogParser {
    * @returns Session ID (UUID) if found, null otherwise
    *
    * @remarks
-   * Used by CopilotCliProvider.extractSessionIdFromLogs() after discoverSessionLog()
+   * Used by CopilotHarnessAdapter.extractSessionIdFromLogs() after discoverSessionLog()
    * has already identified the correct log file via prompt-text matching.
    */
   async extractSessionIdFromLogPath(logPath: string): Promise<string | null> {

@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { BackgroundWorkAbandonedData } from "../../types/CliOutputTypes";
 import { getTranscriptText } from "../../utils/StepOutputText";
@@ -494,7 +494,7 @@ suite("CliResponseCollector", () => {
       __dirname,
       "../../../src/test/fixtures/harness-errors/antigravity"
     );
-    const antigravity = new AntigravityCliProvider();
+    const antigravity = new AntigravityHarnessAdapter();
     const result = await createCollector({
       ...createProvider(createParsedOutput({ events: [], metadata: {} })),
       extractErrorFromStdout: (stdout: string) =>

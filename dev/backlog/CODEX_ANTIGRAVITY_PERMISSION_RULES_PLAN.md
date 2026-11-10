@@ -21,7 +21,7 @@ harnesses, so a workflow's tool lists behave more consistently across harnesses.
 ## Where things stand
 
 - **Codex** enforces `deniedTools` entries of the form `mcp__<server>__<tool>`, but only for
-  servers the workflow attaches. `CodexCliProvider` folds them into that server's
+  servers the workflow attaches. `CodexHarnessAdapter` folds them into that server's
   `disabled_tools` (`foldMcpToolDenialsIntoServers` in `src/types/ToolPermissionUtils.ts`). It
   enforces no shell or built-in tool patterns, and no allow list.
 - A tool list that is still the shipped default shows an information note, not a warning
@@ -80,7 +80,7 @@ in the docs, the CLI's help, or an offline CLI check. Nothing here started a mod
     redirect.
 - **C. Project rules.** Write the rules into `<workspace>/.codex/rules/`. This only works in a
   trusted project, and it writes into the user's repo. That goes against the rule in
-  `harness-cli-providers.instructions.md` that ctrlyoke passes per-run config without touching
+  `harness-adapters.instructions.md` that ctrlyoke passes per-run config without touching
   workspace files. Rejected.
 
 Lean towards A, plus a lease and a stale-file sweep, but only once Codex rules are no longer

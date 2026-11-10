@@ -5,7 +5,7 @@ import {
 } from "../shared/SandboxCapabilities";
 import * as path from "path";
 import * as fs from "fs";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   DEFAULT_MODELS,
@@ -168,11 +168,11 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
  *
  * Usage:
  * ```typescript
- * const provider = new OpenCodeCliProvider();
+ * const provider = new OpenCodeHarnessAdapter();
  * const integration = new CliIntegration(provider, context);
  * ```
  */
-export class OpenCodeCliProvider implements ICliProvider {
+export class OpenCodeHarnessAdapter implements IHarnessAdapter {
   canSendPromptToRunningTerminal(promptText: string): boolean {
     return !promptText.includes(HARNESS_SHELL_ESCAPE_PREFIX);
   }
@@ -191,7 +191,7 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
   private static readonly CLI_COMMAND = "opencode";
   static readonly CLI_VERSION_COMMAND = OPENCODE_VERSION_COMMAND;
-  static readonly CLI_HELP_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --help`;
+  static readonly CLI_HELP_COMMAND = `${OpenCodeHarnessAdapter.CLI_COMMAND} --help`;
 
   readonly config: HarnessConfig = {
     name: "opencode",
@@ -323,7 +323,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     return {
       ...(permission ? { permission } : {}),
       ...(Object.keys(mcpEntries).length > 0 ? { mcp: mcpEntries } : {}),
-      ...OpenCodeCliProvider.buildPluginSlice(
+      ...OpenCodeHarnessAdapter.buildPluginSlice(
         options.extensionPath,
         options.openCodeV2 === true
       ),
@@ -350,7 +350,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     extensionPath: string,
     openCodeV2: boolean
   ): OpenCodeInlinePluginSlice {
-    const entry = OpenCodeCliProvider.pluginEntryPath(
+    const entry = OpenCodeHarnessAdapter.pluginEntryPath(
       extensionPath,
       openCodeV2
     );
@@ -438,7 +438,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     // The integration is reused across prompts in one workflow. Reset before
     // optional MCP or permission preparation so a later prompt cannot inherit
     // either slice when its workspace or policy is absent.
-    const inlinePluginSlice = OpenCodeCliProvider.buildPluginSlice(
+    const inlinePluginSlice = OpenCodeHarnessAdapter.buildPluginSlice(
       extensionPath,
       openCodeV2
     );
@@ -481,7 +481,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     ) {
       args.push(...mcpPreparation.cliArgs);
       Log.debug(
-        "[OpenCodeCliProvider] ctrlyoke MCP config prepared for OpenCode inline delivery"
+        "[OpenCodeHarnessAdapter] ctrlyoke MCP config prepared for OpenCode inline delivery"
       );
     }
 
@@ -516,13 +516,13 @@ export class OpenCodeCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push(OPENCODE_CLI_FLAGS.SESSION, sessionId!);
-      Log.info(`[OpenCodeCliProvider] Resuming session: ${sessionId}`);
+      Log.info(`[OpenCodeHarnessAdapter] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.warn(
-        "[OpenCodeCliProvider] Resume requested but no session ID available"
+        "[OpenCodeHarnessAdapter] Resume requested but no session ID available"
       );
     } else {
-      Log.info("[OpenCodeCliProvider] Starting new session");
+      Log.info("[OpenCodeHarnessAdapter] Starting new session");
     }
 
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
@@ -534,7 +534,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
       Log.info(
-        `[OpenCodeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+        `[OpenCodeHarnessAdapter] Extra CLI args applied (${appendTokens.length} tokens)`
       );
     }
 
@@ -620,7 +620,7 @@ export class OpenCodeCliProvider implements ICliProvider {
         : undefined;
     if (this.pendingResumePrompt) {
       Log.info(
-        `[OpenCodeCliProvider] Resumed session ${sessionId}: the plugin will submit the prompt (OpenCode ignores --prompt with --session)`
+        `[OpenCodeHarnessAdapter] Resumed session ${sessionId}: the plugin will submit the prompt (OpenCode ignores --prompt with --session)`
       );
       return [...baseArgs];
     }
@@ -990,7 +990,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     const size = Buffer.byteLength(content, "utf8");
     if (size > OPENCODE_INLINE_CONFIG_MAX_BYTES) {
       Log.warn(
-        `[OpenCodeCliProvider] OpenCode inline config is ${size} bytes; refusing to launch above the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
+        `[OpenCodeHarnessAdapter] OpenCode inline config is ${size} bytes; refusing to launch above the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
       );
       throw new Error(
         `OpenCode inline config exceeds the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
@@ -1004,7 +1004,7 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     return CliProviderUtils.checkCliAvailability(
-      OpenCodeCliProvider.CLI_VERSION_COMMAND
+      OpenCodeHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
 
@@ -1013,7 +1013,7 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     return CliProviderUtils.getCliVersion(
-      OpenCodeCliProvider.CLI_VERSION_COMMAND,
+      OpenCodeHarnessAdapter.CLI_VERSION_COMMAND,
       {
         timeoutMs: 5000,
       }
@@ -1044,7 +1044,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     if (configuredDefault?.includes("/")) {
       if (resolvedModel) {
         Log.warn(
-          `[OpenCodeCliProvider] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
+          `[OpenCodeHarnessAdapter] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
             `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). Using configured default "${configuredDefault}".`
         );
       }
@@ -1053,7 +1053,7 @@ export class OpenCodeCliProvider implements ICliProvider {
 
     if (resolvedModel) {
       Log.warn(
-        `[OpenCodeCliProvider] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
+        `[OpenCodeHarnessAdapter] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
           `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). ` +
           (configuredDefault === MODEL_NONE
             ? "No model flag will be passed; OpenCode will use its configured model."
@@ -1111,19 +1111,19 @@ export class OpenCodeCliProvider implements ICliProvider {
       // it. The workspace fallback below copies a single V1 file, which OpenCode
       // 2 would not load as a plugin, so there is nothing to fall back to.
       const entry = path.join(
-        OpenCodeCliProvider.pluginEntryPath(extensionPath, true),
+        OpenCodeHarnessAdapter.pluginEntryPath(extensionPath, true),
         "index.ts"
       );
       await fs.promises
         .access(entry, fs.constants.R_OK)
         .catch((error) =>
           Log.warn(
-            `[OpenCodeCliProvider] OpenCode 2 plugin entry is not readable at ${entry}; completion will not be detected: ${error}`
+            `[OpenCodeHarnessAdapter] OpenCode 2 plugin entry is not readable at ${entry}; completion will not be detected: ${error}`
           )
         );
       return;
     }
-    const sourcePath = OpenCodeCliProvider.pluginEntryPath(
+    const sourcePath = OpenCodeHarnessAdapter.pluginEntryPath(
       extensionPath,
       false
     );
@@ -1138,7 +1138,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       await this.pluginPathIsReadable(sourcePath);
     } catch (error) {
       Log.warn(
-        `[OpenCodeCliProvider] OpenCode external plugin could not be loaded from ${sourcePath}; ` +
+        `[OpenCodeHarnessAdapter] OpenCode external plugin could not be loaded from ${sourcePath}; ` +
           `falling back to .opencode/plugin/: ${error}`
       );
       try {
@@ -1149,7 +1149,7 @@ export class OpenCodeCliProvider implements ICliProvider {
         );
       } catch (fallbackError) {
         Log.warn(
-          `[OpenCodeCliProvider] OpenCode plugin fallback was unavailable: ${fallbackError}`
+          `[OpenCodeHarnessAdapter] OpenCode plugin fallback was unavailable: ${fallbackError}`
         );
       }
     }
@@ -1185,7 +1185,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     // An auto-scanned fallback plugin must not remain in the inline list.
     this.pendingInlineConfig.plugin = [];
     Log.warn(
-      "[OpenCodeCliProvider] OpenCode plugin fallback deployed under .opencode/plugin/; " +
+      "[OpenCodeHarnessAdapter] OpenCode plugin fallback deployed under .opencode/plugin/; " +
         "this compatibility path writes workspace files"
     );
   }

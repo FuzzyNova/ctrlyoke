@@ -48,7 +48,7 @@ import {
   StatuslineManager,
   type StatuslineManagerLike,
 } from "../../core/harness/shared/StatuslineManager";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
 import { VsCodeDashboardHostActions } from "../../platform/VsCodeDashboardHostActions";
 import { snapshotProperty } from "../helpers/propertySnapshot";
 import { FileLockTimeoutError } from "../../utils/FileLockUtils";
@@ -84,7 +84,7 @@ function makeOrchestrator(
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 suite("WebviewSettingsSync", () => {
-  const codexInstallCommand = new CodexCliProvider().config.installCommand;
+  const codexInstallCommand = new CodexHarnessAdapter().config.installCommand;
   const tempPaths: string[] = [];
   const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,

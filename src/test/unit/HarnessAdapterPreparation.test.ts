@@ -3,12 +3,12 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
-import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
 
 const fsModule = require("fs/promises") as typeof fs;
 
@@ -31,8 +31,8 @@ suite("CLI provider preparation", () => {
     };
 
     try {
-      const claude = new ClaudeCliProvider();
-      const copilot = new CopilotCliProvider();
+      const claude = new ClaudeHarnessAdapter();
+      const copilot = new CopilotHarnessAdapter();
       const claudeMcp = await claude.planMcpConfigArgs(
         "/ext/mcp-server.js",
         workspaceRoot
@@ -81,10 +81,10 @@ suite("CLI provider preparation", () => {
       path.join(os.tmpdir(), "ctrlyoke-inline-preparation-")
     );
     try {
-      const codex = new CodexCliProvider();
-      const openCode = new OpenCodeCliProvider();
-      const qwen = new QwenCliProvider();
-      const antigravity = new AntigravityCliProvider();
+      const codex = new CodexHarnessAdapter();
+      const openCode = new OpenCodeHarnessAdapter();
+      const qwen = new QwenHarnessAdapter();
+      const antigravity = new AntigravityHarnessAdapter();
 
       const preparations = [
         await codex.planMcpConfigArgs("/ext/mcp-server.js", workspaceRoot),

@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import { RunImportPreviewService } from "../../core/orchestration/RunImportPreview";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
@@ -29,7 +29,7 @@ suite("RunImportPreview", () => {
         ({
           probeResumableSession: async (id: string) =>
             id === "not-found-session" ? "missing" : "available",
-        }) as unknown as ICliProvider,
+        }) as unknown as IHarnessAdapter,
       git: async (_root, args) => {
         if (args[0] === "cat-file") throw new Error("missing");
         if (args[0] === "status") return "";

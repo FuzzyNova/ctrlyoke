@@ -41,7 +41,7 @@ import { getQwenHomeDir } from "./HarnessHome";
 import { TypedEmitter } from "./TypedEmitter";
 import { retryWithBackoff, stopRetrying } from "./RetryUtils";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
-import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
+import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/IHarnessAdapter";
 import { isSubprocessTimeoutError } from "./SubprocessUtils";
 import {
   isOpenCodeV2Version,

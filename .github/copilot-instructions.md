@@ -110,7 +110,7 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
 | `src/mcp-server.ts` | Standalone MCP server binary |
 | `src/core/*.ts` | Core workflow engine and runtime orchestration |
 | `src/core/orchestration/` | File loading, watching, command handling, history, session helpers |
-| `src/core/harness/` | Harness runtime, CLI provider implementations, shared CLI services |
+| `src/core/harness/` | Harness runtime, harness adapters, shared CLI services |
 | `src/ui/` | VS Code-side dashboard bridge, message routing, notifications, serialization |
 | `src/ui/webview-react/` | React dashboard, Zustand stores, hooks, components, hosted-browser support |
 | `src/types/` | Shared contracts and runtime constants across core/UI/server |

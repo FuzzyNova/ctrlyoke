@@ -11,7 +11,7 @@ import {
 } from "../helpers/tempWorkspace";
 import { suite, test, setup, teardown } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import { quoteReferenceField } from "../../completions/ContextReferenceBuilder";
 import { HarnessStatus } from "../../core/HarnessIntegration";
 import {
@@ -29,7 +29,7 @@ import {
 } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { getTranscriptText } from "../../utils/StepOutputText";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import type {
   BaseCliEvent,
   ILogParser,
@@ -108,7 +108,7 @@ class TestCliIntegration extends CliIntegration {
   }
 }
 
-function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
+function createProvider(overrides?: Partial<IHarnessAdapter>): IHarnessAdapter {
   const provider = {
     config: {
       name: "test",
@@ -152,7 +152,7 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
       ...baseArgs,
     ],
     checkAvailability: async () => true,
-  } as unknown as ICliProvider;
+  } as unknown as IHarnessAdapter;
 
   return {
     ...provider,
@@ -169,11 +169,11 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
       ...provider.toolPermissionMapper,
       ...(overrides?.toolPermissionMapper ?? {}),
     },
-  } as unknown as ICliProvider;
+  } as unknown as IHarnessAdapter;
 }
 
 function createHeadlessIntegration(
-  overrides?: Partial<ICliProvider>
+  overrides?: Partial<IHarnessAdapter>
 ): CliIntegration {
   return new CliIntegration(
     createProvider(overrides),
@@ -183,7 +183,7 @@ function createHeadlessIntegration(
 }
 
 function createTestIntegration(
-  overrides?: Partial<ICliProvider>
+  overrides?: Partial<IHarnessAdapter>
 ): TestCliIntegration {
   return new TestCliIntegration(
     createProvider(overrides),
@@ -466,7 +466,7 @@ suite("CliIntegration", () => {
     const integration = createHeadlessIntegration({
       config: {
         installCommand: "npm install -g test-cli",
-      } as ICliProvider["config"],
+      } as IHarnessAdapter["config"],
       checkAvailability: async () => false,
     });
 
@@ -490,7 +490,7 @@ suite("CliIntegration", () => {
           displayName: "Test CLI",
           installCommand: "npm install -g test-cli",
           versionPolicy,
-        } as ICliProvider["config"],
+        } as IHarnessAdapter["config"],
         checkAvailability: async () => true,
         getVersion: async () => version,
       });
@@ -792,8 +792,8 @@ suite("CliIntegration", () => {
           toolPermissionMapper: {
             hasFullPermissions: () => false,
           } as Partial<
-            ICliProvider["toolPermissionMapper"]
-          > as ICliProvider["toolPermissionMapper"],
+            IHarnessAdapter["toolPermissionMapper"]
+          > as IHarnessAdapter["toolPermissionMapper"],
         }),
         new MockVsCodePlatform(),
         false,
@@ -1590,7 +1590,7 @@ suite("CliIntegration", () => {
 
   test("delegates harness-specific terminal reuse checks to its provider", () => {
     const integration = new TestCliIntegration(
-      new OpenCodeCliProvider(),
+      new OpenCodeHarnessAdapter(),
       new MockVsCodePlatform(),
       false
     );
@@ -2329,7 +2329,7 @@ suite("CliIntegration", () => {
 
     function integrationWithPlatform(
       platform: PlatformAdapter,
-      overrides?: Partial<ICliProvider>
+      overrides?: Partial<IHarnessAdapter>
     ): CliIntegration {
       return new CliIntegration(createProvider(overrides), platform, false);
     }

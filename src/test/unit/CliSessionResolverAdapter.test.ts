@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliSessionResolverAdapter } from "../../core/harness/shared/CliSessionResolverAdapter";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import { type PromptFile, type PromptStep } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
@@ -13,7 +13,7 @@ suite("CliSessionResolverAdapter", () => {
   test("should resolve workflow properties and auto-resumed session IDs", async () => {
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
-      provider: {} as ICliProvider,
+      provider: {} as IHarnessAdapter,
       getWorkspaceRoot: () => "/workspace",
     });
 
@@ -58,7 +58,7 @@ suite("CliSessionResolverAdapter", () => {
   test("should clear invalid session IDs and explain the fallback", async () => {
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => HARNESS_IDS.CLAUDE_CLI,
-      provider: {} as ICliProvider,
+      provider: {} as IHarnessAdapter,
       getWorkspaceRoot: () => "/workspace",
     });
 
@@ -100,7 +100,7 @@ suite("CliSessionResolverAdapter", () => {
         getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
         provider: {
           probeResumableSession: async () => availability,
-        } as Partial<ICliProvider> as ICliProvider,
+        } as Partial<IHarnessAdapter> as IHarnessAdapter,
         getWorkspaceRoot: () => "/workspace",
       });
       const prompt: PromptStep = {
@@ -129,7 +129,7 @@ suite("CliSessionResolverAdapter", () => {
       getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
       provider: {
         probeResumableSession: async () => SESSION_AVAILABILITY.MISSING,
-      } as Partial<ICliProvider> as ICliProvider,
+      } as Partial<IHarnessAdapter> as IHarnessAdapter,
       getWorkspaceRoot: () => "/workspace",
     });
     const prompt: PromptStep = {
@@ -160,7 +160,7 @@ suite("CliSessionResolverAdapter", () => {
   test("should return workflowContext resolved properties when no workflow file exists", async () => {
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => HARNESS_IDS.CODEX_CLI,
-      provider: {} as ICliProvider,
+      provider: {} as IHarnessAdapter,
       getWorkspaceRoot: () => "/workspace",
     });
 

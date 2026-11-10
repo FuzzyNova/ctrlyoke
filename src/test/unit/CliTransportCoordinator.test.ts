@@ -5,10 +5,10 @@ import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportC
 import { PtyProcessManager } from "../../core/harness/PtyProcessManager";
 import { CliTransportError } from "../../core/harness/shared/CliTransportError";
 import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import {
   HARNESS_IDS,
   CLI_EVENT_TYPES,
@@ -43,7 +43,7 @@ async function resolveCommand(command: string, args: string[]) {
   };
 }
 
-function createHeadlessProvider(): ICliProvider {
+function createHeadlessProvider(): IHarnessAdapter {
   return {
     config: {
       name: "test-cli",
@@ -70,7 +70,7 @@ function createHeadlessProvider(): ICliProvider {
       ...baseArgs,
     ],
     checkAvailability: async () => true,
-  } as unknown as ICliProvider;
+  } as unknown as IHarnessAdapter;
 }
 
 function createHeadlessHostCallbacks() {
@@ -86,7 +86,7 @@ function createHeadlessHostCallbacks() {
 }
 
 async function runStdoutSpawns(
-  provider: ICliProvider,
+  provider: IHarnessAdapter,
   spawnChunks: readonly (readonly string[])[]
 ): Promise<{ streamedIds: string[]; countsAfterChunks: number[] }> {
   const streamedIds: string[] = [];
@@ -164,11 +164,11 @@ async function runStdoutSpawns(
 
 const stdoutProviderFactories: ReadonlyArray<{
   name: string;
-  create: () => ICliProvider;
+  create: () => IHarnessAdapter;
 }> = [
-  { name: "Copilot", create: () => new CopilotCliProvider() },
-  { name: "Claude", create: () => new ClaudeCliProvider() },
-  { name: "OpenCode", create: () => new OpenCodeCliProvider() },
+  { name: "Copilot", create: () => new CopilotHarnessAdapter() },
+  { name: "Claude", create: () => new ClaudeHarnessAdapter() },
+  { name: "OpenCode", create: () => new OpenCodeHarnessAdapter() },
 ];
 
 /** A coordinator holding one live PTY for workflow-1, for termination tests. */
@@ -205,7 +205,7 @@ async function createCoordinatorWithLivePty(
         ...baseArgs,
       ],
       checkAvailability: async () => true,
-    } as unknown as ICliProvider,
+    } as unknown as IHarnessAdapter,
     processManager: {} as any,
     resolveCliCommand: resolveCommand,
     runtimeState: {
@@ -529,7 +529,7 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
         ],
         checkAvailability: async () => true,
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {
         spawn: async (
           _command: string,
@@ -664,7 +664,7 @@ line two`,
           ...baseArgs,
         ],
         checkAvailability: async () => true,
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {
         spawn: async (
           _command: string,
@@ -794,7 +794,7 @@ line two`,
           ...baseArgs,
         ],
         checkAvailability: async () => true,
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {
         spawn: async () => {
           // The Stop arrives while the process is running, which is the only
@@ -888,7 +888,7 @@ line two`,
             ...baseArgs,
           ],
           checkAvailability: async () => true,
-        } as unknown as ICliProvider,
+        } as unknown as IHarnessAdapter,
         processManager: {
           spawn: async (
             _command: string,
@@ -972,7 +972,7 @@ line two`,
           ...baseArgs,
         ],
         checkAvailability: async () => true,
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {} as any,
       resolveCliCommand: resolveCommand,
       runtimeState: {
@@ -1053,7 +1053,7 @@ line two`,
         getInteractiveSpawnEnv: () => ({
           PROVIDER_OTEL_MARKER: "from-provider",
         }),
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {} as any,
       resolveCliCommand: resolveCommand,
       runtimeState: {
@@ -1147,7 +1147,7 @@ line two`,
           ...baseArgs,
         ],
         checkAvailability: async () => true,
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {} as any,
       resolveCliCommand: resolveCommand,
       runtimeState: {
@@ -1312,7 +1312,7 @@ line two`,
           ...baseArgs,
         ],
         checkAvailability: async () => true,
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {
         disposeProcess: () => {
           disposedProcess = true;
@@ -1424,7 +1424,7 @@ line two`,
             promptText,
             ...baseArgs,
           ],
-        } as unknown as ICliProvider,
+        } as unknown as IHarnessAdapter,
         processManager: {
           spawnInteractive: async (
             _command: string,
@@ -1525,7 +1525,7 @@ line two`,
         buildInteractiveArgs: (_baseArgs: string[], promptText: string) => [
           promptText,
         ],
-      } as unknown as ICliProvider,
+      } as unknown as IHarnessAdapter,
       processManager: {
         spawnInteractive: async () => exit,
         // Disposing an already-exited process is a no-op in CliProcessManager.

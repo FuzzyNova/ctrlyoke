@@ -111,7 +111,7 @@ const OPENCODE_READ_ONLY_TOOLS: readonly string[] = [
  * Default behavior: all operations are allowed without approval.
  *
  * Permission overrides are translated here and delivered through
- * OPENCODE_CONFIG_CONTENT by OpenCodeCliProvider.
+ * OPENCODE_CONFIG_CONTENT by OpenCodeHarnessAdapter.
  *
  * - dangerouslyAllowAll / none: no ctrlyoke permission block
  * - allowAll: `"*": "allow"` plus deny overrides

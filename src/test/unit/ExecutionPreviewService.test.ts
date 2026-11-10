@@ -16,10 +16,10 @@ import {
 } from "../../types/CommandDisplayFormatter";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { PosixClaudeCliProvider } from "../helpers/posixClaudeProvider";
-import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { PosixClaudeHarnessAdapter } from "../helpers/posixClaudeHarnessAdapter";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
@@ -73,7 +73,7 @@ function createDefaults(): ExecutionPropertyDefaults {
 }
 
 function createCapabilities(): HarnessCapabilityRegistrySnapshot {
-  const provider = new ClaudeCliProvider();
+  const provider = new ClaudeHarnessAdapter();
   const permissions = provider.toolPermissionMapper.capabilities;
   const hooks = provider.capabilities.hooks!;
   const mcp = provider.capabilities.mcp!;
@@ -154,7 +154,7 @@ function createPromptPreparer(
 function createHarness(
   workspaceRoot?: string,
   buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
-  provider: ICliProvider = new PosixClaudeCliProvider()
+  provider: IHarnessAdapter = new PosixClaudeHarnessAdapter()
 ): ExecutionPreviewHarness {
   return {
     provider,
@@ -371,7 +371,7 @@ suite("ExecutionPreviewService", () => {
   });
 
   test("previews an explicit sandbox on an unsupported harness with the error instead of throwing", async () => {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
     const harness = createHarness(undefined, undefined, provider);
     const unsupported = {
       fidelity: "unsupported" as const,

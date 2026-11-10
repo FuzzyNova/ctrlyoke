@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import { buildOpenCodeMcpEntries } from "../../core/harness/opencode/OpenCodeInlineConfig";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
 import {
@@ -87,7 +87,7 @@ suite("OpenCode 2 support", () => {
   });
 
   test("maps `run --format json` tool parts, tokens and session", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const stdout = readFixture("v2-tools.stdout.jsonl");
     const output = provider.logParser.extractResponse(
       provider.parseHeadlessStdout(stdout)
@@ -106,7 +106,7 @@ suite("OpenCode 2 support", () => {
   });
 
   test("maps a subagent call and follows its child session", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const output = provider.logParser.extractResponse(
       provider.parseHeadlessStdout(readFixture("v2-subagent.stdout.jsonl"))
     );
@@ -203,7 +203,7 @@ suite("OpenCode 2 support", () => {
   });
 
   test("reads OpenCode 2 `{ type, message }` errors", () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const output = provider.logParser.extractResponse(
       provider.parseHeadlessStdout(
         JSON.stringify({
@@ -233,7 +233,7 @@ suite("OpenCode 2 support", () => {
     teardown(() => restore());
 
     test("runs headless against a private server with the model flag", async () => {
-      const provider = new OpenCodeCliProvider();
+      const provider = new OpenCodeHarnessAdapter();
       const args = await provider.buildCliArgs(
         { prompt: "x" },
         false,
@@ -266,7 +266,7 @@ suite("OpenCode 2 support", () => {
     });
 
     test("moves the interactive model into config, since the TUI has no -m", async () => {
-      const provider = new OpenCodeCliProvider();
+      const provider = new OpenCodeHarnessAdapter();
       const args = await provider.buildCliArgs(
         { prompt: "x" },
         true,
@@ -283,7 +283,7 @@ suite("OpenCode 2 support", () => {
     });
 
     test("passes a resumed prompt as --prompt, which the OpenCode 2 TUI honours", () => {
-      const provider = new OpenCodeCliProvider();
+      const provider = new OpenCodeHarnessAdapter();
       const baseArgs = [
         OPENCODE_CLI_FLAGS.STANDALONE,
         OPENCODE_CLI_FLAGS.SESSION,
@@ -300,7 +300,7 @@ suite("OpenCode 2 support", () => {
     });
 
     test("leaves out --standalone when the user chose --server", async () => {
-      const provider = new OpenCodeCliProvider();
+      const provider = new OpenCodeHarnessAdapter();
       const args = await provider.buildCliArgs(
         { prompt: "x" },
         false,
@@ -349,7 +349,7 @@ suite("OpenCode 2 support", () => {
           JSON.stringify({ permission: { bash: { "foo *": "allow" } } }),
           "utf8"
         );
-        const provider = new OpenCodeCliProvider();
+        const provider = new OpenCodeHarnessAdapter();
         await provider.buildCliArgs(
           { prompt: "x" },
           false,

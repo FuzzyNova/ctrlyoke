@@ -6,8 +6,8 @@ import {
   CliPromptPreparer,
   HEADLESS_EXECUTION_NOTE,
 } from "../../core/harness/shared/CliPromptPreparer";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import {
   HarnessIntegration,
   HarnessStatus,
@@ -148,7 +148,7 @@ suite("CliPromptPreparer", () => {
       undefined,
       undefined
     );
-    const argv = new ClaudeCliProvider().buildHeadlessArgs(
+    const argv = new ClaudeHarnessAdapter().buildHeadlessArgs(
       [],
       prepared.promptWithInstruction
     );
@@ -1883,7 +1883,7 @@ suite("CliPromptPreparer", () => {
 
   test("uses the prompt file form for reused OpenCode commands containing !", async () => {
     const promptText = "/cmd done!";
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async (prompt) =>

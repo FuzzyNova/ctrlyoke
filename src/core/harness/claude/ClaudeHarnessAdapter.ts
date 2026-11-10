@@ -2,7 +2,7 @@ import * as path from "path";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
@@ -51,7 +51,7 @@ import {
 import type {
   CliExecutionSidecar,
   CliExecutionSidecarDeps,
-} from "../shared/interfaces/ICliProvider";
+} from "../shared/interfaces/IHarnessAdapter";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   capabilitySuiteVerification,
@@ -111,17 +111,17 @@ function mergeClaudeSettings(
  *
  * Usage:
  * ```typescript
- * const provider = new ClaudeCliProvider();
+ * const provider = new ClaudeHarnessAdapter();
  * const integration = new CliIntegration(provider, context);
  * ```
  */
-export class ClaudeCliProvider implements ICliProvider {
+export class ClaudeHarnessAdapter implements IHarnessAdapter {
   probeResumableSession(sessionId: string): SessionProbeResult {
     return this.logParser.probeSessionId(sessionId);
   }
   private static readonly CLI_COMMAND = "claude";
-  static readonly CLI_VERSION_COMMAND = `${ClaudeCliProvider.CLI_COMMAND} --version`;
-  static readonly CLI_HELP_COMMAND = `${ClaudeCliProvider.CLI_COMMAND} --help`;
+  static readonly CLI_VERSION_COMMAND = `${ClaudeHarnessAdapter.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${ClaudeHarnessAdapter.CLI_COMMAND} --help`;
 
   private static readonly statuslineManager = StatuslineManager.forProvider(
     STATUS_LINE_HARNESS_IDS.CLAUDE
@@ -130,8 +130,8 @@ export class ClaudeCliProvider implements ICliProvider {
   /** Tracks per-prompt hook settings files for cleanup */
   private hookSettingsPaths: string[] = [];
   private readonly statuslineRegistration = new ProviderStatuslineRegistration({
-    manager: ClaudeCliProvider.statuslineManager,
-    logPrefix: "ClaudeCliProvider",
+    manager: ClaudeHarnessAdapter.statuslineManager,
+    logPrefix: "ClaudeHarnessAdapter",
     harnessLabel: "Claude",
     snapshotPrefix: "claude",
     tokenEnvironmentVariable: "CTRLYOKE_CLAUDE_STATUSLINE_TOKEN",
@@ -333,7 +333,7 @@ export class ClaudeCliProvider implements ICliProvider {
         hasCtrlYokeServer(workflowContext.resolvedProperties)
       ) {
         args.push("--allowed-tools", "mcp__ctrlyoke");
-        Log.debug("[ClaudeCliProvider] ctrlyoke MCP tools auto-approved");
+        Log.debug("[ClaudeHarnessAdapter] ctrlyoke MCP tools auto-approved");
       }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
@@ -345,7 +345,7 @@ export class ClaudeCliProvider implements ICliProvider {
             const normalizedServerId = normalizeClaudeMcpServerId(server.id);
             args.push("--allowed-tools", `mcp__${normalizedServerId}`);
             Log.debug(
-              `[ClaudeCliProvider] Auto-approved all tools from MCP server: ${server.id}`
+              `[ClaudeHarnessAdapter] Auto-approved all tools from MCP server: ${server.id}`
             );
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
@@ -357,7 +357,7 @@ export class ClaudeCliProvider implements ICliProvider {
               );
             }
             Log.debug(
-              `[ClaudeCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
+              `[ClaudeHarnessAdapter] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
             );
           }
         }
@@ -403,13 +403,13 @@ export class ClaudeCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("-r", sessionId!);
-      Log.info(`[ClaudeCliProvider] Resuming session: ${sessionId}`);
+      Log.info(`[ClaudeHarnessAdapter] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.warn(
-        "[ClaudeCliProvider] Resume requested but no session ID available"
+        "[ClaudeHarnessAdapter] Resume requested but no session ID available"
       );
     } else {
-      Log.info("[ClaudeCliProvider] Starting new session");
+      Log.info("[ClaudeHarnessAdapter] Starting new session");
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args).
@@ -421,7 +421,7 @@ export class ClaudeCliProvider implements ICliProvider {
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
       Log.info(
-        `[ClaudeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+        `[ClaudeHarnessAdapter] Extra CLI args applied (${appendTokens.length} tokens)`
       );
     }
 
@@ -482,7 +482,7 @@ export class ClaudeCliProvider implements ICliProvider {
   /** The `--model` value for a step, or `undefined` for no flag. */
   private validateAndGetModel(requestedModel?: string): string | undefined {
     return resolveCliModelFlag(requestedModel, {
-      logLabel: "ClaudeCliProvider",
+      logLabel: "ClaudeHarnessAdapter",
       defaultModel: ConfigurationUtils.getClaudeCliModel(),
       // Anything Claude Code itself listed (a new alias, a pinned version),
       // then static aliases, pinned IDs and Copilot-style names.
@@ -551,7 +551,7 @@ export class ClaudeCliProvider implements ICliProvider {
     if (hookConfig.type !== CLAUDE_HOOK_CONFIG_TYPES.JSON_STRING) {
       throw new Error("Unexpected hook config type for Claude CLI");
     }
-    const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(
+    const hookFileName = ClaudeHarnessAdapter.buildHookSettingsFileName(
       promptIndex,
       workingFilePath
     );
@@ -573,7 +573,7 @@ export class ClaudeCliProvider implements ICliProvider {
    * Build a unique hook settings filename for a prompt.
    *
    * Format: `claude-hook-settings-<stem>-p<promptIndex>.json`
-   * Follows the same pattern as CopilotCliProvider.buildHookFileName().
+   * Follows the same pattern as CopilotHarnessAdapter.buildHookFileName().
    */
   private static buildHookSettingsFileName(
     promptIndex: number,
@@ -645,7 +645,7 @@ export class ClaudeCliProvider implements ICliProvider {
             return hookConfig.config;
           })()
         : ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks ?? []);
-    const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(
+    const hookFileName = ClaudeHarnessAdapter.buildHookSettingsFileName(
       promptIndex,
       workingFilePath
     );
@@ -688,7 +688,7 @@ export class ClaudeCliProvider implements ICliProvider {
         await fs.mkdir(path.dirname(settingsPath), { recursive: true });
         await fs.writeFile(settingsPath, content, "utf-8");
         this.hookSettingsPaths.push(settingsPath);
-        Log.debug(`[ClaudeCliProvider] Configured Claude hook settings`);
+        Log.debug(`[ClaudeHarnessAdapter] Configured Claude hook settings`);
       },
       restore: async () => {
         await fs.unlink(settingsPath).catch(() => undefined);
@@ -948,7 +948,7 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     return CliProviderUtils.checkCliAvailability(
-      ClaudeCliProvider.CLI_VERSION_COMMAND
+      ClaudeHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
 
@@ -959,7 +959,7 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     return CliProviderUtils.getCliVersion(
-      ClaudeCliProvider.CLI_VERSION_COMMAND
+      ClaudeHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
 

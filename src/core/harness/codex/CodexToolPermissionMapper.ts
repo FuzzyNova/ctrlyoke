@@ -67,7 +67,7 @@ export const CODEX_FOLD_EXCLUDED_SERVER_IDS: ReadonlySet<string> = new Set([
  *
  * Codex does not expose ctrlyoke's general tool-pattern contract. Denied
  * `mcp__<server>__<tool>` patterns for servers the workflow attaches become
- * that server's `disabled_tools` (folded in by CodexCliProvider); every other
+ * that server's `disabled_tools` (folded in by CodexHarnessAdapter); every other
  * pattern, including a bare `write` or `shell`, is reported as not enforced.
  */
 export class CodexToolPermissionMapper
@@ -82,7 +82,7 @@ export class CodexToolPermissionMapper
   ): Promise<ToolPermissionApplication> {
     return {
       cliArgs: this.buildCodexSpecificArgs(config, context.isInteractive),
-      // CodexCliProvider folds MCP tool denials into the attached servers'
+      // CodexHarnessAdapter folds MCP tool denials into the attached servers'
       // `disabled_tools`; only the rest of the deny list goes unenforced.
       diagnostics: this.getToolTranslationDiagnostics(
         {

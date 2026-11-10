@@ -98,13 +98,13 @@ export class CodexNotificationMonitor
   /**
    * Build hook configuration for Codex CLI.
    *
-   * Returns a JSON object that CodexCliProvider serializes into inline `-c`
+   * Returns a JSON object that CodexHarnessAdapter serializes into inline `-c`
    * overrides via CodexInlineHooksBuilder.
    * Uses Codex's matcher-based format: { matcher: "", hooks: [{...}] }
    * Registers SessionStart and Stop for ctrlyoke's completion detection.
    *
    * User hooks (from the workflow `hooks:` property) are handled by
-   * CodexCliProvider — not here. The
+   * CodexHarnessAdapter — not here. The
    * _userHooks parameter is intentionally unused (mirrors Qwen pattern).
    */
   buildHookConfig(
@@ -123,7 +123,7 @@ export class CodexNotificationMonitor
       command,
       CodexNotificationMonitor.EVENT_MAP,
       selectedEvents,
-      undefined, // user hooks are merged by CodexCliProvider, not here
+      undefined, // user hooks are merged by CodexHarnessAdapter, not here
       encodedDecisionHook,
       (nativeEvent, command, userHook) =>
         createCodexCommandHookGroup(nativeEvent, command, userHook)

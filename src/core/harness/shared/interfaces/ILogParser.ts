@@ -464,7 +464,7 @@ export interface ILogParser {
    *
    * **Session-reset contract:** each `ILogParser` implementation is a single
    * long-lived instance reused across every session/step run through that
-   * harness for the life of the process (e.g. `ClaudeCliProvider.logParser`,
+   * harness for the life of the process (e.g. `ClaudeHarnessAdapter.logParser`,
    * `readonly logParser = new ClaudeLogParser()`) — it is never one-per-run.
    * Any override that accumulates state here (a `BackgroundFollowUpState`
    * plus whatever provider-specific correlation maps it needs) MUST clear

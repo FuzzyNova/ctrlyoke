@@ -10,7 +10,7 @@ import { afterEach, beforeEach, suite, test } from "mocha";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 import type { UserHookConfig } from "../../types/CtrlYokeTypes";
 import { prepareUserHookLaunchers } from "../../core/harness/shared/UserHookEnvironment";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 
@@ -72,7 +72,7 @@ suite("UserHookEnvironment", () => {
         },
       });
       const plan = await new ExecutionPlanBuilder({
-        provider: new ClaudeCliProvider(),
+        provider: new ClaudeHarnessAdapter(),
         getWorkspaceRoot: () => workspaceRoot,
         getWorkspaceRoots: () => [workspaceRoot],
         getExtensionPath: () => extensionPath,

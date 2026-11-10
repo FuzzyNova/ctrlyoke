@@ -17,7 +17,7 @@ import type {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
-import type { HarnessConfig } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { HarnessConfig } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import {
   CAPABILITY_DOMAINS,
   CAPABILITY_VERIFICATION_KINDS,

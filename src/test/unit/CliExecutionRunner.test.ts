@@ -22,7 +22,7 @@ import {
 import { CliFailureTracker } from "../../core/harness/shared/CliFailureTracker";
 import { CliTransportError } from "../../core/harness/shared/CliTransportError";
 import { CliInteractiveStartupCoordinator } from "../../core/harness/shared/CliInteractiveStartupCoordinator";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import type { InteractiveExitResult } from "../../utils/CliProcessManager";
 import { getTranscriptText } from "../../utils/StepOutputText";
 
@@ -35,7 +35,7 @@ function createProvider(options?: {
   recoverableSessionError?: boolean;
   wrapTerminalPromptForPaste?: (promptText: string) => string;
   setRunId?: (runId: string, notifyDir: string | undefined) => void;
-}): ICliProvider {
+}): IHarnessAdapter {
   return {
     config: {
       name: "test",
@@ -113,7 +113,7 @@ function createProvider(options?: {
     wrapTerminalPromptForPaste: options?.wrapTerminalPromptForPaste,
     setRunId: options?.setRunId,
     checkAvailability: async () => true,
-  } as unknown as ICliProvider;
+  } as unknown as IHarnessAdapter;
 }
 
 function createRunner(options?: {

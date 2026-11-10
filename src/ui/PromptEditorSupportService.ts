@@ -32,12 +32,12 @@ import {
   getHarnessFlagCompletions,
   type HarnessFlagCompletion,
 } from "../core/harness/shared/HarnessFlagCompletionProvider";
-import { CopilotCliProvider } from "../core/harness/copilot/CopilotCliProvider";
-import { ClaudeCliProvider } from "../core/harness/claude/ClaudeCliProvider";
-import { CodexCliProvider } from "../core/harness/codex/CodexCliProvider";
-import { OpenCodeCliProvider } from "../core/harness/opencode/OpenCodeCliProvider";
-import { QwenCliProvider } from "../core/harness/qwen/QwenCliProvider";
-import { AntigravityCliProvider } from "../core/harness/antigravity/AntigravityCliProvider";
+import { CopilotHarnessAdapter } from "../core/harness/copilot/CopilotHarnessAdapter";
+import { ClaudeHarnessAdapter } from "../core/harness/claude/ClaudeHarnessAdapter";
+import { CodexHarnessAdapter } from "../core/harness/codex/CodexHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "../core/harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHarnessAdapter } from "../core/harness/qwen/QwenHarnessAdapter";
+import { AntigravityHarnessAdapter } from "../core/harness/antigravity/AntigravityHarnessAdapter";
 import { TempFileManager } from "../utils/TempFileManager";
 import {
   buildFileReferenceValue,
@@ -185,17 +185,17 @@ function parseCursorArgumentToken(
 function getHarnessHelpCommand(harnessId: HarnessId): string {
   switch (harnessId) {
     case HARNESS_IDS.COPILOT_CLI:
-      return CopilotCliProvider.CLI_HELP_COMMAND;
+      return CopilotHarnessAdapter.CLI_HELP_COMMAND;
     case HARNESS_IDS.CLAUDE_CLI:
-      return ClaudeCliProvider.CLI_HELP_COMMAND;
+      return ClaudeHarnessAdapter.CLI_HELP_COMMAND;
     case HARNESS_IDS.CODEX_CLI:
-      return CodexCliProvider.CLI_HELP_COMMAND;
+      return CodexHarnessAdapter.CLI_HELP_COMMAND;
     case HARNESS_IDS.OPENCODE_CLI:
-      return OpenCodeCliProvider.CLI_HELP_COMMAND;
+      return OpenCodeHarnessAdapter.CLI_HELP_COMMAND;
     case HARNESS_IDS.QWEN_CLI:
-      return QwenCliProvider.CLI_HELP_COMMAND;
+      return QwenHarnessAdapter.CLI_HELP_COMMAND;
     case HARNESS_IDS.ANTIGRAVITY_CLI:
-      return AntigravityCliProvider.CLI_HELP_COMMAND;
+      return AntigravityHarnessAdapter.CLI_HELP_COMMAND;
   }
 }
 

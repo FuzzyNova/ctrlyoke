@@ -2,10 +2,10 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { ClaudeSandboxMapper } from "../../core/harness/claude/ClaudeSandboxMapper";
 import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
-import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import type { SandboxContext } from "../../core/harness/shared/interfaces/ISandboxMapper";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
@@ -236,7 +236,7 @@ suite("sandbox mappers", () => {
   });
 
   test("Copilot and Qwen emit their off switches for Off", async () => {
-    const copilot = await new CopilotCliProvider().sandboxMapper.prepare(
+    const copilot = await new CopilotHarnessAdapter().sandboxMapper.prepare(
       false,
       context
     );
@@ -245,7 +245,7 @@ suite("sandbox mappers", () => {
     assert.strictEqual(copilot.effective.kind, EFFECTIVE_SANDBOX_KINDS.OFF);
 
     // QWEN_SANDBOX outranks the flag, so Off sets it too.
-    const qwen = await new QwenCliProvider().sandboxMapper.prepare(
+    const qwen = await new QwenHarnessAdapter().sandboxMapper.prepare(
       false,
       context
     );
@@ -255,8 +255,8 @@ suite("sandbox mappers", () => {
 
   test("Antigravity and OpenCode have nothing to turn off", async () => {
     for (const provider of [
-      new AntigravityCliProvider(),
-      new OpenCodeCliProvider(),
+      new AntigravityHarnessAdapter(),
+      new OpenCodeHarnessAdapter(),
     ]) {
       const off = await provider.sandboxMapper.prepare(false, context);
       assert.deepStrictEqual(off.cliArgs, [], provider.config.harnessId);
@@ -267,10 +267,10 @@ suite("sandbox mappers", () => {
 
   test("a harness that can't sandbox refuses an authored true but only warns for defaults.sandbox", async () => {
     for (const provider of [
-      new CopilotCliProvider(),
-      new QwenCliProvider(),
-      new AntigravityCliProvider(),
-      new OpenCodeCliProvider(),
+      new CopilotHarnessAdapter(),
+      new QwenHarnessAdapter(),
+      new AntigravityHarnessAdapter(),
+      new OpenCodeHarnessAdapter(),
     ]) {
       const authored = await provider.sandboxMapper.prepare(true, context);
       assert.strictEqual(

@@ -27,7 +27,7 @@ import {
   resolveCliCommand,
   type CliResolvedCommand,
 } from "./CliLauncherResolver";
-import type { ICliProvider } from "./interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 import {
   buildTerminalEndedMessage,
   buildTerminalRemovedMessage,
@@ -70,7 +70,7 @@ interface CliTransportCoordinatorHostCallbacks {
 }
 
 export interface CliTransportCoordinatorDeps {
-  provider: ICliProvider;
+  provider: IHarnessAdapter;
   processManager: CliProcessManager;
   resolveCliCommand?: (
     commandName: string,
@@ -254,7 +254,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     const { stepName, stepIndex, promptNumber, parallelGroupId } = stepMetadata;
     const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
     // Provider-level interactive env (e.g. Copilot's OTel export path override,
-    // see CopilotCliProvider.getInteractiveSpawnEnv()) must be merged in here too —
+    // see CopilotHarnessAdapter.getInteractiveSpawnEnv()) must be merged in here too —
     // this is the VS Code PTY spawn path, a separate call site from
     // executeStandaloneInteractiveProcess() above, which already does this.
     const providerEnv = this.deps.provider.getInteractiveSpawnEnv?.();

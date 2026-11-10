@@ -62,9 +62,9 @@ unverified for "the hook can block", which is what a guard needs.
 | Harness     | Where user hooks are registered                                                  | `preToolUse` decision today                                    |
 | ----------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Claude      | `ClaudeNotificationMonitor.buildHookConfig` / `buildUserOnlyConfig` (headless)   | Native contract, verbatim command                              |
-| Codex       | `CodexCliProvider.buildUserHooksSection` via `createCodexCommandHookGroup`       | Native contract, verbatim command                              |
+| Codex       | `CodexHarnessAdapter.buildUserHooksSection` via `createCodexCommandHookGroup`       | Native contract, verbatim command                              |
 | Copilot     | `CopilotNotificationMonitor` (`bash` and `powershell` keys, `timeoutSec ?? 10`)  | Native contract, verbatim command                              |
-| Qwen        | `QwenNotificationMonitor.buildHookConfig` (via `QwenCliProvider`)                | Native contract, verbatim command                              |
+| Qwen        | `QwenNotificationMonitor.buildHookConfig` (via `QwenHarnessAdapter`)                | Native contract, verbatim command                              |
 | Antigravity | `AntigravityNotificationMonitor` (`pushHandler(nativeEvent, hook.command)`)      | Native contract (unrecorded), verbatim command                 |
 | OpenCode    | `ctrlyoke-opencode-plugin.ts`, hooks passed as JSON in `CTRLYOKE_OPENCODE_HOOKS` | **Cannot deny**: fire-and-forget `_runUserHooks("preToolUse")` |
 

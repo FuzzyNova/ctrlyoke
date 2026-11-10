@@ -1,5 +1,5 @@
 import * as path from "path";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { IHarnessAdapter, HarnessConfig } from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HOOK_CONFIG_TYPES,
@@ -216,14 +216,14 @@ function splitCodexHeaders(headers: Record<string, string> | undefined): {
  *
  * Usage:
  * ```typescript
- * const provider = new CodexCliProvider();
+ * const provider = new CodexHarnessAdapter();
  * const integration = new CliIntegration(provider, context);
  * ```
  */
-export class CodexCliProvider implements ICliProvider {
+export class CodexHarnessAdapter implements IHarnessAdapter {
   private static readonly CLI_COMMAND = "codex";
-  static readonly CLI_VERSION_COMMAND = `${CodexCliProvider.CLI_COMMAND} --version`;
-  static readonly CLI_HELP_COMMAND = `${CodexCliProvider.CLI_COMMAND} --help`;
+  static readonly CLI_VERSION_COMMAND = `${CodexHarnessAdapter.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${CodexHarnessAdapter.CLI_COMMAND} --help`;
 
   readonly logParser: CodexLogParser;
 
@@ -259,7 +259,7 @@ export class CodexCliProvider implements ICliProvider {
     return server.autoApprove.flatMap((toolName) => {
       if (toolName.includes(".")) {
         Log.warn(
-          `[CodexCliProvider] Codex MCP server "${server.id}" tool "${toolName}" contains a dot and cannot be auto-approved. Skipping override.`
+          `[CodexHarnessAdapter] Codex MCP server "${server.id}" tool "${toolName}" contains a dot and cannot be auto-approved. Skipping override.`
         );
         return [];
       }
@@ -466,7 +466,7 @@ export class CodexCliProvider implements ICliProvider {
     ) {
       args.push(...mcpPreparation.cliArgs);
       Log.debug(
-        "[CodexCliProvider] MCP server config added for dynamic queue extension"
+        "[CodexHarnessAdapter] MCP server config added for dynamic queue extension"
       );
     }
 
@@ -534,7 +534,7 @@ export class CodexCliProvider implements ICliProvider {
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
       Log.info(
-        `[CodexCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+        `[CodexHarnessAdapter] Extra CLI args applied (${appendTokens.length} tokens)`
       );
     }
 
@@ -549,10 +549,10 @@ export class CodexCliProvider implements ICliProvider {
     );
     if (resolvedResumeSession && !sessionId) {
       Log.warn(
-        "[CodexCliProvider] Resume requested but no session ID available"
+        "[CodexHarnessAdapter] Resume requested but no session ID available"
       );
     } else if (!shouldResume) {
-      Log.info("[CodexCliProvider] Starting new session");
+      Log.info("[CodexHarnessAdapter] Starting new session");
     }
 
     // Note: Prompt is NOT included here - it's a positional argument
@@ -588,7 +588,7 @@ export class CodexCliProvider implements ICliProvider {
       sessionId
     );
     if (shouldResume) {
-      Log.info(`[CodexCliProvider] Resuming session: ${sessionId}`);
+      Log.info(`[CodexHarnessAdapter] Resuming session: ${sessionId}`);
       return ["resume", sessionId!];
     }
     return [];
@@ -642,7 +642,7 @@ export class CodexCliProvider implements ICliProvider {
       hookEvents
     );
     Log.debug(
-      `[CodexCliProvider] Configured SessionStart + Stop hooks for Codex completion detection`
+      `[CodexHarnessAdapter] Configured SessionStart + Stop hooks for Codex completion detection`
     );
     return {
       cliArgs: [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs],
@@ -692,7 +692,7 @@ export class CodexCliProvider implements ICliProvider {
       enabledNotificationHookEvents
     );
     Log.debug(
-      `[CodexCliProvider] Configured user hooks for Codex headless mode`
+      `[CodexHarnessAdapter] Configured user hooks for Codex headless mode`
     );
     return {
       cliArgs: [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs],
@@ -799,7 +799,7 @@ export class CodexCliProvider implements ICliProvider {
   /** The `--model` value for a step, or `undefined` for no flag. */
   private validateAndGetModel(requestedModel?: string): string | undefined {
     return resolveCliModelFlag(requestedModel, {
-      logLabel: "CodexCliProvider",
+      logLabel: "CodexHarnessAdapter",
       defaultModel: ConfigurationUtils.getCodexCliModel(),
       // Discovered models (hidden ones included), or the static list.
       recognize: (model) => (isKnownCodexModel(model) ? model : undefined),
@@ -949,21 +949,21 @@ export class CodexCliProvider implements ICliProvider {
       const serverKey = sanitizeCodexConfigKeySegment(server.id);
       if (server.url && server.transport === MCP_TRANSPORTS.SSE) {
         Log.warn(
-          `[CodexCliProvider] Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
+          `[CodexHarnessAdapter] Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
         );
         continue;
       }
 
       if (!server.url && !server.command) {
         Log.warn(
-          `[CodexCliProvider] Codex CLI MCP server "${server.id}" is missing a command or URL. Skipping.`
+          `[CodexHarnessAdapter] Codex CLI MCP server "${server.id}" is missing a command or URL. Skipping.`
         );
         continue;
       }
 
       if (usedServerKeys.has(serverKey)) {
         Log.warn(
-          `[CodexCliProvider] Codex MCP server ID "${server.id}" collides after key sanitization as "${serverKey}". Skipping server.`
+          `[CodexHarnessAdapter] Codex MCP server ID "${server.id}" collides after key sanitization as "${serverKey}". Skipping server.`
         );
         continue;
       }
@@ -1013,7 +1013,7 @@ export class CodexCliProvider implements ICliProvider {
       } catch (error) {
         const reason = getErrorMessage(error);
         Log.warn(
-          `[CodexCliProvider] Failed to generate MCP config for server "${server.id}": ${reason}`
+          `[CodexHarnessAdapter] Failed to generate MCP config for server "${server.id}": ${reason}`
         );
         diagnostics.push({
           code: "mcp.server.skipped",
@@ -1032,7 +1032,7 @@ export class CodexCliProvider implements ICliProvider {
 
     if (configArgs.length > 0) {
       Log.debug(
-        `[CodexCliProvider] Codex MCP config overrides added for ${configArgs.length / 2} server(s)`
+        `[CodexHarnessAdapter] Codex MCP config overrides added for ${configArgs.length / 2} server(s)`
       );
     }
 
@@ -1050,7 +1050,7 @@ export class CodexCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     return CliProviderUtils.checkCliAvailability(
-      CodexCliProvider.CLI_VERSION_COMMAND
+      CodexHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
 
@@ -1061,7 +1061,7 @@ export class CodexCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     return CliProviderUtils.getCliVersion(
-      CodexCliProvider.CLI_VERSION_COMMAND,
+      CodexHarnessAdapter.CLI_VERSION_COMMAND,
       {
         parseVersion: (stdout) => {
           // Extract versions from both "codex version 0.1.2" and "codex-cli 0.1.2".

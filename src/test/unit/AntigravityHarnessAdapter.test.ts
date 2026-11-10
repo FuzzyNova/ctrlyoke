@@ -10,7 +10,7 @@ import {
 } from "../../types/DashboardConstants";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import { Log } from "../../utils/Log";
 import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
@@ -48,9 +48,9 @@ function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   };
 }
 
-suite("AntigravityCliProvider", () => {
+suite("AntigravityHarnessAdapter", () => {
   test("probes Antigravity transcripts by conversation ID only", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const transcript = path.join(
       tempHome,
       ".gemini",
@@ -140,7 +140,7 @@ suite("AntigravityCliProvider", () => {
 
   suite("planMcpConfigArgs", () => {
     test("writes dotted server ids sanitized and preserves hyphenated ids", async () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       const preparation = await provider.planMcpConfigArgs(
         undefined,
         workspaceRoot,
@@ -174,7 +174,7 @@ suite("AntigravityCliProvider", () => {
     });
 
     test("reports collisions between sanitized server ids", async () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       const preparation = await provider.planMcpConfigArgs(
         undefined,
         workspaceRoot,
@@ -206,7 +206,7 @@ suite("AntigravityCliProvider", () => {
     );
   }
 
-  async function buildArgs(provider: AntigravityCliProvider) {
+  async function buildArgs(provider: AntigravityHarnessAdapter) {
     return provider.buildCliArgs(
       {} as never,
       false,
@@ -222,7 +222,7 @@ suite("AntigravityCliProvider", () => {
   }
 
   function stubSessionRecovery(
-    provider: AntigravityCliProvider,
+    provider: AntigravityHarnessAdapter,
     cachedSessionId: string | null,
     logSessionId: string | null
   ) {
@@ -247,7 +247,7 @@ suite("AntigravityCliProvider", () => {
   }
 
   async function publishSnapshot(
-    provider: AntigravityCliProvider,
+    provider: AntigravityHarnessAdapter,
     conversationId: string,
     writtenAt: number,
     contextWindow?: Record<string, unknown>,
@@ -273,7 +273,7 @@ suite("AntigravityCliProvider", () => {
     );
   }
 
-  async function waitForSnapshot(provider: AntigravityCliProvider) {
+  async function waitForSnapshot(provider: AntigravityHarnessAdapter) {
     for (let attempt = 0; attempt < 50; attempt += 1) {
       if (provider.getLatestStatuslineSnapshot()) {
         return;
@@ -284,13 +284,13 @@ suite("AntigravityCliProvider", () => {
   }
 
   test("retains hook artifacts while its process can receive sent turns", () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     assert.strictEqual(provider.shouldRetainWorkflowArtifactsForReuse(), true);
   });
 
   test("routes headless output through the transcript log parser", () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     assert.strictEqual(provider.headlessSource, "log");
     assert.ok(provider.logParser);
@@ -305,7 +305,7 @@ suite("AntigravityCliProvider", () => {
       ),
       "utf8"
     );
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     assert.strictEqual(
       provider.extractErrorFromStdout(stdout),
@@ -322,13 +322,13 @@ suite("AntigravityCliProvider", () => {
 
   test("requires absolute file references", () => {
     assert.strictEqual(
-      new AntigravityCliProvider().requiresAbsoluteFileReferences,
+      new AntigravityHarnessAdapter().requiresAbsoluteFileReferences,
       true
     );
   });
 
   test("uses stream-json only for headless arguments", () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     assert.deepStrictEqual(
       provider.buildHeadlessArgs(["--model", "gemini-3.6-flash-low"], "prompt"),
@@ -363,7 +363,7 @@ suite("AntigravityCliProvider", () => {
     });
 
     test("returns the init event conversation ID", () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       const capturedAgentResponseEvent =
         '{"event":"step_update","step_update":{"conversation_id":"73b9d054-...","step_index":2,"state":"DONE","step_type":"agent_response","text_delta":"\\n","duration_seconds":0.7197045,"usage":{"input_tokens":17831,"output_tokens":1,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":17832}}}';
 
@@ -376,7 +376,7 @@ suite("AntigravityCliProvider", () => {
     });
 
     test("returns undefined for a truncated JSON line", () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
 
       assert.strictEqual(
         provider.extractSessionIdFromStdout?.(initEvent.slice(0, -4)),
@@ -385,7 +385,7 @@ suite("AntigravityCliProvider", () => {
     });
 
     test("tolerates interleaved non-JSON noise", () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
 
       assert.strictEqual(
         provider.extractSessionIdFromStdout?.(
@@ -397,7 +397,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("regenerates the token for every prompt and forwards it to both spawn modes", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const inheritedKey = "CTRLYOKE_AGY_PROVIDER_TEST_ENV";
     process.env[inheritedKey] = "preserve-me";
 
@@ -435,7 +435,7 @@ suite("AntigravityCliProvider", () => {
       statusLine: { type: "command", command: "node user-statusline.js" },
     });
     await fs.writeFile(settingsPath(), original);
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     try {
       await provider.buildCliArgs(
@@ -477,7 +477,7 @@ suite("AntigravityCliProvider", () => {
         theme: "dark",
       })
     );
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     try {
       await buildArgs(provider);
@@ -528,7 +528,7 @@ suite("AntigravityCliProvider", () => {
         },
       })
     );
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     await buildArgs(provider);
 
@@ -564,8 +564,8 @@ suite("AntigravityCliProvider", () => {
         statusLine: { type: "command", command: "node user-statusline.js" },
       })
     );
-    const first = new AntigravityCliProvider();
-    const second = new AntigravityCliProvider();
+    const first = new AntigravityHarnessAdapter();
+    const second = new AntigravityHarnessAdapter();
 
     await Promise.all([buildArgs(first), buildArgs(second)]);
 
@@ -605,7 +605,7 @@ suite("AntigravityCliProvider", () => {
         },
       })
     );
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     await buildArgs(provider);
 
@@ -660,7 +660,7 @@ suite("AntigravityCliProvider", () => {
         },
       })
     );
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
 
     await buildArgs(provider);
 
@@ -692,7 +692,7 @@ suite("AntigravityCliProvider", () => {
         },
       })
     );
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     await buildArgs(provider);
 
     assert.strictEqual(
@@ -702,7 +702,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("flushes an unterminated final stream-json record when stdout ends", () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const streamEvent =
       '{"event":"step_update","step_update":{"step_type":"agent_response","usage":{"input_tokens":1,"output_tokens":2,"thinking_tokens":3,"total_tokens":3}}}';
 
@@ -724,7 +724,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("resets stream-json usage for each prompt", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const streamEvent =
       '{"event":"step_update","step_update":{"step_type":"agent_response","usage":{"input_tokens":1,"output_tokens":2,"thinking_tokens":3,"total_tokens":3}}}\n';
 
@@ -754,7 +754,7 @@ suite("AntigravityCliProvider", () => {
 
   suite("augmentParsedOutput", () => {
     test("patches missing completed-response usage from the latest snapshot", async () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       try {
         await buildArgs(provider);
         const sidecar = provider.startExecutionSidecar({
@@ -801,7 +801,7 @@ suite("AntigravityCliProvider", () => {
     });
 
     test("does not overwrite usage values already produced by the parser", async () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       try {
         await buildArgs(provider);
         const sidecar = provider.startExecutionSidecar({
@@ -850,7 +850,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("threads provider-live quota updates from the execution sidecar", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const updates: Array<{ id: string; percentUsed?: number }> = [];
     try {
       await buildArgs(provider);
@@ -892,7 +892,7 @@ suite("AntigravityCliProvider", () => {
 
   suite("extractSessionIdFromLogs", () => {
     test("returns a fresh snapshot conversation ID before recovery", async () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       const calls = stubSessionRecovery(provider, "cached-id", "log-id");
 
       try {
@@ -926,7 +926,7 @@ suite("AntigravityCliProvider", () => {
     });
 
     test("falls back to cache then log scraping when no snapshot is available", async () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       const calls = stubSessionRecovery(provider, null, "log-session-id");
 
       try {
@@ -957,7 +957,7 @@ suite("AntigravityCliProvider", () => {
     });
 
     test("rejects a snapshot written before execution and uses recovery", async () => {
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       const calls = stubSessionRecovery(
         provider,
         "cached-session-id",
@@ -1008,7 +1008,7 @@ suite("AntigravityCliProvider", () => {
           },
         })
       );
-      const provider = new AntigravityCliProvider();
+      const provider = new AntigravityHarnessAdapter();
       const calls = stubSessionRecovery(
         provider,
         "cached-session-id",
@@ -1041,7 +1041,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("keeps the installed statusline during cleanup", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     await buildArgs(provider);
     assert.ok(
       (await fs.readFile(settingsPath(), "utf8")).includes("statusLine")
@@ -1062,7 +1062,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("retains permission settings for the live process and detects user rule changes", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const initialIdentity = provider.getExternalPermissionIdentity();
     await fs.writeFile(
       settingsPath(),
@@ -1092,7 +1092,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("does not replace invalid global hooks JSON when starting", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const invalidContent = '{"user-hook": { trailing comma, }}';
     await fs.writeFile(hooksPath(), invalidContent, "utf8");
 
@@ -1112,7 +1112,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("reclaims dead and unowned groups on the next hook write", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const deadGroup = "ctrlyoke-dead-owner";
     const unownedGroup = "ctrlyoke-no-owner";
     const liveGroup = "ctrlyoke-live-owner";
@@ -1175,7 +1175,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("creates the global hooks directory when it does not exist yet", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     await fs.rm(path.dirname(hooksPath()), { recursive: true, force: true });
 
     await provider.buildNotificationHookArgs(
@@ -1198,7 +1198,7 @@ suite("AntigravityCliProvider", () => {
   });
 
   test("logs invalid global hooks JSON during cleanup and resolves", async () => {
-    const provider = new AntigravityCliProvider();
+    const provider = new AntigravityHarnessAdapter();
     const invalidContent = "not json";
     const warnings: string[] = [];
     const originalWarn = Log.warn;

@@ -21,7 +21,7 @@ floor.
 - **Models never set the minimum.** New models routinely need the latest CLI
   and old ones are retired, so gating on them would move the minimum every
   week. A CLI that rejects a model fails the step with its own error, which
-  must reach the user (see `ICliProvider.extractErrorFromStdout` for a
+  must reach the user (see `IHarnessAdapter.extractErrorFromStdout` for a
   log-sourced harness whose stdout carries it). Claude and Codex model lists
   are static (`ModelConstants.ts`) and documented as matching `testedWith`; the
   other harnesses discover models from the installed CLI.

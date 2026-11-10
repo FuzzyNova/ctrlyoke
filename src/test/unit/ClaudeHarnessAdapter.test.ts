@@ -5,7 +5,7 @@ import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
 import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   EXECUTION_MODES,
@@ -51,7 +51,7 @@ function createProperties(
   };
 }
 
-suite("ClaudeCliProvider", () => {
+suite("ClaudeHarnessAdapter", () => {
   let tempHome: string;
   let workspaceRoot: string;
   let originalHome: string | undefined;
@@ -84,13 +84,13 @@ suite("ClaudeCliProvider", () => {
   });
 
   test("retains hook and statusline artifacts for reusable PTY sessions", () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
 
     assert.strictEqual(provider.shouldRetainWorkflowArtifactsForReuse(), true);
   });
 
   test("merges sandbox settings into the single Claude hook settings file", async () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
     const preparation = await provider.planNotificationHookArgs(
       "/extension",
       workspaceRoot,
@@ -112,7 +112,7 @@ suite("ClaudeCliProvider", () => {
   });
 
   test("strips inherited Claude Code session markers from interactive spawn env", () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
     const markerVars = [
       "CLAUDECODE",
       "CLAUDE_CODE_CHILD_SESSION",
@@ -147,7 +147,7 @@ suite("ClaudeCliProvider", () => {
   });
 
   test("matches recoverable session errors from stderr text or a process result", () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
 
     for (const message of [
       "--resume requires a valid session ID",
@@ -187,7 +187,7 @@ suite("ClaudeCliProvider", () => {
   ];
   for (const [description, mcpServers] of mcpServerCases) {
     test(`auto-approves ctrlyoke MCP tools with ${description}`, async () => {
-      const provider = new ClaudeCliProvider();
+      const provider = new ClaudeHarnessAdapter();
       const preparation = await provider.planCliArgs(
         { prompt: "use the queue" } as PromptStep,
         false,
@@ -210,7 +210,7 @@ suite("ClaudeCliProvider", () => {
   }
 
   test("normalizes MCP server IDs in auto-approved tool rules", async () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
     const preparation = await provider.planCliArgs(
       { prompt: "use context7" } as PromptStep,
       false,
@@ -260,7 +260,7 @@ suite("ClaudeCliProvider", () => {
     const extensionPath = await writeStatuslinePackage(
       path.join(tempHome, "extension")
     );
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
 
     await provider.buildCliArgs(
       {} as never,
@@ -306,7 +306,7 @@ suite("ClaudeCliProvider", () => {
       configService.setUserBackend(
         makeBackend({ defaults: { models: { "claude-cli": "none" } } })
       );
-      const preparation = await new ClaudeCliProvider().planCliArgs(
+      const preparation = await new ClaudeHarnessAdapter().planCliArgs(
         { prompt: "hello" } as PromptStep,
         false,
         process.cwd(),

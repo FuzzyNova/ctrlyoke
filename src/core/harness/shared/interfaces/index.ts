@@ -8,5 +8,5 @@
 export * from "./INotificationMonitor";
 export * from "./IToolPermissionMapper";
 export * from "./ISandboxMapper";
-export * from "./ICliProvider";
+export * from "./IHarnessAdapter";
 export * from "./ILogParser";

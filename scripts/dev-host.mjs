@@ -134,7 +134,7 @@ const CODE_BIN = IS_WINDOWS ? "code.cmd" : "code";
 const NPM_BIN = IS_WINDOWS ? "npm.cmd" : "npm";
 const NO_HARNESSES_FLAG = "--no-harnesses";
 
-// Each provider's CLI_COMMAND (src/core/harness/<harness>/*CliProvider.ts).
+// Each adapter's CLI_COMMAND (src/core/harness/<harness>/*HarnessAdapter.ts).
 const HARNESS_BINARIES = [
   "copilot",
   "claude",

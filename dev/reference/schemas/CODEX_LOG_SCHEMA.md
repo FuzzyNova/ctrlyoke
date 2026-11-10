@@ -932,7 +932,7 @@ function hasAgentResponse(events: CodexLogEvent[]): boolean {
 
 ## Related Documentation
 
-- **Codex CLI Provider Implementation:** `src/flightpath/cli/codex/CodexCliProvider.ts`
+- **Codex CLI Provider Implementation:** `src/flightpath/cli/codex/CodexHarnessAdapter.ts`
 - **Codex Response Parser:** `src/flightpath/cli/codex/CodexResponseParser.ts`
 - **Codex Log Parser:** `src/flightpath/cli/codex/CodexLogParser.ts`
 - **Adding New CLI Providers:** `docs/ADDING_NEW_CLI_HARNESS.md`

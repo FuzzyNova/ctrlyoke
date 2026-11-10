@@ -49,7 +49,7 @@ export function defaultQwenSystemSettingsPath(
 /**
  * Qwen's system defaults path override. Without it Qwen looks for
  * `system-defaults.json` beside the system settings file, which for a ctrlyoke
- * launch is the per-run copy in `.ctrlyoke/temp/`, so `QwenCliProvider` sets it
+ * launch is the per-run copy in `.ctrlyoke/temp/`, so `QwenHarnessAdapter` sets it
  * to the file Qwen would otherwise read.
  */
 export const QWEN_SYSTEM_DEFAULTS_PATH_ENV = "QWEN_CODE_SYSTEM_DEFAULTS_PATH";

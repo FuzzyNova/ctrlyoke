@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 
 suite("Copilot CLI OTel context-window enrichment", () => {
   let otelFilePath: string;
@@ -43,7 +43,7 @@ suite("Copilot CLI OTel context-window enrichment", () => {
       ],
     });
 
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     provider.logParser.setOtelFilePath(otelFilePath);
 
     const output = await provider.augmentParsedOutput({
@@ -67,7 +67,7 @@ suite("Copilot CLI OTel context-window enrichment", () => {
       },
     });
 
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     provider.logParser.setOtelFilePath(otelFilePath);
 
     const output = await provider.augmentParsedOutput({
@@ -85,7 +85,7 @@ suite("Copilot CLI OTel context-window enrichment", () => {
   });
 
   test("should pass through when no OTel file or session ID is available", async () => {
-    const provider = new CopilotCliProvider();
+    const provider = new CopilotHarnessAdapter();
     const output = await provider.augmentParsedOutput({
       events: [],
       metadata: { model: "gpt-5-mini", usage: { outputTokens: 5 } },

@@ -7,7 +7,7 @@ import {
   assessHarnessVersion,
   type HarnessVersionAssessment,
 } from "../../../utils/HarnessVersion";
-import type { ICliProvider } from "./interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 
 export interface HarnessDetectionResult {
   /** Installed and answering. A version below the minimum never makes it unavailable. */
@@ -27,7 +27,7 @@ export interface HarnessDetectionResult {
  * `HarnessCapabilityRegistry` — so they never disagree about an old CLI.
  */
 export async function detectHarness(
-  provider: Pick<ICliProvider, "checkAvailability" | "getVersion" | "config">
+  provider: Pick<IHarnessAdapter, "checkAvailability" | "getVersion" | "config">
 ): Promise<HarnessDetectionResult> {
   if (!(await provider.checkAvailability())) {
     return { available: false };

@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
 import { TEMP_FILE_CATEGORIES } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import type {
@@ -29,9 +29,9 @@ function parseMcpConfig(args: string[]): Record<string, unknown> {
 
 // ============================================================================
 
-suite("QwenCliProvider", () => {
+suite("QwenHarnessAdapter", () => {
   test("recognizes Qwen's missing saved session message from stdout", () => {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
 
     assert.strictEqual(
       provider.isRecoverableSessionError({
@@ -53,7 +53,7 @@ suite("QwenCliProvider", () => {
   });
 
   test("formats file references with spaces for the current platform", () => {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
     const originalPlatform = Object.getOwnPropertyDescriptor(
       process,
       "platform"
@@ -116,7 +116,7 @@ suite("QwenCliProvider", () => {
   });
 
   test("converts user hook timeout seconds to native milliseconds", () => {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
     const hooks = (provider as any).buildUserHooksSection([
       { event: "stop", command: "node slow.js", timeoutSec: 2.5 },
     ]);
@@ -127,7 +127,7 @@ suite("QwenCliProvider", () => {
     /** A provider whose "real" system settings live in the temp workspace. */
     function providerWithSystemSettings(workspaceRoot: string) {
       const basePath = path.join(workspaceRoot, "system", "settings.json");
-      return { basePath, provider: new QwenCliProvider(basePath) };
+      return { basePath, provider: new QwenHarnessAdapter(basePath) };
     }
 
     test("removes orphaned ctrlyoke groups from .qwen/settings.json and keeps user groups", async () => {
@@ -354,7 +354,7 @@ suite("QwenCliProvider", () => {
 
   suite("MCP configuration", () => {
     test("no MCP input returns no inline argument and does not mutate the workspace", async () => {
-      const provider = new QwenCliProvider();
+      const provider = new QwenHarnessAdapter();
       const workspaceRoot = await createTempWorkspace();
 
       try {
@@ -369,7 +369,7 @@ suite("QwenCliProvider", () => {
     });
 
     test("serializes dynamic, local, remote, and environment MCP values using Qwen's settings shape", async () => {
-      const provider = new QwenCliProvider();
+      const provider = new QwenHarnessAdapter();
       const workspaceRoot = "C:\\workspace\\project";
       const workingFilePath = "C:\\workspace\\workflow.yaml";
       const localServer: McpServerConfig = {
@@ -434,7 +434,7 @@ suite("QwenCliProvider", () => {
     });
 
     test("substitutes resolved secret values into process-local MCP config", async () => {
-      const provider = new QwenCliProvider();
+      const provider = new QwenHarnessAdapter();
       const secret = "qwen-test-secret-value";
       const args = await provider.getMcpConfigArgs(
         undefined,
@@ -465,8 +465,8 @@ suite("QwenCliProvider", () => {
 
     test("provider instances keep independent inline MCP argument values", async () => {
       const workspaceRoot = await createTempWorkspace();
-      const firstProvider = new QwenCliProvider();
-      const secondProvider = new QwenCliProvider();
+      const firstProvider = new QwenHarnessAdapter();
+      const secondProvider = new QwenHarnessAdapter();
 
       try {
         const firstArgs = await firstProvider.getMcpConfigArgs(
@@ -499,7 +499,7 @@ suite("QwenCliProvider", () => {
 
   suite("cleanupWorkspaceArtifacts", () => {
     test("leaves existing Qwen settings, backups, and a missing Qwen directory untouched", async () => {
-      const provider = new QwenCliProvider();
+      const provider = new QwenHarnessAdapter();
       const existingWorkspace = await createTempWorkspace();
       const missingWorkspace = await createTempWorkspace();
       const qwenDirectory = path.join(existingWorkspace, ".qwen");
@@ -534,7 +534,7 @@ suite("QwenCliProvider", () => {
 
   suite("buildCliArgs", () => {
     test("keeps inline MCP as two base tokens and redacts its complete value in trace output", async () => {
-      const provider = new QwenCliProvider();
+      const provider = new QwenHarnessAdapter();
       const workspaceRoot = await createTempWorkspace();
       const traceMessages: string[] = [];
       const originalTrace = Log.trace;
@@ -592,7 +592,7 @@ suite("QwenCliProvider", () => {
   });
 
   suite("buildHeadlessArgs", () => {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
 
     test("includes --input-format stream-json alongside --output-format stream-json", () => {
       const result = provider.buildHeadlessArgs(["--base"], "do the thing");
@@ -608,7 +608,7 @@ suite("QwenCliProvider", () => {
   });
 
   suite("buildInteractiveArgs", () => {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
 
     test("does not add --output-format/--input-format (interactive mode never hits the non-interactive gate)", () => {
       const result = provider.buildInteractiveArgs(["--base"], "do the thing");

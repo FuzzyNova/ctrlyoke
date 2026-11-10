@@ -46,7 +46,7 @@ import {
   secretRedactionService,
 } from "../../utils/SecretRedactionService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
 import { NoopFileWatcherFactory } from "../helpers/NoopFileWatcherFactory";
 import { InMemoryLanguageServerBackend } from "../helpers/InMemoryLanguageServerBackend";
 import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
@@ -1927,7 +1927,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
 });
 
 suite("HostedServerMessageFactory", () => {
-  const codexInstallCommand = new CodexCliProvider().config.installCommand;
+  const codexInstallCommand = new CodexHarnessAdapter().config.installCommand;
 
   test("creates harness updates in the webview message shape", () => {
     assert.deepStrictEqual(

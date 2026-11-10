@@ -126,6 +126,33 @@ This ledger maps retired names to their current names. Historical implementation
 - `useSettingsDrawerTabOverrides`, `DrawerRow`, and `DrawerTabBar` remain settings-drawer names; `drawerRef` in `GlobalSettingsDrawer.tsx` remains drawer-specific.
 - `src/ui/webview-react/components/output/ctrlyoke-tools/WorkflowStatusView.tsx` and its tool-view symbols remain tool-status names; they are separate from the workflow header switcher.
 - `MESSAGE_TYPES.CLIENT_ID_ASSIGNED` and `MESSAGE_TYPES.CAPTURE_THEME_VARS` remain wire-message names; only their webview handler/helper locations changed. `useRunViewLoadWatchdog` remains a hook in `hooks/`.
+- `CliProviderUtils`, `CliProviderWorkflowContext`, and `CliProviderPreparation` remain for step 5b; their names and paths are intentionally unchanged in 5a.
 - Persisted and wire contracts: `PERSISTED_STORES.PROVIDER_USAGE = "provider-usage"`, `PROVIDER_USAGE_SCHEMA_VERSION`; `HARNESS_USAGE_ERROR_CODES` values (including `provider-refresh-failed`); `StatusLineFormatProvider` values (`claude`, `antigravity`, `copilot`, `qwen`); `COMPLETION_NOTIFICATION_*` / `NOTIFICATION_KINDS` values; `_runtime.finalStep.loopCount`, `OutputExecutionTarget.loopIndex`, and the `loop*` fields in `WebviewMessageTypes.ts` / `IDashboardSink.ts`.
 - On-disk and browser contracts: `TempFileManager` directory names and file prefixes, output-snapshot filename prefix and truncation markers; sessionStorage `ctrlyoke-panel-reconnect-retry-at`, `window.__ctrlyokePanelHandshake*`; zustand persist names `ctrlyoke-ui-state` and `ctrlyoke-workspace-viewer-state`.
 - `docs/guide/dashboard.md` screenshot name `step-context-menu-900x588.png` remains unchanged.
+| `src/core/harness/shared/interfaces/ICliProvider.ts` | `src/core/harness/shared/interfaces/IHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `src/core/harness/claude/ClaudeCliProvider.ts` | `src/core/harness/claude/ClaudeHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `src/core/harness/codex/CodexCliProvider.ts` | `src/core/harness/codex/CodexHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `src/core/harness/copilot/CopilotCliProvider.ts` | `src/core/harness/copilot/CopilotHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `src/core/harness/opencode/OpenCodeCliProvider.ts` | `src/core/harness/opencode/OpenCodeHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `src/core/harness/qwen/QwenCliProvider.ts` | `src/core/harness/qwen/QwenHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `src/core/harness/antigravity/AntigravityCliProvider.ts` | `src/core/harness/antigravity/AntigravityHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/ClaudeCliProvider.test.ts` | `src/test/unit/ClaudeHarnessAdapter.test.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/CodexCliProvider.test.ts` | `src/test/unit/CodexHarnessAdapter.test.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/CopilotCliProvider.test.ts` | `src/test/unit/CopilotHarnessAdapter.test.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/OpenCodeCliProvider.test.ts` | `src/test/unit/OpenCodeHarnessAdapter.test.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/QwenCliProvider.test.ts` | `src/test/unit/QwenHarnessAdapter.test.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/AntigravityCliProvider.test.ts` | `src/test/unit/AntigravityHarnessAdapter.test.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/CliProviderArgumentCharacterization.test.ts` | `src/test/unit/HarnessAdapterArgumentCharacterization.test.ts` | file | 5a | 2026-11-09 |
+| `src/test/unit/CliProviderPreparation.test.ts` | `src/test/unit/HarnessAdapterPreparation.test.ts` | file | 5a | 2026-11-09 |
+| `.github/instructions/harness-cli-providers.instructions.md` | `.github/instructions/harness-adapters.instructions.md` | file | 5a | 2026-11-09 |
+| `ICliProvider` | `IHarnessAdapter` | symbol | 5a | 2026-11-09 |
+| `ClaudeCliProvider` | `ClaudeHarnessAdapter` | symbol | 5a | 2026-11-09 |
+| `CodexCliProvider` | `CodexHarnessAdapter` | symbol | 5a | 2026-11-09 |
+| `CopilotCliProvider` | `CopilotHarnessAdapter` | symbol | 5a | 2026-11-09 |
+| `OpenCodeCliProvider` | `OpenCodeHarnessAdapter` | symbol | 5a | 2026-11-09 |
+| `QwenCliProvider` | `QwenHarnessAdapter` | symbol | 5a | 2026-11-09 |
+| `AntigravityCliProvider` | `AntigravityHarnessAdapter` | symbol | 5a | 2026-11-09 |
+| `HeadlessSourceModeProvider` | `HeadlessSourceModeAdapter` | symbol | 5a | 2026-11-09 |
+| `src/test/helpers/posixClaudeProvider.ts` | `src/test/helpers/posixClaudeHarnessAdapter.ts` | file | 5a | 2026-11-09 |
+| `PosixClaudeCliProvider` | `PosixClaudeHarnessAdapter` | symbol | 5a | 2026-11-09 |

@@ -5826,7 +5826,7 @@ export const SESSION_AVAILABILITY = {
 } as const;
 export type SessionAvailability =
   (typeof SESSION_AVAILABILITY)[keyof typeof SESSION_AVAILABILITY];
-/** What `ICliProvider.probeResumableSession` can report. */
+/** What `IHarnessAdapter.probeResumableSession` can report. */
 export type SessionProbeResult = Exclude<
   SessionAvailability,
   typeof SESSION_AVAILABILITY.MALFORMED

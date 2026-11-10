@@ -2,13 +2,13 @@ import * as assert from "assert";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { PosixClaudeCliProvider } from "../helpers/posixClaudeProvider";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
-import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { PosixClaudeHarnessAdapter } from "../helpers/posixClaudeHarnessAdapter";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { resolveHookNotificationPlan } from "../../core/harness/shared/HookNotificationPlan";
@@ -35,12 +35,12 @@ const resolvedProperties: ResolvedProperties = {
 };
 
 const providers = [
-  [HARNESS_IDS.COPILOT_CLI, () => new CopilotCliProvider()],
-  [HARNESS_IDS.CLAUDE_CLI, () => new ClaudeCliProvider()],
-  [HARNESS_IDS.CODEX_CLI, () => new CodexCliProvider()],
-  [HARNESS_IDS.OPENCODE_CLI, () => new OpenCodeCliProvider()],
-  [HARNESS_IDS.QWEN_CLI, () => new QwenCliProvider()],
-  [HARNESS_IDS.ANTIGRAVITY_CLI, () => new AntigravityCliProvider()],
+  [HARNESS_IDS.COPILOT_CLI, () => new CopilotHarnessAdapter()],
+  [HARNESS_IDS.CLAUDE_CLI, () => new ClaudeHarnessAdapter()],
+  [HARNESS_IDS.CODEX_CLI, () => new CodexHarnessAdapter()],
+  [HARNESS_IDS.OPENCODE_CLI, () => new OpenCodeHarnessAdapter()],
+  [HARNESS_IDS.QWEN_CLI, () => new QwenHarnessAdapter()],
+  [HARNESS_IDS.ANTIGRAVITY_CLI, () => new AntigravityHarnessAdapter()],
 ] as const;
 
 type MutableFsPromises = Pick<
@@ -88,7 +88,7 @@ function createBuilder(
 
 suite("ExecutionPlanBuilder", () => {
   test("merges Claude sandbox settings into its single hook settings file in both modes", async () => {
-    const provider = new PosixClaudeCliProvider();
+    const provider = new PosixClaudeHarnessAdapter();
     provider.getVersion = async () => "2.1.316";
     const properties: ResolvedProperties = {
       ...resolvedProperties,
@@ -123,7 +123,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("refuses a Claude sandbox that additionalArgs --settings would replace", async () => {
-    const provider = new PosixClaudeCliProvider();
+    const provider = new PosixClaudeHarnessAdapter();
     provider.getVersion = async () => "2.1.317";
     const properties: ResolvedProperties = {
       ...resolvedProperties,
@@ -140,7 +140,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("refuses a Claude sandbox with no workspace to write its settings to", async () => {
-    const provider = new PosixClaudeCliProvider();
+    const provider = new PosixClaudeHarnessAdapter();
     provider.getVersion = async () => "2.1.317";
     await assert.rejects(
       createBuilder(provider).plan(
@@ -202,7 +202,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("passes Qwen's off switch as a flag and a process environment variable", async () => {
-    const provider = new QwenCliProvider();
+    const provider = new QwenHarnessAdapter();
     const plan = await createBuilder(provider).plan(
       createSession("headless", {
         ...resolvedProperties,
@@ -241,7 +241,7 @@ suite("ExecutionPlanBuilder", () => {
 
   test("turns Copilot's sandbox off with --no-sandbox and passes nothing for None", async () => {
     const plan = (sandbox: boolean | null) =>
-      createBuilder(new CopilotCliProvider()).plan(
+      createBuilder(new CopilotHarnessAdapter()).plan(
         createSession("headless", {
           ...resolvedProperties,
           harness: HARNESS_IDS.COPILOT_CLI,
@@ -265,7 +265,7 @@ suite("ExecutionPlanBuilder", () => {
         },
       ],
     };
-    const builder = createBuilder(new QwenCliProvider(), workspaceRoot);
+    const builder = createBuilder(new QwenHarnessAdapter(), workspaceRoot);
     const makeSession = (promptIndex: number) =>
       new CliExecutionSession({
         prompt: { prompt: "prompt text" },
@@ -293,7 +293,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("passes the resolved execution mode to image argument builders", async () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const receivedModes: boolean[] = [];
     provider.buildImageAttachmentArgs = (_paths, isInteractive) => {
       receivedModes.push(isInteractive);
@@ -320,7 +320,7 @@ suite("ExecutionPlanBuilder", () => {
     try {
       const otherFolder = path.join(workspaceRoot, "..", "other-folder");
       const trustedRoot = path.join(workspaceRoot, "..", "trusted-root");
-      const provider = new OpenCodeCliProvider();
+      const provider = new OpenCodeHarnessAdapter();
       const builder = new ExecutionPlanBuilder({
         provider,
         getWorkspaceRoot: () => workspaceRoot,
@@ -362,7 +362,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("omits OpenCode image flags interactively and keeps them headlessly", async () => {
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     const plans = [];
 
     for (const mode of ["interactive", "headless"] as const) {
@@ -392,7 +392,7 @@ suite("ExecutionPlanBuilder", () => {
       [],
       ["shots/diagram.png"]
     );
-    const plan = await createBuilder(new CodexCliProvider()).plan(session);
+    const plan = await createBuilder(new CodexHarnessAdapter()).plan(session);
     const promptIndex = plan.cliArgs.indexOf("Describe shots/diagram.png");
     const imageFlagIndex = plan.cliArgs.indexOf("--image");
 
@@ -416,7 +416,7 @@ suite("ExecutionPlanBuilder", () => {
       toolPermissions: { mode: "custom", allowedTools: [], deniedTools: [] },
     };
     const session = createSession("headless", properties);
-    const plan = await createBuilder(new ClaudeCliProvider()).plan(session);
+    const plan = await createBuilder(new ClaudeHarnessAdapter()).plan(session);
 
     assert.deepStrictEqual(plan.effectiveToolPermissions?.deniedTools, [
       "mcp__io_github_upstash_context7__resolve-library-id",
@@ -498,7 +498,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("hooks:null suppresses inherited custom hooks and hook notifications", async () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new ClaudeHarnessAdapter();
     let capturedUserHooks: unknown;
     let capturedEvents: unknown;
     Object.defineProperty(provider, "planNotificationHookArgs", {
@@ -543,7 +543,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("forwards an install-only notification source to the provider", async () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     let capturedEvents: unknown;
     Object.defineProperty(provider, "planNotificationHookArgs", {
       value: async (

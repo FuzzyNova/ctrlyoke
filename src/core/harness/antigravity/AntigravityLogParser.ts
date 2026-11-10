@@ -168,7 +168,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * there is no "old stale Stop catches up the resume in the same read" race to
    * guard against — and a real agy turn commonly emits exactly one Stop hook for
    * the whole exchange, so a guard requiring one more never resolves. See the
-   * gotcha in harness-cli-providers.instructions.md.
+   * gotcha in harness-adapters.instructions.md.
    */
   private readonly backgroundFollowUpState = new BackgroundFollowUpState();
   private backgroundStateSessionId?: string;

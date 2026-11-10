@@ -4,7 +4,7 @@ import { isRegistryInitialized } from "../../../utils/ModelRegistry";
 
 /** How one harness validates a step's model before passing `--model`. */
 export interface CliModelRules {
-  /** Log prefix, e.g. `ClaudeCliProvider`. */
+  /** Log prefix, e.g. `ClaudeHarnessAdapter`. */
   logLabel: string;
   /** The harness's configured default model (may be `none`). */
   defaultModel: string;

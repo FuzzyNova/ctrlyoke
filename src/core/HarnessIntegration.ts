@@ -1166,7 +1166,7 @@ export abstract class HarnessIntegration {
    * Format an already-quoted path as an inline `@file` reference token, for
    * {@link ContextExpander.sanitizeReferences}'s rewrite of literal `@path`
    * mentions in prompt text. Base implementation is the CLI-native `@`
-   * prefix; `CliIntegration` overrides this to honor `ICliProvider.
+   * prefix; `CliIntegration` overrides this to honor `IHarnessAdapter.
    * formatFileReference` (e.g. Codex, which drops the `@` entirely) — the
    * same provider hook used for ctrlyoke-generated file references.
    */

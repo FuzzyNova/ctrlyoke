@@ -428,7 +428,7 @@ export class OpenCodeLogParser extends BaseLogParser {
 
   /**
    * Returns the context window size (in tokens) for the current model.
-   * Injected from OpenCodeCliProvider so parsers don't call the CLI themselves.
+   * Injected from OpenCodeHarnessAdapter so parsers don't call the CLI themselves.
    */
   private readonly contextWindowSizeFn: () => number | undefined;
 

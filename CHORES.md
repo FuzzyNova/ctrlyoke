@@ -156,7 +156,7 @@ or `copilot` stops offering simply disappears. If it was a default, `npm run typ
 default lives in `DEFAULT_MODELS` in `src/types/DashboardConstants.ts`; the same ID also appears
 in `schemas/settings-schema.json`, `docs/harnesses/antigravity-cli.md`,
 `docs/reference/settings.md`, and the Antigravity bullets in
-`.github/instructions/harness-cli-providers.instructions.md`. Update all of them together.
+`.github/instructions/harness-adapters.instructions.md`. Update all of them together.
 
 #### 2b. Codex / Claude CLI models — inherently manual
 

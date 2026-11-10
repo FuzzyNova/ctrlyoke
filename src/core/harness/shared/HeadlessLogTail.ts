@@ -7,7 +7,7 @@ import { Log } from "../../../utils/Log";
 import { splitCompleteLines } from "../../../utils/TextLines";
 import { DRAIN_DEADLINE_MS, DRAIN_POLL_INTERVAL_MS } from "../CliLogMonitor";
 import { CliLogEventPump } from "./CliLogEventPump";
-import type { ICliProvider } from "./interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 import type { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
 
 /** Default idle poll interval for log growth while stdout is quiet. */
@@ -84,8 +84,8 @@ export interface HeadlessStreamingSource {
 }
 
 /** Provider members that determine which stream feeds headless events. */
-export type HeadlessSourceModeProvider = Pick<
-  ICliProvider,
+export type HeadlessSourceModeAdapter = Pick<
+  IHarnessAdapter,
   "headlessSource" | "parseHeadlessStdout" | "extractSessionIdFromStdout"
 >;
 
@@ -98,7 +98,7 @@ export type HeadlessSourceModeProvider = Pick<
  * implements both hooks can still pin itself to the log.
  */
 export function resolveHeadlessSourceMode(
-  provider: HeadlessSourceModeProvider
+  provider: HeadlessSourceModeAdapter
 ): HeadlessSourceMode | undefined {
   if (provider.headlessSource) {
     return provider.headlessSource;

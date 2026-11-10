@@ -5,10 +5,10 @@ import { suite, test, setup, teardown } from "mocha";
 import { parse } from "smol-toml";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
 import {
   CliProviderUtils,
@@ -145,10 +145,10 @@ suite("CliProviderUtils", () => {
       assert.strictEqual(receivedWorkflow?.declaredRoots?.[0], workflowRoot);
 
       for (const provider of [
-        new ClaudeCliProvider(),
-        new CodexCliProvider(),
-        new CopilotCliProvider(),
-        new AntigravityCliProvider(),
+        new ClaudeHarnessAdapter(),
+        new CodexHarnessAdapter(),
+        new CopilotHarnessAdapter(),
+        new AntigravityHarnessAdapter(),
       ]) {
         const args = await provider.buildCliArgs(
           { prompt: "prompt" },

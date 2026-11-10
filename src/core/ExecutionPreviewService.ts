@@ -94,7 +94,7 @@ import {
   ExecutionPlanBuilder,
   type ExecutionPlan,
 } from "./harness/shared/ExecutionPlanBuilder";
-import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "./harness/shared/interfaces/IHarnessAdapter";
 import type { PreparedMutation } from "./harness/shared/interfaces/PreparedMutation";
 import {
   ConfigurationUtils,
@@ -135,7 +135,7 @@ import {
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {
-  readonly provider: ICliProvider;
+  readonly provider: IHarnessAdapter;
   readonly promptPreparer: CliPromptPreparer;
   readonly executionPlanBuilder: ExecutionPlanBuilder;
 }
@@ -1000,7 +1000,7 @@ export class ExecutionPreviewService {
 
   private toCommandPreview(
     plan: ExecutionPlan,
-    provider: ICliProvider,
+    provider: IHarnessAdapter,
     properties: ResolvedProperties,
     worktreePreview: WorktreeExecutionPreview | undefined
   ): CommandPreview {

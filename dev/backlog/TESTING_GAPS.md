@@ -30,7 +30,7 @@ Ranked by uncovered statement count (biggest win first). Full report: `coverage/
 | `src/core/orchestration/ExternalRunWatchCoordinator.ts` |   63.49% |        418 / 1145 |
 | `src/server/HostedWorkspaceViewerService.ts`            |   87.03% |        412 / 3179 |
 | `src/cli/CliTerminalFormatter.ts`                       |   79.33% |        385 / 1863 |
-| `src/core/harness/copilot/CopilotCliProvider.ts`        |   73.38% |        366 / 1375 |
+| `src/core/harness/copilot/CopilotHarnessAdapter.ts`        |   73.38% |        366 / 1375 |
 | `src/ui/DashboardBroadcastHub.ts`                       |   32.95% |         358 / 534 |
 | `src/ui/PostMessageDashboardSink.ts`                    |   31.08% |         357 / 518 |
 | `src/utils/ModelRegistry.ts`                            |   35.88% |         343 / 535 |

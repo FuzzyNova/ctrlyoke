@@ -45,7 +45,7 @@ const MIN_STATEMENTS = 15;
 // TS interfaces compile away entirely, but v8-to-istanbul's AST walker still
 // counts method signatures as "statements", so these always show as 0%
 // despite having nothing to test. This codebase uses `I<Name>.ts` Hungarian
-// notation for interface-only files (ICliProvider.ts, ILogParser.ts, ...).
+// notation for interface-only files (IHarnessAdapter.ts, ILogParser.ts, ...).
 const EXCLUDE_NAME =
   /Types\.ts$|Settings\.ts$|\/interfaces\/|\/I[A-Z][A-Za-z]*\.ts$/;
 // Build artifacts / vendored or copied assets, not first-party logic to unit test here.

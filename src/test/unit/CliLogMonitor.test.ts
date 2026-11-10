@@ -1142,7 +1142,7 @@ suite("CliLogMonitor", () => {
     // <task-notification> can be consumed *mid-turn* (delivered as a
     // `queued_command` attachment while the model is still actively working,
     // not between turns as a `user` message) — see the Claude gotcha in
-    // harness-cli-providers.instructions.md. When that happens, the turn that
+    // harness-adapters.instructions.md. When that happens, the turn that
     // clears `hasPendingBackgroundWork()` is the *same* turn already in
     // progress, so Claude never fires a genuinely new, second Stop hook for
     // it. The old hold loop only re-checked `hasPendingBackgroundWork()`
@@ -1703,7 +1703,7 @@ suite("CliLogMonitor", () => {
     // whose catch-up read sees both the task-completion notification and the
     // resumed turn's terminal planner response is enough to complete — there is
     // no second, follow-up Stop to wait for. See the Antigravity gotcha in
-    // harness-cli-providers.instructions.md.
+    // harness-adapters.instructions.md.
     await withZeroDrainDeadline(async () => {
       const tempHome = makeTempDir("ctrlyoke-agy-monitor-home-");
       const previousHome = process.env.HOME;

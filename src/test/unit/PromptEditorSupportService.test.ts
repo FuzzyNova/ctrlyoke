@@ -6,7 +6,7 @@ import * as path from "path";
 import { PromptEditorSupportService } from "../../ui/PromptEditorSupportService";
 import { createWebviewClientContext } from "../../ui/WebviewClientContext";
 import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import {
   ATOMIC_REFERENCE_KINDS,
   HARNESS_IDS,
@@ -727,7 +727,7 @@ suite("PromptEditorSupportService", () => {
       from: number;
       seq: number;
     };
-    assert.strictEqual(requestedCommand, CopilotCliProvider.CLI_HELP_COMMAND);
+    assert.strictEqual(requestedCommand, CopilotHarnessAdapter.CLI_HELP_COMMAND);
     assert.strictEqual(
       response.type,
       MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE

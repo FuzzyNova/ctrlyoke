@@ -7,14 +7,14 @@ import {
   ClaudeLogParser,
   normalizeClaudeWorkspacePath,
 } from "../../../core/harness/claude/ClaudeLogParser";
-import { ClaudeCliProvider } from "../../../core/harness/claude/ClaudeCliProvider";
+import { ClaudeHarnessAdapter } from "../../../core/harness/claude/ClaudeHarnessAdapter";
 import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser";
-import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProvider";
+import { CopilotHarnessAdapter } from "../../../core/harness/copilot/CopilotHarnessAdapter";
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
 import { mergeSubagentOutput } from "../../../core/harness/shared/mergeSubagentOutput";
 import { calculateAttemptCost } from "../../../utils/ModelPricing";
-import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
+import { QwenHarnessAdapter } from "../../../core/harness/qwen/QwenHarnessAdapter";
 import {
   QwenLogParser,
   sanitizeQwenProjectPath,
@@ -1108,7 +1108,7 @@ suite("ClaudeLogParser", () => {
 
   suite("headless golden output", () => {
     test("surfaces Claude result errors in output metadata", () => {
-      const provider = new ClaudeCliProvider();
+      const provider = new ClaudeHarnessAdapter();
       const output = provider.logParser.extractResponse(
         provider.parseHeadlessStdout(
           [
@@ -1136,7 +1136,7 @@ suite("ClaudeLogParser", () => {
         __dirname,
         "../../../../src/test/fixtures/claude"
       );
-      const provider = new ClaudeCliProvider();
+      const provider = new ClaudeHarnessAdapter();
       provider.logParser.setCurrentModel("claude-sonnet-4-6");
       const stdout = fs.readFileSync(
         path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
@@ -1200,7 +1200,7 @@ suite("ClaudeLogParser", () => {
     });
 
     test("feeds stdout aliases into Claude background-work tracking", () => {
-      const provider = new ClaudeCliProvider();
+      const provider = new ClaudeHarnessAdapter();
       const events = provider.parseHeadlessStdout(
         [
           {
@@ -3240,7 +3240,7 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
 
       // discoverSessionLog is the boundary for a brand-new claude-cli
-      // execution on this reused parser instance (see ClaudeCliProvider —
+      // execution on this reused parser instance (see ClaudeHarnessAdapter —
       // one ClaudeLogParser lives for the process lifetime). An aborted
       // signal short-circuits before any filesystem work, isolating just
       // the reset behavior.
@@ -3765,7 +3765,7 @@ suite("CopilotLogParser", () => {
         __dirname,
         "../../../../src/test/fixtures/copilot"
       );
-      const provider = new CopilotCliProvider();
+      const provider = new CopilotHarnessAdapter();
       provider.logParser.setCurrentModel("gpt-5.4");
       const stdout = fs.readFileSync(
         path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
@@ -5228,7 +5228,7 @@ suite("CopilotLogParser", () => {
       // No stale-stop guard: Copilot's log watcher stays active during a hold
       // and settles this state independently of Stop-hook timing (like
       // Antigravity), so the resumed turn's own close is enough — see the
-      // Copilot gotcha in harness-cli-providers.instructions.md for why a
+      // Copilot gotcha in harness-adapters.instructions.md for why a
       // guard here caused a real production hang instead.
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
@@ -10089,7 +10089,7 @@ suite("QwenLogParser", () => {
         __dirname,
         "../../../../src/test/fixtures/qwen/headless-api-error.stdout.jsonl"
       );
-      const provider = new QwenCliProvider();
+      const provider = new QwenHarnessAdapter();
       const stdout = fs.readFileSync(fixturePath, "utf8");
 
       assert.strictEqual(
@@ -10103,7 +10103,7 @@ suite("QwenLogParser", () => {
         __dirname,
         "../../../../src/test/fixtures/qwen"
       );
-      const provider = new QwenCliProvider();
+      const provider = new QwenHarnessAdapter();
       provider.logParser.setCurrentModel("qwen3.5-plus");
       const stdout = CliParseUtils.parseJsonLines(
         fs.readFileSync(

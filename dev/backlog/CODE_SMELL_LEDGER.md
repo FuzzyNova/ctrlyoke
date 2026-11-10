@@ -307,7 +307,7 @@ still deferred.
   same name, different meaning from the paged hooks' `./`-stripping copy.
 - Inline `new Promise((resolve) => setTimeout(resolve, ms))` sleeps (about 15 sites across
   core, harness and utils) — one-line idiom; a shared helper would save nothing.
-- `extractSessionIdFromStdout` in the six `*CliProvider.ts` files — each is a few lines
+- `extractSessionIdFromStdout` in the six `*HarnessAdapter.ts` files — each is a few lines
   matching that harness's own event shape and parser; similarity is coincidental.
 - `basename` helpers in `src/ui/webview-react/navigation/navTitle.ts`,
   `src/ui/webview-react/utils/stepOverrideChips.ts`, `src/utils/McpSkillCommandRecognizer.ts`

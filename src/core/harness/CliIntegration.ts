@@ -54,8 +54,8 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import { resolveHookNotificationPlan } from "./shared/HookNotificationPlan";
 import type {
   CliExecutionSidecar,
-  ICliProvider,
-} from "./shared/interfaces/ICliProvider";
+  IHarnessAdapter,
+} from "./shared/interfaces/IHarnessAdapter";
 import type { HarnessQuotaSnapshot } from "../../types/UsageTypes";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
@@ -127,7 +127,7 @@ interface CliIntegrationServices {
  *
  * This class replaces the inheritance-based BaseCliIntegration with a composition-based
  * approach. Instead of extending a base class and implementing abstract methods, it accepts
- * an ICliProvider instance that encapsulates all harness-specific behavior.
+ * an IHarnessAdapter instance that encapsulates all harness-specific behavior.
  *
  * **Architecture Benefits:**
  * - Zero base class changes when adding new harnesses
@@ -145,7 +145,7 @@ interface CliIntegrationServices {
  *
  * @example
  * ```typescript
- * const provider = new CopilotCliProvider(context);
+ * const provider = new CopilotHarnessAdapter(context);
  * const integration = new CliIntegration(provider, context);
  * await integration.initialize();
  * await integration.sendPrompt(prompt);
@@ -153,7 +153,7 @@ interface CliIntegrationServices {
  */
 export class CliIntegration extends HarnessIntegration {
   /** Provider instance that encapsulates all CLI-specific logic */
-  private readonly provider: ICliProvider;
+  private readonly provider: IHarnessAdapter;
 
   protected override canSendToRunningTerminal(promptText: string): boolean {
     return (
@@ -212,7 +212,7 @@ export class CliIntegration extends HarnessIntegration {
   private suppressPtyExitSessionId?: string;
 
   /**
-   * Live-process artifacts (see ICliProvider.getLiveProcessFilePaths) whose cleanup
+   * Live-process artifacts (see IHarnessAdapter.getLiveProcessFilePaths) whose cleanup
    * was deferred until the PTY exits, mapped to the workspace root they belong to.
    */
   private readonly deferredLiveProcessFilePaths = new Map<string, string>();
@@ -250,7 +250,7 @@ export class CliIntegration extends HarnessIntegration {
    * @param platform Platform adapter providing workspace and runtime capabilities
    */
   constructor(
-    cliProvider: ICliProvider,
+    cliProvider: IHarnessAdapter,
     platform: PlatformAdapter,
     registerWithContext: boolean = true,
     private readonly userFeedbackSink?: UserFeedbackSink,
@@ -1401,7 +1401,7 @@ export class CliIntegration extends HarnessIntegration {
 
   private notifyStatuslineInstall(
     result:
-      | ReturnType<NonNullable<ICliProvider["consumeStatuslineInstallResult"]>>
+      | ReturnType<NonNullable<IHarnessAdapter["consumeStatuslineInstallResult"]>>
       | undefined
   ): void {
     if (!result) {
@@ -2172,7 +2172,7 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * @param deferLiveProcessFiles Keep files a live PTY still writes (see
-   *   ICliProvider.getLiveProcessFilePaths) until it exits. The strict variant
+   *   IHarnessAdapter.getLiveProcessFilePaths) until it exits. The strict variant
    *   passes false: its callers need every artifact gone before they settle.
    */
   private async cleanupWorkflowArtifactsWithDeferral(

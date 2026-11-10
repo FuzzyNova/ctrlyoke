@@ -28,7 +28,7 @@ import {
  *
  * ctrlyoke launches Qwen with its own system settings file, a copy of the
  * real one plus hooks, and points `QWEN_CODE_SYSTEM_DEFAULTS_PATH` at the real
- * defaults file (`QwenCliProvider`), so the layers read here are the ones the
+ * defaults file (`QwenHarnessAdapter`), so the layers read here are the ones the
  * launched Qwen reads.
  *
  * With `security.folderTrust.enabled`, whether the workspace layer counts

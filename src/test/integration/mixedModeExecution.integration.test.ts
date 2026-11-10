@@ -10,7 +10,7 @@ import {
   type WorkflowExecutionContext,
 } from "../../core/WorkflowExecutor";
 import { PromptQueue } from "../../core/PromptQueue";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { MockPlatform, TEST_VERSION_POLICY } from "../helpers/mockHarness";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
@@ -36,7 +36,7 @@ type Dispatch = {
   resolvedSessionId?: string;
 };
 
-function createProvider(): ICliProvider {
+function createProvider(): IHarnessAdapter {
   return {
     config: {
       name: "test",
@@ -66,7 +66,7 @@ function createProvider(): ICliProvider {
     buildHeadlessArgs: (_baseArgs, prompt) => ["--prompt", prompt],
     buildInteractiveArgs: (_baseArgs, prompt) => ["--prompt", prompt],
     checkAvailability: async () => true,
-  } as ICliProvider;
+  } as IHarnessAdapter;
 }
 
 function createExecutionContext(

@@ -3,9 +3,9 @@ import { suite, test } from "mocha";
 import type { CliEvent, UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { HeadlessLogTail } from "../../core/harness/shared/HeadlessLogTail";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
-import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
 import type {
   BaseCliEvent,
   ILogParser,
@@ -147,7 +147,7 @@ suite("HeadlessLogTail", () => {
   });
 
   test("captures a Codex session ID split across stdout chunks", async () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     const fake = createParser({ discoveries: [null, "session.log"] });
     const tail = new HeadlessLogTail({
       parser: fake.parser,
@@ -175,7 +175,7 @@ suite("HeadlessLogTail", () => {
   });
 
   test("captures a complete session-ID record on its stdout chunk", async () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     const fake = createParser();
     const tail = new HeadlessLogTail({
       parser: fake.parser,
@@ -227,7 +227,7 @@ suite("HeadlessLogTail", () => {
   });
 
   test("keeps the carry bounded and does not corrupt a later match", async () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     const fake = createParser();
     const tail = new HeadlessLogTail({
       parser: fake.parser,
@@ -252,7 +252,7 @@ suite("HeadlessLogTail", () => {
   });
 
   test("captures a complete record before a partial following record", async () => {
-    const provider = new CodexCliProvider();
+    const provider = new CodexHarnessAdapter();
     const fake = createParser();
     const tail = new HeadlessLogTail({
       parser: fake.parser,
@@ -304,9 +304,9 @@ suite("HeadlessLogTail", () => {
 
   test("delivers log-sourced file diffs before headless completion", async () => {
     const logSourcedProviders = [
-      new CodexCliProvider(),
-      new AntigravityCliProvider(),
-      new QwenCliProvider(),
+      new CodexHarnessAdapter(),
+      new AntigravityHarnessAdapter(),
+      new QwenHarnessAdapter(),
     ];
 
     for (const provider of logSourcedProviders) {

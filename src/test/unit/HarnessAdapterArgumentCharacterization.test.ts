@@ -1,11 +1,11 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
-import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
-import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
-import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
-import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
+import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
 import { HEADLESS_PROMPT_DELIVERIES } from "../../types/DashboardConstants";
 
 suite("CLI provider argument characterization", () => {
@@ -14,7 +14,7 @@ suite("CLI provider argument characterization", () => {
 
   test("preserves Claude headless argument order", () => {
     assert.deepStrictEqual(
-      new ClaudeCliProvider().buildHeadlessArgs(baseArgs, prompt),
+      new ClaudeHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
       [
         "prompt text",
         "-p",
@@ -31,7 +31,7 @@ suite("CLI provider argument characterization", () => {
 
   test("preserves Copilot headless argument order", () => {
     assert.deepStrictEqual(
-      new CopilotCliProvider().buildHeadlessArgs(baseArgs, prompt),
+      new CopilotHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
       [
         "--output-format",
         "json",
@@ -47,7 +47,7 @@ suite("CLI provider argument characterization", () => {
 
   test("preserves Codex headless argument order", () => {
     assert.deepStrictEqual(
-      new CodexCliProvider().buildHeadlessArgs(baseArgs, prompt),
+      new CodexHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
       ["--model", "model-x", "--add-dir", "/workspace", "prompt text"]
     );
   });
@@ -55,7 +55,7 @@ suite("CLI provider argument characterization", () => {
   test("keeps the OpenCode headless prompt out of argv for stdin delivery", () => {
     // `opencode run` quote-wraps a positional message containing a space, so
     // the prompt is piped on stdin instead.
-    const provider = new OpenCodeCliProvider();
+    const provider = new OpenCodeHarnessAdapter();
     assert.strictEqual(
       provider.config.headlessPromptDelivery,
       HEADLESS_PROMPT_DELIVERIES.STDIN
@@ -70,7 +70,7 @@ suite("CLI provider argument characterization", () => {
 
   test("preserves Qwen headless argument order", () => {
     assert.deepStrictEqual(
-      new QwenCliProvider().buildHeadlessArgs(baseArgs, prompt),
+      new QwenHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
       [
         "prompt text",
         "--output-format",
@@ -87,7 +87,7 @@ suite("CLI provider argument characterization", () => {
 
   test("preserves Antigravity headless argument order", () => {
     assert.deepStrictEqual(
-      new AntigravityCliProvider().buildHeadlessArgs(baseArgs, prompt),
+      new AntigravityHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
       [
         "--print",
         "prompt text",
