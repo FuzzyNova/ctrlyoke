@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { type StepContextMenuEntry } from "@components/shared/StepContextMenu";
+import { type ContextMenuEntry } from "@components/shared/ContextMenu";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
@@ -15,7 +15,7 @@ import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
  */
 export function useWorkflowFileMenuItems(): (
   filePath: string | null
-) => StepContextMenuEntry[] {
+) => ContextMenuEntry[] {
   const vscode = useVsCodeApi();
   const isRunView = useUiStore(
     (state) =>

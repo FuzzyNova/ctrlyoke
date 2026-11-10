@@ -9,7 +9,7 @@ CLI, utils and types). Reference counts are approximate. Re-grep each item befor
 Staged 2026-11-09 as one workflow step per chunk below, run in this order. Each step ticks its
 own box in the commit that lands it, and adds its ledger rows to `dev/reference/RENAMES.md`.
 
-- [ ] 1a `StepContextMenu` → `ContextMenu`, and create the ledger plus its `copilot-instructions.md` line
+- [x] 1a `StepContextMenu` → `ContextMenu`, and create the ledger plus its `copilot-instructions.md` line
 - [ ] 1b `PropertiesDrawer` → `PromptPropertiesDrawer`, uiStore state, `WorkflowPropertiesPanel` drawer names
 - [ ] 8 Final-step pass-count names
 - [ ] 2 "prompt" → "step" in the step-list and editor components (`components/prompts/` → `components/steps/`)

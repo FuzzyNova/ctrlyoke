@@ -755,7 +755,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       const target = event.target;
       const isDropdownPortalClick =
         target instanceof Element &&
-        target.closest(".cy-dropdown-popup, .step-context-menu");
+        target.closest(".cy-dropdown-popup, .context-menu");
       if (
         containerRef.current &&
         !containerRef.current.contains(event.target as Node) &&

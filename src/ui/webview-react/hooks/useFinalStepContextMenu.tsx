@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "../components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "../components/shared/ContextMenu";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import {
   getStepSessionDetails,
@@ -88,7 +88,7 @@ export function useFinalStepContextMenu({
     : SHELL_WORKFLOW_ID;
   const hiddenOutputKeys =
     hiddenOutputTargets[outputFilterWorkflowKey]?.keys ?? EMPTY_TARGET_KEYS;
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
 
@@ -206,7 +206,7 @@ export function useFinalStepContextMenu({
   );
 
   const finalStepContextMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   return { openFinalStepContextMenu, finalStepContextMenuPortal };

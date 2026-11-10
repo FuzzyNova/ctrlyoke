@@ -40,9 +40,9 @@ import {
 } from "@root/types/DashboardConstants";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 import type {
-  StepContextMenuEntry,
-  StepContextMenuItem,
-} from "@components/shared/StepContextMenu";
+  ContextMenuEntry,
+  ContextMenuItem,
+} from "@components/shared/ContextMenu";
 import { REFERENCE_CHIP_MENU_LABELS } from "@utils/referenceChipMenu";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { EDITOR_PLACEHOLDER_TEXT } from "@root/types/DashboardConstants";
@@ -2854,7 +2854,7 @@ describe("CodeMirrorEditor atomic reference chip context menu", () => {
     document.body.appendChild(parent);
     const postMessage = vi.fn();
     const openChipMenu =
-      vi.fn<(x: number, y: number, items: StepContextMenuEntry[]) => void>();
+      vi.fn<(x: number, y: number, items: ContextMenuEntry[]) => void>();
     const view = new EditorView({
       parent,
       doc,
@@ -2872,7 +2872,7 @@ describe("CodeMirrorEditor atomic reference chip context menu", () => {
     const item = (label: string) => {
       const items = openChipMenu.mock.lastCall?.[2] ?? [];
       return items.find(
-        (entry): entry is StepContextMenuItem =>
+        (entry): entry is ContextMenuItem =>
           "label" in entry && entry.label === label
       )!;
     };

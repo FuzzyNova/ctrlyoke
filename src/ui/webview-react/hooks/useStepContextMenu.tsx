@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "../components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "../components/shared/ContextMenu";
 import { ResetConfirmModal } from "../components/shared/ResetConfirmModal";
 import { DeleteConfirmModal } from "../components/shared/DeleteConfirmModal";
 import { sendMessage } from "./useMessageHandler";
@@ -160,7 +160,7 @@ export function useStepContextMenu({
     : SHELL_WORKFLOW_ID;
   const hiddenOutputKeys =
     hiddenOutputTargets[outputFilterWorkflowKey]?.keys ?? EMPTY_TARGET_KEYS;
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
   const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
@@ -794,7 +794,7 @@ export function useStepContextMenu({
   ]);
 
   const contextMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   const setPositionModal =
@@ -875,7 +875,7 @@ export function usePasteToEndContextMenu({
   executionState,
   totalSteps,
 }: UsePasteToEndContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
 
@@ -927,7 +927,7 @@ export function usePasteToEndContextMenu({
   );
 
   const pasteToEndMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   return { openPasteToEndMenu, pasteToEndMenuPortal };

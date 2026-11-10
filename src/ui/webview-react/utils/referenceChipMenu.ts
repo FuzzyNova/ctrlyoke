@@ -1,4 +1,4 @@
-import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
+import type { ContextMenuEntry } from "@components/shared/ContextMenu";
 import { writeClipboardText } from "@utils/stepClipboard";
 
 export const REFERENCE_CHIP_MENU_LABELS = {
@@ -34,8 +34,8 @@ export function buildReferenceChipMenuItems({
   invalid = false,
   sendAsPlainText,
   readOnly = false,
-}: ReferenceChipMenuOptions): StepContextMenuEntry[] {
-  const items: StepContextMenuEntry[] = [
+}: ReferenceChipMenuOptions): ContextMenuEntry[] {
+  const items: ContextMenuEntry[] = [
     {
       label: REFERENCE_CHIP_MENU_LABELS.GO_TO,
       icon: "codicon-go-to-file",

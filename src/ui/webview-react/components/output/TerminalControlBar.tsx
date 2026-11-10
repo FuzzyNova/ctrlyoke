@@ -276,7 +276,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 
   // If the on-screen keyboard opens or closes anyway, the layout moves and
   // the menu's fixed position no longer points at the bar: close it rather
-  // than leave it dangling (same rule as StepContextMenu's keepInvokerFocus).
+  // than leave it dangling (same rule as ContextMenu's keepInvokerFocus).
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!moreOpen || !viewport) return;

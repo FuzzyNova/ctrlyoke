@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "@components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "@components/shared/ContextMenu";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import {
   MESSAGE_TYPES,
@@ -81,7 +81,7 @@ export function useWorkflowContextMenu({
   onDelete,
   onCloseDropdown,
 }: UseWorkflowContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
   const activeTerminalWorkflows = useTerminalStore(
@@ -299,7 +299,7 @@ export function useWorkflowContextMenu({
   );
 
   const workflowContextMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   return { openContextMenu, workflowContextMenuPortal };

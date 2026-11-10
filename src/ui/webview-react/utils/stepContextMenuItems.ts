@@ -1,5 +1,5 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
-import type { StepContextMenuItem } from "../components/shared/StepContextMenu";
+import type { ContextMenuItem } from "../components/shared/ContextMenu";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
@@ -60,7 +60,7 @@ export function buildStepCopyMenuItems({
   runtimeMeta,
   isCurrent,
   liveContextWindow,
-}: StepCopyMenuItemsInput): StepContextMenuItem[] {
+}: StepCopyMenuItemsInput): ContextMenuItem[] {
   const isScript = isScriptWorkflowStep(step);
   const copyContentLabel = isScript ? "Copy Script" : "Copy Prompt";
   const copyLabels = getStepCopyLabels(isScript);
@@ -152,7 +152,7 @@ export function buildReplyToStepMenuItem({
   sessionHarness,
   sessionModel,
   sourceLabel,
-}: ReplyToStepMenuItemInput): StepContextMenuItem {
+}: ReplyToStepMenuItemInput): ContextMenuItem {
   const isScriptStep = isScriptWorkflowStep(step);
   const hasSession = typeof sessionId === "string" && sessionId.length > 0;
 
@@ -192,7 +192,7 @@ export function buildStepOutputFilterMenuItems({
   onToggle,
   onSolo,
   soloLabel = "Show only this step's output",
-}: StepOutputFilterMenuItemsInput): StepContextMenuItem[] {
+}: StepOutputFilterMenuItemsInput): ContextMenuItem[] {
   return [
     {
       label: hidden ? "Show output" : "Hide output",
@@ -358,7 +358,7 @@ export function buildStepGroupingMenuItems({
   disabled,
   disabledTitle,
   onReorder,
-}: StepGroupingMenuItemsInput): StepContextMenuItem[] {
+}: StepGroupingMenuItemsInput): ContextMenuItem[] {
   const pendingPosition = stepIndex - currentStep;
   if (pendingPosition < 0 || stepIndex >= steps.length) return [];
 
@@ -409,7 +409,7 @@ export function buildStepGroupingMenuItems({
       : false;
   };
 
-  const items: StepContextMenuItem[] = [];
+  const items: ContextMenuItem[] = [];
   const makeGroupItem = (neighborIndex: number, label: string) => {
     const nextGroups = buildGroupingMutation(
       stepIndex,

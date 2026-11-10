@@ -37,9 +37,9 @@ import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { DryRunModal } from "../shared/DryRunModal";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "../shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "../shared/ContextMenu";
 import {
   HEADER_BUTTON_SIZES,
   HEADER_RUN_SLOT_FIT_CLASSES,
@@ -282,7 +282,7 @@ export const Header: React.FC<{
   }, [vscode, canSave, displayedViewAddress]);
 
   const [runContextMenu, setRunContextMenu] =
-    React.useState<StepContextMenuState | null>(null);
+    React.useState<ContextMenuState | null>(null);
   const openRunDryRunMenu = useCallback((x: number, y: number) => {
     setRunContextMenu({
       x,
@@ -615,7 +615,7 @@ export const Header: React.FC<{
         </button>
       </div>
       {runContextMenu && (
-        <StepContextMenu
+        <ContextMenu
           {...runContextMenu}
           onClose={() => setRunContextMenu(null)}
         />

@@ -1,7 +1,7 @@
 import { EditorSelection, type EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { selectAll, selectLine } from "@codemirror/commands";
-import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
+import type { ContextMenuEntry } from "@components/shared/ContextMenu";
 import { readClipboardText, writeClipboardText } from "@utils/stepClipboard";
 
 const NO_SELECTION_TITLE = "No text selected";
@@ -92,7 +92,7 @@ export function findWordRangeAt(
 export function buildEditorEditMenuItems(
   view: EditorView,
   readOnly: boolean
-): StepContextMenuEntry[] {
+): ContextMenuEntry[] {
   const { state } = view;
   const selection = state.selection.main;
   const selectedText = state.sliceDoc(selection.from, selection.to);

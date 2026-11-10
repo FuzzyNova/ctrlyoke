@@ -603,7 +603,7 @@ describe("WorkflowStatus — loaded state", () => {
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(screen.getByRole("listitem", { name: /Recent 0/ }));
 
-    expect(document.querySelectorAll(".step-context-menu")).toHaveLength(1);
+    expect(document.querySelectorAll(".context-menu")).toHaveLength(1);
   });
 
   it("uses the existing favorite action for the header target", () => {
@@ -2298,7 +2298,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       .closest(".run-panel-row")!;
     fireEvent.contextMenu(row);
 
-    expect(document.querySelectorAll(".step-context-menu")).toHaveLength(1);
+    expect(document.querySelectorAll(".context-menu")).toHaveLength(1);
     await user.click(screen.getByRole("menuitem", { name: "Delete Run" }));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.DELETE_RUN_HISTORY,

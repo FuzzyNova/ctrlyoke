@@ -35,7 +35,7 @@
     "src/ui/webview-react/components/output/OutputMinimap.tsx",
     "src/ui/webview-react/components/prompts/WorkflowStep.tsx",
     "src/ui/webview-react/components/shared/McpServerForm.tsx",
-    "src/ui/webview-react/components/shared/StepContextMenu.tsx",
+    "src/ui/webview-react/components/shared/ContextMenu.tsx",
     "src/ui/webview-react/hooks/useMessageHandler.ts",
     "src/ui/CtrlYokeWebviewProvider.ts",
     "src/core/harness/shared/CliFailureTracker.ts",

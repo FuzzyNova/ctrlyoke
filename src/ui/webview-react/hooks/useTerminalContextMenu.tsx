@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "../components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "../components/shared/ContextMenu";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { sendMessage } from "./useMessageHandler";
 import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS } from "../types/messages";
@@ -23,7 +23,7 @@ export function useTerminalContextMenu({
   isSessionInUse,
   onClose,
 }: UseTerminalContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
 
@@ -122,7 +122,7 @@ export function useTerminalContextMenu({
   );
 
   const terminalContextMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   return { openContextMenu, terminalContextMenuPortal };

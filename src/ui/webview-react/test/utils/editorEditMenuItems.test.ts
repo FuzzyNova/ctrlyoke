@@ -2,9 +2,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import type {
-  StepContextMenuEntry,
-  StepContextMenuItem,
-} from "@components/shared/StepContextMenu";
+  ContextMenuEntry,
+  ContextMenuItem,
+} from "@components/shared/ContextMenu";
 import {
   buildEditorEditMenuItems,
   findWordRangeAt,
@@ -24,11 +24,11 @@ function createView(doc: string, anchor: number, head = anchor): EditorView {
 }
 
 function item(
-  items: StepContextMenuEntry[],
+  items: ContextMenuEntry[],
   label: string
-): StepContextMenuItem {
+): ContextMenuItem {
   const found = items.find(
-    (entry): entry is StepContextMenuItem =>
+    (entry): entry is ContextMenuItem =>
       "label" in entry && entry.label === label
   );
   if (!found) throw new Error(`No menu item "${label}"`);

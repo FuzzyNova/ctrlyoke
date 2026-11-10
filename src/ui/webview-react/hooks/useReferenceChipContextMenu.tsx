@@ -1,14 +1,14 @@
 import { useCallback, useState, type ReactNode } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuEntry,
-  type StepContextMenuState,
-} from "@components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuEntry,
+  type ContextMenuState,
+} from "@components/shared/ContextMenu";
 
 export type ReferenceChipMenuOpener = (
   x: number,
   y: number,
-  items: StepContextMenuEntry[],
+  items: ContextMenuEntry[],
   /** True for a long press, which must leave focus (and the keyboard) in the editor. */
   keepInvokerFocus?: boolean
 ) => void;
@@ -21,7 +21,7 @@ interface UseReferenceChipContextMenuResult {
 
 /** Menu state plus portal for an atomic reference chip's context menu. */
 export function useReferenceChipContextMenu(): UseReferenceChipContextMenuResult {
-  const [menu, setMenu] = useState<StepContextMenuState | null>(null);
+  const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const openReferenceChipMenu = useCallback<ReferenceChipMenuOpener>(
     (x, y, items, keepInvokerFocus) =>
       setMenu({ x, y, items, keepInvokerFocus }),
@@ -32,7 +32,7 @@ export function useReferenceChipContextMenu(): UseReferenceChipContextMenuResult
   return {
     openReferenceChipMenu,
     referenceChipMenuPortal: menu ? (
-      <StepContextMenu {...menu} onClose={close} />
+      <ContextMenu {...menu} onClose={close} />
     ) : null,
   };
 }

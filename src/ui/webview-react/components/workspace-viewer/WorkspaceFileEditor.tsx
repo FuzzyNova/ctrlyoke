@@ -52,7 +52,7 @@ import {
   useReferenceChipContextMenu,
   type ReferenceChipMenuOpener,
 } from "@hooks/useReferenceChipContextMenu";
-import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
+import type { ContextMenuEntry } from "@components/shared/ContextMenu";
 import {
   buildEditorEditMenuItems,
   isTouchOnSelectionHandle,
@@ -110,7 +110,7 @@ export interface WorkspaceFileEditorHandle {
   /** See {@link isTouchOnSelectionHandle}. */
   isTouchOnSelectionHandle: (x: number, y: number) => boolean;
   /** Cut/Copy/Paste and Select Word/Line/All, shared with the prompt editor. */
-  getEditMenuItems: () => StepContextMenuEntry[];
+  getEditMenuItems: () => ContextMenuEntry[];
   /** True when the caret touches a word the symbol actions can act on. */
   hasSymbolAtCaret: () => boolean;
   goToDefinition: () => Promise<void>;

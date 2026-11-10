@@ -10,7 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 
-export type StepContextMenuItem = {
+export type ContextMenuItem = {
   label: string;
   icon: string;
   disabled: boolean;
@@ -19,16 +19,16 @@ export type StepContextMenuItem = {
   onClick: () => void;
 };
 
-export type StepContextMenuDivider = {
+export type ContextMenuDivider = {
   type: "divider";
 };
 
-export type StepContextMenuEntry = StepContextMenuItem | StepContextMenuDivider;
+export type ContextMenuEntry = ContextMenuItem | ContextMenuDivider;
 
-export type StepContextMenuState = {
+export type ContextMenuState = {
   x: number;
   y: number;
-  items: StepContextMenuEntry[];
+  items: ContextMenuEntry[];
   /** Accessible name of the menu; defaults to {@link DEFAULT_MENU_LABEL}. */
   label?: string;
   /**
@@ -40,13 +40,13 @@ export type StepContextMenuState = {
   keepInvokerFocus?: boolean;
 };
 
-type StepContextMenuProps = StepContextMenuState & { onClose: () => void };
+type ContextMenuProps = ContextMenuState & { onClose: () => void };
 
 const DEFAULT_MENU_LABEL = "Context menu";
 
 function isDividerEntry(
-  item: StepContextMenuEntry
-): item is StepContextMenuDivider {
+  item: ContextMenuEntry
+): item is ContextMenuDivider {
   return "type" in item && item.type === "divider";
 }
 
@@ -102,14 +102,14 @@ function nextMenuItemIndex(
  * editor it was opened on. Menus that take focus can't close on resize, since
  * taking focus is itself what dismisses the keyboard.
  */
-export function StepContextMenu({
+export function ContextMenu({
   x,
   y,
   items,
   label = DEFAULT_MENU_LABEL,
   keepInvokerFocus = false,
   onClose,
-}: StepContextMenuProps) {
+}: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [invoker] = useState(() =>
@@ -196,7 +196,7 @@ export function StepContextMenu({
       // cy-no-select: the menu is portaled to body, outside any chrome that
       // carries the class, and the long press that opened it otherwise lands
       // in an iOS text selection of the item labels.
-      className="step-context-menu cy-no-select bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px] outline-none"
+      className="context-menu cy-no-select bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px] outline-none"
       onKeyDown={handleMenuKeyDown}
       onPointerDown={(e) => e.stopPropagation()}
       // Focus moves on mousedown (a tap's emulated one, too); cancelling it

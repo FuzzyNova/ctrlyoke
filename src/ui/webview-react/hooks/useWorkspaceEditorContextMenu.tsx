@@ -1,9 +1,9 @@
 import { useCallback, useState, type ReactNode, type RefObject } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuEntry,
-  type StepContextMenuState,
-} from "@components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuEntry,
+  type ContextMenuState,
+} from "@components/shared/ContextMenu";
 import { type WorkspaceFileEditorHandle } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useLongPress } from "@hooks/useLongPress";
 import { useWorkflowFileMenuItems } from "@hooks/useWorkflowFileMenuItems";
@@ -35,13 +35,13 @@ export function buildLanguageIntelligenceMenuItems(
   editorRef: RefObject<WorkspaceFileEditorHandle | null>,
   capabilities: Record<string, unknown>,
   hasSymbol: boolean
-): StepContextMenuEntry[] {
-  const items: StepContextMenuEntry[] = [];
+): ContextMenuEntry[] {
+  const items: ContextMenuEntry[] = [];
   const symbolItem = (
     label: string,
     icon: string,
     run: (editor: WorkspaceFileEditorHandle) => Promise<void>
-  ): StepContextMenuEntry => ({
+  ): ContextMenuEntry => ({
     label,
     icon,
     disabled: !hasSymbol,
@@ -106,7 +106,7 @@ export function useWorkspaceEditorContextMenu({
   filePath,
 }: UseWorkspaceEditorContextMenuOptions): UseWorkspaceEditorContextMenuResult {
   const buildWorkflowFileMenuItems = useWorkflowFileMenuItems();
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
 
@@ -124,7 +124,7 @@ export function useWorkspaceEditorContextMenu({
         editorRef.current?.hasSymbolAtCaret() ?? false
       );
 
-      const items: StepContextMenuEntry[] = [
+      const items: ContextMenuEntry[] = [
         ...(editorRef.current?.getEditMenuItems() ?? []),
         ...(languageItems.length
           ? [{ type: "divider" as const }, ...languageItems]
@@ -182,7 +182,7 @@ export function useWorkspaceEditorContextMenu({
   );
 
   const editorContextMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   return { openContextMenu, editorContextMenuPortal, editorLongPressHandlers };

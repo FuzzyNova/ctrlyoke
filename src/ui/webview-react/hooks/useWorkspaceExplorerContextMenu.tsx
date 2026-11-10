@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "@components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "@components/shared/ContextMenu";
 import { useWorkflowFileMenuItems } from "@hooks/useWorkflowFileMenuItems";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useEditorStore } from "@store/editorStore";
@@ -74,7 +74,7 @@ export function useWorkspaceExplorerContextMenu({
 }: UseWorkspaceExplorerContextMenuOptions) {
   const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
   const buildWorkflowFileMenuItems = useWorkflowFileMenuItems();
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
   const [pendingDelete, setPendingDelete] = useState<WorkspaceEntry | null>(
@@ -290,7 +290,7 @@ export function useWorkspaceExplorerContextMenu({
   const explorerContextMenuPortal = (
     <>
       {contextMenu ? (
-        <StepContextMenu
+        <ContextMenu
           {...contextMenu}
           onClose={() => setContextMenu(null)}
         />

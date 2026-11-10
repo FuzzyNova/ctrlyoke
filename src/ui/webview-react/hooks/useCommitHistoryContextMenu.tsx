@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "@components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "@components/shared/ContextMenu";
 import { useEditorStore } from "@store/editorStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
@@ -27,7 +27,7 @@ export function useCommitHistoryContextMenu({
   onRefresh,
   onCheckoutError,
 }: UseCommitHistoryContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
   const [pendingCheckout, setPendingCheckout] =
@@ -143,7 +143,7 @@ export function useCommitHistoryContextMenu({
   const commitHistoryContextMenuPortal = (
     <>
       {contextMenu && (
-        <StepContextMenu
+        <ContextMenu
           {...contextMenu}
           onClose={() => setContextMenu(null)}
         />

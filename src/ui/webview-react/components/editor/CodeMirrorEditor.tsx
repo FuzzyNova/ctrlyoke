@@ -115,7 +115,7 @@ import {
   useReferenceChipContextMenu,
   type ReferenceChipMenuOpener,
 } from "@hooks/useReferenceChipContextMenu";
-import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
+import type { ContextMenuEntry } from "@components/shared/ContextMenu";
 import { isTouchContextMenuEvent, useLongPress } from "@hooks/useLongPress";
 import {
   buildEditorEditMenuItems,
@@ -2716,7 +2716,7 @@ export function buildEditorReferenceChipMenuItems(
   chip: HTMLElement,
   view: EditorView,
   openLink: (target: HTMLElement, view: EditorView) => boolean
-): StepContextMenuEntry[] {
+): ContextMenuEntry[] {
   const range = findChipRange(view, chip);
   const sourceText = range ? view.state.sliceDoc(range.from, range.to) : null;
   return buildReferenceChipMenuItems({

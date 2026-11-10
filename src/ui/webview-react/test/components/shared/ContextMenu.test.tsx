@@ -1,18 +1,18 @@
 /**
- * Tests for StepContextMenu's WAI-ARIA menu semantics: roles, initial focus,
+ * Tests for ContextMenu's WAI-ARIA menu semantics: roles, initial focus,
  * arrow-key navigation over enabled items, and focus returning to the invoker.
  */
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import {
-  StepContextMenu,
-  type StepContextMenuEntry,
-} from "@components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuEntry,
+} from "@components/shared/ContextMenu";
 
 function item(
   label: string,
-  overrides: Partial<Extract<StepContextMenuEntry, { label: string }>> = {}
-): StepContextMenuEntry {
+  overrides: Partial<Extract<ContextMenuEntry, { label: string }>> = {}
+): ContextMenuEntry {
   return {
     label,
     icon: "codicon-copy",
@@ -23,12 +23,12 @@ function item(
 }
 
 function renderMenu(
-  items: StepContextMenuEntry[],
+  items: ContextMenuEntry[],
   props: { label?: string; onClose?: () => void } = {}
 ) {
   const onClose = props.onClose ?? vi.fn();
   render(
-    <StepContextMenu
+    <ContextMenu
       x={10}
       y={10}
       items={items}
@@ -39,7 +39,7 @@ function renderMenu(
   return { onClose };
 }
 
-describe("StepContextMenu", () => {
+describe("ContextMenu", () => {
   it("exposes a labelled menu of menuitems", () => {
     renderMenu([item("Copy"), { type: "divider" }, item("Delete")], {
       label: "Step actions",
@@ -128,7 +128,7 @@ describe("StepContextMenu", () => {
   });
 
   describe("keepInvokerFocus (long press over an editor)", () => {
-    function renderKeepingFocus(items: StepContextMenuEntry[]) {
+    function renderKeepingFocus(items: ContextMenuEntry[]) {
       const editor = document.createElement("div");
       editor.contentEditable = "true";
       editor.tabIndex = 0;
@@ -136,7 +136,7 @@ describe("StepContextMenu", () => {
       editor.focus();
       const onClose = vi.fn();
       render(
-        <StepContextMenu
+        <ContextMenu
           x={10}
           y={10}
           items={items}

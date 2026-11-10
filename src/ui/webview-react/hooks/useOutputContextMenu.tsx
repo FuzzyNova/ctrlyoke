@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
 import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "../components/shared/StepContextMenu";
+  ContextMenu,
+  type ContextMenuState,
+} from "../components/shared/ContextMenu";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 import type { OutputMessage } from "@utils/outputProjection";
@@ -113,7 +113,7 @@ export function useOutputContextMenu({
   finalStep,
   onOpenFind,
 }: UseOutputContextMenuOptions) {
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
     null
   );
 
@@ -254,7 +254,7 @@ export function useOutputContextMenu({
   );
 
   const outputContextMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   return { openContextMenu, outputContextMenuPortal };
