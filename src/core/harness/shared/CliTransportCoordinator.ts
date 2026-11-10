@@ -22,7 +22,7 @@ import { CliProcessTimeoutError } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
-import { CliProviderUtils } from "./CliProviderUtils";
+import { HarnessAdapterUtils } from "./HarnessAdapterUtils";
 import {
   resolveCliCommand,
   type CliResolvedCommand,
@@ -187,7 +187,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       this.deps.runtimeState.getWorkspaceRoot() || process.cwd();
     const interactiveEnv =
       this.deps.provider.getInteractiveSpawnEnv?.() ??
-      CliProviderUtils.buildProcessEnv();
+      HarnessAdapterUtils.buildProcessEnv();
     const secretEnv = await this.resolveSecretEnvironment(secretNames);
 
     const exit = this.deps.processManager.spawnInteractive(
@@ -262,7 +262,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       workflowContext?.resolvedProperties?.secrets ?? []
     );
     const mergedEnv = {
-      ...CliProviderUtils.buildProcessEnv(),
+      ...HarnessAdapterUtils.buildProcessEnv(),
       ...providerEnv,
       ...env,
       ...secretEnv,
@@ -751,7 +751,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   ): Promise<SpawnResult> {
     const headlessEnvOverrides = this.deps.provider.getHeadlessSpawnEnv?.();
     const baseEnv = {
-      ...CliProviderUtils.buildProcessEnv(),
+      ...HarnessAdapterUtils.buildProcessEnv(),
       ...headlessEnvOverrides,
     };
     const secretEnv = await this.resolveSecretEnvironment(

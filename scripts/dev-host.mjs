@@ -32,7 +32,7 @@
  * `--no-harnesses` launches the host with every PATH directory that holds a
  * harness CLI removed, so all six harnesses detect as missing. Harness
  * detection is a plain `<cli> --version` against the inherited PATH
- * (`CliProviderUtils.runVersionCommand`), so this reproduces a machine with no
+ * (`HarnessAdapterUtils.runVersionCommand`), so this reproduces a machine with no
  * CLIs installed, e.g. for the missing-harness preflight screenshots. A
  * directory that also holds `node`/`git`/`code` (e.g. nvm's global bin) is
  * replaced by a temp directory exposing only those tools.

@@ -52,7 +52,7 @@ import {
 } from "../../utils/ConfigurationUtils";
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
-import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { pathsEqual } from "../../utils/PathCasing";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 
@@ -939,7 +939,7 @@ suite("ExecutionPreviewService", () => {
         )
       ).properties;
       let executionServerIds: string[] = [];
-      await CliProviderUtils.planMcpConfigBlock(
+      await HarnessAdapterUtils.planMcpConfigBlock(
         {
           promptIndex: 0,
           allPrompts: [],

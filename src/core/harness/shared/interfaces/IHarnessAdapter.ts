@@ -6,9 +6,9 @@ import type {
   ToolPermissionConfig,
 } from "./IToolPermissionMapper";
 import type { ISandboxMapper } from "./ISandboxMapper";
-import type { CliProviderPreparation } from "./PreparedMutation";
+import type { HarnessAdapterPreparation } from "./PreparedMutation";
 export type {
-  CliProviderPreparation,
+  HarnessAdapterPreparation,
   PreparedMutation,
 } from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
@@ -303,7 +303,7 @@ export interface IHarnessAdapter {
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
-  ): Promise<CliProviderPreparation>;
+  ): Promise<HarnessAdapterPreparation>;
 
   /**
    * Build CLI arguments for headless mode
@@ -392,7 +392,7 @@ export interface IHarnessAdapter {
     userServers?: McpServerConfig[],
     stateRoot?: string,
     secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<CliProviderPreparation>;
+  ): Promise<HarnessAdapterPreparation>;
 
   /**
    * Return the path of the MCP config file this provider writes (optional).
@@ -531,7 +531,7 @@ export interface IHarnessAdapter {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[],
     sandboxSettings?: Record<string, unknown>
-  ): Promise<CliProviderPreparation>;
+  ): Promise<HarnessAdapterPreparation>;
 
   /**
    * Set up user-defined hooks for headless execution.
@@ -557,7 +557,7 @@ export interface IHarnessAdapter {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[],
     sandboxSettings?: Record<string, unknown>
-  ): Promise<CliProviderPreparation>;
+  ): Promise<HarnessAdapterPreparation>;
 
   /**
    * Check if CLI is available on the system
@@ -575,7 +575,7 @@ export interface IHarnessAdapter {
    * Return environment variable overrides for interactive spawning.
    * Use this to unset variables that conflict with the child process
    * (e.g., CLAUDECODE blocks nested Claude CLI sessions).
-   * If not defined, CliIntegration defaults to CliProviderUtils.buildProcessEnv().
+   * If not defined, CliIntegration defaults to HarnessAdapterUtils.buildProcessEnv().
    */
   getInteractiveSpawnEnv?(): NodeJS.ProcessEnv;
 

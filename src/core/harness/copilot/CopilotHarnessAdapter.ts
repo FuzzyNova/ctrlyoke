@@ -39,9 +39,9 @@ import { Log } from "../../../utils/Log";
 import { repoToplevel } from "../../../utils/GitUtils";
 import { isPathWithinDirectory } from "../../../utils/PathSecurity";
 import {
-  CliProviderUtils,
+  HarnessAdapterUtils,
   hasCtrlYokeServer,
-} from "../shared/CliProviderUtils";
+} from "../shared/HarnessAdapterUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import {
   StatuslineManager,
@@ -70,7 +70,7 @@ import type {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
-  type CliProviderPreparation,
+  type HarnessAdapterPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 import { COPILOT_EVENT_TYPES } from "./CopilotProtocolConstants";
@@ -296,7 +296,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const statusLineToken = randomUUID();
     // Generate a fresh per-invocation OTel export path (or clear it) every prompt.
     // Must run unconditionally — the parser/provider instances are reused across
@@ -322,7 +322,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
+    const mcpPreparation = await HarnessAdapterUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
@@ -435,7 +435,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
 
     // Workspace directories
     if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
+      const workspaceDirs = HarnessAdapterUtils.getWorkspaceDirs(
         workspaceRoot,
         workspaceRoots,
         approvedExternalRoots,
@@ -457,7 +457,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     // No --agent CLI flag needed; this works with all providers (Copilot, Claude, Codex).
 
     // Session resumption
-    const shouldResume = CliProviderUtils.shouldResumeSession(
+    const shouldResume = HarnessAdapterUtils.shouldResumeSession(
       resolvedResumeSession,
       sessionId
     );
@@ -558,7 +558,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
     const hookScriptPath = path.join(
@@ -632,7 +632,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const hasUserHooks = userHooks && userHooks.length > 0;
     const hasPromptModeHooks =
       !!hasUserHooks || enabledNotificationHookEvents.length > 0;
@@ -783,7 +783,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
    */
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
-      ...CliProviderUtils.buildProcessEnv(),
+      ...HarnessAdapterUtils.buildProcessEnv(),
       ...this.buildOtelSpawnEnv(),
       ...this.statuslineRegistration.buildSpawnEnv(),
     };
@@ -1066,7 +1066,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     userServers?: McpServerConfig[],
     stateRoot?: string,
     secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     try {
       // Generate MCP config JSON using shared utility
       // Copilot CLI requires "type": "local" and "tools" field for ctrlyoke server;
@@ -1076,7 +1076,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
         remoteTypeMap: { "streamable-http": "http", sse: "sse" },
         tools: ["*"] as string[],
       };
-      const secretOptions = CliProviderUtils.createMcpSecretConfigOptions(
+      const secretOptions = HarnessAdapterUtils.createMcpSecretConfigOptions(
         (name) => `\${${name}}`,
         secretEnvironment
       );
@@ -1156,7 +1156,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability(
+    return HarnessAdapterUtils.checkCliAvailability(
       CopilotHarnessAdapter.CLI_VERSION_COMMAND,
       {
         retryWindowsFileLockErrors: true,
@@ -1170,7 +1170,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
    * @returns Version string if available, undefined if error
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion(
+    return HarnessAdapterUtils.getCliVersion(
       CopilotHarnessAdapter.CLI_VERSION_COMMAND,
       {
         retryWindowsFileLockErrors: true,

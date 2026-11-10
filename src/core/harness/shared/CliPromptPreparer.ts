@@ -31,7 +31,7 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { ctrlYokeToolFamilies } from "./CliProviderUtils";
+import { ctrlYokeToolFamilies } from "./HarnessAdapterUtils";
 import {
   fenceLiteral,
   LITERAL_FENCE_INFO,

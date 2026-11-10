@@ -31,9 +31,9 @@ import { isKnownClaudeModel } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import {
-  CliProviderUtils,
+  HarnessAdapterUtils,
   hasCtrlYokeServer,
-} from "../shared/CliProviderUtils";
+} from "../shared/HarnessAdapterUtils";
 import { normalizeClaudeMcpServerId } from "../../../types/ToolPermissionUtils";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
@@ -68,7 +68,7 @@ import type {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
-  type CliProviderPreparation,
+  type HarnessAdapterPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
@@ -296,7 +296,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const args: string[] = [];
     const statusLineToken = randomUUID();
 
@@ -306,7 +306,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
+    const mcpPreparation = await HarnessAdapterUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
@@ -380,7 +380,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
 
     // Add workspace directories
     if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
+      const workspaceDirs = HarnessAdapterUtils.getWorkspaceDirs(
         workspaceRoot,
         workspaceRoots,
         approvedExternalRoots,
@@ -397,7 +397,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     // 2. Could accidentally resume a session from a different project
     // 3. No guarantee which session it will resume if user has multiple Claude instances
     // Instead, we only resume when resumeSession is true AND we have an explicit session ID.
-    const shouldResume = CliProviderUtils.shouldResumeSession(
+    const shouldResume = HarnessAdapterUtils.shouldResumeSession(
       resolvedResumeSession,
       sessionId
     );
@@ -526,7 +526,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[],
     sandboxSettings?: Record<string, unknown>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -623,7 +623,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[],
     sandboxSettings?: Record<string, unknown>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const settingsJson =
       enabledNotificationHookEvents.length > 0
         ? (() => {
@@ -828,11 +828,11 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     userServers?: McpServerConfig[],
     stateRoot?: string,
     secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     try {
       // Generate MCP config JSON using shared utility
       // Claude CLI requires "type": "stdio"
-      const secretOptions = CliProviderUtils.createMcpSecretConfigOptions(
+      const secretOptions = HarnessAdapterUtils.createMcpSecretConfigOptions(
         (name) => `\${${name}}`,
         secretEnvironment
       );
@@ -924,7 +924,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
    */
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     const env = {
-      ...CliProviderUtils.buildProcessEnv(),
+      ...HarnessAdapterUtils.buildProcessEnv(),
       ...this.statuslineRegistration.buildSpawnEnv(),
     };
     delete env.CLAUDECODE;
@@ -947,7 +947,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability(
+    return HarnessAdapterUtils.checkCliAvailability(
       ClaudeHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
@@ -958,7 +958,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
    * @returns Version string if available, undefined if error
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion(
+    return HarnessAdapterUtils.getCliVersion(
       ClaudeHarnessAdapter.CLI_VERSION_COMMAND
     );
   }

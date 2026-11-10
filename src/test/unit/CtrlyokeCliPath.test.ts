@@ -12,7 +12,7 @@ import {
   resolvePackageRootFromEntry,
   withCtrlyokeBinOnPath,
 } from "../../utils/CtrlyokeCliPath";
-import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 
 suite("CtrlyokeCliPath", () => {
   let tempRoot: string;
@@ -95,7 +95,7 @@ suite("CtrlyokeCliPath", () => {
       registerCtrlyokeBinDirectory(tempRoot);
       assert.strictEqual(getCtrlyokeBinDirectory(), binDirectory);
 
-      const env = CliProviderUtils.buildProcessEnv();
+      const env = HarnessAdapterUtils.buildProcessEnv();
       assert.strictEqual(
         env[findPathKey(env)]?.split(path.delimiter)[0],
         binDirectory,

@@ -18,7 +18,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 - [x] 3c Utils, hooks and stores: `stepClipboard` split, `usePropertiesTabOverrides`, store renames, `requestQueue`, history stores
 - [x] 4 Webview `messaging/` module
 - [x] 5a `ICliProvider`/`*CliProvider` → `IHarnessAdapter`/`*HarnessAdapter`, and the instruction file rename
-- [ ] 5b `CliProviderUtils`/`CliProviderWorkflowContext`/`CliProviderPreparation`, and `RetryableAsyncCache` → `src/utils/`
+- [x] 5b `CliProviderUtils`/`CliProviderWorkflowContext`/`CliProviderPreparation`, and `RetryableAsyncCache` → `src/utils/`
 - [ ] 5c Quota collectors, `HarnessFlagHelpParser`, status-line format harness names, `HarnessModelUsage`
 - [ ] 6a UI bridge: `IDashboardRegistryEvents`, `Dashboard*` router/sync/context/port, `NotificationEventFactory`, `WorkflowLibraryHandlers`, `OutputCaptureAttachments`
 - [ ] 6b Platform and core: `NodePlatformAdapter`, `CliConfirm`, `SettingsPropertyResolver`, `HarnessSettingsJsonStore`, `DashboardNavigationCommands`, `wasLastFailureUserCancellation` removal
@@ -465,4 +465,6 @@ Each is small enough to ride with the batch that touches the same area.
   unlisted-binary, unused-export, duplicate-export and configuration-hint findings. The 5a
   run still reports those categories; the renamed `CodexHarnessAdapter.test.ts` appears only
   in the existing `smol-toml` unlisted-dependency warning. No finding concerns a renamed
-  adapter or interface symbol.
+  adapter or interface symbol. The 5b run reports the same repository-wide findings; the
+  renamed `HarnessAdapterUtils.test.ts` retains the existing `smol-toml` warning from its
+  predecessor, and no finding concerns the renamed helpers or extracted cache.

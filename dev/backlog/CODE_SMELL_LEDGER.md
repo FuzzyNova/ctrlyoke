@@ -207,7 +207,7 @@ still deferred.
     bootstrap helper gets written.
 - Internal `CTRLYOKE_*` env-var names (`CTRLYOKE_PROMPT_INDEX`, `CTRLYOKE_EXECUTION_ROOT`,
   `CTRLYOKE_WORKSPACE`, ...) written by `CliExecutionRunner.ts`, `CliMcpConfigGenerator.ts`,
-  `CommitMessageGenerator.ts`, `CliProviderUtils.ts` and read in `mcp-server.ts` as raw
+  `CommitMessageGenerator.ts`, `HarnessAdapterUtils.ts` and read in `mcp-server.ts` as raw
   names; `CTRLYOKE_ENV_VARS` has only three keys.
   _2026-11-09: classified about 55 names. Every writer's spelling matches its readers,
   so this is hygiene only._

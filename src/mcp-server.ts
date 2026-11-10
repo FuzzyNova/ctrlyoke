@@ -2371,7 +2371,7 @@ export interface McpEnvSettings {
 }
 
 /**
- * Fill each env value `CliProviderUtils` would have passed from the settings
+ * Fill each env value `HarnessAdapterUtils` would have passed from the settings
  * files instead, for a process started without that handoff: a skill-mode
  * `--tool` call (the harness's shell does not reliably carry ctrlyoke's env)
  * or a standalone MCP registration. Without this, such a process freezes

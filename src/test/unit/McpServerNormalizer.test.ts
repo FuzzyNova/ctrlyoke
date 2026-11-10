@@ -11,7 +11,7 @@ import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import type { CtrlYokeMcpMode } from "../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
-import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
 
 const PLAYWRIGHT_SERVER: McpServerConfig = {
@@ -50,7 +50,7 @@ suite("McpServerNormalizer", () => {
   test("suppresses only the ctrlyoke server when it is in skill mode", async () => {
     let plannedServerPath: string | undefined = "not-called";
     let plannedServers: McpServerConfig[] | undefined;
-    await CliProviderUtils.planMcpConfigBlock(
+    await HarnessAdapterUtils.planMcpConfigBlock(
       {
         promptIndex: 0,
         allPrompts: [],
@@ -86,7 +86,7 @@ suite("McpServerNormalizer", () => {
     assert.deepStrictEqual(normalized.mcpServers, [PLAYWRIGHT_SERVER]);
 
     let plannedServers: McpServerConfig[] | undefined;
-    await CliProviderUtils.planMcpConfigBlock(
+    await HarnessAdapterUtils.planMcpConfigBlock(
       {
         promptIndex: 0,
         allPrompts: [],
@@ -108,7 +108,7 @@ suite("McpServerNormalizer", () => {
 
     assert.deepStrictEqual(plannedServers, [PLAYWRIGHT_SERVER]);
     assert.deepStrictEqual(
-      CliProviderUtils.buildSettingsJsonMcpEntries(
+      HarnessAdapterUtils.buildSettingsJsonMcpEntries(
         undefined,
         "/workspace",
         undefined,

@@ -11,9 +11,8 @@ import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapte
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
 import {
-  CliProviderUtils,
-  RetryableAsyncCache,
-} from "../../core/harness/shared/CliProviderUtils";
+  HarnessAdapterUtils,
+} from "../../core/harness/shared/HarnessAdapterUtils";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
@@ -24,7 +23,7 @@ function parseInlineTomlEnv(toml: string): Record<string, string> {
   return { ...parsed.mcp_servers.ctrlyoke.env };
 }
 
-suite("CliProviderUtils", () => {
+suite("HarnessAdapterUtils", () => {
   setup(() => {
     configService.setCliOverlay({});
   });
@@ -44,7 +43,7 @@ suite("CliProviderUtils", () => {
       "ctrlyoke-workspace-secondary"
     );
 
-    const result = CliProviderUtils.getWorkspaceDirs(primaryRoot, [
+    const result = HarnessAdapterUtils.getWorkspaceDirs(primaryRoot, [
       primaryRoot,
       secondaryRoot,
       secondaryRoot,
@@ -69,7 +68,7 @@ suite("CliProviderUtils", () => {
       set: async () => ({}),
     });
 
-    const result = CliProviderUtils.getWorkspaceDirs(primaryRoot, []);
+    const result = HarnessAdapterUtils.getWorkspaceDirs(primaryRoot, []);
 
     assert.deepStrictEqual(result, [
       path.resolve(primaryRoot),
@@ -86,7 +85,7 @@ suite("CliProviderUtils", () => {
     const lowerRoot = root.charAt(0).toLowerCase() + root.slice(1);
     const expected = canonicalizeDriveLetter(path.resolve(root));
 
-    const result = CliProviderUtils.getWorkspaceDirs(lowerRoot, []);
+    const result = HarnessAdapterUtils.getWorkspaceDirs(lowerRoot, []);
 
     assert.deepStrictEqual(result, [expected]);
   });
@@ -100,7 +99,7 @@ suite("CliProviderUtils", () => {
     const lowerRoot = root.charAt(0).toLowerCase() + root.slice(1);
     const expected = canonicalizeDriveLetter(path.resolve(root));
 
-    const result = CliProviderUtils.getWorkspaceDirs(root, [lowerRoot]);
+    const result = HarnessAdapterUtils.getWorkspaceDirs(root, [lowerRoot]);
 
     assert.deepStrictEqual(result, [expected]);
   });
@@ -131,7 +130,7 @@ suite("CliProviderUtils", () => {
         stateRoot: primaryRoot,
         workflowFile: { trustedExternalRoots: [workflowRoot] },
       };
-      const result = CliProviderUtils.getWorkspaceDirs(
+      const result = HarnessAdapterUtils.getWorkspaceDirs(
         primaryRoot,
         [],
         [inheritedRoot],
@@ -170,7 +169,7 @@ suite("CliProviderUtils", () => {
         assert.ok(!addDirValues.includes(path.resolve(inheritedRoot)));
       }
 
-      const disabled = CliProviderUtils.getWorkspaceDirs(
+      const disabled = HarnessAdapterUtils.getWorkspaceDirs(
         primaryRoot,
         [],
         [inheritedRoot],
@@ -199,7 +198,7 @@ suite("CliProviderUtils", () => {
     );
     const workflowFile = { trustedExternalRoots: ["/shared"] };
 
-    const duringRun = CliProviderUtils.getWorkflowExternalRootsContext(
+    const duringRun = HarnessAdapterUtils.getWorkflowExternalRootsContext(
       primaryRoot,
       {
         filePath: runWorkingCopy,
@@ -215,7 +214,7 @@ suite("CliProviderUtils", () => {
     assert.strictEqual(duringRun?.identity, asApproved);
 
     // No authored file (a workflow loaded only from its working copy).
-    const workingCopyOnly = CliProviderUtils.getWorkflowExternalRootsContext(
+    const workingCopyOnly = HarnessAdapterUtils.getWorkflowExternalRootsContext(
       primaryRoot,
       { filePath: runWorkingCopy, stateRoot: primaryRoot, workflowFile }
     );
@@ -228,44 +227,10 @@ suite("CliProviderUtils", () => {
     );
   });
 
-  test("shares successful probes and retries a failed probe", async () => {
-    const cache = new RetryableAsyncCache<string>();
-    let calls = 0;
-
-    const result = await Promise.all([
-      cache.getOrRun("test --version", async () => {
-        calls += 1;
-        return "1.0.0";
-      }),
-      cache.getOrRun("test --version", async () => {
-        calls += 1;
-        return "1.0.0";
-      }),
-    ]);
-
-    assert.deepStrictEqual(result, ["1.0.0", "1.0.0"]);
-    assert.strictEqual(calls, 1);
-
-    await assert.rejects(
-      cache.getOrRun("missing --version", async () => {
-        calls += 1;
-        throw new Error("not installed");
-      }),
-      /not installed/u
-    );
-    const retryResult = await cache.getOrRun("missing --version", async () => {
-      calls += 1;
-      return "1.0.0";
-    });
-
-    assert.strictEqual(retryResult, "1.0.0");
-    assert.strictEqual(calls, 3);
-  });
-
   test("runs and caches help output while retrying failed help commands", async () => {
     const [firstResult, coalescedResult] = await Promise.all([
-      CliProviderUtils.runHelpCommand("node --help"),
-      CliProviderUtils.runHelpCommand("node --help"),
+      HarnessAdapterUtils.runHelpCommand("node --help"),
+      HarnessAdapterUtils.runHelpCommand("node --help"),
     ]);
 
     assert.match(firstResult, /Usage: node/u);
@@ -273,17 +238,17 @@ suite("CliProviderUtils", () => {
 
     const missingCommand = `ctrlyoke-missing-help-${Date.now()} --help`;
     await assert.rejects(
-      CliProviderUtils.runHelpCommand(missingCommand),
+      HarnessAdapterUtils.runHelpCommand(missingCommand),
       /not found|cannot find|ENOENT|resolve/u
     );
     await assert.rejects(
-      CliProviderUtils.runHelpCommand(missingCommand),
+      HarnessAdapterUtils.runHelpCommand(missingCommand),
       /not found|cannot find|ENOENT|resolve/u
     );
   });
 
   test("keeps provider-specific references in settings MCP env and headers", () => {
-    const entries = CliProviderUtils.buildSettingsJsonMcpEntries(
+    const entries = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
       undefined,
       "/workspace",
       undefined,
@@ -302,7 +267,7 @@ suite("CliProviderUtils", () => {
       ],
       undefined,
       undefined,
-      CliProviderUtils.createMcpSecretConfigOptions((name) => `{env:${name}}`)
+      HarnessAdapterUtils.createMcpSecretConfigOptions((name) => `{env:${name}}`)
     );
 
     assert.strictEqual(
@@ -348,7 +313,7 @@ suite("CliProviderUtils", () => {
         stateRoot
       )
     );
-    const settingsEntry = CliProviderUtils.buildSettingsJsonMcpEntries(
+    const settingsEntry = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
       serverPath,
       workspaceRoot,
       workingFilePath,
@@ -363,7 +328,7 @@ suite("CliProviderUtils", () => {
   });
 
   test("creates a restrictive substitution strategy for non-expanding providers", () => {
-    const options = CliProviderUtils.createMcpSecretConfigOptions(undefined, {
+    const options = HarnessAdapterUtils.createMcpSecretConfigOptions(undefined, {
       API_TOKEN: "secret-value",
     });
     assert.deepStrictEqual(options, {

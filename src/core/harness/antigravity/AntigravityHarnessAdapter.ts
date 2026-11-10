@@ -59,7 +59,7 @@ import {
 import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import {
@@ -88,7 +88,7 @@ import { AntigravityStatuslineSidecar } from "./AntigravityStatuslineSidecar";
 import { AntigravityStreamJsonUsageAccumulator } from "./AntigravityStreamJsonUsage";
 import {
   applyPreparedMutations,
-  type CliProviderPreparation,
+  type HarnessAdapterPreparation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
 import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
@@ -307,7 +307,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const statusLineToken = randomUUID();
 
     const args: string[] = [];
@@ -318,7 +318,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     // MCP configuration (experimental — see isMcpEnabled). agy auto-discovers
     // .agents/mcp_config.json, so no CLI arg is returned; this just writes the
     // file via the tracker when enabled.
-    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
+    const mcpPreparation = await HarnessAdapterUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
@@ -345,7 +345,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
       args.push("--model", model);
     }
 
-    const shouldResume = CliProviderUtils.shouldResumeSession(
+    const shouldResume = HarnessAdapterUtils.shouldResumeSession(
       resolvedResumeSession,
       sessionId
     );
@@ -361,7 +361,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     }
 
     if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
+      const workspaceDirs = HarnessAdapterUtils.getWorkspaceDirs(
         workspaceRoot,
         workspaceRoots,
         approvedExternalRoots,
@@ -501,7 +501,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
 
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
-      ...CliProviderUtils.buildProcessEnv(),
+      ...HarnessAdapterUtils.buildProcessEnv(),
       ...this.statuslineRegistration.buildSpawnEnv(),
     };
   }
@@ -606,7 +606,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const workflowKey = workingFilePath ?? workspaceRoot;
     const scriptPath = path.join(
       extensionPath,
@@ -681,7 +681,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const workflowKey = workingFilePath ?? workspaceRoot;
     if (
       (userHooks?.length ?? 0) === 0 &&
@@ -801,7 +801,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
   }
 
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion(
+    return HarnessAdapterUtils.getCliVersion(
       AntigravityHarnessAdapter.CLI_VERSION_COMMAND,
       {
         parseVersion: (stdout) => {
@@ -895,7 +895,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     userServers?: McpServerConfig[],
     stateRoot?: string,
     secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
@@ -909,7 +909,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
         ...server,
         id: normalizeAntigravityMcpServerId(server.id),
       }));
-      const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
+      const mcpEntries = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
         mcpServerPath,
         workspaceRoot,
         workingFilePath,
@@ -923,7 +923,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
           includeTrust: false,
         },
         stateRoot,
-        CliProviderUtils.createMcpSecretConfigOptions(
+        HarnessAdapterUtils.createMcpSecretConfigOptions(
           undefined,
           secretEnvironment
         )

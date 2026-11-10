@@ -27,7 +27,7 @@ import {
   type WorkflowDocumentIssueSeverity,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
-import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../core/harness/shared/HarnessAdapterUtils";
 import {
   getHarnessFlagCompletions,
   type HarnessFlagCompletion,
@@ -463,7 +463,7 @@ export class PromptEditorSupportService {
   ): Promise<void> {
     const token = parseCursorArgumentToken(text, position);
     try {
-      const helpText = await CliProviderUtils.runHelpCommand(
+      const helpText = await HarnessAdapterUtils.runHelpCommand(
         getHarnessHelpCommand(harnessId),
         { retryWindowsFileLockErrors: true }
       );

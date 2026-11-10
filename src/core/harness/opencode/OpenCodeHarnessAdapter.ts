@@ -25,7 +25,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
-import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
@@ -44,7 +44,7 @@ import type {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
-  type CliProviderPreparation,
+  type HarnessAdapterPreparation,
 } from "../shared/interfaces/PreparedMutation";
 import {
   buildOpenCodeMcpEntries,
@@ -433,7 +433,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     },
     _workspaceRoots?: readonly string[],
     _approvedExternalRoots?: readonly string[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const openCodeV2 = await detectOpenCodeV2();
     // The integration is reused across prompts in one workflow. Reset before
     // optional MCP or permission preparation so a later prompt cannot inherit
@@ -460,7 +460,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
+    const mcpPreparation = await HarnessAdapterUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
@@ -510,7 +510,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     // NOTE: We do NOT use -c (continue last session) because:
     // 1. It's global across all projects, not workspace-specific
     // 2. Could accidentally resume a session from a different project
-    const shouldResume = CliProviderUtils.shouldResumeSession(
+    const shouldResume = HarnessAdapterUtils.shouldResumeSession(
       resolvedResumeSession,
       sessionId
     );
@@ -729,7 +729,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     userServers?: McpServerConfig[],
     _stateRoot?: string,
     secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const hasUserServers = userServers && userServers.length > 0;
     if (!mcpServerPath && !hasUserServers) {
       return {
@@ -753,7 +753,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
       additionalEnv,
       userServers,
       _stateRoot,
-      CliProviderUtils.createMcpSecretConfigOptions(
+      HarnessAdapterUtils.createMcpSecretConfigOptions(
         (name) => `{env:${name}}`,
         secretEnvironment
       ),
@@ -892,7 +892,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     _enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const serializedHooks = this.serializeUserHooks(userHooks);
     return {
       cliArgs: [],
@@ -935,7 +935,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     _enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const serializedHooks = this.serializeUserHooks(userHooks);
     return {
       cliArgs: [],
@@ -962,7 +962,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
 
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
-      ...CliProviderUtils.buildProcessEnv(),
+      ...HarnessAdapterUtils.buildProcessEnv(),
       OPENCODE_CONFIG_CONTENT: this.getInlineConfigContent(),
       ...(this.pendingUserHooksEnv
         ? { CTRLYOKE_OPENCODE_HOOKS: this.pendingUserHooksEnv }
@@ -1003,7 +1003,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
    * Check if OpenCode CLI is available on the system
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability(
+    return HarnessAdapterUtils.checkCliAvailability(
       OpenCodeHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
@@ -1012,7 +1012,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
    * Get OpenCode CLI version string
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion(
+    return HarnessAdapterUtils.getCliVersion(
       OpenCodeHarnessAdapter.CLI_VERSION_COMMAND,
       {
         timeoutMs: 5000,

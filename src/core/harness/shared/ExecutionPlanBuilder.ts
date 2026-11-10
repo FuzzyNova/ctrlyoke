@@ -21,7 +21,7 @@ import {
 } from "./CliLauncherResolver";
 import type {
   IHarnessAdapter,
-  CliProviderPreparation,
+  HarnessAdapterPreparation,
 } from "./interfaces/IHarnessAdapter";
 import type {
   PermissionContext,
@@ -32,8 +32,8 @@ import {
   type PreparedMutation,
 } from "./interfaces/PreparedMutation";
 import type { CliExecutionSession } from "./CliExecutionSession";
-import type { CliProviderWorkflowContext } from "./CliProviderUtils";
-import { CliProviderUtils } from "./CliProviderUtils";
+import type { HarnessAdapterWorkflowContext } from "./HarnessAdapterUtils";
+import { HarnessAdapterUtils } from "./HarnessAdapterUtils";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   EFFECTIVE_SANDBOX_KINDS,
@@ -76,14 +76,14 @@ export interface ExecutionPlan {
   /** Arguments before launcher resolution, useful for preview consumers. */
   readonly cliArgs: string[];
   readonly mutations: PreparedMutation[];
-  readonly providerPreparation: CliProviderPreparation;
+  readonly providerPreparation: HarnessAdapterPreparation;
   readonly permissionApplication: ToolPermissionApplication;
   /** Provider preparation carries the provider-specific MCP application. */
-  readonly mcpApplication: CliProviderPreparation;
+  readonly mcpApplication: HarnessAdapterPreparation;
   readonly effectiveToolPermissions:
     ResolvedProperties["toolPermissions"] | undefined;
   readonly effectiveSandbox?: EffectiveSandbox;
-  readonly diagnostics: CliProviderPreparation["diagnostics"];
+  readonly diagnostics: HarnessAdapterPreparation["diagnostics"];
   readonly tempFilePaths: string[];
   /** Hook environment files stay available for the lifetime of their hook config. */
   readonly deferredHookEnvironmentFilePaths: string[];
@@ -97,7 +97,7 @@ type ProviderWorkflowContext = {
   workingFilePath?: string;
   stateRoot?: string;
   secretEnvironment?: Readonly<Record<string, string>>;
-  workflowFile?: CliProviderWorkflowContext["workflowFile"];
+  workflowFile?: HarnessAdapterWorkflowContext["workflowFile"];
 };
 
 function asProviderWorkflowContext(
@@ -107,7 +107,7 @@ function asProviderWorkflowContext(
   return workflowContext ? { ...workflowContext, stateRoot } : undefined;
 }
 
-function emptyPreparation(): CliProviderPreparation {
+function emptyPreparation(): HarnessAdapterPreparation {
   return { cliArgs: [], mutations: [], diagnostics: [] };
 }
 
@@ -174,7 +174,7 @@ export class ExecutionPlanBuilder {
       ? await this.deps.provider.sandboxMapper.prepare(sandboxRequest, {
           isInteractive,
           writableRoots: workspaceRoot
-            ? CliProviderUtils.getWorkspaceDirs(
+            ? HarnessAdapterUtils.getWorkspaceDirs(
                 workspaceRoot,
                 this.deps.getWorkspaceRoots(),
                 approvedExternalRoots,
@@ -250,7 +250,7 @@ export class ExecutionPlanBuilder {
         apply: async () => this.deps.provider.setSandboxSpawnEnv!(sandboxEnv),
       });
     }
-    const hookPreparations: CliProviderPreparation[] = [];
+    const hookPreparations: HarnessAdapterPreparation[] = [];
     const tempFilePaths: string[] = [];
     const deferredHookEnvironmentFilePaths: string[] = [];
 
@@ -394,7 +394,7 @@ export class ExecutionPlanBuilder {
     // The same directories `--add-dir` harnesses receive, minus the launch
     // directory itself (the first entry).
     const externalDirectories = workspaceRoot
-      ? CliProviderUtils.getWorkspaceDirs(
+      ? HarnessAdapterUtils.getWorkspaceDirs(
           workspaceRoot,
           this.deps.getWorkspaceRoots(),
           approvedExternalRoots,
@@ -406,7 +406,7 @@ export class ExecutionPlanBuilder {
       workspaceRoot,
       externalDirectories,
       workingFilePath: session.workflowContext?.workingFilePath,
-      environment: CliProviderUtils.buildProcessEnv(),
+      environment: HarnessAdapterUtils.buildProcessEnv(),
       additionalArgs: session.resolvedProperties?.additionalArgs,
       mcpServers: session.resolvedProperties?.mcpServers,
     };

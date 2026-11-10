@@ -37,7 +37,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { isKnownCodexModel } from "../../../utils/ModelRegistry";
 import { resolveCliModelFlag } from "../shared/CliModelSelection";
 import { Log } from "../../../utils/Log";
-import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";
 import { moveGreedyOptionArgsAfterPrompt } from "../shared/CliArgumentUtils";
 import {
   CAPABILITY_VERIFICATION_STATUSES,
@@ -66,7 +66,7 @@ import {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
-  type CliProviderPreparation,
+  type HarnessAdapterPreparation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
@@ -429,7 +429,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const args: string[] = [];
 
     args.push(...CODEX_SKIP_UPDATE_CHECK_ARGS);
@@ -445,7 +445,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     // MCP configuration (when dynamic queue extension is enabled). Codex
     // filters MCP tools in each server's config, so `mcp__<server>__<tool>`
     // denials travel as that server's `disabled_tools`.
-    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
+    const mcpPreparation = await HarnessAdapterUtils.planMcpConfigBlock(
       workflowContext && withMcpToolDenialsOnServers(workflowContext),
       workspaceRoot,
       extensionPath,
@@ -498,7 +498,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       const workspaceDirs =
         resolvedSandboxMode === CODEX_SANDBOX_MODES.READ_ONLY
           ? []
-          : CliProviderUtils.getWorkspaceDirs(
+          : HarnessAdapterUtils.getWorkspaceDirs(
               workspaceRoot,
               workspaceRoots,
               approvedExternalRoots,
@@ -543,7 +543,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     // buildNotificationHookArgs() returns ["--enable", "hooks"] for interactive mode.
 
     // Session management
-    const shouldResume = CliProviderUtils.shouldResumeSession(
+    const shouldResume = HarnessAdapterUtils.shouldResumeSession(
       resolvedResumeSession,
       sessionId
     );
@@ -583,7 +583,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
   ): string[] {
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;
-    const shouldResume = CliProviderUtils.shouldResumeSession(
+    const shouldResume = HarnessAdapterUtils.shouldResumeSession(
       resolvedResumeSession,
       sessionId
     );
@@ -627,7 +627,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const hookEvents = [
       ...new Set<HookEvent>([
         "sessionStart",
@@ -684,7 +684,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const { hookArgs, trustArgs } = this.writeCodexHooks(
       extensionPath,
       workspaceRoot,
@@ -913,7 +913,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     userServers?: McpServerConfig[],
     stateRoot?: string,
     _secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
@@ -1049,7 +1049,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability(
+    return HarnessAdapterUtils.checkCliAvailability(
       CodexHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
@@ -1060,7 +1060,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
    * @returns Version string if available
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion(
+    return HarnessAdapterUtils.getCliVersion(
       CodexHarnessAdapter.CLI_VERSION_COMMAND,
       {
         parseVersion: (stdout) => {

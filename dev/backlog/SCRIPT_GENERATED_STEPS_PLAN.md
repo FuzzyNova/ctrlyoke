@@ -149,7 +149,7 @@ Plumbing:
 
 - **Put the launcher on script PATH.** `ScriptProcessRunner` builds its own
   `cleanEnv` and does not call `withCtrlyokeBinOnPath`; only harness spawns
-  (`CliProviderUtils`, `PtyProcessManager`) do. Apply it to script steps,
+  (`HarnessAdapterUtils`, `PtyProcessManager`) do. Apply it to script steps,
   conditions and hooks too, so `ctrlyoke step add` inside a script reaches the
   same ctrlyoke version that is running the workflow.
 - **Attribute the steps to the step that added them.** Script steps should

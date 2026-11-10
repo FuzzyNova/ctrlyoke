@@ -1,4 +1,4 @@
-import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";
 import {
   isOpenCodeV2Version,
   OPENCODE_VERSION_COMMAND,
@@ -10,7 +10,7 @@ export { isOpenCodeV2Version, OPENCODE_VERSION_COMMAND };
 export type OpenCodeVersionProbe = () => Promise<string | undefined>;
 
 const installedVersionProbe: OpenCodeVersionProbe = () =>
-  CliProviderUtils.getCliVersion(OPENCODE_VERSION_COMMAND, { timeoutMs: 5000 });
+  HarnessAdapterUtils.getCliVersion(OPENCODE_VERSION_COMMAND, { timeoutMs: 5000 });
 
 let versionProbe: OpenCodeVersionProbe = installedVersionProbe;
 
@@ -37,7 +37,7 @@ export function setOpenCodeVersionProbe(
  * `session export`, directory plugins), which output shape cannot reveal before
  * the process starts, so these are the version branches the harness rules
  * allow. The `--version` probe is cached per extension-host session by
- * `CliProviderUtils`. An unknown version is treated as OpenCode 1, which keeps
+ * `HarnessAdapterUtils`. An unknown version is treated as OpenCode 1, which keeps
  * the long-standing behaviour.
  */
 export async function detectOpenCodeV2(): Promise<boolean> {

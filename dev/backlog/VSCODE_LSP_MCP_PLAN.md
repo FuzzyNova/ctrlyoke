@@ -16,7 +16,7 @@ end condition, and no `ctrlyoke-ide` server exist.
 >   `CliPromptPreparer`; `EndConditionHandler.buildRetryPrompt` only picks the
 >   template or the fallback text.)
 > - MCP injection is per harness, via `CliMcpConfigGenerator` and
->   `CliProviderUtils`. `SettingsJsonMcpTracker` only serves Qwen and
+>   `HarnessAdapterUtils`. `SettingsJsonMcpTracker` only serves Qwen and
 >   Antigravity. The `ctrlyoke` server is injected only when a workflow's
 >   resolved `mcpServers` includes `MCP_SERVER_IDS.CTRLYOKE`, so it is not
 >   always present.
@@ -150,7 +150,7 @@ src/bar.ts:8:1 error TS2304: Cannot find name 'Foo'.
 
 ### Phase 3: `ctrlyoke-ide` MCP Server (auto-injected)
 
-A thin MCP server that exposes `getDiagnostics` to CLI harnesses running as detached processes. Unlike community extensions that require manual user configuration, this registers through the existing per-harness MCP injection (`CliMcpConfigGenerator` and the `CliProviderUtils` MCP preparation path; `SettingsJsonMcpTracker` covers only Qwen and Antigravity). A simpler option to consider first: add the tools to the existing `ctrlyoke` MCP server (`src/mcp-server.ts`) instead of shipping a second binary.
+A thin MCP server that exposes `getDiagnostics` to CLI harnesses running as detached processes. Unlike community extensions that require manual user configuration, this registers through the existing per-harness MCP injection (`CliMcpConfigGenerator` and the `HarnessAdapterUtils` MCP preparation path; `SettingsJsonMcpTracker` covers only Qwen and Antigravity). A simpler option to consider first: add the tools to the existing `ctrlyoke` MCP server (`src/mcp-server.ts`) instead of shipping a second binary.
 
 **Architecture:**
 

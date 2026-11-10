@@ -56,7 +56,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     // CtrlYokeConfigService has no "unset backend" method; reassigning
     // undefined-shaped backends keeps other suites (which construct their
     // own CtrlYokeConfigService instances) unaffected, but this suite
-    // deliberately uses the shared singleton like CliProviderUtils.test.ts
+    // deliberately uses the shared singleton like HarnessAdapterUtils.test.ts
     // does, so restore it to empty backends afterward.
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(makeBackend({}));

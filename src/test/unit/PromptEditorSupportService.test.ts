@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { PromptEditorSupportService } from "../../ui/PromptEditorSupportService";
 import { createWebviewClientContext } from "../../ui/WebviewClientContext";
-import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import {
   ATOMIC_REFERENCE_KINDS,
@@ -691,9 +691,9 @@ suite("PromptEditorSupportService", () => {
 
   test("emits harness flag completions from the selected CLI help output", async () => {
     const emitted: unknown[] = [];
-    const originalRunHelpCommand = CliProviderUtils.runHelpCommand;
+    const originalRunHelpCommand = HarnessAdapterUtils.runHelpCommand;
     let requestedCommand: string | undefined;
-    CliProviderUtils.runHelpCommand = async (command) => {
+    HarnessAdapterUtils.runHelpCommand = async (command) => {
       requestedCommand = command;
       return [
         "Options:",
@@ -718,7 +718,7 @@ suite("PromptEditorSupportService", () => {
         201
       );
     } finally {
-      CliProviderUtils.runHelpCommand = originalRunHelpCommand;
+      HarnessAdapterUtils.runHelpCommand = originalRunHelpCommand;
     }
 
     const response = emitted[0] as {
@@ -742,8 +742,8 @@ suite("PromptEditorSupportService", () => {
 
   test("emits empty harness flag items when the help command fails", async () => {
     const emitted: unknown[] = [];
-    const originalRunHelpCommand = CliProviderUtils.runHelpCommand;
-    CliProviderUtils.runHelpCommand = async () => {
+    const originalRunHelpCommand = HarnessAdapterUtils.runHelpCommand;
+    HarnessAdapterUtils.runHelpCommand = async () => {
       throw new Error("CLI not installed");
     };
 
@@ -763,7 +763,7 @@ suite("PromptEditorSupportService", () => {
         202
       );
     } finally {
-      CliProviderUtils.runHelpCommand = originalRunHelpCommand;
+      HarnessAdapterUtils.runHelpCommand = originalRunHelpCommand;
     }
 
     const response = emitted[0] as {
@@ -783,8 +783,8 @@ suite("PromptEditorSupportService", () => {
 
   test("filters harness flags by the token containing the cursor", async () => {
     const emitted: unknown[] = [];
-    const originalRunHelpCommand = CliProviderUtils.runHelpCommand;
-    CliProviderUtils.runHelpCommand = async () =>
+    const originalRunHelpCommand = HarnessAdapterUtils.runHelpCommand;
+    HarnessAdapterUtils.runHelpCommand = async () =>
       [
         "Options:",
         "  --model <model>  Model to use",
@@ -809,7 +809,7 @@ suite("PromptEditorSupportService", () => {
         203
       );
     } finally {
-      CliProviderUtils.runHelpCommand = originalRunHelpCommand;
+      HarnessAdapterUtils.runHelpCommand = originalRunHelpCommand;
     }
 
     const response = emitted[0] as {

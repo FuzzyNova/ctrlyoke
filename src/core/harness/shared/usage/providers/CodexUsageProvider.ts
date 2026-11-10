@@ -3,7 +3,7 @@ import {
   HARNESS_QUOTA_SOURCES,
 } from "../../../../../types/DashboardConstants";
 import type { HarnessQuotaSnapshot } from "../../../../../types/UsageTypes";
-import { CliProviderUtils } from "../../../shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../../../shared/HarnessAdapterUtils";
 import type { IHarnessUsageProvider } from "../IHarnessUsageProvider";
 import {
   CodexAppServerClient,
@@ -57,7 +57,7 @@ export function isCodexAppServerVersionSupported(
 }
 
 function defaultGetVersion(): Promise<string | undefined> {
-  return CliProviderUtils.getCliVersion("codex --version", {
+  return HarnessAdapterUtils.getCliVersion("codex --version", {
     parseVersion: (stdout) => {
       const match = stdout.match(
         /(?:codex\s+version\s+)?(\d+\.\d+(?:\.\d+)?)/i

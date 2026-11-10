@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
-import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 
@@ -31,7 +31,7 @@ suite("Antigravity MCP", () => {
     };
 
     test("remote servers use serverUrl with no type/trust, keep headers", () => {
-      const entries = CliProviderUtils.buildSettingsJsonMcpEntries(
+      const entries = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
         undefined,
         "c:/ws",
         undefined,
@@ -48,7 +48,7 @@ suite("Antigravity MCP", () => {
     });
 
     test("stdio servers keep command/args/env", () => {
-      const entries = CliProviderUtils.buildSettingsJsonMcpEntries(
+      const entries = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
         undefined,
         "c:/ws",
         undefined,
@@ -63,7 +63,7 @@ suite("Antigravity MCP", () => {
     });
 
     test("ctrlyoke server omits trust under agy options", () => {
-      const entries = CliProviderUtils.buildSettingsJsonMcpEntries(
+      const entries = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
         "c:/x/out/mcp-server.js",
         "c:/ws",
         undefined,
@@ -77,7 +77,7 @@ suite("Antigravity MCP", () => {
     });
 
     test("default options are unchanged (Gemini/Qwen url/type/trust)", () => {
-      const entries = CliProviderUtils.buildSettingsJsonMcpEntries(
+      const entries = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
         "c:/x/out/mcp-server.js",
         "c:/ws",
         undefined,

@@ -8,7 +8,7 @@
  *   never touched.
  * - Harness processes do not inherit that collection; they pick the same
  *   directory up from `registerCtrlyokeBinDirectory()` via
- *   `CliProviderUtils.buildProcessEnv()`.
+ *   `HarnessAdapterUtils.buildProcessEnv()`.
  * - "Install CLI for Use Outside VS Code" types the matching npm install
  *   command into a terminal without running it.
  */

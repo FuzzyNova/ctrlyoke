@@ -21,7 +21,7 @@ export interface PreparedMutation {
 }
 
 /** Pure provider preparation output shared by preview and real execution. */
-export interface CliProviderPreparation {
+export interface HarnessAdapterPreparation {
   readonly cliArgs: string[];
   readonly mutations: PreparedMutation[];
   readonly diagnostics: CompatibilityDiagnostic[];

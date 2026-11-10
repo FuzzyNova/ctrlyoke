@@ -44,7 +44,7 @@ export interface PermissionContext {
   /**
    * Directories outside the launch directory that the harness may use: the
    * other workspace folders plus every approved trusted external root. The
-   * same set `--add-dir` harnesses receive (`CliProviderUtils.getWorkspaceDirs()`
+   * same set `--add-dir` harnesses receive (`HarnessAdapterUtils.getWorkspaceDirs()`
    * without the primary root), for harnesses that grant directories through
    * permission rules instead (OpenCode's `external_directory`).
    */

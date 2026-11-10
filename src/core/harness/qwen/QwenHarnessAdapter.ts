@@ -46,7 +46,7 @@ import {
 } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
-import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";
 import { redactMcpConfigArgs } from "../shared/CliLauncherResolver";
 import {
   StatuslineManager,
@@ -69,7 +69,7 @@ import {
 } from "../../../types/CompatibilityTypes";
 import {
   applyPreparedMutations,
-  type CliProviderPreparation,
+  type HarnessAdapterPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
@@ -312,7 +312,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     },
     _workspaceRoots?: readonly string[],
     _approvedExternalRoots?: readonly string[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const statusLineToken = randomUUID();
     const args: string[] = [];
 
@@ -322,7 +322,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension or user MCP servers are enabled)
-    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
+    const mcpPreparation = await HarnessAdapterUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
@@ -358,7 +358,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
 
     // Session management: Resume with explicit session ID
-    const shouldResume = CliProviderUtils.shouldResumeSession(
+    const shouldResume = HarnessAdapterUtils.shouldResumeSession(
       resolvedResumeSession,
       sessionId
     );
@@ -430,7 +430,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
 
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
-      ...CliProviderUtils.buildProcessEnv(),
+      ...HarnessAdapterUtils.buildProcessEnv(),
       ...this.statuslineRegistration.buildSpawnEnv(),
       ...this.buildHookSettingsSpawnEnv(),
       ...this.sandboxSpawnEnv,
@@ -490,7 +490,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -564,7 +564,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const ctrlyokeHooksSection =
       enabledNotificationHookEvents.length > 0
         ? (
@@ -604,7 +604,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     ctrlyokeHooks: Record<string, unknown[]>,
     userHooks: Record<string, unknown[]>,
     description: string
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     const orphanCleanup: PreparedMutation = {
       path: path.join(workspaceRoot, ".qwen", "settings.json"),
       ownedKeys: ["hooks"],
@@ -863,12 +863,12 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     userServers?: McpServerConfig[],
     stateRoot?: string,
     secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<CliProviderPreparation> {
+  ): Promise<HarnessAdapterPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
-    const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
+    const mcpEntries = HarnessAdapterUtils.buildSettingsJsonMcpEntries(
       mcpServerPath,
       workspaceRoot,
       workingFilePath,
@@ -882,7 +882,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
         includeRemoteType: false,
       },
       stateRoot,
-      CliProviderUtils.createMcpSecretConfigOptions(
+      HarnessAdapterUtils.createMcpSecretConfigOptions(
         undefined,
         secretEnvironment
       )
@@ -911,7 +911,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability(
+    return HarnessAdapterUtils.checkCliAvailability(
       QwenHarnessAdapter.CLI_VERSION_COMMAND
     );
   }
@@ -922,7 +922,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * @returns Version string if available
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion(QwenHarnessAdapter.CLI_VERSION_COMMAND);
+    return HarnessAdapterUtils.getCliVersion(QwenHarnessAdapter.CLI_VERSION_COMMAND);
   }
 
   /**

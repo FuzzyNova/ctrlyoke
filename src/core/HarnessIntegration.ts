@@ -58,7 +58,7 @@ import {
   isHarnessShellEscape,
 } from "../utils/HarnessShellEscape";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
-import { CliProviderUtils } from "./harness/shared/CliProviderUtils";
+import { HarnessAdapterUtils } from "./harness/shared/HarnessAdapterUtils";
 import type { DisposableRegistry } from "./HostPorts";
 
 /** Match a complete leading harness slash-command token. */
@@ -1235,7 +1235,7 @@ export abstract class HarnessIntegration {
     }
 
     const workflowRoots = workflowContext
-      ? CliProviderUtils.getWorkflowExternalRootsContext(
+      ? HarnessAdapterUtils.getWorkflowExternalRootsContext(
           workspaceRoot,
           workflowContext
         )

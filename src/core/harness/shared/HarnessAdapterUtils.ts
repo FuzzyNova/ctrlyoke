@@ -16,9 +16,10 @@ import { ctrlYokeToolFamilies } from "../../../types/ExecutionPropertyResolver";
 import { retryWithBackoff, stopRetrying } from "../../../utils/RetryUtils";
 import { withCtrlyokeBinOnPath } from "../../../utils/CtrlyokeCliPath";
 import { parseArgString } from "../../../utils/CliArgParser";
+import { RetryableAsyncCache } from "../../../utils/RetryableAsyncCache";
 import { resolveCliCommand } from "./CliLauncherResolver";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "./interfaces/IHarnessAdapter";
-import { type CliProviderPreparation } from "./interfaces/PreparedMutation";
+import { type HarnessAdapterPreparation } from "./interfaces/PreparedMutation";
 import {
   CliMcpConfigGenerator,
   transformMcpSecretMap,
@@ -49,7 +50,7 @@ interface GetCliVersionOptions extends CliCommandOptions {
   parseVersion?: (stdout: string) => string | undefined;
 }
 
-export interface CliProviderWorkflowContext {
+export interface HarnessAdapterWorkflowContext {
   filePath?: string;
   sourceDefinitionPath?: string;
   stateRoot?: string;
@@ -73,38 +74,7 @@ export interface WorkflowExternalRootsContext {
 }
 
 /**
- * Shares a successful asynchronous lookup while allowing failures to be retried.
- *
- * CLI installation/version checks are called by both detector integrations and
- * capability consumers. Keeping a rejected promise would make a newly installed
- * CLI appear unavailable for the rest of the extension-host session, so only
- * successful results are retained.
- */
-export class RetryableAsyncCache<T> {
-  private readonly entries = new Map<string, Promise<T>>();
-
-  async getOrRun(key: string, operation: () => Promise<T>): Promise<T> {
-    const cached = this.entries.get(key);
-    if (cached) {
-      return cached;
-    }
-
-    const result = operation();
-    this.entries.set(key, result);
-
-    try {
-      return await result;
-    } catch (error) {
-      if (this.entries.get(key) === result) {
-        this.entries.delete(key);
-      }
-      throw error;
-    }
-  }
-}
-
-/**
- * Per-harness formatting knobs for {@link CliProviderUtils.buildSettingsJsonMcpEntries}.
+ * Per-harness formatting knobs for {@link HarnessAdapterUtils.buildSettingsJsonMcpEntries}.
  *
  * Defaults reproduce Qwen output (`url` + `type` for remote servers,
  * `trust: true` for auto-approved servers). Antigravity's `mcp_config.json`
@@ -132,7 +102,7 @@ export interface SettingsJsonMcpEntryOptions extends Pick<
  * - Process environment construction (`buildProcessEnv`)
  * - Shell-aware CLI version checks (`checkCliAvailability`, `getCliVersion`)
  */
-export class CliProviderUtils {
+export class HarnessAdapterUtils {
   /** Build the per-provider MCP secret strategy at the shared config seam. */
   static createMcpSecretConfigOptions(
     referenceToken: ((name: string) => string) | undefined,
@@ -235,9 +205,9 @@ export class CliProviderUtils {
     versionCommand: string,
     options: CliCommandOptions = {}
   ): Promise<string> {
-    return CliProviderUtils.runCachedCliCommand(
+    return HarnessAdapterUtils.runCachedCliCommand(
       versionCommand,
-      CliProviderUtils.versionCommandCache,
+      HarnessAdapterUtils.versionCommandCache,
       "Version",
       options
     );
@@ -251,9 +221,9 @@ export class CliProviderUtils {
     helpCommand: string,
     options: CliCommandOptions = {}
   ): Promise<string> {
-    return CliProviderUtils.runCachedCliCommand(
+    return HarnessAdapterUtils.runCachedCliCommand(
       helpCommand,
-      CliProviderUtils.helpCommandCache,
+      HarnessAdapterUtils.helpCommandCache,
       "Help",
       options
     );
@@ -267,7 +237,7 @@ export class CliProviderUtils {
     options: CliCommandOptions = {}
   ): Promise<boolean> {
     try {
-      await CliProviderUtils.runVersionCommand(versionCommand, options);
+      await HarnessAdapterUtils.runVersionCommand(versionCommand, options);
       return true;
     } catch {
       return false;
@@ -282,7 +252,7 @@ export class CliProviderUtils {
     options: GetCliVersionOptions = {}
   ): Promise<string | undefined> {
     try {
-      const stdout = await CliProviderUtils.runVersionCommand(
+      const stdout = await HarnessAdapterUtils.runVersionCommand(
         versionCommand,
         options
       );
@@ -340,7 +310,7 @@ export class CliProviderUtils {
     workspaceRoot: string,
     workspaceRoots: readonly string[] = [],
     approvedExternalRoots?: readonly string[],
-    workflowContext?: CliProviderWorkflowContext
+    workflowContext?: HarnessAdapterWorkflowContext
   ): string[] {
     const workspaceDirs: string[] = [];
     const directoryKeys = new Set<string>();
@@ -363,7 +333,7 @@ export class CliProviderUtils {
     // workflow context is available, retain the execution workspace snapshot
     // supplied by callers.
     const workflowRoots = workflowContext
-      ? CliProviderUtils.getWorkflowExternalRootsContext(
+      ? HarnessAdapterUtils.getWorkflowExternalRootsContext(
           workspaceRoot,
           workflowContext
         )
@@ -387,7 +357,7 @@ export class CliProviderUtils {
 
   static getWorkflowExternalRootsContext(
     workspaceRoot: string,
-    workflowContext: CliProviderWorkflowContext
+    workflowContext: HarnessAdapterWorkflowContext
   ): WorkflowExternalRootsContext | undefined {
     // Approvals are recorded against the authored file. In a real run
     // `filePath` is the run's working copy, which has none of them.
@@ -440,8 +410,8 @@ export class CliProviderUtils {
       userServers?: McpServerConfig[],
       stateRoot?: string,
       secretEnvironment?: Readonly<Record<string, string>>
-    ) => Promise<CliProviderPreparation>
-  ): Promise<CliProviderPreparation> {
+    ) => Promise<HarnessAdapterPreparation>
+  ): Promise<HarnessAdapterPreparation> {
     if (!workflowContext || !workspaceRoot) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
