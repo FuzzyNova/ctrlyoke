@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-This product includes third-party software and assets. This inventory was audited on **2026-11-08** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
+This product includes third-party software and assets. This inventory was audited on **2026-11-10** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
 
 ## Commercial Distribution
 
@@ -46,7 +46,7 @@ EPL-2.0 license: <https://www.eclipse.org/legal/epl-2.0/>
 
 ## Production Dependency Inventory
 
-The production dependency tree contains **415 packages**. Each package is listed with its installed version, declared license, and copyright line. Full license texts are grouped below only when the package files contain identical text.
+The production dependency tree contains **420 packages**. Each package is listed with its installed version, declared license, and copyright line. Full license texts are grouped below only when the package files contain identical text.
 
 | Package                                     | Version         | License                       | Copyright                                                                                                                                                                   |
 | ------------------------------------------- | --------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -80,6 +80,9 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@dnd-kit/core`                             | `6.3.1`         | `MIT`                         | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
 | `@dnd-kit/sortable`                         | `10.0.0`        | `MIT`                         | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
 | `@dnd-kit/utilities`                        | `3.2.2`         | `MIT`                         | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
+| `@emnapi/core`                              | `1.11.2`        | `MIT`                         | Copyright (c) 2021-present Toyobayashi                                                                                                                                      |
+| `@emnapi/runtime`                           | `1.11.2`        | `MIT`                         | Copyright (c) 2021-present Toyobayashi                                                                                                                                      |
+| `@emnapi/wasi-threads`                      | `1.2.2`         | `MIT`                         | Copyright (c) 2021-present Toyobayashi                                                                                                                                      |
 | `@hono/node-server`                         | `2.1.6`         | `MIT`                         | Copyright (c) 2022 - present, Yusuke Wada and Hono contributors                                                                                                             |
 | `@iconify/types`                            | `2.0.0`         | `MIT`                         | Copyright (c) 2021 - 2022 Vjacheslav Trushkin / Iconify OÜ                                                                                                                  |
 | `@iconify/utils`                            | `3.1.7`         | `MIT`                         | Copyright (c) 2021-PRESENT Vjacheslav Trushkin                                                                                                                              |
@@ -107,6 +110,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@microsoft/dynamicproto-js`                | `2.0.5`         | `MIT`                         | Microsoft Application Insights Team                                                                                                                                         |
 | `@modelcontextprotocol/sdk`                 | `1.32.2`        | `MIT`                         | Copyright (c) 2024 Anthropic, PBC                                                                                                                                           |
 | `@napi-rs/canvas`                           | `1.1.0`         | `MIT`                         | Copyright (c) 2020 lynweklm@gmail.com                                                                                                                                       |
+| `@napi-rs/wasm-runtime`                     | `1.2.7`         | `MIT`                         | LongYinan                                                                                                                                                                   |
 | `@nevware21/ts-async`                       | `0.5.5`         | `MIT`                         | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
 | `@nevware21/ts-utils`                       | `0.16.0`        | `MIT`                         | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
 | `@noble/hashes`                             | `1.8.0`         | `MIT`                         | Copyright (c) 2022 Paul Miller (https://paulmillr.com)                                                                                                                      |
@@ -125,6 +129,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@resvg/resvg-wasm`                         | `2.6.2`         | `MPL-2.0`                     | resvg-js contributors                                                                                                                                                       |
 | `@tanstack/react-virtual`                   | `3.14.26`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
 | `@tanstack/virtual-core`                    | `3.19.11`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tybys/wasm-util`                          | `0.10.4`        | `MIT`                         | Copyright (c) 2022-present Toyobayashi                                                                                                                                      |
 | `@types/body-parser`                        | `1.19.6`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/connect`                            | `3.4.38`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/d3`                                 | `7.4.3`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
@@ -275,13 +280,13 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `eventsource`                               | `3.0.7`         | `MIT`                         | Copyright (c) EventSource GitHub organisation                                                                                                                               |
 | `eventsource-parser`                        | `3.1.1`         | `MIT`                         | Copyright (c) 2026 Espen Hovlandsdal <espen@hovlandsdal.com>                                                                                                                |
 | `express`                                   | `5.3.0`         | `MIT`                         | Copyright (c) 2009-2014 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
-| `express-rate-limit`                        | `8.7.3`         | `MIT`                         | Copyright 2023 Nathan Friedly, Vedant K                                                                                                                                     |
+| `express-rate-limit`                        | `8.7.4`         | `MIT`                         | Copyright 2023 Nathan Friedly, Vedant K                                                                                                                                     |
 | `find-up`                                   | `4.1.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `fuzzysort`                                 | `4.0.2`         | `MIT`                         | Copyright (c) 2018 Stephen Kamenar                                                                                                                                          |
 | `get-caller-file`                           | `2.0.5`         | `ISC`                         | Copyright 2018 Stefan Penner                                                                                                                                                |
 | `gitdiff-parser`                            | `0.3.1`         | `MIT`                         | Copyright (c) 2020 Baidu EFE                                                                                                                                                |
 | `glob`                                      | `14.0.4`        | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me/)                                                                                                                        |
-| `gpt-tokenizer`                             | `4.1.0`         | `MIT`                         | Copyright (c) 2023-2024 Bazyli Brzoska                                                                                                                                      |
+| `gpt-tokenizer`                             | `4.1.1`         | `MIT`                         | Copyright (c) 2023-2024 Bazyli Brzoska                                                                                                                                      |
 | `hachure-fill`                              | `0.5.2`         | `MIT`                         | Copyright (c) 2023 Preet Shihn                                                                                                                                              |
 | `hast-util-from-parse5`                     | `8.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `hast-util-parse-selector`                  | `4.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
@@ -291,7 +296,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `hast-util-to-parse5`                       | `8.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `hast-util-whitespace`                      | `3.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `hastscript`                                | `9.0.3`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hono`                                      | `4.13.16`       | `MIT`                         | Copyright (c) 2021 - present, Yusuke Wada and Hono contributors                                                                                                             |
+| `hono`                                      | `4.13.17`       | `MIT`                         | Copyright (c) 2021 - present, Yusuke Wada and Hono contributors                                                                                                             |
 | `html-url-attributes`                       | `3.0.1`         | `MIT`                         | Copyright (c) Titus Wormer                                                                                                                                                  |
 | `html-void-elements`                        | `3.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `http-errors`                               | `2.0.1`         | `MIT`                         | Copyright (c) 2014 Jonathan Ong me@jongleberry.com                                                                                                                          |
@@ -307,7 +312,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `is-decimal`                                | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `is-hexadecimal`                            | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `isexe`                                     | `2.0.0`         | `ISC`                         | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
-| `jose`                                      | `6.2.15`        | `MIT`                         | Copyright (c) 2018 Filip Skokan                                                                                                                                             |
+| `jose`                                      | `6.2.17`        | `MIT`                         | Copyright (c) 2018 Filip Skokan                                                                                                                                             |
 | `js-tokens`                                 | `4.0.0`         | `MIT`                         | Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell                                                                                                                     |
 | `js-yaml`                                   | `5.5.0`         | `MIT`                         | Copyright (C) 2011-2015 by Vitaly Puzrin                                                                                                                                    |
 | `json-schema-typed`                         | `8.0.2`         | `BSD-2-Clause`                | Remy Rylan                                                                                                                                                                  |
@@ -326,7 +331,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `markdown-table`                            | `3.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `marked`                                    | `15.0.12`       | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
 | `marked`                                    | `16.4.2`        | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
-| `marked`                                    | `18.1.3`        | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
+| `marked`                                    | `18.2.0`        | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
 | `mdast-util-find-and-replace`               | `3.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-from-markdown`                  | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm`                            | `3.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
@@ -379,7 +384,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `p-try`                                     | `2.2.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `package-manager-detector`                  | `1.9.0`         | `MIT`                         | Copyright (c) 2020-PRESENT Anthony Fu <https://github.com/antfu>                                                                                                            |
 | `parse-entities`                            | `4.0.2`         | `MIT`                         | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
-| `parse5`                                    | `8.1.0`         | `MIT`                         | Copyright (c) 2013-2019 Ivan Nikulin (ifaaan@gmail.com, https://github.com/inikulin)                                                                                        |
+| `parse5`                                    | `8.1.1`         | `MIT`                         | Copyright (c) 2013-2019 Ivan Nikulin (ifaaan@gmail.com, https://github.com/inikulin)                                                                                        |
 | `path-data-parser`                          | `0.1.0`         | `MIT`                         | Copyright (c) 2020 Preet Shihn                                                                                                                                              |
 | `path-exists`                               | `4.0.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `path-key`                                  | `3.1.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
@@ -398,7 +403,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `react`                                     | `19.3.1`        | `MIT`                         | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
 | `react-diff-view`                           | `3.3.3`         | `MIT`                         | Copyright (c) 2017 Gray Zhang                                                                                                                                               |
 | `react-dom`                                 | `19.3.1`        | `MIT`                         | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
-| `react-resizable-panels`                    | `4.19.1`        | `MIT`                         | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
+| `react-resizable-panels`                    | `4.21.0`        | `MIT`                         | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
 | `readdirp`                                  | `5.1.1`         | `MIT`                         | Copyright (c) 2012-2019 Thorsten Lorenz, Paul Miller (https://paulmillr.com)                                                                                                |
 | `reflect-metadata`                          | `0.2.2`         | `Apache-2.0`                  | Ron Buckton                                                                                                                                                                 |
 | `refractor`                                 | `5.0.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
@@ -455,7 +460,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `which`                                     | `2.0.2`         | `ISC`                         | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
 | `which-module`                              | `2.0.1`         | `ISC`                         | Copyright (c) 2016, Contributors                                                                                                                                            |
 | `wrap-ansi`                                 | `6.2.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `ws`                                        | `8.22.1`        | `MIT`                         | Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>                                                                                                                  |
+| `ws`                                        | `8.22.2`        | `MIT`                         | Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>                                                                                                                  |
 | `y18n`                                      | `4.0.3`         | `ISC`                         | Copyright (c) 2015, Contributors                                                                                                                                            |
 | `yaml`                                      | `2.9.1`         | `ISC`                         | Eemeli Aro <eemeli@gmail.com>                                                                                                                                               |
 | `yargs`                                     | `15.4.1`        | `MIT`                         | Copyright 2010 James Halliday (mail@substack.net); Modified work Copyright 2014 Contributors (ben@npmjs.com)                                                                |
@@ -861,6 +866,34 @@ SOFTWARE.
 
 ### License text 8: MIT
 
+Packages: @emnapi/core@1.11.2, @emnapi/runtime@1.11.2, @emnapi/wasi-threads@1.2.2
+
+```text
+MIT License
+
+Copyright (c) 2021-present Toyobayashi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### License text 9: MIT
+
 Packages: @hono/node-server@2.1.6
 
 ```text
@@ -887,7 +920,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 9: MIT
+### License text 10: MIT
 
 Packages: @iconify/types@2.0.0
 
@@ -915,7 +948,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 10: MIT
+### License text 11: MIT
 
 Packages: @iconify/utils@3.1.7
 
@@ -943,7 +976,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 11: MIT
+### License text 12: MIT
 
 Packages: @lezer/common@1.5.5, @lezer/css@1.3.9, @lezer/highlight@1.2.5, @lezer/html@1.3.13, @lezer/lr@1.4.12, @lezer/php@1.0.6, @lezer/rust@1.0.3
 
@@ -971,7 +1004,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 12: MIT
+### License text 13: MIT
 
 Packages: @lezer/cpp@1.1.6, @lezer/java@1.1.5, @lezer/markdown@1.8.1, @lezer/python@1.1.19
 
@@ -999,7 +1032,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 13: MIT
+### License text 14: MIT
 
 Packages: @lezer/json@1.0.3
 
@@ -1027,7 +1060,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 14: MIT
+### License text 15: MIT
 
 Packages: @lezer/yaml@1.0.4
 
@@ -1055,7 +1088,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 15: MIT
+### License text 16: MIT
 
 Packages: @mermaid-js/parser@2.0.1
 
@@ -1083,7 +1116,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 16: MIT
+### License text 17: MIT
 
 Packages: @microsoft/1ds-core-js@4.4.6, @microsoft/1ds-post-js@4.4.6, @microsoft/applicationinsights-channel-js@3.4.6, @microsoft/applicationinsights-common@3.4.6, @microsoft/applicationinsights-core-js@3.4.6, @microsoft/applicationinsights-shims@3.0.1, @microsoft/applicationinsights-web-basic@3.4.6
 
@@ -1111,7 +1144,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 17: MIT
+### License text 18: MIT
 
 Packages: @microsoft/dynamicproto-js@2.0.5
 
@@ -1139,7 +1172,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 18: MIT
+### License text 19: MIT
 
 Packages: @modelcontextprotocol/sdk@1.32.2
 
@@ -1167,7 +1200,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 19: MIT
+### License text 20: MIT
 
 Packages: @napi-rs/canvas@1.1.0
 
@@ -1229,7 +1262,35 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 20: MIT
+### License text 21: MIT
+
+Packages: @napi-rs/wasm-runtime@1.2.7
+
+```text
+MIT License
+
+Copyright (c) LongYinan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### License text 22: MIT
 
 Packages: @nevware21/ts-async@0.5.5, @nevware21/ts-utils@0.16.0
 
@@ -1257,7 +1318,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 21: MIT
+### License text 23: MIT
 
 Packages: @noble/hashes@1.8.0
 
@@ -1285,7 +1346,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 22: MIT
+### License text 24: MIT
 
 Packages: @peculiar/asn1-cms@2.11.1, @peculiar/asn1-csr@2.11.1, @peculiar/asn1-ecc@2.11.1, @peculiar/asn1-pfx@2.11.1, @peculiar/asn1-pkcs8@2.11.1, @peculiar/asn1-pkcs9@2.11.1, @peculiar/asn1-rsa@2.11.1, @peculiar/asn1-schema@2.11.1, @peculiar/asn1-x509@2.11.1, @peculiar/asn1-x509-attr@2.11.1
 
@@ -1313,7 +1374,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 23: MIT
+### License text 25: MIT
 
 Packages: @peculiar/x509@1.14.3
 
@@ -1341,7 +1402,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 24: MIT
+### License text 26: MIT
 
 Packages: @pushforge/builder@2.0.5
 
@@ -1369,13 +1430,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 25: MPL-2.0
+### License text 27: MPL-2.0
 
 Packages: @resvg/resvg-wasm@2.6.2
 
 No license text file was present in the package. Declared license: `MPL-2.0`.
 
-### License text 26: MIT
+### License text 28: MIT
 
 Packages: @tanstack/react-virtual@3.14.26, @tanstack/virtual-core@3.19.11
 
@@ -1403,7 +1464,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 27: MIT
+### License text 29: MIT
+
+Packages: @tybys/wasm-util@0.10.4
+
+```text
+MIT License
+
+Copyright (c) 2022-present Toyobayashi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### License text 30: MIT
 
 Packages: @types/body-parser@1.19.6, @types/connect@3.4.38, @types/d3@7.4.3, @types/d3-array@3.2.2, @types/d3-axis@3.0.6, @types/d3-brush@3.0.6, @types/d3-chord@3.0.6, @types/d3-color@3.1.3, @types/d3-contour@3.0.6, @types/d3-delaunay@6.0.4, @types/d3-dispatch@3.0.7, @types/d3-drag@3.0.7, @types/d3-dsv@3.0.7, @types/d3-ease@3.0.2, @types/d3-fetch@3.0.7, @types/d3-force@3.0.10, @types/d3-format@3.0.4, @types/d3-geo@3.1.1, @types/d3-hierarchy@3.1.7, @types/d3-interpolate@3.0.4, @types/d3-path@3.1.1, @types/d3-polygon@3.0.2, @types/d3-quadtree@3.0.6, @types/d3-random@3.0.4, @types/d3-scale@4.0.9, @types/d3-scale-chromatic@3.1.0, @types/d3-selection@3.0.12, @types/d3-shape@3.2.0, @types/d3-time@3.0.4, @types/d3-time-format@4.0.3, @types/d3-timer@3.0.2, @types/d3-transition@3.0.9, @types/d3-zoom@3.0.9, @types/estree@1.0.10, @types/estree-jsx@1.0.5, @types/express@5.0.6, @types/express-serve-static-core@5.1.3, @types/geojson@7946.0.16, @types/hast@3.0.5, @types/http-errors@2.0.5, @types/mdast@4.0.4, @types/node@26.6.6, @types/prismjs@1.26.6, @types/qs@6.15.1, @types/range-parser@1.2.7, @types/react@19.3.0, @types/send@1.2.1, @types/serve-static@2.2.0, @types/trusted-types@2.0.7, @types/unist@2.0.11, @types/unist@3.0.3, @types/ws@8.18.2
 
@@ -1431,7 +1520,7 @@ Packages: @types/body-parser@1.19.6, @types/connect@3.4.38, @types/d3@7.4.3, @ty
     SOFTWARE
 ```
 
-### License text 28: ISC
+### License text 31: ISC
 
 Packages: @ungap/structured-clone@1.4.0
 
@@ -1453,7 +1542,7 @@ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 29: MIT
+### License text 32: MIT
 
 Packages: @upsetjs/venn.js@2.0.0
 
@@ -1482,7 +1571,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 30: CC-BY-4.0
+### License text 33: CC-BY-4.0
 
 Packages: @vscode/codicons@0.0.46-24
 
@@ -1910,7 +1999,7 @@ Git Logo by [Jason Long](https://bsky.app/profile/jasonlong.me) is licensed unde
     SOFTWARE
 ```
 
-### License text 31: MIT
+### License text 34: MIT
 
 Packages: @vscode/extension-telemetry@1.5.2
 
@@ -1940,7 +2029,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 32: MIT
+### License text 35: MIT
 
 Packages: @xterm/addon-fit@0.11.0
 
@@ -1966,7 +2055,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 33: MIT
+### License text 36: MIT
 
 Packages: @xterm/addon-webgl@0.19.0
 
@@ -1992,7 +2081,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 34: MIT
+### License text 37: MIT
 
 Packages: @xterm/xterm@6.0.0
 
@@ -2020,7 +2109,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 35: MIT
+### License text 38: MIT
 
 Packages: ajv@8.20.0
 
@@ -2048,7 +2137,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 36: MIT
+### License text 39: MIT
 
 Packages: ajv-formats@3.0.1
 
@@ -2076,7 +2165,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 37: MIT
+### License text 40: MIT
 
 Packages: ansi-regex@5.0.1, ansi-styles@4.3.0, camelcase@5.3.1, find-up@4.1.0, locate-path@5.0.0, p-limit@2.3.0, p-locate@4.1.0, p-try@2.2.0, path-exists@4.0.0, path-key@3.1.1, shebang-regex@3.0.0, string-width@4.2.3, strip-ansi@6.0.1, wrap-ansi@6.2.0
 
@@ -2092,7 +2181,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 38: PSF-2.0
+### License text 41: PSF-2.0
 
 Packages: argparse@3.0.4
 
@@ -2146,7 +2235,7 @@ agrees to be bound by the terms and conditions of this License
 Agreement.
 ```
 
-### License text 39: BSD-3-Clause
+### License text 42: BSD-3-Clause
 
 Packages: asn1js@3.1.0
 
@@ -2183,7 +2272,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 40: MIT
+### License text 43: MIT
 
 Packages: bytes@3.1.2
 
@@ -2213,7 +2302,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 41: BSD-3-Clause
+### License text 44: BSD-3-Clause
 
 Packages: bytestreamjs@2.0.1
 
@@ -2249,7 +2338,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 42: MIT
+### License text 45: MIT
 
 Packages: ccount@2.0.1, character-entities@2.0.2, character-entities-html4@2.1.0, character-entities-legacy@3.0.0, character-reference-invalid@2.0.1, mdast-util-to-string@4.0.0, unist-util-position@5.0.0
 
@@ -2278,7 +2367,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 43: MIT
+### License text 46: MIT
 
 Packages: chalk@6.0.1, escape-string-regexp@5.0.0
 
@@ -2294,7 +2383,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 44: MIT
+### License text 47: MIT
 
 Packages: chokidar@5.0.0
 
@@ -2322,7 +2411,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 45: MIT
+### License text 48: MIT
 
 Packages: classnames@2.5.1
 
@@ -2350,7 +2439,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 46: ISC
+### License text 49: ISC
 
 Packages: cliui@6.0.0
 
@@ -2371,7 +2460,7 @@ WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 47: MIT
+### License text 50: MIT
 
 Packages: clsx@2.1.1
 
@@ -2387,7 +2476,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 48: MIT
+### License text 51: MIT
 
 Packages: color-convert@2.0.1
 
@@ -2414,7 +2503,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 49: MIT
+### License text 52: MIT
 
 Packages: color-name@1.1.4
 
@@ -2429,7 +2518,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 50: MIT
+### License text 53: MIT
 
 Packages: comma-separated-tokens@2.0.3, hast-util-parse-selector@4.0.0, hast-util-whitespace@3.0.0, html-void-elements@3.0.0, is-alphabetical@2.0.1, is-alphanumerical@2.0.1, is-decimal@2.0.1, is-hexadecimal@2.0.1, mdast-util-to-hast@13.2.1, rehype-raw@7.0.0, rehype-sanitize@6.0.0, space-separated-tokens@2.0.2, unist-util-stringify-position@4.0.0, web-namespaces@2.0.1, zwitch@2.0.4
 
@@ -2458,7 +2547,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 51: MIT
+### License text 54: MIT
 
 Packages: commander@15.1.0, commander@7.2.0
 
@@ -2487,7 +2576,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 52: MIT
+### License text 55: MIT
 
 Packages: content-type@1.0.5
 
@@ -2516,7 +2605,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 53: MIT
+### License text 56: MIT
 
 Packages: cors@2.8.6
 
@@ -2545,7 +2634,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 54: MIT
+### License text 57: MIT
 
 Packages: cose-base@1.0.3, cose-base@2.2.0
 
@@ -2573,7 +2662,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 55: MIT
+### License text 58: MIT
 
 Packages: crelt@1.0.7
 
@@ -2599,7 +2688,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 56: MIT
+### License text 59: MIT
 
 Packages: cross-spawn@7.0.6
 
@@ -2627,7 +2716,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 57: MIT
+### License text 60: MIT
 
 Packages: csstype@3.2.3
 
@@ -2653,7 +2742,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 58: MIT
+### License text 61: MIT
 
 Packages: cytoscape@3.34.4
 
@@ -2679,7 +2768,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 59: MIT
+### License text 62: MIT
 
 Packages: cytoscape-cose-bilkent@4.1.0
 
@@ -2705,7 +2794,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 60: MIT
+### License text 63: MIT
 
 Packages: cytoscape-fcose@2.2.0
 
@@ -2731,7 +2820,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 61: ISC
+### License text 64: ISC
 
 Packages: d3@7.9.2, d3-array@3.2.5, d3-axis@3.0.1, d3-brush@3.0.1, d3-chord@3.0.2, d3-color@3.1.1, d3-dispatch@3.0.2, d3-drag@3.0.1, d3-force@3.0.1, d3-format@3.1.3, d3-hierarchy@3.1.3, d3-interpolate@3.0.2, d3-polygon@3.0.2, d3-quadtree@3.0.2, d3-random@3.0.2, d3-scale@4.0.3, d3-selection@3.0.1, d3-shape@3.2.1, d3-time@3.1.1, d3-time-format@4.1.1, d3-timer@3.0.2, d3-transition@3.0.2, d3-zoom@3.0.1
 
@@ -2751,7 +2840,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 62: BSD-3-Clause
+### License text 65: BSD-3-Clause
 
 Packages: d3-array@2.12.1
 
@@ -2785,7 +2874,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 63: ISC
+### License text 66: ISC
 
 Packages: d3-contour@4.0.3
 
@@ -2805,7 +2894,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 64: ISC
+### License text 67: ISC
 
 Packages: d3-delaunay@6.0.6
 
@@ -2826,7 +2915,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 65: ISC
+### License text 68: ISC
 
 Packages: d3-dsv@3.0.2
 
@@ -2846,7 +2935,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 66: BSD-3-Clause
+### License text 69: BSD-3-Clause
 
 Packages: d3-ease@3.0.2
 
@@ -2881,7 +2970,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 67: ISC
+### License text 70: ISC
 
 Packages: d3-fetch@3.0.2
 
@@ -2901,7 +2990,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 68: ISC
+### License text 71: ISC
 
 Packages: d3-geo@3.1.2
 
@@ -2942,7 +3031,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 69: BSD-3-Clause
+### License text 72: BSD-3-Clause
 
 Packages: d3-path@1.0.9
 
@@ -2976,7 +3065,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 70: ISC
+### License text 73: ISC
 
 Packages: d3-path@3.1.1
 
@@ -2996,7 +3085,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 71: BSD-3-Clause
+### License text 74: BSD-3-Clause
 
 Packages: d3-sankey@0.12.3
 
@@ -3030,7 +3119,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 72: ISC
+### License text 75: ISC
 
 Packages: d3-scale-chromatic@3.1.1
 
@@ -3065,7 +3154,7 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 ```
 
-### License text 73: BSD-3-Clause
+### License text 76: BSD-3-Clause
 
 Packages: d3-shape@1.3.7
 
@@ -3099,7 +3188,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 74: MIT
+### License text 77: MIT
 
 Packages: dagre-d3-es@7.0.14
 
@@ -3129,7 +3218,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 75: MIT
+### License text 78: MIT
 
 Packages: dayjs@1.11.23
 
@@ -3157,7 +3246,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 76: MIT
+### License text 79: MIT
 
 Packages: debug@4.4.3
 
@@ -3183,7 +3272,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 77: MIT
+### License text 80: MIT
 
 Packages: decamelize@1.2.0, object-assign@4.1.1
 
@@ -3211,7 +3300,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 78: MIT
+### License text 81: MIT
 
 Packages: decode-named-character-reference@1.3.0, hast-util-from-parse5@8.0.4, hast-util-raw@9.2.0, hast-util-sanitize@5.0.2, hast-util-to-jsx-runtime@2.3.7, hast-util-to-parse5@8.0.1, hastscript@9.0.3, markdown-table@3.1.0, mdast-util-find-and-replace@3.0.4, mdast-util-from-markdown@2.1.0, mdast-util-gfm@3.1.0, mdast-util-gfm-autolink-literal@2.1.0, mdast-util-gfm-footnote@2.1.0, mdast-util-gfm-strikethrough@2.0.1, mdast-util-gfm-table@2.0.1, mdast-util-gfm-task-list-item@2.0.1, mdast-util-mdx-jsx@3.2.1, mdast-util-to-markdown@2.2.3, micromark-core-commonmark@2.0.4, micromark-extension-gfm-table@2.1.2, micromark-factory-destination@2.0.1, micromark-factory-label@2.0.1, micromark-factory-space@2.1.0, micromark-factory-title@2.0.1, micromark-factory-whitespace@2.0.1, micromark-util-character@2.1.1, micromark-util-chunked@2.0.1, micromark-util-classify-character@2.0.1, micromark-util-combine-extensions@2.0.1, micromark-util-decode-string@2.0.1, micromark-util-edit-map@1.0.0, micromark-util-html-tag-name@2.0.1, micromark-util-normalize-identifier@2.0.1, micromark-util-resolve-all@2.0.1, micromark-util-sanitize-uri@2.0.1, micromark-util-subtokenize@2.1.0, micromark-util-symbol@2.0.1, micromark-util-types@2.0.3, remark-gfm@4.0.1, remark-rehype@11.1.2, unist-util-visit@5.2.0, unist-util-visit-parents@6.1.0, vfile-location@5.0.4, vfile-message@4.0.4
 
@@ -3240,7 +3329,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 79: ISC
+### License text 82: ISC
 
 Packages: delaunator@5.1.0
 
@@ -3262,7 +3351,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 80: MIT
+### License text 83: MIT
 
 Packages: dequal@2.0.3
 
@@ -3290,7 +3379,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 81: MIT
+### License text 84: MIT
 
 Packages: devlop@1.1.0
 
@@ -3319,7 +3408,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 82: BSD-3-Clause
+### License text 85: BSD-3-Clause
 
 Packages: diff@9.0.0
 
@@ -3355,7 +3444,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 83: MIT
+### License text 86: MIT
 
 Packages: dijkstrajs@1.0.3
 
@@ -3381,7 +3470,7 @@ THE SOFTWARE.
 ```
 ````
 
-### License text 84: EPL-2.0 OR GPL-3.0-or-later
+### License text 87: EPL-2.0 OR GPL-3.0-or-later
 
 Packages: elkjs@0.12.1
 
@@ -3651,7 +3740,7 @@ in the Eclipse Public License, v. 2.0 are satisfied: GNU General Public License 
 > You may add additional accurate notices of copyright ownership.
 ```
 
-### License text 85: BSD-2-Clause
+### License text 88: BSD-2-Clause
 
 Packages: entities@9.0.0
 
@@ -3669,7 +3758,7 @@ THIS IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRE
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 86: MIT
+### License text 89: MIT
 
 Packages: es-toolkit@1.53.2
 
@@ -3697,7 +3786,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 87: MIT
+### License text 90: MIT
 
 Packages: estree-util-is-identifier-name@3.0.0, mdast-util-mdx-expression@2.0.1, mdast-util-mdxjs-esm@2.0.1, micromark-extension-gfm@3.0.0, micromark-extension-gfm-autolink-literal@2.1.0, micromark-extension-gfm-strikethrough@2.1.0, micromark-extension-gfm-tagfilter@2.0.0, micromark-extension-gfm-task-list-item@2.1.0
 
@@ -3726,7 +3815,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 88: MIT
+### License text 91: MIT
 
 Packages: eventsource@3.0.7
 
@@ -3755,7 +3844,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 89: MIT
+### License text 92: MIT
 
 Packages: eventsource-parser@3.1.1
 
@@ -3783,7 +3872,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 90: MIT
+### License text 93: MIT
 
 Packages: express@5.3.0
 
@@ -3814,9 +3903,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 91: MIT
+### License text 94: MIT
 
-Packages: express-rate-limit@8.7.3
+Packages: express-rate-limit@8.7.4
 
 ```text
 MIT License
@@ -3842,7 +3931,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 92: MIT
+### License text 95: MIT
 
 Packages: fuzzysort@4.0.2
 
@@ -3870,7 +3959,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 93: ISC
+### License text 96: ISC
 
 Packages: get-caller-file@2.0.5
 
@@ -3883,7 +3972,7 @@ Permission to use, copy, modify, and/or distribute this software for any purpose
 THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 94: MIT
+### License text 97: MIT
 
 Packages: gitdiff-parser@0.3.1
 
@@ -3911,7 +4000,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 95: BlueOak-1.0.0
+### License text 98: BlueOak-1.0.0
 
 Packages: glob@14.0.4
 
@@ -3981,9 +4070,9 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim.***
 ```
 
-### License text 96: MIT
+### License text 99: MIT
 
-Packages: gpt-tokenizer@4.1.0
+Packages: gpt-tokenizer@4.1.1
 
 ```text
 MIT License
@@ -4009,7 +4098,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 97: MIT
+### License text 100: MIT
 
 Packages: hachure-fill@0.5.2
 
@@ -4037,9 +4126,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 98: MIT
+### License text 101: MIT
 
-Packages: hono@4.13.16
+Packages: hono@4.13.17
 
 ```text
 MIT License
@@ -4065,7 +4154,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 99: MIT
+### License text 102: MIT
 
 Packages: html-url-attributes@3.0.1
 
@@ -4093,7 +4182,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 100: MIT
+### License text 103: MIT
 
 Packages: http-errors@2.0.1
 
@@ -4122,7 +4211,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 101: MIT
+### License text 104: MIT
 
 Packages: iconv-lite@0.6.3, iconv-lite@0.7.3
 
@@ -4149,7 +4238,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 102: MIT
+### License text 105: MIT
 
 Packages: import-meta-resolve@4.2.0
 
@@ -4230,7 +4319,7 @@ IN THE SOFTWARE.
 """
 ```
 
-### License text 103: MIT
+### License text 106: MIT
 
 Packages: inline-style-parser@0.2.9
 
@@ -4246,7 +4335,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 104: ISC
+### License text 107: ISC
 
 Packages: internmap@1.0.1, internmap@2.0.3
 
@@ -4266,7 +4355,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 105: MIT
+### License text 108: MIT
 
 Packages: ip-address@10.7.6
 
@@ -4292,7 +4381,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 106: ISC
+### License text 109: ISC
 
 Packages: isexe@2.0.0, which@2.0.2
 
@@ -4314,9 +4403,9 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 107: MIT
+### License text 110: MIT
 
-Packages: jose@6.2.15
+Packages: jose@6.2.17
 
 ```text
 The MIT License (MIT)
@@ -4342,7 +4431,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 108: MIT
+### License text 111: MIT
 
 Packages: js-tokens@4.0.0
 
@@ -4370,7 +4459,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 109: MIT
+### License text 112: MIT
 
 Packages: js-yaml@5.5.0
 
@@ -4398,7 +4487,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 110: BSD-2-Clause
+### License text 113: BSD-2-Clause
 
 Packages: json-schema-typed@8.0.2
 
@@ -4462,7 +4551,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 111: MIT
+### License text 114: MIT
 
 Packages: jsonc-parser@3.3.1
 
@@ -4490,7 +4579,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 112: MIT
+### License text 115: MIT
 
 Packages: katex@0.18.10
 
@@ -4518,7 +4607,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 113: MIT
+### License text 116: MIT
 
 Packages: khroma@2.1.0
 
@@ -4546,7 +4635,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 114: MIT
+### License text 117: MIT
 
 Packages: layout-base@1.0.2, layout-base@2.0.1
 
@@ -4574,7 +4663,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 115: MIT
+### License text 118: MIT
 
 Packages: lodash@4.18.1, lodash-es@4.18.1
 
@@ -4628,7 +4717,7 @@ licenses; we recommend you read them, as their terms may differ from the
 terms above.
 ```
 
-### License text 116: MIT
+### License text 119: MIT
 
 Packages: longest-streak@3.1.0, stringify-entities@4.0.4
 
@@ -4657,7 +4746,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 117: MIT
+### License text 120: MIT
 
 Packages: loose-envify@1.4.0
 
@@ -4685,7 +4774,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 118: BlueOak-1.0.0
+### License text 121: BlueOak-1.0.0
 
 Packages: lru-cache@11.5.3, minipass@7.1.3, path-scurry@3.0.0
 
@@ -4747,7 +4836,7 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim.***
 ```
 
-### License text 119: ISC
+### License text 122: ISC
 
 Packages: lucide-react@1.70.0
 
@@ -4797,9 +4886,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 120: MIT
+### License text 123: MIT
 
-Packages: marked@15.0.12, marked@16.4.2, marked@18.1.3
+Packages: marked@15.0.12, marked@16.4.2, marked@18.2.0
 
 ```text
 # License information
@@ -4848,7 +4937,7 @@ Redistribution and use in source and binary forms, with or without modification,
 This software is provided by the copyright holders and contributors “as is” and any express or implied warranties, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose are disclaimed. In no event shall the copyright owner or contributors be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of this software, even if advised of the possibility of such damage.
 ```
 
-### License text 121: MIT
+### License text 124: MIT
 
 Packages: mdast-util-phrasing@4.1.0
 
@@ -4878,7 +4967,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 122: MIT
+### License text 125: MIT
 
 Packages: mermaid@12.3.0
 
@@ -4906,7 +4995,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 123: MIT
+### License text 126: MIT
 
 Packages: micromark-extension-gfm-footnote@2.1.0
 
@@ -4935,7 +5024,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 124: BlueOak-1.0.0
+### License text 127: BlueOak-1.0.0
 
 Packages: minimatch@11.0.5
 
@@ -4997,7 +5086,7 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim._**
 ```
 
-### License text 125: MIT
+### License text 128: MIT
 
 Packages: node-addon-api@7.1.1
 
@@ -5013,7 +5102,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 126: MIT
+### License text 129: MIT
 
 Packages: node-pty@1.2.0-beta.18
 
@@ -5089,7 +5178,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 127: MIT
+### License text 130: MIT
 
 Packages: package-manager-detector@1.9.0
 
@@ -5117,7 +5206,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 128: MIT
+### License text 131: MIT
 
 Packages: parse-entities@4.0.2, property-information@7.2.0
 
@@ -5146,9 +5235,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 129: MIT
+### License text 132: MIT
 
-Packages: parse5@8.1.0
+Packages: parse5@8.1.1
 
 ```text
 Copyright (c) 2013-2019 Ivan Nikulin (ifaaan@gmail.com, https://github.com/inikulin)
@@ -5172,7 +5261,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 130: MIT
+### License text 133: MIT
 
 Packages: path-data-parser@0.1.0, points-on-curve@0.2.0
 
@@ -5200,7 +5289,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 131: Apache-2.0
+### License text 134: Apache-2.0
 
 Packages: pdfjs-dist@6.5.438
 
@@ -5383,7 +5472,7 @@ Packages: pdfjs-dist@6.5.438
    END OF TERMS AND CONDITIONS
 ```
 
-### License text 132: MIT
+### License text 135: MIT
 
 Packages: pkce-challenge@5.0.1
 
@@ -5411,7 +5500,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 133: BSD-3-Clause
+### License text 136: BSD-3-Clause
 
 Packages: pkijs@3.4.3
 
@@ -5448,7 +5537,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 134: MIT
+### License text 137: MIT
 
 Packages: pngjs@5.0.0
 
@@ -5475,7 +5564,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 135: MIT
+### License text 138: MIT
 
 Packages: points-on-path@0.2.1
 
@@ -5503,7 +5592,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 136: MIT
+### License text 139: MIT
 
 Packages: pvtsutils@1.3.6
 
@@ -5531,7 +5620,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 137: MIT
+### License text 140: MIT
 
 Packages: pvutils@1.2.0
 
@@ -5562,7 +5651,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 138: MIT
+### License text 141: MIT
 
 Packages: qrcode@1.5.4
 
@@ -5578,7 +5667,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 139: MIT
+### License text 142: MIT
 
 Packages: raw-body@3.0.2
 
@@ -5607,7 +5696,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 140: MIT
+### License text 143: MIT
 
 Packages: react@19.3.1, react-dom@19.3.1
 
@@ -5635,7 +5724,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 141: MIT
+### License text 144: MIT
 
 Packages: react-diff-view@3.3.3
 
@@ -5663,9 +5752,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 142: MIT
+### License text 145: MIT
 
-Packages: react-resizable-panels@4.19.1
+Packages: react-resizable-panels@4.21.0
 
 ```text
 The MIT License (MIT)
@@ -5691,7 +5780,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 143: MIT
+### License text 146: MIT
 
 Packages: readdirp@5.1.1
 
@@ -5719,7 +5808,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 144: Apache-2.0
+### License text 147: Apache-2.0
 
 Packages: reflect-metadata@0.2.2
 
@@ -5781,7 +5870,7 @@ If the Work includes a "NOTICE" text file as part of its distribution, then any 
 END OF TERMS AND CONDITIONS
 ```
 
-### License text 145: MIT
+### License text 148: MIT
 
 Packages: refractor@5.0.0
 
@@ -5811,7 +5900,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 146: MIT
+### License text 149: MIT
 
 Packages: rehype-harden@1.1.9
 
@@ -5839,7 +5928,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 147: MIT
+### License text 150: MIT
 
 Packages: remark-parse@11.0.0, remark-stringify@11.0.0
 
@@ -5867,7 +5956,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 148: Apache-2.0
+### License text 151: Apache-2.0
 
 Packages: remend@1.4.0, streamdown@2.7.1
 
@@ -5887,7 +5976,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### License text 149: MIT
+### License text 152: MIT
 
 Packages: require-directory@2.1.1
 
@@ -5916,7 +6005,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 150: ISC
+### License text 153: ISC
 
 Packages: require-main-filename@2.0.0, set-blocking@2.0.0, yargs-parser@18.1.3
 
@@ -5937,7 +6026,7 @@ WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 151: Unlicense
+### License text 154: Unlicense
 
 Packages: robust-predicates@3.0.3
 
@@ -5968,7 +6057,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 ```
 
-### License text 152: MIT
+### License text 155: MIT
 
 Packages: roughjs@4.6.6
 
@@ -5996,7 +6085,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 153: BSD-3-Clause
+### License text 156: BSD-3-Clause
 
 Packages: rw@1.3.3
 
@@ -6029,7 +6118,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 154: MIT
+### License text 157: MIT
 
 Packages: safer-buffer@2.1.2
 
@@ -6057,7 +6146,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 155: MIT
+### License text 158: MIT
 
 Packages: selfsigned@5.5.0
 
@@ -6085,7 +6174,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 156: MIT
+### License text 159: MIT
 
 Packages: shallow-equal@3.1.0
 
@@ -6113,7 +6202,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 157: MIT
+### License text 160: MIT
 
 Packages: shebang-command@2.0.0
 
@@ -6129,7 +6218,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 158: MIT
+### License text 161: MIT
 
 Packages: style-to-object@2.0.2
 
@@ -6158,7 +6247,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 159: MIT
+### License text 162: MIT
 
 Packages: stylis@4.4.0
 
@@ -6186,7 +6275,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 160: MIT
+### License text 163: MIT
 
 Packages: tailwind-merge@3.7.0
 
@@ -6214,7 +6303,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 161: MIT
+### License text 164: MIT
 
 Packages: tinyexec@1.3.1
 
@@ -6242,7 +6331,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 162: MIT
+### License text 165: MIT
 
 Packages: tree-kill@1.2.2
 
@@ -6270,7 +6359,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 163: MIT
+### License text 166: MIT
 
 Packages: ts-dedent@2.3.0
 
@@ -6298,7 +6387,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 164: 0BSD
+### License text 167: 0BSD
 
 Packages: tslib@1.14.1, tslib@2.9.1
 
@@ -6317,7 +6406,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 165: MIT
+### License text 168: MIT
 
 Packages: tsyringe@4.10.0
 
@@ -6345,7 +6434,7 @@ Packages: tsyringe@4.10.0
     SOFTWARE
 ```
 
-### License text 166: BSD-3-Clause
+### License text 169: BSD-3-Clause
 
 Packages: typo-js@1.4.0
 
@@ -6380,7 +6469,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 167: MIT
+### License text 170: MIT
 
 Packages: unified@11.0.5, vfile@6.0.3
 
@@ -6408,7 +6497,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 168: MIT
+### License text 171: MIT
 
 Packages: unist-util-is@6.0.1
 
@@ -6437,7 +6526,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 169: MIT
+### License text 172: MIT
 
 Packages: unpipe@1.0.0
 
@@ -6466,7 +6555,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 170: MIT
+### License text 173: MIT
 
 Packages: vary@1.1.2
 
@@ -6495,7 +6584,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 171: MIT
+### License text 174: MIT
 
 Packages: vscode-jsonrpc@10.0.0, vscode-languageserver-protocol@3.18.5, vscode-languageserver-types@3.18.5
 
@@ -6513,7 +6602,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 172: MIT
+### License text 175: MIT
 
 Packages: warning@4.0.3
 
@@ -6541,7 +6630,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 173: ISC
+### License text 176: ISC
 
 Packages: which-module@2.0.1
 
@@ -6561,9 +6650,9 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 174: MIT
+### License text 177: MIT
 
-Packages: ws@8.22.1
+Packages: ws@8.22.2
 
 ```text
 Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
@@ -6588,7 +6677,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 175: ISC
+### License text 178: ISC
 
 Packages: y18n@4.0.3
 
@@ -6608,7 +6697,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 176: ISC
+### License text 179: ISC
 
 Packages: yaml@2.9.1
 
@@ -6628,7 +6717,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 177: MIT
+### License text 180: MIT
 
 Packages: yargs@15.4.1
 
@@ -6656,7 +6745,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 178: MIT
+### License text 181: MIT
 
 Packages: zod@4.6.7
 
@@ -6684,7 +6773,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 179: ISC
+### License text 182: ISC
 
 Packages: zod-to-json-schema@3.25.2
 
@@ -6706,7 +6795,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 180: MIT
+### License text 183: MIT
 
 Packages: zundo@2.3.0
 
@@ -6734,7 +6823,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 181: MIT
+### License text 184: MIT
 
 Packages: zustand@5.1.0
 
@@ -6762,7 +6851,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 182: BSD-3-Clause
+### License text 185: BSD-3-Clause
 
 Packages: pdfjs-dist: Adobe CMaps
 
@@ -6805,7 +6894,7 @@ Packages: pdfjs-dist: Adobe CMaps
 %%Copyright: -----------------------------------------------------------
 ```
 
-### License text 183: BSD-3-Clause
+### License text 186: BSD-3-Clause
 
 Packages: pdfjs-dist: Foxit Symbol and Dingbats fonts
 
@@ -6839,7 +6928,7 @@ Packages: pdfjs-dist: Foxit Symbol and Dingbats fonts
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 184: CC0-1.0
+### License text 187: CC0-1.0
 
 Packages: pdfjs-dist: CGATS001Compat ICC profile
 
@@ -6962,7 +7051,7 @@ For more information, please see
 http://creativecommons.org/publicdomain/zero/1.0/
 ```
 
-### License text 185: BSD-2-Clause
+### License text 188: BSD-2-Clause
 
 Packages: pdfjs-dist: OpenJPEG decoder
 
@@ -7031,7 +7120,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 186: BSD-3-Clause AND Apache-2.0
+### License text 189: BSD-3-Clause AND Apache-2.0
 
 Packages: pdfjs-dist: PDFium JBIG2 decoder
 
@@ -7248,7 +7337,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### License text 187: MIT
+### License text 190: MIT
 
 Packages: pdfjs-dist: qcms color management
 

@@ -113,7 +113,7 @@ export const CLAUDE_CLI_MODELS = ["opus", "fable", "sonnet", "haiku"] as const;
  */
 export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
   opus: "Opus 5.5",
-  fable: "Fable 5.1",
+  fable: "Fable 5.2",
   sonnet: "Sonnet 5.5",
   haiku: "Haiku 5.5",
 };
