@@ -11,7 +11,7 @@ import type {
   CopilotQuotaProbeResult,
   CopilotQuotaReader,
 } from "../../core/harness/copilot/CopilotQuotaClient";
-import { CopilotUsageProvider } from "../../core/harness/shared/usage/providers/CopilotUsageProvider";
+import { CopilotQuotaCollector } from "../../core/harness/shared/usage/collectors/CopilotQuotaCollector";
 
 const liveQuota: HarnessQuotaSnapshot = {
   harnessId: HARNESS_IDS.COPILOT_CLI,
@@ -60,10 +60,10 @@ class ThrowingCopilotQuotaReader implements CopilotQuotaReader {
   }
 }
 
-suite("CopilotUsageProvider", () => {
+suite("CopilotQuotaCollector", () => {
   test("returns the provider-live snapshot on success", async () => {
     const reader = new FakeCopilotQuotaReader({ quota: liveQuota });
-    const provider = new CopilotUsageProvider({ client: reader });
+    const provider = new CopilotQuotaCollector({ client: reader });
 
     assert.deepStrictEqual(await provider.refreshUsage(), liveQuota);
     assert.strictEqual(reader.calls, 1);
@@ -79,7 +79,7 @@ suite("CopilotUsageProvider", () => {
     ];
 
     for (const result of cases) {
-      const provider = new CopilotUsageProvider({
+      const provider = new CopilotQuotaCollector({
         client: new FakeCopilotQuotaReader(result),
       });
       const snapshot = await provider.refreshUsage();
@@ -90,7 +90,7 @@ suite("CopilotUsageProvider", () => {
   });
 
   test("maps an unexpected client failure to the generic safe code", async () => {
-    const provider = new CopilotUsageProvider({
+    const provider = new CopilotQuotaCollector({
       client: new ThrowingCopilotQuotaReader(),
     });
 
@@ -103,7 +103,7 @@ suite("CopilotUsageProvider", () => {
 
   test("single-flights simultaneous refreshes per provider instance", async () => {
     const reader = new FakeCopilotQuotaReader();
-    const provider = new CopilotUsageProvider({ client: reader });
+    const provider = new CopilotQuotaCollector({ client: reader });
     const first = provider.refreshUsage();
     const second = provider.refreshUsage();
 

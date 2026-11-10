@@ -13,11 +13,11 @@ import {
   HARNESS_USAGE_ERROR_CODES,
   HarnessUsageService,
 } from "../../core/harness/shared/usage/HarnessUsageService";
-import type { IHarnessUsageProvider } from "../../core/harness/shared/usage/IHarnessUsageProvider";
+import type { IHarnessQuotaCollector } from "../../core/harness/shared/usage/IHarnessQuotaCollector";
 import { providerSnapshotsPath } from "../../utils/UsagePaths";
 import { COPILOT_QUOTA_STATUS_CODES } from "../../core/harness/copilot/CopilotUsageNormalization";
 
-class LiveProvider implements IHarnessUsageProvider {
+class LiveProvider implements IHarnessQuotaCollector {
   readonly harnessId = HARNESS_IDS.CLAUDE_CLI;
 
   async refreshUsage(): Promise<HarnessQuotaSnapshot> {
@@ -43,7 +43,7 @@ class LiveProvider implements IHarnessUsageProvider {
   }
 }
 
-class ThrowingProvider implements IHarnessUsageProvider {
+class ThrowingProvider implements IHarnessQuotaCollector {
   readonly harnessId = HARNESS_IDS.CODEX_CLI;
 
   async refreshUsage(): Promise<HarnessQuotaSnapshot> {
@@ -51,7 +51,7 @@ class ThrowingProvider implements IHarnessUsageProvider {
   }
 }
 
-class CopilotProvider implements IHarnessUsageProvider {
+class CopilotProvider implements IHarnessQuotaCollector {
   readonly harnessId = HARNESS_IDS.COPILOT_CLI;
   failed = false;
 
@@ -88,7 +88,7 @@ class CopilotProvider implements IHarnessUsageProvider {
   }
 }
 
-class CancellableProvider implements IHarnessUsageProvider {
+class CancellableProvider implements IHarnessQuotaCollector {
   readonly harnessId = HARNESS_IDS.COPILOT_CLI;
   sawSignal: AbortSignal | undefined;
   aborted = false;

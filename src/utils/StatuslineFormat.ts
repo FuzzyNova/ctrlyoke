@@ -156,7 +156,7 @@ export type StatusLineSegment =
     };
 
 /**
- * Shared default format for every statusline provider. ctrlyoke installs it
+ * Shared default format for every statusline harness. ctrlyoke installs it
  * into the harness's global settings unprompted, so the trailing gray hint
  * tells the user where to change it. It is a plain literal (not a field) so it
  * renders as an editable text box in the format editor and can be deleted.
@@ -318,15 +318,15 @@ export function formatUsagePercentForDisplay(
     : usedPercent;
 }
 
-export const STATUS_LINE_FORMAT_PROVIDERS = {
+export const STATUS_LINE_FORMAT_HARNESSES = {
   CLAUDE: "claude",
   ANTIGRAVITY: "antigravity",
   COPILOT: "copilot",
   QWEN: "qwen",
 } as const;
 
-export type StatusLineFormatProvider =
-  (typeof STATUS_LINE_FORMAT_PROVIDERS)[keyof typeof STATUS_LINE_FORMAT_PROVIDERS];
+export type StatusLineFormatHarness =
+  (typeof STATUS_LINE_FORMAT_HARNESSES)[keyof typeof STATUS_LINE_FORMAT_HARNESSES];
 
 export interface StatusLineFormatOptions {
   /** Locally computed fields are supplied by the detached wrapper when available. */
@@ -356,7 +356,7 @@ function safeLabel(value: unknown, fallback: string): string {
     : fallback;
 }
 
-/** Resolve the workspace directory represented by a provider statusline payload. */
+/** Resolve the workspace directory represented by a harness statusline payload. */
 export function getStatusLineWorkspaceDirectory(
   payload: unknown
 ): string | undefined {
@@ -383,7 +383,7 @@ function compactTokenCount(value: unknown): string {
 
 function contextValues(
   payload: Record<string, unknown>,
-  provider: StatusLineFormatProvider
+  harness: StatusLineFormatHarness
 ): {
   used: number;
   size: number;
@@ -392,14 +392,14 @@ function contextValues(
     ? payload.context_window
     : {};
   const size = finiteNumber(contextWindow.context_window_size);
-  if (provider === STATUS_LINE_FORMAT_PROVIDERS.COPILOT) {
+  if (harness === STATUS_LINE_FORMAT_HARNESSES.COPILOT) {
     const used = finiteNumber(contextWindow.current_context_tokens);
     const displayedSize = finiteNumber(contextWindow.displayed_context_limit);
     if (used !== undefined && displayedSize !== undefined) {
       return { used, size: displayedSize };
     }
   }
-  if (provider === STATUS_LINE_FORMAT_PROVIDERS.QWEN) {
+  if (harness === STATUS_LINE_FORMAT_HARNESSES.QWEN) {
     const used = finiteNumber(contextWindow.current_usage);
     if (used !== undefined && size !== undefined) {
       return { used, size };
@@ -443,15 +443,15 @@ function percentageLabel(percentage: number): string {
 
 function quotaPercentage(
   payload: Record<string, unknown>,
-  provider: StatusLineFormatProvider
+  harness: StatusLineFormatHarness
 ): number | undefined {
-  const source = quotaSource(payload, provider);
+  const source = quotaSource(payload, harness);
   if (!isRecord(source)) return undefined;
 
   const percentages = Object.values(source)
     .map((entry) => {
       if (!isRecord(entry)) return undefined;
-      if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
+      if (harness === STATUS_LINE_FORMAT_HARNESSES.CLAUDE) {
         return finiteNumber(entry.used_percentage);
       }
       const remaining = finiteNumber(entry.remaining_fraction);
@@ -469,12 +469,12 @@ function normalizeUsedPercentage(value: number): number {
 
 function usageWindows(
   payload: Record<string, unknown>,
-  provider: StatusLineFormatProvider
+  harness: StatusLineFormatHarness
 ): Array<{ id?: string; label: string; usedPercentage: number } | undefined> {
-  const source = quotaSource(payload, provider);
+  const source = quotaSource(payload, harness);
   if (!isRecord(source)) return [];
 
-  if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
+  if (harness === STATUS_LINE_FORMAT_HARNESSES.CLAUDE) {
     return CLAUDE_RATE_LIMIT_WINDOWS.map((definition) => {
       const entry = source[definition.key];
       const value = isRecord(entry)
@@ -515,15 +515,15 @@ function usageWindows(
 
 function quotaSource(
   payload: Record<string, unknown>,
-  provider: StatusLineFormatProvider
+  harness: StatusLineFormatHarness
 ): unknown {
-  switch (provider) {
-    case STATUS_LINE_FORMAT_PROVIDERS.CLAUDE:
+  switch (harness) {
+    case STATUS_LINE_FORMAT_HARNESSES.CLAUDE:
       return payload.rate_limits;
-    case STATUS_LINE_FORMAT_PROVIDERS.ANTIGRAVITY:
+    case STATUS_LINE_FORMAT_HARNESSES.ANTIGRAVITY:
       return payload.quota;
-    case STATUS_LINE_FORMAT_PROVIDERS.COPILOT:
-    case STATUS_LINE_FORMAT_PROVIDERS.QWEN:
+    case STATUS_LINE_FORMAT_HARNESSES.COPILOT:
+    case STATUS_LINE_FORMAT_HARNESSES.QWEN:
       return undefined;
   }
 }
@@ -602,7 +602,7 @@ export function parseAnsiStatusLine(text: string): AnsiStatusLineChunk[] {
 
 /** Format statusline segments for both the detached wrapper and the webview preview. */
 export function formatBrandedStatusLine(
-  provider: StatusLineFormatProvider,
+  harness: StatusLineFormatHarness,
   payload: unknown,
   format?: readonly StatusLineSegment[],
   percentDirection: UsagePercentDirection = STATUS_LINE_USAGE_DIRECTIONS.USED,
@@ -610,12 +610,12 @@ export function formatBrandedStatusLine(
 ): string {
   try {
     const normalized = isRecord(payload) ? payload : {};
-    const { used, size } = contextValues(normalized, provider);
+    const { used, size } = contextValues(normalized, harness);
     const percentage = contextPercentage(used, size);
     const band = contextBand(percentage);
     const segments: readonly StatusLineSegment[] =
       format && format.length > 0 ? format : DEFAULT_STATUS_LINE_FORMAT;
-    const windows = usageWindows(normalized, provider);
+    const windows = usageWindows(normalized, harness);
     const direction =
       percentDirection === STATUS_LINE_USAGE_DIRECTIONS.REMAINING
         ? STATUS_LINE_USAGE_DIRECTIONS.REMAINING
@@ -664,7 +664,7 @@ export function formatBrandedStatusLine(
             text = `${compactTokenCount(used)}/${compactTokenCount(size)} ${label || "ctx"} (${percentageLabel(percentage)})`;
             break;
           case STATUS_LINE_FIELD_IDS.USAGE: {
-            const value = quotaPercentage(normalized, provider);
+            const value = quotaPercentage(normalized, harness);
             const display =
               value === undefined
                 ? "—"

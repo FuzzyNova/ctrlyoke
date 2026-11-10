@@ -16,12 +16,12 @@ import {
   STATUS_LINE_FIELD_IDS,
   STATUS_LINE_FIELD_REGISTRY,
   STATUS_LINE_FORMAT_SEGMENT_TYPES,
-  STATUS_LINE_FORMAT_PROVIDERS,
+  STATUS_LINE_FORMAT_HARNESSES,
   STATUS_LINE_COLOR_NAMES,
   type StatusLineColorId,
   type StatusLineFieldId,
   type StatusLineSegment,
-  type StatusLineFormatProvider,
+  type StatusLineFormatHarness,
   type UsagePercentDirection,
 } from "@root/utils/StatuslineFormat";
 import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
@@ -41,7 +41,7 @@ const STATUS_LINE_COLOR_LIST = Object.keys(
 interface Props {
   format: StatusLineSegment[];
   onCommit: (format: StatusLineSegment[]) => void;
-  provider?: StatusLineFormatProvider;
+  harness?: StatusLineFormatHarness;
   snapshot?: HarnessUsageSnapshot;
   percentDirection?: UsagePercentDirection;
   hidePreview?: boolean;
@@ -193,7 +193,7 @@ function SortableSegmentRow({
 export function StatusLineFormatEditor({
   format,
   onCommit,
-  provider = STATUS_LINE_FORMAT_PROVIDERS.CLAUDE,
+  harness = STATUS_LINE_FORMAT_HARNESSES.CLAUDE,
   snapshot,
   percentDirection = "used",
   hidePreview = false,
@@ -311,7 +311,7 @@ export function StatusLineFormatEditor({
       {!hidePreview && (
         <StatusLinePreview
           format={draftFormat}
-          provider={provider}
+          harness={harness}
           snapshot={snapshot}
           percentDirection={percentDirection}
         />

@@ -1,9 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
-  AntigravityUsageProvider,
+  AntigravityQuotaCollector,
   parseAntigravityQuotaSnapshot,
-} from "../../core/harness/shared/usage/providers/AntigravityUsageProvider";
+} from "../../core/harness/shared/usage/collectors/AntigravityQuotaCollector";
 import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
@@ -13,7 +13,7 @@ import {
   HARNESS_USAGE_WINDOW_KINDS,
 } from "../../types/DashboardConstants";
 
-suite("AntigravityUsageProvider", () => {
+suite("AntigravityQuotaCollector", () => {
   test("normalizes dynamic quota tiers without hardcoded plan names", () => {
     const quota = parseAntigravityQuotaSnapshot(
       {
@@ -85,7 +85,7 @@ suite("AntigravityUsageProvider", () => {
   });
 
   test("returns an explicit unavailable pull result because quota is sidecar-pushed", async () => {
-    const quota = await new AntigravityUsageProvider().refreshUsage();
+    const quota = await new AntigravityQuotaCollector().refreshUsage();
 
     assert.deepStrictEqual(quota, {
       harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,

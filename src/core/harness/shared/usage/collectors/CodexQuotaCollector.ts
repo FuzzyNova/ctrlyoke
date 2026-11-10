@@ -4,7 +4,7 @@ import {
 } from "../../../../../types/DashboardConstants";
 import type { HarnessQuotaSnapshot } from "../../../../../types/UsageTypes";
 import { HarnessAdapterUtils } from "../../../shared/HarnessAdapterUtils";
-import type { IHarnessUsageProvider } from "../IHarnessUsageProvider";
+import type { IHarnessQuotaCollector } from "../IHarnessQuotaCollector";
 import {
   CodexAppServerClient,
   type CodexAppServerClientOptions,
@@ -19,7 +19,7 @@ export const CODEX_APP_SERVER_MIN_VERSION = {
   minor: 146,
 } as const;
 
-export interface CodexUsageProviderOptions {
+export interface CodexQuotaCollectorOptions {
   appServer?: CodexAppServerClientOptions;
   getVersion?: () => Promise<string | undefined>;
 }
@@ -71,12 +71,12 @@ function defaultGetVersion(): Promise<string | undefined> {
  * Codex quota provider. The documented app-server probe is preferred, while
  * rollout `token_count.rate_limits` is pushed by CodexLogParser as a fallback.
  */
-export class CodexUsageProvider implements IHarnessUsageProvider {
+export class CodexQuotaCollector implements IHarnessQuotaCollector {
   readonly harnessId = HARNESS_IDS.CODEX_CLI;
   private readonly appServer: CodexAppServerClient;
   private readonly getVersion: () => Promise<string | undefined>;
 
-  constructor(options: CodexUsageProviderOptions = {}) {
+  constructor(options: CodexQuotaCollectorOptions = {}) {
     this.appServer = new CodexAppServerClient(options.appServer);
     this.getVersion = options.getVersion ?? defaultGetVersion;
   }

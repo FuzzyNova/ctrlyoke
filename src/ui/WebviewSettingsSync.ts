@@ -1213,7 +1213,7 @@ export class WebviewSettingsSync {
     }
 
     const { harnessId, restoreCustomCommand } = request;
-    const statuslineProvider = StatuslineManager.providerForHarness(harnessId);
+    const statuslineProvider = StatuslineManager.statusLineHarnessIdForHarness(harnessId);
     let manager: StatuslineManagerLike;
     let currentSettings: StatusLineHarnessSettings;
     try {

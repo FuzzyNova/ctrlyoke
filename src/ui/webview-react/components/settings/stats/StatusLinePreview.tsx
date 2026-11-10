@@ -3,8 +3,8 @@ import {
   formatBrandedStatusLine,
   parseAnsiStatusLine,
   STATUS_LINE_COLOR_SWATCHES,
-  STATUS_LINE_FORMAT_PROVIDERS,
-  type StatusLineFormatProvider,
+  STATUS_LINE_FORMAT_HARNESSES,
+  type StatusLineFormatHarness,
   type StatusLineSegment,
   type UsagePercentDirection,
 } from "@root/utils/StatuslineFormat";
@@ -12,7 +12,7 @@ import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 
 interface Props {
   format: StatusLineSegment[];
-  provider?: StatusLineFormatProvider;
+  harness?: StatusLineFormatHarness;
   snapshot?: HarnessUsageSnapshot;
   percentDirection?: UsagePercentDirection;
 }
@@ -35,12 +35,12 @@ function renderStatusLinePreview(statusLine: string) {
 }
 
 function previewPayload(
-  provider: StatusLineFormatProvider,
+  harness: StatusLineFormatHarness,
   snapshot: HarnessUsageSnapshot | undefined
 ): Record<string, unknown> {
   let representativePayload: Record<string, unknown>;
-  switch (provider) {
-    case STATUS_LINE_FORMAT_PROVIDERS.CLAUDE:
+  switch (harness) {
+    case STATUS_LINE_FORMAT_HARNESSES.CLAUDE:
       representativePayload = {
         model: { id: "claude-sonnet-4.5" },
         context_window: {
@@ -57,7 +57,7 @@ function previewPayload(
         session_id: "preview-session",
       };
       break;
-    case STATUS_LINE_FORMAT_PROVIDERS.ANTIGRAVITY:
+    case STATUS_LINE_FORMAT_HARNESSES.ANTIGRAVITY:
       representativePayload = {
         model: { id: "gemini-2.5-pro" },
         context_window: {
@@ -74,7 +74,7 @@ function previewPayload(
         session_id: "preview-session",
       };
       break;
-    case STATUS_LINE_FORMAT_PROVIDERS.COPILOT:
+    case STATUS_LINE_FORMAT_HARNESSES.COPILOT:
       representativePayload = {
         cwd: "C:\\projects\\my-app",
         session_id: "fadbffd9-fb8e-4a6d-9048-2fcbbd09858b",
@@ -120,7 +120,7 @@ function previewPayload(
         allow_all_enabled: false,
       };
       break;
-    case STATUS_LINE_FORMAT_PROVIDERS.QWEN:
+    case STATUS_LINE_FORMAT_HARNESSES.QWEN:
       representativePayload = {
         session_id: "43a8bb4c-f013-447e-9e23-c70e071fc16e",
         version: "0.21.15",
@@ -165,7 +165,7 @@ function previewPayload(
   }
 
   const windows = snapshot.quota.windows;
-  if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
+  if (harness === STATUS_LINE_FORMAT_HARNESSES.CLAUDE) {
     return {
       ...representativePayload,
       model: { id: "cached model" },
@@ -181,13 +181,13 @@ function previewPayload(
       ),
     };
   }
-  if (provider === STATUS_LINE_FORMAT_PROVIDERS.COPILOT) {
+  if (harness === STATUS_LINE_FORMAT_HARNESSES.COPILOT) {
     return {
       ...representativePayload,
       model: { id: "cached model", display_name: "cached model" },
     };
   }
-  if (provider === STATUS_LINE_FORMAT_PROVIDERS.QWEN) {
+  if (harness === STATUS_LINE_FORMAT_HARNESSES.QWEN) {
     return {
       ...representativePayload,
       model: { display_name: "cached model" },
@@ -207,7 +207,7 @@ function previewPayload(
 
 export function StatusLinePreview({
   format,
-  provider = STATUS_LINE_FORMAT_PROVIDERS.CLAUDE,
+  harness = STATUS_LINE_FORMAT_HARNESSES.CLAUDE,
   snapshot,
   percentDirection = "used",
 }: Props) {
@@ -217,8 +217,8 @@ export function StatusLinePreview({
       <code className="mt-1 block break-all text-sm text-foreground">
         {renderStatusLinePreview(
           formatBrandedStatusLine(
-            provider,
-            previewPayload(provider, snapshot),
+            harness,
+            previewPayload(harness, snapshot),
             format,
             percentDirection,
             { branch: "feature/statusline" }

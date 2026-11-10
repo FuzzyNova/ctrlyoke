@@ -11,9 +11,9 @@ import {
   type CopilotQuotaReader,
 } from "../../../copilot/CopilotQuotaClient";
 import { COPILOT_QUOTA_STATUS_CODES } from "../../../copilot/CopilotUsageNormalization";
-import type { IHarnessUsageProvider } from "../IHarnessUsageProvider";
+import type { IHarnessQuotaCollector } from "../IHarnessQuotaCollector";
 
-export interface CopilotUsageProviderOptions {
+export interface CopilotQuotaCollectorOptions {
   client?: CopilotQuotaReader;
   quotaClientOptions?: CopilotQuotaClientOptions;
 }
@@ -42,12 +42,12 @@ function safeErrorCode(errorCode: string | undefined): string {
 }
 
 /** Provider-live Copilot account quota collector. */
-export class CopilotUsageProvider implements IHarnessUsageProvider {
+export class CopilotQuotaCollector implements IHarnessQuotaCollector {
   readonly harnessId = HARNESS_IDS.COPILOT_CLI;
   private readonly quotaClient: CopilotQuotaReader;
   private refreshPromise: Promise<HarnessQuotaSnapshot> | undefined;
 
-  constructor(options: CopilotUsageProviderOptions = {}) {
+  constructor(options: CopilotQuotaCollectorOptions = {}) {
     this.quotaClient =
       options.client ?? new CopilotQuotaClient(options.quotaClientOptions);
   }

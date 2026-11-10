@@ -2,9 +2,9 @@ import type {
   CliEvent,
   SubagentAttribution,
 } from "../../../../types/CliOutputTypes";
-import type { ProviderModelUsage } from "../../../../types/CliOutputTypes";
+import type { HarnessModelUsage } from "../../../../types/CliOutputTypes";
 
-export interface SubagentRecordUsage extends ProviderModelUsage {
+export interface SubagentRecordUsage extends HarnessModelUsage {
   model: string;
   /** Stable source-local identity used to avoid counting a reread record twice. */
   recordId: string;

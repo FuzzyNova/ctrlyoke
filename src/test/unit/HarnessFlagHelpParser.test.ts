@@ -5,7 +5,7 @@ import { suite, test } from "mocha";
 import {
   getHarnessFlagCompletions,
   type HarnessFlagCompletion,
-} from "../../core/harness/shared/HarnessFlagCompletionProvider";
+} from "../../core/harness/shared/HarnessFlagHelpParser";
 import { HARNESS_IDS, type HarnessId } from "../../types/DashboardConstants";
 
 const FIXTURE_DIRECTORY = path.resolve(
@@ -42,7 +42,7 @@ function findCompletion(
   return completion;
 }
 
-suite("HarnessFlagCompletionProvider", () => {
+suite("HarnessFlagHelpParser", () => {
   for (const { harnessId, fileName } of FIXTURE_CASES) {
     test(`parses captured ${harnessId} help output (${fileName})`, () => {
       const completions = getHarnessFlagCompletions(

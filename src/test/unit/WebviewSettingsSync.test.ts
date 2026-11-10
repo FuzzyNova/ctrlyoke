@@ -217,7 +217,7 @@ suite("WebviewSettingsSync", () => {
           assert.deepStrictEqual(messages, [
             {
               type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
-              path: `${CONFIG_KEYS.STATUS_LINE}.byHarness.${StatuslineManager.providerForHarness(harnessId)}`,
+              path: `${CONFIG_KEYS.STATUS_LINE}.byHarness.${StatuslineManager.statusLineHarnessIdForHarness(harnessId)}`,
               value: {
                 enabled: false,
                 customCommand: "node user-statusline.js",

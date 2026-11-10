@@ -114,7 +114,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
   static readonly CLI_VERSION_COMMAND = `${CopilotHarnessAdapter.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${CopilotHarnessAdapter.CLI_COMMAND} --help`;
 
-  private static readonly statuslineManager = StatuslineManager.forProvider(
+  private static readonly statuslineManager = StatuslineManager.forStatusLineHarness(
     STATUS_LINE_HARNESS_IDS.COPILOT
   );
 

@@ -54,10 +54,10 @@ export interface StatuslineInstallResult {
   readonly collision?: boolean;
   /**
    * True when the pre-existing statusLine value was already recognized as a
-   * ctrlyoke wrapper for this provider before this call (e.g. a package-folder
+   * ctrlyoke wrapper for this harness before this call (e.g. a package-folder
    * path moving to the shared launcher). The write still happens to keep
    * the installed command current, but the user has already seen the
-   * one-time install notification for this provider, so callers must not
+   * one-time install notification for this harness, so callers must not
    * notify again for this result.
    */
   readonly alreadyCtrlyoke?: boolean;
@@ -94,7 +94,7 @@ interface StatuslineProviderDefinition {
  * The harness settings file is machine-global, while the ctrlyoke settings
  * object stores the user's forward command. Keeping both mutations here makes
  * first-install capture and explicit restore/delete use the same locking and
- * statusLine parsing rules for every host and provider.
+ * statusLine parsing rules for every host and harness.
  */
 export class StatuslineManager implements StatuslineManagerLike {
   private static readonly definitions = new Map<
@@ -102,11 +102,16 @@ export class StatuslineManager implements StatuslineManagerLike {
     StatuslineProviderDefinition
   >();
 
-  static forProvider(provider: StatusLineHarnessId): StatuslineManager {
-    return new StatuslineManager(provider, this.getDefinition(provider));
+  static forStatusLineHarness(
+    statusLineHarnessId: StatusLineHarnessId
+  ): StatuslineManager {
+    return new StatuslineManager(
+      statusLineHarnessId,
+      this.getDefinition(statusLineHarnessId)
+    );
   }
 
-  static providerForHarness(
+  static statusLineHarnessIdForHarness(
     harnessId: StatusLineHarnessId
   ): StatusLineHarnessId {
     switch (harnessId) {
@@ -124,13 +129,15 @@ export class StatuslineManager implements StatuslineManagerLike {
   }
 
   static forHarness(harnessId: StatusLineHarnessId): StatuslineManager {
-    return this.forProvider(this.providerForHarness(harnessId));
+    return this.forStatusLineHarness(
+      this.statusLineHarnessIdForHarness(harnessId)
+    );
   }
 
   private static getDefinition(
-    provider: StatusLineHarnessId
+    statusLineHarnessId: StatusLineHarnessId
   ): StatuslineProviderDefinition {
-    const existing = this.definitions.get(provider);
+    const existing = this.definitions.get(statusLineHarnessId);
     if (existing) {
       return existing;
     }
@@ -149,37 +156,39 @@ export class StatuslineManager implements StatuslineManagerLike {
       });
     };
     const tracker =
-      provider === STATUS_LINE_HARNESS_IDS.CLAUDE
+      statusLineHarnessId === STATUS_LINE_HARNESS_IDS.CLAUDE
         ? globalSettings("claude-cli-settings", () => getClaudeConfigDir())
-        : provider === STATUS_LINE_HARNESS_IDS.COPILOT
+        : statusLineHarnessId === STATUS_LINE_HARNESS_IDS.COPILOT
           ? globalSettings("copilot-cli-settings", () => getCopilotHomeDir())
-          : provider === STATUS_LINE_HARNESS_IDS.QWEN
+          : statusLineHarnessId === STATUS_LINE_HARNESS_IDS.QWEN
             ? globalSettings("qwen-cli-settings", () => getQwenHomeDir())
             : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
                 projectConfigPath: () => getAntigravitySettingsPath(),
               });
     const definition = { tracker };
-    this.definitions.set(provider, definition);
+    this.definitions.set(statusLineHarnessId, definition);
     return definition;
   }
 
   private constructor(
-    private readonly provider: StatusLineHarnessId,
+    private readonly statusLineHarnessId: StatusLineHarnessId,
     private readonly definition: StatuslineProviderDefinition
   ) {}
 
   getSettings(): StatusLineHarnessSettings {
-    return ConfigurationUtils.getStatusLineHarnessSettings(this.provider);
+    return ConfigurationUtils.getStatusLineHarnessSettings(
+      this.statusLineHarnessId
+    );
   }
 
   /**
-   * The script path for this provider's statusline command: the shared
+   * The script path for this harness's statusline command: the shared
    * `~/.ctrlyoke/bin` launcher, or this package's own copy when the launcher
    * cannot be deployed (see StatuslineLauncher). `undefined` when neither
    * exists; callers must then leave the harness config untouched.
    */
   resolveScriptPath(packageRoot: string): Promise<string | undefined> {
-    return resolveStatuslineScriptPath(packageRoot, this.provider);
+    return resolveStatuslineScriptPath(packageRoot, this.statusLineHarnessId);
   }
 
   /** Install the wrapper and capture the user's command exactly once. */
@@ -201,7 +210,7 @@ export class StatuslineManager implements StatuslineManagerLike {
           customCommand !== undefined &&
           this.isCtrlyokeStatuslineCommand(customCommand);
         alreadyCtrlyoke = isCtrlyokeCommand;
-        const enabledSettingPath = `${SETTING_PATHS.STATUS_LINE}.byHarness.${this.provider}.enabled`;
+        const enabledSettingPath = `${SETTING_PATHS.STATUS_LINE}.byHarness.${this.statusLineHarnessId}.enabled`;
         // The automatic veto materializes a user-scoped disabled setting. A later
         // user-scoped re-enable is the explicit opt-in that permits replacement,
         // so no separate persisted "already asked" flag is needed.
@@ -217,7 +226,7 @@ export class StatuslineManager implements StatuslineManagerLike {
           if (settings.enabled) {
             collision = true;
             await ConfigurationUtils.setStatusLineHarnessSettings(
-              this.provider,
+              this.statusLineHarnessId,
               {
                 ...settings,
                 enabled: false,
@@ -232,11 +241,14 @@ export class StatuslineManager implements StatuslineManagerLike {
           !this.isCtrlyokeStatuslineCommand(customCommand)
         ) {
           captured = true;
-          await ConfigurationUtils.setStatusLineHarnessSettings(this.provider, {
-            ...settings,
-            customCommand,
-            useCtrlyokeStyle: false,
-          });
+          await ConfigurationUtils.setStatusLineHarnessSettings(
+            this.statusLineHarnessId,
+            {
+              ...settings,
+              customCommand,
+              useCtrlyokeStyle: false,
+            }
+          );
         }
       },
       (currentValue, hadKey) =>
@@ -268,7 +280,7 @@ export class StatuslineManager implements StatuslineManagerLike {
    *
    * This always runs, even with another ctrlyoke installation live: it follows
    * the user disabling tracking, which is a machine-wide setting both hosts
-   * read, so the other host will not use this provider's statusline either.
+   * read, so the other host will not use this harness's statusline either.
    * What another installation can still need is the shared launcher, which
    * {@link releaseLauncherIfUnused} keeps while it does.
    */
@@ -296,8 +308,8 @@ export class StatuslineManager implements StatuslineManagerLike {
   ): Promise<StatuslineRemovalResult> {
     const restored: StatusLineHarnessId[] = [];
     const failed: StatuslineRemovalFailure[] = [];
-    for (const provider of Object.values(STATUS_LINE_HARNESS_IDS)) {
-      const manager = this.forProvider(provider);
+    for (const statusLineHarnessId of Object.values(STATUS_LINE_HARNESS_IDS)) {
+      const manager = this.forStatusLineHarness(statusLineHarnessId);
       try {
         if (
           await manager.definition.tracker.uninstallPersistentValue(
@@ -313,11 +325,11 @@ export class StatuslineManager implements StatuslineManagerLike {
             }
           )
         ) {
-          restored.push(provider);
+          restored.push(statusLineHarnessId);
         }
       } catch (error) {
         failed.push({
-          harnessId: provider,
+          harnessId: statusLineHarnessId,
           message: getErrorMessage(error),
         });
       }
@@ -330,7 +342,7 @@ export class StatuslineManager implements StatuslineManagerLike {
 
   /**
    * Remove the shared `~/.ctrlyoke/bin` launcher once nothing can use it
-   * (CLI_DISTRIBUTION_PLAN.md §3.4 rule 6): every provider has tracking
+   * (CLI_DISTRIBUTION_PLAN.md §3.4 rule 6): every harness has tracking
    * disabled, no harness config still runs a launcher script, and no other
    * ctrlyoke installation is recorded as live. When the package itself is
    * being removed, tracking settings no longer matter: nothing is left to act
@@ -342,8 +354,10 @@ export class StatuslineManager implements StatuslineManagerLike {
   ): Promise<boolean> {
     try {
       const launcherDirectory = statuslineLauncherDirectory();
-      for (const provider of Object.values(STATUS_LINE_HARNESS_IDS)) {
-        const manager = this.forProvider(provider);
+      for (const statusLineHarnessId of Object.values(
+        STATUS_LINE_HARNESS_IDS
+      )) {
+        const manager = this.forStatusLineHarness(statusLineHarnessId);
         if (
           (!packageRemoved && manager.getSettings().enabled) ||
           (await manager.runsScriptFrom(workspaceRoot, launcherDirectory))
@@ -375,7 +389,7 @@ export class StatuslineManager implements StatuslineManagerLike {
       : { action: "delete" };
   }
 
-  /** True when this provider's configured statusline runs a script in `directory`. */
+  /** True when this harness's configured statusline runs a script in `directory`. */
   private async runsScriptFrom(
     workspaceRoot: string,
     directory: string
@@ -395,7 +409,7 @@ export class StatuslineManager implements StatuslineManagerLike {
   }
 
   private getPersistentValueKey(): string {
-    return this.provider === STATUS_LINE_HARNESS_IDS.QWEN
+    return this.statusLineHarnessId === STATUS_LINE_HARNESS_IDS.QWEN
       ? QWEN_STATUS_LINE_SETTING_KEY
       : STATUS_LINE_SETTING_KEY;
   }
@@ -427,6 +441,6 @@ export class StatuslineManager implements StatuslineManagerLike {
     }
 
     const scriptName = script.replace(/\\/gu, "/").split("/").pop();
-    return scriptName === statuslineScriptFileName(this.provider);
+    return scriptName === statuslineScriptFileName(this.statusLineHarnessId);
   }
 }

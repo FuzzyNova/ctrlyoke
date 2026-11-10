@@ -13,8 +13,8 @@ import {
 } from "../../core/harness/codex/CodexUsageNormalization";
 import {
   CODEX_APP_SERVER_UNSUPPORTED,
-  CodexUsageProvider,
-} from "../../core/harness/shared/usage/providers/CodexUsageProvider";
+  CodexQuotaCollector,
+} from "../../core/harness/shared/usage/collectors/CodexQuotaCollector";
 import {
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_STATUS_CODES,
@@ -216,7 +216,7 @@ suite("Codex usage tracking", () => {
 
   test("gates unsupported versions before spawning app-server", async () => {
     let spawned = false;
-    const provider = new CodexUsageProvider({
+    const provider = new CodexQuotaCollector({
       getVersion: async () => "0.145.0",
       appServer: {
         spawnProcess: () => {

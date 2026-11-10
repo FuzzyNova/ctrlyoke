@@ -31,8 +31,8 @@ import {
 import { migrateToCurrent } from "../../../../utils/FormatMigrations";
 import { normalizeUsageTimestamp } from "./UsageTimestampUtils";
 import { ObservedHarnessUsageStore } from "./ObservedHarnessUsageStore";
-import type { IHarnessUsageProvider } from "./IHarnessUsageProvider";
-import { createDefaultHarnessUsageProviders } from "./providers";
+import type { IHarnessQuotaCollector } from "./IHarnessQuotaCollector";
+import { createDefaultHarnessQuotaCollectors } from "./collectors";
 
 export const PROVIDER_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROVIDER_USAGE];
@@ -156,7 +156,7 @@ function safeErrorCode(error: unknown): string {
 export class HarnessUsageService {
   private readonly providerByHarness = new Map<
     HarnessId,
-    IHarnessUsageProvider
+    IHarnessQuotaCollector
   >();
   private readonly quotaCache = new Map<HarnessId, HarnessQuotaSnapshot>();
   private readonly observedCache = new Map<
@@ -188,7 +188,7 @@ export class HarnessUsageService {
 
   constructor(
     workspaceRoot: string,
-    providers: readonly IHarnessUsageProvider[] = createDefaultHarnessUsageProviders(),
+    providers: readonly IHarnessQuotaCollector[] = createDefaultHarnessQuotaCollectors(),
     observedStore: ObservedHarnessUsageStore = new ObservedHarnessUsageStore(
       workspaceRoot
     ),

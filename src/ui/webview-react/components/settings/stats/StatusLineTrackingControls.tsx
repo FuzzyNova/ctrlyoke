@@ -10,8 +10,8 @@ import {
 import type { StatusLineHarnessId } from "@root/types/DashboardConstants";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
-  STATUS_LINE_FORMAT_PROVIDERS,
-  type StatusLineFormatProvider,
+  STATUS_LINE_FORMAT_HARNESSES,
+  type StatusLineFormatHarness,
   type StatusLineSegment,
 } from "@root/utils/StatuslineFormat";
 import { AnimatedSection } from "@components/shared/AnimatedSection";
@@ -71,7 +71,7 @@ const STATUS_LINE_SETTING_PATHS: Partial<
 
 const RESTORE_LABEL_MAX_LENGTH = 56;
 
-function providerForHarness(
+function statusLineHarnessIdForHarness(
   harnessId: StatusLineHarnessId
 ): StatusLineHarnessId {
   switch (harnessId) {
@@ -103,15 +103,15 @@ function getDisableWarning(harnessId: StatusLineHarnessId): string {
   }
 }
 
-const STATUS_LINE_FORMAT_PROVIDER_BY_HARNESS: Record<
+const STATUS_LINE_FORMAT_HARNESS_BY_ID: Record<
   StatusLineHarnessId,
-  StatusLineFormatProvider
+  StatusLineFormatHarness
 > = {
-  [STATUS_LINE_HARNESS_IDS.CLAUDE]: STATUS_LINE_FORMAT_PROVIDERS.CLAUDE,
+  [STATUS_LINE_HARNESS_IDS.CLAUDE]: STATUS_LINE_FORMAT_HARNESSES.CLAUDE,
   [STATUS_LINE_HARNESS_IDS.ANTIGRAVITY]:
-    STATUS_LINE_FORMAT_PROVIDERS.ANTIGRAVITY,
-  [STATUS_LINE_HARNESS_IDS.COPILOT]: STATUS_LINE_FORMAT_PROVIDERS.COPILOT,
-  [STATUS_LINE_HARNESS_IDS.QWEN]: STATUS_LINE_FORMAT_PROVIDERS.QWEN,
+    STATUS_LINE_FORMAT_HARNESSES.ANTIGRAVITY,
+  [STATUS_LINE_HARNESS_IDS.COPILOT]: STATUS_LINE_FORMAT_HARNESSES.COPILOT,
+  [STATUS_LINE_HARNESS_IDS.QWEN]: STATUS_LINE_FORMAT_HARNESSES.QWEN,
 };
 
 function getPlainScriptBasename(command: string): string | undefined {
@@ -165,15 +165,15 @@ export function StatusLineTrackingControls({
   useDifferentFormatPerHarness = settings.settings.statusLine
     .useDifferentFormatPerHarness,
 }: Props) {
-  const provider = providerForHarness(harnessId);
-  const paths = STATUS_LINE_SETTING_PATHS[provider];
+  const statusLineHarnessId = statusLineHarnessIdForHarness(harnessId);
+  const paths = STATUS_LINE_SETTING_PATHS[statusLineHarnessId];
   if (!paths) {
     throw new Error(
-      `Missing statusline setting paths for provider: ${provider}`
+      `Missing statusline setting paths for provider: ${statusLineHarnessId}`
     );
   }
-  const tracking = settings.settings.statusLine.byHarness[provider];
-  const formatProvider = STATUS_LINE_FORMAT_PROVIDER_BY_HARNESS[provider];
+  const tracking = settings.settings.statusLine.byHarness[statusLineHarnessId];
+  const formatHarness = STATUS_LINE_FORMAT_HARNESS_BY_ID[statusLineHarnessId];
   const snapshot = useHarnessUsageStore(
     (state) => state.snapshotsByHarness[harnessId]
   );
@@ -227,13 +227,13 @@ export function StatusLineTrackingControls({
       />
       <SettingInputRow
         settingKey={`statusLine.byHarness.${harnessId}.customCommand`}
-        id={`${provider}-custom-command`}
+        id={`${statusLineHarnessId}-custom-command`}
         sources={settings.sources}
         onReset={(path) => sendGlobalSetting(path, undefined)}
         activeScope={SETTING_SCOPES.USER}
       >
         <LocalTextInput
-          id={`${provider}-custom-command`}
+          id={`${statusLineHarnessId}-custom-command`}
           value={tracking.customCommand}
           onCommit={(value) => sendGlobalSetting(paths.customCommand, value)}
           placeholder="None"
@@ -257,7 +257,7 @@ export function StatusLineTrackingControls({
           searchId={`statusLine.byHarness.${harnessId}.format`}
           format={tracking.format}
           onCommit={(format) => sendGlobalSetting(paths.format, format)}
-          provider={formatProvider}
+          harness={formatHarness}
           snapshot={snapshot}
           percentDirection={settings.settings.usageTracking.percentDirection}
         />
@@ -267,7 +267,7 @@ export function StatusLineTrackingControls({
       >
         <StatusLinePreview
           format={sharedDraft}
-          provider={formatProvider}
+          harness={formatHarness}
           snapshot={snapshot}
           percentDirection={settings.settings.usageTracking.percentDirection}
         />

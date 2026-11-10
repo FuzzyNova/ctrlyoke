@@ -18,8 +18,8 @@ import type {
 } from "../../../../../types/UsageTypes";
 import { CLAUDE_RATE_LIMIT_WINDOWS } from "../../../../../utils/StatuslineFormat";
 import { normalizeUsageTimestamp } from "../UsageTimestampUtils";
-import type { IHarnessUsageProvider } from "../IHarnessUsageProvider";
-import { ObservedOnlyUsageProvider } from "../ObservedOnlyUsageProvider";
+import type { IHarnessQuotaCollector } from "../IHarnessQuotaCollector";
+import { ObservedOnlyQuotaCollector } from "../ObservedOnlyQuotaCollector";
 
 export interface ClaudeStatuslineSnapshot {
   [key: string]: unknown;
@@ -89,9 +89,9 @@ export function parseClaudeQuotaSnapshot(
   };
 }
 
-export class ClaudeUsageProvider
-  extends ObservedOnlyUsageProvider
-  implements IHarnessUsageProvider
+export class ClaudeQuotaCollector
+  extends ObservedOnlyQuotaCollector
+  implements IHarnessQuotaCollector
 {
   constructor() {
     super(HARNESS_IDS.CLAUDE_CLI);

@@ -9,7 +9,7 @@ import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   parseClaudeQuotaSnapshot,
   parseClaudeRateLimitWindows,
-} from "../../core/harness/shared/usage/providers/ClaudeUsageProvider";
+} from "../../core/harness/shared/usage/collectors/ClaudeQuotaCollector";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
@@ -20,7 +20,7 @@ function backend(data: PartialCtrlYokeSettings): ConfigBackend {
   return { getAll: () => data, set: async () => data };
 }
 
-suite("ClaudeUsageProvider", () => {
+suite("ClaudeQuotaCollector", () => {
   let tempDirectory: string;
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;

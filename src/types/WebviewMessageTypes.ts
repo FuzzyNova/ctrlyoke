@@ -138,7 +138,7 @@ import type { CapabilitiesModel } from "./CapabilitiesTypes";
 import type { ScriptCompletionItem } from "../completions/ScriptCommandCompletionHelpers";
 import type { PermissionCompletionItem } from "../completions/PermissionListCompletionHelpers";
 import type { PlainCompletionItem } from "../completions/CompletionCore";
-import type { HarnessFlagCompletion } from "../core/harness/shared/HarnessFlagCompletionProvider";
+import type { HarnessFlagCompletion } from "../core/harness/shared/HarnessFlagHelpParser";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
 import type {

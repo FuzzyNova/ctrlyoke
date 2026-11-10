@@ -3,7 +3,7 @@ import { StatuslineSnapshotWatcher } from "../shared/StatuslineSnapshotWatcher";
 import {
   parseClaudeQuotaSnapshot,
   type ClaudeStatuslineSnapshot,
-} from "../shared/usage/providers/ClaudeUsageProvider";
+} from "../shared/usage/collectors/ClaudeQuotaCollector";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 
 export interface ClaudeStatuslineSidecarDeps {

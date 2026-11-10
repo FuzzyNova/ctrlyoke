@@ -119,6 +119,25 @@ This ledger maps retired names to their current names. Historical implementation
 | `src/ui/webview-react/test/hooks/inboundMessageDispatcher.test.ts` | `src/ui/webview-react/test/messaging/inboundMessageDispatcher.test.ts` | file | 4 | 2026-11-09 |
 | `src/ui/webview-react/test/hooks/panelHandshake.test.ts` | `src/ui/webview-react/test/messaging/panelHandshake.test.ts` | file | 4 | 2026-11-09 |
 
+
+| `src/core/harness/shared/usage/IHarnessUsageProvider.ts` | `src/core/harness/shared/usage/IHarnessQuotaCollector.ts` | file | 5c | 2026-11-09 |
+| `src/core/harness/shared/usage/providers/` | `src/core/harness/shared/usage/collectors/` | folder | 5c | 2026-11-09 |
+| `src/core/harness/shared/usage/ObservedOnlyUsageProvider.ts` | `src/core/harness/shared/usage/ObservedOnlyQuotaCollector.ts` | file | 5c | 2026-11-09 |
+| `src/test/unit/HarnessFlagCompletionProvider.test.ts` | `src/test/unit/HarnessFlagHelpParser.test.ts` | file | 5c | 2026-11-09 |
+| `src/core/harness/shared/HarnessFlagCompletionProvider.ts` | `src/core/harness/shared/HarnessFlagHelpParser.ts` | file | 5c | 2026-11-09 |
+| `IHarnessUsageProvider` | `IHarnessQuotaCollector` | symbol | 5c | 2026-11-09 |
+| `*UsageProvider` (`usage/providers/`) | `*QuotaCollector` (`usage/collectors/`) | symbol | 5c | 2026-11-09 |
+| `ObservedOnlyUsageProvider` | `ObservedOnlyQuotaCollector` | symbol | 5c | 2026-11-09 |
+| `createDefaultHarnessUsageProviders` | `createDefaultHarnessQuotaCollectors` | symbol | 5c | 2026-11-09 |
+| `StatusLineFormatProvider` | `StatusLineFormatHarness` | symbol | 5c | 2026-11-09 |
+| `STATUS_LINE_FORMAT_PROVIDERS` | `STATUS_LINE_FORMAT_HARNESSES` | symbol | 5c | 2026-11-09 |
+| `providerForHarness` (`StatusLineTrackingControls`) | `statusLineHarnessIdForHarness` | symbol | 5c | 2026-11-09 |
+| `STATUS_LINE_FORMAT_PROVIDER_BY_HARNESS` | `STATUS_LINE_FORMAT_HARNESS_BY_ID` | symbol | 5c | 2026-11-09 |
+| `StatuslineManager.providerForHarness` | `StatuslineManager.statusLineHarnessIdForHarness` | symbol | 5c | 2026-11-09 |
+| `StatuslineManager.forProvider` | `StatuslineManager.forStatusLineHarness` | symbol | 5c | 2026-11-09 |
+| `StatusLineFormatEditor.provider` / `StatusLinePreview.provider` | `harness` | symbol / prop | 5c | 2026-11-09 |
+| `ProviderModelUsage` | `HarnessModelUsage` | symbol | 5c | 2026-11-09 |
+
 ## Kept on purpose
 
 - `utils/prompt.ts`'s `PromptStep` remains a wider data-model name; `PromptPropertiesDrawer` remains prompt-only.
@@ -126,7 +145,7 @@ This ledger maps retired names to their current names. Historical implementation
 - `useSettingsDrawerTabOverrides`, `DrawerRow`, and `DrawerTabBar` remain settings-drawer names; `drawerRef` in `GlobalSettingsDrawer.tsx` remains drawer-specific.
 - `src/ui/webview-react/components/output/ctrlyoke-tools/WorkflowStatusView.tsx` and its tool-view symbols remain tool-status names; they are separate from the workflow header switcher.
 - `MESSAGE_TYPES.CLIENT_ID_ASSIGNED` and `MESSAGE_TYPES.CAPTURE_THEME_VARS` remain wire-message names; only their webview handler/helper locations changed. `useRunViewLoadWatchdog` remains a hook in `hooks/`.
-- Persisted and wire contracts: `PERSISTED_STORES.PROVIDER_USAGE = "provider-usage"`, `PROVIDER_USAGE_SCHEMA_VERSION`; `HARNESS_USAGE_ERROR_CODES` values (including `provider-refresh-failed`); `StatusLineFormatProvider` values (`claude`, `antigravity`, `copilot`, `qwen`); `COMPLETION_NOTIFICATION_*` / `NOTIFICATION_KINDS` values; `_runtime.finalStep.loopCount`, `OutputExecutionTarget.loopIndex`, and the `loop*` fields in `WebviewMessageTypes.ts` / `IDashboardSink.ts`.
+- Persisted and wire contracts: `PERSISTED_STORES.PROVIDER_USAGE = "provider-usage"`, `PROVIDER_USAGE_SCHEMA_VERSION`; `HARNESS_USAGE_ERROR_CODES` values (including `provider-refresh-failed`); `StatusLineFormatHarness` values (`claude`, `antigravity`, `copilot`, `qwen`); `COMPLETION_NOTIFICATION_*` / `NOTIFICATION_KINDS` values; `_runtime.finalStep.loopCount`, `OutputExecutionTarget.loopIndex`, and the `loop*` fields in `WebviewMessageTypes.ts` / `IDashboardSink.ts`.
 - On-disk and browser contracts: `TempFileManager` directory names and file prefixes, output-snapshot filename prefix and truncation markers; sessionStorage `ctrlyoke-panel-reconnect-retry-at`, `window.__ctrlyokePanelHandshake*`; zustand persist names `ctrlyoke-ui-state` and `ctrlyoke-workspace-viewer-state`.
 - `docs/guide/dashboard.md` screenshot name `step-context-menu-900x588.png` remains unchanged.
 | `src/core/harness/shared/interfaces/ICliProvider.ts` | `src/core/harness/shared/interfaces/IHarnessAdapter.ts` | file | 5a | 2026-11-09 |

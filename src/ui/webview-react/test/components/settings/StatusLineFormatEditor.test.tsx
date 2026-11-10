@@ -5,7 +5,7 @@ import { StatusLineFormatEditor } from "@components/settings/stats/StatusLineFor
 import {
   DEFAULT_STATUS_LINE_FORMAT,
   STATUS_LINE_FIELD_IDS,
-  STATUS_LINE_FORMAT_PROVIDERS,
+  STATUS_LINE_FORMAT_HARNESSES,
   type StatusLineSegment,
 } from "@root/utils/StatuslineFormat";
 import {
@@ -342,7 +342,7 @@ describe("StatusLineFormatEditor", () => {
 
     render(
       <StatusLineFormatEditor
-        provider={STATUS_LINE_FORMAT_PROVIDERS.CLAUDE}
+        harness={STATUS_LINE_FORMAT_HARNESSES.CLAUDE}
         format={[
           { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
           { type: "field", field: STATUS_LINE_FIELD_IDS.CWD },

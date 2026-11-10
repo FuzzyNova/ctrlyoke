@@ -78,11 +78,11 @@ suite("StatuslineManager", () => {
 
   test("maps Copilot and Qwen harnesses to their statusline providers", () => {
     assert.strictEqual(
-      StatuslineManager.providerForHarness(HARNESS_IDS.COPILOT_CLI),
+      StatuslineManager.statusLineHarnessIdForHarness(HARNESS_IDS.COPILOT_CLI),
       STATUS_LINE_HARNESS_IDS.COPILOT
     );
     assert.strictEqual(
-      StatuslineManager.providerForHarness(HARNESS_IDS.QWEN_CLI),
+      StatuslineManager.statusLineHarnessIdForHarness(HARNESS_IDS.QWEN_CLI),
       STATUS_LINE_HARNESS_IDS.QWEN
     );
   });

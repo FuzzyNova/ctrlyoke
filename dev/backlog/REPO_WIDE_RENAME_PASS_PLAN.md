@@ -19,7 +19,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 - [x] 4 Webview `messaging/` module
 - [x] 5a `ICliProvider`/`*CliProvider` → `IHarnessAdapter`/`*HarnessAdapter`, and the instruction file rename
 - [x] 5b `CliProviderUtils`/`CliProviderWorkflowContext`/`CliProviderPreparation`, and `RetryableAsyncCache` → `src/utils/`
-- [ ] 5c Quota collectors, `HarnessFlagHelpParser`, status-line format harness names, `HarnessModelUsage`
+- [x] 5c Quota collectors, `HarnessFlagHelpParser`, status-line format harness names, `HarnessModelUsage`
 - [ ] 6a UI bridge: `IDashboardRegistryEvents`, `Dashboard*` router/sync/context/port, `NotificationEventFactory`, `WorkflowLibraryHandlers`, `OutputCaptureAttachments`
 - [ ] 6b Platform and core: `NodePlatformAdapter`, `CliConfirm`, `SettingsPropertyResolver`, `HarnessSettingsJsonStore`, `DashboardNavigationCommands`, `wasLastFailureUserCancellation` removal
 - [ ] 7 Folder moves that change which instruction file applies
@@ -467,4 +467,4 @@ Each is small enough to ride with the batch that touches the same area.
   in the existing `smol-toml` unlisted-dependency warning. No finding concerns a renamed
   adapter or interface symbol. The 5b run reports the same repository-wide findings; the
   renamed `HarnessAdapterUtils.test.ts` retains the existing `smol-toml` warning from its
-  predecessor, and no finding concerns the renamed helpers or extracted cache.
+  predecessor, and no finding concerns the renamed helpers or extracted cache. The 5c run reports the same categories; renamed quota collector tests appear in the same `smol-toml` warning as their predecessors, with no finding concerning renamed quota or status-line symbols.

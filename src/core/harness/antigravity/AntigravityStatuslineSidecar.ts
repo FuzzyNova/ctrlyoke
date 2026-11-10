@@ -4,7 +4,7 @@ import type { AntigravityLogParser } from "./AntigravityLogParser";
 import {
   parseAntigravityQuotaSnapshot,
   type AntigravityStatuslineQuotaSnapshot,
-} from "../shared/usage/providers/AntigravityUsageProvider";
+} from "../shared/usage/collectors/AntigravityQuotaCollector";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 
 interface SnapshotContextWindow {

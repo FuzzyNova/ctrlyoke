@@ -1,5 +1,5 @@
 import type {
-  ProviderModelUsage,
+  HarnessModelUsage,
   ToolCall,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
@@ -50,7 +50,7 @@ export function mergeSubagentOutput(
   const events = [...mergedEvents, ...appendedEvents].sort(
     (left, right) => (left.timestamp ?? 0) - (right.timestamp ?? 0)
   );
-  const modelUsage: Record<string, ProviderModelUsage> = {
+  const modelUsage: Record<string, HarnessModelUsage> = {
     ...(output.metadata.modelUsage ?? output.metadata.usage?.modelUsage ?? {}),
   };
   const priorUsage = output.metadata.usage;

@@ -376,7 +376,7 @@ export interface OutputMetadata {
   /** Raw USD total reported by a harness (never inferred from tokens). */
   harnessReportedCostUsd?: number;
   /** Typed per-provider-model cost breakdown when the harness supplies one. */
-  modelUsage?: Record<string, ProviderModelUsage>;
+  modelUsage?: Record<string, HarnessModelUsage>;
   /**
    * When true, text events contain pre-formatted output that should NOT be
    * processed by markdown renderers (e.g., Streamdown). The harness already
@@ -390,7 +390,7 @@ export interface OutputMetadata {
 }
 
 /** Provider-reported per-model usage/cost details (currently Claude stream-json). */
-export interface ProviderModelUsage {
+export interface HarnessModelUsage {
   inputTokens?: number;
   outputTokens?: number;
   cacheReadInputTokens?: number;
@@ -614,5 +614,5 @@ export interface TokenUsage {
   /** Model's total context window capacity in tokens (e.g. 200000 or 128000). */
   contextWindowSize?: number;
   /** Optional billing usage partitioned by model; older outputs remain blended. */
-  modelUsage?: Record<string, ProviderModelUsage>;
+  modelUsage?: Record<string, HarnessModelUsage>;
 }

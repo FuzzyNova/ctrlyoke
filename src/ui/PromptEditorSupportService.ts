@@ -31,7 +31,7 @@ import { HarnessAdapterUtils } from "../core/harness/shared/HarnessAdapterUtils"
 import {
   getHarnessFlagCompletions,
   type HarnessFlagCompletion,
-} from "../core/harness/shared/HarnessFlagCompletionProvider";
+} from "../core/harness/shared/HarnessFlagHelpParser";
 import { CopilotHarnessAdapter } from "../core/harness/copilot/CopilotHarnessAdapter";
 import { ClaudeHarnessAdapter } from "../core/harness/claude/ClaudeHarnessAdapter";
 import { CodexHarnessAdapter } from "../core/harness/codex/CodexHarnessAdapter";

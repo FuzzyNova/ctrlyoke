@@ -152,7 +152,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
    * MCP settings which are workspace-scoped. Keep a separate tracker so the
    * two leases cannot interfere with each other's files or baselines.
    */
-  private static readonly statuslineManager = StatuslineManager.forProvider(
+  private static readonly statuslineManager = StatuslineManager.forStatusLineHarness(
     STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
   );
 

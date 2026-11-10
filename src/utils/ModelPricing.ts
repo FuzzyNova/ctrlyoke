@@ -14,7 +14,7 @@ import {
 } from "../types/DashboardConstants";
 import type { AttemptCostEstimate } from "../types/CtrlYokeTypes";
 import type { ModelPricingOverride } from "../types/CtrlYokeSettings";
-import type { ProviderModelUsage } from "../types/CliOutputTypes";
+import type { HarnessModelUsage } from "../types/CliOutputTypes";
 import { getModelPricingFromRegistry } from "./ModelPricingRegistry";
 import { Log } from "./Log";
 import {
@@ -68,7 +68,7 @@ export interface AttemptCostCalculationInput extends AttemptTokenCounts {
   /** Raw provider-reported USD total, when available. */
   harnessReportedCostUsd?: number;
   /** Optional per-model billing counts; absent on older persisted attempts. */
-  modelUsage?: Record<string, ProviderModelUsage>;
+  modelUsage?: Record<string, HarnessModelUsage>;
 }
 
 export interface AttemptCostCalculationResult {

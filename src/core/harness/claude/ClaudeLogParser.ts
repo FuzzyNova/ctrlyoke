@@ -17,7 +17,7 @@ import {
   TextData,
   ToolResultData,
   CompactionData,
-  ProviderModelUsage,
+  HarnessModelUsage,
   BackgroundTaskSummary,
   BackgroundWorkHoldSnapshot,
   ToolCall,
@@ -170,7 +170,7 @@ interface ClaudeProviderEvent extends BaseCliEvent {
     origin?: { kind?: string };
   };
   total_cost_usd?: number;
-  modelUsage?: Record<string, ProviderModelUsage>;
+  modelUsage?: Record<string, HarnessModelUsage>;
 }
 
 function isClaudeProviderEvent(value: unknown): value is ClaudeProviderEvent {
@@ -408,7 +408,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let reportedError: string | undefined;
     let resultTotalTokens: number | undefined;
     let harnessReportedCostUsd: number | undefined;
-    let modelUsage: Record<string, ProviderModelUsage> | undefined;
+    let modelUsage: Record<string, HarnessModelUsage> | undefined;
     let lastAssistantUsage:
       | {
           input_tokens: number;

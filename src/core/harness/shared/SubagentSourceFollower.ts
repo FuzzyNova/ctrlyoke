@@ -1,6 +1,6 @@
 import type {
   CliEvent,
-  ProviderModelUsage,
+  HarnessModelUsage,
   SubagentSpawn,
 } from "../../../types/CliOutputTypes";
 import {
@@ -17,7 +17,7 @@ export const SUBAGENT_SPAWN_UPDATE_TOOL_NAME = "";
 
 export interface SubagentDrainResult {
   events: CliEvent[];
-  usageByModel: Record<string, ProviderModelUsage>;
+  usageByModel: Record<string, HarnessModelUsage>;
   partial: boolean;
 }
 
@@ -60,7 +60,7 @@ export interface SubagentDrainOptions {
 export class SubagentSourceFollower {
   private readonly sources = new Map<string, RegisteredSource>();
   private readonly events: CliEvent[] = [];
-  private readonly usageByModel: Record<string, ProviderModelUsage> = {};
+  private readonly usageByModel: Record<string, HarnessModelUsage> = {};
   private readonly completedSpawns = new Set<string>();
   private partial = false;
   private callback?: (events: CliEvent[]) => void;

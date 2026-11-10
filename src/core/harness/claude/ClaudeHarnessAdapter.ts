@@ -123,7 +123,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
   static readonly CLI_VERSION_COMMAND = `${ClaudeHarnessAdapter.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${ClaudeHarnessAdapter.CLI_COMMAND} --help`;
 
-  private static readonly statuslineManager = StatuslineManager.forProvider(
+  private static readonly statuslineManager = StatuslineManager.forStatusLineHarness(
     STATUS_LINE_HARNESS_IDS.CLAUDE
   );
 

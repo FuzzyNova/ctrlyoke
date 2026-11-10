@@ -19,7 +19,7 @@ import {
   quotaWindowKind,
 } from "../../../../../utils/StatuslineFormat";
 import { normalizeUsageTimestamp } from "../UsageTimestampUtils";
-import type { IHarnessUsageProvider } from "../IHarnessUsageProvider";
+import type { IHarnessQuotaCollector } from "../IHarnessQuotaCollector";
 
 /** Raw quota entry shape emitted by the Antigravity statusline payload. */
 export interface AntigravityStatuslineQuotaEntry {
@@ -87,7 +87,7 @@ export function parseAntigravityQuotaSnapshot(
   };
 }
 
-export class AntigravityUsageProvider implements IHarnessUsageProvider {
+export class AntigravityQuotaCollector implements IHarnessQuotaCollector {
   readonly harnessId = HARNESS_IDS.ANTIGRAVITY_CLI;
 
   async refreshUsage(_signal?: AbortSignal): Promise<HarnessQuotaSnapshot> {
