@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failed workflow step rows now show the failure reason when the workflow stops, as well as when it continues after the failure.
 - Copilot and Antigravity headless session errors now fail the step even when their CLI exits successfully; externally signalled process kills now follow `errorBehavior`.
 - Interactive Claude, Copilot and OpenCode failures now show the harness's own error text.
+- OpenCode: a headless step now attaches the prompt files ctrlyoke writes for it with `--file`, so OpenCode puts their contents into the first message and the model no longer spends tool calls reading them. Workspace files the prompt references are still read by the model.
 - Codex: an interactive step that hits an API error now fails with Codex's error text instead of waiting forever.
 - Qwen: an interactive step now fails with Qwen's error text on an API error Qwen never retries (HTTP 401 or 403) instead of waiting forever. Other API errors, which Qwen may retry, still wait for the process to exit or for `maxPromptTimeoutSec`.
 - Antigravity: interactive and headless steps that hit an API error now fail with agy's error text. Before, an interactive step completed as if the turn had succeeded, and a headless step failed as an unexpected process exit.

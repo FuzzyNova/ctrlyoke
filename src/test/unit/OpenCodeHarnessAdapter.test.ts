@@ -1193,4 +1193,19 @@ suite("OpenCodeHarnessAdapter", () => {
       []
     );
   });
+
+  test("attaches generated prompt files with --file only in headless runs", () => {
+    const provider = new OpenCodeHarnessAdapter();
+    assert.deepStrictEqual(
+      provider.buildPromptFileAttachmentArgs(
+        ["temp/a.skills.md", "temp/a.prompt.md"],
+        false
+      ),
+      ["--file", "temp/a.skills.md", "--file", "temp/a.prompt.md"]
+    );
+    assert.deepStrictEqual(
+      provider.buildPromptFileAttachmentArgs(["temp/a.prompt.md"], true),
+      []
+    );
+  });
 });

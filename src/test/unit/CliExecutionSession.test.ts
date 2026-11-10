@@ -51,6 +51,25 @@ suite("CliExecutionSession", () => {
     assert.strictEqual(session.effectiveSessionId, "session-existing");
   });
 
+  test("keeps prompt files apart from temp files added after preparation", () => {
+    const session = new CliExecutionSession({
+      prompt: { prompt: "original prompt" },
+    });
+
+    session.preparePrompt("Follow instructions in @prompt.md", [
+      "agent.md",
+      "prompt.md",
+    ]);
+    session.addTempFilePath("mcp-config.json");
+
+    assert.deepStrictEqual(session.promptFilePaths, ["agent.md", "prompt.md"]);
+    assert.deepStrictEqual(session.tempFilePaths, [
+      "agent.md",
+      "prompt.md",
+      "mcp-config.json",
+    ]);
+  });
+
   test("records headless responses and prefers extracted session IDs", () => {
     const parsedOutput = createParsedOutput({
       metadata: { sessionId: "session-output" },

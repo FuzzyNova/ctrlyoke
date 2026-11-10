@@ -241,6 +241,17 @@ export class ExecutionPlanBuilder {
         )
       );
     }
+    if (
+      session.promptFilePaths.length > 0 &&
+      this.deps.provider.buildPromptFileAttachmentArgs
+    ) {
+      baseArgs.push(
+        ...this.deps.provider.buildPromptFileAttachmentArgs(
+          session.promptFilePaths,
+          isInteractive
+        )
+      );
+    }
     const mutations = [...providerPreparation.mutations];
     if (this.deps.provider.setSandboxSpawnEnv) {
       // Reset on every launch so one step's sandbox env never leaks into the next.

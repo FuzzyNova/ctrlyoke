@@ -633,9 +633,11 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
    * OpenCode's TUI treats a leading `@` as an agent-mention trigger: with terminal
    * reuse we write text straight into the running TUI, so an `@path` prefix gets
    * intercepted and rewritten to an agent invocation (e.g. `@explore`) before it
-   * ever reaches the model. OpenCode does not auto-read `@`-prefixed paths anyway
-   * — it decides to read referenced files on its own from the plain path — so we
-   * drop the `@` entirely, mirroring Codex. This applies uniformly to simple,
+   * ever reaches the model. OpenCode never turns typed `@path` text into an
+   * attachment (only a file picked from the TUI's autocomplete, or a `--file`
+   * argument, is read for the model), so we drop the `@` entirely, mirroring
+   * Codex. Headless runs attach the generated prompt files with `--file`
+   * (`buildPromptFileAttachmentArgs`). This applies uniformly to simple,
    * sent-to-terminal, and categorized prompts because every ref routes through here.
    *
    * @param relativeFilePath Relative or absolute file path
@@ -646,7 +648,8 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
   }
 
   /**
-   * Since nothing reads these plain paths for the model, it often does not
+   * Where nothing reads these plain paths for the model (the TUI, and workspace
+   * files the prompt names), it often does not
    * resolve a relative one against its working directory and searches other
    * folders for it (e.g. globbing the home directory, which headless
    * permissions deny). An absolute path leaves nothing to resolve.
@@ -662,9 +665,38 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     imageFilePaths: readonly string[],
     isInteractive: boolean
   ): string[] {
+    return OpenCodeHarnessAdapter.headlessFileArgs(
+      imageFilePaths,
+      isInteractive
+    );
+  }
+
+  /**
+   * Headless `run --file` makes OpenCode read each generated prompt file into
+   * the first message, so the model never spends tool calls on them. OpenCode
+   * 2 inlines the text as `<file name="<basename>">` blocks; OpenCode 1 runs
+   * its own Read tool on the file and adds the call and result as synthetic
+   * parts. A missing file fails the run on both, which cannot happen here:
+   * the files are written before spawn. The TUI has no attachment flag, so
+   * interactive prompts keep plain path references.
+   */
+  buildPromptFileAttachmentArgs(
+    promptFilePaths: readonly string[],
+    isInteractive: boolean
+  ): string[] {
+    return OpenCodeHarnessAdapter.headlessFileArgs(
+      promptFilePaths,
+      isInteractive
+    );
+  }
+
+  private static headlessFileArgs(
+    filePaths: readonly string[],
+    isInteractive: boolean
+  ): string[] {
     return isInteractive
       ? []
-      : imageFilePaths.flatMap((filePath) => ["--file", filePath]);
+      : filePaths.flatMap((filePath) => [OPENCODE_CLI_FLAGS.FILE, filePath]);
   }
 
   /**

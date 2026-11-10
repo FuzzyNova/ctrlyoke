@@ -186,6 +186,8 @@ export const OPENCODE_CLI_FLAGS = {
   MODEL: "-m",
   SESSION: "-s",
   PROMPT: "--prompt",
+  /** `run` only: attach a file (repeatable; a greedy array). */
+  FILE: "--file",
   /**
    * OpenCode 2 only. Without it the CLI attaches to a shared, long-lived
    * background service that never sees this launch's environment, so the

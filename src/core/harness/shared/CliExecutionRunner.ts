@@ -544,7 +544,7 @@ export class CliExecutionRunner {
           });
           retrySession.preparePrompt(
             session.promptArgument,
-            session.tempFilePaths,
+            [...session.promptFilePaths],
             session.imageFileRefs,
             session.attachedSkills
           );

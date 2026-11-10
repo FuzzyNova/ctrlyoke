@@ -32,6 +32,7 @@ export class CliExecutionSession {
   private resolvedSessionIdValue?: string;
   private promptText: string;
   private tempFiles: string[] = [];
+  private promptFiles: string[] = [];
   private deferredHookEnvironmentFiles: string[] = [];
   private imageFiles: string[] = [];
   private attachedSkillNames?: string[];
@@ -73,6 +74,7 @@ export class CliExecutionSession {
   ): void {
     this.promptText = promptArgument;
     this.tempFiles = [...tempFilePaths];
+    this.promptFiles = [...tempFilePaths];
     this.imageFiles = [...imageFileRefs];
     this.attachedSkillNames =
       attachedSkills === undefined ? undefined : [...attachedSkills];
@@ -158,6 +160,15 @@ export class CliExecutionSession {
 
   get tempFilePaths(): string[] {
     return [...this.tempFiles];
+  }
+
+  /**
+   * The generated prompt files (prompt, agent, skills, context, excerpts,
+   * secrets) as prepared. Unlike `tempFilePaths`, this never includes hook or
+   * MCP files added later with `addTempFilePath()`.
+   */
+  get promptFilePaths(): readonly string[] {
+    return [...this.promptFiles];
   }
 
   get imageFileRefs(): readonly string[] {

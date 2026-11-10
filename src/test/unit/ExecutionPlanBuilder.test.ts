@@ -313,6 +313,33 @@ suite("ExecutionPlanBuilder", () => {
     assert.deepStrictEqual(receivedModes, [true, false]);
   });
 
+  test("attaches the prepared prompt files through the provider", async () => {
+    const provider = new OpenCodeHarnessAdapter();
+    const received: { paths: readonly string[]; isInteractive: boolean }[] = [];
+    provider.buildPromptFileAttachmentArgs = (paths, isInteractive) => {
+      received.push({ paths: [...paths], isInteractive });
+      return isInteractive ? [] : ["--attach-marker"];
+    };
+
+    const plans: string[][] = [];
+    for (const mode of ["interactive", "headless"] as const) {
+      const session = createSession(mode);
+      session.preparePrompt("Follow the instructions in prompt.md", [
+        "temp/a.agent.md",
+        "temp/a.prompt.md",
+      ]);
+      session.addTempFilePath("temp/mcp-config.json");
+      plans.push((await createBuilder(provider).plan(session)).cliArgs);
+    }
+
+    assert.deepStrictEqual(received, [
+      { paths: ["temp/a.agent.md", "temp/a.prompt.md"], isInteractive: true },
+      { paths: ["temp/a.agent.md", "temp/a.prompt.md"], isInteractive: false },
+    ]);
+    assert.ok(!plans[0].includes("--attach-marker"));
+    assert.ok(plans[1].includes("--attach-marker"));
+  });
+
   test("grants OpenCode the --add-dir directories through external_directory", async () => {
     const workspaceRoot = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "plan-opencode-external-")

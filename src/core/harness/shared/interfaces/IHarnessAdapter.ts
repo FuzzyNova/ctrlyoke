@@ -364,6 +364,19 @@ export interface IHarnessAdapter {
   ): string[];
 
   /**
+   * Build native CLI arguments that attach ctrlyoke's generated prompt files
+   * (prompt, agent, skills, context, excerpts, secrets), so the CLI puts
+   * their contents into the first message and the model needs no read tool
+   * call. The prompt text still names each file. Workspace files the prompt
+   * references are not passed. Providers without a verified mechanism leave
+   * this unset.
+   */
+  buildPromptFileAttachmentArgs?(
+    promptFilePaths: readonly string[],
+    isInteractive: boolean
+  ): string[];
+
+  /**
    * Generate MCP server configuration arguments (optional)
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
