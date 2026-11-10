@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ExitButton } from "@components/shared";
-import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
+import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import { VirtualizedDropdownList } from "../shared";
 import { RunSummaryRow, type RunPanelRow } from "./RunSummaryRow";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
@@ -316,7 +316,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
         </div>
       )}
 
-      <DeleteConfirmModal
+      <ConfirmDeleteOperationModal
         isOpen={showDeleteAllModal}
         onCancel={() => setShowDeleteAllModal(false)}
         onConfirm={handleConfirmDeleteAllRuns}

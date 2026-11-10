@@ -13,7 +13,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 - [x] 1b `PropertiesDrawer` → `PromptPropertiesDrawer`, uiStore state, `WorkflowPropertiesPanel` panel names
 - [x] 8 Final-step pass-count names
 - [x] 2 "prompt" → "step" in the step-list and editor components (`components/steps/` → `components/steps/`)
-- [ ] 3a Component moves: `WorkflowSwitcher`, delete modals, `FileBrowserModal`, `HooksEditor`, `StepColorSwatch`
+- [x] 3a Component moves: `WorkflowSwitcher`, delete modals, `FileBrowserModal`, `HooksEditor`, `StepColorSwatch`
 - [ ] 3b Output/diff components: `TextDiffView`, `SubagentSpawnOutput`, `SubmitCommitMessageView`, `ToolDot`, `InOutputView`, plus the Batch 3 deletions
 - [ ] 3c Utils, hooks and stores: `stepClipboard` split, `usePropertiesTabOverrides`, store renames, `requestQueue`, history stores
 - [ ] 4 Webview `messaging/` module

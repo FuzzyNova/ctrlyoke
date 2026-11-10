@@ -4,7 +4,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { DASHBOARD_HOST_CAPABILITIES } from "@root/types/DashboardConstants";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import { toWorkspaceRelative } from "../workspace-viewer/fileBrowserShared";
+import { toWorkspaceRelative } from "../shared/fileBrowserShared";
 import { Button } from "../shared";
 
 interface WorkflowLocationNameFieldsProps {

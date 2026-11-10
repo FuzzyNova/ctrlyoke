@@ -18,7 +18,7 @@ import {
   FILE_BROWSER_NARROW_THRESHOLD,
   FileBrowserSortHeader,
   renderBreadcrumb,
-} from "../workspace-viewer/fileBrowserShared";
+} from "./fileBrowserShared";
 import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";

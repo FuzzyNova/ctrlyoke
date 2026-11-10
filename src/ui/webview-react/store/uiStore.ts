@@ -587,7 +587,7 @@ interface UiState {
   pendingFindRequest: PendingOutputFindRequest | null;
   /**
    * Bumped by a user gesture that starts a blank workflow (see
-   * `startNewBlankWorkflow`), so `WorkflowStatus` enters name editing inside
+   * `startNewBlankWorkflow`), so `WorkflowSwitcher` enters name editing inside
    * that same gesture. iOS raises the on-screen keyboard only for a focus()
    * made during a user gesture; waiting for the backend's new-workflow
    * snapshot leaves the field focused with no keyboard. 0 = never requested.

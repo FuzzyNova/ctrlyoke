@@ -51,7 +51,7 @@ describe("WorkflowControls — New button", () => {
   });
 
   // The name field must be focused inside the tap for iOS to raise the
-  // keyboard, so the click itself asks WorkflowStatus to start naming.
+  // keyboard, so the click itself asks WorkflowSwitcher to start naming.
   it("requests workflow naming within the click", async () => {
     const user = userEvent.setup();
     render(<WorkflowControls />);

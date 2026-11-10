@@ -20,7 +20,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
-import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
+import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
 import {
   SCM_GRAPH_TRUNK_COLOR_CLASS,
@@ -59,7 +59,7 @@ function generateRequestId(key: string): string {
 
 /**
  * A destructive/recoverable action awaiting user confirmation, rendered via
- * `DeleteConfirmModal`/`ResetConfirmModal`. `window.confirm` is not usable
+ * `ConfirmDeleteOperationModal`/`ResetConfirmModal`. `window.confirm` is not usable
  * here: VS Code's webview iframe sandbox omits `allow-modals`, so native
  * `confirm()` calls resolve to `false` immediately with no dialog shown —
  * every confirm-gated button silently no-op'd instead of prompting.
@@ -670,7 +670,7 @@ export function WorktreesSection({
         </p>
       </section>
 
-      <DeleteConfirmModal
+      <ConfirmDeleteOperationModal
         isOpen={pendingConfirm?.variant === CONFIRMATION_VARIANTS.DELETE}
         onCancel={() => setPendingConfirm(null)}
         onConfirm={() => {

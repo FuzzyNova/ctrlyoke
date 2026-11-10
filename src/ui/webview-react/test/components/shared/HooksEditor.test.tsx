@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { HooksEditor } from "@components/editor/HooksEditor";
+import { HooksEditor } from "@components/shared/HooksEditor";
 import { HARNESS_IDS } from "@root/types/DashboardConstants";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "@root/types/CompatibilityTypes";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";

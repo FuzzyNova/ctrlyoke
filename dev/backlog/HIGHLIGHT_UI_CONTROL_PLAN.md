@@ -95,7 +95,7 @@ on to see <label>"). Never flip the parent setting on the user's behalf.
 
 ## 4. First consumers
 
-1. **Confirmation dialogs.** Add a quiet **Show setting** link to `DeleteConfirmModal`,
+1. **Confirmation dialogs.** Add a quiet **Show setting** link to `ConfirmDeleteOperationModal`,
    `ResetConfirmModal`, `SuffixEditConfirmModal` and `RerunConfirmModal`. The link closes the dialog
    without performing the action, then highlights `ui.confirmDeleteOperations`,
    `ui.confirmResetOperations`, `ui.confirmContinuationDiscardOperations` or

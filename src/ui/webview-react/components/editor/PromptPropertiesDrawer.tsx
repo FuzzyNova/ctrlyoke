@@ -102,7 +102,7 @@ import {
   sandboxSupportDiagnostic,
   toFieldDiagnostic,
 } from "@utils/compatibilityDiagnostics";
-import { HooksEditor } from "./HooksEditor";
+import { HooksEditor } from "../shared/HooksEditor";
 import { StepColorField } from "./StepColorField";
 import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";

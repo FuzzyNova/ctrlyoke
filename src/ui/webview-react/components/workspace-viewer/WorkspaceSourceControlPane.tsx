@@ -24,7 +24,7 @@ import {
 import type { SourceControlFile } from "@root/types/HostedWorkspaceViewerTypes";
 import { SCM_KIND_COLOR_CLASS } from "@utils/scmStatus";
 import { SCM_FILE_KINDS } from "@root/types/DashboardConstants";
-import { DeleteConfirmationModal } from "../shared/DeleteConfirmationModal";
+import { WorkspaceFileDeleteConfirmModal } from "../shared/WorkspaceFileDeleteConfirmModal";
 import { WorkspaceCommitArea } from "./WorkspaceCommitArea";
 import { WorkspaceCommitHistoryPane } from "./WorkspaceCommitHistoryPane";
 import { WorkspaceDiffPane } from "./WorkspaceDiffPane";
@@ -586,7 +586,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   );
 
   const discardConfirmationModal = (
-    <DeleteConfirmationModal
+    <WorkspaceFileDeleteConfirmModal
       isOpen={pendingDiscard !== null}
       onClose={() => setPendingDiscard(null)}
       title={

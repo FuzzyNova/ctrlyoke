@@ -31,7 +31,7 @@ const UNSTARTED_LABEL = "not started";
 
 /**
  * ExecutionStateBadge - the uppercase state pill shared by the workflow
- * dropdown rows, the run panel rows, and the WorkflowStatus header.
+ * dropdown rows, the run panel rows, and the WorkflowSwitcher header.
  *
  * Single source for badge colour, casing, and narrow icon fallback so those
  * surfaces cannot drift apart.

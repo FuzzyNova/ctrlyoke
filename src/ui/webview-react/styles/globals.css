@@ -220,7 +220,7 @@
   --color-badge-bg: var(--vscode-badge-background);
   --color-badge-fg: var(--vscode-badge-foreground);
 
-  /* Command Center (used for WorkflowStatus split button styling) */
+  /* Command Center (used for WorkflowSwitcher split button styling) */
   --color-cmd-bg: var(--vscode-commandCenter-activeBackground);
   --color-cmd-fg: var(--vscode-commandCenter-foreground);
   --color-cmd-active-bg: var(--vscode-commandCenter-debuggingBackground);
@@ -1660,7 +1660,7 @@ button .cy-lucide-icon {
   }
 
   /* Browsers disagree about whether rows inside a vertical scroller resolve
-     width against the usable content box or under the scrollbar. WorkflowStatus
+     width against the usable content box or under the scrollbar. WorkflowSwitcher
      measures the usable row width once the dropdown opens so high-contrast
      outlines stay visible and metadata columns do not jump on touch/hover. */
   .workflow-dropdown-menu .workflow-menu-item,

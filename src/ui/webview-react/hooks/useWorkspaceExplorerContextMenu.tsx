@@ -16,7 +16,7 @@ import {
 import { WebviewLog } from "@utils/logger";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
-import { DeleteConfirmationModal } from "@components/shared/DeleteConfirmationModal";
+import { WorkspaceFileDeleteConfirmModal } from "@components/shared/WorkspaceFileDeleteConfirmModal";
 import {
   CLIPBOARD_OPERATIONS,
   WORKSPACE_ENTRY_KINDS,
@@ -295,7 +295,7 @@ export function useWorkspaceExplorerContextMenu({
           onClose={() => setContextMenu(null)}
         />
       ) : null}
-      <DeleteConfirmationModal
+      <WorkspaceFileDeleteConfirmModal
         isOpen={pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
         title={

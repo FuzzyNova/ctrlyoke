@@ -15,7 +15,7 @@ interface RunIdentityBadgeProps {
  *
  * Shows the viewed run's identity and opens the run panel for the displayed
  * lineage directly — the two-click path to "switch run of the current
- * workflow" (RUN_NAVIGATION_UX_PLAN.md). `WorkflowStatus` only mounts this
+ * workflow" (RUN_NAVIGATION_UX_PLAN.md). `WorkflowSwitcher` only mounts this
  * when the displayed lineage is drillable (more than one addressable
  * target); a single-run lineage keeps today's two-segment header exactly.
  */

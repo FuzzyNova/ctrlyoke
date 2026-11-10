@@ -16,7 +16,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
-import { FileBrowserModal } from "@components/workflow/FileBrowserModal";
+import { FileBrowserModal } from "@components/shared/FileBrowserModal";
 import { useUiStore, type FileBrowserRequest } from "@store/uiStore";
 import { workspaceFile, workspaceTree } from "@utils/hostedApi";
 import {

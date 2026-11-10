@@ -13,7 +13,7 @@ import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { StepEditor, type PromptFileAction } from "../editor/StepEditor";
 import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
-import { StepColorQuickPicker } from "../editor/StepColorQuickPicker";
+import { StepColorSwatch } from "./StepColorSwatch";
 import { PanelBar, IconToggleButton } from "../shared";
 import { HARNESS_DISPLAY_NAMES } from "../shared/HarnessDropdown";
 import { StatusBanner, STATUS_BANNER_TONES } from "../shared/StatusBanner";
@@ -376,7 +376,7 @@ const EditorSectionInner: React.FC = () => {
           )}
           {!isExternallyManaged &&
             globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
-              <StepColorQuickPicker
+              <StepColorSwatch
                 disabled={
                   isExternallyManaged ||
                   (isBulkMode && !bulkCapabilities?.canEditColor)

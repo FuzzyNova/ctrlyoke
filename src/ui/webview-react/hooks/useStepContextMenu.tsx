@@ -4,7 +4,7 @@ import {
   type ContextMenuState,
 } from "../components/shared/ContextMenu";
 import { ResetConfirmModal } from "../components/shared/ResetConfirmModal";
-import { DeleteConfirmModal } from "../components/shared/DeleteConfirmModal";
+import { ConfirmDeleteOperationModal } from "../components/shared/ConfirmDeleteOperationModal";
 import { sendMessage } from "./useMessageHandler";
 import {
   EXECUTION_STATES,
@@ -823,7 +823,7 @@ export function useStepContextMenu({
 
   const deleteModal =
     pendingDeleteIndices !== null ? (
-      <DeleteConfirmModal
+      <ConfirmDeleteOperationModal
         isOpen={true}
         title={
           pendingDeleteIndices.length > 1

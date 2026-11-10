@@ -75,7 +75,7 @@ import {
   filterExplicitSecretGrants,
   useSecretGrantOptions,
 } from "../shared";
-import { HooksEditor } from "../editor/HooksEditor";
+import { HooksEditor } from "../shared/HooksEditor";
 import { PermissionListEditor } from "../shared/PermissionListEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import {

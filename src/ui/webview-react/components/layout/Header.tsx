@@ -23,14 +23,14 @@ import {
   usePauseRequestStore,
 } from "@store/pauseRequestStore";
 import { WorkflowControls } from "../workflow/WorkflowControls";
-import { WorkflowStatus } from "../workflow/WorkflowStatus";
+import { WorkflowSwitcher } from "../workflow/WorkflowSwitcher";
 import { HeaderStatusBanner } from "./HeaderStatusBanner";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 import { ExportRunDialog } from "../workflow/ExportRunDialog";
 import { ImportRunDialog } from "../workflow/ImportRunDialog";
 import { DuplicateWorkflowDialog } from "../workflow/DuplicateWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
-import { FileBrowserModal } from "../workflow/FileBrowserModal";
+import { FileBrowserModal } from "../shared/FileBrowserModal";
 import { SuffixEditConfirmModal } from "../shared/SuffixEditConfirmModal";
 import { RerunConfirmModal } from "../shared/RerunConfirmModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
@@ -75,10 +75,10 @@ function nextSaveRequestId(): string {
  *   [app navigation]  — Search · Workspace Explorer · Settings — each opens a drawer/overlay; Settings in the corner.
  *
  * Layout (three tiers):
- *   Wide (lg+):     ([WorkflowControls label][action] left) [spacer] [forward/back] [WorkflowStatus] [execution] [spacer] ([app nav] right)  ← one row
- *   Medium (sm–lg): ([WorkflowControls icon][action] left)  ([forward/back][WorkflowStatus][execution] center lane) ([app nav] right)  ← one row
+ *   Wide (lg+):     ([WorkflowControls label][action] left) [spacer] [forward/back] [WorkflowSwitcher] [execution] [spacer] ([app nav] right)  ← one row
+ *   Medium (sm–lg): ([WorkflowControls icon][action] left)  ([forward/back][WorkflowSwitcher][execution] center lane) ([app nav] right)  ← one row
  *   Narrow (< sm):  ([WorkflowControls icon][action] left) ([execution] evenly spaced) ([app nav] right)                         ← row 1
- *                   ([Steps]⟵edge [WorkflowStatus, filling the row] [Workflow Properties]⟶edge)                                 ← row 2
+ *                   ([Steps]⟵edge [WorkflowSwitcher, filling the row] [Workflow Properties]⟶edge)                                 ← row 2
  *
  * Grid: mobile uses [max-content · minmax(max-content,1fr) · max-content] with the execution group
  * centered in the middle track, i.e. equal gaps to its neighbours rather than the true screen
@@ -98,12 +98,12 @@ function nextSaveRequestId(): string {
  * for the centered status. forward/back (NavHistoryControls, standalone only) is hidden below md. The
  * Steps / Workflow Properties half-pills are edge-anchored drawer pulls at the outer ends of row 2
  * (flat edge flush to the screen, rounded toward the interior). The workflow dropdown anchors to the
- * status button's own bottom and width (see WorkflowStatus.updateDropdownTop), so on narrow it opens
+ * status button's own bottom and width (see WorkflowSwitcher.updateDropdownTop), so on narrow it opens
  * directly below row 2, spanning the status between the two pulls.
  *
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
- * - WorkflowStatus: Workflow name + execution state badge (editable name, recent workflows dropdown)
+ * - WorkflowSwitcher: Workflow name + execution state badge (editable name, recent workflows dropdown)
  * - Control buttons: Run/Pause/Stop based on execution state
  */
 export const Header: React.FC<{
@@ -112,13 +112,13 @@ export const Header: React.FC<{
 }> = ({ onToggleMobileSteps, onToggleMobileWorkflowProps }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
-  // WorkflowStatus is a heavy, stateful component (dropdown-open state, its own
+  // WorkflowSwitcher is a heavy, stateful component (dropdown-open state, its own
   // ResizeObserver, document-level outside-click listener). The header's three responsive tiers each have their own
   // wrapper with tier-specific layout, so historically each tier mounted its own
-  // <WorkflowStatus>, hidden/shown purely via Tailwind classes — three simultaneous
+  // <WorkflowSwitcher>, hidden/shown purely via Tailwind classes — three simultaneous
   // live instances at all times, only one of which is ever visible. `layoutTier`
   // mirrors the header's own sm/lg Tailwind breakpoints via matchMedia so exactly one
-  // tier's WorkflowStatus actually mounts; the other two wrappers render without it.
+  // tier's WorkflowSwitcher actually mounts; the other two wrappers render without it.
   const isWideLayout = useMediaQuery("(min-width: 1024px)");
   const isMediumLayout = !isMobile && !isWideLayout;
   const btnSize = isMobile
@@ -633,7 +633,7 @@ export const Header: React.FC<{
           {actionControls}
         </div>
 
-        {/* Row-2 (mobile only): Steps pull | WorkflowStatus | Workflow Properties pull.
+        {/* Row-2 (mobile only): Steps pull | WorkflowSwitcher | Workflow Properties pull.
             Spans all 3 outer grid columns; the status takes every pixel between the two edge pulls,
             and its dropdown anchors to the status's own bottom, so it opens below this row.
             contain:inline-size is load-bearing: this row spans the outer max-content tracks, so
@@ -659,10 +659,10 @@ export const Header: React.FC<{
             </button>
           </div>
 
-          {/* Center (1fr): WorkflowStatus fills the space between the pulls. Mount-gated on
-              isMobile so only one tier's (stateful) WorkflowStatus ever exists. */}
+          {/* Center (1fr): WorkflowSwitcher fills the space between the pulls. Mount-gated on
+              isMobile so only one tier's (stateful) WorkflowSwitcher ever exists. */}
           <div className="flex items-center min-w-0">
-            {isMobile && <WorkflowStatus className="flex-1 min-w-0" />}
+            {isMobile && <WorkflowSwitcher className="flex-1 min-w-0" />}
           </div>
 
           {/* Right (auto): Workflow Properties drawer pull — rounded toward content, flat right edge to screen */}
@@ -740,11 +740,11 @@ export const Header: React.FC<{
         {dryRunScope && <DryRunModal scope={dryRunScope} />}
 
         {/* Desktop center lane: medium keeps a shared flex row, while lg+ promotes the centered
-            region back into dedicated tracks so WorkflowStatus stays perfectly page-centered. */}
+            region back into dedicated tracks so WorkflowSwitcher stays perfectly page-centered. */}
         <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 lg:hidden min-w-0 items-center justify-center gap-0">
           <NavHistoryControls className="hidden md:flex shrink-0" />
           {isMediumLayout && (
-            <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
+            <WorkflowSwitcher className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
           )}
           {runControls}
         </div>
@@ -755,7 +755,7 @@ export const Header: React.FC<{
 
         <div className="hidden lg:flex lg:col-start-4 lg:row-start-1 items-center justify-center min-w-0">
           {isWideLayout && (
-            <WorkflowStatus className="w-full min-w-0 max-w-[500px]" />
+            <WorkflowSwitcher className="w-full min-w-0 max-w-[500px]" />
           )}
         </div>
 

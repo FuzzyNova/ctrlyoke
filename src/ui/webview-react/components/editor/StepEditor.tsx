@@ -27,7 +27,7 @@ import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import { PromptPropertiesDrawer } from "./PromptPropertiesDrawer";
 import { StepColorField } from "./StepColorField";
 import { EditorFooter } from "./EditorFooter";
-import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
+import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import { ScriptConditionEditor } from "../shared/ScriptConditionEditor";
 import type { ScriptConditionValue } from "../shared/ScriptConditionEditor";
 import {
@@ -1669,7 +1669,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       />
 
       {/* Delete Confirmation Modal */}
-      <DeleteConfirmModal
+      <ConfirmDeleteOperationModal
         isOpen={showDeleteModal}
         onCancel={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}

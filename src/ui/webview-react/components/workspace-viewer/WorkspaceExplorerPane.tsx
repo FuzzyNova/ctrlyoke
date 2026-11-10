@@ -62,7 +62,7 @@ import {
   FileBrowserSortHeader,
   renderBreadcrumb as renderBreadcrumbShared,
   toWorkspaceRelative,
-} from "./fileBrowserShared";
+} from "../shared/fileBrowserShared";
 import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 import {

@@ -12,7 +12,7 @@ import {
   FILE_BROWSER_GRID_TEMPLATE,
   FileBrowserSortHeader,
   formatWorkspaceEntryModifiedAt,
-} from "@components/workspace-viewer/fileBrowserShared";
+} from "@components/shared/fileBrowserShared";
 
 function makeEntry(overrides: Partial<WorkspaceEntry> = {}): WorkspaceEntry {
   return {

@@ -6,7 +6,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 
-interface DeleteConfirmModalProps {
+interface ConfirmDeleteOperationModalProps {
   isOpen: boolean;
   title: string;
   message: React.ReactNode;
@@ -17,14 +17,14 @@ interface DeleteConfirmModalProps {
 }
 
 /**
- * DeleteConfirmModal - Shared destructive-action confirmation dialog
+ * ConfirmDeleteOperationModal - Shared destructive-action confirmation dialog
  *
  * Features:
  * - Consistent delete confirmation UX for both prompts and workflows
  * - "Don't ask me again" checkbox that persists to VS Code settings
  * - Reads confirmDeleteOperations from global settings (defaults to true = always ask)
  */
-export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
+export const ConfirmDeleteOperationModal: React.FC<ConfirmDeleteOperationModalProps> = ({
   isOpen,
   title,
   message,

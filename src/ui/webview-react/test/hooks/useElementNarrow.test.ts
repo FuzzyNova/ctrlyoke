@@ -356,7 +356,7 @@ describe("useElementNarrow", () => {
   // -------------------------------------------------------------------------
 
   it("does not flip back to wide on a small rebound right at the threshold", () => {
-    // Reproduces WorkflowStatus's header badge: going narrow hides content in
+    // Reproduces WorkflowSwitcher's header badge: going narrow hides content in
     // a *sibling* of the measured element (an abbreviated run-identity label),
     // which hands the measured element back a few px — with a bare threshold
     // that's enough to immediately flip back to wide, reshrink the sibling,

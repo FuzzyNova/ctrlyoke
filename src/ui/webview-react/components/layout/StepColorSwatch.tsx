@@ -1,13 +1,13 @@
 import React from "react";
-import { useStepColorInput } from "./StepColorField";
+import { useStepColorInput } from "../editor/StepColorField";
 
-interface StepColorQuickPickerProps {
+interface StepColorSwatchProps {
   /** When true, the control is disabled (CLI watch mode). */
   disabled?: boolean;
 }
 
 /** Compact header control for overriding a step's identity color. */
-export const StepColorQuickPicker: React.FC<StepColorQuickPickerProps> = ({
+export const StepColorSwatch: React.FC<StepColorSwatchProps> = ({
   disabled = false,
 }) => {
   const { color, setColor, commit, hasOverride, mixed } = useStepColorInput();

@@ -52,7 +52,7 @@ export function UxSnapshotButton() {
     return null;
   }
 
-  // Swallow mousedown here so it never bubbles to document, where WorkflowStatus's
+  // Swallow mousedown here so it never bubbles to document, where WorkflowSwitcher's
   // outside-click listener (bound to "mousedown") would otherwise treat this tap as
   // "outside" and close whatever dropdown is currently open — right before the click
   // handler below gets a chance to snapshot it. React delegates synthetic events at

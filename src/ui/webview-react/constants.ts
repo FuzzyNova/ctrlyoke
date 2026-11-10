@@ -259,7 +259,7 @@ export function formatWorkflowCountBadge(count: number): string {
 }
 
 /**
- * WorkflowStatus header button sizing — the workflow name field and dropdown arrow.
+ * WorkflowSwitcher header button sizing — the workflow name field and dropdown arrow.
  * Does not affect the expanded dropdown list items.
  * Touch target height controlled by --cy-touch-target in globals.css.
  */

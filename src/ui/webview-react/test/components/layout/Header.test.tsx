@@ -386,7 +386,7 @@ describe("Header execution controls", () => {
       pendingRewind: null,
       runSummaries: [],
     });
-    // WorkflowStatus updates the addressed view optimistically before the
+    // WorkflowSwitcher updates the addressed view optimistically before the
     // asynchronous RUN_VIEW_LOADED definition snapshot arrives.
     useWorkflowStore.getState().resetWorkflow();
     useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.COMPLETED);

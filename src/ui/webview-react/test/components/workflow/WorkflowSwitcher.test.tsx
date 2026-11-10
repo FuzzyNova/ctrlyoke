@@ -1,7 +1,7 @@
 /**
- * Tests for WorkflowStatus.
+ * Tests for WorkflowSwitcher.
  *
- * WorkflowStatus depends on workflowStore, uiStore, settingsStore and vscodeApi.
+ * WorkflowSwitcher depends on workflowStore, uiStore, settingsStore and vscodeApi.
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -15,7 +15,7 @@ import {
   createEvent,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
+import { WorkflowSwitcher } from "@components/workflow/WorkflowSwitcher";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore, type RecentWorkflow } from "@store/uiStore";
@@ -164,9 +164,9 @@ function seedRunPanel(
   ]);
 }
 
-describe("WorkflowStatus — empty state", () => {
+describe("WorkflowSwitcher — empty state", () => {
   it("shows 'New Workflow' when fileName is null", () => {
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     // The display name button shows "New Workflow"; the hidden RecentWorkflows
     // dropdown also renders a "New Workflow" button (CSS-hidden), so use
     // getAllByText and assert at least one match is in the document.
@@ -175,7 +175,7 @@ describe("WorkflowStatus — empty state", () => {
   });
 });
 
-describe("WorkflowStatus — loaded state", () => {
+describe("WorkflowSwitcher — loaded state", () => {
   beforeEach(() => {
     useUiStore.setState({
       pendingRunViewSwitch: null,
@@ -188,7 +188,7 @@ describe("WorkflowStatus — loaded state", () => {
   });
 
   it("shows workflow name", () => {
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     expect(screen.getByText("My Workflow")).toBeInTheDocument();
   });
 
@@ -208,7 +208,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     expect(screen.getByText("Target Workflow")).toBeInTheDocument();
     expect(screen.queryByText("Previous Workflow")).not.toBeInTheDocument();
@@ -226,7 +226,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.click(screen.getByRole("button", { name: "Edit workflow name" }));
 
     expect(
@@ -258,7 +258,7 @@ describe("WorkflowStatus — loaded state", () => {
       ],
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     const mainButton = screen.getByRole("button", {
       name: "Edit workflow name",
@@ -269,7 +269,7 @@ describe("WorkflowStatus — loaded state", () => {
   });
 
   it("focuses an empty name field when a new workflow is created", async () => {
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     act(() => {
       useWorkflowStore.setState({
@@ -285,7 +285,7 @@ describe("WorkflowStatus — loaded state", () => {
   });
 
   it("falls back to the default name when the empty name is blurred", async () => {
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     act(() => {
       useWorkflowStore.setState({
@@ -341,7 +341,7 @@ describe("WorkflowStatus — loaded state", () => {
     // iOS raises the keyboard only for a focus() made inside the tap, so the
     // field must be focused before the backend's blank workflow arrives.
     it("focuses the name field inside the gesture, before the blank workflow arrives", () => {
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
 
       startNaming();
 
@@ -354,7 +354,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     it("keeps what was typed when the blank workflow arrives", () => {
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
       startNaming();
       const input = screen.getByPlaceholderText("Name your workflow...");
       fireEvent.change(input, { target: { value: "Fix lo" } });
@@ -367,7 +367,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     it("applies a name committed early to the blank workflow, not the previous one", () => {
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
       startNaming();
       const input = screen.getByPlaceholderText("Name your workflow...");
       fireEvent.change(input, { target: { value: "Fix login" } });
@@ -391,14 +391,14 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     it("does not restart naming when it remounts after an earlier request", () => {
-      const { unmount } = render(<WorkflowStatus />);
+      const { unmount } = render(<WorkflowSwitcher />);
       startNaming();
       fireEvent.keyDown(screen.getByPlaceholderText("Name your workflow..."), {
         key: "Escape",
       });
       unmount();
 
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
 
       expect(
         screen.queryByPlaceholderText("Name your workflow...")
@@ -412,7 +412,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     async function nameNewWorkflow() {
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
       act(() => {
         useWorkflowStore.setState({
           fileName: DEFAULT_WORKFLOW_NAME,
@@ -458,7 +458,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     it("only saves on Enter when renaming an existing workflow", () => {
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
       fireEvent.click(
         screen.getByRole("button", { name: "Edit workflow name" })
       );
@@ -477,7 +477,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     it("still moves on with Tab when renaming an existing workflow", () => {
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
       fireEvent.click(
         screen.getByRole("button", { name: "Edit workflow name" })
       );
@@ -516,7 +516,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.contextMenu(
       screen.getByRole("button", { name: "Edit workflow name" })
     );
@@ -552,7 +552,7 @@ describe("WorkflowStatus — loaded state", () => {
       workflowName: "Copy Workflow",
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(
       screen.getByRole("button", { name: "Edit workflow name" })
@@ -578,7 +578,7 @@ describe("WorkflowStatus — loaded state", () => {
       workflowName: "Focus Workflow",
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     const mainButton = screen.getByRole("button", {
       name: "Edit workflow name",
     });
@@ -599,7 +599,7 @@ describe("WorkflowStatus — loaded state", () => {
         executionState: EXECUTION_STATES.COMPLETED,
       }))
     );
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(screen.getByRole("listitem", { name: /Recent 0/ }));
 
@@ -618,7 +618,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(
       screen.getByRole("button", { name: "Edit workflow name" })
@@ -648,7 +648,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.contextMenu(
       screen.getByRole("button", { name: "Edit workflow name" })
     );
@@ -687,7 +687,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(
       screen.getByRole("listitem", { name: /Some Other Workflow/ })
@@ -717,7 +717,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     }));
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
@@ -733,7 +733,7 @@ describe("WorkflowStatus — loaded state", () => {
       fileName: "/workspace/my-workflow.ctrlyoke.yaml",
       workflowName: "",
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     expect(screen.getByText("my-workflow")).toBeInTheDocument();
   });
 
@@ -742,7 +742,7 @@ describe("WorkflowStatus — loaded state", () => {
       fileName: "/workspace/wf.yaml",
       executionState: EXECUTION_STATES.RUNNING,
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     // jsdom always reports 0-width elements, so isNarrow=true and the badge
     // renders an icon with the state as a title rather than visible text.
     expect(
@@ -755,7 +755,7 @@ describe("WorkflowStatus — loaded state", () => {
       fileName: "/workspace/wf.yaml",
       executionState: EXECUTION_STATES.IDLE,
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     expect(screen.queryByText(EXECUTION_STATES.IDLE)).not.toBeInTheDocument();
   });
 
@@ -769,7 +769,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     const indicator = screen.getByLabelText("Named worktree: feature/status");
     expect(indicator).toHaveAttribute(
@@ -789,7 +789,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     expect(
       screen.queryByLabelText("Named worktree: feature/status")
@@ -798,7 +798,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("clicking the name button enters edit mode", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     // The main button's accessible name is the workflow name text content
     await user.click(
       screen.getByRole("button", { name: "Edit workflow name" })
@@ -808,7 +808,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("pressing Enter in edit mode sends UPDATE_WORKFLOW_NAME", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", { name: "Edit workflow name" })
     );
@@ -832,7 +832,7 @@ describe("WorkflowStatus — loaded state", () => {
       displayedDefinitionRevision: 2,
       displayedDescriptorRevision: 5,
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", { name: "Edit workflow name" })
     );
@@ -856,7 +856,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("pressing Escape cancels edit without sending message", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", { name: "Edit workflow name" })
     );
@@ -871,7 +871,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("dropdown toggle sends GET_RECENT_WORKFLOWS and GET_WORKFLOWS_LIST", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS,
@@ -896,7 +896,7 @@ describe("WorkflowStatus — loaded state", () => {
       loadedWorkflows: [],
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(screen.getAllByText("Pausing Workflow").length).toBeGreaterThan(0);
@@ -920,7 +920,7 @@ describe("WorkflowStatus — loaded state", () => {
       loadedWorkflows: [],
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Old Workflow",
@@ -977,7 +977,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         address: { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
@@ -1021,7 +1021,7 @@ describe("WorkflowStatus — loaded state", () => {
 
     async function openDropdown(): Promise<void> {
       const user = userEvent.setup();
-      render(<WorkflowStatus />);
+      render(<WorkflowSwitcher />);
       setRecentWorkflows([
         {
           address: {
@@ -1189,7 +1189,7 @@ describe("WorkflowStatus — loaded state", () => {
         } as never,
       ],
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Running Multi",
@@ -1249,7 +1249,7 @@ describe("WorkflowStatus — loaded state", () => {
         } as never,
       ],
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     const runningRow = document.querySelector(".running-workflow-item")!;
@@ -1309,7 +1309,7 @@ describe("WorkflowStatus — loaded state", () => {
         } as never,
       ],
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     const runningRow = document.querySelector(".running-workflow-item")!;
@@ -1328,7 +1328,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("shows no pinned running region when nothing is running", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Only Recent",
@@ -1345,7 +1345,7 @@ describe("WorkflowStatus — loaded state", () => {
   });
 
   it("populates recent workflows list on RECENT_WORKFLOWS message", async () => {
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Workflow A",
@@ -1378,7 +1378,7 @@ describe("WorkflowStatus — loaded state", () => {
         executionState: EXECUTION_STATES.IDLE,
       },
     ]);
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     const dropdownTrigger = screen.getByRole("button", {
       name: /Show workflows/i,
@@ -1431,7 +1431,7 @@ describe("WorkflowStatus — loaded state", () => {
         executionState: EXECUTION_STATES.COMPLETED,
       },
     ]);
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(
@@ -1481,7 +1481,7 @@ describe("WorkflowStatus — loaded state", () => {
         },
       ],
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
@@ -1506,7 +1506,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("sorts favorite workflows to the top of recent workflows", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     setRecentWorkflows([
       {
@@ -1538,7 +1538,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("toggles a workflow favorite optimistically and posts the toggle message", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     setRecentWorkflows([
       {
@@ -1629,7 +1629,7 @@ describe("WorkflowStatus — loaded state", () => {
       ],
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
@@ -1648,7 +1648,7 @@ describe("WorkflowStatus — loaded state", () => {
       .mockReturnValue({ width: 500 } as DOMRect);
     useUiStore.getState().setActiveWorkflowId("workflow-1");
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     act(() => {
       useTerminalStore.getState().addSession({
@@ -1687,7 +1687,7 @@ describe("WorkflowStatus — loaded state", () => {
       ],
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Completed Workflow",
@@ -1711,7 +1711,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("filters recent workflows from the header search", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     setRecentWorkflows([
       {
@@ -1735,7 +1735,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("augments search results with the state filter", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     setRecentWorkflows([
       {
@@ -1772,7 +1772,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("filters recent workflows by harness", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     setRecentWorkflows([
       {
@@ -1804,7 +1804,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("closing the filter drawer preserves active filters until Clear is clicked", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     setRecentWorkflows([
       {
@@ -1849,7 +1849,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("filters recent workflows to favorites only", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
 
     setRecentWorkflows([
       {
@@ -1875,7 +1875,7 @@ describe("WorkflowStatus — loaded state", () => {
   });
 });
 
-describe("WorkflowStatus — run navigation panel", () => {
+describe("WorkflowSwitcher — run navigation panel", () => {
   beforeEach(() => {
     // resetUi() doesn't clear these request-scoped fields (by design — a
     // pending switch outlives the reset that runs between unrelated tests
@@ -1890,7 +1890,7 @@ describe("WorkflowStatus — run navigation panel", () => {
   it("shows a run indicator on a drillable recent workflow and drills into its run panel without loading it", async () => {
     const user = userEvent.setup();
     const workflowKey = "multi-wf" as never;
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Multi-run Workflow",
@@ -1934,7 +1934,7 @@ describe("WorkflowStatus — run navigation panel", () => {
 
   it("shows no run indicator for a single-run lineage with no draft", async () => {
     const user = userEvent.setup();
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Single Run Workflow",
@@ -1963,7 +1963,7 @@ describe("WorkflowStatus — run navigation panel", () => {
   it("re-clicking the chevron while the run panel is open switches back to the workflow list", async () => {
     const user = userEvent.setup();
     const workflowKey = "multi-wf" as never;
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Multi-run Workflow",
@@ -2017,7 +2017,7 @@ describe("WorkflowStatus — run navigation panel", () => {
   it("restores the workflow list when Back is pressed from the run panel", async () => {
     const user = userEvent.setup();
     const workflowKey = "multi-wf" as never;
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Multi-run Workflow",
@@ -2075,7 +2075,7 @@ describe("WorkflowStatus — run navigation panel", () => {
   it("returns to the workflow list with the same exit animation on Escape", async () => {
     const user = userEvent.setup();
     const workflowKey = "multi-wf" as never;
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     setRecentWorkflows([
       {
         workflowName: "Multi-run Workflow",
@@ -2143,7 +2143,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         },
       ],
     });
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     expect(
       screen.queryByRole("button", { name: /browse runs of/i })
     ).not.toBeInTheDocument();
@@ -2190,7 +2190,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       workflowName: "Badge Workflow",
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     const badge = screen.getByRole("button", {
       name: /Run 2 — browse runs of Badge Workflow/i,
     });
@@ -2257,7 +2257,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       workflowName: "Badge Workflow",
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", {
         name: /Run 2 — browse runs of Badge Workflow/i,
@@ -2287,7 +2287,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       },
     }));
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", {
         name: /Run 2 — browse runs of Menu Workflow/i,
@@ -2320,7 +2320,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       },
     }));
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", {
         name: /Run 2 — browse runs of Menu Workflow/i,
@@ -2356,7 +2356,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       hasDraft: true,
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", {
         name: /Run 2 — browse runs of Menu Workflow/i,
@@ -2419,7 +2419,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       workflowName: "Current Row Workflow",
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", {
         name: /Run 2 — browse runs of Current Row Workflow/i,
@@ -2487,7 +2487,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       workflowName: "Badge Workflow",
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", {
         name: /Run 1 — browse runs of Badge Workflow/i,
@@ -2548,7 +2548,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       workflowName: "Badge Workflow",
     });
 
-    render(<WorkflowStatus />);
+    render(<WorkflowSwitcher />);
     await user.click(
       screen.getByRole("button", {
         name: /Run 1 — browse runs of Badge Workflow/i,

@@ -1,5 +1,5 @@
 export { WorkflowControls } from "./WorkflowControls";
-export { WorkflowStatus } from "./WorkflowStatus";
+export { WorkflowSwitcher } from "./WorkflowSwitcher";
 export { TemplateModal } from "./TemplateModal";
 export { WorkflowList } from "./WorkflowList";
 export { SaveWorkflowDialog } from "./SaveWorkflowDialog";

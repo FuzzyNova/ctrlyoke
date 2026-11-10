@@ -59,7 +59,7 @@ import type {
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
 import { DateRangeFilterControls, MultiCheckboxDropdown } from "../shared";
-import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
+import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import {
   applyPauseRequest,
   isWorkflowActive,
@@ -95,7 +95,7 @@ import { formatMultiFilterLabel } from "../../utils/filterLabels";
 import { Icon } from "../shared/Icon";
 import { getWorkflowNameFromPath } from "@utils/workflowDisplayName";
 
-interface WorkflowStatusProps {
+interface WorkflowSwitcherProps {
   className?: string;
 }
 
@@ -134,14 +134,14 @@ function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
 }
 
 /**
- * WorkflowStatus - Split button showing current workflow name with dropdown
+ * WorkflowSwitcher - Split button showing current workflow name with dropdown
  *
  * Features:
  * - Displays current workflow name and execution state
  * - Click main button to edit workflow name inline
  * - Dropdown shows recent workflows
  */
-export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
+export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   className = "",
 }) => {
   const vscode = useVsCodeApi();
@@ -429,7 +429,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
     prevShowExecutionBadgeRef.current = showExecutionBadge;
     WebviewLog.debug(
-      `[WorkflowStatus] header badge visible=${showExecutionBadge} ` +
+      `[WorkflowSwitcher] header badge visible=${showExecutionBadge} ` +
         `(executionState=${executionState}, fileName="${fileName || "(none)"}", ` +
         `workflowKey=${displayedViewAddress?.workflowKey ?? "(none)"})`
     );
@@ -965,7 +965,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       updateDropdownTop();
       setWorkflowSearch("");
       WebviewLog.debug(
-        `[WorkflowStatus:toggleDropdown] opening dropdown — requesting workflows list. ` +
+        `[WorkflowSwitcher:toggleDropdown] opening dropdown — requesting workflows list. ` +
           `Current loadedWorkflows: [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}], ` +
           (syntheticActiveWorkflow
             ? ` syntheticActive=inst:${syntheticActiveWorkflow.id.slice(0, 8)}(state=${syntheticActiveWorkflow.executionState}),`
@@ -986,7 +986,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
     if (isDropdownClosing) {
       WebviewLog.debug(
-        "[WorkflowStatus:toggleDropdown] ignored — still playing the close transition"
+        "[WorkflowSwitcher:toggleDropdown] ignored — still playing the close transition"
       );
       return;
     }
@@ -1676,7 +1676,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`workflow-status relative min-w-0 ${className}`}
+      className={`relative min-w-0 ${className}`}
     >
       {/* Editing Mode */}
       {isEditing ? (
@@ -1936,7 +1936,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
       {/* Delete workflow history confirmation modal */}
       {workflowContextMenuPortal}
-      <DeleteConfirmModal
+      <ConfirmDeleteOperationModal
         isOpen={pendingDelete !== null}
         onCancel={handleRemoveWorkflowCancel}
         onConfirm={handleRemoveWorkflowConfirm}

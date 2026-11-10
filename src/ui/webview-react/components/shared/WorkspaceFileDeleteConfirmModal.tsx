@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 
-interface DeleteConfirmationModalProps {
+interface WorkspaceFileDeleteConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
@@ -16,8 +16,8 @@ interface DeleteConfirmationModalProps {
 }
 
 /** Shared confirmation dialog for operations that delete user files. */
-export const DeleteConfirmationModal: React.FC<
-  DeleteConfirmationModalProps
+export const WorkspaceFileDeleteConfirmModal: React.FC<
+  WorkspaceFileDeleteConfirmModalProps
 > = ({
   isOpen,
   onClose,

@@ -3127,7 +3127,7 @@ export class WorkflowInstance
         });
       }
 
-      // Notify the webview so the WorkflowStatus header transitions from
+      // Notify the webview so the WorkflowSwitcher header transitions from
       // "No workflow loaded" to showing the new workflow name.
       if (this.dashboardSink) {
         const workflowName =

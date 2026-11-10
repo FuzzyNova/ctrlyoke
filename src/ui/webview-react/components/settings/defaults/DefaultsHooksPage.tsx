@@ -4,7 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
-import { HooksEditor } from "../../editor/HooksEditor";
+import { HooksEditor } from "../../shared/HooksEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 
 interface Props {
