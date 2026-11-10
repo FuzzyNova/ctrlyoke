@@ -5,7 +5,7 @@ import {
   buildGitReference,
   buildSelectionReference,
   buildSymbolReference,
-} from "./ContextReferenceBuilder";
+} from "../utils/ContextReferenceBuilder";
 import { toWorkspaceRelativeReferencePath } from "./WorkspaceReferencePaths";
 import {
   PROMPT_EDITOR_INSERT_MODES,

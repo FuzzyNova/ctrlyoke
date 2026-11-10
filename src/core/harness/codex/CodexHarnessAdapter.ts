@@ -21,14 +21,14 @@ import {
 import { CodexSandboxMapper, codexSandboxFlag } from "./CodexSandboxMapper";
 import { gitWritableAdminDirs } from "../../../utils/GitUtils";
 import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
-import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
+import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
 import {
   CliMcpConfigGenerator,
   sanitizeCodexConfigKeySegment,
 } from "../shared/CliMcpConfigGenerator";
 import { quoteTomlBasicString } from "../shared/InlineToml";
-import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
+import { createCodexCommandHookGroup } from "./CodexHookUtils";
 import {
   buildCodexInlineHooks,
   type CodexInlineHooksArgs,

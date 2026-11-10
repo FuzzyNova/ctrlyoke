@@ -9,7 +9,7 @@ import {
   buildSymbolReference,
   buildSymbolReferenceValue,
   normalizeReferencePath,
-} from "./ContextReferenceBuilder";
+} from "../utils/ContextReferenceBuilder";
 import { fuzzyMatches, rankByFuzzyQuery } from "./FuzzyRanking";
 import { getPriorContextCompletionItems } from "./PriorContextCompletions";
 import {

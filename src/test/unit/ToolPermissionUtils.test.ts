@@ -5,7 +5,7 @@ import type { ToolPermissionConfig } from "../../types/ExecutionPropertyTypes";
 import {
   isToolPermissionConfigNoWiderThan,
   normalizeAntigravityMcpServerId,
-} from "../../types/ToolPermissionUtils";
+} from "../../utils/ToolPermissionUtils";
 
 function config(
   mode: ToolPermissionConfig["mode"],

@@ -12,7 +12,7 @@ import {
 } from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
-import { normalizeClaudeMcpServerId } from "../../../types/ToolPermissionUtils";
+import { normalizeClaudeMcpServerId } from "../../../utils/ToolPermissionUtils";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,

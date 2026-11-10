@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import { getWorkflowPromptDiagnostics } from "./WorkflowPromptDiagnostics";
 import {
   findRangeForPath,
@@ -14,7 +14,7 @@ import {
   PROMPT_DIAGNOSTICS_SOURCE,
   VSCODE_URI_SCHEMES,
   WORKFLOW_SCHEMA_DIAGNOSTIC_CODES,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
   type PromptDiagnosticSeverity,
 } from "../types/DashboardConstants";
 import type {
@@ -41,7 +41,7 @@ export type PromptDiagnosticsRefreshTrigger = (
 
 export type WorkflowTextValidator = (
   text: string,
-  kind: CtrlYokeFileKind,
+  kind: WorkflowFileKind,
   globalMaxSteps?: number
 ) => WorkflowTextValidationResult;
 
@@ -74,7 +74,7 @@ function toVsCodeSeverity(
 }
 
 /** The ctrlyoke kind of an on-disk document, or null when it is not linted. */
-function lintableKind(document: vscode.TextDocument): CtrlYokeFileKind | null {
+function lintableKind(document: vscode.TextDocument): WorkflowFileKind | null {
   return document.uri.scheme === VSCODE_URI_SCHEMES.FILE
     ? getCtrlYokeFileKind(document.fileName)
     : null;

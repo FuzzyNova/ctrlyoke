@@ -2,7 +2,7 @@ import {
   CTRLYOKE_FILE_KINDS,
   WORKFLOW_LOCATION_ROLES,
   WORKFLOW_OBJECT_KINDS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
   type WorkflowLocationRole,
 } from "../types/DashboardConstants";
 import { splitPromptMarkdown } from "./WorkflowDocumentLocation";
@@ -26,7 +26,7 @@ export type { WorkflowTextSpan } from "./WorkflowTextDecoding";
  */
 export function getWorkflowTextSpans(
   text: string,
-  kind: CtrlYokeFileKind,
+  kind: WorkflowFileKind,
   role: WorkflowLocationRole = WORKFLOW_LOCATION_ROLES.PROMPT_TEXT
 ): WorkflowTextSpan[] {
   switch (kind) {

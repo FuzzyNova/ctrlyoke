@@ -15,7 +15,7 @@ import {
   buildGitReference,
   buildSelectionReference,
   buildSymbolReference,
-} from "../../completions/ContextReferenceBuilder";
+} from "../../utils/ContextReferenceBuilder";
 import type { PromptEditorInsertRequest } from "../../types/WebviewMessageTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {

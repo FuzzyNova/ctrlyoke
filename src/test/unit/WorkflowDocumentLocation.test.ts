@@ -11,7 +11,7 @@ import {
   CTRLYOKE_FILE_KINDS,
   WORKFLOW_LOCATION_ROLES as ROLE,
   WORKFLOW_OBJECT_KINDS as OBJECT,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
 } from "../../types/DashboardConstants";
 
 const { WORKFLOW_YAML, WORKFLOW_JSON, PROMPT_MARKDOWN } = CTRLYOKE_FILE_KINDS;
@@ -23,7 +23,7 @@ function cursor(marked: string): { text: string; offset: number } {
   return { text: marked.slice(0, offset) + marked.slice(offset + 1), offset };
 }
 
-function locate(marked: string, kind: CtrlYokeFileKind) {
+function locate(marked: string, kind: WorkflowFileKind) {
   const { text, offset } = cursor(marked);
   return { text, offset, loc: getWorkflowLocation(text, offset, kind) };
 }

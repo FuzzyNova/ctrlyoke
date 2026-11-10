@@ -49,7 +49,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   CTRLYOKE_FILE_KINDS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
 } from "../types/DashboardConstants";
 import {
   describeIncompleteComparison,
@@ -328,7 +328,7 @@ export class PromptFileParser {
    */
   validateWorkflowText(
     text: string,
-    kind: CtrlYokeFileKind,
+    kind: WorkflowFileKind,
     globalMaxSteps?: number
   ): WorkflowTextValidationResult {
     let sourceLineOffset = 0;

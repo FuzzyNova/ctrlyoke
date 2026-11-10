@@ -30,7 +30,7 @@ import {
   buildFileReference,
   buildSelectionReference,
   buildSymbolReference,
-} from "../../completions/ContextReferenceBuilder";
+} from "../../utils/ContextReferenceBuilder";
 import {
   readRunBundleHeader,
   streamRunBundleEvents,

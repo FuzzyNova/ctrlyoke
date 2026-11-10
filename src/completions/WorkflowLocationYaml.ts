@@ -14,7 +14,7 @@ import {
   WORKFLOW_OBJECT_KINDS,
 } from "../types/DashboardConstants";
 import type {
-  CtrlYokeFileKind,
+  WorkflowFileKind,
   WorkflowLocationRole,
 } from "../types/DashboardConstants";
 import {
@@ -176,7 +176,7 @@ function compactBlockMapText(
 function locateInAst(
   text: string,
   parsed: YamlParse,
-  kind: CtrlYokeFileKind,
+  kind: WorkflowFileKind,
   offset: number
 ): WorkflowLocation | undefined {
   const visit = (
@@ -486,7 +486,7 @@ function blockBodyEnd(text: string, offset: number, keyCol: number): number {
 function locateByScan(
   text: string,
   parsed: YamlParse,
-  kind: CtrlYokeFileKind,
+  kind: WorkflowFileKind,
   offset: number
 ): WorkflowLocation {
   const lines = text.slice(0, offset).split("\n");
@@ -615,7 +615,7 @@ function locateByScan(
 export function getYamlWorkflowLocation(
   text: string,
   offset: number,
-  kind: CtrlYokeFileKind = CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+  kind: WorkflowFileKind = CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
 ): WorkflowLocation {
   const parsed = parseYaml(text);
   return (
@@ -668,7 +668,7 @@ function decodePlainRange(
 export function getYamlTextSpans(
   text: string,
   role: WorkflowLocationRole,
-  kind: CtrlYokeFileKind = CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+  kind: WorkflowFileKind = CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
 ): WorkflowTextSpan[] {
   const parsed = parseYaml(text);
   const spans: WorkflowTextSpan[] = [];

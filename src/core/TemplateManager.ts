@@ -27,7 +27,7 @@ import {
 import { PromptFileParser } from "./PromptFileParser";
 import type { PromptFile } from "../types/CtrlYokeTypes";
 import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
-import { quoteReferencePath } from "../completions/ContextReferenceBuilder";
+import { quoteReferencePath } from "../utils/ContextReferenceBuilder";
 
 /** Scope for a custom (non-built-in) template: where it's stored and read from. */
 export type TemplateScope =

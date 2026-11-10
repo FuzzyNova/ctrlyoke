@@ -8,7 +8,7 @@ import {
   PROMPT_FILE_LANGUAGE_IDS,
   WORKFLOW_LOCATION_ROLES,
 } from "../types/DashboardConstants";
-import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import { getWorkflowLocation } from "./WorkflowDocumentLocation";
 import {
   getWorkflowInsertEscape,

@@ -12,7 +12,7 @@ import { buildHarnessModelOptions } from "../utils/HarnessModelOptions";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import { toVSCodeWorkflowCompletionItem } from "./CompletionHelpers";
-import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import {
   getWorkflowLocation,
   parseWorkflowDocumentRoot,

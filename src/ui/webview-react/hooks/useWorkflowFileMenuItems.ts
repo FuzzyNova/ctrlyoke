@@ -5,7 +5,7 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { postWorkflowDefinitionMutation } from "../utils/workflowMutation";
-import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "@root/utils/WorkflowFileKind";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 /**

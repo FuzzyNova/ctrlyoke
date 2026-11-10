@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { isMultiRootWorkspace } from "../platform/VsCodeWorkspaceRoot";
-import { normalizeReferencePath } from "./ContextReferenceBuilder";
+import { normalizeReferencePath } from "../utils/ContextReferenceBuilder";
 
 export function toWorkspaceRelativeReferencePath(
   uri: vscode.Uri

@@ -4573,7 +4573,7 @@ export const CTRLYOKE_FILE_KINDS = {
   WORKFLOW_JSON: "workflowJson",
   PROMPT_MARKDOWN: "promptMarkdown",
 } as const;
-export type CtrlYokeFileKind =
+export type WorkflowFileKind =
   (typeof CTRLYOKE_FILE_KINDS)[keyof typeof CTRLYOKE_FILE_KINDS];
 
 /** What the cursor is on inside a ctrlyoke file (`getWorkflowLocation().role`). */

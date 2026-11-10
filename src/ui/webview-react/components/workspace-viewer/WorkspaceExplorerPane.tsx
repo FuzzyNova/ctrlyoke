@@ -71,7 +71,7 @@ import {
   SCM_FILE_KINDS,
   WORKSPACE_ENTRY_KINDS,
 } from "@root/types/DashboardConstants";
-import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "@root/utils/WorkflowFileKind";
 import { getPromptMarkdownText } from "@root/utils/MarkdownFrontmatter";
 import { useAttachmentTokenCount } from "@hooks/useAttachmentTokenCount";
 import { isTouchContextMenuEvent } from "@hooks/useLongPress";

@@ -2,7 +2,7 @@ import {
   outputCaptureCache,
   type OutputCaptureEntry,
 } from "../completions/OutputCaptureCache";
-import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
+import { buildFileReferenceValue } from "../utils/ContextReferenceBuilder";
 import { TempFileManager } from "../utils/TempFileManager";
 
 /** Write an output capture to the workspace attachment store. */

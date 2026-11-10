@@ -2,7 +2,7 @@ import {
   CTRLYOKE_FILE_KINDS,
   WORKFLOW_LOCATION_ROLES,
   WORKFLOW_OBJECT_KINDS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
 } from "../types/DashboardConstants";
 import { parse as parseJsonc } from "jsonc-parser";
 import { locateMarkdownFrontmatter } from "../utils/MarkdownFrontmatter";
@@ -37,7 +37,7 @@ export {
 export function getWorkflowLocation(
   text: string,
   offset: number,
-  kind: CtrlYokeFileKind
+  kind: WorkflowFileKind
 ): WorkflowLocation {
   switch (kind) {
     case CTRLYOKE_FILE_KINDS.WORKFLOW_JSON:
@@ -56,7 +56,7 @@ export function getWorkflowLocation(
 export function findRangeForPath(
   text: string,
   path: WorkflowPath,
-  kind: CtrlYokeFileKind
+  kind: WorkflowFileKind
 ): WorkflowTextRange | undefined {
   switch (kind) {
     case CTRLYOKE_FILE_KINDS.WORKFLOW_JSON:
@@ -79,7 +79,7 @@ export function findRangeForPath(
  */
 export function parseWorkflowDocumentRoot(
   text: string,
-  kind: CtrlYokeFileKind
+  kind: WorkflowFileKind
 ): unknown {
   switch (kind) {
     case CTRLYOKE_FILE_KINDS.WORKFLOW_JSON:

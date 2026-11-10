@@ -14,7 +14,7 @@ import {
   buildSymbolReferenceValue,
   quoteReferenceField,
   quoteReferencePath,
-} from "../../completions/ContextReferenceBuilder";
+} from "../../utils/ContextReferenceBuilder";
 
 suite("ContextReferenceBuilder", () => {
   test("quotes paths with spaces", () => {

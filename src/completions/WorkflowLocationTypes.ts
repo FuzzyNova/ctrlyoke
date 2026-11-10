@@ -6,7 +6,7 @@ import {
   WORKFLOW_HOOK_PROPERTIES,
   WORKFLOW_LOCATION_ROLES,
   WORKFLOW_OBJECT_KINDS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
   type WorkflowLocationRole,
   type WorkflowObjectKind,
 } from "../types/DashboardConstants";
@@ -30,7 +30,7 @@ export type YamlScalarStyle =
   (typeof YAML_SCALAR_STYLES)[keyof typeof YAML_SCALAR_STYLES];
 
 export interface WorkflowLocation {
-  readonly kind: CtrlYokeFileKind;
+  readonly kind: WorkflowFileKind;
   /** The node under the cursor; for a new key not yet typed, the owning object. */
   readonly path: WorkflowPath;
   readonly role: WorkflowLocationRole;
@@ -219,7 +219,7 @@ export function splitValuePath(path: WorkflowPath): {
 }
 
 export interface WorkflowLocationInput {
-  readonly kind: CtrlYokeFileKind;
+  readonly kind: WorkflowFileKind;
   /** The partially parsed document, used to classify objects and list keys. */
   readonly root: unknown;
   readonly ownerPath: WorkflowPath;

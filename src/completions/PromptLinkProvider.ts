@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import {
   getDocumentPromptCodeRanges,
   isRangeInPromptCode,

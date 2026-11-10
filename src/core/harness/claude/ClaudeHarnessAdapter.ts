@@ -34,7 +34,7 @@ import {
   HarnessAdapterUtils,
   hasCtrlYokeServer,
 } from "../shared/HarnessAdapterUtils";
-import { normalizeClaudeMcpServerId } from "../../../types/ToolPermissionUtils";
+import { normalizeClaudeMcpServerId } from "../../../utils/ToolPermissionUtils";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import {

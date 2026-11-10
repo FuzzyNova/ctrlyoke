@@ -25,7 +25,7 @@ import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
 } from "../../types/DashboardConstants";
-import { normalizeAntigravityMcpServerId } from "../../types/ToolPermissionUtils";
+import { normalizeAntigravityMcpServerId } from "../../utils/ToolPermissionUtils";
 import {
   OPENCODE_EXPORT_COMMANDS,
   OPENCODE_MESSAGE_ROLES,

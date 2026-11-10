@@ -12,7 +12,7 @@ import {
 import {
   buildSelectionReferenceText,
   quoteReferenceField,
-} from "../completions/ContextReferenceBuilder";
+} from "../utils/ContextReferenceBuilder";
 import {
   MAX_CONTENT_SIZE,
   MAX_EXCERPT_BYTES,

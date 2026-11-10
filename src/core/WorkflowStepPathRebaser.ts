@@ -11,7 +11,7 @@ import { PromptFileResolver } from "./PromptFileResolver";
 import {
   quoteReferenceField,
   quoteReferencePath,
-} from "../completions/ContextReferenceBuilder";
+} from "../utils/ContextReferenceBuilder";
 
 /**
  * Rebase source-file-relative paths before steps are moved into another

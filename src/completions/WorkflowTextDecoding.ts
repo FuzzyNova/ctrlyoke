@@ -1,5 +1,5 @@
 import type {
-  CtrlYokeFileKind,
+  WorkflowFileKind,
   WorkflowLocationRole,
   WorkflowObjectKind,
 } from "../types/DashboardConstants";
@@ -20,7 +20,7 @@ export interface DecodedText {
 
 /** One prompt- or script-bearing value in a workflow document. */
 export interface WorkflowTextSpan {
-  readonly kind: CtrlYokeFileKind;
+  readonly kind: WorkflowFileKind;
   /** Path of the value, e.g. `["steps", 0, "endCondition", "retryPrompt"]`; `[]` for a `.prompt.md` body. */
   readonly path: WorkflowPath;
   /** The key holding the value (`prompt`, `retryPrompt`, ...); absent for a `.prompt.md` body. */

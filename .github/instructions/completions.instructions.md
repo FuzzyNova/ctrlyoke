@@ -9,8 +9,6 @@ Prompt-file completion and navigation layer. This directory owns VS Code complet
 <architecture>
 **Single shared engine:** `CompletionHelpers.ts` is not VS Code-only glue. `PromptCompletionProvider` uses it for editor IntelliSense, and `src/ui/PromptEditorSupportService.ts` uses the same helpers for CodeMirror completions in the dashboard. Keep trigger behavior, labels, and `insertText` framework-agnostic here.
 
-**Single reference syntax source:** `ContextReferenceBuilder.ts` is the source of truth for emitted `@`, `#selection:`, `#sym:`, and `~` references. Do not hand-roll quoting, slashes, or trailing-slash behavior anywhere else.
-
 **Two navigation entry points:** `PromptLinkProvider.ts` resolves references already typed into prompt files; `ContextMenuReferenceCommands.ts` creates those same references from Explorer/SCM/timeline actions and inserts them through the webview prompt editor.
 </architecture>
 
@@ -44,8 +42,6 @@ If you add a new trigger or reference form, update all of these together:
   </registration>
 
 <ctrlyokeFileDetection>
-`CtrlYokeFileKind.ts` is the single "is this a ctrlyoke file" predicate (`getCtrlYokeFileKind`) and the source of the VS Code globs (`getCtrlYokeFileGlobs`). Add a new workflow or prompt suffix there only; workflow discovery (`WorkflowFileDiscovery`), the secret registry scan and the bundle analyzer all call it, so a bare `ctrlyoke.yaml` or `prompt.md` (no stem) is deliberately not a workflow file anywhere. The Node language-server host imports it too: `LanguageIntelligenceHost` refuses ctrlyoke files (reason `CTRLYOKE_FILE`) so a generic YAML, JSON or Markdown server never attaches next to ctrlyoke's own support.
-
 `WorkflowDocumentLocation.ts` (`getWorkflowLocation`, `findRangeForPath`) answers "where is the cursor and which schema object owns it" for all three kinds. Prompt- and script-bearing fields are listed once in `WORKFLOW_TEXT_FIELDS` (`WorkflowLocationTypes.ts`); add a new text field there. Everything is pure (no `vscode`, no `fs`). Keep the YAML half in `WorkflowLocationYaml.ts` so the webview can `import()` it lazily; the facade imports it statically and is for the Node and VS Code hosts. Both VS Code completion providers gate on it; no provider keeps a private scanner.
 
 Workspace-editor schema diagnostics use `PromptFileParser.validateWorkflowText()` on the host through `VALIDATE_WORKFLOW_DOCUMENT`; keep `ajv` out of the webview. Convert JSON Pointers with the pure `WorkflowPathFromInstancePath.ts` helper before `findRangeForPath()`. The editor's lint adapter validates only ctrlyoke files, uses a 400 ms delay and discards superseded sequence replies. Resolve ranges through `loadWorkflowFileSupport()` so a static import does not pull the YAML parser into the dashboard's first chunk.

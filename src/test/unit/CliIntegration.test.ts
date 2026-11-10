@@ -12,7 +12,7 @@ import {
 import { suite, test, setup, teardown } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
-import { quoteReferenceField } from "../../completions/ContextReferenceBuilder";
+import { quoteReferenceField } from "../../utils/ContextReferenceBuilder";
 import { HarnessStatus } from "../../core/HarnessIntegration";
 import {
   CLI_EVENT_TYPES,

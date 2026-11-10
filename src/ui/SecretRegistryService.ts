@@ -32,7 +32,7 @@ import {
   loadYamlDocument,
   WORKFLOW_YAML_SCHEMA,
 } from "../core/WorkflowYamlSchema";
-import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 
 const SECRET_REGISTRY_CACHE_TTL_MS = 30_000;
 

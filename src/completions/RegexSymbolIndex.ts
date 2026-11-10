@@ -4,7 +4,7 @@ import { relativePathEscapes } from "../utils/PathSecurity";
 import { fuzzyMatches } from "./FuzzyRanking";
 import type { IndexedSymbol, SymbolIndex } from "./SymbolIndex";
 import { LspSymbolKind } from "./SymbolIndex";
-import { normalizeReferencePath } from "./ContextReferenceBuilder";
+import { normalizeReferencePath } from "../utils/ContextReferenceBuilder";
 
 const SOURCE_EXTENSIONS = new Set([
   ".ts",

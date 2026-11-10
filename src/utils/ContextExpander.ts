@@ -47,7 +47,7 @@ import {
 } from "../types/DashboardConstants";
 import { getErrorMessage, getErrnoCode } from "./ErrorUtils";
 import { isWorkflowRelativeReferencePath } from "./promptPathUtils";
-import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
+import { quoteReferenceField } from "./ContextReferenceBuilder";
 import { LineTooLongError, splitLines, streamFileLines } from "./TextLines";
 import { hasLineRange, isValidLineRange } from "./LineRangeUtils";
 

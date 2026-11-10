@@ -170,7 +170,7 @@ suite("WorkspacePathQuery", () => {
   test("narrowing returns the same results as a fresh full scan", async () => {
     const files = [
       "src/completions/CompletionCore.ts",
-      "src/completions/ContextReferenceBuilder.ts",
+      "src/utils/ContextReferenceBuilder.ts",
       "src/completions/FuzzyRanking.ts",
       "src/completions/WorkspacePathQuery.ts",
       "src/test/unit/CompletionCore.test.ts",

@@ -22,7 +22,7 @@ import {
   createFileReferenceChip,
   createSelectionReferenceChip,
 } from "@utils/atomicReferences";
-import { buildSelectionReferenceText } from "@root/completions/ContextReferenceBuilder";
+import { buildSelectionReferenceText } from "@root/utils/ContextReferenceBuilder";
 import type { RowFindDecoration } from "@utils/outputFind";
 import { hasRenderableDiff } from "@utils/diffUtils";
 import {

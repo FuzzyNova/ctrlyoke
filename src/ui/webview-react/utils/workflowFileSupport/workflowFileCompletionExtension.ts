@@ -11,7 +11,7 @@ import type { PlainCompletionItem } from "@root/completions/CompletionCore";
 import {
   WORKFLOW_LOCATION_ROLES,
   WORKFLOW_OBJECT_KINDS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
 } from "@root/types/DashboardConstants";
 import { COMPLETION_KIND_ICONS } from "@root/types/SymbolKindConstants";
 import type { WorkflowValueDataSource } from "@root/completions/WorkflowFileCompletionCore";
@@ -34,7 +34,7 @@ import {
 } from "./hostedRangeCompletions";
 
 export interface WorkflowFileCompletionExtensionOptions {
-  kind: CtrlYokeFileKind;
+  kind: WorkflowFileKind;
   /** The lazily loaded location/completion modules; null until the chunk arrives. */
   getSupport: () => WorkflowFileSupport | null;
   getDataSource: () => WorkflowValueDataSource;

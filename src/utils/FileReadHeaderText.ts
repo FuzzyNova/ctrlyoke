@@ -1,5 +1,5 @@
 import type { FileReadData } from "../types/CliOutputTypes";
-import { buildSelectionReferenceText } from "../completions/ContextReferenceBuilder";
+import { buildSelectionReferenceText } from "./ContextReferenceBuilder";
 
 /** Canonical label for a file read, including a requested line range. */
 export function getFileReadHeaderText(data: FileReadData): string {

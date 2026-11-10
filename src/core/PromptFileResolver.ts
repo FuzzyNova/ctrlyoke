@@ -10,7 +10,7 @@ import {
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { looksLikeFilePath } from "../utils/promptPathUtils";
 import { resolveSourceRuntimeArtifacts } from "../utils/SourceRuntimeArtifactResolver";
-import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import { getPromptMarkdownText } from "../utils/MarkdownFrontmatter";
 import {
   CTRLYOKE_FILE_KINDS,

@@ -7,7 +7,7 @@ import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver
 import type { WorkflowStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { ToolPermissionConfig } from "../../../types/ExecutionPropertyTypes";
-import { mergeServerDeniedTools } from "../../../types/ToolPermissionUtils";
+import { mergeServerDeniedTools } from "../../../utils/ToolPermissionUtils";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,

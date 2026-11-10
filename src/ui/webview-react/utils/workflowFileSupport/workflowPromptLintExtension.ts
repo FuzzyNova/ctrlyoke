@@ -4,7 +4,7 @@ import { hoverTooltip, ViewPlugin } from "@codemirror/view";
 import {
   WORKFLOW_LOCATION_ROLES,
   MESSAGE_TYPES,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
 } from "@root/types/DashboardConstants";
 import type {
   ContextReferenceResolver,
@@ -28,7 +28,7 @@ let nextValidationSequence = 1_000_000_000;
 
 /** Prompt lint uses the shared span runner and host resolver round trip. */
 export function createWorkflowPromptLintExtension(options: {
-  kind: CtrlYokeFileKind;
+  kind: WorkflowFileKind;
   getSupport: () => WorkflowFileSupport | null;
   transport: ValidationTransport;
   getSettingsPreCondition?: () => unknown;
@@ -93,7 +93,7 @@ export function createWorkflowPromptLintExtension(options: {
 
 /** Shows the generated schema description when hovering an authorable key. */
 export function createWorkflowOutlineHoverExtension(options: {
-  kind: CtrlYokeFileKind;
+  kind: WorkflowFileKind;
   getSupport: () => WorkflowFileSupport | null;
 }): Extension {
   return hoverTooltip(

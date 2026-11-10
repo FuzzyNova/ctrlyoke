@@ -7,7 +7,7 @@ import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
 import { AntigravityHarnessAdapter } from "./core/harness/antigravity/AntigravityHarnessAdapter";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { WorkflowFileCompletionProvider } from "./completions/WorkflowFileCompletionProvider";
-import { getCtrlYokeFileGlobs } from "./completions/CtrlYokeFileKind";
+import { getCtrlYokeFileGlobs } from "./utils/WorkflowFileKind";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { PromptDiagnosticsProvider } from "./completions/PromptDiagnosticsProvider";
 import { PromptFileParser } from "./core/PromptFileParser";

@@ -6,13 +6,13 @@ import {
   buildFileReference,
   buildSelectionReference,
   buildSymbolReference,
-} from "../completions/ContextReferenceBuilder";
+} from "./ContextReferenceBuilder";
 import {
   parseAllFileReferences,
   type FileReference,
 } from "./FileReferenceParser";
 import { PromptFileResolver } from "../core/PromptFileResolver";
-import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "./WorkflowFileKind";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { type ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {

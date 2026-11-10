@@ -22,7 +22,7 @@ harnesses, so a workflow's tool lists behave more consistently across harnesses.
 
 - **Codex** enforces `deniedTools` entries of the form `mcp__<server>__<tool>`, but only for
   servers the workflow attaches. `CodexHarnessAdapter` folds them into that server's
-  `disabled_tools` (`foldMcpToolDenialsIntoServers` in `src/types/ToolPermissionUtils.ts`). It
+  `disabled_tools` (`foldMcpToolDenialsIntoServers` in `src/utils/ToolPermissionUtils.ts`). It
   enforces no shell or built-in tool patterns, and no allow list.
 - A tool list that is still the shipped default shows an information note, not a warning
   (`isShippedDefaultToolList`). This keeps new users from seeing warnings about defaults they

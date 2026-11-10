@@ -56,7 +56,7 @@ import {
   type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
-import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
+import { normalizeAntigravityMcpServerId } from "../../../utils/ToolPermissionUtils";
 import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";

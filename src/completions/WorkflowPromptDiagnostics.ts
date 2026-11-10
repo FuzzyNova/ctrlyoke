@@ -3,7 +3,7 @@ import {
   END_CONDITION_PROPERTIES,
   PROMPT_DIAGNOSTIC_FIELDS,
   PROMPT_PROPERTIES,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
   type PromptDiagnosticField,
 } from "../types/DashboardConstants";
 import {
@@ -151,7 +151,7 @@ export function getSpanContext(
 /** Workflow facts used by prompt-token completions at a document offset. */
 export function getWorkflowPromptCompletionContext(
   text: string,
-  kind: CtrlYokeFileKind,
+  kind: WorkflowFileKind,
   offset: number,
   settingsPreCondition?: unknown
 ): PromptCompletionWorkflowContext | undefined {
@@ -198,7 +198,7 @@ export function getWorkflowPromptCompletionContext(
  */
 export async function getWorkflowPromptDiagnostics(
   text: string,
-  kind: CtrlYokeFileKind,
+  kind: WorkflowFileKind,
   resolve: ContextReferenceResolver,
   settingsPreCondition?: unknown
 ): Promise<PromptDiagnostic[]> {

@@ -3,9 +3,9 @@ import {
   PERMISSION_MODES,
   permissionModeAppliesToolList,
   type PermissionMode,
-} from "./DashboardConstants";
-import type { McpServerConfig } from "./CtrlYokeTypes";
-import type { ToolPermissionConfig } from "./ExecutionPropertyTypes";
+} from "../types/DashboardConstants";
+import type { McpServerConfig } from "../types/CtrlYokeTypes";
+import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 
 /**
  * Merge per-server MCP denials into the unified tool permission configuration.

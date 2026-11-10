@@ -1,6 +1,6 @@
 import {
   CTRLYOKE_FILE_KINDS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
 } from "../types/DashboardConstants";
 
 /**
@@ -8,7 +8,7 @@ import {
  * extension, the Node language-server host and the hosted webview all import it.
  */
 const CTRLYOKE_FILE_SUFFIXES: Readonly<
-  Record<CtrlYokeFileKind, readonly string[]>
+  Record<WorkflowFileKind, readonly string[]>
 > = {
   [CTRLYOKE_FILE_KINDS.WORKFLOW_YAML]: [".ctrlyoke.yaml", ".ctrlyoke.yml"],
   [CTRLYOKE_FILE_KINDS.WORKFLOW_JSON]: [".ctrlyoke.json"],
@@ -16,7 +16,7 @@ const CTRLYOKE_FILE_SUFFIXES: Readonly<
 };
 
 /** Basename-suffix match, case-insensitive; accepts `/` and `\` separators. */
-export function getCtrlYokeFileKind(filePath: string): CtrlYokeFileKind | null {
+export function getCtrlYokeFileKind(filePath: string): WorkflowFileKind | null {
   const baseName = filePath.slice(
     Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\")) + 1
   );
@@ -36,7 +36,7 @@ export function getCtrlYokeFileKind(filePath: string): CtrlYokeFileKind | null {
 
 /** VS Code document-selector globs for the given kinds (all kinds by default). */
 export function getCtrlYokeFileGlobs(
-  kinds: readonly CtrlYokeFileKind[] = Object.values(CTRLYOKE_FILE_KINDS)
+  kinds: readonly WorkflowFileKind[] = Object.values(CTRLYOKE_FILE_KINDS)
 ): string[] {
   return kinds.flatMap((kind) =>
     CTRLYOKE_FILE_SUFFIXES[kind].map((suffix) => `**/*${suffix}`)

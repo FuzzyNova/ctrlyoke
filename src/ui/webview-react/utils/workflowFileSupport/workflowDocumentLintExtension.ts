@@ -2,7 +2,7 @@ import { linter, type Diagnostic } from "@codemirror/lint";
 import { forceLinting } from "@codemirror/lint";
 import type { Extension } from "@codemirror/state";
 import { ViewPlugin } from "@codemirror/view";
-import type { CtrlYokeFileKind } from "@root/types/DashboardConstants";
+import type { WorkflowFileKind } from "@root/types/DashboardConstants";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   MESSAGE_TYPES,
@@ -18,7 +18,7 @@ let nextSequence = 0;
 
 /** Debounced host validation; schema and YAML code remains in the lazy chunk. */
 export function createWorkflowDocumentLintExtension(options: {
-  kind: CtrlYokeFileKind;
+  kind: WorkflowFileKind;
   getSupport: () => WorkflowFileSupport | null;
   transport: ValidationTransport;
 }): Extension {

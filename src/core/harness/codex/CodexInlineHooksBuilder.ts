@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-import { normalizeCodexHookMatcher } from "../shared/CodexHookUtils";
+import { normalizeCodexHookMatcher } from "./CodexHookUtils";
 import { Log } from "../../../utils/Log";
 import { quoteTomlBasicString } from "../shared/InlineToml";
 import {

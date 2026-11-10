@@ -42,7 +42,7 @@ import { TempFileManager } from "../utils/TempFileManager";
 import {
   buildFileReferenceValue,
   buildPromptFileReferenceValue,
-} from "../completions/ContextReferenceBuilder";
+} from "../utils/ContextReferenceBuilder";
 import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
 import { isValidLineRange } from "../utils/LineRangeUtils";
 import { splitLines } from "../utils/TextLines";
@@ -99,7 +99,7 @@ import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder"
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { PromptFileParser } from "../core/PromptFileParser";
-import type { CtrlYokeFileKind } from "../types/DashboardConstants";
+import type { WorkflowFileKind } from "../types/DashboardConstants";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type { DashboardClientContext } from "./DashboardClientContext";
 import type { SecretRegistryService } from "./SecretRegistryService";
@@ -254,7 +254,7 @@ export class PromptEditorSupportService {
 
   validateWorkflowDocument(
     text: string,
-    kind: CtrlYokeFileKind
+    kind: WorkflowFileKind
   ): Array<{
     path: string;
     message: string;

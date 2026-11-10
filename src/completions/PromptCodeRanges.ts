@@ -1,6 +1,6 @@
 import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import { findCodeRanges } from "../utils/FileReferenceParser";
-import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import { getWorkflowTextSpans } from "./WorkflowPromptRanges";
 
 /** A literal (code) range in document offsets. */

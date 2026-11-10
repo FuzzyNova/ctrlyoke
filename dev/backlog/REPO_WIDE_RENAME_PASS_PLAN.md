@@ -1,8 +1,6 @@
 # Repo-Wide Rename Pass
 
-**Status:** Not started. Candidates come from four read-only scans of `src/` on 2026-11-08
-(webview components; webview hooks/store/utils; core/harness/orchestration; UI bridge, server,
-CLI, utils and types). Reference counts are approximate. Re-grep each item before renaming it.
+**Status:** Every staged chunk has landed. Awaiting review before moving this plan to `dev/implemented/`.
 
 ## Progress
 
@@ -22,7 +20,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 - [x] 5c Quota collectors, `HarnessFlagHelpParser`, status-line format harness names, `HarnessModelUsage`
 - [x] 6a UI bridge: `IDashboardRegistryEvents`, `Dashboard*` router/sync/context/port, `NotificationEventFactory`, `WorkflowLibraryHandlers`, `OutputCaptureAttachments`
 - [x] 6b Platform and core: `NodePlatformAdapter`, `CliConfirm`, `SettingsPropertyResolver`, `HarnessSettingsJsonStore`, `DashboardNavigationCommands`, `wasLastFailureUserCancellation` removal
-- [ ] 7 Folder moves that change which instruction file applies
+- [x] 7 Folder moves that change which instruction file applies
 
 Paths in Batches 3–8 are written against the tree before this pass. Where an earlier batch has
 already moved a file (Batch 2 moves `components/steps/` to `components/steps/`), look the new

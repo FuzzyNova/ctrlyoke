@@ -28,7 +28,7 @@ import {
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import { Log } from "../../utils/Log";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
-import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
+import { mergeServerDeniedTools } from "../../utils/ToolPermissionUtils";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 

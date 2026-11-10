@@ -4,7 +4,7 @@ import {
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
-import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
+import { createCodexCommandHookGroup } from "./CodexHookUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {

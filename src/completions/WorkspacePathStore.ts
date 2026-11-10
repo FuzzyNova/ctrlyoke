@@ -1,4 +1,4 @@
-import { normalizeReferencePath } from "./ContextReferenceBuilder";
+import { normalizeReferencePath } from "../utils/ContextReferenceBuilder";
 import {
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,

@@ -10,7 +10,7 @@ import {
   workspaceCheckoutCommit,
 } from "@utils/hostedApi";
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
-import { buildGitReference } from "@root/completions/ContextReferenceBuilder";
+import { buildGitReference } from "@root/utils/ContextReferenceBuilder";
 import { PROMPT_EDITOR_INSERT_MODES, MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { Modal } from "@components/shared/Modal";

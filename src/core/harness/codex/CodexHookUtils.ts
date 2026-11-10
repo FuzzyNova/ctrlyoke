@@ -1,5 +1,5 @@
 import type { UserHookConfig } from "../../../types/CtrlYokeTypes";
-import { buildHookTimeoutOptions } from "./interfaces/INotificationMonitor";
+import { buildHookTimeoutOptions } from "../shared/interfaces/INotificationMonitor";
 
 const CODEX_EVENTS_WITH_MATCHERS = new Set([
   "PreToolUse",

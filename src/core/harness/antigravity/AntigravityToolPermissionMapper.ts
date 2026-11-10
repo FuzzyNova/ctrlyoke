@@ -21,7 +21,7 @@ import {
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
-import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
+import { normalizeAntigravityMcpServerId } from "../../../utils/ToolPermissionUtils";
 import { hasCliFlag } from "../../../utils/CliArgParser";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import { escapeRegExp } from "../../../utils/TextUtils";

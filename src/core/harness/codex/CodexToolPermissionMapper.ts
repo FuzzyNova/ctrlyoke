@@ -15,7 +15,7 @@ import {
   MCP_SERVER_IDS,
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
-import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
+import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtils";
 
 const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.129.0",

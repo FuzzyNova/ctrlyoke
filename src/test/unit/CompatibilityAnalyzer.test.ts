@@ -30,7 +30,7 @@ import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToo
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
-import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
+import { mergeServerDeniedTools } from "../../utils/ToolPermissionUtils";
 
 const defaults = {
   harness: HARNESS_IDS.CODEX_CLI,

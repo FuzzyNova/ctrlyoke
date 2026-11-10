@@ -17,7 +17,7 @@ import {
   CTRLYOKE_FILE_KINDS,
   HARNESS_IDS,
   WORKFLOW_OBJECT_KINDS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
 } from "../../types/DashboardConstants";
 import { escapeJsonStringFragment } from "../../utils/JsonStringEscape";
 
@@ -56,7 +56,7 @@ class StubData implements WorkflowValueDataSource {
 /** `§` marks the cursor. */
 function complete(
   marked: string,
-  kind: CtrlYokeFileKind = WORKFLOW_YAML,
+  kind: WorkflowFileKind = WORKFLOW_YAML,
   data: WorkflowValueDataSource = new StubData()
 ): WorkflowFileCompletions & { text: string } {
   const offset = marked.indexOf("§");

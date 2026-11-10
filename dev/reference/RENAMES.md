@@ -234,8 +234,16 @@ This ledger maps retired names to their current names. Historical implementation
 | `src/test/unit/WorkflowCommandHandler.test.ts` | `src/test/unit/DashboardNavigationCommands.test.ts` | file | 6b | 2026-11-09 |
 | `WorkflowCommandHandler` | `DashboardNavigationCommands` | symbol | 6b | 2026-11-09 |
 | `HarnessIntegration.wasLastFailureUserCancellation` | removed (dead branch; no overrides) | symbol | 6b | 2026-11-09 |
+| `src/core/harness/shared/CodexHookUtils.ts` | `src/core/harness/codex/CodexHookUtils.ts` | file | 7 | 2026-11-09 |
+| `src/completions/ContextReferenceBuilder.ts` | `src/utils/ContextReferenceBuilder.ts` | file | 7 | 2026-11-09 |
+| `src/completions/CtrlYokeFileKind.ts` | `src/utils/WorkflowFileKind.ts` | file | 7 | 2026-11-09 |
+| `src/test/unit/CtrlYokeFileKind.test.ts` | `src/test/unit/WorkflowFileKind.test.ts` | file | 7 | 2026-11-09 |
+| `CtrlYokeFileKind` | `WorkflowFileKind` | symbol | 7 | 2026-11-09 |
+| `src/types/ToolPermissionUtils.ts` | `src/utils/ToolPermissionUtils.ts` | file | 7 | 2026-11-09 |
 
 ## Kept on purpose
 
 - `ResolvedCliConfig` remains CLI configuration despite its adapter moving to `NodePlatformAdapter`.
 - `ExecutionPropertyResolver` remains the platform-neutral types-layer resolver; only its settings adapter is now `SettingsPropertyResolver`.
+- `getCtrlYokeFileKind`, `getCtrlYokeFileGlobs`, and the `CTRLYOKE_FILE_KINDS` values keep their names and values; only the `CtrlYokeFileKind` type is now `WorkflowFileKind`.
+- `ToolPermissionUtils` has no webview import; its shared runtime helpers remain under `src/utils/`.

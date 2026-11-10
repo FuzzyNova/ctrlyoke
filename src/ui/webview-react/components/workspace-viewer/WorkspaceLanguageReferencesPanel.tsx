@@ -7,7 +7,7 @@ import {
 import { useEditorStore } from "@store/editorStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { languageReferenceSymbolName } from "@utils/languageReferences";
-import { buildSelectionReference } from "@root/completions/ContextReferenceBuilder";
+import { buildSelectionReference } from "@root/utils/ContextReferenceBuilder";
 import { PROMPT_EDITOR_INSERT_MODES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 

@@ -23,7 +23,7 @@ import {
   buildFileReference,
   buildSelectionReference,
   buildSymbolReference,
-} from "../../completions/ContextReferenceBuilder";
+} from "../../utils/ContextReferenceBuilder";
 
 suite("FileReferenceParser", () => {
   suite("findCodeRanges markdown parity", () => {

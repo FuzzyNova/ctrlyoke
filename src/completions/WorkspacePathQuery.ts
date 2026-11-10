@@ -3,7 +3,7 @@ import {
   WorkspacePathStore,
   type WorkspacePathEntry,
 } from "./WorkspacePathStore";
-import { normalizeReferencePath } from "./ContextReferenceBuilder";
+import { normalizeReferencePath } from "../utils/ContextReferenceBuilder";
 import { type WorkspaceFileTreeEntryKind } from "../types/DashboardConstants";
 
 const FILE_LIMIT = 500;

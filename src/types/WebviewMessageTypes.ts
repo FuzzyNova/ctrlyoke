@@ -62,7 +62,7 @@ import {
   type RerunConfirmationMode,
   type EditorFontSize,
   type HarnessStatusString,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
   type PriorContextDetail,
   type WorkspaceFolderPicker,
   type RunDefinitionChange,
@@ -3574,7 +3574,7 @@ export interface SkillsRegistryUpdateCheckResultMessage {
 export interface ValidateWorkflowDocumentMessage {
   type: typeof MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT;
   text: string;
-  kind: CtrlYokeFileKind;
+  kind: WorkflowFileKind;
   seq: number;
 }
 

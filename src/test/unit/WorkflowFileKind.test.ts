@@ -3,7 +3,7 @@ import { suite, test } from "mocha";
 import {
   getCtrlYokeFileGlobs,
   getCtrlYokeFileKind,
-} from "../../completions/CtrlYokeFileKind";
+} from "../../utils/WorkflowFileKind";
 import { CTRLYOKE_FILE_KINDS } from "../../types/DashboardConstants";
 
 suite("CtrlYokeFileKind", () => {

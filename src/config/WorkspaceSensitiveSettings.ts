@@ -6,7 +6,7 @@ import {
 } from "../types/CtrlYokeSettings";
 import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
-import { isToolPermissionConfigNoWiderThan } from "../types/ToolPermissionUtils";
+import { isToolPermissionConfigNoWiderThan } from "../utils/ToolPermissionUtils";
 import {
   PERMISSION_CAPABILITY_KEYS,
   SANDBOX_MODE_ORDER,

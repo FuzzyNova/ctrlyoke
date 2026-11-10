@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "./WorkflowFileKind";
 import {
   getGitFilesIncludingNestedRepos,
   getGitIgnoredEntries,

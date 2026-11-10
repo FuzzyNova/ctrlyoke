@@ -58,7 +58,7 @@ import {
   isTouchOnSelectionHandle,
   placeCaretForContextMenu,
 } from "@utils/editorEditMenuItems";
-import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "@root/utils/WorkflowFileKind";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import {
   loadWorkflowFileSupport,
@@ -90,7 +90,7 @@ import {
   CODEMIRROR_LANGUAGE_IDS,
   CTRLYOKE_FILE_KINDS,
   LSP_METHODS,
-  type CtrlYokeFileKind,
+  type WorkflowFileKind,
   PROMPT_FILE_LANGUAGE_IDS,
   WORKSPACE_ENTRY_KINDS,
   WORKSPACE_MEDIA_KINDS,
@@ -1066,7 +1066,7 @@ function createWorkspaceReferenceDecorationExtension() {
  * needs the number of steps before the prompt the reference sits in.
  */
 function createWorkspaceReferenceLinkHandlerExtension(
-  kind: CtrlYokeFileKind | null,
+  kind: WorkflowFileKind | null,
   getSupport: () => WorkflowFileSupport | null,
   openChipMenu: ReferenceChipMenuOpener
 ) {

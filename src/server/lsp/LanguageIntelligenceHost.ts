@@ -14,7 +14,7 @@ import type {
   LanguageServerDescriptor,
 } from "./LanguageServerBackend";
 import { LANGUAGE_SERVER_RESOLUTION_REASONS } from "./LanguageServerBackend";
-import { getCtrlYokeFileKind } from "../../completions/CtrlYokeFileKind";
+import { getCtrlYokeFileKind } from "../../utils/WorkflowFileKind";
 import { LspSessionProxy } from "./LspSessionProxy";
 import type { SharedDocument } from "./LspSharedDocument";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
