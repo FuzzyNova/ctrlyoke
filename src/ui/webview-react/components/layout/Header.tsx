@@ -40,6 +40,7 @@ import { ContextMenu, type ContextMenuState } from "../shared/ContextMenu";
 import {
   HEADER_BUTTON_SIZES,
   HEADER_RUN_SLOT_FIT_CLASSES,
+  HEADER_UNDO_REDO_FIT_CLASSES,
 } from "../../constants";
 import {
   getWorkflowExecutionControls,
@@ -473,17 +474,25 @@ export const Header: React.FC<{
         <Icon name="save" className={`${btnSize.icon}`} />
       </button>
 
-      <div className="cy-button-group-divider" />
-
-      {/* Undo / Redo / History */}
-      <UndoRedoControl
-        isRunning={isRunning}
-        isPaused={isPaused}
-        disabled={isLineageReadOnly}
-        embedded
-        showHistoryChevronOnDesktopOnly="lg"
-        onAction={handleUndoRedoAction}
-      />
+      {/* Undo / Redo / History — hidden only when the header is too narrow to
+          keep the app nav on screen (see HEADER_UNDO_REDO_FIT_CLASSES). */}
+      <div
+        className={
+          isStandalone
+            ? HEADER_UNDO_REDO_FIT_CLASSES.standalone
+            : HEADER_UNDO_REDO_FIT_CLASSES.vscode
+        }
+      >
+        <div className="cy-button-group-divider" />
+        <UndoRedoControl
+          isRunning={isRunning}
+          isPaused={isPaused}
+          disabled={isLineageReadOnly}
+          embedded
+          showHistoryChevronOnDesktopOnly="lg"
+          onAction={handleUndoRedoAction}
+        />
+      </div>
     </div>
   );
 

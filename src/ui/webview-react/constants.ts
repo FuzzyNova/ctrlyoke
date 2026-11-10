@@ -102,6 +102,21 @@ export const HEADER_RUN_SLOT_FIT_CLASSES = {
 } as const;
 
 /**
+ * Narrow-header widths below which Undo/Redo (and the divider before them) are
+ * hidden, so the app nav — Settings in particular — stays on screen. Each is
+ * the narrowest the header's row 1 can get with Undo/Redo shown, measured in
+ * the hosted dashboard (Playwright, 2026-11-09) with every disabled run slot
+ * already hidden (HEADER_RUN_SLOT_FIT_CLASSES); the VS Code panel lacks the
+ * Workspace Explorer button (37px). Undo and redo stay reachable through their
+ * keyboard shortcuts. `contents` keeps the two buttons laid out inside the
+ * Save group when shown. Re-measure alongside HEADER_RUN_SLOT_FIT_CLASSES.
+ */
+export const HEADER_UNDO_REDO_FIT_CLASSES = {
+  standalone: "hidden min-[321px]:contents",
+  vscode: "hidden min-[284px]:contents",
+} as const;
+
+/**
  * Header button sizing — single source of truth for button/icon size in the Header.
  * To tune the touch target HEIGHT, change --cy-touch-target in globals.css (one place).
  * To tune the icon size, change the `icon` value in the `touch` block below.
