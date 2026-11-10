@@ -24,6 +24,9 @@ This ledger maps retired names to their current names. Historical implementation
 | `closePropertiesDrawer` | `closePromptPropertiesDrawer` | symbol | 1b | 2026-11-09 |
 | `drawerRef` (`WorkflowPropertiesPanel`) | `panelRef` | symbol | 1b | 2026-11-09 |
 | `SETTINGS_DRAWER_BREAKPOINT` (`WorkflowPropertiesPanel`) | `WORKFLOW_PANEL_BREAKPOINT` | symbol | 1b | 2026-11-09 |
+| `RunFinalStepProjection.loopCount` | `RunFinalStepProjection.passCount` | symbol | 8 | 2026-11-09 |
+| `RunFinalStepProjection.latestLoop` | `RunFinalStepProjection.latestPass` | symbol | 8 | 2026-11-09 |
+| `finalLoopCount` (`src/cli.ts`) | `finalPassCount` | symbol | 8 | 2026-11-09 |
 
 ## Kept on purpose
 

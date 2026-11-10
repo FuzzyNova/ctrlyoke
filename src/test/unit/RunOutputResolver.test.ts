@@ -2537,19 +2537,19 @@ suite("RunOutputResolver", () => {
         operations: ["deleted"],
       },
     ]);
-    assert.strictEqual(projection.finalStep?.loopCount, 2);
+    assert.strictEqual(projection.finalStep?.passCount, 2);
     assert.strictEqual(projection.finalStep?.attempts, 2);
     assert.strictEqual(
-      projection.finalStep?.latestLoop?.target.kind,
+      projection.finalStep?.latestPass?.target.kind,
       "finalStep"
     );
     assert.strictEqual(
-      projection.finalStep?.latestLoop?.target.kind === "finalStep"
-        ? projection.finalStep.latestLoop.target.loopIndex
+      projection.finalStep?.latestPass?.target.kind === "finalStep"
+        ? projection.finalStep.latestPass.target.loopIndex
         : undefined,
       1
     );
-    assert.deepStrictEqual(projection.finalStep?.latestLoop?.scriptOutput, {
+    assert.deepStrictEqual(projection.finalStep?.latestPass?.scriptOutput, {
       command: "node check.js",
       stdout: "ok",
       stderr: "",

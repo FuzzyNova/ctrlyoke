@@ -11,7 +11,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 
 - [x] 1a `StepContextMenu` → `ContextMenu`, and create the ledger plus its `copilot-instructions.md` line
 - [x] 1b `PropertiesDrawer` → `PromptPropertiesDrawer`, uiStore state, `WorkflowPropertiesPanel` panel names
-- [ ] 8 Final-step pass-count names
+- [x] 8 Final-step pass-count names
 - [ ] 2 "prompt" → "step" in the step-list and editor components (`components/prompts/` → `components/steps/`)
 - [ ] 3a Component moves: `WorkflowSwitcher`, delete modals, `FileBrowserModal`, `HooksEditor`, `StepColorSwatch`
 - [ ] 3b Output/diff components: `TextDiffView`, `SubagentSpawnOutput`, `SubmitCommitMessageView`, `ToolDot`, `InOutputView`, plus the Batch 3 deletions
@@ -459,3 +459,9 @@ Each is small enough to ride with the batch that touches the same area.
 - **`useVsCodeApi`, `terminalRegistry`, `useFontSizeControls`/`useFontSizeSync`,
   `RunSummaryRow`/`RunSummaryBanner`, `ctrlyoke-tools/*View.tsx` exporting `*Body`,
   `DrawerRow`/`DrawerTabBar`, `WorkspaceViewerModal`.** These were checked, and the names hold.
+
+## Known unrelated failures
+
+- `npm run knip` reports existing repository-wide unused-file, unlisted-dependency,
+  unlisted-binary, unused-export, duplicate-export and configuration-hint findings. None
+  refer to Batch 8 files or `getFinalStepPassCount`.

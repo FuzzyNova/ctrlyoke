@@ -29,6 +29,7 @@ import type {
   WorkflowStopReason,
   WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
+import { getFinalStepPassCount } from "../types/CtrlYokeTypes";
 import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
   type RunAttemptProjection,
@@ -407,19 +408,13 @@ function buildFinalStep(
   const isScript = step.type === STEP_TYPES.SCRIPT;
   const stepRuntime = step._runtime;
   const status = runtime?.status ?? null;
-  const passCount =
-    projection?.loopCount ??
-    (runtime
-      ? runtime.phase === FINAL_STEP_PHASES.FINAL_STEP
-        ? runtime.loopCount + 1
-        : runtime.loopCount
-      : 0);
+  const passCount = projection?.passCount ?? getFinalStepPassCount(runtime);
   const filesChanged = shapeFileChanges(
     projection?.filesChanged ?? [],
     input.workspaceRoot
   );
-  const lastPass = projection?.latestLoop
-    ? buildFinalPass(step, runtime, projection.latestLoop)
+  const lastPass = projection?.latestPass
+    ? buildFinalPass(step, runtime, projection.latestPass)
     : null;
   const hasRun = Boolean(
     projection?.attempts ||
@@ -428,7 +423,7 @@ function buildFinalStep(
     status === STEP_STATUS.FAILED
   );
   const metadata = getEffectiveMetadata(stepRuntime, input, hasRun, isScript);
-  const latestScriptOutput = projection?.latestLoop?.scriptOutput;
+  const latestScriptOutput = projection?.latestPass?.scriptOutput;
 
   return {
     type: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,

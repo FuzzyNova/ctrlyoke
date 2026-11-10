@@ -498,6 +498,16 @@ export interface FinalStepRuntimeState {
   endCondition?: ConditionEvaluationSummary;
 }
 
+/** Number of final-step passes represented by runtime state. */
+export function getFinalStepPassCount(
+  runtime: FinalStepRuntimeState | undefined
+): number {
+  if (!runtime) return 0;
+  return runtime.phase === FINAL_STEP_PHASES.FINAL_STEP
+    ? runtime.loopCount + 1
+    : runtime.loopCount;
+}
+
 /**
  * Stable identity for a workflow lineage directory in run storage: `.runs/<workflowKey>/`.
  * A sanitized name plus creation timestamp, minted once by `WorkflowLineageRepository`

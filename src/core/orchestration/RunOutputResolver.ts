@@ -168,10 +168,10 @@ export interface RunAttemptProjection {
 }
 
 export interface RunFinalStepProjection {
-  loopCount: number;
+  passCount: number;
   attempts: number;
   filesChanged: RunFileChangeProjection[];
-  latestLoop?: RunAttemptProjection;
+  latestPass?: RunAttemptProjection;
 }
 
 export interface RunOutputProjection {
@@ -886,11 +886,11 @@ export class RunOutputResolver {
     }
     if (finalStepTargets.length > 0) {
       projection.finalStep = {
-        loopCount: finalAccumulator.loopCount,
+        passCount: finalAccumulator.passCount,
         attempts: finalAccumulator.attempts,
         filesChanged: finalAccumulator.toFileChanges(),
         ...(latestFinalLoop
-          ? { latestLoop: latestFinalLoop.toProjection() }
+          ? { latestPass: latestFinalLoop.toProjection() }
           : {}),
       };
     }
@@ -922,7 +922,7 @@ export class RunOutputResolver {
         ...(finalStepTargets.length > 0
           ? {
               finalStep: {
-                loopCount: 0,
+                passCount: 0,
                 attempts: 0,
                 filesChanged: [],
               },
@@ -1503,7 +1503,7 @@ class ProjectionAccumulator {
   private latestScriptOutput: ScriptRuntimeOutput | undefined;
 
   attempts = 0;
-  loopCount = 0;
+  passCount = 0;
 
   constructor(private target?: OutputExecutionTarget) {}
 
@@ -1515,7 +1515,7 @@ class ProjectionAccumulator {
     this.target ??= attempt.target;
     this.attempts++;
     if (attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      this.loopCount = Math.max(this.loopCount, attempt.target.loopIndex + 1);
+      this.passCount = Math.max(this.passCount, attempt.target.loopIndex + 1);
     }
 
     const candidate: ProjectionAttemptIdentity = {

@@ -39,7 +39,10 @@ import type {
   FinalStepRuntimeState,
   RunnerHostIdentity,
 } from "./types/CtrlYokeTypes";
-import { projectWorktreeRuntime } from "./types/CtrlYokeTypes";
+import {
+  getFinalStepPassCount,
+  projectWorktreeRuntime,
+} from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import {
@@ -2102,11 +2105,7 @@ async function resolveCliJsonOutputProjection(
 
   const workflowFile = instance.promptQueue.getWorkflowFile();
   const finalStepRuntime = instance.promptQueue.getFinalStepRuntime();
-  const finalLoopCount = finalStepRuntime
-    ? finalStepRuntime.phase === FINAL_STEP_PHASES.FINAL_STEP
-      ? finalStepRuntime.loopCount + 1
-      : finalStepRuntime.loopCount
-    : 0;
+  const finalPassCount = getFinalStepPassCount(finalStepRuntime);
   const queueTargets: OutputExecutionTarget[] = state.steps.map(
     (_, stepIndex) => ({
       kind: FINAL_STEP_PHASES.QUEUE,
@@ -2114,7 +2113,7 @@ async function resolveCliJsonOutputProjection(
     })
   );
   const finalStepTargets: OutputExecutionTarget[] = workflowFile.finalStep
-    ? Array.from({ length: finalLoopCount }, (_, loopIndex) => ({
+    ? Array.from({ length: finalPassCount }, (_, loopIndex) => ({
         kind: FINAL_STEP_PHASES.FINAL_STEP,
         loopIndex,
       }))

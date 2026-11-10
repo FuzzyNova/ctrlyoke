@@ -458,12 +458,12 @@ suite("CliJsonResultBuilder", () => {
     const projection: RunOutputProjection = {
       targets: new Map(),
       finalStep: {
-        loopCount: 2,
+        passCount: 2,
         attempts: 3,
         filesChanged: [
           { path: "src/fix.ts", scope: "workspace", operations: ["modified"] },
         ],
-        latestLoop: finalProjection,
+        latestPass: finalProjection,
       },
     };
     const output = build({
