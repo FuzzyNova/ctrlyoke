@@ -795,7 +795,7 @@ suite("ExecutionPreviewService", () => {
   test("uses shared planning paths and produces a step-scoped DTO", async () => {
     const workflow: PromptFile = {
       harness: HARNESS_IDS.CLAUDE_CLI,
-      model: "workflow-model",
+      model: "opus",
       steps: [
         {
           name: "Inspect",
@@ -818,10 +818,7 @@ suite("ExecutionPreviewService", () => {
 
     assert.strictEqual(preview.steps.length, 1);
     assert.strictEqual(preview.steps[0].stepName, "Inspect");
-    assert.strictEqual(
-      preview.steps[0].resolvedProperties.model,
-      "workflow-model"
-    );
+    assert.strictEqual(preview.steps[0].resolvedProperties.model, "opus");
     assert.strictEqual(
       preview.steps[0].resolvedProperties.propertySources.model,
       "workflow"
@@ -832,7 +829,8 @@ suite("ExecutionPreviewService", () => {
         argument.includes("inspect src/app.ts")
       )
     );
-    assert.ok(preview.steps[0].command?.args.includes("--model"));
+    const args = preview.steps[0].command?.args ?? [];
+    assert.strictEqual(args[args.indexOf("--model") + 1], "opus");
     assert.ok(
       preview.steps[0].prompt?.sections.some((section) =>
         section.body?.includes("src/app.ts")

@@ -170,18 +170,18 @@ The default harness for workflows and steps that do not name one. Empty = auto-d
 
 - **Type:** `{ copilot-cli?, claude-cli?, codex-cli?, … }`
 
-The default model to use for each harness for new workflows.
+The model each harness uses when neither the step nor the workflow names one. Unset: ctrlyoke's built-in recommendation for that harness, which is `none` for every harness: no `--model` is passed, so the harness CLI uses its own configured default. The built-in recommendation can change between releases.
 
 <details><summary>Default value</summary>
 
 ```json
 {
-  "copilot-cli": "claude-sonnet-4.6",
-  "claude-cli": "sonnet",
-  "codex-cli": "gpt-6-luna",
-  "opencode-cli": "opencode/big-pickle",
-  "qwen-cli": "qwen3.5-plus",
-  "antigravity-cli": "gemini-3.8-flash-medium"
+  "copilot-cli": "none",
+  "claude-cli": "none",
+  "codex-cli": "none",
+  "opencode-cli": "none",
+  "qwen-cli": "none",
+  "antigravity-cli": "none"
 }
 ```
 
@@ -1018,7 +1018,7 @@ Automatically grow the editor panel as you type past its current height, up to 6
 - **Type:** `boolean`
 - **Default:** `false`
 
-Send absolute file paths to the harness/model instead of relative paths. Stored workflow text stays relative regardless of this setting. Forced on in multi-root workspaces and for OpenCode and Antigravity, whose models often fail to resolve relative paths.
+Send absolute file paths to the harness/model instead of relative paths. Stored workflow text stays relative regardless of this setting. Forced on in multi-root workspaces and for OpenCode, Antigravity and Qwen, whose models often fail to resolve relative paths.
 
 ### `ui.outputVirtualizationRowThreshold` {#ui-outputvirtualizationrowthreshold}
 

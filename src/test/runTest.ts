@@ -95,6 +95,18 @@ async function runShard(
       extensionTestsEnv: {
         ...selectionEnv,
         CTRLYOKE_HOME: stateHome,
+        // A Qwen launch checks its model against Qwen's settings files, so
+        // tests must never see the machine's real Qwen system files. The user
+        // file (~/.qwen) is left alone here, because tests fake the home
+        // directory; tests that launch Qwen isolate it with QWEN_HOME.
+        QWEN_CODE_SYSTEM_SETTINGS_PATH: path.join(
+          stateHome,
+          "qwen-system-settings.json"
+        ),
+        QWEN_CODE_SYSTEM_DEFAULTS_PATH: path.join(
+          stateHome,
+          "qwen-system-defaults.json"
+        ),
         TMPDIR: resolvedTmpDir,
         CTRLYOKE_TEST_SHARD_INDEX: String(index),
         CTRLYOKE_TEST_SHARD_COUNT: String(SHARD_COUNT),

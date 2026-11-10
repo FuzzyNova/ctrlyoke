@@ -17,8 +17,8 @@ capability details and version-scoped evidence.
 - **Command:** `opencode`, on your `PATH`.
 - **Install:** see [Install](#install).
 - **Sign in:** connect at least one model provider in OpenCode, then check that `opencode models`
-  lists the models you want. ctrlyoke's default OpenCode model, `opencode/big-pickle`, is
-  OpenCode's free model.
+  lists the models you want. Unless you pick a model, OpenCode uses the one from its own
+  configuration. `opencode/big-pickle` is OpenCode's free model.
 - **Version:** at least the minimum listed under
   [Supported versions](/harnesses/compatibility#supported-versions). Update with
   `opencode upgrade`.
@@ -69,10 +69,10 @@ provider. If the command fails, ctrlyoke falls back to `opencode/big-pickle`,
 
 Models use OpenCode's `provider/model` form. Set `model` on the workflow or on a step. Without one,
 ctrlyoke uses [`defaults.models["opencode-cli"]`](/reference/settings#defaults-models), which is
-`opencode/big-pickle`, OpenCode's free model, out of the box. Any `provider/model` value is passed
-to OpenCode as is, even one the list doesn't show. A value without a `/` is replaced by your
-default, with a warning in the log. If your default is `none`, no model flag is passed and
-OpenCode uses the model from its own configuration.
+`none` out of the box: no model flag is passed, so OpenCode uses the model from its own
+configuration, from whichever providers you connected. Any `provider/model` value is passed to
+OpenCode as is, even one the list doesn't show. A value without a `/` is replaced by your default,
+with a warning in the log. If your default is `none`, no model flag is passed.
 
 `model: none` leaves the model unset, so OpenCode uses the model from its own configuration. See
 [How step properties inherit](/workflows/yaml-format#property-inheritance).

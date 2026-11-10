@@ -42,6 +42,7 @@ import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
 import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
+import { describeQwenModelFallback } from "./QwenModelProviders";
 import { splitDescriptionPreview } from "../shared/AskUserQuestionPreview";
 import {
   QWEN_AGENT_ARGUMENTS,
@@ -223,6 +224,33 @@ function isQwenMainTurnPromptId(promptId: unknown): boolean {
 }
 
 export class QwenLogParser extends BaseLogParser {
+  /**
+   * The `--model` ctrlyoke launched Qwen with, or undefined when Qwen chose its
+   * own model. Set for each launch by `QwenHarnessAdapter`.
+   */
+  private launchModel: string | undefined;
+
+  /** Record the model the next Qwen process is launched with. */
+  setLaunchModel(model: string | undefined): void {
+    this.launchModel = model || undefined;
+  }
+
+  /**
+   * The step warning when Qwen answered on `actualModel` for a launch that
+   * requested another one; undefined when they match or either is unknown.
+   * Only a warning: the turn has already run, so failing it would discard
+   * work. The settings check before launch fails the step instead whenever
+   * Qwen's settings list models.
+   */
+  private getModelFallbackWarning(
+    actualModel: string | undefined
+  ): string | undefined {
+    if (!this.launchModel || !actualModel || actualModel === this.launchModel) {
+      return undefined;
+    }
+    return describeQwenModelFallback(this.launchModel, actualModel);
+  }
+
   /**
    * An `api_error` on the user's turn whose status Qwen never retries ends the
    * turn without a Stop hook, so it fails the step at once. Every other
@@ -518,11 +546,15 @@ export class QwenLogParser extends BaseLogParser {
             }
           : undefined;
 
+    // `model` is the turn's first answer: a later one can follow a `/model`
+    // switch made in the TUI.
+    const modelFallback = this.getModelFallbackWarning(model);
     return {
       events: outputEvents,
       metadata: {
         sessionId,
         model,
+        ...(modelFallback ? { warnings: [modelFallback] } : {}),
         harness: HARNESS_IDS.QWEN_CLI,
         usage: tokenUsage,
         ...(totalCachedTokens > 0

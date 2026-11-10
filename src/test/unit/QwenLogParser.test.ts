@@ -31,6 +31,50 @@ function sessionErrors(events: BaseCliEvent[]) {
   });
 }
 
+suite("Qwen model fallback warning", () => {
+  const answer = (model: string): BaseCliEvent => ({
+    type: "assistant",
+    model,
+    message: { role: "model", parts: [{ text: "ok" }] },
+  });
+
+  test("warns, without failing, when Qwen answered on another model", () => {
+    const parser = new QwenLogParser();
+    parser.setLaunchModel("qwen3.5-plus");
+    const output = parser.extractResponse([answer("qwen3.6-plus")]);
+    assert.strictEqual(output.metadata.error, undefined);
+    assert.strictEqual(output.metadata.model, "qwen3.6-plus");
+    assert.strictEqual(output.metadata.warnings?.length, 1);
+    assert.ok(
+      output.metadata.warnings[0].includes("Qwen ran qwen3.6-plus"),
+      output.metadata.warnings[0]
+    );
+    assert.strictEqual(
+      parser.getSessionError(answer("qwen3.6-plus")),
+      undefined
+    );
+  });
+
+  test("judges by the first answer, so a later /model switch is not flagged", () => {
+    const parser = new QwenLogParser();
+    parser.setLaunchModel("qwen3.5-plus");
+    const output = parser.extractResponse([
+      answer("qwen3.5-plus"),
+      answer("qwen3.7-plus"),
+    ]);
+    assert.strictEqual(output.metadata.warnings, undefined);
+  });
+
+  test("warns about nothing when Qwen chose its own model", () => {
+    const parser = new QwenLogParser();
+    parser.setLaunchModel(undefined);
+    assert.strictEqual(
+      parser.extractResponse([answer("qwen3.6-plus")]).metadata.warnings,
+      undefined
+    );
+  });
+});
+
 function apiError(uiEvent: Record<string, unknown>): BaseCliEvent {
   return {
     type: "system",

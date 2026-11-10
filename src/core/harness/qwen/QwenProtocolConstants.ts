@@ -6,6 +6,17 @@ export const QWEN_EVENT_TYPES = {
   RESULT: "result",
 } as const;
 
+/**
+ * Start of the error Qwen 0.27+ returns, without running the tool, when the
+ * model calls a deferred MCP tool before loading its schema with
+ * `tool_search`. The model then loads it and calls the tool again, so one
+ * intended call can appear as a refused attempt followed by the real one.
+ */
+export const QWEN_DEFERRED_TOOL_REFUSAL_PREFIX = "[tool_call bridge refused]";
+
+/** Qwen's flags that choose the model (`-m, --model`). */
+export const QWEN_MODEL_FLAGS: ReadonlySet<string> = new Set(["--model", "-m"]);
+
 export const QWEN_CONTENT_PART_TYPES = {
   TEXT: "text",
   TOOL_USE: "tool_use",

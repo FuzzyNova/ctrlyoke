@@ -36,6 +36,7 @@ import {
 import type { CapabilitiesModel } from "../types/CapabilitiesTypes";
 import { CodexAppServerClient } from "../core/harness/codex/CodexAppServerClient";
 import { ClaudeModelCatalogClient } from "../core/harness/claude/ClaudeModelCatalogClient";
+import { collectQwenModelProviderIds } from "../core/harness/qwen/QwenModelProviders";
 import { Log } from "./Log";
 import { getQwenHomeDir } from "./HarnessHome";
 import { TypedEmitter } from "./TypedEmitter";
@@ -534,20 +535,7 @@ async function queryQwenModels(): Promise<void> {
   const settingsPath = path.join(getQwenHomeDir(), "settings.json");
   try {
     const content = await fsPromises.readFile(settingsPath, "utf-8");
-    const settings = JSON.parse(content) as {
-      modelProviders?: Record<string, Array<{ id?: string }>>;
-    };
-    const providers = settings?.modelProviders ?? {};
-    const ids: string[] = [];
-    for (const providerModels of Object.values(providers)) {
-      if (Array.isArray(providerModels)) {
-        for (const model of providerModels) {
-          if (model && typeof model.id === "string" && model.id) {
-            ids.push(model.id);
-          }
-        }
-      }
-    }
+    const ids = collectQwenModelProviderIds(JSON.parse(content));
     if (ids.length > 0) {
       cachedQwenModelIds = ids;
       Log.debug(

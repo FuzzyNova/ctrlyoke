@@ -51,7 +51,7 @@ See [GitHub's install guide](https://github.com/github/copilot-cli#installation)
 
 ```yaml
 harness: copilot-cli
-model: claude-sonnet-4.6
+model: claude-sonnet-5.5
 
 steps:
   - prompt: Review @src/ for the highest-priority reliability issue.
@@ -64,9 +64,10 @@ when it starts, so reload the window after Copilot adds a model. If the command 
 uses its built-in list instead.
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
-[`defaults.models["copilot-cli"]`](/reference/settings#defaults-models), which is
-`claude-sonnet-4.6` out of the box. A model that isn't on the list is replaced by that default,
-with a warning in the log; if the default is `none`, no `--model` flag is passed. The `ctrlyoke`
+[`defaults.models["copilot-cli"]`](/reference/settings#defaults-models), which is `none` out of
+the box: no `--model` flag is passed, so Copilot uses its own default model, which is always one
+your account can use. A model that isn't on the list is replaced by your default, with a warning in
+the log; if the default is `none`, no `--model` flag is passed. The `ctrlyoke`
 CLI doesn't look the list up, so it passes the model to Copilot as you wrote it.
 
 `model: none` passes no `--model` flag, so Copilot uses its own default model. `copilot help

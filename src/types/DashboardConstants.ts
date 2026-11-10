@@ -3244,29 +3244,33 @@ export const WORKTREE_KEEP_HELP_TEXT =
   "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch — ignored files such as `node_modules` are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run.";
 
 // ============================================================================
-// DEFAULT MODELS - Default model per harness. `CTRLYOKE_SETTINGS_DEFAULTS`
-// derives `defaults.models` from this, and a test pins the settings schema's
-// defaults to those, so change a default here and run `npm run schema:update`.
-// ============================================================================
-export const DEFAULT_MODELS = {
-  [HARNESS_IDS.COPILOT_CLI]: "claude-sonnet-4.6",
-  [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
-  [HARNESS_IDS.CODEX_CLI]: "gpt-6-luna",
-  // OpenCode's free model, so a default run costs nothing.
-  [HARNESS_IDS.OPENCODE_CLI]: "opencode/big-pickle",
-  [HARNESS_IDS.QWEN_CLI]: "qwen3.5-plus",
-  // Gemini Flash, not agy's own Claude Sonnet default: the Sonnet tier has a
-  // small individual quota that a single run can exhaust for ~28h, which would
-  // block unrelated work for anyone who never picks a model explicitly.
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3.8-flash-medium",
-} as const satisfies Record<HarnessId, string>;
-
-// ============================================================================
 // MODEL OPTION VALUES - Sentinels used by model option lists
 // ============================================================================
 export const MODEL_OPTION_VALUES = {
   NONE: "none",
 } as const;
+
+// ============================================================================
+// DEFAULT MODELS - The model a harness runs when neither the step, the
+// workflow nor `defaults.models` names one. `CTRLYOKE_SETTINGS_DEFAULTS`
+// derives `defaults.models` from this.
+//
+// Every harness defaults to `none`: no `--model`, so the CLI uses its own
+// configured default, which is always valid for the user's account. A pinned
+// id goes stale as vendors retire models (Copilot stopped serving
+// `claude-sonnet-4.6` while still listing it), and every user who never chose
+// a model then fails. These are recommendations, not part of the settings
+// schema contract, so changing one needs a CHANGELOG "Changed" entry but no
+// schema bump.
+// ============================================================================
+export const DEFAULT_MODELS = {
+  [HARNESS_IDS.COPILOT_CLI]: MODEL_OPTION_VALUES.NONE,
+  [HARNESS_IDS.CLAUDE_CLI]: MODEL_OPTION_VALUES.NONE,
+  [HARNESS_IDS.CODEX_CLI]: MODEL_OPTION_VALUES.NONE,
+  [HARNESS_IDS.OPENCODE_CLI]: MODEL_OPTION_VALUES.NONE,
+  [HARNESS_IDS.QWEN_CLI]: MODEL_OPTION_VALUES.NONE,
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: MODEL_OPTION_VALUES.NONE,
+} as const satisfies Record<HarnessId, string>;
 
 // ============================================================================
 // CLI MODEL OPTION LISTS - Derived from ModelConstants (single source of truth)

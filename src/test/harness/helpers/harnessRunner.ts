@@ -73,10 +73,16 @@ export type { HarnessId };
  * - opencode-cli uses Claude Haiku through OpenCode Zen, a paid model: the free
  *   big-pickle tier has a usage cap that a full suite run can exhaust, after
  *   which every OpenCode case times out. claude-cli uses the haiku alias.
- * - antigravity-cli uses GPT-OSS 120B: a full run costs about 1% of a free
- *   agy weekly quota, where Gemini 3.8 Flash runs it out in two. Its shared
- *   capacity sometimes answers 503, which the runners retry. It is text-only,
- *   so image cases use {@link HARNESS_IMAGE_MODELS}.
+ * - antigravity-cli uses Gemini 3.8 Flash (Medium), which needs a paid Google
+ *   plan: on the free plan two full runs exhaust the weekly quota. GPT-OSS
+ *   120B, the cheaper alternative, stalled for 5 minutes per request in
+ *   November 2026, timing out every case.
+ * - qwen-cli uses qwen3.7-flash: cheaper than qwen3.6-plus, and it follows
+ *   the suite's tool instructions where qwen3.5-flash did not (it skipped
+ *   commands and repeated MCP calls). The test machine's
+ *   `~/.qwen/settings.json` must list it under `modelProviders`, or ctrlyoke
+ *   fails every Qwen step before launch (Qwen 0.27+ would silently run its
+ *   default model).
  *
  * `CTRLYOKE_HARNESS_MODEL_<HARNESS>` (e.g. `CTRLYOKE_HARNESS_MODEL_ANTIGRAVITY_CLI`)
  * replaces a harness's model for a whole run, image cases included — for an
@@ -89,17 +95,15 @@ export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "claude-cli": modelFor("claude-cli", "haiku"),
   "codex-cli": modelFor("codex-cli", "gpt-6-luna"),
   "opencode-cli": modelFor("opencode-cli", "opencode/claude-haiku-5-5"),
-  "qwen-cli": modelFor("qwen-cli", "qwen3.5-plus"),
-  "antigravity-cli": modelFor("antigravity-cli", "gpt-oss-120b-medium"),
+  "qwen-cli": modelFor("qwen-cli", "qwen3.7-flash"),
+  "antigravity-cli": modelFor("antigravity-cli", "gemini-3.8-flash-medium"),
 };
 
 /**
  * Models for cases that send an image, where a harness's default model cannot
  * read one. A harness not listed here uses its {@link HARNESS_MODELS} entry.
  */
-export const HARNESS_IMAGE_MODELS: Partial<Record<HarnessId, string>> = {
-  "antigravity-cli": modelFor("antigravity-cli", "gemini-3.8-flash-low"),
-};
+export const HARNESS_IMAGE_MODELS: Partial<Record<HarnessId, string>> = {};
 
 /** The model a case that sends an image should run `harness` with. */
 export function imageInputModel(harness: HarnessId): string | undefined {
@@ -366,13 +370,29 @@ function parseJsonResultLine(stdout: string): CliJsonResult | undefined {
 /**
  * Folder-trust questions a harness TUI asks on first sight of a workspace, and
  * the keys that accept them. Matched against the terminal output with escape
- * sequences and whitespace removed. Only `makeHarnessWorkspaceDir`'s fixed
- * folders reach these, so each is answered once per machine.
+ * sequences and whitespace removed. Claude's comes up only for
+ * `makeHarnessWorkspaceDir`'s fixed folders, so it is answered once per
+ * machine. Copilot's comes up for every fresh temp folder; its default answer
+ * trusts the folder for that session only and records nothing, so it is
+ * answered every time it appears (a resumed step asks again).
  */
-const FOLDER_TRUST_ANSWERS: readonly { prompt: RegExp; keys: string[] }[] = [
+const FOLDER_TRUST_ANSWERS: readonly {
+  prompt: RegExp;
+  keys: string[];
+  /** Answer each time the question appears, not just the first time. */
+  repeats?: boolean;
+}[] = [
   // Claude Code: "Is this a project you created or one you trust?", with
   // "No, exit" selected above "Yes, I trust this folder".
   { prompt: /Yes,Itrustthisfolder/, keys: ["\x1b[B", "\r"] },
+  // Copilot CLI: "Do you trust the files in this folder?", with "1. Yes"
+  // (this session only) selected above "Yes, and remember this folder". The
+  // dialog's box border (`│`) separates the question from its options.
+  {
+    prompt: /Doyoutrustthefilesinthisfolder\?[│]*❯1\.Yes/,
+    keys: ["\r"],
+    repeats: true,
+  },
 ];
 
 /** Pause before each answer keystroke: a TUI drops keys sent while it redraws. */
@@ -433,23 +453,37 @@ function spawnInteractive(
       terminal.kill();
     };
     const unanswered = [...FOLDER_TRUST_ANSWERS];
+    // Output before this offset has already been answered, so a repeating
+    // answer only fires again for a question asked after its last reply. No
+    // question is matched while a reply's keys are still being sent, because
+    // the TUI keeps redrawing the question until the last key arrives.
+    let answeredThrough = 0;
+    let replying = false;
     terminal.onData((chunk) => {
       output += chunk;
+      if (replying) return;
       const screen = output
-        .slice(-4000)
+        .slice(Math.max(answeredThrough, output.length - 4000))
         .replace(/\x1b\[[0-9;?>]*[a-zA-Z]/g, "")
         .replace(/\s+/g, "");
-      for (const answer of [...unanswered]) {
-        if (answer.prompt.test(screen)) {
-          unanswered.splice(unanswered.indexOf(answer), 1);
-          answer.keys.forEach((key, index) =>
-            setTimeout(
-              () => terminal.write(key),
-              (index + 1) * ANSWER_KEY_DELAY_MS
-            )
-          );
-        }
-      }
+      const answer = unanswered.find((candidate) =>
+        candidate.prompt.test(screen)
+      );
+      if (!answer) return;
+      if (!answer.repeats) unanswered.splice(unanswered.indexOf(answer), 1);
+      replying = true;
+      answer.keys.forEach((key, index) =>
+        setTimeout(
+          () => {
+            terminal.write(key);
+            if (index === answer.keys.length - 1) {
+              answeredThrough = output.length;
+              replying = false;
+            }
+          },
+          (index + 1) * ANSWER_KEY_DELAY_MS
+        )
+      );
     });
     const timer = setTimeout(kill, timeoutMs);
     const poller = stopWhen
@@ -665,8 +699,12 @@ export async function withIsolatedCodexHome<T>(
     },
     (isolatedHome) => {
       // TOML literal-string keys hold a Windows path without escaping, matching
-      // how Codex itself records trust.
-      const trustEntries = trustedDirs
+      // how Codex itself records trust. Codex looks the folder up by its real
+      // path, so a macOS temp folder (`/var/folders/…`, a symlink into
+      // `/private/var/…`) is recorded under both spellings.
+      const trustEntries = [
+        ...new Set(trustedDirs.flatMap((dir) => [dir, fs.realpathSync(dir)])),
+      ]
         .map((dir) => `\n[projects.'${dir}']\ntrust_level = "trusted"\n`)
         .join("");
       fs.appendFileSync(path.join(isolatedHome, "config.toml"), trustEntries);

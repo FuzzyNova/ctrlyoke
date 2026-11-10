@@ -11,7 +11,6 @@ import {
 } from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
-  DEFAULT_MODELS,
   HARNESS_IDS,
   HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
@@ -216,7 +215,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     npmPackage: "opencode-ai",
     versionPolicy: {
       minimum: "1.3.16",
-      testedWith: "2.2.6",
+      testedWith: "2.2.7",
       updateCommand: "opencode upgrade",
     },
     shouldStreamHeadlessOutput: true,
@@ -230,8 +229,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
   };
 
   /** The fully-qualified model ID used for the most-recently started execution (e.g. "anthropic/claude-sonnet-4-6"). */
-  private resolvedCurrentModel: string =
-    DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI];
+  private resolvedCurrentModel = "";
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
@@ -553,9 +551,8 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
             };
             this.setAttachedMcpServerIds([]);
             this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
-            if (model) {
-              this.resolvedCurrentModel = model;
-            }
+            // No model flag means OpenCode picks; its window is then unknown.
+            this.resolvedCurrentModel = model ?? "";
           },
         },
         ...(workspaceRoot
@@ -1058,18 +1055,10 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
       Log.warn(
         `[OpenCodeHarnessAdapter] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
           `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). ` +
-          (configuredDefault === MODEL_NONE
-            ? "No model flag will be passed; OpenCode will use its configured model."
-            : configuredDefault
-              ? "Using the built-in default model."
-              : "No model flag will be passed.")
+          "No model flag will be passed; OpenCode will use its configured model."
       );
     }
-
-    if (configuredDefault === MODEL_NONE) return undefined;
-    return configuredDefault
-      ? DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI]
-      : undefined;
+    return undefined;
   }
 
   private serializeUserHooks(userHooks?: UserHookConfig[]): string | undefined {

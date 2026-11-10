@@ -6001,6 +6001,14 @@ export class WorkflowExecutor {
       integration,
       "step output"
     );
+    for (const warning of parsedOutput?.metadata.warnings ?? []) {
+      await this.trackStatusMessage(
+        context,
+        target,
+        warning,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+    }
     if (context.historyFilePath && context.outputHistoryManager) {
       await context.outputHistoryManager.recordAttemptTerminal(
         context.historyFilePath,

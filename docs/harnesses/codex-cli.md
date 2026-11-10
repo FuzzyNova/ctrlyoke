@@ -70,8 +70,9 @@ If Codex isn't installed or doesn't answer, the picker falls back to the list bu
 `gpt-5.6-terra` and `gpt-5.6-luna`.
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
-[`defaults.models["codex-cli"]`](/reference/settings#defaults-models), which is `gpt-6-luna` out of
-the box. A model Codex didn't list is replaced by that default, with a warning in the log; if the
+[`defaults.models["codex-cli"]`](/reference/settings#defaults-models), which is `none` out of the
+box: no `--model` flag is passed, so Codex uses the model from its own configuration. A model Codex
+didn't list is replaced by your default, with a warning in the log; if the
 default is `none`, no `--model` flag is passed. The
 `ctrlyoke` CLI doesn't look the list up, so it passes the model to Codex as you wrote it.
 

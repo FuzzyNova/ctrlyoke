@@ -14,6 +14,7 @@
 import * as assert from "assert";
 import { spawn, spawnSync } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import type {
   McpServerConfig,
@@ -507,6 +508,15 @@ async function withIsolatedAntigravityHome<T>(
   const settingsPath = getAntigravitySettingsPath(home);
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+  // macOS finds the login Keychain, where agy keeps its sign-in, through
+  // $HOME/Library; without it agy fails with "authentication failed or timed
+  // out". Windows keeps credentials outside the profile folder.
+  if (process.platform === "darwin") {
+    fs.symlinkSync(
+      path.join(os.homedir(), "Library"),
+      path.join(home, "Library")
+    );
+  }
   const previous = {
     USERPROFILE: process.env.USERPROFILE,
     HOME: process.env.HOME,

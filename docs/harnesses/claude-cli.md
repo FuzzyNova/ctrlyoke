@@ -75,8 +75,9 @@ uses no tokens.
 If Claude Code isn't installed or doesn't answer, the picker falls back to the four aliases.
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
-[`defaults.models["claude-cli"]`](/reference/settings#defaults-models), which is `sonnet` out of
-the box. A full model ID is passed to Claude Code as written, so the version it pins is kept. That
+[`defaults.models["claude-cli"]`](/reference/settings#defaults-models), which is `none` out of
+the box: no `--model` flag is passed, so Claude Code uses its own default model for your plan. A
+full model ID is passed to Claude Code as written, so the version it pins is kept. That
 includes Anthropic IDs such as `claude-opus-4-6`, Amazon Bedrock IDs such as
 `us.anthropic.claude-sonnet-4-5-20250929-v1:0` and Bedrock inference-profile ARNs, and Google
 Vertex AI IDs such as `claude-sonnet-4-5@20250929`. A Copilot-style ID such as `claude-sonnet-4.6`

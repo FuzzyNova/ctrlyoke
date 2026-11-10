@@ -270,6 +270,11 @@ export const HOOK_CAVEAT_CODES = {
   NO_NATIVE_EVENT: "hooks.noNativeEvent",
   /** The harness can miss the main session's creation event (OpenCode #14808). */
   MAIN_SESSION_START_UNRELIABLE: "hooks.mainSessionStartUnreliable",
+  /**
+   * The harness can exit without waiting for the hook (Claude Code's
+   * StopFailure after a rejected request), so a slow hook is cut off.
+   */
+  NOT_AWAITED_ON_EXIT: "hooks.notAwaitedOnExit",
   /** The hook fires, but the harness's decision-response contract is unverified. */
   UNVERIFIED_DECISION_CONTRACT: "hooks.unverifiedDecisionContract",
   /** The hook fires, but cannot block the tool call. */
@@ -329,6 +334,8 @@ export function getCompatibilityCaveatMessage(
       return "because this harness exposes no native event ctrlyoke can map it to";
     case HOOK_CAVEAT_CODES.MAIN_SESSION_START_UNRELIABLE:
       return "because this harness can start the main session before its plugin is listening, so the hook may not fire for it";
+    case HOOK_CAVEAT_CODES.NOT_AWAITED_ON_EXIT:
+      return "because this harness can exit without waiting for the hook, so a hook that takes more than a moment can be cut off before it finishes";
     case HOOK_CAVEAT_CODES.UNVERIFIED_DECISION_CONTRACT:
       return "because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored";
     case HOOK_CAVEAT_CODES.CANNOT_BLOCK:

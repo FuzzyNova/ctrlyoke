@@ -56,6 +56,12 @@ interface MovedHomeCase {
   readonly moves: string;
   readonly home: () => MovedHarnessHomeOptions;
   readonly prepare: (home: string, workspace: string) => CasePreparation;
+  /**
+   * The `home().copy` entry that carries the sign-in, with why a machine may
+   * lack it. Without that file the moved home cannot sign in, so the case is
+   * skipped instead of waiting on a login screen.
+   */
+  readonly signIn?: { readonly file: string; readonly missingReason: string };
 }
 
 /** Add `advanced.runtimeOutputDir` to a Qwen settings file. */
@@ -79,6 +85,14 @@ const CASES: readonly MovedHomeCase[] = [
     moves: "CLAUDE_CONFIG_DIR",
     home: claudeHomeCopy,
     prepare: (home) => ({ transcriptRoot: path.join(home, "projects") }),
+    signIn: {
+      file: ".credentials.json",
+      // macOS Claude Code keeps the sign-in in the Keychain, in an entry
+      // named per config directory, so a moved home has none, and copying
+      // one would write to the developer's real Keychain.
+      missingReason:
+        "Claude Code keeps its sign-in in the OS credential store here, not in .credentials.json",
+    },
   },
   {
     harness: HARNESS_IDS.QWEN_CLI,
@@ -175,6 +189,15 @@ suite("Moved harness home regression tests", function () {
       const label = `${movedCase.harness} (${mode}, ${movedCase.moves})`;
 
       test(`${movedCase.harness}: ${mode} run follows ${movedCase.moves}`, async function () {
+        const signInSource =
+          movedCase.signIn && movedCase.home().copy[movedCase.signIn.file];
+        if (
+          movedCase.signIn &&
+          (!signInSource || !fs.existsSync(signInSource))
+        ) {
+          console.log(`  ↳ skipped: ${movedCase.signIn.missingReason}`);
+          this.skip();
+        }
         const workspace = makeHarnessWorkspaceDir(
           movedCase.harness,
           "cy-moved-home-"

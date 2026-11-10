@@ -429,15 +429,29 @@ suite("ExecutionPlanBuilder", () => {
         const provider = createProvider();
         const session = createSession(executionMode);
         const plan = await createBuilder(provider).plan(session);
-        const baseArgs = await provider.buildCliArgs(
-          session.prompt,
-          executionMode === EXECUTION_MODES.INTERACTIVE,
-          "extension",
-          undefined,
-          undefined,
-          session.workflowContext,
-          []
+        // The real launch below runs Qwen's model check against Qwen's
+        // settings; an empty home keeps the developer's ~/.qwen out of it.
+        const emptyQwenHome = await fsPromises.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-empty-qwen-home-")
         );
+        const realQwenHome = process.env.QWEN_HOME;
+        process.env.QWEN_HOME = emptyQwenHome;
+        let baseArgs: string[];
+        try {
+          baseArgs = await provider.buildCliArgs(
+            session.prompt,
+            executionMode === EXECUTION_MODES.INTERACTIVE,
+            "extension",
+            undefined,
+            undefined,
+            session.workflowContext,
+            []
+          );
+        } finally {
+          if (realQwenHome === undefined) delete process.env.QWEN_HOME;
+          else process.env.QWEN_HOME = realQwenHome;
+          await fsPromises.rm(emptyQwenHome, { recursive: true, force: true });
+        }
         const realArgs =
           executionMode === EXECUTION_MODES.INTERACTIVE
             ? provider.buildInteractiveArgs(baseArgs, session.promptArgument)

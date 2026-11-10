@@ -2,8 +2,11 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { suite, test } from "mocha";
-import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from "mocha";
+import {
+  getRequestedQwenModel,
+  QwenHarnessAdapter,
+} from "../../core/harness/qwen/QwenHarnessAdapter";
 import { TEMP_FILE_CATEGORIES } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import type {
@@ -30,6 +33,42 @@ function parseMcpConfig(args: string[]): Record<string, unknown> {
 // ============================================================================
 
 suite("QwenHarnessAdapter", () => {
+  // Launching checks the model against Qwen's settings files, so point every
+  // test at an empty Qwen home instead of the developer's real one.
+  const isolatedQwenEnvKeys = [
+    "QWEN_HOME",
+    "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+    "QWEN_CODE_SYSTEM_DEFAULTS_PATH",
+  ] as const;
+  let realQwenEnv: Partial<
+    Record<(typeof isolatedQwenEnvKeys)[number], string>
+  > = {};
+  let emptyQwenHome: string;
+
+  suiteSetup(async () => {
+    realQwenEnv = Object.fromEntries(
+      isolatedQwenEnvKeys.map((key) => [key, process.env[key]])
+    );
+    emptyQwenHome = await createTempWorkspace();
+    process.env.QWEN_HOME = emptyQwenHome;
+    process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH = path.join(
+      emptyQwenHome,
+      "no-system.json"
+    );
+    process.env.QWEN_CODE_SYSTEM_DEFAULTS_PATH = path.join(
+      emptyQwenHome,
+      "no-defaults.json"
+    );
+  });
+
+  suiteTeardown(async () => {
+    for (const key of isolatedQwenEnvKeys) {
+      if (realQwenEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = realQwenEnv[key];
+    }
+    await removeTempWorkspace(emptyQwenHome);
+  });
+
   test("recognizes Qwen's missing saved session message from stdout", () => {
     const provider = new QwenHarnessAdapter();
 
@@ -113,6 +152,13 @@ suite("QwenHarnessAdapter", () => {
         Object.defineProperty(process, "platform", originalPlatform);
       }
     }
+  });
+
+  test("requires absolute file references", () => {
+    assert.strictEqual(
+      new QwenHarnessAdapter().requiresAbsoluteFileReferences,
+      true
+    );
   });
 
   test("converts user hook timeout seconds to native milliseconds", () => {
@@ -613,6 +659,113 @@ suite("QwenHarnessAdapter", () => {
     test("does not add --output-format/--input-format (interactive mode never hits the non-interactive gate)", () => {
       const result = provider.buildInteractiveArgs(["--base"], "do the thing");
       assert.deepStrictEqual(result, ["-i", "do the thing", "--base"]);
+    });
+  });
+
+  suite("model check before launch", () => {
+    const envKeys = [
+      "QWEN_HOME",
+      "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+      "QWEN_CODE_SYSTEM_DEFAULTS_PATH",
+    ] as const;
+    let savedEnv: Partial<Record<(typeof envKeys)[number], string>>;
+    let qwenHome: string;
+    let workspaceRoot: string;
+
+    /** Write Qwen user settings listing `ids` under one provider. */
+    const writeUserModels = (ids: string[]) =>
+      fs.writeFile(
+        path.join(qwenHome, "settings.json"),
+        JSON.stringify({
+          modelProviders: { openai: ids.map((id) => ({ id })) },
+        })
+      );
+
+    const launch = (resolvedProperties: Partial<ResolvedProperties>) => {
+      const prompt: PromptStep = { prompt: "do the thing" };
+      return new QwenHarnessAdapter().buildCliArgs(
+        prompt,
+        false,
+        "C:\\extension",
+        workspaceRoot,
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [prompt],
+          resolvedProperties: resolvedProperties as ResolvedProperties,
+        }
+      );
+    };
+
+    setup(async () => {
+      savedEnv = Object.fromEntries(
+        envKeys.map((key) => [key, process.env[key]])
+      );
+      qwenHome = await createTempWorkspace();
+      workspaceRoot = await createTempWorkspace();
+      process.env.QWEN_HOME = qwenHome;
+      process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH = path.join(
+        qwenHome,
+        "no-system.json"
+      );
+      process.env.QWEN_CODE_SYSTEM_DEFAULTS_PATH = path.join(
+        qwenHome,
+        "no-defaults.json"
+      );
+    });
+
+    teardown(async () => {
+      for (const key of envKeys) {
+        if (savedEnv[key] === undefined) delete process.env[key];
+        else process.env[key] = savedEnv[key];
+      }
+      await removeTempWorkspace(qwenHome);
+      await removeTempWorkspace(workspaceRoot);
+    });
+
+    test("reads the last --model, -m or --model= in the argv", () => {
+      assert.strictEqual(getRequestedQwenModel(["-y"]), undefined);
+      assert.strictEqual(
+        getRequestedQwenModel(["--model", "a", "--extra", "-m", "b"]),
+        "b"
+      );
+      assert.strictEqual(
+        getRequestedQwenModel(["--model", "a", "--model=c"]),
+        "c"
+      );
+    });
+
+    test("fails before launch for a model Qwen's settings do not list, even from additionalArgs", async () => {
+      await writeUserModels(["qwen3.6-plus"]);
+      await assert.rejects(
+        launch({ model: "none", additionalArgs: "--model cy-no-such-model" }),
+        /"cy-no-such-model" is not listed under modelProviders/
+      );
+    });
+
+    test("launches a listed model, and checks nothing without --model", async () => {
+      await writeUserModels(["qwen3.6-plus"]);
+      const args = await launch({ model: "qwen3.6-plus" });
+      assert.ok(args.includes("qwen3.6-plus"));
+      const noModel = await launch({ model: "none" });
+      assert.ok(!noModel.includes("--model"));
+    });
+
+    test("counts a model listed only in the workspace's .qwen/settings.json", async () => {
+      await writeUserModels(["qwen3.6-plus"]);
+      await fs.mkdir(path.join(workspaceRoot, ".qwen"));
+      await fs.writeFile(
+        path.join(workspaceRoot, ".qwen", "settings.json"),
+        JSON.stringify({
+          modelProviders: { openai: [{ id: "qwen3.5-flash" }] },
+        })
+      );
+      await launch({ model: "qwen3.5-flash" });
+    });
+
+    test("checks nothing when Qwen's settings list no models", async () => {
+      const args = await launch({ model: "cy-no-such-model" });
+      assert.ok(args.includes("cy-no-such-model"));
     });
   });
 });

@@ -3,7 +3,15 @@ import {
   UnsupportedSandboxMapper,
   unsupportedSandboxCapabilities,
 } from "../shared/SandboxCapabilities";
-import { QWEN_SANDBOX_ENV } from "./QwenProtocolConstants";
+import {
+  QWEN_EVENT_TYPES,
+  QWEN_MODEL_FLAGS,
+  QWEN_SANDBOX_ENV,
+} from "./QwenProtocolConstants";
+import {
+  describeUnconfiguredQwenModel,
+  readConfiguredQwenModelIds,
+} from "./QwenModelProviders";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { randomUUID } from "crypto";
@@ -16,7 +24,6 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
-  MODEL_OPTION_VALUES,
   STATUS_LINE_HARNESS_IDS,
   TEMP_FILE_CATEGORIES,
   type TempFileCategory,
@@ -43,6 +50,7 @@ import {
 } from "./QwenSystemSettings";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
+import { resolveCliModelFlag } from "../shared/CliModelSelection";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -76,6 +84,46 @@ import {
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
+
+/**
+ * The model a Qwen argv requests: the value of its last `--model`/`-m` (or
+ * `--model=<id>`), since `additionalArgs` come after ctrlyoke's own flag and
+ * the last one wins. Undefined when the argv lets Qwen choose.
+ */
+export function getRequestedQwenModel(
+  args: readonly string[]
+): string | undefined {
+  let model: string | undefined;
+  args.forEach((arg, index) => {
+    if (QWEN_MODEL_FLAGS.has(arg)) {
+      model = args[index + 1];
+      return;
+    }
+    const separator = arg.indexOf("=");
+    if (separator > 0 && QWEN_MODEL_FLAGS.has(arg.slice(0, separator))) {
+      model = arg.slice(separator + 1);
+    }
+  });
+  return model?.trim() || undefined;
+}
+
+/**
+ * Fail the launch when `model` is missing from every `modelProviders` list in
+ * Qwen's settings: Qwen 0.27+ would run its default model instead, with no
+ * error. Nothing is checked when no `--model` is passed or the settings list
+ * no models at all; the parser then warns after the turn if Qwen still swapped
+ * the model.
+ */
+async function assertQwenModelConfigured(
+  model: string | undefined,
+  workspaceRoot: string | undefined
+): Promise<void> {
+  if (!model) return;
+  const configured = await readConfiguredQwenModelIds(workspaceRoot);
+  if (configured && !configured.has(model)) {
+    throw new Error(describeUnconfiguredQwenModel(model));
+  }
+}
 
 const QWEN_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -215,6 +263,14 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
   }
   readonly logParser = new QwenLogParser();
 
+  /**
+   * qwen3.5-flash resolved a relative `.ctrlyoke/temp/...` reference against a
+   * garbled working directory (`…/gn/T/…` read as `…gn-T-…`), so it never
+   * found the step's prompt. An absolute path leaves nothing to resolve, as for
+   * OpenCode and Antigravity.
+   */
+  readonly requiresAbsoluteFileReferences = true;
+
   /** Extract Qwen's session ID from any complete JSON object in stdout. */
   extractSessionIdFromStdout(chunk: string): string | undefined {
     const { objects } = CliParseUtils.extractJsonObjectsFromStream(chunk);
@@ -228,7 +284,8 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
   extractErrorFromStdout(stdout: string): string | undefined {
     const { objects } = CliParseUtils.extractJsonObjectsFromStream(stdout);
     const resultEvent = objects.find(
-      (event) => event.type === "result" && event.is_error === true
+      (event) =>
+        event.type === QWEN_EVENT_TYPES.RESULT && event.is_error === true
     );
     if (!resultEvent) {
       return undefined;
@@ -399,9 +456,17 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       `[QwenHarnessAdapter] Qwen CLI arguments: ${JSON.stringify(redactMcpConfigArgs(args))}`
     );
 
+    const launchModel = getRequestedQwenModel(args);
     return {
       cliArgs: args,
       mutations: [
+        {
+          description: "Check and record the model Qwen is launched with",
+          apply: async () => {
+            await assertQwenModelConfigured(launchModel, workspaceRoot);
+            this.logParser.setLaunchModel(launchModel);
+          },
+        },
         {
           description: "Prepare Qwen statusline tracking",
           apply: async () => {
@@ -728,22 +793,16 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
   }
 
   /**
-   * Validate model is supported by Qwen CLI, fallback to configured default if not
+   * The `--model` value for a step, or `undefined` for no flag. Any model id
+   * is passed through: Qwen resolves it against its own `modelProviders`. A
+   * `none` model or default means no flag, never a literal `--model none`.
    */
   private validateAndGetModel(requestedModel?: string): string | undefined {
-    const defaultModel = ConfigurationUtils.getQwenCliModel();
-
-    if (!requestedModel) {
-      return defaultModel;
-    }
-
-    // Check for "none" sentinel value (skip --model flag)
-    if (requestedModel === MODEL_OPTION_VALUES.NONE) {
-      return undefined;
-    }
-
-    // Accept any model string — Qwen CLI validates it against the configured API key
-    return requestedModel;
+    return resolveCliModelFlag(requestedModel, {
+      logLabel: "QwenHarnessAdapter",
+      defaultModel: ConfigurationUtils.getQwenCliModel(),
+      recognize: (model) => model,
+    });
   }
 
   /**

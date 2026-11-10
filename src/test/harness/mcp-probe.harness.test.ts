@@ -13,6 +13,7 @@ import {
 } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import { ANTIGRAVITY_TOOL_NAMES } from "../../core/harness/antigravity/AntigravityProtocolConstants";
+import { QWEN_DEFERRED_TOOL_REFUSAL_PREFIX } from "../../core/harness/qwen/QwenProtocolConstants";
 import { MCP_PROBE_CALLS } from "./mcpProbeContract";
 
 /**
@@ -24,6 +25,20 @@ const MCP_DISCOVERY_OPERATIONS: readonly string[] = [
   ANTIGRAVITY_TOOL_NAMES.LIST_RESOURCES,
   ANTIGRAVITY_TOOL_NAMES.READ_RESOURCE,
 ];
+
+/**
+ * A call the harness itself refused without reaching the server: Qwen 0.27+
+ * refuses a deferred MCP tool until the model loads its schema, and the model
+ * then makes the real call. The probe counts calls the server received, so a
+ * recorded refusal is a distinct attempt, not a duplicated row.
+ */
+function isHarnessRefusal(event: CliEvent): boolean {
+  const result = (event.data as { result?: { error?: unknown } }).result;
+  return (
+    typeof result?.error === "string" &&
+    result.error.startsWith(QWEN_DEFERRED_TOOL_REFUSAL_PREFIX)
+  );
+}
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
@@ -49,7 +64,8 @@ function assertProbeCalls(
       event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL &&
       !MCP_DISCOVERY_OPERATIONS.includes(
         (event.data as { tool?: string }).tool ?? ""
-      )
+      ) &&
+      !isHarnessRefusal(event)
   );
   assert.strictEqual(
     mcpCalls.length,

@@ -5,6 +5,7 @@ import {
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { PromptStep } from "../../types/CtrlYokeTypes";
+import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import {
   FAILURE_KINDS,
   HARNESS_IDS,
@@ -61,6 +62,7 @@ export class MockHarnessIntegration extends HarnessIntegration {
   public timeoutFailure: boolean = false;
   public lastFailureOutput?: string;
   public lastCliCommandValue?: string;
+  public lastParsedOutput?: UniversalCliOutput;
   public onSend?: (
     prompt: PromptStep,
     workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
@@ -134,6 +136,10 @@ export class MockHarnessIntegration extends HarnessIntegration {
 
   override getLastCliCommand(): string | undefined {
     return this.lastCliCommandValue;
+  }
+
+  override getLastParsedOutput(): UniversalCliOutput | undefined {
+    return this.lastParsedOutput;
   }
 
   isIntegrationAvailable(): boolean {

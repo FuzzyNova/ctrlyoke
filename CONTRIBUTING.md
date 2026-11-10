@@ -55,6 +55,8 @@ Contributors: don't open PRs that only bump dependencies; Dependabot handles tho
 - **No bump**: adding an optional field an older ctrlyoke can safely ignore, adding an enum value, or editing descriptions. Edit the schema, run `npm run schema:update` to regenerate the YAML schema, UI descriptions, and reference docs, and commit. `v<N>` is updated in place.
 - **Bump**: renaming or removing a field, narrowing a type, changing what a field or its default means, or adding a field an older host must not ignore. Before editing, run `npm run schema:bump -- workflow` (or `settings`) on the committed schema. It freezes the published version into `schemas/archive/v<N>/`, moves the `$id` to `v<N+1>`, re-points cross-schema `$ref`s, bumps `CURRENT_SCHEMA_VERSIONS`, and lists what's left: the breaking edit, the migration in `src/utils/FormatMigrations.ts`, a new fixture, and stale URL references.
 
+Built-in default models (`DEFAULT_MODELS` in `src/types/DashboardConstants.ts`) are recommendations, not part of the settings schema contract: `defaults.models` publishes no schema `default`, and an unset value means "ctrlyoke's current recommendation". Changing one needs a **Changed** entry in `CHANGELOG.md`, not a bump. Every harness currently defaults to `none` (the CLI's own default), because a pinned model goes stale when the vendor retires it.
+
 Files under `schemas/archive/` stay published forever so old `$schema` links keep resolving; never edit them. The full policy is in `dev/implemented/SCHEMA_RELEASE_READINESS_PLAN.md` §2.6–2.7. Since the first public release (`0.2.0`), every breaking change needs the bump and its migration; there is no unreleased exemption.
 
 ## Deprecations

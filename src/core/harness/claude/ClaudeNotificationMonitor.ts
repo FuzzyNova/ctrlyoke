@@ -7,11 +7,13 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {
   capabilitySuiteVerification,
+  HOOK_CAVEAT_CODES,
   type CapabilityDeclaration,
 } from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  HOOK_EVENT_NAMES,
 } from "../../../types/DashboardConstants";
 
 /**
@@ -73,7 +75,16 @@ export class ClaudeNotificationMonitor
       Object.keys(ClaudeNotificationMonitor.EVENT_MAP).map((event) => [
         event,
         {
-          fidelity: CAPABILITY_FIDELITIES.EXACT,
+          // Claude Code 2.1.322 exits after a rejected request (an unknown
+          // model) without waiting for StopFailure hooks: a hook that writes
+          // after 300 ms never finished in 5 runs, and the node recorder in
+          // the capability suite finished in about 1 run in 4.
+          ...(event === HOOK_EVENT_NAMES.ERROR
+            ? {
+                fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+                caveatCode: HOOK_CAVEAT_CODES.NOT_AWAITED_ON_EXIT,
+              }
+            : { fidelity: CAPABILITY_FIDELITIES.EXACT }),
           mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
           verification: capabilitySuiteVerification([">=2.1.94"]),
         },

@@ -28,6 +28,19 @@ const OPTIONAL_NO_DEFAULT_LEAVES = [
   },
 ] as const;
 
+/**
+ * Leaves with a DEFAULT_SETTINGS value but deliberately no schema default:
+ * the value is ctrlyoke's current recommendation, which a release may change
+ * without a schema bump, so the schema must not publish it as a contract.
+ */
+const RECOMMENDATION_LEAVES = [
+  {
+    path: /^defaults\.models\.[^.]+$/,
+    reason:
+      "Built-in default models are recommendations (DEFAULT_MODELS) that follow vendors' model changes.",
+  },
+] as const;
+
 const LOCAL_DEFINITION_REF_PREFIX = "#/$defs/";
 
 suite("Settings schema defaults", () => {
@@ -78,6 +91,22 @@ suite("Settings schema defaults", () => {
           break;
         }
         value = (value as Record<string, unknown>)[segment];
+      }
+
+      const recommendation = RECOMMENDATION_LEAVES.find(({ path: pattern }) =>
+        pattern.test(settingPath)
+      );
+      if (recommendation) {
+        assert.strictEqual(
+          node.default,
+          undefined,
+          `Leaf ${settingPath} is a recommendation and must not publish a schema default.`
+        );
+        assert.ok(
+          hasSettingsValue,
+          `Leaf ${settingPath} has no built-in value.`
+        );
+        return;
       }
 
       if (node.default === undefined && !hasSettingsValue) {

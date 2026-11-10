@@ -11,7 +11,7 @@ and type checking, but do not recognize the schema's unknown-key closures.
 ```yaml
 name: Reliability pass
 harness: copilot-cli
-model: claude-sonnet-4.6
+model: claude-sonnet-5.5
 
 steps:
   - name: inspect

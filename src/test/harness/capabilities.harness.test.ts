@@ -106,6 +106,7 @@ const hookPath = (event: HookEvent): CapabilityPath => `hooks.${event}`;
  */
 const MAY_NOT_FIRE_CAVEATS: ReadonlySet<CompatibilityCaveatCode> = new Set([
   HOOK_CAVEAT_CODES.MAIN_SESSION_START_UNRELIABLE,
+  HOOK_CAVEAT_CODES.NOT_AWAITED_ON_EXIT,
 ]);
 
 // ---------------------------------------------------------------------------

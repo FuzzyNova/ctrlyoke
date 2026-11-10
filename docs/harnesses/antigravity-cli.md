@@ -66,9 +66,11 @@ adds a model. If the command fails, ctrlyoke uses its built-in list instead.
 Workflow files and settings use the ID `agy models` prints, such as `gemini-3.8-flash-low` or
 `claude-sonnet-4-6`, not the label. The effort tier is part of the ID (`-low`, `-medium`, `-high`).
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
-[`defaults.models["antigravity-cli"]`](/reference/settings#defaults-models), which is
-`gemini-3.8-flash-medium` out of the box, not agy's own Claude Sonnet default. ctrlyoke passes any
-value to agy as is. agy rejects a model it doesn't know with an error rather than falling back to
+[`defaults.models["antigravity-cli"]`](/reference/settings#defaults-models), which is `none` out
+of the box: no `--model` flag is passed, so agy uses its own default model. agy's default can be a
+model with a small quota, such as Claude Sonnet, which one long workflow can use up for about a
+day. To avoid that, set `defaults.models["antigravity-cli"]` to a model with more headroom, such
+as `gemini-3.8-flash-medium`. ctrlyoke passes any value to agy as is. agy rejects a model it doesn't know with an error rather than falling back to
 its default, so the step fails.
 
 `model: none` passes no `--model` flag, so agy uses its own default model. See

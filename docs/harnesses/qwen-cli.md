@@ -65,9 +65,16 @@ ctrlyoke reads that file when it starts, so reload the window after you add a mo
 file is missing or lists no models, the picker shows only `qwen3.5-plus`.
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
-[`defaults.models["qwen-cli"]`](/reference/settings#defaults-models), which is `qwen3.5-plus` out
-of the box. ctrlyoke passes any value to Qwen Code as is, even one the list doesn't show, and Qwen
-Code checks it against your configured providers.
+[`defaults.models["qwen-cli"]`](/reference/settings#defaults-models), which is `none` out of the
+box: no `--model` flag is passed, so Qwen Code uses the model from its own settings (`model.name`).
+
+Qwen Code 0.27 and later run their default model, without an error, when the requested model isn't
+listed under `modelProviders`. So before a step starts, ctrlyoke checks the model it is about to
+pass, including a `--model` in `additionalArgs`, against the `modelProviders` lists in Qwen's
+system, user and workspace `settings.json`. If any of them lists models and yours isn't one, the
+step fails before Qwen starts, naming the model. If none of them lists any models, ctrlyoke can't
+check beforehand. If Qwen then answers on a different model, the step finishes and shows a warning
+naming both models.
 
 `model: none` passes no `--model` flag, so Qwen Code uses the model from its own settings. See
 [How step properties inherit](/workflows/yaml-format#property-inheritance).

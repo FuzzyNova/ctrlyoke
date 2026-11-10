@@ -984,6 +984,30 @@ suite("WorkflowExecutor condition shell reporting", () => {
     assert.deepStrictEqual(feedback, []);
   });
 
+  test("shows the harness's warnings for a completed step without failing it", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    integration.lastParsedOutput = {
+      events: [],
+      metadata: { warnings: ["Qwen ran qwen3.6-plus instead"] },
+    };
+    queue.loadPrompts({ steps: [{ prompt: "warned step" }] });
+
+    const context = makeContext(integration);
+    const statusMessages: string[] = [];
+    context.onStatusMessage = (_stepIndex, message) => {
+      statusMessages.push(message);
+    };
+    await makeExecutor(queue).execute(integration, context);
+
+    assert.strictEqual(queue.getState().results[0].failureKind, undefined);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.ok(
+      statusMessages.includes("Qwen ran qwen3.6-plus instead"),
+      statusMessages.join("\n")
+    );
+  });
+
   test("prints harness failure reason when the workflow stops", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

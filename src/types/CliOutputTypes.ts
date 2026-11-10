@@ -369,6 +369,11 @@ export interface OutputMetadata {
   error?: string;
   /** Provider error category when the harness supplies one. */
   errorType?: string;
+  /**
+   * Problems with the attempt that did not fail it, such as Qwen running
+   * another model than requested. Each is shown as a step warning.
+   */
+  warnings?: string[];
   /** Elapsed time in milliseconds */
   elapsed?: number;
   /** Harness identifier from the canonical HARNESS_IDS set. */
