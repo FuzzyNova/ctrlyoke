@@ -28,6 +28,36 @@ Paths in Batches 3–8 are written against the tree before this pass. Where an e
 already moved a file (Batch 2 moves `components/prompts/` to `components/steps/`), look the new
 path up in the ledger.
 
+### Procedure for each staged step
+
+Each step runs in a fresh session, after the earlier steps have committed.
+
+1. Read this whole plan, then your chunk's section. Run `git log --oneline -20` and read
+   `dev/reference/RENAMES.md` (once it exists) to see what has landed. Check the code you build
+   on rather than trusting the line numbers here. Re-grep every item before renaming it.
+2. Read the instruction file for every area you touch (routing table in `CLAUDE.md`).
+3. Follow "Ground rules" below exactly: `git mv`, an explicit identifier list (never a pattern),
+   contract strings untouched, the grep checklist, live docs updated in place, history docs left
+   alone, and ledger rows (plus "kept on purpose" entries) in the same commit. Write any codemod as
+   a script file in your scratch directory and run it with `node`. Never pass code through a shell
+   string (see `fileEditing` in `.github/copilot-instructions.md`).
+4. Do only your chunk. If you find something wrong in a later chunk's section, correct that
+   section of this plan rather than doing the work yourself.
+5. Run the gate in the **foreground**: `npm run typecheck`, `npm run lint`, `npm run knip`,
+   `npm run check:docs` if you touched docs or scripts, then
+   `npm test > .ctrlyoke/logs/rename-pass-test.log 2>&1` and read its `TEST SUMMARY:` block
+   (`tail -40`). Steps run headless, and every process a step started dies when its turn ends, so
+   never background a command and end the turn to "check later". Raise the tool timeout as far as
+   it goes. If the suite could outlive it, start it writing to the log and poll in a foreground
+   loop in the same turn (`until grep -q 'TEST SUMMARY:' <log>; do sleep 30; done`). Don't re-run
+   the whole suite just to check whether it passed. Fix every failure your rename caused. If a
+   failure is plainly unrelated and was already failing before you started, record it under
+   "Known unrelated failures" at the end of this plan.
+6. Tick your box under Progress. Stage explicit paths (no `git add -A`), check
+   `git diff --cached --stat` to make sure moves show as renames, and commit with a plain
+   `refactor(<area>): …` conventional message with no trailers. If any log prefix changed, mention
+   it in the body. Leave the working tree clean.
+
 ## Goal
 
 Rename files and symbols whose names no longer describe what they do. Most are named after
