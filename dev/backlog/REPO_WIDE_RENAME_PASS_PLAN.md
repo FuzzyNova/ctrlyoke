@@ -27,17 +27,17 @@ Rename **TypeScript identifiers and file paths only**. A rename must never touch
 is persisted, sent over the wire, or typed by a user. Each item below is marked where this
 applies. The known traps:
 
-| Keep exactly as is                                                                                          | Why                                                                                                                         |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `PERSISTED_STORES.PROVIDER_USAGE = "provider-usage"`, `PROVIDER_USAGE_SCHEMA_VERSION`                       | Schema-versioned store (`PersistedSchemaGuard.ts`, `FormatMigrations.ts`)                                                   |
-| `HARNESS_USAGE_ERROR_CODES` values (`provider-refresh-failed`, …)                                           | Can surface to users                                                                                                        |
-| `StatusLineFormatProvider` **values** (`claude`, `antigravity`, `copilot`, `qwen`)                          | `statusLine.byHarness.<id>` setting keys, and the snapshot-file prefix read by `src/scripts/ctrlyoke-statusline-wrapper.js` |
-| `COMPLETION_NOTIFICATION_*` / `NOTIFICATION_KINDS` **values**                                               | Wire payloads and web push                                                                                                  |
-| `_runtime.finalStep.loopCount`, `loopIndex` in `CtrlYokeTypes.ts` / `IDashboardSink.ts`                     | Persisted run state and dashboard protocol                                                                                  |
-| `TempFileManager` directory names and file prefixes, output-snapshot filename prefix and truncation markers | On-disk layout                                                                                                              |
-| sessionStorage `ctrlyoke-panel-reconnect-retry-at`, `window.__ctrlyokePanelHandshake*`                      | Shared with the HTML bootstrap                                                                                              |
-| zustand persist names (`ctrlyoke-ui-state`, `ctrlyoke-workspace-viewer-state`)                              | Persisted, and not derived from file names                                                                                  |
-| `docs/guide/dashboard.md` `step-context-menu-900x588.png`                                                   | It really is a screenshot of the step menu                                                                                  |
+| Keep exactly as is                                                                                                                      | Why                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `PERSISTED_STORES.PROVIDER_USAGE = "provider-usage"`, `PROVIDER_USAGE_SCHEMA_VERSION`                                                   | Schema-versioned store (`PersistedSchemaGuard.ts`, `FormatMigrations.ts`)                                                   |
+| `HARNESS_USAGE_ERROR_CODES` values (`provider-refresh-failed`, …)                                                                       | Can surface to users                                                                                                        |
+| `StatusLineFormatProvider` **values** (`claude`, `antigravity`, `copilot`, `qwen`)                                                      | `statusLine.byHarness.<id>` setting keys, and the snapshot-file prefix read by `src/scripts/ctrlyoke-statusline-wrapper.js` |
+| `COMPLETION_NOTIFICATION_*` / `NOTIFICATION_KINDS` **values**                                                                           | Wire payloads and web push                                                                                                  |
+| `_runtime.finalStep.loopCount`, `OutputExecutionTarget.loopIndex`, the `loop*` fields in `WebviewMessageTypes.ts` / `IDashboardSink.ts` | Run files, every final-step `events.jsonl` event, and the dashboard protocol (see Batch 8)                                  |
+| `TempFileManager` directory names and file prefixes, output-snapshot filename prefix and truncation markers                             | On-disk layout                                                                                                              |
+| sessionStorage `ctrlyoke-panel-reconnect-retry-at`, `window.__ctrlyokePanelHandshake*`                                                  | Shared with the HTML bootstrap                                                                                              |
+| zustand persist names (`ctrlyoke-ui-state`, `ctrlyoke-workspace-viewer-state`)                                                          | Persisted, and not derived from file names                                                                                  |
+| `docs/guide/dashboard.md` `step-context-menu-900x588.png`                                                                               | It really is a screenshot of the step menu                                                                                  |
 
 Log prefixes (`[CopilotCliProvider]`, `[WorkflowCommandHandler]`, …) follow their class name.
 The session log is not one of the contracts listed in `CLAUDE.md`, so renaming them is fine.
@@ -62,11 +62,64 @@ replace would break them. For each rename:
    - `scripts/*.mjs` (`dev-host.mjs`, `generate-testing-gaps.mjs`, `find-hardcoded-strings.mjs`)
 4. Rename the matching test file to mirror the source file.
 5. Update live docs: `.github/instructions/*.md`, `.github/copilot-instructions.md`,
-   `dev/reference/**` and `dev/backlog/**`. **Leave history alone**: `dev/implemented/`,
-   `dev/bugs/implemented/`, `dev/rejected/` and `dev/research/` are a record of past work.
+   `dev/reference/**`, `dev/active/**` and `dev/backlog/**`. **Leave history alone**:
+   `dev/implemented/`, `dev/bugs/implemented/`, `dev/rejected/` and `dev/research/` are a
+   record of past work. Add a row to `dev/reference/RENAMES.md` instead, in the same commit
+   (see "Historical dev docs" below). Item 1 in that section says what each row needs.
 6. If a file moves between folders that different instruction files cover, or an instruction
    file is renamed, update the `applyTo` globs and run `npm run generate-agent-files`. The
    routing table in `CLAUDE.md`/`AGENTS.md` is generated from them, so never hand-edit it.
+
+### Historical dev docs: a rename ledger instead of rewriting them
+
+**Problem:** `dev/implemented/` (296 docs), `dev/bugs/implemented/` (813), `dev/rejected/` and
+`dev/research/` use names that this pass retires: 383 of those docs mention at least one. Someone reading an old design doc greps for
+`WorkflowSerializer` and finds nothing. The scale is real. By file count, `CliProvider` appears
+in 71 implemented plans and 61 fixed bugs, `PromptEditor` in 54 and 28, `useMessageHandler` in
+48 and 23, and `WorkflowSerializer` in 40 and 9.
+
+**Decision: don't find-and-replace history. Keep a ledger that makes the old names
+searchable.** Rewriting those docs would damage the thing they exist for:
+
+- **They'd contradict their own citations.** Fixed-bug docs give a commit hash, and plans
+  describe a specific tree. After a rewrite, a doc says `ContextMenu.tsx` while
+  `git show <hash>` shows `StepContextMenu.tsx`. Then the doc matches neither the code at the
+  time nor the code today.
+- **Some old statements only made sense under the old name.** For example, "`StepContextMenu`
+  is only used by the step list" was true when it was written. After a replace it reads
+  "`ContextMenu` is only used by the step list", which was never true. Batch 1 renames
+  `StepContextMenu` _because_ that's no longer true. A replace can't tell a reference from a
+  claim.
+- **It's the substring trap again, at a larger scale and with no compiler.** Prose, code
+  fences and quoted log lines (`[CopilotCliProvider] …`) have no type checker. A mistaken
+  `useStepContextMenu` → `useContextMenu` in a doc fails silently.
+- **It's churn with no review signal.** Hundreds of history docs would change, burying each
+  batch's real diff, and every future rename would have to repeat it.
+
+The ledger fixes the actual problem, which is that an old name leads nowhere:
+
+1. **Create `dev/reference/RENAMES.md`** in the first rename commit, whichever batch lands
+   first. Each later batch appends its own rows in the same commit as the rename. The table has
+   one row per old name: `| Old name | New name | Kind (file / symbol / CSS class / folder) | Batch | Date |`.
+   There is no commit column, because a commit can't contain its own hash. The commit that
+   added a row is the rename commit, so
+   `git log -S'<old name>' -- dev/reference/RENAMES.md` finds it. Write file paths in full (`src/ui/webview-react/components/shared/StepContextMenu.tsx`), so
+   a grep for either the bare file name or the path finds the row. Record splits (Batch 3's
+   `stepClipboard.ts` → three files) as one row per moved symbol. Add a short "kept on
+   purpose" list for names that look renamed but aren't (`useStepContextMenu`,
+   `StepContextMenuRequest`, the contract strings), so nobody "finishes" the rename later.
+2. **Then a grep for any old name lands on the ledger**, and the ledger gives the new name.
+   `git log --follow` on the new path recovers the file's history, because every
+   move is a `git mv` (ground rule 1).
+3. **Add one line to the `knowledgeCapture` (or `orientation`) section of
+   `.github/copilot-instructions.md`**: names in `dev/implemented/`, `dev/bugs/implemented/`,
+   `dev/rejected/` and `dev/research/` are as of when each doc was written, and you look up
+   renamed ones in `dev/reference/RENAMES.md`. It's the same idea as the existing
+   `copilot-chat` note. This is a durable fact that the code can't tell you, so it meets the
+   bar for instruction files. Add it in the same commit that creates the ledger.
+
+Live docs still get updated in place (ground rule 5): `dev/backlog/**`, `dev/active/**`,
+`dev/reference/**` (except the ledger's "Old name" column), and the instruction files.
 
 ### Verification per batch
 
@@ -83,8 +136,8 @@ current branch. No `CHANGELOG.md` entry is needed, since nothing a user sees cha
 ## Batches
 
 Ordered by value and independence. Batches 1–3 are webview-only and low risk. Batches 4–6 reach
-across layers and need the "contracts never change" table. Earlier batches don't block later
-ones, except where noted.
+across layers and need the "contracts never change" table. Batch 7 moves folders, and Batch 8
+is a small core/CLI naming fix. Earlier batches don't block later ones, except where noted.
 
 ### Batch 1: the two requested renames
 
@@ -244,6 +297,73 @@ instruction-file paragraphs to the file that now covers them.
   `src/types/` (`CompatibilityAnalyzer`, `PortabilityReport`, `PreviewRedactor`), because the
   webview does share it.
 
+### Batch 8: final-step "loop" and "pass" names
+
+**Decision (2026-11-09): don't rename the `loop*` contract names. Fix the few names that
+hold the wrong kind of number.** One small commit. It doesn't depend on the other batches.
+Some of the files it names are renamed by Batches 2 and 3 (`PromptChipRail`,
+`InOutputViewMarker.tsx`). If those batches land first, look up the new names in the ledger.
+
+#### Why the contract names stay
+
+There are ~500 `loopIndex`/`loopCount` references. Most of them carry one value from disk or
+the wire through to its consumer:
+
+- `_runtime.finalStep.loopCount` is persisted in every run file and documented publicly in
+  `docs/reference/run-files.md` ("pass N is loopCount N-1"), which is generated from the
+  schema.
+- `OutputExecutionTarget.loopIndex` (`CtrlYokeTypes.ts:932`) is the `target` of every final-step
+  event in `events.jsonl`.
+- The dashboard protocol carries both: `FinalStep*Message` in `WebviewMessageTypes.ts` and
+  `IDashboardSink`.
+
+Renaming any of these means a schema bump plus a migration of every timeline file, and users
+get nothing for it. The webview mirrors (`workflowStore.finalStepLoopCount`, the
+`setFinalStepStatus` parameter, the `loopCount` prop on `FinalStepFooter`/`PromptChipRail`)
+should keep the contract's name too. A grep for `loopCount` then follows the value from the
+run file all the way to the badge. A different name partway along would break that grep at
+the boundary.
+
+The originally proposed `finalStepPassCount` would also be **wrong**. `_runtime.finalStep.loopCount`
+is a 0-based **index**, not a count. `FinalStepFooter` renders `formatFinalPassBadge(loopCount + 1)`.
+So the real hazard isn't "loop" versus "pass". It's whether a variable holds an index, a
+1-based number, or a count.
+
+#### The convention: the name says what kind of number it holds
+
+| Holds                                   | Name                                                                | Already used by                                            |
+| --------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 0-based pass index (the contract value) | `loopIndex`, and `loopCount` where the contract field has that name | run files, timeline, protocol, webview mirrors             |
+| 1-based pass number                     | `passNumber`                                                        | `FinalStepLabels.ts`, `CliStepSelector.ts`                 |
+| How many passes ran                     | `passCount`                                                         | `CliJsonResultBuilder.ts:410`, `InOutputViewMarker.tsx:38` |
+
+Never introduce a new `loopCount` that holds a count, or a `passIndex` that holds the index.
+In final-step code, use a qualified name (`passNumber`, `finalPass…`) and never a bare `pass`,
+because end conditions already use "pass" for validation passing (`onPass`, `passRetryPrompt`).
+
+The local `loopIndex` variables in `InOutputViewMarker.tsx` and `UndoChangesDialog.tsx` hold
+indexes, so they're already correct. Leave them alone.
+
+#### What the commit changes
+
+1. **`RunFinalStepProjection.loopCount` → `passCount`** (`core/orchestration/RunOutputResolver.ts:171`,
+   the accumulator at `:1506`/`:1518`, the write at `:889`/`:925`). This field is a **count**
+   (`max(loopIndex + 1)`) that uses the contract's index name, which is the one real trap.
+   `CliJsonResultBuilder.ts:411` already reads it into a variable called `passCount`. The type
+   is internal: the CLI JSON envelope exposes `pass`/`passes[]`, never this field. Re-grep for
+   other readers. Consider `latestLoop` → `latestPass` in the same interface.
+2. **`cli.ts:2105` `finalLoopCount` → `finalPassCount`.** It is a count (used as an
+   `Array.from` length).
+3. **Single-source the index→count conversion.** `cli.ts:2105` and
+   `CliJsonResultBuilder.ts:410` each compute `phase === FINAL_STEP ? loopCount + 1 : loopCount`
+   inline. Extract it as one helper beside the final-step runtime type, e.g.
+   `getFinalStepPassCount(runtime)`. Don't put it in `FinalStepLabels.ts`, which must stay
+   dependency-free. Re-grep for further copies.
+4. **Update the convention in `.github/copilot-instructions.md`** (the Terminology bullet). Keep
+   "internal `loopIndex`/`loopCount` names stay as they are", then add the index/number/count
+   rule above in one sentence, so the next scan doesn't propose this rename again.
+5. **Add the ledger rows** for items 1 and 2.
+
 ### Deletions found along the way (not renames)
 
 Each is small enough to ride with the batch that touches the same area.
@@ -278,20 +398,3 @@ Each is small enough to ride with the batch that touches the same area.
 - **`useVsCodeApi`, `terminalRegistry`, `useFontSizeControls`/`useFontSizeSync`,
   `RunSummaryRow`/`RunSummaryBanner`, `ctrlyoke-tools/*View.tsx` exporting `*Body`,
   `DrawerRow`/`DrawerTabBar`, `WorkspaceViewerModal`.** These were checked, and the names hold.
-
-## Open question: final-step "loop" names that mean one pass
-
-`copilot-instructions.md` says internal `loopIndex`/`loopCount` names stay as they are, so
-this plan leaves them alone. The scans did find webview-local names that aren't persisted or
-part of the protocol and plainly mean a pass count:
-
-- `workflowStore.finalStepLoopCount`
-- the `setFinalStepStatus(…, loopCount, …)` parameter
-- the `loopCount` prop on `FinalStepFooter`/`PromptChipRail`, which is treated as
-  "passes 1..loopCount + 1"
-- local `loopIndex` in `InOutputViewMarker.tsx` and `UndoChangesDialog.tsx`
-
-`outputAnnouncements.ts` already stores the comparison in a variable named `samePass`.
-Renaming them to `finalStepPassCount`/`completedPassCount` would be safe, but it goes against
-the written convention. Decide whether the convention covers only the shared and persisted
-names before including it. If yes, it fits in Batch 2.
