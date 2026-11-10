@@ -22,11 +22,11 @@ import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 
 const diffViewUnmountCount = vi.hoisted(() => ({ value: 0 }));
 
-vi.mock("@components/output/DiffView", async () => {
+vi.mock("@components/diff/TextDiffView", async () => {
   const ReactModule = await import("react");
 
   return {
-    DiffView: ({ collapsed }: { collapsed?: boolean }) => {
+    TextDiffView: ({ collapsed }: { collapsed?: boolean }) => {
       ReactModule.useEffect(
         () => () => {
           diffViewUnmountCount.value++;

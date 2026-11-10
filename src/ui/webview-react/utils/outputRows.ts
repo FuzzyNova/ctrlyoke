@@ -59,7 +59,6 @@ import type { PromptChangeSummary } from "./promptUndo";
 import {
   buildUndoRecordKey,
   computeOutputDiffStats,
-  getCliTextForCopy,
   getOutputDiffKey,
   getRawTextOutput,
   getToolCallBody,
@@ -67,6 +66,7 @@ import {
   isRenderableStructuredEvent,
   isScriptOutput,
 } from "./outputRenderUtils";
+import { getStepAssistantTextForCopy } from "./outputUtils";
 import type { DiffGapExpansionState } from "./outputRenderUtils";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
@@ -3100,7 +3100,7 @@ export function buildOutputRows(
     // once per slice — quadratic in a running step's size.
     const outputText =
       emitsTrailingChrome && !aggregateOutput.isStreaming
-        ? getCliTextForCopy(aggregateOutput)
+        ? getStepAssistantTextForCopy(aggregateOutput)
         : undefined;
     const hasStatsRow = isScriptOutput(aggregateOutput)
       ? !aggregateOutput.isStreaming &&

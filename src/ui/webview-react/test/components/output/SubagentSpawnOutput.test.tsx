@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { SubagentSpawnOutput } from "@components/output/SubagentSpawn";
+import { SubagentSpawnOutput } from "@components/output/SubagentSpawnOutput";
 import {
   SUBAGENT_SPAWN_STATES,
   TOOL_CALL_EXPANSION_SECTIONS,

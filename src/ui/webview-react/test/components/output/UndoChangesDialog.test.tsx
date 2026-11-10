@@ -44,8 +44,8 @@ vi.mock("@utils/syntaxHighlighting", async (importOriginal) => {
   };
 });
 
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: ({ collapsed }: { collapsed?: boolean }) => (
+vi.mock("@components/diff/TextDiffView", () => ({
+  TextDiffView: ({ collapsed }: { collapsed?: boolean }) => (
     <div data-testid="dialog-diff-view" data-collapsed={String(collapsed)} />
   ),
 }));

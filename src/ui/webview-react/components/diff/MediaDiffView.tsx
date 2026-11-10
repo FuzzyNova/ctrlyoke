@@ -70,7 +70,7 @@ function MediaSide({
   );
 }
 
-/** Direct before/after media comparison; this intentionally does not use DiffView. */
+/** Direct before/after media comparison; this intentionally does not use TextDiffView. */
 export const MediaDiffView: React.FC<MediaDiffViewProps> = ({
   path,
   sides,

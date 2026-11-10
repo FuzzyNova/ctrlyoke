@@ -27,7 +27,7 @@ import {
   describeFinalPassesInView,
   InOutputViewBar,
   useFinalStepPassesInOutputView,
-} from "./InOutputViewMarker";
+} from "./InOutputView";
 
 function getStepDisplayText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : (step.name ?? step.prompt);

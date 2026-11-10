@@ -11,8 +11,8 @@ vi.mock("@utils/syntaxHighlighting", () => ({
   getLanguageFromPath: vi.fn(() => "typescript"),
 }));
 
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: vi.fn(({ actionSlot }: { actionSlot?: ReactNode }) => (
+vi.mock("@components/diff/TextDiffView", () => ({
+  TextDiffView: vi.fn(({ actionSlot }: { actionSlot?: ReactNode }) => (
     <div>
       <div>mock diff</div>
       {actionSlot}

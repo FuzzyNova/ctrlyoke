@@ -214,7 +214,7 @@ describe("buildDiffRenderPlan", () => {
   });
 
   // `ui.wordWrap` off: a change never wraps, so it is exactly one row, and the
-  // only extra height is the scrollbar track DiffView's wrapper grows once a
+  // only extra height is the scrollbar track TextDiffView's wrapper grows once a
   // line overflows the pane.
   describe("unwrapped (ui.wordWrap off)", () => {
     const singleLineHunk = (content: string) => [
@@ -379,7 +379,7 @@ describe("syntaxHighlighting", () => {
     expect(normalizeSyntaxLanguage("yml")).toBe("yaml");
   });
 
-  it("registers the React-oriented refractor grammars used by DiffView", () => {
+  it("registers the React-oriented refractor grammars used by TextDiffView", () => {
     expect(refractor.registered("typescript")).toBe(true);
     expect(refractor.registered("tsx")).toBe(true);
     expect(refractor.registered("javascript")).toBe(true);

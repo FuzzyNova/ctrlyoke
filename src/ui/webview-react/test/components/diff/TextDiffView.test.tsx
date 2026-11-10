@@ -113,9 +113,9 @@ vi.mock("@hooks/useElementNarrow", () => ({
 }));
 
 import { useElementNarrow } from "@hooks/useElementNarrow";
-import { DiffView } from "@components/output/DiffView";
+import { TextDiffView } from "@components/diff/TextDiffView";
 
-describe("DiffView", () => {
+describe("TextDiffView", () => {
   beforeEach(() => {
     useUiStore.setState({ diffsCollapsed: false, diffResetVersion: 0 });
     useSettingsStore.getState().updateGlobalSetting("wordWrap", true);
@@ -142,7 +142,7 @@ describe("DiffView", () => {
   });
 
   it("renders nothing when there is no diff content", () => {
-    const { container } = render(<DiffView globallyCollapsed={false} />);
+    const { container } = render(<TextDiffView globallyCollapsed={false} />);
     expect(container.firstChild).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe("DiffView", () => {
     });
 
     const { container } = render(
-      <DiffView
+      <TextDiffView
         structuredPatch={[
           {
             oldStart: 1,
@@ -194,7 +194,7 @@ describe("DiffView", () => {
       diffType: "modify",
     });
     const { getByText } = render(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={true}
@@ -221,7 +221,7 @@ describe("DiffView", () => {
     });
 
     const { container } = render(
-      <DiffView oldContent="" newContent={"new\n"} globallyCollapsed={false} />
+      <TextDiffView oldContent="" newContent={"new\n"} globallyCollapsed={false} />
     );
 
     expect(mockToRdvFromContent).toHaveBeenCalledWith("", "new\n");
@@ -258,7 +258,7 @@ describe("DiffView", () => {
     });
 
     // useElementNarrow is an unconditional hook call, so it runs once per
-    // DiffView render. Throwing past a bound makes the guard trip *inside* the
+    // TextDiffView render. Throwing past a bound makes the guard trip *inside* the
     // loop: the runaway renders happen within render()'s act(), so any
     // assertion placed after it would never be reached — the process exhausts
     // its heap first. Tripping mid-loop turns a regression into a fast, legible
@@ -269,7 +269,7 @@ describe("DiffView", () => {
       renders += 1;
       if (renders > MAX_RENDERS) {
         throw new Error(
-          `DiffView rendered more than ${MAX_RENDERS} times while collapsed — ` +
+          `TextDiffView rendered more than ${MAX_RENDERS} times while collapsed — ` +
             `the uncontrolled gap-reset effect is looping again.`
         );
       }
@@ -277,7 +277,7 @@ describe("DiffView", () => {
     });
 
     const { getByText } = render(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={true}
@@ -290,7 +290,7 @@ describe("DiffView", () => {
 
   it("shows diff when expanded", () => {
     const { getByText } = render(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={false}
@@ -321,7 +321,7 @@ describe("DiffView", () => {
 
     const renderDiff = (wordWrap?: boolean) =>
       render(
-        <DiffView
+        <TextDiffView
           oldContent={"a\tb\n"}
           newContent={"x".repeat(40) + "\n"}
           globallyCollapsed={false}
@@ -377,7 +377,7 @@ describe("DiffView", () => {
     // Otherwise-hidden content (behind "Show diff") can never be found or
     // scrolled to, so an active match must force it open.
     const { getByText } = render(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={true}
@@ -408,7 +408,7 @@ describe("DiffView", () => {
     });
 
     render(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={true}
@@ -425,7 +425,7 @@ describe("DiffView", () => {
     const onCollapsedChange = vi.fn();
 
     const { rerender, getByRole } = render(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={false}
@@ -438,7 +438,7 @@ describe("DiffView", () => {
     expect(onCollapsedChange).toHaveBeenCalledWith(false);
 
     rerender(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={false}
@@ -452,7 +452,7 @@ describe("DiffView", () => {
 
   it("renders the actionSlot alongside the toggle", () => {
     const { getByText } = render(
-      <DiffView
+      <TextDiffView
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         globallyCollapsed={false}
@@ -484,7 +484,7 @@ describe("DiffView", () => {
 
     const { container } = render(
       <div data-diff-anchor="true">
-        <DiffView
+        <TextDiffView
           oldContent={"const a = 1;\n"}
           newContent={"const a = 2;\n"}
           globallyCollapsed={false}
@@ -531,7 +531,7 @@ describe("DiffView", () => {
 
     const oldContent = "a\nb\nc\nd\ne\nf\n";
     const { getByRole } = render(
-      <DiffView
+      <TextDiffView
         oldContent={oldContent}
         newContent={"A\nb\nc\nd\ne\nF\n"}
         globallyCollapsed={false}
@@ -586,7 +586,7 @@ describe("DiffView", () => {
     ].join("\n");
 
     const { getByRole } = render(
-      <DiffView
+      <TextDiffView
         oldContent={oldContent}
         newContent={newContent}
         globallyCollapsed={false}
@@ -642,7 +642,7 @@ describe("DiffView", () => {
     const onExpandGap = vi.fn();
 
     const { getByRole } = render(
-      <DiffView
+      <TextDiffView
         oldContent={"a\nb\nc\nd\ne\nf\n"}
         newContent={"A\nb\nc\nd\ne\nF\n"}
         globallyCollapsed={false}
@@ -680,7 +680,7 @@ describe("DiffView", () => {
       (_, i) => `line ${i + 1}`
     ).join("\n");
     const { getByRole } = render(
-      <DiffView
+      <TextDiffView
         oldContent={oldContent}
         newContent={oldContent}
         globallyCollapsed={false}
@@ -719,7 +719,7 @@ describe("DiffView", () => {
     ]);
     const onExpandGap = vi.fn();
     const { getByRole } = render(
-      <DiffView
+      <TextDiffView
         oldContent={Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join(
           "\n"
         )}
@@ -760,7 +760,7 @@ describe("DiffView", () => {
       (_, i) => `line ${i + 1}`
     ).join("\n");
     const { getByRole } = render(
-      <DiffView
+      <TextDiffView
         oldContent={oldContent}
         newContent={oldContent}
         globallyCollapsed={false}
@@ -801,7 +801,7 @@ describe("DiffView", () => {
     mockGetCollapsedLinesCountBetween.mockReturnValue(4);
 
     const { getByText, queryByRole } = render(
-      <DiffView
+      <TextDiffView
         structuredPatch={[
           {
             oldStart: 1,
@@ -849,7 +849,7 @@ describe("DiffView", () => {
     mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
 
     render(
-      <DiffView
+      <TextDiffView
         oldContent={oldContent}
         newContent={"const value = 2;\n"}
         language="typescript"
@@ -883,7 +883,7 @@ describe("DiffView", () => {
     mockToRdvHunks.mockReturnValue(hunks);
 
     render(
-      <DiffView
+      <TextDiffView
         oldContent={"attempt-start content that no longer matches the patch"}
         newContent={"later event content"}
         structuredPatch={[

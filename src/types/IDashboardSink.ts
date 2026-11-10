@@ -22,10 +22,10 @@ import type { HarnessUsageSnapshot } from "./UsageTypes";
  * IDashboardSink
  *
  * Minimal interface for posting state updates to the webview dashboard.
- * WorkflowInstance depends on this interface (not the concrete CtrlYokeWebviewProvider)
+ * WorkflowInstance depends on this interface (not the concrete dashboard provider)
  * so it stays free of VS Code API imports.
  *
- * CtrlYokeWebviewProvider satisfies this interface structurally — no `implements`
+ * The VS Code dashboard provider satisfies this interface structurally — no `implements`
  * declaration is required.
  */
 export interface IDashboardSink {

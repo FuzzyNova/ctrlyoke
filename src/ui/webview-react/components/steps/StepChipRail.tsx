@@ -84,7 +84,7 @@ import {
   InOutputViewBar,
   useFinalStepPassesInOutputView,
   useIsStepInOutputView,
-} from "./InOutputViewMarker";
+} from "./InOutputView";
 import {
   formatFinalPassRangeCompact,
   formatParallelStepsLabel,

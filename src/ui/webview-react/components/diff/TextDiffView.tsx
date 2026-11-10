@@ -1,5 +1,5 @@
 /**
- * DiffView — collapsible diff renderer powered by react-diff-view.
+ * TextDiffView — collapsible diff renderer powered by react-diff-view.
  *
  * Layout:
  * - Wide panels (≥ 1024 px): side-by-side split view via viewType="split".
@@ -78,7 +78,7 @@ const DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD = 240;
 const DEFER_DIFF_TOKENIZATION_TIMEOUT_MS = 900;
 
 function getRawStructuredPatchText(
-  hunks: DiffViewProps["structuredPatch"]
+  hunks: TextDiffViewProps["structuredPatch"]
 ): string | undefined {
   if (!hunks?.length) return undefined;
   return hunks
@@ -115,7 +115,7 @@ function formatHiddenLines(count: number): string {
   return `${count} hidden line${count === 1 ? "" : "s"}`;
 }
 
-interface DiffViewProps {
+interface TextDiffViewProps {
   /** Raw old file content (full-file edit path) */
   oldContent?: string;
   /** Raw new file content (full-file edit path) */
@@ -164,7 +164,7 @@ interface DiffViewProps {
   outerMarginClassName?: string;
   /**
    * Pre-parsed react-diff-view hunks (e.g. from parseUnifiedDiffToFiles).
-   * When provided, DiffView skips its own content/patch parsing and uses these
+   * When provided, TextDiffView skips its own content/patch parsing and uses these
    * directly. diffType must also be provided when hunks is provided.
    */
   hunks?: HunkData[];
@@ -177,7 +177,7 @@ interface DiffViewProps {
   /**
    * Offset range of the currently active "Find in output" match within this
    * diff's searched text (`getStructuredPatchText` — the raw `structuredPatch`
-   * lines flattened and joined with "\n"). When set, DiffView marks that exact
+   * lines flattened and joined with "\n"). When set, TextDiffView marks that exact
    * occurrence for precise scroll targeting and force-expands a collapsed diff
    * so the match can be found and scrolled to at all.
    */
@@ -190,7 +190,7 @@ interface DiffViewProps {
   wordWrap?: boolean;
 }
 
-export const DiffView: React.FC<DiffViewProps> = ({
+export const TextDiffView: React.FC<TextDiffViewProps> = ({
   oldContent,
   newContent,
   structuredPatch,
@@ -283,7 +283,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       };
     } catch (error) {
       WebviewLog.warn(
-        "[DiffView] structured patch parsing failed; showing raw patch text",
+        "[TextDiffView] structured patch parsing failed; showing raw patch text",
         error
       );
       return {
@@ -440,7 +440,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       const oldLineCount = oldContent.split("\n").length;
       if (gapStart > oldLineCount) {
         WebviewLog.warn(
-          `[DiffView] expand skipped: gapStart=${gapStart} exceeds oldContent lines=${oldLineCount}. ` +
+          `[TextDiffView] expand skipped: gapStart=${gapStart} exceeds oldContent lines=${oldLineCount}. ` +
             `oldContent may be a snippet rather than the full file.`
         );
         return;
@@ -535,7 +535,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       }
       return tokenize(expandedHunks, { highlight: false, enhancers });
     } catch (error) {
-      WebviewLog.warn("[DiffView] syntax tokenization failed", error);
+      WebviewLog.warn("[TextDiffView] syntax tokenization failed", error);
       return null;
     }
   }, [expandedHunks, lang, shouldComputeTokens, tokenizationOldSource]);

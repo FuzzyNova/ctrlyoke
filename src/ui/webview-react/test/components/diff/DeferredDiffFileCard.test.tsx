@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { DiffFileCard } from "@components/diff/DiffFileCard";
 import type { WorkspaceFileHistoryDiffResponse } from "@root/types/HostedWorkspaceViewerTypes";
 
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: ({ findQuery }: { findQuery?: string }) => (
+vi.mock("@components/diff/TextDiffView", () => ({
+  TextDiffView: ({ findQuery }: { findQuery?: string }) => (
     <div data-testid="loaded-diff">
       {findQuery ? <mark data-testid="find-highlight">{findQuery}</mark> : null}
     </div>

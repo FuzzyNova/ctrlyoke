@@ -34,7 +34,6 @@ import {
 } from "./rdvAdapter";
 import {
   buildDiffAnchorPrefix,
-  getStepAssistantTextForCopy,
   isStructuredPatchMalformed,
 } from "./outputUtils";
 import {
@@ -401,10 +400,6 @@ export function getOutputDiffKey(
     runIndex,
     attemptIndex
   )}-e${eventIndex}`;
-}
-
-export function getCliTextForCopy(output: CliOutputType): string | undefined {
-  return getStepAssistantTextForCopy(output);
 }
 
 export function applyDiffGapExpansionState(

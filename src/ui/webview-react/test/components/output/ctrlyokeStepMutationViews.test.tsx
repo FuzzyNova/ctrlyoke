@@ -17,8 +17,8 @@ import {
   EditStepBody,
   RemoveStepBody,
   ReorderStepsBody,
-  SubmitCommitMessageBody,
 } from "@components/output/ctrlyoke-tools/StepMutationViews";
+import { SubmitCommitMessageBody } from "@components/output/ctrlyoke-tools/SubmitCommitMessageView";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
   estimateGenericToolCallHeight,

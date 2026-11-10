@@ -9,8 +9,8 @@ const { diffViewRenderCount } = vi.hoisted(() => ({
   diffViewRenderCount: { value: 0 },
 }));
 
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: ({
+vi.mock("@components/diff/TextDiffView", () => ({
+  TextDiffView: ({
     collapsed,
     expandedGaps,
     onCollapsedChange,
@@ -213,7 +213,7 @@ describe("DiffFileCard", () => {
     );
   });
 
-  it("renders a compact binary fallback without DiffView props", () => {
+  it("renders a compact binary fallback without TextDiffView props", () => {
     render(
       <DiffFileCard
         path="assets/data.bin"

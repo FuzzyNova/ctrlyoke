@@ -18,8 +18,8 @@ import {
   type DiffFileListHandle,
 } from "@components/diff/DiffFileList";
 
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: ({
+vi.mock("@components/diff/TextDiffView", () => ({
+  TextDiffView: ({
     collapsed,
     expandedGaps,
     onCollapsedChange,

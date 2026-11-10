@@ -1,5 +1,5 @@
 import React from "react";
-import { DiffView } from "@components/output/DiffView";
+import { TextDiffView } from "@components/diff/TextDiffView";
 import { RawToolCallSection } from "./RawToolCallSection";
 import type {
   ToolCallExpansionSection,
@@ -26,7 +26,6 @@ import type {
   ReorderStepsParams,
   ReorderStepsResult,
 } from "@root/utils/ctrlyokeToolViews/reorderStepsModel";
-import type { SubmitCommitMessageParams } from "@root/utils/ctrlyokeToolViews/submitCommitMessageModel";
 
 function RawToggle({
   data,
@@ -122,7 +121,7 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
       )}
       {prompt !== undefined && (
         <div aria-label="Prompt change">
-          <DiffView
+          <TextDiffView
             oldContent={oldPrompt}
             newContent={prompt}
             globallyCollapsed={false}
@@ -188,25 +187,4 @@ export const ReorderStepsBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
       />
     </div>
   );
-};
-
-export const SubmitCommitMessageBody: React.FC<CtrlYokeToolBodyProps> = (
-  props
-) => {
-  const params = props.params as SubmitCommitMessageParams | undefined;
-  const message = params?.message;
-  return (
-    <div className="space-y-1">
-      {message && (
-        <pre className="m-0 overflow-x-auto whitespace-pre-wrap wrap-break-word rounded-sm bg-muted/40 p-2 font-mono text-(length:--cy-output-font-size-sm)">
-          {message}
-        </pre>
-      )}
-      <RawToggle
-        data={props.data}
-        expansion={props.expansion}
-        onExpansionChange={props.onExpansionChange}
-      />
-    </div>
-  );
-};
+};\n

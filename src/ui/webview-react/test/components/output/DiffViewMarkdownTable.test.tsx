@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import { DiffView } from "@components/output/DiffView";
+import { TextDiffView } from "@components/diff/TextDiffView";
 import { useSettingsStore } from "@store/settingsStore";
 
-describe("DiffView Markdown table rendering", () => {
+describe("TextDiffView Markdown table rendering", () => {
   afterEach(() => {
     cleanup();
     document.head
@@ -22,7 +22,7 @@ describe("DiffView Markdown table rendering", () => {
     useSettingsStore.getState().updateGlobalSetting("wordWrap", true);
 
     const { container } = render(
-      <DiffView
+      <TextDiffView
         structuredPatch={[
           {
             oldStart: 1,

@@ -1,7 +1,7 @@
 /**
  * Diff computation utilities.
  *
- * Structured-patch normalisation and line-counting shared by DiffView (via
+ * Structured-patch normalisation and line-counting shared by TextDiffView (via
  * rdvAdapter) and other consumers (OutputSection, markdownExport, CliOutput).
  * Raw old/new → DiffLine generation stays here for OutputSection and markdown export.
  */

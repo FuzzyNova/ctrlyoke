@@ -3,9 +3,9 @@
  *
  * Routes CLI events to the appropriate specialized component. File operation
  * events (edit / write / read / delete) are handled by FileOperationOutput.tsx.
- * The diff renderer lives in DiffView.tsx.
+ * The diff renderer lives in TextDiffView.tsx.
  *
- * Re-exports from FileOperationOutput and DiffView are preserved for
+ * Re-exports from FileOperationOutput and TextDiffView are preserved for
  * backward compatibility with existing consumers.
  */
 import React, { useId, useState } from "react";
@@ -24,7 +24,8 @@ import {
 } from "@utils/toolCallLayout";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
 import { CollapsibleOutputSection } from "./CollapsibleOutputSection";
-import { ToolDot } from "./FileOperationOutput";
+import { ToolDot } from "./ToolDot";
+export { ToolDot } from "./ToolDot";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 import type { ToolResult, WebSearchData } from "../../types/cliEvents";
@@ -46,7 +47,7 @@ export {
   FileReadOutput,
   FileDeleteOutput,
 } from "./FileOperationOutput";
-export { DiffView } from "./DiffView";
+export { TextDiffView } from "@components/diff/TextDiffView";
 
 // ── Status helper ─────────────────────────────────────────────────────────────
 

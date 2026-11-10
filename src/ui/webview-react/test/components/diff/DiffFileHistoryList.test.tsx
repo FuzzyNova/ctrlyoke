@@ -14,8 +14,8 @@ const { usePagedFileHistory } = vi.hoisted(() => ({
 }));
 
 vi.mock("@hooks/usePagedFileHistory", () => ({ usePagedFileHistory }));
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: ({ collapsed }: { collapsed?: boolean }) => (
+vi.mock("@components/diff/TextDiffView", () => ({
+  TextDiffView: ({ collapsed }: { collapsed?: boolean }) => (
     <div data-testid="loaded-diff" data-collapsed={String(collapsed)} />
   ),
 }));

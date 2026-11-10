@@ -140,12 +140,12 @@ export function diffLineHeight(outputFontSize: number): number {
   return (outputFontSize - 1) * DIFF_LINE_HEIGHT;
 }
 
-/** `py-0.5` on DiffView's gap decoration bar (Tailwind's default spacing scale, unoverridden here). */
+/** `py-0.5` on TextDiffView's gap decoration bar (Tailwind's default spacing scale, unoverridden here). */
 export const DIFF_GAP_DECORATION_VERTICAL_PADDING = 4;
 
 /**
  * Height of one "Show N hidden lines" gap decoration bar between hunks.
- * Renders outside `.diff-line` (it is DiffView's own markup, not react-diff-view's
+ * Renders outside `.diff-line` (it is TextDiffView's own markup, not react-diff-view's
  * vendored row CSS), at the same `text-(length:--cy-output-font-size-xs)`
  * class as the diff's own header line — so it shares that line's already-measured
  * `leading-relaxed` line height, plus its own `py-0.5` the header line doesn't have.
@@ -211,14 +211,14 @@ const DIFF_GUTTER_COLUMNS = 2;
 const DIFF_GUTTER_COLUMN_CH = 7;
 /** `.diff-code { padding: 0 0 0 .5em }`. */
 const DIFF_CODE_CELL_PADDING_EM = 0.5;
-/** The `border` on DiffView's `overflow-x-auto` wrapper, both edges. */
+/** The `border` on TextDiffView's `overflow-x-auto` wrapper, both edges. */
 const DIFF_WRAPPER_BORDER_WIDTH = 2;
 /** Never wrap against a code column narrower than this — it explodes row counts. */
 export const MIN_DIFF_CODE_COLUMN_WIDTH = 120;
 
 /**
  * `::-webkit-scrollbar { height: 10px }` in globals.css: the horizontal track
- * DiffView's `overflow-x-auto` wrapper adds below an unwrapped (`ui.wordWrap`
+ * TextDiffView's `overflow-x-auto` wrapper adds below an unwrapped (`ui.wordWrap`
  * off) table once a line overflows it.
  */
 export const DIFF_HORIZONTAL_SCROLLBAR_HEIGHT = 10;

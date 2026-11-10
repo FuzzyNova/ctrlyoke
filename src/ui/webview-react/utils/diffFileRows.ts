@@ -46,7 +46,7 @@ export const DIFF_FILE_CARD_PATH_LINE_COUNT = 2;
 /** `.gap-0.5` separates the optional note from the path row. */
 export const DIFF_FILE_CARD_NOTE_GAP = 2;
 
-/** `DiffView` receives `outerMarginClassName="my-1"` (4px on both edges). */
+/** `TextDiffView` receives `outerMarginClassName="my-1"` (4px on both edges). */
 export const DIFF_FILE_DIFF_VIEW_MARGIN_HEIGHT = 8;
 
 /** Card header `px-2.5` (20px) plus note `pl-5` (20px). */
@@ -261,7 +261,7 @@ function getContentEstimate(
   const metrics = getContentSourceMetrics(file.source);
   if (!metrics.hasDisplayableContent) return 0;
 
-  // DiffView can only build a body from a complete old/new pair. With one
+  // TextDiffView can only build a body from a complete old/new pair. With one
   // side absent, or with identical content, it still renders its summary but
   // has no diff table below it.
   const hasDiffBody =

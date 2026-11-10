@@ -18,7 +18,7 @@ import {
 } from "@utils/outputFind";
 import { buildAskUserQuestionSearchSegments } from "@utils/askUserQuestionLayout";
 import { ToolCallBlock } from "./ToolCallBlock";
-import { ToolDot } from "./FileOperationOutput";
+import { ToolDot } from "./ToolDot";
 import { TOOL_RESULT_LINE } from "./outputStyles";
 import {
   HISTORY_MATCH_FIELDS,

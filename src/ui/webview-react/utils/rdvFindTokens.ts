@@ -147,7 +147,7 @@ function promoteActiveMarkInNode(
 /**
  * Re-tags the single "find" mark token covering `[location.start,
  * location.end)` on `location`'s line with a distinct markType so
- * `renderDiffToken` in DiffView can render it as a `<mark data-find-active>`
+ * `renderDiffToken` in TextDiffView can render it as a `<mark data-find-active>`
  * — the element `revealActiveFindMatchInRow` looks for to scroll precisely to
  * the active occurrence instead of only the containing row.
  *

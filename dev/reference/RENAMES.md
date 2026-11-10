@@ -27,6 +27,16 @@ This ledger maps retired names to their current names. Historical implementation
 | `RunFinalStepProjection.loopCount` | `RunFinalStepProjection.passCount` | symbol | 8 | 2026-11-09 |
 | `RunFinalStepProjection.latestLoop` | `RunFinalStepProjection.latestPass` | symbol | 8 | 2026-11-09 |
 | `finalLoopCount` (`src/cli.ts`) | `finalPassCount` | symbol | 8 | 2026-11-09 |
+| `src/ui/webview-react/components/output/DiffView.tsx` | `src/ui/webview-react/components/diff/TextDiffView.tsx` | file | 3b | 2026-11-09 |
+| `src/ui/webview-react/test/components/output/DiffView.test.tsx` | `src/ui/webview-react/test/components/diff/TextDiffView.test.tsx` | file | 3b | 2026-11-09 |
+| `DiffView` | `TextDiffView` | symbol | 3b | 2026-11-09 |
+| `src/ui/webview-react/components/output/SubagentSpawn.tsx` | `src/ui/webview-react/components/output/SubagentSpawnOutput.tsx` | file | 3b | 2026-11-09 |
+| `src/ui/webview-react/test/components/output/SubagentSpawn.test.tsx` | `src/ui/webview-react/test/components/output/SubagentSpawnOutput.test.tsx` | file | 3b | 2026-11-09 |
+| `src/ui/webview-react/components/output/ctrlyoke-tools/StepMutationViews.tsx` (`SubmitCommitMessageBody`) | `src/ui/webview-react/components/output/ctrlyoke-tools/SubmitCommitMessageView.tsx` | symbol | 3b | 2026-11-09 |
+| `src/ui/webview-react/components/output/FileOperationOutput.tsx` (`ToolDot`) | `src/ui/webview-react/components/output/ToolDot.tsx` | symbol | 3b | 2026-11-09 |
+| `src/ui/webview-react/components/steps/InOutputViewMarker.tsx` | `src/ui/webview-react/components/steps/InOutputView.tsx` | file | 3b | 2026-11-09 |
+| `getCliTextForCopy` | removed; callers use `getStepAssistantTextForCopy` | symbol | 3b | 2026-11-09 |
+| `src/ui/webview-react/utils/diff.ts` (`generateDiff`, `applyDiff`) | removed (unused) | file / symbols | 3b | 2026-11-09 |
 
 | `src/ui/webview-react/components/prompts/` | `src/ui/webview-react/components/steps/` | folder | 2 | 2026-11-09 |
 | `src/ui/webview-react/test/components/prompts/` | `src/ui/webview-react/test/components/steps/` | folder | 2 | 2026-11-09 |

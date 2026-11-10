@@ -50,11 +50,11 @@ import { WorkflowStatusBody } from "./WorkflowStatusView";
 import { GlobalStatusBody } from "./GlobalStatusView";
 import { ReadOutputBody } from "./ReadOutputView";
 import { ListHarnessesBody } from "./ListHarnessesView";
+import { SubmitCommitMessageBody } from "./SubmitCommitMessageView";
 import {
   EditStepBody,
   RemoveStepBody,
   ReorderStepsBody,
-  SubmitCommitMessageBody,
 } from "./StepMutationViews";
 
 export interface CtrlYokeToolBodyProps {

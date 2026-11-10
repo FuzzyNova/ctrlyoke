@@ -5,7 +5,7 @@ import {
   WORKSPACE_ENTRY_KINDS,
   type DiffViewType,
 } from "@root/types/DashboardConstants";
-import { DiffView } from "@components/output/DiffView";
+import { TextDiffView } from "@components/diff/TextDiffView";
 import type { HunkData, DiffType } from "react-diff-view";
 import type { UnifiedDiffHunk } from "@root/types/CliOutputTypes";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
@@ -383,7 +383,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
     switch (renderedSource.kind) {
       case DIFF_FILE_SOURCE_KINDS.HUNKS:
         return (
-          <DiffView
+          <TextDiffView
             hunks={renderedSource.hunks}
             diffType={renderedSource.diffType}
             {...sharedDiffViewProps}
@@ -391,7 +391,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
         );
       case WORKSPACE_ENTRY_KINDS.CONTENT:
         return (
-          <DiffView
+          <TextDiffView
             oldContent={renderedSource.oldContent}
             newContent={renderedSource.newContent}
             {...sharedDiffViewProps}
@@ -399,7 +399,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
         );
       case DIFF_FILE_SOURCE_KINDS.PATCH:
         return (
-          <DiffView
+          <TextDiffView
             structuredPatch={renderedSource.structuredPatch}
             oldContent={renderedSource.oldContent}
             {...sharedDiffViewProps}

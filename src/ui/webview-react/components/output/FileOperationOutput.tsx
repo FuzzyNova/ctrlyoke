@@ -5,7 +5,8 @@
  * All four components share the ToolDot / FilePath primitives defined here.
  */
 import React, { memo } from "react";
-import { DiffView } from "./DiffView";
+import { TextDiffView } from "@components/diff/TextDiffView";
+import { ToolDot } from "./ToolDot";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { openFile } from "@hooks/useMessageHandler";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
@@ -40,19 +41,6 @@ import { Icon } from "../shared/Icon";
 // Shared primitives
 // ============================================================================
 
-type DotStatus = ToolResultStatus;
-
-const DOT_COLORS: Record<DotStatus, string> = {
-  [TOOL_RESULT_STATUSES.PENDING]: "text-editor-fg",
-  [TOOL_RESULT_STATUSES.SUCCESS]: "text-indicator-success",
-  [TOOL_RESULT_STATUSES.ERROR]: "text-indicator-error",
-};
-
-/** Coloured ● bullet that reflects the operation status */
-export const ToolDot: React.FC<{ status: DotStatus }> = ({ status }) => (
-  <span className={DOT_COLORS[status]}>●</span>
-);
-
 /** Clickable file path that opens the file in VS Code */
 const FilePath: React.FC<{
   path: string;
@@ -74,7 +62,7 @@ const FilePath: React.FC<{
 );
 
 interface FileOperationBlockProps {
-  dotStatus: DotStatus;
+  dotStatus: ToolResultStatus;
   actionLabel: string;
   path: string;
   pathContent?: React.ReactNode;
@@ -96,6 +84,8 @@ interface FileOperationBlockProps {
   fullBleed?: React.ReactNode;
   className?: string;
 }
+
+type DotStatus = ToolResultStatus;
 
 const PATH_FLEX_STYLE: React.CSSProperties = {
   flexBasis: `${FILE_OPERATION_PATH_MIN_CH}ch`,
@@ -285,7 +275,7 @@ interface FileEditOutputProps {
   onCollapsedChange?: (collapsed: boolean) => void;
   expandedGaps?: DiffGapExpansionState;
   onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
-  /** Forwarded to DiffView to avoid the initial wrong-viewType render. */
+  /** Forwarded to TextDiffView to avoid the initial wrong-viewType render. */
   viewType?: "split" | "unified";
   /** "Find in output" query to highlight within the diff. */
   findQuery?: string;
@@ -299,7 +289,7 @@ interface FileEditOutputProps {
 /**
  * FileEditOutput renders a file edit operation with diff visualization.
  *
- * The raw diff inputs are passed directly to DiffView which owns all
+ * The raw diff inputs are passed directly to TextDiffView which owns all
  * expensive computation (diff generation + syntax tokenization) lazily behind
  * an expand gate.
  * This component itself does zero diff work at render time.
@@ -369,7 +359,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
         // the rail therefore stops just above its "Show diff" toggle.
         fullBleed={
           hasDiffData ? (
-            <DiffView
+            <TextDiffView
               oldContent={oldContent}
               newContent={newContent}
               structuredPatch={structuredPatch}

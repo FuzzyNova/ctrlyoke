@@ -21,8 +21,8 @@ import { downloadBlob } from "@utils/download";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: ({ collapsed }: { collapsed: boolean }) => (
+vi.mock("@components/diff/TextDiffView", () => ({
+  TextDiffView: ({ collapsed }: { collapsed: boolean }) => (
     <div data-testid="diff-view" data-collapsed={String(collapsed)} />
   ),
 }));

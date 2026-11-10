@@ -65,7 +65,7 @@ interface RunningWorkflowItemProps {
 }
 
 /**
- * RunningWorkflowItem - Single entry in the "Running Workflows" dropdown section.
+ * RunningWorkflowItem - Single entry in the running-workflows section.
  *
  * Shows:
  * - Workflow name (truncated)

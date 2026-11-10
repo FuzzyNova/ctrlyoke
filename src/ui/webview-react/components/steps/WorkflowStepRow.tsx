@@ -26,7 +26,7 @@ import {
   IN_OUTPUT_VIEW_TITLE,
   InOutputViewBar,
   useIsStepInOutputView,
-} from "./InOutputViewMarker";
+} from "./InOutputView";
 
 export type WorkflowStepComponentProps = React.ComponentProps<
   typeof WorkflowStepItem

@@ -52,7 +52,6 @@ export {
 } from "./status";
 
 // Diff utilities
-export { generateDiff, applyDiff } from "./diff";
 
 // Output rendering utilities
 export {

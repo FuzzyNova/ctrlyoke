@@ -557,11 +557,11 @@ interface UiState {
   outputCollapsed: boolean;
   editorCollapsed: boolean;
 
-  // Diff display — when true all DiffView instances render collapsed (summary only),
+  // Diff display — when true all TextDiffView instances render collapsed (summary only),
   // keeping the DOM lean for runs with many large file edits.
   diffsCollapsed: boolean;
   // Monotonic counter bumped on every "expand all" / "collapse all" action.
-  // DiffView includes this in its useEffect deps so the effect fires even when
+  // TextDiffView includes this in its useEffect deps so the effect fires even when
   // diffsCollapsed doesn't change (e.g. user manually collapsed one diff while
   // diffsCollapsed was already false, then presses "Expand all" again).
   diffResetVersion: number;

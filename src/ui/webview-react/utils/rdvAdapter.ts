@@ -256,7 +256,7 @@ export interface DiffRenderPlanOptions {
 }
 
 /**
- * DiffView's own frame around the summary line: `my-2` (16, of which the bottom
+ * TextDiffView's own frame around the summary line: `my-2` (16, of which the bottom
  * half collapses into ToolCallBlock's) plus the header's `mb-1` (4) and the
  * expanded diff container's 1px border top and bottom (2).
  */
@@ -364,7 +364,7 @@ function hasLineWiderThan(
 
 /**
  * Number of collapsed "Show N hidden lines" gap bars still present in `hunks`.
- * Mirrors DiffView.tsx's own render loop exactly: a gap exists between two
+ * Mirrors TextDiffView.tsx's own render loop exactly: a gap exists between two
  * adjacent hunks whenever `getCollapsedLinesCountBetween` is positive, and a
  * fully-expanded gap (chunk/all mode via `expandFromRawCode`) merges its two
  * hunks into one, removing the pair this counts.
@@ -581,7 +581,7 @@ export function buildDiffRenderPlanFromStats(
     };
   }
 
-  // The ● header the diff hangs under, and DiffView's own "Show diff" summary
+  // The ● header the diff hangs under, and TextDiffView's own "Show diff" summary
   // line (xs font, one line — its content never wraps in practice). Both
   // inherit `leading-relaxed` from TOOL_CALL_TERMINAL.
   const toolLineHeight =

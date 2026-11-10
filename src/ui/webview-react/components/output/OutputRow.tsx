@@ -51,7 +51,7 @@ import { resolveCtrlYokeToolView } from "./ctrlyoke-tools/registry";
 import { CTRLYOKE_TOOL_VIEW_BODIES } from "./ctrlyoke-tools/viewComponents";
 import { CtrlYokeToolHeading } from "./ctrlyoke-tools/CtrlYokeToolHeading";
 import { ToolCallBlock } from "./ToolCallBlock";
-import { ToolDot } from "./FileOperationOutput";
+import { ToolDot } from "./ToolDot";
 import type { McpToolName } from "@root/utils/McpToolDefinitions";
 import type {
   AskUserQuestionData,
