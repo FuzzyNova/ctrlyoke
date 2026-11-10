@@ -63,7 +63,7 @@ import {
   type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import {
   applyPreparedMutations,
   type HarnessAdapterPreparation,
@@ -435,7 +435,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     args.push(...CODEX_SKIP_UPDATE_CHECK_ARGS);
     args.push(...CODEX_REASONING_SUMMARY_ARGS);
 
-    // Use resolved properties if available (from PropertyResolver three-tier precedence)
+    // Use resolved properties if available (from SettingsPropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     // Agent handling is done via buildPromptSections() → createCategorizedPromptFiles().
     // No provider-specific agent flags needed.

@@ -7,7 +7,7 @@ import {
 import { repoToplevel } from "../utils/GitUtils";
 import { canonicalStatePath } from "../utils/ProjectStatePaths";
 import { pathsEqual } from "../utils/PathCasing";
-import { confirmMutation, type CliConfirmIo } from "./CliPrompt";
+import { confirmMutation, type CliConfirmIo } from "./CliConfirm";
 import * as path from "node:path";
 import type {
   HistoryPruneOptions,

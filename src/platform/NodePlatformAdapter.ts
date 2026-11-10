@@ -37,7 +37,7 @@ export interface ResolvedCliConfig {
   /**
    * Execution mode for CLI operation.
    * Detected from TTY presence (default) or overridden by --interactive / --headless flags.
-   * Exposed so that CliAdapter.getConfig("cliExecutionMode") returns the
+   * Exposed so that NodePlatformAdapter.getConfig("cliExecutionMode") returns the
    * correct value when CliIntegration reads the execution mode via the
    * platform adapter rather than vscode.workspace.getConfiguration().
    */
@@ -49,7 +49,7 @@ export interface ResolvedCliConfig {
  * Node.js CLI implementation of PlatformAdapter.
  * Used by the standalone ctrlyoke CLI binary.
  */
-export class CliAdapter implements PlatformAdapter {
+export class NodePlatformAdapter implements PlatformAdapter {
   readonly interactiveTerminal: InteractiveTerminalMode;
   private readonly secretStore: SecretStore;
 

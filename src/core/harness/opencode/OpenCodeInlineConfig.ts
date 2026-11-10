@@ -4,7 +4,7 @@ import * as path from "path";
 import { parse, type ParseError } from "jsonc-parser";
 import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../shared/interfaces/IToolPermissionMapper";
-import type { SettingsJsonPermissionPolicy } from "../shared/SettingsJsonMcpTracker";
+import type { OpenCodePermissionPolicy } from "./OpenCodePermissionPolicy";
 import {
   transformMcpSecretMap,
   type McpSecretConfigOptions,
@@ -254,7 +254,7 @@ export interface OpenCodeInlineConfig {
    * The V1 permission map. OpenCode 2 still accepts it and migrates its keys
    * (`bash` → `shell`, `task` → `subagent`) in memory.
    */
-  permission?: SettingsJsonPermissionPolicy;
+  permission?: OpenCodePermissionPolicy;
   mcp?: OpenCodeMcpEntries;
   /** OpenCode 1: plugin entry files. */
   plugin?: string[];

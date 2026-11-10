@@ -6,9 +6,9 @@ import {
 } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
-  PropertyResolver,
+  SettingsPropertyResolver,
   type ResolvedProperties,
-} from "../../../utils/PropertyResolver";
+} from "../../../utils/SettingsPropertyResolver";
 import { SessionResolver } from "../../../utils/SessionResolver";
 import { SessionValidator } from "../../../utils/SessionValidator";
 import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
@@ -37,7 +37,7 @@ export class CliSessionResolverAdapter {
     workflowContext?: WorkflowContext
   ): Promise<CliSessionResolution> {
     const resolvedProperties = workflowContext?.workflowFile
-      ? PropertyResolver.resolve(prompt, workflowContext.workflowFile, {
+      ? SettingsPropertyResolver.resolve(prompt, workflowContext.workflowFile, {
           hostCanProvidePty: workflowContext.hostCanProvidePty,
         })
       : workflowContext?.resolvedProperties;

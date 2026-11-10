@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { teardown } from "mocha";
-import { PropertyResolver } from "../../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import {
   resolveExecutionProperties,
   resolveStepHarnessAndModel,
@@ -22,7 +22,7 @@ import {
 } from "../../utils/McpToolDefinitions";
 import { configService } from "../../config/CtrlYokeConfigService";
 
-suite("PropertyResolver Tests", () => {
+suite("SettingsPropertyResolver Tests", () => {
   teardown(() => {
     configService.setCliOverlay({});
   });
@@ -241,9 +241,9 @@ suite("PropertyResolver Tests", () => {
               ? { [fixture.property]: fixture.workflow }
               : {}),
           } as PromptFile;
-          const context = PropertyResolver.createContext();
+          const context = SettingsPropertyResolver.createContext();
           const pure = resolveExecutionProperties(prompt, workflow, context);
-          const backend = PropertyResolver.resolveTarget(prompt, workflow);
+          const backend = SettingsPropertyResolver.resolveTarget(prompt, workflow);
           const expected = tier.usePrompt
             ? fixture.prompt
             : tier.useWorkflow
@@ -289,7 +289,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("execution property precedence contracts", () => {
     test("resolves secrets with replacement and null-clearing semantics", () => {
-      const context = PropertyResolver.createContext();
+      const context = SettingsPropertyResolver.createContext();
       context.defaults.secrets = ["DEFAULT_SECRET"];
 
       const workflow: PromptFile = {
@@ -386,7 +386,7 @@ suite("PropertyResolver Tests", () => {
         additionalArgs: "--prompt",
       };
 
-      const fromPrompt = PropertyResolver.resolve(prompt, workflow);
+      const fromPrompt = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(fromPrompt.harness, HARNESS_IDS.CLAUDE_CLI);
       assert.strictEqual(fromPrompt.model, "prompt-model");
       assert.strictEqual(fromPrompt.executionMode, EXECUTION_MODES.INTERACTIVE);
@@ -397,7 +397,7 @@ suite("PropertyResolver Tests", () => {
       assert.deepStrictEqual(fromPrompt.priorContext, [1]);
       assert.strictEqual(fromPrompt.additionalArgs, "--prompt");
 
-      const fromWorkflow = PropertyResolver.resolve(
+      const fromWorkflow = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           harness: undefined,
@@ -422,7 +422,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(fromWorkflow.priorContext, "all");
       assert.strictEqual(fromWorkflow.additionalArgs, "--workflow");
 
-      const fromSettings = PropertyResolver.resolve(
+      const fromSettings = SettingsPropertyResolver.resolve(
         { prompt: "test" },
         { steps: [] }
       );
@@ -456,7 +456,7 @@ suite("PropertyResolver Tests", () => {
         errorBehavior: { onError: "retry", maxRetries: 2 },
       };
 
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           agent: undefined,
@@ -500,7 +500,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("prompt policies override materialized workflow policies", () => {
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           hooks: [{ event: "stop", command: "echo prompt" }],
@@ -567,7 +567,7 @@ suite("PropertyResolver Tests", () => {
         errorBehavior: { onError: "retry", maxRetries: 2 },
       };
 
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           agent: null,
@@ -595,7 +595,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("non-nullable empty values still override inherited values", () => {
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           resumeSession: false,
@@ -624,7 +624,7 @@ suite("PropertyResolver Tests", () => {
         harness: HARNESS_IDS.COPILOT_CLI, // Should be ignored
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.harness, HARNESS_IDS.CLAUDE_CLI);
     });
 
@@ -637,7 +637,7 @@ suite("PropertyResolver Tests", () => {
         harness: HARNESS_IDS.CLAUDE_CLI,
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.harness, HARNESS_IDS.CLAUDE_CLI);
     });
 
@@ -649,7 +649,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       // Should default to ConfigurationUtils.getIntegrationMode() result
       assert.ok(resolved.harness); // Harness should be defined
     });
@@ -666,7 +666,7 @@ suite("PropertyResolver Tests", () => {
         model: "claude-haiku-4.5", // Should be ignored
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.model, "gpt-5");
     });
 
@@ -679,7 +679,7 @@ suite("PropertyResolver Tests", () => {
         model: "claude-haiku-4.5",
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.model, "claude-haiku-4.5");
     });
 
@@ -692,13 +692,13 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       // Should default to ConfigurationUtils.getCopilotCliModel() for CopilotCli
       assert.ok(resolved.model); // Model should be defined
     });
 
     test("workflow model and args apply only to steps on the workflow's harness", () => {
-      const context = PropertyResolver.createContext();
+      const context = SettingsPropertyResolver.createContext();
       context.defaults.harness = HARNESS_IDS.COPILOT_CLI;
       context.defaults.modelsByHarness = {
         [HARNESS_IDS.CLAUDE_CLI]: "opus",
@@ -781,7 +781,7 @@ suite("PropertyResolver Tests", () => {
         agent: "bug-hunter", // Should be ignored
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.agent, "code-reviewer");
     });
 
@@ -794,7 +794,7 @@ suite("PropertyResolver Tests", () => {
         agent: "bug-hunter",
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.agent, "bug-hunter");
     });
 
@@ -806,7 +806,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       // Agent may be undefined or fall back to global setting
       // We don't assert strict undefined since it depends on VS Code settings
       assert.ok(
@@ -826,7 +826,7 @@ suite("PropertyResolver Tests", () => {
         resumeSession: false, // Should be ignored
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.resumeSession, true);
     });
 
@@ -839,7 +839,7 @@ suite("PropertyResolver Tests", () => {
         resumeSession: true,
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.resumeSession, true);
     });
 
@@ -851,7 +851,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       // Should default to ConfigurationUtils.shouldResumeExistingSession()
       assert.strictEqual(typeof resolved.resumeSession, "boolean");
     });
@@ -877,15 +877,15 @@ suite("PropertyResolver Tests", () => {
       };
 
       assert.strictEqual(
-        PropertyResolver.resolve(prompt, workflow).executionMode,
+        SettingsPropertyResolver.resolve(prompt, workflow).executionMode,
         EXECUTION_MODES.INTERACTIVE
       );
       assert.strictEqual(
-        PropertyResolver.resolve({ prompt: "test" }, workflow).executionMode,
+        SettingsPropertyResolver.resolve({ prompt: "test" }, workflow).executionMode,
         EXECUTION_MODES.HEADLESS
       );
       assert.strictEqual(
-        PropertyResolver.resolve({ prompt: "test" }, { steps: [] })
+        SettingsPropertyResolver.resolve({ prompt: "test" }, { steps: [] })
           .executionMode,
         EXECUTION_MODES.HEADLESS
       );
@@ -896,7 +896,7 @@ suite("PropertyResolver Tests", () => {
         defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
       });
       assert.strictEqual(
-        PropertyResolver.resolve(
+        SettingsPropertyResolver.resolve(
           { prompt: "test" },
           { steps: [], executionMode: EXECUTION_MODES.INTERACTIVE },
           { hostCanProvidePty: false }
@@ -904,7 +904,7 @@ suite("PropertyResolver Tests", () => {
         EXECUTION_MODES.HEADLESS
       );
       assert.strictEqual(
-        PropertyResolver.resolve(
+        SettingsPropertyResolver.resolve(
           { prompt: "test" },
           { steps: [], executionMode: EXECUTION_MODES.HEADLESS },
           { hostCanProvidePty: false }
@@ -916,7 +916,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveMcpServers", () => {
     test("preserves the existing resolved shape and skills in native mode", () => {
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         { prompt: "test", mcpServers: ["ctrlyoke"] },
         { steps: [] }
       );
@@ -931,7 +931,7 @@ suite("PropertyResolver Tests", () => {
         execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         { prompt: "test", mcpServers: ["ctrlyoke"] },
         { steps: [] }
       );
@@ -951,7 +951,7 @@ suite("PropertyResolver Tests", () => {
         execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
-      const coordinationOnly = PropertyResolver.resolve(
+      const coordinationOnly = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           mcpServers: [
@@ -964,7 +964,7 @@ suite("PropertyResolver Tests", () => {
         MCP_SKILL_NAMES.COORDINATION,
       ]);
 
-      const workflowOnly = PropertyResolver.resolve(
+      const workflowOnly = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           mcpServers: [
@@ -981,7 +981,7 @@ suite("PropertyResolver Tests", () => {
         execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           mcpServers: ["ctrlyoke"],
@@ -1001,7 +1001,7 @@ suite("PropertyResolver Tests", () => {
         execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         {
           prompt: "test",
           mcpServers: [
@@ -1025,7 +1025,7 @@ suite("PropertyResolver Tests", () => {
         execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         { prompt: "test" },
         { steps: [] }
       );
@@ -1045,7 +1045,7 @@ suite("PropertyResolver Tests", () => {
         mcpServers: null, // Should be ignored
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
     });
 
@@ -1058,7 +1058,7 @@ suite("PropertyResolver Tests", () => {
         mcpServers: ["ctrlyoke"],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
     });
 
@@ -1070,7 +1070,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.mcpServers, []);
     });
 
@@ -1084,7 +1084,7 @@ suite("PropertyResolver Tests", () => {
         mcpServers: ["ctrlyoke"],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.mcpServers, null);
     });
   });
@@ -1100,7 +1100,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: "other-session-id", // Should be ignored
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(
         resolved.sessionId,
         "550e8400-e29b-41d4-a716-446655440000"
@@ -1117,7 +1117,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: "workflow-session-id", // Should be ignored
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, 1);
     });
 
@@ -1130,7 +1130,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: "workflow-session-id",
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, "workflow-session-id");
     });
 
@@ -1143,7 +1143,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: 2,
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, 2);
     });
 
@@ -1155,7 +1155,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, undefined);
     });
 
@@ -1168,7 +1168,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: "",
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, undefined);
     });
 
@@ -1183,7 +1183,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: "workflow-session-id", // should not be used when prompt owns resume tier
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, undefined);
     });
 
@@ -1198,7 +1198,7 @@ suite("PropertyResolver Tests", () => {
         resumeSession: true,
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, "workflow-session-id");
     });
   });
@@ -1218,7 +1218,7 @@ suite("PropertyResolver Tests", () => {
         },
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
@@ -1231,7 +1231,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: null,
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
@@ -1243,7 +1243,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
@@ -1257,7 +1257,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: { mode: PERMISSION_MODES.ALLOW_ALL },
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
@@ -1270,7 +1270,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: { mode: PERMISSION_MODES.NONE },
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
@@ -1288,7 +1288,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: { mode: PERMISSION_MODES.ALLOW_ALL },
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.toolPermissions, {
         mode: PERMISSION_MODES.CUSTOM,
         allowedTools: ["write"],
@@ -1309,7 +1309,7 @@ suite("PropertyResolver Tests", () => {
         },
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.toolPermissions, {
         mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
         allowedTools: [],
@@ -1326,7 +1326,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.ok(resolved.toolPermissions);
       assert.strictEqual(
         resolved.toolPermissions.mode,
@@ -1344,7 +1344,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.ok(resolved.toolPermissions);
       assert.strictEqual(
         resolved.toolPermissions.mode,
@@ -1367,7 +1367,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.toolPermissions, {
         mode: PERMISSION_MODES.CUSTOM,
         allowedTools: ["write", "shell(git:*)"],
@@ -1386,7 +1386,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
         hooks: [{ event: "stop", command: "echo default" }],
       };
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       // Prompt-level stop hooks replace workflow-level stop hooks
       assert.deepStrictEqual(resolved.hooks, [
         { event: "stop", command: "npm test" },
@@ -1399,7 +1399,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
         hooks: [{ event: "stop", command: "npm test" }],
       };
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.hooks, [
         { event: "stop", command: "npm test" },
       ]);
@@ -1408,7 +1408,7 @@ suite("PropertyResolver Tests", () => {
     test("should default to empty array when neither prompt nor workflow specify hooks", () => {
       const prompt: PromptStep = { prompt: "test" };
       const workflow: PromptFile = { steps: [] };
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.hooks, []);
     });
 
@@ -1421,7 +1421,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
         hooks: [{ event: "stop", command: "npm test" }],
       };
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.hooks, null);
     });
 
@@ -1431,7 +1431,7 @@ suite("PropertyResolver Tests", () => {
         steps: [],
         hooks: null,
       };
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.hooks, null);
     });
 
@@ -1447,7 +1447,7 @@ suite("PropertyResolver Tests", () => {
           { event: "sessionStart", command: "node notify.js" },
         ],
       };
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       // stop is overridden, sessionStart is inherited
       assert.ok(Array.isArray(resolved.hooks));
       const hooks = resolved.hooks!;
@@ -1519,7 +1519,7 @@ suite("PropertyResolver Tests", () => {
         ],
       };
       const workflow: PromptFile = { steps: [] };
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
       assert.ok(Array.isArray(resolved.hooks));
       assert.strictEqual(resolved.hooks!.length, 2);
     });
@@ -1552,7 +1552,7 @@ suite("PropertyResolver Tests", () => {
         }, // Should be used
       };
 
-      const resolved = PropertyResolver.resolve(prompt, workflow);
+      const resolved = SettingsPropertyResolver.resolve(prompt, workflow);
 
       assert.strictEqual(resolved.harness, HARNESS_IDS.CLAUDE_CLI); // From prompt
       assert.strictEqual(resolved.model, "opus"); // From workflow

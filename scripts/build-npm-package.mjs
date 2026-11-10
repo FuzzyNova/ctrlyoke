@@ -8,7 +8,7 @@
  * Run after a production build (`npm run build:extension`, or `npm run package`
  * in release.yml). The package reuses the extension's `out/` layout because the
  * CLI finds its runtime assets relative to the package root
- * (`CliAdapter.getExtensionPath()`). It gets a generated package.json with no
+ * (`NodePlatformAdapter.getExtensionPath()`). It gets a generated package.json with no
  * dependencies; the root package.json is extension-only and is never published.
  * See dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.2.
  */

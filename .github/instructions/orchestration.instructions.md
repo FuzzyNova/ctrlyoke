@@ -9,7 +9,7 @@ Disk/UI-facing orchestration helpers for workflow loading, session recovery, his
 <ownership>
 
 - `WorkflowInstance` owns `PromptFileLoader`, `PromptFileWatcher`, and `OutputHistoryManager`.
-- `WorkflowOrchestrator` owns `TemplateImporter`, `WorkflowCommandHandler`, `WorkspaceSessionManager`, and any live `ExternalRunWatchSession` instances.
+- `WorkflowOrchestrator` owns `TemplateImporter`, `DashboardNavigationCommands`, `WorkspaceSessionManager`, and any live `ExternalRunWatchSession` instances.
 - `HistorySearchService` is the exception: it is stateless and currently UI-owned (`CtrlYokeWebviewProvider` / `DashboardMessageRouter`), not orchestrator-owned.
 - `TimelineRecorder` and `OutputHistoryTimelineAdapter` are internal history primitives; most callers should go through `OutputHistoryManager` instead of reading/appending timeline files directly.
 - `RunMetadataScanner` is the narrow counterpart to `RunOutputResolver`: both stream a run's `events.jsonl` once via `TimelineRecorder.streamEvents` instead of materializing it, but `RunOutputResolver` reconstructs response-bearing output while `RunMetadataScanner` answers small bookkeeping questions (latest workspace snapshot/undo record for a target, next attempt/run index) that a full `OutputHistoryTimelineAdapter.loadHistory()` would answer at O(run size) cost for no reason. `OutputHistoryManager` exposes it only via `findNextAttemptIndexForPhase`/`findNextRunIndexByTarget`; its snapshot/undo lookups stay internal to `OutputHistoryManager` itself. Add a new bookkeeping need here rather than reaching for `loadHistory()` when the caller only needs one field.

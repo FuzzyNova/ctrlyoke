@@ -34,7 +34,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   folded paired `!hasErrnoCode(e, A) && !hasErrnoCode(e, B)` checks into the variadic
   form. Fixed directly: merge-outcome literals in `WorktreeManager`/`DashboardMessageRouter`
   now use `WORKTREE_MERGE_OUTCOMES`; `confirmMutation` copied in `HistoryCommands` and
-  `SecretCommands` now lives in `src/cli/CliPrompt.ts` (with a `CliConfirmIo` base
+  `SecretCommands` now uses `src/cli/CliConfirm.ts` (with a `CliConfirmIo` base
   interface); three inline newer-schema refusals (`mcp-server.ts`,
   `WorkingFileManager.ts`, `PromptFileParser.ts`) now call `assertWritableSchema`.
   Hunted the harness providers and the CLI/MCP/extension adapters; queued three steps

@@ -21,7 +21,7 @@ Do not turn this folder into a second workspace-viewer git service. The hosted w
 
 **Execution model**
 
-- Commit generation must reuse normal ctrlyoke harness plumbing: `CliAdapter` + `IntegrationFactory` + `WorkflowInstance`.
+- Commit generation must reuse normal ctrlyoke harness plumbing: `NodePlatformAdapter` + `IntegrationFactory` + `WorkflowInstance`.
 - This run is intentionally headless and one-shot: `resumeSession: false`, quiet mode, and explicit suppression of inherited `mcpServers`, `agent`, `skills`, `additionalArgs`, and `hooks`.
 - Resolve harness/model/prompt through the commit-specific `ConfigurationUtils` getters, with fallback to the normal harness when no commit harness override is set.
 

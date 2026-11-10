@@ -11,7 +11,7 @@ import {
 } from "../../../utils/RunHistoryStoragePolicy";
 import { ctrlyokeStateHome } from "../../../utils/ProjectStatePaths";
 import { canonicalizeDriveLetter } from "../../../utils/PathCasing";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { ctrlYokeToolFamilies } from "../../../types/ExecutionPropertyResolver";
 import { retryWithBackoff, stopRetrying } from "../../../utils/RetryUtils";
 import { withCtrlyokeBinOnPath } from "../../../utils/CtrlyokeCliPath";

@@ -18,7 +18,7 @@ import {
   getCopilotHomeDir,
   getQwenHomeDir,
 } from "../../../utils/HarnessHome";
-import { SettingsJsonMcpTracker } from "./SettingsJsonMcpTracker";
+import { HarnessSettingsJsonStore } from "./HarnessSettingsJsonStore";
 import {
   removeStatuslineLauncher,
   resolveStatuslineScriptPath,
@@ -26,11 +26,11 @@ import {
   statuslineScriptFileName,
 } from "./StatuslineLauncher";
 import {
-  SETTINGS_JSON_INSTALL_KIND_WRITTEN,
+  HARNESS_SETTINGS_INSTALL_KIND_WRITTEN,
   STATUS_LINE_SETTING_KEY,
-  type SettingsJsonPersistentValueInstallResult,
-  type SettingsJsonPersistentValueUninstall,
-} from "./SettingsJsonMcpTracker";
+  type HarnessSettingsPersistentValueInstallResult,
+  type HarnessSettingsPersistentValueUninstall,
+} from "./HarnessSettingsJsonStore";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 const QWEN_STATUS_LINE_SETTING_KEY = "ui.statusLine";
@@ -48,7 +48,7 @@ export function getAntigravitySettingsPath(
 }
 
 export interface StatuslineInstallResult {
-  readonly kind: SettingsJsonPersistentValueInstallResult["kind"];
+  readonly kind: HarnessSettingsPersistentValueInstallResult["kind"];
   readonly captured: boolean;
   /** True when a configured non-command statusline caused the install veto. */
   readonly collision?: boolean;
@@ -85,7 +85,7 @@ export interface StatuslineManagerLike {
 }
 
 interface StatuslineProviderDefinition {
-  readonly tracker: SettingsJsonMcpTracker;
+  readonly tracker: HarnessSettingsJsonStore;
 }
 
 /**
@@ -148,9 +148,9 @@ export class StatuslineManager implements StatuslineManagerLike {
     const globalSettings = (
       trackerName: string,
       resolveHome: () => string
-    ): SettingsJsonMcpTracker => {
+    ): HarnessSettingsJsonStore => {
       const settingsPath = () => path.join(resolveHome(), "settings.json");
-      return SettingsJsonMcpTracker.getInstance(trackerName, {
+      return HarnessSettingsJsonStore.getInstance(trackerName, {
         projectConfigPath: settingsPath,
         userConfigPath: settingsPath,
       });
@@ -162,7 +162,7 @@ export class StatuslineManager implements StatuslineManagerLike {
           ? globalSettings("copilot-cli-settings", () => getCopilotHomeDir())
           : statusLineHarnessId === STATUS_LINE_HARNESS_IDS.QWEN
             ? globalSettings("qwen-cli-settings", () => getQwenHomeDir())
-            : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
+            : HarnessSettingsJsonStore.getInstance("antigravity-cli-settings", {
                 projectConfigPath: () => getAntigravitySettingsPath(),
               });
     const definition = { tracker };
@@ -261,7 +261,7 @@ export class StatuslineManager implements StatuslineManagerLike {
     // install notification for this case). Keep `captured` itself accurate
     // regardless, since it still reflects whether a custom command is being
     // preserved underneath the refreshed path.
-    if (result.kind === SETTINGS_JSON_INSTALL_KIND_WRITTEN && !captured) {
+    if (result.kind === HARNESS_SETTINGS_INSTALL_KIND_WRITTEN && !captured) {
       const settings = this.getSettings();
       captured =
         settings.customCommand.length > 0 && !settings.useCtrlyokeStyle;
@@ -379,7 +379,7 @@ export class StatuslineManager implements StatuslineManagerLike {
   /** Restore the captured custom command when asked and present, else delete the key. */
   private uninstallOperation(
     restoreCustomCommand: boolean
-  ): SettingsJsonPersistentValueUninstall {
+  ): HarnessSettingsPersistentValueUninstall {
     const { customCommand } = this.getSettings();
     return restoreCustomCommand && customCommand.length > 0
       ? {

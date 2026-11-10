@@ -9,15 +9,15 @@ Keep core workflow/runtime code platform-agnostic. `PlatformAdapter` is intentio
 <architecture>
 - `PlatformAdapter.ts` defines the small shared contract used by runtime code.
 - `VsCodeAdapter.ts` wraps real `vscode` APIs and exposes `getExtensionContext()` for VS Code-only collaborators such as terminal setup.
-- `CliAdapter.ts` adapts `ResolvedCliConfig` to the same contract and supplies the CLI execution mode through `PlatformAdapter.getConfig()`.
+- `NodePlatformAdapter.ts` adapts `ResolvedCliConfig` to the same contract and supplies the CLI execution mode through `PlatformAdapter.getConfig()`.
 - `VsCodeLogOutputChannel.ts` and `VsCodeTelemetry.ts` are the VS Code halves of `Log` and telemetry: `extension.ts` installs them as the host-neutral `LogOutputSink`/`TelemetrySink`.
 - `WorkspaceRootResolver.ts` owns `.ctrlyoke`-root/trusted-root resolution and `resolveNamedRelativePath` (prefix→absolute). `WorkspaceViewerPath.ts` is the **single source of the folder-name-prefixed viewer-path convention** (`root2/src/x.ts`) — pure-string primitives (`firstViewerSegment`/`stripViewerPrefix`/`joinViewerPath`), `rootForViewerPath`, and the `toViewerPath`⇄`fromViewerPath` absolute conversions (`ViewerRootContext`). The hosted SCM service (`relativePath`/`resolveAgainstRoots`) and the snapshot/undo layer (`segmentViewerPath`/`gitRelFromChange`) delegate here rather than re-deriving prefix slicing. Viewer paths are **always `/`-separated** — `toViewerPath` normalizes both the single-root and multi-root branches, so single-root output no longer leaks OS-native `\` on Windows. It imports `node:path`, so it must **not** be imported into the webview bundle; the store's one prefix read mirrors only `firstViewerSegment` and cross-references it.
 </architecture>
 
 <stateFlow>
 - VS Code path: `extension.ts` / `WorkflowOrchestrator` create `VsCodeAdapter` instances and pass them into shared runtime classes.
-- CLI path: `cli.ts` computes the effective execution mode, writes it and any explicitly passed setting flags (e.g. `--permission-mode`, `--allow-tool`) into `configService.setCliOverlay(...)`, then constructs `CliAdapter`. The CLI never resolves tool permissions itself; they resolve per step (step > workflow > settings) like in the extension, so execution mode must not change them.
-- `CommitMessageGenerator` also constructs a headless `CliAdapter` inside the extension host, so platform changes affect both the standalone CLI and AI commit-message generation.
+- CLI path: `cli.ts` computes the effective execution mode, writes it and any explicitly passed setting flags (e.g. `--permission-mode`, `--allow-tool`) into `configService.setCliOverlay(...)`, then constructs `NodePlatformAdapter`. The CLI never resolves tool permissions itself; they resolve per step (step > workflow > settings) like in the extension, so execution mode must not change them.
+- `CommitMessageGenerator` also constructs a headless `NodePlatformAdapter` inside the extension host, so platform changes affect both the standalone CLI and AI commit-message generation.
 </stateFlow>
 
 <conventions>

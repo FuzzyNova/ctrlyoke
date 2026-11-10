@@ -24,7 +24,7 @@ Shared CLI-harness infrastructure: provider contracts, prompt assembly, response
 </promptAndResponseFlow>
 
 <parallelSafety>
-- `SettingsJsonMcpTracker` coordinates MCP edits to shared `.{tool}/settings.json` files. Qwen hooks no longer go in a shared file: each launch gets its own system settings copy through `QWEN_CODE_SYSTEM_SETTINGS_PATH` (`qwen/QwenSystemSettings.ts`), because Qwen 0.26.9 gates project (`.qwen/settings.json`) hooks behind a TUI approval a step can't give.
+- `HarnessSettingsJsonStore` coordinates MCP edits and other owned settings values in shared `.{tool}/settings.json` files. Qwen hooks no longer go in a shared file: each launch gets its own system settings copy through `QWEN_CODE_SYSTEM_SETTINGS_PATH` (`qwen/QwenSystemSettings.ts`), because Qwen 0.26.9 gates project (`.qwen/settings.json`) hooks behind a TUI approval a step can't give.
 - These trackers preserve a baseline snapshot and ref-count per workflow. Cleanup must unregister only the current workflow; never “reset” the whole file just because one run finished.
 - When ctrlyoke creates a new tool settings file, the tracker may also create a temporary `.gitignore` beside it. That behavior is intentional so provider-owned config files do not appear as untracked workspace noise.
 </parallelSafety>

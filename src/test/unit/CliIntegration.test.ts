@@ -34,7 +34,7 @@ import type {
   BaseCliEvent,
   ILogParser,
 } from "../../core/harness/shared/interfaces/ILogParser";
-import { CliAdapter } from "../../platform/CliAdapter";
+import { NodePlatformAdapter } from "../../platform/NodePlatformAdapter";
 import {
   createNoWorktreeExecutionWorkspace,
   PlatformAdapter,
@@ -42,7 +42,7 @@ import {
 import type { McpServerConfig, PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { RunningTerminalContext } from "../../core/harness/shared/CliExecutionRunner";
-import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
@@ -649,7 +649,7 @@ suite("CliIntegration", () => {
       parseHeadlessStdout: undefined,
       logParser: parser,
     });
-    const platform = new CliAdapter({
+    const platform = new NodePlatformAdapter({
       cwd: workspaceRoot,
 
       verbose: false,

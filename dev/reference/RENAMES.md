@@ -208,3 +208,34 @@ This ledger maps retired names to their current names. Historical implementation
 | `writeOutputSnapshotAttachment` | `writeOutputCaptureAttachment` | symbol | 6a | 2026-11-09 |
 | `savePendingOutputSnapshot` | `savePendingOutputCapture` | symbol | 6a | 2026-11-09 |
 | `TempFileManager.createOutputSnapshotFile` | `TempFileManager.createOutputCaptureFile` | symbol | 6a | 2026-11-09 |
+| `src/platform/CliAdapter.ts` | `src/platform/NodePlatformAdapter.ts` | file | 6b | 2026-11-09 |
+| `CliAdapter` | `NodePlatformAdapter` | symbol | 6b | 2026-11-09 |
+| `src/cli/CliPrompt.ts` | `src/cli/CliConfirm.ts` | file | 6b | 2026-11-09 |
+| `promptYesNo` | `confirmYesNo` | symbol | 6b | 2026-11-09 |
+| `src/utils/PropertyResolver.ts` | `src/utils/SettingsPropertyResolver.ts` | file | 6b | 2026-11-09 |
+| `src/test/unit/PropertyResolver.test.ts` | `src/test/unit/SettingsPropertyResolver.test.ts` | file | 6b | 2026-11-09 |
+| `PropertyResolver` | `SettingsPropertyResolver` | symbol | 6b | 2026-11-09 |
+| `PropertyResolverOptions` | `SettingsPropertyResolverOptions` | symbol | 6b | 2026-11-09 |
+| `src/core/harness/shared/SettingsJsonMcpTracker.ts` | `src/core/harness/shared/HarnessSettingsJsonStore.ts` | file | 6b | 2026-11-09 |
+| `src/test/unit/SettingsJsonMcpTracker.test.ts` | `src/test/unit/HarnessSettingsJsonStore.test.ts` | file | 6b | 2026-11-09 |
+| `SettingsJsonMcpTracker` | `HarnessSettingsJsonStore` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonMcpTrackerOptions` | `HarnessSettingsJsonStoreOptions` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonMcpRegisterOptions` | `HarnessSettingsJsonRegisterOptions` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPersistentValueKey` | `HarnessSettingsPersistentValueKey` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPersistentValueCaptureResult` | `HarnessSettingsPersistentValueCaptureResult` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPersistentValueCapture` | `HarnessSettingsPersistentValueCapture` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPersistentValueUninstall` | `HarnessSettingsPersistentValueUninstall` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPersistentValueInstallResult` | `HarnessSettingsPersistentValueInstallResult` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPersistentValueMatcher` | `HarnessSettingsPersistentValueMatcher` | symbol | 6b | 2026-11-09 |
+| `SETTINGS_JSON_INSTALL_KIND_WRITTEN` | `HARNESS_SETTINGS_INSTALL_KIND_WRITTEN` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPermissionDecision` | `OpenCodePermissionDecision` | symbol | 6b | 2026-11-09 |
+| `SettingsJsonPermissionPolicy` | `OpenCodePermissionPolicy` | symbol | 6b | 2026-11-09 |
+| `src/core/orchestration/WorkflowCommandHandler.ts` | `src/core/orchestration/DashboardNavigationCommands.ts` | file | 6b | 2026-11-09 |
+| `src/test/unit/WorkflowCommandHandler.test.ts` | `src/test/unit/DashboardNavigationCommands.test.ts` | file | 6b | 2026-11-09 |
+| `WorkflowCommandHandler` | `DashboardNavigationCommands` | symbol | 6b | 2026-11-09 |
+| `HarnessIntegration.wasLastFailureUserCancellation` | removed (dead branch; no overrides) | symbol | 6b | 2026-11-09 |
+
+## Kept on purpose
+
+- `ResolvedCliConfig` remains CLI configuration despite its adapter moving to `NodePlatformAdapter`.
+- `ExecutionPropertyResolver` remains the platform-neutral types-layer resolver; only its settings adapter is now `SettingsPropertyResolver`.

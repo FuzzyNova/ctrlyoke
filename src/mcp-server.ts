@@ -48,7 +48,7 @@ import {
 } from "./types/CtrlYokeSettings";
 import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import { configService } from "./config/CtrlYokeConfigService";
-import { PropertyResolver } from "./utils/PropertyResolver";
+import { SettingsPropertyResolver } from "./utils/SettingsPropertyResolver";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
 import {
   createUserConfigBackend,
@@ -481,7 +481,7 @@ function resolveEffectiveStepSettings(
   const workflowResumeSession =
     workflow.resumeSession ?? CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
   const resolved = resolveStepHarnessAndModel(step, workflow, {
-    harness: PropertyResolver.resolveHarnessValue(undefined, undefined),
+    harness: SettingsPropertyResolver.resolveHarnessValue(undefined, undefined),
     modelForHarness: (harness) =>
       ConfigurationUtils.getModelForHarness(harness) || undefined,
   });
@@ -504,11 +504,11 @@ function executionModeWarnings(
   const hasCodexInteractiveStep = steps.some((step) => {
     if (isScriptStep(step)) return false;
     return (
-      PropertyResolver.resolveHarnessValue(
+      SettingsPropertyResolver.resolveHarnessValue(
         step.harness,
         workingFile.harness
       ) === HARNESS_IDS.CODEX_CLI &&
-      PropertyResolver.resolveExecutionMode(step, workingFile) ===
+      SettingsPropertyResolver.resolveExecutionMode(step, workingFile) ===
         EXECUTION_MODES.INTERACTIVE
     );
   });
@@ -1867,7 +1867,7 @@ export class CtrlYokeMCPServer {
     for (const step of steps) {
       if (isScriptStep(step)) continue;
       const promptStep = step as PromptStep;
-      const effectiveHarness = PropertyResolver.resolveHarnessValue(
+      const effectiveHarness = SettingsPropertyResolver.resolveHarnessValue(
         promptStep.harness,
         workflowHarness
       );

@@ -11,7 +11,7 @@ import {
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
-import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import { HarnessSettingsJsonStore } from "../../core/harness/shared/HarnessSettingsJsonStore";
 import { Log } from "../../utils/Log";
 import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
 import {
@@ -99,11 +99,11 @@ suite("AntigravityHarnessAdapter", () => {
     });
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(makeBackend({}));
-    SettingsJsonMcpTracker.resetAll();
+    HarnessSettingsJsonStore.resetAll();
   });
 
   teardown(async () => {
-    SettingsJsonMcpTracker.resetAll();
+    HarnessSettingsJsonStore.resetAll();
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(makeBackend({}));
     if (originalHome === undefined) {

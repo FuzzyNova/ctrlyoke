@@ -1,8 +1,8 @@
 export type { PlatformAdapter } from "./PlatformAdapter";
 export { VsCodeAdapter } from "./VsCodeAdapter";
 export { VsCodeFileWatcherFactory } from "./VsCodeFileWatcher";
-export { CliAdapter } from "./CliAdapter";
-export type { ResolvedCliConfig } from "./CliAdapter";
+export { NodePlatformAdapter } from "./NodePlatformAdapter";
+export type { ResolvedCliConfig } from "./NodePlatformAdapter";
 export type { SecretStore } from "./SecretStore";
 export { isValidSecretName, validateSecretName } from "../utils/SecretName";
 export {

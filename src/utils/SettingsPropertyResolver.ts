@@ -26,12 +26,12 @@ export type {
 } from "../types/ExecutionPropertyResolver";
 export type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 
-export interface PropertyResolverOptions {
+export interface SettingsPropertyResolverOptions {
   hostCanProvidePty?: boolean;
 }
 
-/** VS Code/settings adapter for the platform-neutral execution resolver. */
-export class PropertyResolver {
+/** Settings adapter for the platform-neutral execution resolver. */
+export class SettingsPropertyResolver {
   private static createDefaults(): ExecutionPropertyDefaults {
     const harnessIds = Object.values(HARNESS_IDS) as HarnessId[];
     const modelsByHarness: Partial<Record<HarnessId, string>> = {};
@@ -70,7 +70,7 @@ export class PropertyResolver {
   }
 
   static createContext(
-    options: PropertyResolverOptions = {}
+    options: SettingsPropertyResolverOptions = {}
   ): ExecutionResolutionContext {
     return {
       defaults: this.createDefaults(),
@@ -81,7 +81,7 @@ export class PropertyResolver {
   static resolveTarget(
     prompt: PromptStep,
     workflow: PromptFile,
-    options: PropertyResolverOptions = {}
+    options: SettingsPropertyResolverOptions = {}
   ): ResolvedExecutionTarget {
     return resolveExecutionProperties(
       prompt,
@@ -93,7 +93,7 @@ export class PropertyResolver {
   static resolve(
     prompt: PromptStep,
     workflow: PromptFile,
-    options: PropertyResolverOptions = {}
+    options: SettingsPropertyResolverOptions = {}
   ): ResolvedProperties {
     return this.resolveTarget(prompt, workflow, options).properties;
   }
@@ -112,7 +112,7 @@ export class PropertyResolver {
   static resolveExecutionMode(
     prompt: Pick<PromptStep, "executionMode">,
     workflow: Pick<PromptFile, "executionMode">,
-    options: PropertyResolverOptions = {}
+    options: SettingsPropertyResolverOptions = {}
   ): ExecutionMode {
     const defaults = this.createDefaults();
     if (options.hostCanProvidePty === false) {

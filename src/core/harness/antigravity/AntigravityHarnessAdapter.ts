@@ -57,11 +57,11 @@ import {
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import { HarnessSettingsJsonStore } from "../shared/HarnessSettingsJsonStore";
 import {
   StatuslineManager,
   type StatuslineInstallResult,
@@ -137,7 +137,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
    * workspace `.agents/mcp_config.json` (a bare `{ mcpServers }`
    * object), with `~/.gemini/config/mcp_config.json` as the user-level file.
    */
-  private static readonly mcpTracker = SettingsJsonMcpTracker.getInstance(
+  private static readonly mcpTracker = HarnessSettingsJsonStore.getInstance(
     "antigravity",
     {
       projectConfigPath: (workspaceRoot: string) =>

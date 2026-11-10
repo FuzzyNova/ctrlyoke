@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
-import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import { HarnessSettingsJsonStore } from "../../core/harness/shared/HarnessSettingsJsonStore";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 
 /**
@@ -111,16 +111,16 @@ suite("Antigravity MCP", () => {
       tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "agy-mcp-test-"));
       configPath = path.join(tmpDir, ".agents", "mcp_config.json");
       gitignorePath = path.join(tmpDir, ".agents", ".gitignore");
-      SettingsJsonMcpTracker.resetAll();
+      HarnessSettingsJsonStore.resetAll();
     });
 
     teardown(async () => {
-      SettingsJsonMcpTracker.resetAll();
+      HarnessSettingsJsonStore.resetAll();
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
-    function agyTracker(): SettingsJsonMcpTracker {
-      return SettingsJsonMcpTracker.getInstance("antigravity", {
+    function agyTracker(): HarnessSettingsJsonStore {
+      return HarnessSettingsJsonStore.getInstance("antigravity", {
         projectConfigPath: (ws) => path.join(ws, ".agents", "mcp_config.json"),
         userConfigPath: () =>
           path.join(os.homedir(), ".gemini", "config", "mcp_config.json"),

@@ -1,4 +1,4 @@
-import type { ResolvedProperties } from "./PropertyResolver";
+import type { ResolvedProperties } from "./SettingsPropertyResolver";
 import type {
   UserHookConfig,
   EndCondition,

@@ -62,7 +62,7 @@ import type {
   McpServerConfig,
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import {
   capabilitySuiteVerification,
   type HarnessCapabilityFacts,
@@ -316,7 +316,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     const statusLineToken = randomUUID();
     const args: string[] = [];
 
-    // Use resolved properties if available (from PropertyResolver three-tier precedence)
+    // Use resolved properties if available (from SettingsPropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;

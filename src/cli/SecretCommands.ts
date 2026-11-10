@@ -5,7 +5,7 @@ import {
   type SecretStore,
 } from "../platform/SecretStore";
 import { createNodeSecretStore } from "../platform/NodeSecretStore";
-import { CliAdapter, type ResolvedCliConfig } from "../platform/CliAdapter";
+import { NodePlatformAdapter, type ResolvedCliConfig } from "../platform/NodePlatformAdapter";
 import {
   MissingSecretsError,
   getWorkflowSecretGrants,
@@ -40,7 +40,7 @@ import type {
   TrustSecretGrantsOptions,
 } from "./SecretCommandDefinitions";
 import { resolveCliFileArgument } from "./CliFileArgument";
-import { confirmMutation, promptYesNo, type CliConfirmIo } from "./CliPrompt";
+import { confirmMutation, confirmYesNo, type CliConfirmIo } from "./CliConfirm";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { reportCliError } from "./CliExitCode";
 import { parseCliPromptFile } from "./CliPromptFile";
@@ -86,7 +86,7 @@ export function createCliSecretCommandDependencies(
   return {
     workspaceRoot,
     secretStore,
-    platform: new CliAdapter(config, secretStore),
+    platform: new NodePlatformAdapter(config, secretStore),
     environment: process.env,
   };
 }
@@ -369,7 +369,7 @@ export function createSecretCommandIo(): SecretCommandIo {
     writeOut: (message) => process.stdout.write(redactOutput(message) + "\n"),
     writeErr: (message) => process.stderr.write(redactOutput(message) + "\n"),
     isInteractive: !!process.stdin.isTTY && !!process.stderr.isTTY,
-    confirm: promptYesNo,
+    confirm: confirmYesNo,
     readHidden: readHiddenSecret,
     readStdin: readSecretFromStdin,
   };

@@ -968,13 +968,13 @@ export function buildPromptStepProperties(
     }),
     // additionalArgs is three-state: null = explicitly disabled, string = custom, undefined = inherit.
     // Do NOT coerce null to undefined — null must be preserved in PromptStep so the working
-    // file retains the "explicitly none" override and the PropertyResolver stops resolution.
+    // file retains the "explicitly none" override and the SettingsPropertyResolver stops resolution.
     ...(props?.additionalArgs !== undefined && {
       additionalArgs: props.additionalArgs as string | null,
     }),
     // toolPermissions is three-state: null = explicitly none (inject no flags),
     // object = override, undefined = inherit from workflow.
-    // Do NOT coerce null to undefined — null must be preserved so the PropertyResolver
+    // Do NOT coerce null to undefined — null must be preserved so the SettingsPropertyResolver
     // stops resolution and injects no permission flags for this prompt.
     ...(props?.toolPermissions !== undefined && {
       toolPermissions: props.toolPermissions as ToolPermissionsOverride | null,

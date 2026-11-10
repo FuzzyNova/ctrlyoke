@@ -16,7 +16,7 @@ end condition, and no `ctrlyoke-ide` server exist.
 >   `CliPromptPreparer`; `EndConditionHandler.buildRetryPrompt` only picks the
 >   template or the fallback text.)
 > - MCP injection is per harness, via `CliMcpConfigGenerator` and
->   `HarnessAdapterUtils`. `SettingsJsonMcpTracker` only serves Qwen and
+>   `HarnessAdapterUtils`. `HarnessSettingsJsonStore` serves settings-file harness integrations and
 >   Antigravity. The `ctrlyoke` server is injected only when a workflow's
 >   resolved `mcpServers` includes `MCP_SERVER_IDS.CTRLYOKE`, so it is not
 >   always present.
@@ -120,7 +120,7 @@ Run `npm run schema:update` afterwards.
 - `src/types/CtrlYokeTypes.ts` — add `DiagnosticsEndCondition` to `EndCondition` union type
 - `src/core/EndConditionEvaluator.ts` — add `evaluateDiagnostics()` that reads from a host-neutral `DiagnosticsSource` port. This is a new in-process evaluation path, separate from the child-process script path.
 - `src/core/EndConditionHandler.ts` — route `kind: "diagnostics"` to new evaluator
-- `src/platform/` — a `VsCodeDiagnosticsSource` (`vscode.languages.getDiagnostics()`), wired through `PlatformAdapter`/`VsCodeAdapter`, plus a Node implementation over `src/server/lsp/ManagedLanguageServerBackend.ts` (pull diagnostics) for `CliAdapter`/`ctrlyoke server`. See the follow-up note above.
+- `src/platform/` — a `VsCodeDiagnosticsSource` (`vscode.languages.getDiagnostics()`), wired through `PlatformAdapter`/`VsCodeAdapter`, plus a Node implementation over `src/server/lsp/ManagedLanguageServerBackend.ts` (pull diagnostics) for `NodePlatformAdapter`/`ctrlyoke server`. See the follow-up note above.
 
 ### Phase 2: `{diagnostics}` Retry Prompt Interpolation
 
@@ -150,7 +150,7 @@ src/bar.ts:8:1 error TS2304: Cannot find name 'Foo'.
 
 ### Phase 3: `ctrlyoke-ide` MCP Server (auto-injected)
 
-A thin MCP server that exposes `getDiagnostics` to CLI harnesses running as detached processes. Unlike community extensions that require manual user configuration, this registers through the existing per-harness MCP injection (`CliMcpConfigGenerator` and the `HarnessAdapterUtils` MCP preparation path; `SettingsJsonMcpTracker` covers only Qwen and Antigravity). A simpler option to consider first: add the tools to the existing `ctrlyoke` MCP server (`src/mcp-server.ts`) instead of shipping a second binary.
+A thin MCP server that exposes `getDiagnostics` to CLI harnesses running as detached processes. Unlike community extensions that require manual user configuration, this registers through the existing per-harness MCP injection (`CliMcpConfigGenerator` and the `HarnessAdapterUtils` MCP preparation path; `HarnessSettingsJsonStore` covers settings-file integrations such as Qwen and Antigravity). A simpler option to consider first: add the tools to the existing `ctrlyoke` MCP server (`src/mcp-server.ts`) instead of shipping a second binary.
 
 **Architecture:**
 

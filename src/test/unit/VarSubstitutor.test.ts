@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
-import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("VarSubstitutor Tests", () => {

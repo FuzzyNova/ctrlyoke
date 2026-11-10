@@ -1,11 +1,11 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { WorkflowCommandHandler } from "../../core/orchestration/WorkflowCommandHandler";
+import { DashboardNavigationCommands } from "../../core/orchestration/DashboardNavigationCommands";
 import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
 import type { UserFeedback } from "../../core/UserFeedbackSink";
 import { Log } from "../../utils/Log";
 
-suite("WorkflowCommandHandler", () => {
+suite("DashboardNavigationCommands", () => {
   test("opens the dashboard without a harness-status gate", async () => {
     let focused = false;
     const actions = {
@@ -14,7 +14,7 @@ suite("WorkflowCommandHandler", () => {
         focused = true;
       },
     };
-    await new WorkflowCommandHandler(actions).openPanel();
+    await new DashboardNavigationCommands(actions).openPanel();
     assert.strictEqual(focused, true);
   });
 
@@ -32,7 +32,7 @@ suite("WorkflowCommandHandler", () => {
           message: "file is unavailable",
         }),
       };
-      const handler = new WorkflowCommandHandler(actions, {
+      const handler = new DashboardNavigationCommands(actions, {
         notify: (message) => feedback.push(message),
       });
 

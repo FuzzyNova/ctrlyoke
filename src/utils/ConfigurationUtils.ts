@@ -1157,7 +1157,7 @@ export const ConfigurationUtils = {
 
   /**
    * Get extra CLI flags to append for a specific harness (global fallback).
-   * Prompt-level and workflow-level additionalArgs take precedence via PropertyResolver.
+   * Prompt-level and workflow-level additionalArgs take precedence via SettingsPropertyResolver.
    */
   getAdditionalArgsForHarness(harness: HarnessId): string {
     return (

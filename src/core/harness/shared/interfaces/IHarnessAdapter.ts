@@ -21,7 +21,7 @@ import type {
   McpServerConfig,
   UserHookConfig,
 } from "../../../../types/CtrlYokeTypes";
-import type { ResolvedProperties } from "../../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../../utils/SettingsPropertyResolver";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type {
   HarnessId,

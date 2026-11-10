@@ -17,7 +17,7 @@ import { HARNESS_REPORTED_ERROR } from "./interfaces/INotificationMonitor";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { CliLogMonitor } from "../CliLogMonitor";
 import { CliExecutionSession } from "./CliExecutionSession";
 import type { CliFailureTracker } from "./CliFailureTracker";

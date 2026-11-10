@@ -19,7 +19,7 @@ import type {
 } from "../types/CompatibilityTypes";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../types/CompatibilityTypes";
 import type { PromptFile } from "../types/CtrlYokeTypes";
-import { PropertyResolver } from "../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 
 export type CliValidationTarget =
   | {
@@ -104,7 +104,7 @@ export function analyzeCliCompatibility(
   capabilities: HarnessCapabilityRegistrySnapshot,
   harnesses: readonly HarnessId[],
   resolveTarget: CompatibilityTargetResolver = (prompt, file) =>
-    PropertyResolver.resolveTarget(prompt, file),
+    SettingsPropertyResolver.resolveTarget(prompt, file),
   options: CliCompatibilityAnalysisOptions = {}
 ): CliCompatibilityAnalysis {
   const consumers = enumerateCompatibilityTargets(workflow, resolveTarget);

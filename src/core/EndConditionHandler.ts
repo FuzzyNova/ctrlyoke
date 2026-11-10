@@ -26,7 +26,7 @@ import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
-import { PropertyResolver } from "../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import { reportEndConditionEvaluated } from "../utils/TelemetryEvents";
 import { formatComparison } from "../utils/ScriptComparison";
 import { fenceLiteral, LITERAL_FENCE_INFO } from "../utils/FileReferenceParser";
@@ -515,7 +515,7 @@ export class EndConditionHandler {
     }
 
     reportEndConditionEvaluated({
-      harness: PropertyResolver.resolveHarnessValue(prompt.harness, undefined),
+      harness: SettingsPropertyResolver.resolveHarnessValue(prompt.harness, undefined),
       result: evaluationResult.errored
         ? "error"
         : evaluationResult.passed

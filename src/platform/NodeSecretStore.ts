@@ -29,7 +29,7 @@ export class NodeSecretStore extends FallbackSecretStore {
 
 /**
  * The one secret store for every Node host: `ctrlyoke server`, `ctrlyoke
- * secret`, the server's pre-start license check and `CliAdapter`'s default.
+ * secret`, the server's pre-start license check and `NodePlatformAdapter`'s default.
  * Building it in one place keeps them on the same backend, so a license or
  * secret saved by one is found by the others.
  *

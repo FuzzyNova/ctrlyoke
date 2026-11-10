@@ -876,7 +876,7 @@ export abstract class HarnessIntegration {
   /**
    * Format categorized file references into a structured instruction string.
    *
-   * Single source of truth for both CLI and Chat harnesses.
+   * Single source of truth for CLI harness execution.
    *
    * Format (absent categories omitted):
    *   Following these agent instructions <agentRefs>,
@@ -1355,11 +1355,11 @@ export abstract class HarnessIntegration {
   }
 
   // ============================================================
-  // EXECUTION OUTPUT METHODS (CLI provides real values, Chat returns undefined)
+  // EXECUTION OUTPUT METHODS (CLI provides real values; other paths return undefined)
   // ============================================================
 
   /**
-   * Get the last execution result (CLI-specific, returns undefined for Chat)
+   * Get the last execution result (CLI-specific; returns undefined otherwise)
    * Includes response text, statistics, and exit code
    */
   getLastResult(): CliResult | undefined {
@@ -1404,13 +1404,6 @@ export abstract class HarnessIntegration {
   }
 
   /**
-   * Check if the last sendPrompt failure was due to user cancellation
-   * Returns false by default (only Chat tracks this)
-   */
-  wasLastFailureUserCancellation(): boolean {
-    return false;
-  }
-
   /**
    * Check if the last sendPrompt failure was due to the CLI process exiting
    * before completion was detected. All CLI harnesses are TUIs that stay open

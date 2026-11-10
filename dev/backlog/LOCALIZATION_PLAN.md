@@ -192,7 +192,7 @@ runtime no-op.
 Most of what looks like "extension-host user-facing strings" — the
 `vscode.window.showErrorMessage`/`showWarningMessage`/`showInformationMessage`
 calls in `WorkflowInstance`, `WorkflowExecutor`, `PromptFileParser`,
-`EndConditionHandler`, `CliIntegration`, `WorkflowCommandHandler`,
+`EndConditionHandler`, `CliIntegration`, `DashboardNavigationCommands`,
 `McpManagerService`, etc. — is exactly the code `BROWSER_USER_FEEDBACK_PLAN.md`
 (already implemented) migrated **off** native `vscode` calls and onto the
 shared `UserFeedback` → `notifyUserFeedback()`/`notifyUser()` →
@@ -373,7 +373,7 @@ This is a multi-phase effort, not a single PR:
 
 - [ ] Phase 1: Convert `package.json` `contributes.commands/configuration/menus` literal strings to `%key%` + `package.nls.json`; add `"l10n": "./l10n"` root field
 - [ ] Phase 1: Verify with `--locale qps-ploc` that manifest strings pseudo-translate
-- [ ] Phase 2: Add `@vscode/l10n-dev` + `@vscode/l10n` deps; wrap strings **only** in the VS Code boundary files (the `vscode`-importing files listed above — `extension.ts`, `platform/VsCode*.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlyokeCliCommands.ts`, `ExternalFileTrustPrompt.ts`, `NativeOutputCaptureCommand.ts`, `NotificationManager.ts`, `StatusBarManager.ts`, the `vscode`-importing `completions/*` providers, `ScmCommitCommand.ts`, `DevCommands.ts`) in `vscode.l10n.t()` — do not touch `WorkflowInstance`/`WorkflowExecutor`/`PromptFileParser`/`EndConditionHandler`/`CliIntegration`/`WorkflowCommandHandler`/`McpManagerService`
+- [ ] Phase 2: Add `@vscode/l10n-dev` + `@vscode/l10n` deps; wrap strings **only** in the VS Code boundary files (the `vscode`-importing files listed above — `extension.ts`, `platform/VsCode*.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlyokeCliCommands.ts`, `ExternalFileTrustPrompt.ts`, `NativeOutputCaptureCommand.ts`, `NotificationManager.ts`, `StatusBarManager.ts`, the `vscode`-importing `completions/*` providers, `ScmCommitCommand.ts`, `DevCommands.ts`) in `vscode.l10n.t()` — do not touch `WorkflowInstance`/`WorkflowExecutor`/`PromptFileParser`/`EndConditionHandler`/`CliIntegration`/`DashboardNavigationCommands`/`McpManagerService`
 - [ ] Phase 2: Generate `l10n/bundle.l10n.json` via extraction script; document the translator handoff format
 - [ ] Phase 3: Refactor `UserFeedback`/`UserFeedbackMessage` from `message: string` to `{ code, params }`, coordinating with `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`'s `PlatformAdapter`/feedback-sink narrowing so the call sites are only touched once
 - [x] Phase 3: Standalone-graph `vscode` import gate — exists as `scripts/node-bundle-vscode-guard.cjs` (esbuild plugin)

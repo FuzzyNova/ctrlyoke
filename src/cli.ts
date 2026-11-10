@@ -6,13 +6,13 @@ import chalk from "chalk";
 import * as path from "path";
 import { access, readFile } from "fs/promises";
 
-import { CliAdapter } from "./platform/CliAdapter";
+import { NodePlatformAdapter } from "./platform/NodePlatformAdapter";
 import {
   applyCliPropertyOverrides,
   buildCliPropertyOverrides,
 } from "./cli/CliPropertyOverrides";
 import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
-import type { ResolvedCliConfig } from "./platform/CliAdapter";
+import type { ResolvedCliConfig } from "./platform/NodePlatformAdapter";
 import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
 import { rebaseWorkflowStepPaths } from "./core/WorkflowStepPathRebaser";
@@ -226,7 +226,7 @@ import {
   getWorkflowSecretGrants,
 } from "./utils/SecretResolver";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
-import { promptYesNo } from "./cli/CliPrompt";
+import { confirmYesNo } from "./cli/CliConfirm";
 import {
   trustExternalRootsCommand as reviewExternalRootsCommand,
   type TrustExternalRootsOptions,
@@ -247,7 +247,7 @@ import { bootstrapCliWorkspace } from "./cli/CliWorkspaceBootstrap";
 import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
-import { PropertyResolver } from "./utils/PropertyResolver";
+import { SettingsPropertyResolver } from "./utils/SettingsPropertyResolver";
 import type { WorkflowExecutionPreview } from "./types/ExecutionPreviewTypes";
 import { repoToplevel } from "./utils/GitUtils";
 import {
@@ -344,7 +344,7 @@ registerHistoryCommands(program, {
         writeOut: (message) => console.log(message),
         writeErr: (message) => console.error(chalk.yellow(message)),
         isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
-        confirm: promptYesNo,
+        confirm: confirmYesNo,
       })
     ),
   relink: (oldPath, newPath, options) =>
@@ -353,7 +353,7 @@ registerHistoryCommands(program, {
         writeOut: (message) => console.log(message),
         writeErr: (message) => console.error(chalk.yellow(message)),
         isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
-        confirm: promptYesNo,
+        confirm: confirmYesNo,
       })
     ),
   list: (options) =>
@@ -860,7 +860,7 @@ type CliRunOperation =
 
 /**
  * Report workflow steps whose interactive request will be clamped because the
- * CLI host cannot provide a PTY. PropertyResolver performs the actual clamp;
+ * CLI host cannot provide a PTY. SettingsPropertyResolver performs the actual clamp;
  * this is only the user-facing aggregate diagnostic.
  */
 function warnAboutClampedInteractiveSteps(
@@ -871,7 +871,7 @@ function warnAboutClampedInteractiveSteps(
     return;
   }
 
-  // Mirror PropertyResolver's three-tier precedence without its clamp, which is
+  // Mirror SettingsPropertyResolver's three-tier precedence without its clamp, which is
   // already active by the time this diagnostic runs and would report nothing.
   const settingsMode = ConfigurationUtils.getCliExecutionMode();
   const downgradedSteps = (workflow.steps ?? [])
@@ -1061,7 +1061,7 @@ async function runCommand(
     process.exit(workspaceSettingsExitCode);
   }
 
-  const platform = new CliAdapter(config);
+  const platform = new NodePlatformAdapter(config);
   const userFeedbackSink = new ConsoleUserFeedbackSink();
   const factory = new IntegrationFactory(platform, userFeedbackSink);
   // The default harness used only when neither a step nor the workflow names
@@ -1711,7 +1711,7 @@ function createHistoryCommandIo(): HistoryCommandIo {
     writeOut: (message) => console.log(message),
     writeErr: (message) => console.error(chalk.yellow(message)),
     isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
-    confirm: promptYesNo,
+    confirm: confirmYesNo,
   };
 }
 
@@ -1924,7 +1924,7 @@ async function dryRunCommand(
   workingDir: string,
   hostCanProvidePty: boolean,
   supportsConcurrentInteractiveSessions: boolean,
-  platform: CliAdapter,
+  platform: NodePlatformAdapter,
   factory: IntegrationFactory,
   userFeedbackSink: ConsoleUserFeedbackSink
 ): Promise<void> {
@@ -1967,7 +1967,7 @@ async function dryRunCommand(
     } finally {
       capabilityRegistry.dispose();
     }
-    const defaultsContext = PropertyResolver.createContext({
+    const defaultsContext = SettingsPropertyResolver.createContext({
       hostCanProvidePty,
     });
     const defaults = {
@@ -2141,7 +2141,7 @@ async function executeAddressedCliOperation(
   >,
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   workspaceRoot: string,
-  platform: CliAdapter,
+  platform: NodePlatformAdapter,
   instance: WorkflowInstance,
   hostCanProvidePty: boolean,
   userFeedbackSink: ConsoleUserFeedbackSink,
@@ -2335,7 +2335,7 @@ async function applyAddressedCliPropertyOverrides(
 async function parseAppendTail(
   operation: Extract<CliRunOperation, { kind: "append" }>,
   options: AppendOptions,
-  platform: CliAdapter,
+  platform: NodePlatformAdapter,
   userFeedbackSink: ConsoleUserFeedbackSink,
   destinationDefinitionPath?: string
 ): Promise<WorkflowStep[]> {
@@ -2977,7 +2977,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
       workingDir,
       options,
       committer,
-      () => promptYesNo("Commit with this message? [y/N] ")
+      () => confirmYesNo("Commit with this message? [y/N] ")
     );
     if (result === "aborted") {
       console.error("Aborted.");

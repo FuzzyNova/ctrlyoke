@@ -6,8 +6,8 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
-import { CliAdapter } from "../platform/CliAdapter";
-import type { ResolvedCliConfig } from "../platform/CliAdapter";
+import { NodePlatformAdapter } from "../platform/NodePlatformAdapter";
+import type { ResolvedCliConfig } from "../platform/NodePlatformAdapter";
 import { IntegrationFactory } from "../core/IntegrationFactory";
 import { CliIntegration } from "../core/harness/CliIntegration";
 import { WorkflowInstance } from "../core/WorkflowInstance";
@@ -522,7 +522,7 @@ export class CommitMessageGenerator {
       cliExecutionMode: EXECUTION_MODES.HEADLESS,
     };
 
-    const platform = new CliAdapter(config);
+    const platform = new NodePlatformAdapter(config);
 
     // Probe for the MCP server so we can capture the commit message via a structured tool call
     // rather than parsing prose response text. This eliminates "I'm going to read the prompt..."
@@ -625,9 +625,9 @@ export class CommitMessageGenerator {
     instance.setSuppressHeadlessPermissionWarning(true);
 
     // Force headless execution at the workflow tier and suppress VS Code globals
-    // that could bleed into this one-shot call. PropertyResolver materializes
+    // that could bleed into this one-shot call. SettingsPropertyResolver materializes
     // settings into resolved step properties, which take precedence over the
-    // CliAdapter fallback used by CliIntegration.
+    // NodePlatformAdapter fallback used by CliIntegration.
     let mcpToolCalled = false;
     let streamingChunkDisposable: { dispose(): void } | undefined;
     let streamingEventsDisposable: { dispose(): void } | undefined;

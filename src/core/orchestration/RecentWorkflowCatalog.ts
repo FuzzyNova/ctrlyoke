@@ -24,7 +24,7 @@ import {
   getLineageLastModifiedAt,
   stripLegacyWorkingFileLineageMetadata,
 } from "../../utils/WorkingFileMetadata";
-import { PropertyResolver } from "../../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
@@ -322,7 +322,7 @@ export class RecentWorkflowCatalog {
       const firstAiStepHarness = steps.find(
         (s): s is PromptStep => !isScriptStep(s)
       )?.harness;
-      const harness = PropertyResolver.resolveHarnessValue(
+      const harness = SettingsPropertyResolver.resolveHarnessValue(
         firstAiStepHarness,
         workingFile.harness
       );

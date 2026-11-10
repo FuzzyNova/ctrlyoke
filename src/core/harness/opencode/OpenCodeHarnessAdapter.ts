@@ -41,7 +41,7 @@ import type {
   OpenCodeUserHookConfig,
   HookEvent,
 } from "../../../types/CtrlYokeTypes";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import {
   applyPreparedMutations,
   type HarnessAdapterPreparation,
@@ -454,7 +454,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     const standalone =
       openCodeV2 && !appendTokens.includes(OPENCODE_V2_SERVER_FLAG);
 
-    // Use resolved properties if available (from PropertyResolver three-tier precedence)
+    // Use resolved properties if available (from SettingsPropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;

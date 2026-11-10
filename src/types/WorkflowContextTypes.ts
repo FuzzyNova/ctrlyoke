@@ -5,7 +5,7 @@ import type {
   WorkflowStep,
   WorktreeResolution,
 } from "./CtrlYokeTypes";
-import type { ResolvedProperties } from "../utils/PropertyResolver";
+import type { ResolvedProperties } from "../utils/SettingsPropertyResolver";
 import type {
   HarnessIntegration,
   PriorContextItem,

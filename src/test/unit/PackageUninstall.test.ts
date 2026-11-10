@@ -5,7 +5,7 @@ import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { uninstallPackageIntegration } from "../../core/harness/shared/PackageUninstall";
-import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import { HarnessSettingsJsonStore } from "../../core/harness/shared/HarnessSettingsJsonStore";
 import { StatuslineManager } from "../../core/harness/shared/StatuslineManager";
 import { resetStatuslineLauncherCache } from "../../core/harness/shared/StatuslineLauncher";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
@@ -40,7 +40,7 @@ suite("PackageUninstall", () => {
   });
 
   teardown(async () => {
-    SettingsJsonMcpTracker.resetAll();
+    HarnessSettingsJsonStore.resetAll();
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) delete process.env[key];
       else process.env[key] = savedEnv[key];

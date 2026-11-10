@@ -126,7 +126,7 @@ import {
 } from "./harness/PtyProcessManager";
 
 // Orchestration classes that remain at orchestrator level
-import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
+import { DashboardNavigationCommands } from "./orchestration/DashboardNavigationCommands";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import { WorkflowActivityTracker } from "./orchestration/WorkflowActivityTracker";
@@ -154,7 +154,7 @@ import {
 import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
-import { PropertyResolver } from "../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import { notifyUserFeedback } from "./UserFeedbackSink";
 import {
@@ -186,7 +186,7 @@ const PANEL_READY_IN_FLIGHT_MAX_WAIT_MS = 30_000;
  * are shared or orchestrator-scoped:
  *   - Six harness integrations (created once and shared by workflow instances)
  *   - injected host services
- *   - WorkflowCommandHandler
+ *   - DashboardNavigationCommands
  *   - WorkspaceSessionManager (workspace-level session discovery)
  *   - dashboardReady / orchestratorInitialized gates
  *
@@ -645,7 +645,7 @@ export class WorkflowOrchestrator {
   private readonly antigravityCliIntegration: CliIntegration;
 
   // Orchestration helpers
-  private readonly workflowCommandHandler: WorkflowCommandHandler;
+  private readonly workflowCommandHandler: DashboardNavigationCommands;
   private readonly workspaceSessionManager: WorkspaceSessionManager;
   private readonly promptFileParser: PromptFileParser;
   /** Evaluator used by the dashboard's in-app starter-script control. */
@@ -808,7 +808,7 @@ export class WorkflowOrchestrator {
       this.platform
     );
     this.endConditionEvaluator = new EndConditionEvaluator(this.platform);
-    this.workflowCommandHandler = new WorkflowCommandHandler(
+    this.workflowCommandHandler = new DashboardNavigationCommands(
       this.dashboardHostActions,
       this.userFeedbackSink
     );
@@ -1992,7 +1992,7 @@ export class WorkflowOrchestrator {
   /**
    * Execute a specific workflow (or the active one) by ID.
    * Multiple workflows may run simultaneously.
-   * Warns (but does not block) if a second Chat-harness workflow is started.
+   * Warns (but does not block) if a second workflow is started.
    */
   async executeWorkflow(
     workflowId?: string,
@@ -2571,7 +2571,7 @@ export class WorkflowOrchestrator {
           )
         : "";
     const service = new ExecutionPreviewService({
-      defaults: PropertyResolver.createContext({ hostCanProvidePty: true })
+      defaults: SettingsPropertyResolver.createContext({ hostCanProvidePty: true })
         .defaults,
       capabilities: await this.compatibilityRegistry.getSnapshot(),
       getHarness: (harnessId, executionWorkspace) =>

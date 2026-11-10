@@ -125,7 +125,7 @@ import {
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
 import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
-import { PropertyResolver } from "../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import {
   resolveWorktreeForWorkspace,
   type WorkspaceWorktreeResolution,
@@ -861,7 +861,7 @@ export class WorkflowInstance
     const targets = enumerateCompatibilityTargets(
       workflowForAnalysis,
       (prompt, resolvedWorkflow) =>
-        PropertyResolver.resolveTarget(prompt, resolvedWorkflow, {
+        SettingsPropertyResolver.resolveTarget(prompt, resolvedWorkflow, {
           hostCanProvidePty: this.hostCanProvidePty,
         })
     );
@@ -889,7 +889,7 @@ export class WorkflowInstance
       ...this.promptQueue.getWorkflowFile(),
       steps: this.promptQueue.getWorkflowFile().steps ?? [],
     };
-    const resolvedTarget = PropertyResolver.resolveTarget(prompt, workflow, {
+    const resolvedTarget = SettingsPropertyResolver.resolveTarget(prompt, workflow, {
       hostCanProvidePty: this.hostCanProvidePty,
     });
     const diagnostics = analyzeCompatibility({
@@ -1473,7 +1473,7 @@ export class WorkflowInstance
     const workflowHarness =
       this.currentPromptFile?.promptFile?.harness ??
       this.promptQueue.getWorkflowFile().harness;
-    const harness = PropertyResolver.resolveHarnessValue(
+    const harness = SettingsPropertyResolver.resolveHarnessValue(
       undefined,
       workflowHarness
     );
@@ -4851,7 +4851,7 @@ export class WorkflowInstance
       reportUnresolvedVariables: (placeholders: readonly string[]) =>
         this.reportUnresolvedWorktreeVariables(
           placeholders,
-          PropertyResolver.resolveHarnessValue(
+          SettingsPropertyResolver.resolveHarnessValue(
             undefined,
             this.promptQueue.getWorkflowFile().harness
           )
@@ -5592,11 +5592,11 @@ export class WorkflowInstance
             (step) => !isScriptStep(step) && step.endCondition != null
           );
         reportWorkflowStarted({
-          harness: PropertyResolver.resolveHarnessValue(
+          harness: SettingsPropertyResolver.resolveHarnessValue(
             undefined,
             workflowFile.harness
           ),
-          executionMode: PropertyResolver.resolveExecutionMode(
+          executionMode: SettingsPropertyResolver.resolveExecutionMode(
             { executionMode: undefined },
             workflowFile
           ),
@@ -5631,11 +5631,11 @@ export class WorkflowInstance
         }
         const workflowFile = this.promptQueue.getWorkflowFile();
         reportWorkflowCompleted({
-          harness: PropertyResolver.resolveHarnessValue(
+          harness: SettingsPropertyResolver.resolveHarnessValue(
             undefined,
             workflowFile.harness
           ),
-          executionMode: PropertyResolver.resolveExecutionMode(
+          executionMode: SettingsPropertyResolver.resolveExecutionMode(
             { executionMode: undefined },
             workflowFile
           ),
@@ -5713,7 +5713,7 @@ export class WorkflowInstance
           const harness = isScriptStep(step)
             ? undefined
             : (step._runtime?.harness ??
-              PropertyResolver.resolve(
+              SettingsPropertyResolver.resolve(
                 step,
                 this.promptQueue.getWorkflowFile(),
                 { hostCanProvidePty: this.hostCanProvidePty }

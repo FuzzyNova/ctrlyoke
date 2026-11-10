@@ -11,12 +11,11 @@ import { NODE_ERROR_CODES } from "../../../types/DashboardConstants";
 /**
  * Options for customizing where a tracker reads/writes its MCP config.
  *
- * Defaults reproduce the Qwen behavior (`.{tool}/settings.json` in the
- * project, `~/.{tool}/settings.json` for the user). Antigravity overrides the
- * paths, while Antigravity overrides the paths and MCP property for its
- * workspace-discovered MCP config.
+ * Defaults use `.{tool}/settings.json` in the project and
+ * `~/.{tool}/settings.json` for the user. Harnesses can override the paths
+ * and MCP property for their own settings layout.
  */
-export interface SettingsJsonMcpTrackerOptions {
+export interface HarnessSettingsJsonStoreOptions {
   /** Resolve the project-level config file path. Default: `<ws>/.<tool>/settings.json`. */
   projectConfigPath?: (workspaceRoot: string) => string;
   /** Resolve the user-level config file path. Default: `~/.<tool>/settings.json`. */
@@ -27,48 +26,41 @@ export interface SettingsJsonMcpTrackerOptions {
   schemaUrl?: string;
 }
 
-export interface SettingsJsonMcpRegisterOptions {
+export interface HarnessSettingsJsonRegisterOptions {
   /** File mode for secret-bearing generated settings (POSIX: 0600). */
   fileMode?: number;
 }
 
-export type SettingsJsonPermissionDecision = "allow" | "ask" | "deny";
-export type SettingsJsonPermissionPolicy = Record<
-  string,
-  | SettingsJsonPermissionDecision
-  | Record<string, SettingsJsonPermissionDecision>
->;
-
 export const STATUS_LINE_SETTING_KEY = "statusLine" as const;
-export type SettingsJsonPersistentValueKey = string;
+export type HarnessSettingsPersistentValueKey = string;
 
-/** {@link SettingsJsonPersistentValueInstallResult} discriminant for an actual write. */
-export const SETTINGS_JSON_INSTALL_KIND_WRITTEN = "written" as const;
+/** {@link HarnessSettingsPersistentValueInstallResult} discriminant for an actual write. */
+export const HARNESS_SETTINGS_INSTALL_KIND_WRITTEN = "written" as const;
 
-export interface SettingsJsonPersistentValueCaptureResult {
+export interface HarnessSettingsPersistentValueCaptureResult {
   readonly proceed?: boolean;
 }
 
-export type SettingsJsonPersistentValueCapture = (
+export type HarnessSettingsPersistentValueCapture = (
   preexistingValue: unknown,
   hadKey: boolean
 ) =>
   | void
-  | SettingsJsonPersistentValueCaptureResult
-  | Promise<void | SettingsJsonPersistentValueCaptureResult>;
+  | HarnessSettingsPersistentValueCaptureResult
+  | Promise<void | HarnessSettingsPersistentValueCaptureResult>;
 
-export type SettingsJsonPersistentValueUninstall =
+export type HarnessSettingsPersistentValueUninstall =
   | { readonly action: "restore"; readonly value: unknown }
   | { readonly action: "delete" };
 
-export type SettingsJsonPersistentValueInstallResult =
+export type HarnessSettingsPersistentValueInstallResult =
   | {
       readonly kind: "no-op";
       readonly preexistingValue: unknown;
       readonly hadKey: boolean;
     }
   | {
-      readonly kind: typeof SETTINGS_JSON_INSTALL_KIND_WRITTEN;
+      readonly kind: typeof HARNESS_SETTINGS_INSTALL_KIND_WRITTEN;
       readonly preexistingValue: unknown;
       readonly hadKey: boolean;
     }
@@ -78,7 +70,7 @@ export type SettingsJsonPersistentValueInstallResult =
       readonly hadKey: boolean;
     };
 
-export type SettingsJsonPersistentValueMatcher = (
+export type HarnessSettingsPersistentValueMatcher = (
   currentValue: unknown,
   hadKey: boolean
 ) => boolean;
@@ -107,7 +99,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 function getAtPath(
   settings: Record<string, unknown>,
-  key: SettingsJsonPersistentValueKey
+  key: HarnessSettingsPersistentValueKey
 ): PathValue {
   let current: unknown = settings;
 
@@ -128,7 +120,7 @@ function getAtPath(
 
 function setAtPath(
   settings: Record<string, unknown>,
-  key: SettingsJsonPersistentValueKey,
+  key: HarnessSettingsPersistentValueKey,
   value: unknown
 ): void {
   const segments = key.split(".");
@@ -147,7 +139,7 @@ function setAtPath(
 
 function deleteAtPath(
   settings: Record<string, unknown>,
-  key: SettingsJsonPersistentValueKey
+  key: HarnessSettingsPersistentValueKey
 ): void {
   const segments = key.split(".");
   const leaf = segments.pop()!;
@@ -191,7 +183,7 @@ function deleteAtPath(
  *
  * Usage per tool (one static singleton per tool name):
  * ```typescript
- * const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+ * const tracker = HarnessSettingsJsonStore.getInstance("qwen");
  * // Before prompt: register servers and get allowed names
  * const allowed = await tracker.registerServers(workflowKey, workspaceRoot, entries);
  * // Build CLI args: --allowed-mcp-server-names ...allowed
@@ -201,12 +193,12 @@ function deleteAtPath(
  * await tracker.withLock(async () => { ... });
  * ```
  */
-export class SettingsJsonMcpTracker {
+export class HarnessSettingsJsonStore {
   // ============================================================
   // SINGLETON PER TOOL
   // ============================================================
 
-  private static instances = new Map<string, SettingsJsonMcpTracker>();
+  private static instances = new Map<string, HarnessSettingsJsonStore>();
 
   /**
    * Get or create the singleton tracker for a tool.
@@ -215,11 +207,11 @@ export class SettingsJsonMcpTracker {
    */
   static getInstance(
     toolName: string,
-    options?: SettingsJsonMcpTrackerOptions
-  ): SettingsJsonMcpTracker {
+    options?: HarnessSettingsJsonStoreOptions
+  ): HarnessSettingsJsonStore {
     let instance = this.instances.get(toolName);
     if (!instance) {
-      instance = new SettingsJsonMcpTracker(toolName, options);
+      instance = new HarnessSettingsJsonStore(toolName, options);
       this.instances.set(toolName, instance);
     }
     return instance;
@@ -269,7 +261,7 @@ export class SettingsJsonMcpTracker {
 
   private constructor(
     private readonly toolName: string,
-    options?: SettingsJsonMcpTrackerOptions
+    options?: HarnessSettingsJsonStoreOptions
   ) {
     this.settingsSubdir = `.${toolName}`;
     this.projectConfigPath =
@@ -391,7 +383,7 @@ export class SettingsJsonMcpTracker {
       }
     }
     Log.debug(
-      `[SettingsJsonMcpTracker] ${this.toolName} MCP baseline captured for ${projectSettings}: [${[...baselineServers].join(", ")}]`
+      `[HarnessSettingsJsonStore] ${this.toolName} MCP baseline captured for ${projectSettings}: [${[...baselineServers].join(", ")}]`
     );
   }
 
@@ -415,7 +407,7 @@ export class SettingsJsonMcpTracker {
     workflowKey: string,
     workspaceRoot: string,
     servers: Record<string, unknown>,
-    options?: SettingsJsonMcpRegisterOptions
+    options?: HarnessSettingsJsonRegisterOptions
   ): Promise<string[]> {
     await this.captureBaseline(workspaceRoot);
 
@@ -487,7 +479,7 @@ export class SettingsJsonMcpTracker {
           await fs.chmod(settingsPath, options.fileMode).catch(() => undefined);
         }
         Log.debug(
-          `[SettingsJsonMcpTracker] ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
+          `[HarnessSettingsJsonStore] ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
         );
 
         if (!this.getBaseline(settingsPath).settingsFileExisted) {
@@ -498,7 +490,7 @@ export class SettingsJsonMcpTracker {
           await fs.chmod(settingsPath, options.fileMode).catch(() => undefined);
         }
         Log.debug(
-          `[SettingsJsonMcpTracker] ${this.toolName} MCP servers already in settings.json: [${serverNames.join(", ")}]`
+          `[HarnessSettingsJsonStore] ${this.toolName} MCP servers already in settings.json: [${serverNames.join(", ")}]`
         );
       }
     });
@@ -568,7 +560,7 @@ export class SettingsJsonMcpTracker {
                   delete mcpServers[name];
                 } else if (managedValue !== undefined) {
                   Log.warn(
-                    `[SettingsJsonMcpTracker] ${this.toolName} MCP cleanup preserved user-modified server "${name}"`
+                    `[HarnessSettingsJsonStore] ${this.toolName} MCP cleanup preserved user-modified server "${name}"`
                   );
                 }
                 pathManagedValues?.delete(name);
@@ -587,7 +579,7 @@ export class SettingsJsonMcpTracker {
 
               await this.writeOrRemoveManagedConfig(settingsPath, settings);
               Log.debug(
-                `[SettingsJsonMcpTracker] ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
+                `[HarnessSettingsJsonStore] ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
               );
             }
           } catch {
@@ -618,11 +610,11 @@ export class SettingsJsonMcpTracker {
    */
   async installPersistentValue(
     workspaceRoot: string,
-    key: SettingsJsonPersistentValueKey,
+    key: HarnessSettingsPersistentValueKey,
     value: unknown,
-    capture?: SettingsJsonPersistentValueCapture,
-    alreadyInstalled?: SettingsJsonPersistentValueMatcher
-  ): Promise<SettingsJsonPersistentValueInstallResult> {
+    capture?: HarnessSettingsPersistentValueCapture,
+    alreadyInstalled?: HarnessSettingsPersistentValueMatcher
+  ): Promise<HarnessSettingsPersistentValueInstallResult> {
     const settingsPath = this.getProjectConfigPath(workspaceRoot);
 
     return this.withMutationLock(settingsPath, async () => {
@@ -669,7 +661,7 @@ export class SettingsJsonMcpTracker {
   /** The current value at `key`, `undefined` when absent. Unlocked read. */
   async readPersistentValue(
     workspaceRoot: string,
-    key: SettingsJsonPersistentValueKey
+    key: HarnessSettingsPersistentValueKey
   ): Promise<unknown> {
     const settings = await this.readProjectConfig(
       this.getProjectConfigPath(workspaceRoot)
@@ -685,9 +677,9 @@ export class SettingsJsonMcpTracker {
    */
   async uninstallPersistentValue(
     workspaceRoot: string,
-    key: SettingsJsonPersistentValueKey,
-    operation: SettingsJsonPersistentValueUninstall,
-    onlyWhen?: SettingsJsonPersistentValueMatcher
+    key: HarnessSettingsPersistentValueKey,
+    operation: HarnessSettingsPersistentValueUninstall,
+    onlyWhen?: HarnessSettingsPersistentValueMatcher
   ): Promise<boolean> {
     const settingsPath = this.getProjectConfigPath(workspaceRoot);
 

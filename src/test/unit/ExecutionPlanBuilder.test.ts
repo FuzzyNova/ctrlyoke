@@ -18,7 +18,7 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
 } from "../../types/DashboardConstants";
-import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 

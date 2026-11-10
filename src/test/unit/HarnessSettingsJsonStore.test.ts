@@ -3,11 +3,11 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 import {
-  SettingsJsonMcpTracker,
+  HarnessSettingsJsonStore,
   STATUS_LINE_SETTING_KEY,
-} from "../../core/harness/shared/SettingsJsonMcpTracker";
+} from "../../core/harness/shared/HarnessSettingsJsonStore";
 
-suite("SettingsJsonMcpTracker", () => {
+suite("HarnessSettingsJsonStore", () => {
   let tmpDir: string;
   let settingsDir: string;
   let settingsPath: string;
@@ -16,11 +16,11 @@ suite("SettingsJsonMcpTracker", () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "mcp-tracker-test-"));
     settingsDir = path.join(tmpDir, ".qwen");
     settingsPath = path.join(settingsDir, "settings.json");
-    SettingsJsonMcpTracker.resetAll();
+    HarnessSettingsJsonStore.resetAll();
   });
 
   teardown(async () => {
-    SettingsJsonMcpTracker.resetAll();
+    HarnessSettingsJsonStore.resetAll();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -31,7 +31,7 @@ suite("SettingsJsonMcpTracker", () => {
       settingsPath,
       JSON.stringify({ statusLine: value, theme: "dark" })
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
     let captureCalls = 0;
 
     const result = await tracker.installPersistentValue(
@@ -67,7 +67,7 @@ suite("SettingsJsonMcpTracker", () => {
       settingsPath,
       JSON.stringify({ statusLine: preexistingValue })
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
 
     const result = await tracker.installPersistentValue(
       tmpDir,
@@ -94,7 +94,7 @@ suite("SettingsJsonMcpTracker", () => {
       settingsPath,
       JSON.stringify({ theme: "dark", ui: { sidebar: "visible" } })
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
 
     const result = await tracker.installPersistentValue(
       tmpDir,
@@ -125,7 +125,7 @@ suite("SettingsJsonMcpTracker", () => {
     await fs.mkdir(settingsDir, { recursive: true });
     const installedValue = { type: "command", command: "node statusline.js" };
     await fs.writeFile(settingsPath, JSON.stringify({ theme: "dark" }));
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
 
     await tracker.installPersistentValue(
       tmpDir,
@@ -152,7 +152,7 @@ suite("SettingsJsonMcpTracker", () => {
       2
     );
     await fs.writeFile(settingsPath, originalContents);
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
 
     const result = await tracker.installPersistentValue(
       tmpDir,
@@ -188,7 +188,7 @@ suite("SettingsJsonMcpTracker", () => {
       settingsPath,
       JSON.stringify({ statusLine: preexistingValue })
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
 
     await assert.rejects(
       tracker.installPersistentValue(
@@ -223,7 +223,7 @@ suite("SettingsJsonMcpTracker", () => {
       settingsPath,
       JSON.stringify({ statusLine: installedValue, theme: "dark" })
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
 
     await tracker.uninstallPersistentValue(tmpDir, STATUS_LINE_SETTING_KEY, {
       action: "restore",
@@ -257,7 +257,7 @@ suite("SettingsJsonMcpTracker", () => {
       settingsPath,
       JSON.stringify({ statusLine: preexistingValue })
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
     let captureCalls = 0;
 
     const results = await Promise.all(
@@ -287,7 +287,7 @@ suite("SettingsJsonMcpTracker", () => {
   });
 
   test("should remove settings.json when ctrlyoke created it for MCP", async () => {
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
     await tracker.registerServers("wf-1", tmpDir, {
       ctrlyoke: { command: "node", args: ["server.js"] },
     });
@@ -303,7 +303,7 @@ suite("SettingsJsonMcpTracker", () => {
     await fs.mkdir(settingsDir, { recursive: true });
     await fs.writeFile(settingsPath, JSON.stringify({ theme: "dark" }));
 
-    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const tracker = HarnessSettingsJsonStore.getInstance("qwen");
     await tracker.registerServers("wf-1", tmpDir, {
       ctrlyoke: { command: "node", args: ["server.js"] },
     });
@@ -333,7 +333,7 @@ suite("SettingsJsonMcpTracker", () => {
       JSON.stringify({ mcpServers: { shared: { command: "user" } } })
     );
 
-    const tracker = SettingsJsonMcpTracker.getInstance("multi-root", {
+    const tracker = HarnessSettingsJsonStore.getInstance("multi-root", {
       userConfigPath: () => path.join(tmpDir, "missing-user-settings.json"),
     });
     await tracker.registerServers("wf-second", secondWorkspace, {
@@ -369,7 +369,7 @@ suite("SettingsJsonMcpTracker", () => {
       path.dirname(secondSettingsPath),
       ".gitignore"
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("multi-root", {
+    const tracker = HarnessSettingsJsonStore.getInstance("multi-root", {
       userConfigPath: () => path.join(tmpDir, "missing-user-settings.json"),
     });
 
@@ -433,7 +433,7 @@ suite("SettingsJsonMcpTracker", () => {
       path.dirname(secondSettingsPath),
       ".gitignore"
     );
-    const tracker = SettingsJsonMcpTracker.getInstance("multi-root", {
+    const tracker = HarnessSettingsJsonStore.getInstance("multi-root", {
       userConfigPath: () => path.join(tmpDir, "missing-user-settings.json"),
     });
 

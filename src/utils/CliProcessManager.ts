@@ -329,7 +329,7 @@ export class CliProcessManager {
    * parent process. All three file descriptors (stdin, stdout, stderr) are
    * wired to the user's terminal so the AI CLI runs as if launched directly.
    *
-   * Used exclusively in the standalone CLI binary (CliAdapter context).
+   * Used exclusively in the standalone CLI binary (NodePlatformAdapter context).
    * The VS Code extension always uses createTerminal() instead.
    * Until the child exits it holds `inheritedTerminalOwnership`, which is how
    * the CLI's own output knows to wait instead of drawing over the TUI.

@@ -21,7 +21,7 @@ own box in the commit that lands it, and adds its ledger rows to `dev/reference/
 - [x] 5b `CliProviderUtils`/`CliProviderWorkflowContext`/`CliProviderPreparation`, and `RetryableAsyncCache` → `src/utils/`
 - [x] 5c Quota collectors, `HarnessFlagHelpParser`, status-line format harness names, `HarnessModelUsage`
 - [x] 6a UI bridge: `IDashboardRegistryEvents`, `Dashboard*` router/sync/context/port, `NotificationEventFactory`, `WorkflowLibraryHandlers`, `OutputCaptureAttachments`
-- [ ] 6b Platform and core: `NodePlatformAdapter`, `CliConfirm`, `SettingsPropertyResolver`, `HarnessSettingsJsonStore`, `DashboardNavigationCommands`, `wasLastFailureUserCancellation` removal
+- [x] 6b Platform and core: `NodePlatformAdapter`, `CliConfirm`, `SettingsPropertyResolver`, `HarnessSettingsJsonStore`, `DashboardNavigationCommands`, `wasLastFailureUserCancellation` removal
 - [ ] 7 Folder moves that change which instruction file applies
 
 Paths in Batches 3–8 are written against the tree before this pass. Where an earlier batch has

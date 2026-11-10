@@ -76,7 +76,7 @@ export interface ParallelGroupReconcileResult {
   readonly joined: boolean;
   readonly group?: ParallelGroupDefinition;
 }
-import { PropertyResolver } from "../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import { reportPromptCompleted } from "../utils/TelemetryEvents";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
@@ -1332,7 +1332,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /**
    * Get the complete workflow file with workflow-level properties.
-   * Used by PropertyResolver to apply three-tier property precedence.
+   * Used by SettingsPropertyResolver to apply three-tier property precedence.
    *
    * @returns Complete PromptFile with workflow-level properties, or empty object if not loaded
    */
@@ -1513,11 +1513,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const workflowFile = this.getWorkflowFile();
       const isScript = isScriptStep(prompt);
       reportPromptCompleted({
-        harness: PropertyResolver.resolveHarnessValue(
+        harness: SettingsPropertyResolver.resolveHarnessValue(
           prompt._runtime.harness ?? (isScript ? undefined : prompt.harness),
           workflowFile.harness
         ),
-        executionMode: PropertyResolver.resolveExecutionMode(
+        executionMode: SettingsPropertyResolver.resolveExecutionMode(
           {
             executionMode:
               prompt._runtime.executionMode ??

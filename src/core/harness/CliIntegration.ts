@@ -74,7 +74,7 @@ import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
 import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import { ExecutionPlanBuilder } from "./shared/ExecutionPlanBuilder";
 import type { ExecutionPreviewHarness } from "../ExecutionPreviewService";
-import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
 import {
   SPAWN_IDENTITY_FIELDS,
   spawnIdentityFields,
@@ -83,7 +83,7 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
-import { SETTINGS_JSON_INSTALL_KIND_WRITTEN } from "./shared/SettingsJsonMcpTracker";
+import { HARNESS_SETTINGS_INSTALL_KIND_WRITTEN } from "./shared/HarnessSettingsJsonStore";
 import { resolveSecretEnvironment } from "../../utils/SecretResolver";
 import { type RunSecretRedactor } from "../../utils/SecretRedactionService";
 import {
@@ -298,9 +298,9 @@ export class CliIntegration extends HarnessIntegration {
    * In CLI context, the resolved execution mode (from flags/TTY detection) is written
    * to the configService overlay in cli.ts, so ConfigurationUtils returns the correct value.
    *
-   * When the platform adapter exposes a `getConfig()` method (i.e. CliAdapter), its value
+   * When the platform adapter exposes a `getConfig()` method (i.e. NodePlatformAdapter), its value
    * takes precedence over the global configService. This allows callers like
-   * CommitMessageGenerator to force headless mode via CliAdapter without affecting VS Code
+   * CommitMessageGenerator to force headless mode via NodePlatformAdapter without affecting VS Code
    * user settings — the optional PlatformAdapter hook keeps that compatibility
    * behavior explicit without widening the global config service.
    */
@@ -406,7 +406,7 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * Override base class getNamedWorkspaceRoots() to use the platform adapter.
-   * `CliAdapter` always returns a single named root, so multi-root behavior
+   * `NodePlatformAdapter` always returns a single named root, so multi-root behavior
    * can never trigger for the CLI binary.
    */
   protected override getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
@@ -1418,7 +1418,7 @@ export class CliIntegration extends HarnessIntegration {
       );
       return;
     }
-    if (result.kind !== SETTINGS_JSON_INSTALL_KIND_WRITTEN) {
+    if (result.kind !== HARNESS_SETTINGS_INSTALL_KIND_WRITTEN) {
       return;
     }
     if (result.alreadyCtrlyoke) {

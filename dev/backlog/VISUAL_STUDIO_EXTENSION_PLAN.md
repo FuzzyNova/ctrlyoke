@@ -214,7 +214,7 @@ Audited against `src/` on 2026-09-28.
   `src/server/themes/vscode-default-{dark,light}.css`). **No external host-push theme source
   exists yet.** That is still a Phase 3 requirement.
 - **Secrets:** `OsCredentialStore` already uses Windows Credential Manager, and it is the
-  `CliAdapter` default. `ctrlyoke server` builds `LicenseService` over `OsCredentialStore`
+  `NodePlatformAdapter` default. `ctrlyoke server` builds `LicenseService` over `OsCredentialStore`
   with no `trialState`. The remote-access trial is deliberately extension-only, so no
   file-backed trial store is needed unless the Visual Studio host should offer the trial.
 - **Harness hooks and MCP configs call a bare `node` from `PATH`**

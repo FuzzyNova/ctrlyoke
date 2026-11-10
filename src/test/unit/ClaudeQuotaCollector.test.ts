@@ -10,7 +10,7 @@ import {
   parseClaudeQuotaSnapshot,
   parseClaudeRateLimitWindows,
 } from "../../core/harness/shared/usage/collectors/ClaudeQuotaCollector";
-import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import { HarnessSettingsJsonStore } from "../../core/harness/shared/HarnessSettingsJsonStore";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
@@ -26,7 +26,7 @@ suite("ClaudeQuotaCollector", () => {
   const originalUserProfile = process.env.USERPROFILE;
 
   teardown(async () => {
-    SettingsJsonMcpTracker.resetAll();
+    HarnessSettingsJsonStore.resetAll();
     configService.setUserBackend(backend({}));
     configService.setWorkspaceBackend(backend({}));
     if (originalHome === undefined) delete process.env.HOME;

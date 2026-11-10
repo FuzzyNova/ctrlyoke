@@ -27,7 +27,7 @@ import { findExistingBundleImport } from "./RunBundleImporter";
 import type { RunImportPreview } from "../../types/RunImportPreviewTypes";
 import { REDACTION_MARKER } from "../../types/PreviewRedactor";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
-import { PropertyResolver } from "../../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import { isScriptStep } from "../../types/CtrlYokeTypes";
 import {
   getDeclaredSecretGrants,
@@ -200,7 +200,7 @@ export class RunImportPreviewService {
         const isScript = isScriptStep(step);
         const resolved = isScript
           ? undefined
-          : PropertyResolver.resolve(step as PromptStep, workflow, {
+          : SettingsPropertyResolver.resolve(step as PromptStep, workflow, {
               hostCanProvidePty: false,
             });
         const grants = getDeclaredSecretGrants(step, workflow);

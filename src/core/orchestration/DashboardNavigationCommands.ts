@@ -9,15 +9,13 @@ import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import type { DashboardHostActions } from "../HostPorts";
 
 /**
- * WorkflowCommandHandler
+ * DashboardNavigationCommands
  *
- * RESPONSIBILITY: Command Routing & UI Interactions
+ * RESPONSIBILITY: Dashboard navigation and opening the active workflow file
  *
- * Handles all user-facing commands including:
- * - Opening files and panels
- * - Opening current prompt file
+ * Handles dashboard navigation actions exposed by the workflow orchestrator.
  */
-export class WorkflowCommandHandler {
+export class DashboardNavigationCommands {
   constructor(
     private readonly hostActions: DashboardHostActions,
     private readonly userFeedbackSink?: UserFeedbackSink
@@ -32,7 +30,7 @@ export class WorkflowCommandHandler {
       this.hostActions.focusDashboard?.();
     } catch (error) {
       Log.error(
-        "[WorkflowCommandHandler] Failed to focus ctrlyoke dashboard:",
+        "[DashboardNavigationCommands] Failed to focus ctrlyoke dashboard:",
         error
       );
       throw error; // Let caller handle fallback
@@ -57,7 +55,7 @@ export class WorkflowCommandHandler {
     try {
       await this.openPromptFile(currentFilePath);
       Log.info(
-        `[WorkflowCommandHandler] ctrlyoke: Opened prompt file: ${currentFilePath}`
+        `[DashboardNavigationCommands] ctrlyoke: Opened prompt file: ${currentFilePath}`
       );
     } catch (error) {
       notifyUserFeedback(

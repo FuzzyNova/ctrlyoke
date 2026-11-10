@@ -27,7 +27,7 @@ import {
   type PromptDiagnosticCode,
   type PreviewPromptCategory,
 } from "../../../types/DashboardConstants";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";

@@ -13,9 +13,9 @@ import {
   TOOL_PERMISSION_CATEGORIES,
 } from "../../../types/DashboardConstants";
 import type {
-  SettingsJsonPermissionDecision,
-  SettingsJsonPermissionPolicy,
-} from "../shared/SettingsJsonMcpTracker";
+  OpenCodePermissionDecision,
+  OpenCodePermissionPolicy,
+} from "./OpenCodePermissionPolicy";
 import {
   containsOpenCodeConfigSubstitution,
   type OpenCodePermissionCollisionContext,
@@ -161,12 +161,12 @@ export class OpenCodeToolPermissionMapper
     config: ToolPermissionConfig | undefined,
     collisionContext?: OpenCodePermissionCollisionContext,
     externalDirectories: readonly string[] = []
-  ): SettingsJsonPermissionPolicy | undefined {
+  ): OpenCodePermissionPolicy | undefined {
     const emittedTopLevelKeys = new Set<string>();
     const emittedToolKeys = new Map<string, string>();
     const emittedNestedKeys = new Map<string, Map<string, string>>();
     const appendExternalDirectories = (
-      policy: SettingsJsonPermissionPolicy
+      policy: OpenCodePermissionPolicy
     ): void =>
       this.appendExternalDirectoryRules(
         policy,
@@ -184,7 +184,7 @@ export class OpenCodeToolPermissionMapper
     ) {
       // These modes leave OpenCode's own rules in charge, but trusted roots are
       // still granted, as `--add-dir` is to the other harnesses in every mode.
-      const policy: SettingsJsonPermissionPolicy = {};
+      const policy: OpenCodePermissionPolicy = {};
       appendExternalDirectories(policy);
       return Object.keys(policy).length > 0 ? policy : undefined;
     }
@@ -196,7 +196,7 @@ export class OpenCodeToolPermissionMapper
       emittedTopLevelKeys,
       "top-level catch-all"
     );
-    const policy: SettingsJsonPermissionPolicy = {};
+    const policy: OpenCodePermissionPolicy = {};
     if (catchAllKey === undefined) {
       return policy;
     }
@@ -248,7 +248,7 @@ export class OpenCodeToolPermissionMapper
    * than widened into a pattern.
    */
   private appendExternalDirectoryRules(
-    policy: SettingsJsonPermissionPolicy,
+    policy: OpenCodePermissionPolicy,
     directories: readonly string[],
     collisionContext: OpenCodePermissionCollisionContext | undefined,
     emittedTopLevelKeys: Set<string>,
@@ -277,9 +277,9 @@ export class OpenCodeToolPermissionMapper
   }
 
   private appendRules(
-    policy: SettingsJsonPermissionPolicy,
+    policy: OpenCodePermissionPolicy,
     patterns: string[],
-    decision: SettingsJsonPermissionDecision,
+    decision: OpenCodePermissionDecision,
     collisionContext: OpenCodePermissionCollisionContext | undefined,
     emittedTopLevelKeys: Set<string>,
     emittedToolKeys: Map<string, string>,
@@ -339,10 +339,10 @@ export class OpenCodeToolPermissionMapper
   }
 
   private appendRule(
-    policy: SettingsJsonPermissionPolicy,
+    policy: OpenCodePermissionPolicy,
     tool: string,
     argumentPattern: string | undefined,
-    decision: SettingsJsonPermissionDecision,
+    decision: OpenCodePermissionDecision,
     collisionContext: OpenCodePermissionCollisionContext | undefined,
     emittedTopLevelKeys: Set<string>,
     emittedToolKeys: Map<string, string>,
@@ -395,7 +395,7 @@ export class OpenCodeToolPermissionMapper
     if (nestedKey === undefined) {
       return;
     }
-    let rules: Record<string, SettingsJsonPermissionDecision>;
+    let rules: Record<string, OpenCodePermissionDecision>;
     if (current && typeof current === "object") {
       rules = current;
     } else if (current) {

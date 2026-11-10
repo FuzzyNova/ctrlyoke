@@ -6,7 +6,7 @@ import { noWorkspacePlaceholderRoot } from "../utils/ProjectStatePaths";
 
 /**
  * Abstraction layer for platform-specific APIs.
- * Implemented by VsCodeAdapter (VS Code extension) and CliAdapter (standalone CLI).
+ * Implemented by VsCodeAdapter (VS Code extension) and NodePlatformAdapter (standalone CLI).
  *
  * This allows core workflow execution code to run in both contexts without
  * importing the `vscode` module directly.

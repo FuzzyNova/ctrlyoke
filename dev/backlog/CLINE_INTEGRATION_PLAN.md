@@ -385,7 +385,7 @@ export class ClineHarnessAdapter implements IHarnessAdapter {
       provider-local version gate; the minimum is enforced once in `detectHarness()`
 - [ ] MCP: implement `getMcpConfigArgs`/`planMcpConfigArgs`. `cline mcp add` mutates
       Cline's global config, so it needs baseline restoration through a shared tracker
-      (cf. `SettingsJsonMcpTracker`) rather than per-run adds — prefer a process-local
+      (cf. `HarnessSettingsJsonStore`) rather than per-run adds — prefer a process-local
       config flag if current Cline offers one
 
 **Reference:** `src/core/harness/claude/ClaudeHarnessAdapter.ts`

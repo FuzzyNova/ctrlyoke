@@ -5,7 +5,7 @@ import type {
 import type { FailureKind } from "../../../types/CtrlYokeTypes";
 import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 
 export interface CliExecutionSessionParams {

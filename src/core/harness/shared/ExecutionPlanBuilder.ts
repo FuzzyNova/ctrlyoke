@@ -3,7 +3,7 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../../../utils/ConfigurationUtils";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import type { WorkflowStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { ToolPermissionConfig } from "../../../types/ExecutionPropertyTypes";

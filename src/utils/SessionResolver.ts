@@ -5,7 +5,7 @@ import {
   HarnessId,
 } from "../types/CtrlYokeTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
-import { PropertyResolver } from "./PropertyResolver";
+import { SettingsPropertyResolver } from "./SettingsPropertyResolver";
 import { ConfigurationUtils } from "./ConfigurationUtils";
 import { Log } from "./Log";
 
@@ -71,7 +71,7 @@ export class SessionResolver {
     groupStartBoundary: number = promptIndex
   ): string | undefined {
     const resolved = workflow
-      ? PropertyResolver.resolve(prompt, workflow)
+      ? SettingsPropertyResolver.resolve(prompt, workflow)
       : undefined;
     return this.resolveWithProperties(
       prompt,
@@ -313,7 +313,7 @@ export class SessionResolver {
   /**
    * Check if prompt should resume existing session.
    *
-   * Applies three-tier precedence (using PropertyResolver):
+   * Applies three-tier precedence (using SettingsPropertyResolver):
    * 1. Prompt-level resumeSession setting (highest priority)
    * 2. Workflow-level resumeSession setting
    * 3. `defaults.resumeSession` setting (lowest priority)
@@ -327,7 +327,7 @@ export class SessionResolver {
     workflow?: PromptFile
   ): boolean {
     if (workflow) {
-      return PropertyResolver.resolve(prompt, workflow).resumeSession;
+      return SettingsPropertyResolver.resolve(prompt, workflow).resumeSession;
     }
 
     // Fallback when workflow is unavailable (should be rare): respect the

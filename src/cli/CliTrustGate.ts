@@ -1,4 +1,4 @@
-import { promptYesNo } from "./CliPrompt";
+import { confirmYesNo } from "./CliConfirm";
 import { escapeUntrustedDisplayText } from "../utils/EscapeUntrustedDisplayText";
 
 /** Terminal access for the CLI's trust prompts; prompts and errors use stderr. */
@@ -14,7 +14,7 @@ export function createCliTrustIo(): CliTrustIo {
     writeOut: (message) => process.stdout.write(`${message}\n`),
     writeErr: (message) => process.stderr.write(`${message}\n`),
     isInteractive: !!process.stdin.isTTY && !!process.stderr.isTTY,
-    confirm: promptYesNo,
+    confirm: confirmYesNo,
   };
 }
 

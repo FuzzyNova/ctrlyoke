@@ -84,9 +84,9 @@ import {
 import { Log } from "../utils/Log";
 import { SessionResolver } from "../utils/SessionResolver";
 import {
-  PropertyResolver,
+  SettingsPropertyResolver,
   type ResolvedProperties,
-} from "../utils/PropertyResolver";
+} from "../utils/SettingsPropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import {
   exceedsLimit,
@@ -1036,7 +1036,7 @@ export class WorkflowExecutor {
     return {
       workflow,
       group,
-      defaults: PropertyResolver.createContext({
+      defaults: SettingsPropertyResolver.createContext({
         hostCanProvidePty: context.hostCanProvidePty,
       }).defaults,
       hostCanProvidePty: context.hostCanProvidePty ?? true,
@@ -2032,7 +2032,7 @@ export class WorkflowExecutor {
       step &&
       !isScriptStep(step)
     ) {
-      const resolved = PropertyResolver.resolve(
+      const resolved = SettingsPropertyResolver.resolve(
         step,
         this.promptQueue.getWorkflowFile(),
         { hostCanProvidePty: context?.hostCanProvidePty }
@@ -2292,7 +2292,7 @@ export class WorkflowExecutor {
       const workflowFileForPre = this.promptQueue.getWorkflowFile();
       let preResolvedProperties =
         preflightMember?.resolvedProperties ??
-        PropertyResolver.resolve(prompt, workflowFileForPre, {
+        SettingsPropertyResolver.resolve(prompt, workflowFileForPre, {
           hostCanProvidePty: context.hostCanProvidePty,
         });
       const preVars = preflightMember
@@ -2462,7 +2462,7 @@ export class WorkflowExecutor {
       const workflowFile = this.promptQueue.getWorkflowFile();
       let resolvedProperties =
         preflightMember?.resolvedProperties ??
-        PropertyResolver.resolve(prompt, workflowFile, {
+        SettingsPropertyResolver.resolve(prompt, workflowFile, {
           hostCanProvidePty: context.hostCanProvidePty,
         });
 
@@ -2733,7 +2733,7 @@ export class WorkflowExecutor {
           elapsed: duration,
         });
       }
-      // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
+      // Use the resolved end condition (handles workflow-level inheritance via SettingsPropertyResolver)
       // rather than reading prompt.endCondition directly, which misses workflow-level defaults.
       const resolvedEndCondition = resolvedProperties.endCondition;
       const promptForEval =
@@ -2907,7 +2907,7 @@ export class WorkflowExecutor {
         ? VarSubstitutor.applyToScriptStep(step, scriptVars)
         : step;
     const stepLabel = step.name ?? effectiveStep.script.split(/\s+/)[0];
-    const resolvedScriptHarness = PropertyResolver.resolveHarnessValue(
+    const resolvedScriptHarness = SettingsPropertyResolver.resolveHarnessValue(
       undefined,
       this.promptQueue.getWorkflowFile().harness
     );
@@ -2969,7 +2969,7 @@ export class WorkflowExecutor {
       const timestampMs = Date.now();
 
       // ─── Interactive mode: run inside a PTY so the user can provide input ────
-      const resolvedExecutionMode = PropertyResolver.resolveExecutionMode(
+      const resolvedExecutionMode = SettingsPropertyResolver.resolveExecutionMode(
         step,
         this.promptQueue.getWorkflowFile(),
         { hostCanProvidePty: context.hostCanProvidePty }
@@ -4898,7 +4898,7 @@ export class WorkflowExecutor {
     ): Promise<{ attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
-      let resolvedProperties = PropertyResolver.resolve(
+      let resolvedProperties = SettingsPropertyResolver.resolve(
         retryPromptStep,
         workflowFile,
         { hostCanProvidePty: context.hostCanProvidePty }
@@ -5427,7 +5427,7 @@ export class WorkflowExecutor {
       return "next target: script";
     }
 
-    let resolvedProperties = PropertyResolver.resolve(nextStep, workflowFile, {
+    let resolvedProperties = SettingsPropertyResolver.resolve(nextStep, workflowFile, {
       hostCanProvidePty: context.hostCanProvidePty,
     });
     const vars = workflowFile.vars;
@@ -5622,25 +5622,6 @@ export class WorkflowExecutor {
         await this.promptQueue.cancelStep(target.stepIndex);
       }
 
-      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
-    }
-
-    if (integration.wasLastFailureUserCancellation()) {
-      const failureReason = integration.getLastFailureReason();
-      runtime.cancelAttempt(target, attemptIndex, failureReason);
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        await this.promptQueue.cancelStep(target.stepIndex);
-      }
-      await context.outputHistoryManager?.recordAttemptTerminal?.(
-        context.historyFilePath,
-        this.toOutputExecutionTarget(target),
-        runIndex,
-        attemptIndex,
-        "cancelled",
-        context.getDefinitionRevisionContext?.(),
-        failureReason,
-        resolvedProperties?.harness
-      );
       return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
     }
 

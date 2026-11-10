@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import { HarnessSettingsJsonStore } from "../../core/harness/shared/HarnessSettingsJsonStore";
 import { StatuslineManager } from "../../core/harness/shared/StatuslineManager";
 import {
   resetStatuslineLauncherCache,
@@ -64,7 +64,7 @@ suite("StatuslineManager", () => {
   });
 
   teardown(async () => {
-    SettingsJsonMcpTracker.resetAll();
+    HarnessSettingsJsonStore.resetAll();
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
     if (originalUserProfile === undefined) delete process.env.USERPROFILE;

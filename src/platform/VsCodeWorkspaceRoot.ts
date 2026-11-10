@@ -81,7 +81,7 @@ export function getVsCodeFileAccessWorkspaceRoot(): string | undefined {
 /**
  * Returns true when more than one folder is open in the current VS Code
  * window (a multi-root `.code-workspace`). CLI code must never call this —
- * `CliAdapter` always represents a single root, so nothing calls it there.
+ * `NodePlatformAdapter` always represents a single root, so nothing calls it there.
  */
 export function isMultiRootWorkspace(): boolean {
   return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;

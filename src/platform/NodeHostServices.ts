@@ -7,7 +7,7 @@ import {
   RUNNER_IDS,
   WORKSPACE_FILE_CHANGE_KINDS,
 } from "../types/DashboardConstants";
-import { CliAdapter, type ResolvedCliConfig } from "./CliAdapter";
+import { NodePlatformAdapter, type ResolvedCliConfig } from "./NodePlatformAdapter";
 import { NodeFileWatcherFactory } from "./NodeFileWatcher";
 import { FileKeyValueStore } from "./FileKeyValueStore";
 import { NodeDashboardHostActions } from "./NodeDashboardHostActions";
@@ -61,7 +61,7 @@ export interface NodeHostServices {
   cwd: string;
   hub: DashboardBroadcastHub;
   setDashboardHub(hub: DashboardBroadcastHub): void;
-  platform: CliAdapter;
+  platform: NodePlatformAdapter;
   fileWatcherFactory: NodeFileWatcherFactory;
   workspaceState: FileKeyValueStore;
   userFeedbackSink: CompositeUserFeedbackSink;
@@ -111,7 +111,7 @@ export async function createNodeHostServices(options: {
     cliExecutionMode: options.mode,
     interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
   };
-  const platform = new CliAdapter(config, secretStore);
+  const platform = new NodePlatformAdapter(config, secretStore);
   const licenseService = new LicenseService(secretStore);
   disposables.push(licenseService);
   void licenseService.refresh();
@@ -299,7 +299,7 @@ export async function createNodeHostedServer(options: {
     getDevStatus: async () => undefined,
     notifyActiveWorkflowChanged: () => undefined,
   });
-  // The server's CliAdapter selects the embedded-PTY terminal mode, so
+  // The server's NodePlatformAdapter selects the embedded-PTY terminal mode, so
   // interactive steps need this manager exactly as they do in VS Code.
   const ptyManager = initPtyProcessManager(
     (message) => hub.postMessage(message),

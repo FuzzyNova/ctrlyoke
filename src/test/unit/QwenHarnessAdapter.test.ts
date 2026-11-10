@@ -11,7 +11,7 @@ import type {
   PromptStep,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
 
 async function createTempWorkspace(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-qwen-provider-"));

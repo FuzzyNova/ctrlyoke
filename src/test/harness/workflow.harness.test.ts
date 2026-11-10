@@ -25,7 +25,7 @@
  * global session/project database (~/.local/share/opencode/opencode.db) and
  * reattaches to a recently-active project instead of strictly scoping to the
  * spawn's cwd, so it operates against the real repo instead of each test's
- * isolated tmp dir. ctrlyoke's own cwd propagation (cli.ts -> CliAdapter ->
+ * isolated tmp dir. ctrlyoke's own cwd propagation (cli.ts -> NodePlatformAdapter ->
  * CliIntegration -> CliTransportCoordinator -> CliProcessManager.spawn) was
  * verified correct; the issue is on OpenCode's side. Revisit once that's
  * resolved or a documented way to force project scoping is found.

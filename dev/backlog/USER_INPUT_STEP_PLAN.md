@@ -37,7 +37,7 @@ No existing backlog doc covers this — `dev/backlog/` was searched and nothing 
 
 `ScriptStep` (schema: `$defs/scriptStep` in `schemas/workflow-schema.json`) has an
 `executionMode` field. When resolved to `interactive` (step → workflow → global setting;
-see `PropertyResolver.resolveExecutionMode`), `WorkflowExecutor.executeScriptStep`
+see `SettingsPropertyResolver.resolveExecutionMode`), `WorkflowExecutor.executeScriptStep`
 (`src/core/WorkflowExecutor.ts`, ~line 2641) does **not** run the script through
 `ScriptProcessRunner`/`CliProcessManager` at all — it calls `context.spawnScriptPty(...)`
 instead, which spawns the command inside a real PTY (`PtyProcessManager`) wired to an
@@ -70,7 +70,7 @@ end. What's missing is polish and reach, covered next.
   which is why an interactive script step works fine from a browser tab in practice.
   `WorkflowOrchestrator.buildWorkflowInstance()` (which delegates to
   `WorkflowInstanceRegistry.buildWorkflowInstanceForHost()`) never sets it to `false`;
-  `PropertyResolver.createContext` defaults `hostCanProvidePty` to `true`, and
+  `SettingsPropertyResolver.createContext` defaults `hostCanProvidePty` to `true`, and
   `ExecutionPreviewService` is constructed with `hostCanProvidePty: true`, with no
   `isStandalone` branch anywhere in the real execution path. (The client-side
   `useCompatibilityDiagnostics.ts` preview also hard-codes `hostCanProvidePty: true` now —

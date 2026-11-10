@@ -7,7 +7,7 @@ import {
   type SecretStore,
 } from "../../platform/SecretStore";
 import { userSecretKey, userSecretMetadataKey } from "../../platform/SecretKey";
-import { CliAdapter } from "../../platform/CliAdapter";
+import { NodePlatformAdapter } from "../../platform/NodePlatformAdapter";
 import { NodeSecretStore } from "../../platform/NodeSecretStore";
 import { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import { EXECUTION_MODES } from "../../types/DashboardConstants";
@@ -141,7 +141,7 @@ suite("ManagedSecretMigration", () => {
       { extensionPath: "" } as never,
       extensionStore
     );
-    const cli = new CliAdapter({
+    const cli = new NodePlatformAdapter({
       cwd: "C:/workspace",
       verbose: false,
       quiet: false,

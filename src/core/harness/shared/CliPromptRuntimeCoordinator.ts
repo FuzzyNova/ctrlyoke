@@ -2,7 +2,7 @@ import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { FailureKind, HarnessId } from "../../../types/DashboardConstants";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
-import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { Log } from "../../../utils/Log";
 
 export interface CliPromptRuntimeCoordinatorDeps {

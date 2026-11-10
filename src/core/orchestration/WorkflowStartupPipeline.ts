@@ -39,7 +39,7 @@ import type { WorkspaceWorktreeResolution } from "../../utils/WorktreeResolution
 import { resolveWorktreeForWorkspace } from "../../utils/WorktreeResolution";
 import { preflightWorkflowSecrets } from "../../utils/SecretResolver";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { PropertyResolver } from "../../utils/PropertyResolver";
+import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import { Log } from "../../utils/Log";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
@@ -682,7 +682,7 @@ export class WorkflowStartupPipeline {
     fileName: string
   ): Promise<boolean> {
     const currentPromptFile = this.port.execution.currentPromptFile();
-    const preflightHarness = PropertyResolver.resolveHarnessValue(
+    const preflightHarness = SettingsPropertyResolver.resolveHarnessValue(
       modeOverride,
       currentPromptFile?.promptFile?.harness
     );
@@ -803,7 +803,7 @@ export class WorkflowStartupPipeline {
     const totalSteps = currentQueueState.steps.length;
     const currentStep = currentQueueState.steps[currentQueueState.currentIndex];
     const executionMode = currentStep
-      ? PropertyResolver.resolveExecutionMode(
+      ? SettingsPropertyResolver.resolveExecutionMode(
           currentStep,
           this.port.queue.getWorkflowFile(),
           { hostCanProvidePty: this.port.hostCanProvidePty }
@@ -1163,7 +1163,7 @@ export class WorkflowStartupPipeline {
         );
       })
       .map((step) => ({
-        harnessId: PropertyResolver.resolveHarnessValue(
+        harnessId: SettingsPropertyResolver.resolveHarnessValue(
           step.harness,
           modeOverride ?? workflow.harness
         ),
@@ -1181,7 +1181,7 @@ export class WorkflowStartupPipeline {
           finalStepRuntime.status !== STEP_STATUS.SKIPPED));
     if (finalStepStillQueued && finalStep) {
       queuedAttempts.push({
-        harnessId: PropertyResolver.resolveHarnessValue(
+        harnessId: SettingsPropertyResolver.resolveHarnessValue(
           finalStep.harness,
           modeOverride ?? workflow.harness
         ),
