@@ -1,4 +1,5 @@
 import * as path from "path";
+import { resolvedPathKey } from "../../utils/PathCasing";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import { Log } from "../../utils/Log";
@@ -29,6 +30,7 @@ import {
   isCommitAncestor,
   localBranchExists,
   validateBranchName,
+  normalizeBranchName,
   type GitLocationLookup,
   type GitWorkingTreeCounts,
   type GitWorktreeEntry,
@@ -509,12 +511,6 @@ interface ResolvedRepositoryInputs {
   executionRoot: string;
 }
 
-function normalizeBranchName(branchName: string): string {
-  return branchName.startsWith("refs/heads/")
-    ? branchName.slice("refs/heads/".length)
-    : branchName;
-}
-
 /**
  * Build the deterministic, non-AI commit message used to land a managed
  * worktree's changes (see `WORKTREE_SUPPORT_PLAN.md` "Finalization order").
@@ -542,8 +538,7 @@ function dedupePaths(paths: readonly string[]): string[] {
   const result: string[] = [];
   for (const value of paths) {
     const resolved = path.resolve(value);
-    const key =
-      process.platform === "win32" ? resolved.toLowerCase() : resolved;
+    const key = resolvedPathKey(value);
     if (!seen.has(key)) {
       seen.add(key);
       result.push(resolved);

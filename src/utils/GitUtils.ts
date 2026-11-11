@@ -2,6 +2,7 @@ import { execFile, spawn, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { realpathOrResolved } from "./PathSecurity";
 import { StringDecoder } from "string_decoder";
 import type { ExecFileOptions } from "child_process";
 import {
@@ -1828,11 +1829,7 @@ export async function gitCommonDir(dir: string): Promise<string | null> {
     const resolved = path.isAbsolute(result)
       ? result
       : path.resolve(dir, result);
-    try {
-      return path.normalize(await fs.realpath(resolved));
-    } catch {
-      return path.normalize(resolved);
-    }
+    return await realpathOrResolved(resolved);
   } catch {
     return null;
   }
@@ -1991,9 +1988,7 @@ export function parseGitWorktreePorcelain(output: string): GitWorktreeEntry[] {
         headCommit = field.slice("HEAD ".length);
       } else if (field.startsWith("branch ")) {
         const ref = field.slice("branch ".length);
-        branchName = ref.startsWith("refs/heads/")
-          ? ref.slice("refs/heads/".length)
-          : ref;
+        branchName = normalizeBranchName(ref);
       } else if (field === "detached") {
         detached = true;
       } else if (field === "bare") {
@@ -2065,7 +2060,7 @@ export interface AddWorktreeOptions {
   detached?: boolean;
 }
 
-function normalizeBranchName(branchName: string): string {
+export function normalizeBranchName(branchName: string): string {
   return branchName.startsWith("refs/heads/")
     ? branchName.slice("refs/heads/".length)
     : branchName;

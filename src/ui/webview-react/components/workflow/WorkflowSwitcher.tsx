@@ -10,6 +10,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore, type RecentWorkflow } from "../../store/uiStore";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { effectiveWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
@@ -27,7 +28,6 @@ import {
   WORKFLOW_DROPDOWN_VIEWS,
   WORKFLOW_ROW_KINDS,
   WORKFLOW_ROW_TIERS,
-  WORKTREE_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_DELETE_SCOPES,
   RUN_SUMMARY_CACHE_STATUSES,
@@ -182,24 +182,14 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const closeFullscreenDrawers = useUiStore((s) => s.closeFullscreenDrawers);
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
-  const effectiveWorktree = useMemo(() => {
-    const authored = workflowProperties.worktree;
-    if (authored === false) return false;
-    if (authored === true) return { mode: WORKTREE_MODES.MANAGED };
-    if (authored === undefined) {
-      const configured = globalSettings.worktree ?? false;
-      if (configured === false) return false;
-      if (configured === true) return { mode: WORKTREE_MODES.MANAGED };
-      if (typeof configured === "string") {
-        return { mode: WORKTREE_MODES.NAMED, branch: configured };
-      }
-      return configured;
-    }
-    if (typeof authored === "string") {
-      return { mode: WORKTREE_MODES.NAMED, branch: authored };
-    }
-    return authored;
-  }, [globalSettings.worktree, workflowProperties.worktree]);
+  const effectiveWorktree = useMemo(
+    () =>
+      effectiveWorktreeObjectConfig(
+        workflowProperties.worktree,
+        globalSettings.worktree
+      ),
+    [globalSettings.worktree, workflowProperties.worktree]
+  );
   const worktreeIndicator = useMemo(() => {
     if (effectiveWorktree === false) {
       return undefined;

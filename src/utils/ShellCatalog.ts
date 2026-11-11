@@ -33,7 +33,14 @@ export function shellDisplayName(shellPath: string): string {
  * to pick the appropriate terminal icon.
  */
 export function resolveShellKind(shellPath: string): ShellKind {
-  const name = shellDisplayName(shellPath).toLowerCase();
+  return (
+    shellKindForName(shellDisplayName(shellPath).toLowerCase()) ??
+    SHELL_KINDS.BASH
+  );
+}
+
+/** Map an already-normalized lowercase shell name to its kind, if recognized. */
+export function shellKindForName(name: string): ShellKind | undefined {
   if (/^pwsh([.-]|$)/.test(name)) return SHELL_KINDS.PWSH;
   if (name.startsWith("powershell")) return SHELL_KINDS.POWERSHELL;
   if (name === SHELL_TYPES.ZSH) return SHELL_KINDS.ZSH;
@@ -52,7 +59,7 @@ export function resolveShellKind(shellPath: string): ShellKind {
     return SHELL_KINDS.SH;
   }
   if (name.endsWith("sh")) return SHELL_KINDS.SH;
-  return SHELL_KINDS.BASH;
+  return undefined;
 }
 
 const ALL_UI_PLATFORMS: readonly UiPlatform[] = [

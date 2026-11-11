@@ -19,14 +19,6 @@ const OUTPUT_TOOL_NAMES = {
   SEARCH: "search",
 } as const;
 export { formatTime } from "./time";
-export {
-  type DiffLine,
-  generateDiffLines,
-  normalizeStructuredPatch,
-  isStructuredPatchMalformed,
-  countStructuredPatchDisplayLines,
-} from "./diffUtils";
-
 /**
  * Returns the first `count` whitespace-delimited words of `text`, appending
  * "..." when the source has more words than the limit.

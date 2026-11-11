@@ -10,6 +10,7 @@ import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { foldPathForCompare } from "../../utils/PathCasing";
 import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
 import { hasErrnoCode } from "../../utils/ErrorUtils";
+import { realpathOrResolved } from "../../utils/PathSecurity";
 
 /** The canonical identity used by all execution-root-scoped storage. */
 export interface ExecutionRootScope {
@@ -36,21 +37,12 @@ export const SCOPE_STORAGE_CATEGORIES = {
 export type ScopeStorageCategory =
   (typeof SCOPE_STORAGE_CATEGORIES)[keyof typeof SCOPE_STORAGE_CATEGORIES];
 
-async function readJson<T>(filePath: string): Promise<T | null> {
+export async function readJson<T>(filePath: string): Promise<T | null> {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
   } catch (error) {
     if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return null;
     throw error;
-  }
-}
-
-async function canonicalPath(value: string): Promise<string> {
-  const resolved = path.resolve(value);
-  try {
-    return path.normalize(await fs.realpath(resolved));
-  } catch {
-    return path.normalize(resolved);
   }
 }
 
@@ -65,10 +57,10 @@ export async function resolveExecutionRootScope(
   executionRoot: string,
   git: GitLocationLookup = liveGitLocations
 ): Promise<ExecutionRootScope> {
-  const canonicalExecutionRoot = await canonicalPath(executionRoot);
+  const canonicalExecutionRoot = await realpathOrResolved(executionRoot);
   const worktreeGitDir = await absoluteGitDir(canonicalExecutionRoot);
   const identity = foldPathForCompare(
-    await canonicalPath(worktreeGitDir ?? canonicalExecutionRoot)
+    await realpathOrResolved(worktreeGitDir ?? canonicalExecutionRoot)
   );
   const commonDir = worktreeGitDir
     ? await git.gitCommonDir(canonicalExecutionRoot)
@@ -86,7 +78,7 @@ export async function resolveExecutionRootScope(
       .update(identity, "utf8")
       .digest("hex"),
     executionRoot: canonicalExecutionRoot,
-    ...(commonDir ? { gitCommonDir: await canonicalPath(commonDir) } : {}),
+    ...(commonDir ? { gitCommonDir: await realpathOrResolved(commonDir) } : {}),
   };
 }
 
@@ -199,7 +191,7 @@ export async function sweepOrphanedScopeStorage(
 ): Promise<string[]> {
   const commonDir = await git.gitCommonDir(executionRoot).catch(() => null);
   if (!commonDir) return [];
-  const canonicalCommonDir = await canonicalPath(commonDir);
+  const canonicalCommonDir = await realpathOrResolved(commonDir);
   const worktreeAdminRoot = foldPathForCompare(
     path.join(canonicalCommonDir, "worktrees")
   );

@@ -80,7 +80,6 @@ import type {
   WorkflowDefinitionMutation,
   WorkflowViewIdentityMessage,
   ExecutionPreviewScope,
-  TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
@@ -120,6 +119,7 @@ import { HarnessUsageService } from "./harness/shared/usage/HarnessUsageService"
 import { WorkspaceStatsService } from "./harness/shared/usage/WorkspaceStatsService";
 import type { WorkspaceStatsSnapshot } from "../types/UsageTypes";
 import {
+  buildTerminalStartedMessage,
   claimTerminalsOnReplay,
   getPtyProcessManager,
   setPtyPostMessage,
@@ -1163,18 +1163,7 @@ export class WorkflowOrchestrator {
           `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +
           `reconnectBuffer=${session.reconnectBuffer.length} chunks`
       );
-      const terminalStartedMessage: TerminalStartedMessage = {
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
-        workflowId: session.workflowId,
-        sessionId: session.id,
-        stepName: session.stepName,
-        stepIndex: session.stepIndex,
-        kind: session.kind,
-        promptNumber: session.promptNumber,
-        harnessId: session.harnessId,
-        parallelGroupId: session.parallelGroupId,
-        controllerClientId: session.controllerClientId,
-      };
+      const terminalStartedMessage = buildTerminalStartedMessage(session);
       send(terminalStartedMessage);
       // Immediately follow with current PTY dimensions so viewers can match
       // the controller's width without waiting for the next resize event.

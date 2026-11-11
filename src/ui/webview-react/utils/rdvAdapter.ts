@@ -11,8 +11,9 @@ import { getCollapsedLinesCountBetween, parseDiff } from "react-diff-view";
 import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
 import {
   getStructuredPatchDiffLines,
+  isDisplayableDiffLine,
   normalizeStructuredPatch,
-} from "./diffUtils";
+} from "@root/utils/DiffLines";
 import {
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,
@@ -387,15 +388,6 @@ function getDefaultGapExpansionPlanState(): DiffGapExpansionPlanState {
   };
 }
 
-function isDisplayableLine(line: string): boolean {
-  return !(
-    line === "\\ No newline at end of file" ||
-    line.startsWith("@@ ") ||
-    line.startsWith("diff --git ") ||
-    line.startsWith("index ")
-  );
-}
-
 export function toRdvHunks(hunks: UnifiedDiffHunk[]): HunkData[] {
   const normalized = normalizeStructuredPatch(hunks);
   return normalized.map((hunk): HunkData => {
@@ -404,7 +396,7 @@ export function toRdvHunks(hunks: UnifiedDiffHunk[]): HunkData[] {
     let newLineNumber = hunk.newStart;
 
     for (const line of hunk.lines) {
-      if (!isDisplayableLine(line)) continue;
+      if (!isDisplayableDiffLine(line)) continue;
       const prefix = line[0];
       const content = line.slice(1);
 

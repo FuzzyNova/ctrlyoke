@@ -43,6 +43,20 @@ export function truncateSnippet(snippet: string, maxLength = 80): string {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
 }
 
+/** Normalize whitespace, then truncate with a three-dot suffix when needed. */
+export function truncateNormalized(text: string, maxLength: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+/** Format a count with a regular English plural suffix. */
+export function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 /**
  * A search's result count, e.g. "1 result", "1,234 results". A count that is
  * only a lower bound (a scan that has not finished, or stopped at a cap) is

@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { resolvedPathKey } from "../../utils/PathCasing";
 import { spawnSync } from "child_process";
 import { suite, test } from "mocha";
 
@@ -64,8 +65,7 @@ function expectedProjectKey(stateRoot: string): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 48)
       .replace(/-+$/g, "") || "project";
-  const folded =
-    process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  const folded = resolvedPathKey(stateRoot);
   return `${slug}-${createHash("sha256").update(folded).digest("hex").slice(0, 12)}`;
 }
 

@@ -49,11 +49,17 @@ export function foldPathForCompare(
   return isWindows(platform) ? value.toLowerCase() : value;
 }
 
+/**
+ * Resolve and fold a path into a lookup or identity key. Never show this value
+ * to users or hand it to a process; folding discards the original casing.
+ */
+export function resolvedPathKey(value: string): string {
+  return foldPathForCompare(path.resolve(value));
+}
+
 /** Hash a resolved path using the filesystem's path comparison semantics. */
 export function hashPathForCompare(value: string): string {
-  return createHash("sha256")
-    .update(foldPathForCompare(path.resolve(value)))
-    .digest("hex");
+  return createHash("sha256").update(resolvedPathKey(value)).digest("hex");
 }
 
 /**

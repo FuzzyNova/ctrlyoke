@@ -168,6 +168,190 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     (`src/core/harness/shared/AskUserQuestionPreview.ts`), the first piece of the shared
     ask-user-question parser.
 
+- **2026-11-10, pass 7** (new workflow run, so no steps to review). Hunted the
+  pass-6 candidate list. `lstatIfExists` is already single-sourced in
+  `ProjectStateInspection.ts`. Queued two steps:
+  - `truncateUtf8` in `CliPromptPreparer` and `CommitMessageGenerator`. The copies
+    have drifted: the commit-message copy keeps a stray U+FFFD when the cut lands
+    inside a 4-byte character.
+    Landed as shared Node-only `src/utils/Utf8Truncate.ts`; the commit-message bug is filed and fixed.
+  - Five identical private helper pairs: `normalizeBranchName`,
+    `mapWithConcurrency`, `symbolKey`, `matchesPrefix`, and the
+    `ExecutionRootScope`/`ExecutionRootLeaseManager` `readJson`. These five helper pairs
+    landed as shared exports/utilities with focused coverage for `mapWithConcurrency` and
+    `matchesPrefix`.
+
+  Still open for a later pass: `flattenSteps` vs `flatStepCount` on non-object
+  members (check what the loader does first); win32-only `toLowerCase()` path keys
+  beside `PathCasing`; the CLI terminal fallback assuming queue output targets.
+
+- **2026-11-10, pass 8**: reviewed pass 7's two refactors. Both preserve behavior,
+  and `npm test` passes. The shared `truncateUtf8` changes output only in the two
+  cases the bug fix intended: it no longer keeps a stray U+FFFD, and it keeps a
+  genuine trailing U+FFFD. Cleaned up: an orphaned `truncateUtf8` doc comment at the
+  end of `CliPromptPreparer.ts`, and `GitUtils.parseWorktreeList` re-inlining
+  `normalizeBranchName`. Queued three steps:
+  - Terminal step-status membership. `PROMPT_TERMINAL_STATUS` has five statuses,
+    but both undo/redo copies (`UndoRedoControl.tsx`, `useUndoRedoKeyHandler.ts`) and
+    `WorkflowStepsPanel.tsx` predate `NO_TURN_STARTED` and miss it. Fixed with the
+    shared `isTerminalStepStatus` guard and regression tests.
+  - Win32 `resolve` + `toLowerCase()` path keys beside `PathCasing` (nine sites). The
+    Codex admin-dir check also skips the fold.
+    Landed as the shared `resolvedPathKey` helper; Codex equality checks use `pathsEqual`.
+  - Identical private copies of `ensurePrivateDirectory` and `isStringArray`.
+    Landed as shared utilities in `PrivateFileModes.ts` and `JsonTypeGuards.ts`, with focused coverage.
+
+- **2026-11-10, pass 9**: reviewed pass 8's three refactors. All preserve behavior, and
+  `npm test` passes. The only output changes are the intended ones:
+  `WorkflowStepsPanel` now treats `NO_TURN_STARTED` as terminal (filed bug), and on
+  win32 the Codex admin-dir dedupe now case-folds through `pathsEqual`.
+  Cleaned up:
+  - `useStepStatus` had re-inlined the terminal-status switch; it now uses
+    `isTerminalStepStatus`.
+  - The private `isObject` copies of `isRecord` in `PromptFileParser.ts` and
+    `HarnessLspExporter.ts` now import it.
+  - The `ensurePrivateDirectory` test moved out of `JsonTypeGuards.test.ts` into
+    `PrivateFileModes.test.ts`.
+
+  Queued two steps:
+  - Async realpath fallbacks: `realpathOrUndefined` (×2), `ExecutionRootScope.canonicalPath`,
+    and `GitUtils.gitCommonDir`'s inline copy, to go into `PathSecurity.ts` beside
+    `realpathOrSelf`.
+  - Webview text helpers: whitespace-normalizing `truncate` in `FinalStepFooter.tsx`
+    and `WorkflowStepItem.tsx`, and the identical `plural`/`pluralize` in
+    `worktreeStatus.ts` and `AskUserQuestionOutput.tsx`, to go into `utils/string.ts`.
+
+  Landed async realpath fallbacks in `PathSecurity.ts` with focused tests.
+  Landed the webview text helpers in `utils/string.ts` with focused coverage.
+
+- **2026-11-10, pass 10**: reviewed pass 9's two refactors. Both preserve behavior,
+  and `npm test` passes. `WorkflowBundleAnalyzer`'s old copy wrapped `fs.realpath` in
+  `path.resolve`, a no-op on realpath's absolute output; `WorkflowStepItem`'s old
+  `!text` guard is covered by its `text &&` call site. Hunted with a whole-`src/`
+  scan for byte-identical function bodies. Fixed directly:
+  - Private `toFiniteNumber` (`AntigravityStatuslineSidecar.ts`) and `isJsonObject`
+    (`HarnessSettingsJsonStore.ts`) now import `finiteNumber`/`isRecord`.
+  - `OutputMinimap.tsx` re-declared `getResizeObserverEntryHeight` from
+    `utils/outputDom.ts`; `useOutputMinimapModel.ts` re-declared `getStepName` from
+    `utils/outputRows.ts`; `rdvAdapter.ts` re-declared `isDisplayableDiffLine` from
+    `utils/diffUtils.ts`. All now import the original.
+  - `DryRunModal.tsx` and `executionPreviewStore.ts` had the same `sameScope`; the
+    modal imports the store's and keeps its null check at the call site.
+
+  Queued two steps:
+  - Usage-store leaf helpers: `numeric`, `stableCostSources`, the empty
+    `LifetimeUsageStoreData` builders (`LifetimeUsageStore`/`WorkspaceStatsService`)
+    and the local-day key (`HarnessUsageService`/`ObservedHarnessUsageStore`).
+  - CLI diff lines: `CliTerminalFormatter`'s private `DIFF_LINE_TYPES`,
+    `parseUnifiedDiff` and `generateDiffLines` drifted from the dashboard's
+    `diffUtils.ts`. The CLI skips the metadata-line filter, patch normalization and
+    CRLF normalization (bug to file).
+  - Ruled out the inline day-key copies in `src/utils/StatuslineFormat.ts` and
+    `src/core/orchestration/WorkflowTokenTotalsReducer.ts`: the former is standalone,
+    while the latter pads years to four digits and differs below year 1000.
+  - Landed shared usage-store helpers in `UsageContributionValues.ts`,
+    `UsageTimestampUtils.ts` and `LifetimeUsageStore.ts`, with focused coverage.
+  - Landed shared CLI/dashboard diff-line helpers in `utils/DiffLines.ts`, fixing CLI metadata, duplicate hunks and mixed line endings.
+
+- **2026-11-10, pass 11**: reviewed pass 10's two refactors. Both preserve behavior
+  and `npm test` passes. The usage-store copies were byte-identical; the CLI diff
+  changes are the filed bug's three intended fixes. Cleaned up: `LifetimeUsageStore`
+  exported `emptyLifetimeContribution`/`emptyLifetimeOutcomes` with no outside
+  consumer (now private again). Hunted by same-named private functions across
+  `src/`, focusing on the dashboard settings pages and workspace viewer. Fixed
+  directly: identical private `isStringRecord` in `HarnessFileManager.ts` and
+  `McpRegistryFileManager.ts` now lives in `JsonTypeGuards.ts`; `PromptFileParser`
+  compared against a raw `"worktree"` instead of `PROMPT_PROPERTIES.WORKTREE`.
+  Landed shared setting write-scope labels and replaced repeated dashboard labels and scope literals.
+  Landed shared MCP server detail rows and summaries, reused the shared scope badge and path formatter.
+  Queued four steps:
+  - Dashboard `@` references: the workspace explorer/editor context menus quote only
+    on spaces instead of using `ContextReferenceBuilder` (colon paths break; bug to
+    file); snapshot/paste insertions don't quote at all.
+  - Worktree config normalization: `worktreeObjectConfig` ×2, an inline copy in
+    `WorkflowPropertiesPanel`, and `WorkflowSwitcher` re-implementing the store's
+    `getEffectiveWorktree`.
+  - Landed shared `toWorktreeObjectConfig` normalization with focused helper and store coverage.
+  - Setting-scope labels: "Workspace"/"User" retyped in about seven dashboard files,
+    plus raw `"workspace"`/`"user"` literals in `AgentSkillsManagerSection` and
+    `ManagerExportGroups`.
+  - MCP server detail rows: `ServerDetails` rows and `getServerSummary` (drifted
+    fallback) copied between `McpManagerSection` and `McpServersEditor`, a private
+    `ScopeBadge` copy, and `formatPathForDisplay` ×2.
+  - Landed shared `ContextReferenceBuilder` formatting across dashboard and native
+    output/paste references; colon paths and top-level filenames now stay parseable.
+    The explorer's path normalization makes the builder's slash normalization a
+    no-op; the editor hook now benefits from the same normalization. Directory
+    formatting matches except for inputs with multiple trailing slashes, which the
+    shared builder collapses. Capture and paste handlers now return raw workspace-
+    relative paths for their callers to format once.
+
+- **2026-11-10, pass 12**: reviewed pass 11's four commits (`@`-reference quoting,
+  worktree normalization, scope labels, MCP detail rows). All preserve behavior apart
+  from the filed quoting fix. The MCP manager's summary for a server with `args` but no
+  `command` is now empty instead of a leading-space args list, which doesn't matter.
+  Cleaned up:
+  - `WorktreeResolution.ts` still had a core-side copy of the shorthand → object
+    normalization, with raw `"authored"`/`"default"` origins. It now uses
+    `toWorktreeObjectConfig` and `WORKTREE_CONFIG_ORIGINS`. The named-branch check
+    still applies only to an explicit object default.
+  - `workspaceViewerStore.ts` and `useWorkspaceExplorerContextMenu.tsx` had private
+    copies of `pagedListing.normalizePagedPath`.
+  - `WorkflowExecutor` and `CliIntegration` had the same strict context-resolution
+    guard. It now lives in `src/utils/ContextResolutionPolicy.ts`.
+
+  Hunted with a scan for repeated 8-line windows across `src/`. Queued two steps:
+  - Dead `getMcpConfigArgs` in all six harness adapters plus the optional
+    `IHarnessAdapter` member. Production calls only `planMcpConfigArgs`. The six
+    copies had drifted on when they return `null`. Only Qwen/OpenCode tests call it.
+    Landed: removed the wrapper and migrated its tests to apply planned mutations.
+  - `TerminalStartedMessage` hand-built from a live `PtySession` in six places. The
+    orchestrator's replay copy drops `shellKind` (filed:
+    `dev/bugs/backlog/terminal-replay-drops-shell-kind.md`).
+    Landed: added `buildTerminalStartedMessage` in `PtyProcessManager` and routed
+    all six existing-session copies through it; replay now preserves `shellKind`.
+
+  Still open for a later pass: `WorkspaceViewerHeader.getWorkspaceFilePath` vs
+  `fileBrowserShared.toWorkspaceRelative` (they differ on a path equal to the root and on
+  leading slashes); `PromptPropertiesDrawer`/`WorkflowPropertiesPanel` permission
+  diagnostics filter; `WorkflowStepsPanel`/`StepChipRail` final-step output text.
+
+- **2026-11-10, pass 13**: reviewed pass 12's two refactors. Removing `getMcpConfigArgs`
+  left no references, and its tests now call `planMcpConfigArgs` and then apply the
+  mutations. `buildTerminalStartedMessage` matches every copy it replaced. The
+  coordinator copy read step metadata from `metadata`, but the session fields are
+  assigned from it just before. The shell spawn/restart copies hardcoded
+  `kind: SHELL` and took `workflowId` from the message, but the session holds the same
+  values. Shell messages now also carry the session's `promptNumber`/`harnessId`/
+  `parallelGroupId`, which are undefined for a shell. Nothing to fix.
+
+  Hunted the dashboard and the core/webview seam (repeated 8-line window scan) and
+  picked up all three items pass 12 left open. Queued four steps:
+  - `terminalPresentation.inferShellKind` copies `ShellCatalog.resolveShellKind`'s
+    name → `ShellKind` ladder, even though `ShellCatalog` is kept pure so the webview
+    can import it. The two differ only in the fallback (`undefined` vs bash) and in
+    name normalization (trim vs strip-directory).
+    Landed: extracted `shellKindForName`; core and webview keep their existing
+    normalization and fallback behavior.
+  - Context-menu `outputText`: four sites (`WorkflowStepRow`, `StepChipRail` ×2,
+    `WorkflowStepsPanel`) compute `getStepAssistantTextForCopy(latestOutput)` and pass
+    it next to `latestOutput` through `StepContextMenuRequest`, `OpenContextMenuParams`,
+    `useFinalStepContextMenu` and `StepCopyMenuItemsInput`. `buildStepCopyMenuItems`
+    can derive it itself.
+    Landed: `buildStepCopyMenuItems` derives Copy Response text from `latestOutput`;
+    removed the duplicate parameter and covered missing, empty, and copied output.
+  - The permission-diagnostics filter (mode/allowedTools/deniedTools) is written out in
+    `StepEditor`, `PromptPropertiesDrawer` and `WorkflowPropertiesPanel`, next to the
+    sibling `diagnosticsFor*` helpers in `utils/compatibilityDiagnostics.ts`.
+    Landed: the three editors use `diagnosticsForPermissions`; focused coverage verifies
+    all permission capabilities, exclusion, and input order.
+  - `WorkspaceViewerHeader.getWorkspaceFilePath` re-implements
+    `fileBrowserShared.toWorkspaceRelative`, plus a leading-slash strip.
+    Landed: the header now uses `toWorkspaceRelative` before its leading-slash strip
+    and workspace-name prefix. Characterization covers drive-case differences,
+    outside-root absolute paths, relative paths, and absent workspace names; a path
+    equal to the root is unreachable because the header only titles files.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -371,3 +555,61 @@ still deferred.
   caller normalizes paths first, and the cached store copies before mutating. A
   composed helper would save about 10 lines; the shared file I/O already landed in
   pass 6. (2026-11-09)
+
+- `flattenSteps` (`WorkflowFileCompletionCore.ts`) vs `flatStepCount`
+  (`WorkflowPromptDiagnostics.ts`). They disagree only when a `steps` entry is not an
+  object, and the schema diagnostic already rejects that document. Step numbers in
+  an invalid file don't need to agree.
+- `CliTerminalFormatter.targetKey`'s `queueTargetKey` fallback. Every producer of
+  `CliOutputTarget` sets `key` through `outputTargetKey`, so the fallback only covers
+  the target-less default.
+- Same-named private helpers that differ in meaning:
+  - `pathExists`: `access`, `lstat` and `stat` each treat symlinks and permissions
+    differently.
+  - `toPortablePath`: `path.sep` split vs backslash replace, which differ on POSIX.
+  - `countLines`: empty-text and trailing-newline rules differ.
+  - `escapeHtml`: text-only vs attribute-safe.
+  - `parseVersion`: the Codex quota probe accepts a `v` prefix, unlike `HarnessVersion`.
+  - `safeErrorCode` in the usage collectors.
+- `formatUnknownError` in `src/ui/webview-react/scripts/bootstrapScript.ts` and
+  `moduleLoaderScript.ts`: standalone inline bootstrap scripts that must load before
+  any module.
+- `FileSecretStore`'s directory creation: it sets the mode only on mkdir and never
+  chmods an existing directory, unlike `ensurePrivateDirectory`.
+- `sanitizeQwenProjectPath`'s win32 lowercase: it mirrors Qwen's own `sanitizeCwd`
+  naming, not ctrlyoke's comparison rule.
+- Inline `` `${n} noun${n === 1 ? "" : "s"}` `` expressions (about 40 sites across CLI,
+  core and the dashboard): a one-line idiom, like the inline sleeps. Only the named
+  private copies were queued. `ClearHistoryModal.tsx`'s `plural` (uses `toLocaleString`
+  and irregular forms) and `speechText.ts`'s `plural` (irregular forms) differ.
+- Other truncate helpers: `utils/string.ts` `truncate`/`truncateSnippet`,
+  `utils/uxSnapshot.ts` `truncate` and `TextUtils.truncateText` each differ in where
+  they cut, whether they trim and which ellipsis they use, and callers rely on those.
+- `isObject` in `OpenCodeLogParser.ts`: accepts arrays on purpose, unlike `isRecord`.
+- Async realpath sites that differ from the shared fallbacks: `gitWritableAdminDirs`
+  keeps Git's un-normalized path, `UndoRedoCoordinator` throws, and
+  `WorkspacePathContainment`/`WorkspaceSnapshotService` walk ancestors or keep both
+  forms.
+- `addUsage` (`ObservedHarnessUsageStore.ts`) vs `addHarnessContribution`
+  (`LifetimeUsageStore.ts`): they persist different shapes on subtraction
+  (cost sources and partial flags) and only one counts attempts. Merging would change
+  persisted usage files.
+- `getAtPath`/`setAtPath` in `WorkspaceSensitiveSettings.ts` vs
+  `HarnessSettingsJsonStore.ts`: copy-on-write that stops at a missing parent, vs
+  own-property lookups that create missing parents.
+- `formatAge` in `CliStatusCommand.ts` (`42s`/`5m`/`3h`) vs `HistoryTrashCommands.ts`
+  (`just now`/`3h ago`/`2d ago`): different outputs for different listings.
+- `pathsOverlap` in `ExecutionRootCoordination.ts` (glob claim patterns) vs
+  `WorktreeManager.ts` (filesystem containment): same name, different meaning.
+- `trustExternalRootsCommand` in `src/cli.ts`: a settings-loading wrapper around the
+  shared `cli/ExternalRootsTrustCommands.ts` function, not a copy.
+- `formatStructuredPatch` in `ui/webview-react/utils/promptUndo.ts` vs
+  `src/utils/CliEventDiff.ts`: different headers (`a/`/`b/` prefixes), a reverse mode
+  and a trailing newline; each output feeds a different consumer.
+- `compareVersions` in `CtrlyokeInstallations.ts` (raw strings, prerelease stripped,
+  any length) vs `HarnessVersion.ts` (parsed major/minor/patch): different inputs.
+- `normalizeAbsolutePath` in `platform/NodeFileWatcher.ts` and
+  `VsCodeFileWatcher.ts`: a one-line `path.normalize(path.resolve())` idiom.
+- `ShellCatalog.findShellChoice` vs `resolveShellKind`: picker lookup against the
+  choice catalog and aliases, not the kind ladder. Its doc comment explains why an
+  unknown shell must stay `undefined`.

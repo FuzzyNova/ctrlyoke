@@ -11,6 +11,7 @@ import {
   request as httpsRequest,
 } from "https";
 import * as path from "path";
+import { resolvedPathKey } from "../utils/PathCasing";
 import * as fs from "fs";
 import * as os from "os";
 import { StringDecoder } from "string_decoder";
@@ -225,18 +226,13 @@ function escapeHtmlAttribute(value: string): string {
   });
 }
 
-function normalizeWorkspaceRoot(workspaceRoot: string): string {
-  const resolved = path.resolve(workspaceRoot);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
-}
-
 function createServerIdentityProof(
   token: string,
   nonce: string,
   workspaceRoot: string
 ): string {
   return createHmac("sha256", token)
-    .update(`${nonce}\n${normalizeWorkspaceRoot(workspaceRoot)}`)
+    .update(`${nonce}\n${resolvedPathKey(workspaceRoot)}`)
     .digest("hex");
 }
 

@@ -9,6 +9,7 @@ import type {
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../types/CompatibilityTypes";
 import { formatComparison } from "../utils/ScriptComparison";
 import { relativePathEscapes } from "../utils/PathSecurity";
+import { foldPathForCompare } from "../utils/PathCasing";
 import {
   CONDITION_ACTIONS,
   FINAL_STEP_PHASES,
@@ -1220,7 +1221,7 @@ export class ExecutionPreviewService {
     const tempRootBase =
       executionWorkspace?.executionRoot ?? this.options.workspaceRoot;
     const tempRoot = tempRootBase
-      ? this.normalizeComparisonPath(
+      ? foldPathForCompare(
           path.resolve(
             tempRootBase,
             PATH_CONSTANTS.CTRLYOKE_DIR,
@@ -1229,7 +1230,7 @@ export class ExecutionPreviewService {
         )
       : undefined;
     const mutationPath = mutation.path
-      ? this.normalizeComparisonPath(path.resolve(mutation.path))
+      ? foldPathForCompare(path.resolve(mutation.path))
       : undefined;
     const relativePath =
       tempRoot && mutationPath
@@ -1256,10 +1257,6 @@ export class ExecutionPreviewService {
           }
         : {}),
     };
-  }
-
-  private normalizeComparisonPath(value: string): string {
-    return process.platform === "win32" ? value.toLowerCase() : value;
   }
 
   private extractOwnedKeys(content: string): string[] {

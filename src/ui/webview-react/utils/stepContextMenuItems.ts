@@ -9,6 +9,7 @@ import {
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
 import { executionOwnsCurrentStep } from "./status";
+import { getStepAssistantTextForCopy } from "./outputUtils";
 import {
   getTargetKey,
   toOutputMessageTarget,
@@ -37,8 +38,6 @@ export interface StepCopyMenuItemsInput {
   slotNumber?: number;
   /** True for the workflow's final step, which has no queue position. */
   isFinalStep?: boolean;
-  /** Response/output text to copy; undefined disables the Copy Response (or, for a script, Copy Output) item. */
-  outputText?: string;
   latestOutput?: CliOutput | null;
   latestPrompt?: string;
   runtimeMeta?: StepRuntimeMetaSnapshot;
@@ -54,13 +53,15 @@ export function buildStepCopyMenuItems({
   step,
   slotNumber,
   isFinalStep = false,
-  outputText,
   latestOutput,
   latestPrompt,
   runtimeMeta,
   isCurrent,
   liveContextWindow,
 }: StepCopyMenuItemsInput): ContextMenuItem[] {
+  const outputText = latestOutput
+    ? getStepAssistantTextForCopy(latestOutput)
+    : undefined;
   const isScript = isScriptWorkflowStep(step);
   const copyContentLabel = isScript ? "Copy Script" : "Copy Prompt";
   const copyLabels = getStepCopyLabels(isScript);

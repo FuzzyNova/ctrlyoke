@@ -441,16 +441,11 @@ export class ContextMenuReferenceCommands {
       channel: getOutputChannelSlug(editor.document),
       range,
     };
-    // writeOutputCaptureAttachment already returns a quoted/normalized
-    // reference value (same contract as savePendingOutputCapture, whose only
-    // other caller prepends '@' itself) — do not re-run it through
-    // buildFileReference, which would quote an already-quoted path a second
-    // time whenever the channel name contains a space.
-    const referenceValue = await writeOutputCaptureAttachment(
+    const relativePath = await writeOutputCaptureAttachment(
       this.getWorkspaceRoot,
       entry
     );
-    await this.insertReferences([`@${referenceValue}`]);
+    await this.insertReferences([buildFileReference(relativePath)]);
   }
 
   private async tryBuildSymbolReference(

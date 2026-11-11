@@ -1,6 +1,11 @@
 /** Unix epoch seconds are below this threshold; ctrlyoke persists milliseconds. */
 export const UNIX_SECONDS_THRESHOLD = 100_000_000_000;
 
+/** Format a date as a local YYYY-MM-DD day key. */
+export function formatLocalDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 /**
  * Normalize provider timestamps at the boundary into epoch milliseconds.
  * Codex supplies Unix seconds while Claude status-line payloads supply ISO text.

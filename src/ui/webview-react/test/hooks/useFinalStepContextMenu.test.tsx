@@ -62,14 +62,12 @@ function TestHarness({
   finalStep,
   isReadOnly = false,
   isDisabled = false,
-  outputText,
   latestOutput,
   runtimeMeta,
 }: {
   finalStep: WorkflowStep | null | undefined;
   isReadOnly?: boolean;
   isDisabled?: boolean;
-  outputText?: string;
   latestOutput?: CliOutput | null;
   runtimeMeta?: { sessionId?: string; elapsed?: number };
 }) {
@@ -79,7 +77,6 @@ function TestHarness({
       isReadOnly,
       isDisabled,
       onToggleEnabled: vi.fn(),
-      outputText,
       latestOutput,
       runtimeMeta,
     });
@@ -275,11 +272,28 @@ describe("useFinalStepContextMenu", () => {
     ).toBeDisabled();
   });
 
+  it("disables Copy Response when the output has no assistant text", () => {
+    render(
+      <TestHarness
+        finalStep={{ prompt: "Final prompt" }}
+        latestOutput={{
+          structured: { events: [], metadata: {} },
+          elapsed: 1,
+          isStreaming: false,
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("menuitem", { name: "Copy Response" })
+    ).toBeDisabled();
+  });
+
   it("copies the final step's metadata with a final-step header, not a numbered slot", () => {
     render(
       <TestHarness
         finalStep={{ prompt: "Final prompt" }}
-        outputText="final output"
         latestOutput={{
           structured: {
             events: [{ type: "text", data: { text: "final output" } }],
@@ -302,7 +316,14 @@ describe("useFinalStepContextMenu", () => {
     render(
       <TestHarness
         finalStep={{ prompt: "Final prompt" }}
-        outputText="final output text"
+        latestOutput={{
+          structured: {
+            events: [{ type: "text", data: { text: "final output text" } }],
+            metadata: {},
+          },
+          elapsed: 1,
+          isStreaming: false,
+        }}
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
@@ -328,7 +349,6 @@ describe("useFinalStepContextMenu", () => {
     render(
       <TestHarness
         finalStep={{ prompt: "Final prompt" }}
-        outputText="answer"
         latestOutput={latestOutput}
       />
     );

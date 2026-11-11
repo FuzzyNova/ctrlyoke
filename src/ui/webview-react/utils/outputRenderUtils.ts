@@ -32,10 +32,8 @@ import {
   toRdvFromContent,
   toRdvHunks,
 } from "./rdvAdapter";
-import {
-  buildDiffAnchorPrefix,
-  isStructuredPatchMalformed,
-} from "./outputUtils";
+import { buildDiffAnchorPrefix } from "./outputUtils";
+import { isStructuredPatchMalformed } from "./diffUtils";
 import {
   DEFAULT_OUTPUT_FONT_SIZE,
   FILE_EDIT_ACTION_LABEL,

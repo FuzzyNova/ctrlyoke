@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import {
@@ -6,7 +8,9 @@ import {
   isPathWithinAnyDirectory,
   relativePathEscapes,
   isSafePathSegment,
+  realpathOrResolved,
   realpathOrSelf,
+  realpathOrUndefined,
 } from "../../utils/PathSecurity";
 
 suite("PathSecurity", () => {
@@ -42,6 +46,67 @@ suite("PathSecurity", () => {
         "missing-path-security-test"
       );
       assert.strictEqual(realpathOrSelf(missingPath), missingPath);
+    });
+  });
+
+  suite("async realpath fallbacks", () => {
+    test("realpathOrUndefined resolves an existing directory through a symlink", async function () {
+      if (process.platform === "win32") this.skip();
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "path-security-")
+      );
+      const target = path.join(tempRoot, "target");
+      const link = path.join(tempRoot, "link");
+      await fs.mkdir(target);
+      try {
+        await fs.symlink(target, link, "dir");
+        assert.strictEqual(
+          await realpathOrUndefined(link),
+          await fs.realpath(target)
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("realpathOrUndefined returns undefined for a missing path", async () => {
+      const missingPath = path.join(
+        process.cwd(),
+        "missing-path-security-test"
+      );
+      assert.strictEqual(await realpathOrUndefined(missingPath), undefined);
+    });
+
+    test("realpathOrResolved resolves an existing directory through a symlink", async function () {
+      if (process.platform === "win32") this.skip();
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "path-security-")
+      );
+      const target = path.join(tempRoot, "target");
+      const link = path.join(tempRoot, "link");
+      await fs.mkdir(target);
+      try {
+        await fs.symlink(target, link, "dir");
+        assert.strictEqual(
+          await realpathOrResolved(link),
+          await fs.realpath(target)
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("realpathOrResolved normalizes a missing path and resolves relative input", async () => {
+      const missingPath = path.join(
+        "missing-path-security-test",
+        "..",
+        "missing"
+      );
+      assert.strictEqual(
+        await realpathOrResolved(missingPath),
+        path.normalize(path.resolve(missingPath))
+      );
+      assert.strictEqual(await realpathOrResolved("."), path.resolve("."));
     });
   });
 

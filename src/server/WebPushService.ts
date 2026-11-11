@@ -12,9 +12,11 @@ import { stripLeadingBom } from "../utils/TextUtils";
 import type { CtrlYokeNotificationEvent } from "../core/notifications/NotificationEventFactory";
 import { LICENSE_UI, NODE_ERROR_CODES } from "../types/DashboardConstants";
 import { getErrorMessage, getErrnoCode } from "../utils/ErrorUtils";
+import {
+  ensurePrivateDirectory,
+  PRIVATE_FILE_MODE,
+} from "../utils/PrivateFileModes";
 
-const PRIVATE_DIRECTORY_MODE = 0o700;
-const PRIVATE_FILE_MODE = 0o600;
 const PUSH_REQUEST_TIMEOUT_MS = 10_000;
 const PUSH_SEND_RESULT = {
   SUCCESS: "success",
@@ -607,11 +609,6 @@ function isSubscriptionStale(subscription: StoredPushSubscription): boolean {
   }
 
   return subscription.lastFailureAt > subscription.lastSuccessAt;
-}
-
-async function ensurePrivateDirectory(dirPath: string): Promise<void> {
-  await fsp.mkdir(dirPath, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  await fsp.chmod(dirPath, PRIVATE_DIRECTORY_MODE);
 }
 
 async function atomicWriteJson(

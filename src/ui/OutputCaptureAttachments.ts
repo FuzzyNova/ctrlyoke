@@ -2,7 +2,6 @@ import {
   outputCaptureCache,
   type OutputCaptureEntry,
 } from "../completions/OutputCaptureCache";
-import { buildFileReferenceValue } from "../utils/ContextReferenceBuilder";
 import { TempFileManager } from "../utils/TempFileManager";
 
 /** Write an output capture to the workspace attachment store. */
@@ -22,12 +21,12 @@ export async function writeOutputCaptureAttachment(
     entry.range,
     tempFileManager.getAttachmentsDir()
   );
-  return buildFileReferenceValue(tempFileManager.getRelativePath(absolutePath));
+  return tempFileManager.getRelativePath(absolutePath).replace(/\\/g, "/");
 }
 
 /**
  * Persist a pending output completion capture and return the workspace-
- * relative reference value used by prompt editors.
+ * relative path used to build a prompt reference.
  *
  * This is deliberately independent of the webview transport so the native
  * VS Code completion command and the dashboard message handler share the

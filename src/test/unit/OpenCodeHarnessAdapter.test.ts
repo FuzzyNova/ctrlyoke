@@ -14,6 +14,7 @@ import {
   OPENCODE_RESUME_PROMPT_ENV,
 } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
+import { applyPreparedMutations } from "../../core/harness/shared/interfaces/PreparedMutation";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -554,15 +555,16 @@ suite("OpenCodeHarnessAdapter", () => {
         userServers,
       });
 
-      const mcpArgs = await provider.getMcpConfigArgs(
+      const preparation = await provider.planMcpConfigArgs(
         mcpServerPath,
         workspaceRoot,
         workingFilePath,
         additionalEnv,
         userServers
       );
+      await applyPreparedMutations(preparation.mutations);
 
-      assert.deepStrictEqual(mcpArgs, []);
+      assert.deepStrictEqual(preparation.cliArgs, []);
       assert.deepStrictEqual(
         JSON.parse(provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!),
         { mcp: inlineConfig.mcp, plugin: [] }
@@ -580,7 +582,7 @@ suite("OpenCodeHarnessAdapter", () => {
     const extensionPath = path.join(workspaceRoot, "extension");
     try {
       const provider = new OpenCodeHarnessAdapter();
-      await provider.getMcpConfigArgs(
+      const preparation = await provider.planMcpConfigArgs(
         undefined,
         workspaceRoot,
         undefined,
@@ -599,6 +601,7 @@ suite("OpenCodeHarnessAdapter", () => {
           },
         ]
       );
+      await applyPreparedMutations(preparation.mutations);
       const configContent =
         provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!;
 

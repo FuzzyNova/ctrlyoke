@@ -18,6 +18,7 @@ import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import { isScriptStep } from "@root/types/CtrlYokeTypes";
 import { Icon } from "../shared/Icon";
+import { truncateNormalized } from "@utils/string";
 import {
   formatFinalPassBadge,
   formatFinalPassRangeBadge,
@@ -77,14 +78,6 @@ interface FinalStepFooterProps {
   /** Right-click context menu handler */
   onContextMenu?: (x: number, y: number) => void;
 }
-
-const truncate = (text: string, maxLength: number = 72): string => {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `${normalized.slice(0, maxLength)}...`;
-};
 
 export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   finalStep,
@@ -186,7 +179,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             <div className="flex-1 min-w-0">
               {/* Prompt name / text — pl-5 matches StepDetailRows indent */}
               <div className="text-xs leading-relaxed">
-                {truncate(getStepDisplayText(finalStep))}
+                {truncateNormalized(getStepDisplayText(finalStep), 72)}
               </div>
 
               {/* Phase badge */}

@@ -47,7 +47,8 @@ interface ExecutionPreviewActions {
 
 let requestSequence = 0;
 
-function sameScope(
+/** Whether two preview scopes name the same workflow or step. */
+export function sameScope(
   left: ExecutionPreviewScope,
   right: ExecutionPreviewScope
 ): boolean {

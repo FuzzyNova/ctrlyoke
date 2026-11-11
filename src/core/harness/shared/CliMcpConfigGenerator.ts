@@ -323,7 +323,7 @@ export class CliMcpConfigGenerator {
    * Compute the path for a file-based MCP config in .ctrlyoke/temp/.
    *
    * Single source of truth for all file-based MCP config paths. Both
-   * getMcpConfigArgs (write) and getMcpConfigFilePath (cleanup) must use
+   * planMcpConfigArgs (write) and getMcpConfigFilePath (cleanup) must use
    * this method to guarantee the paths always match.
    *
    * @param workingFilePath Active working file for this workflow (used as filename suffix)

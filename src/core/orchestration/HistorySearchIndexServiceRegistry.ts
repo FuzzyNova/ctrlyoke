@@ -1,14 +1,7 @@
-import * as path from "path";
+import { resolvedPathKey } from "../../utils/PathCasing";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 
 const sharedServices = new Map<string, HistorySearchIndexService>();
-
-function normalizeWorkspaceFolderPath(workspaceFolderPath: string): string {
-  const resolvedPath = path.resolve(workspaceFolderPath);
-  return process.platform === "win32"
-    ? resolvedPath.toLowerCase()
-    : resolvedPath;
-}
 
 /**
  * Returns the process-wide history index service for one workspace folder.
@@ -18,7 +11,7 @@ function normalizeWorkspaceFolderPath(workspaceFolderPath: string): string {
 export function getSharedHistorySearchIndexService(
   workspaceFolderPath: string
 ): HistorySearchIndexService {
-  const key = normalizeWorkspaceFolderPath(workspaceFolderPath);
+  const key = resolvedPathKey(workspaceFolderPath);
   let service = sharedServices.get(key);
   if (!service) {
     service = new HistorySearchIndexService();

@@ -88,8 +88,6 @@ interface OpenContextMenuParams {
   isCurrentStep: boolean;
   isExecutionTargetLocked: boolean;
   direction: WorktreePositionDirection;
-  /** Response/output text to copy; undefined disables the Copy Response (or, for a script, Copy Output) item */
-  outputText?: string;
   /** Latest CLI output for this step, used to build the Copy Metadata text (session ID, tokens, cost) */
   latestOutput?: CliOutput | null;
   latestPrompt?: string;
@@ -273,7 +271,6 @@ export function useStepContextMenu({
         isCurrentStep,
         isExecutionTargetLocked,
         direction,
-        outputText,
         latestOutput,
         latestPrompt,
         runtimeMeta,
@@ -511,7 +508,6 @@ export function useStepContextMenu({
           ...buildStepCopyMenuItems({
             step,
             slotNumber: deleteIndex + 1,
-            outputText,
             latestOutput,
             latestPrompt: latestPrompt ?? getLatestPrompt(deleteIndex),
             runtimeMeta,

@@ -51,6 +51,30 @@ suite("ShellCatalog", () => {
     );
   });
 
+  test("resolves every shell-name branch and falls back to bash for unknown names", () => {
+    const cases: Array<[string, string]> = [
+      ["pwsh-preview", SHELL_KINDS.PWSH],
+      ["powershell-core", SHELL_KINDS.POWERSHELL],
+      ["zsh", SHELL_KINDS.ZSH],
+      ["bash", SHELL_KINDS.BASH],
+      ["fish", SHELL_KINDS.FISH],
+      ["cmd", SHELL_KINDS.CMD],
+      ["wsl", SHELL_KINDS.WSL],
+      ["nu", SHELL_KINDS.NUSHELL],
+      ["nushell", SHELL_KINDS.NUSHELL],
+      ["sh", SHELL_KINDS.SH],
+      ["dash", SHELL_KINDS.SH],
+      ["ksh", SHELL_KINDS.SH],
+      ["customsh", SHELL_KINDS.SH],
+    ];
+    for (const [name, kind] of cases) {
+      assert.strictEqual(resolveShellKind(name), kind, name);
+    }
+    assert.strictEqual(resolveShellKind("custom-shell"), SHELL_KINDS.BASH);
+    assert.strictEqual(resolveShellKind("  zsh  "), SHELL_KINDS.BASH);
+    assert.strictEqual(resolveShellKind("ZSH.EXE"), SHELL_KINDS.ZSH);
+  });
+
   test("strips directories and the .exe suffix from a display name", () => {
     assert.strictEqual(shellDisplayName("/bin/zsh"), SHELL_TYPES.ZSH);
     assert.strictEqual(

@@ -194,6 +194,45 @@ describe("WorkspaceViewerModal — header title", () => {
     expect(screen.getByText("ctrlyoke/src/fileA.ts")).toBeInTheDocument();
   });
 
+  it("normalizes a Windows path when the drive letter casing differs", () => {
+    useWorkspaceViewerStore.setState({
+      isOpen: true,
+      selectedFilePath: "c:/dev/ctrlyoke/src/index.ts",
+    });
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("workspaceRoot", "C:\\dev\\ctrlyoke");
+
+    render(<WorkspaceViewerModal />);
+
+    expect(screen.getByText("ctrlyoke/src/index.ts")).toBeInTheDocument();
+  });
+
+  it("strips the leading slash from an absolute path outside the workspace", () => {
+    useWorkspaceViewerStore.setState({
+      isOpen: true,
+      selectedFilePath: "/tmp/other/file.ts",
+    });
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("workspaceRoot", "/workspace/project");
+
+    render(<WorkspaceViewerModal />);
+
+    expect(screen.getByText("project/tmp/other/file.ts")).toBeInTheDocument();
+  });
+
+  it("does not prefix an already-relative path when no workspace name is set", () => {
+    useWorkspaceViewerStore.setState({
+      isOpen: true,
+      selectedFilePath: "src/index.ts",
+    });
+
+    render(<WorkspaceViewerModal />);
+
+    expect(screen.getByText("src/index.ts")).toBeInTheDocument();
+  });
+
   it("does not show a selected explorer file while the Search tab is active", () => {
     useWorkspaceViewerStore.setState({
       isOpen: true,

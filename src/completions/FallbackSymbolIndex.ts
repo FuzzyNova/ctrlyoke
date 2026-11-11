@@ -1,4 +1,4 @@
-import type { IndexedSymbol, SymbolIndex } from "./SymbolIndex";
+import { symbolKey, type IndexedSymbol, type SymbolIndex } from "./SymbolIndex";
 
 /** Uses a secondary index only when the primary has no results. */
 export class FallbackSymbolIndex implements SymbolIndex {
@@ -64,8 +64,4 @@ export class FallbackSymbolIndex implements SymbolIndex {
     );
     return [...symbols, ...missing];
   }
-}
-
-function symbolKey(symbol: IndexedSymbol): string {
-  return `${symbol.viewerPath}\n${symbol.name}\n${symbol.kind}\n${symbol.startLine}:${symbol.endLine}`;
 }

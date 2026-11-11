@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
   type AnyTargetId,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
@@ -122,8 +123,14 @@ export function BulkSelectionActionsBar({
     value,
   }));
   const scopeItems: ActionDropdownItem[] = [
-    { label: "Workspace", value: SETTING_SCOPES.WORKSPACE },
-    { label: "User", value: SETTING_SCOPES.USER },
+    {
+      label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.WORKSPACE],
+      value: SETTING_SCOPES.WORKSPACE,
+    },
+    {
+      label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.USER],
+      value: SETTING_SCOPES.USER,
+    },
   ];
   const targetItems: ActionDropdownItem[] = scopeTargets.map((id) => ({
     label: getTargetLabel(id),
@@ -171,7 +178,7 @@ export function BulkSelectionActionsBar({
             </span>
 
             <ActionDropdown
-              label={scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"}
+              label={SETTING_WRITE_SCOPE_LABELS[scope]}
               items={scopeItems}
               onSelect={(value) =>
                 handleScopeChange(value as SettingWriteScope)
@@ -194,8 +201,7 @@ export function BulkSelectionActionsBar({
           </>
         ) : (
           <span className="text-xs text-description-fg">
-            defaults (
-            {activeScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"})
+            defaults ({SETTING_WRITE_SCOPE_LABELS[activeScope]})
           </span>
         )}
 

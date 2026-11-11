@@ -18,6 +18,7 @@ import { type ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import {
   isPathWithinAnyDirectory,
   isPathWithinDirectory,
+  realpathOrUndefined,
 } from "./PathSecurity";
 import { foldPathForCompare } from "./PathCasing";
 import { isWorkflowRelativeReferencePath } from "./promptPathUtils";
@@ -1189,16 +1190,6 @@ function looksLikeGeneratedStoreReference(referencePath: string): boolean {
       normalized.startsWith(`${PATH_CONSTANTS.CTRLYOKE_DIR}/${store}/`) ||
       normalized.startsWith(`${store}/`)
   );
-}
-
-async function realpathOrUndefined(
-  filePath: string
-): Promise<string | undefined> {
-  try {
-    return path.resolve(await fs.realpath(filePath));
-  } catch {
-    return undefined;
-  }
 }
 
 async function realpathRoots(roots: readonly string[]): Promise<string[]> {

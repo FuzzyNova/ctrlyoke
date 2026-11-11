@@ -7,6 +7,7 @@ import {
 } from "@/types/messages";
 import {
   DASHBOARD_HOST_CAPABILITIES,
+  SETTING_WRITE_SCOPE_LABELS,
   TEMPLATE_VARIABLE_TYPES,
   TEMPLATE_SOURCES,
   WORKSPACE_ENTRY_KINDS,
@@ -67,10 +68,6 @@ function isMultiline(variable: TemplateVariable): boolean {
     variable.type !== TEMPLATE_VARIABLE_TYPES.SELECT &&
     variable.type !== TEMPLATE_VARIABLE_TYPES.HARNESS
   );
-}
-
-function scopeLabel(scope: SettingWriteScope): string {
-  return scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
 }
 
 export function TemplatesSection(props: Props) {
@@ -474,8 +471,8 @@ function TemplateDefaultsPage({
         </div>
         {cardIds.length === 0 && (
           <p className="text-sm text-description-fg">
-            No saved values in {scopeLabel(activeScope)} settings. Pin a value
-            in New Workflow, or add one here.
+            No saved values in {SETTING_WRITE_SCOPE_LABELS[activeScope]}{" "}
+            settings. Pin a value in New Workflow, or add one here.
           </p>
         )}
         {cardIds.map((templateId) => {

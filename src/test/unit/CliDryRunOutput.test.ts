@@ -849,6 +849,58 @@ CliTerminalFormatter.renderEvent({
     assert.ok(output.includes("(no diff recorded)"));
   });
 
+  test("skips structured diff metadata without consuming line numbers", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
+  path: "notes.md", status: OPERATION_STATUS.COMPLETED,
+  structuredPatch: [{ oldStart: 4, oldLines: 1, newStart: 7, newLines: 1, lines: [
+    "\\\\ No newline at end of file", "@@ -4 +7 @@", "diff --git a/notes.md b/notes.md",
+    "index abc..def 100644", " context"
+  ] }]
+}});`);
+
+    assert.ok(output.includes("  4   7   context"));
+    assert.ok(!output.includes("No newline"));
+    assert.ok(!output.includes("diff --git"));
+    assert.ok(!output.includes("index abc"));
+  });
+
+  test("normalizes duplicate structured hunks before rendering", () => {
+    const output = runFormatterScript(`
+const hunk = { oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ["-old", "+new"] };
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
+  path: "notes.md", status: OPERATION_STATUS.COMPLETED, structuredPatch: [hunk, hunk]
+}});`);
+
+    assert.strictEqual((output.match(/- old/g) ?? []).length, 1);
+    assert.strictEqual((output.match(/\+ new/g) ?? []).length, 1);
+  });
+
+  test("normalizes CRLF in raw-content diffs", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
+  path: "notes.md", status: OPERATION_STATUS.COMPLETED,
+  oldContent: "first\\r\\nsecond\\n", newContent: "first\\nsecond\\r\\n"
+}});`);
+
+    assert.ok(output.includes("1   1   first"));
+    assert.ok(output.includes("2   2   second"));
+    assert.ok(!output.includes("+ first"));
+    assert.ok(!output.includes("- first"));
+  });
+
+  test("keeps ordinary structured add, remove, and context rendering unchanged", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
+  path: "notes.md", status: OPERATION_STATUS.COMPLETED,
+  structuredPatch: [{ oldStart: 2, oldLines: 2, newStart: 2, newLines: 2, lines: [" keep", "-old", "+new"] }]
+}});`);
+
+    assert.match(output, /2\s+2\s+keep/u);
+    assert.match(output, /3\s+- old/u);
+    assert.match(output, /3\s+\+ new/u);
+  });
+
   test("prints errors from failed tool results and web searches", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderEvent({

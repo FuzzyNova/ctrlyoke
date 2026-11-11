@@ -21,7 +21,7 @@ import { resolveVerdictDisplay } from "@root/utils/ScriptComparison";
 import {
   getStructuredPatchDiffLines,
   normalizeStructuredPatch,
-} from "./diffUtils";
+} from "@root/utils/DiffLines";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
 import { getCliCommandDisplayParts } from "../../../utils/outputCommandDisplay";

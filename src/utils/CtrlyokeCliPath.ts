@@ -15,6 +15,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { foldPathForCompare } from "./PathCasing";
 
 /** Directory under the package root that holds the launcher shims. */
 export const CTRLYOKE_BIN_DIRNAME = "bin";
@@ -88,8 +89,7 @@ export function prependToPath(
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
   const delimiter = platform === "win32" ? ";" : ":";
-  const normalize = (entry: string) =>
-    platform === "win32" ? entry.toLowerCase() : entry;
+  const normalize = (entry: string) => foldPathForCompare(entry, platform);
   const pathKey = findPathKey(env);
   const existing = (env[pathKey] ?? "")
     .split(delimiter)

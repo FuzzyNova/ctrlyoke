@@ -4,16 +4,7 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import type { WorkspaceRepo } from "../types/HostedWorkspaceViewerTypes";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { repoToplevel } from "./GitUtils";
-
-/**
- * Case-fold a path for identity comparison on case-insensitive filesystems
- * (Windows, default macOS). Kept in one place so repo de-duplication and
- * containment checks agree.
- */
-function pathKey(p: string): string {
-  const normalized = path.resolve(p);
-  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
-}
+import { resolvedPathKey } from "./PathCasing";
 
 /**
  * Discover the distinct git repositories spanned by a set of workspace roots.
@@ -52,17 +43,20 @@ export async function discoverRepos(
     // matches the (possibly symlinked) trusted-root path used for prefixing.
     let rootPath = top;
     try {
-      if (pathKey(fs.realpathSync(root.fsPath)) === pathKey(top)) {
+      if (
+        resolvedPathKey(fs.realpathSync(root.fsPath)) === resolvedPathKey(top)
+      ) {
         rootPath = path.resolve(root.fsPath);
       }
     } catch {
       // realpath failed (root vanished) — fall back to git's toplevel
     }
 
-    const key = pathKey(rootPath);
+    const key = resolvedPathKey(rootPath);
     if (seen.has(key)) return;
 
-    const sameAsRoot = pathKey(rootPath) === pathKey(root.fsPath);
+    const sameAsRoot =
+      resolvedPathKey(rootPath) === resolvedPathKey(root.fsPath);
     const label = sameAsRoot ? root.name : path.basename(rootPath);
     seen.set(key, { id: label, label, rootPath });
   });

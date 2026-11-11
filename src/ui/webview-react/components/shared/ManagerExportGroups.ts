@@ -3,6 +3,7 @@ import type { FlyoutGroup } from "./FlyoutActionDropdown";
 import { encodeManagerTarget } from "./ManagerUi";
 import {
   SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
 
@@ -34,11 +35,17 @@ export function buildManagerExportGroups(options: {
     : [];
   return [
     ...(workspaceItems.length
-      ? [{ id: "workspace", label: "Workspace", items: workspaceItems }]
+      ? [
+          {
+            id: SETTING_SCOPES.WORKSPACE,
+            label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.WORKSPACE],
+            items: workspaceItems,
+          },
+        ]
       : []),
     {
-      id: "user",
-      label: "User",
+      id: SETTING_SCOPES.USER,
+      label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.USER],
       items: makeItems(options.userTargetIds, SETTING_SCOPES.USER),
     },
   ];

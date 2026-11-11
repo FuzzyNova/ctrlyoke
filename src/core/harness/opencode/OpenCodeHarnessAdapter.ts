@@ -727,32 +727,8 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
    * @param workingFilePath Active working file for this workflow
    * @param additionalEnv Extra environment variables for the ctrlyoke MCP server
    * @param userServers User-defined MCP server configurations
-   * @returns Empty array (inline config is delivered through the spawn env)
+   * @returns Preparation with empty CLI arguments and deferred environment mutations
    */
-  async getMcpConfigArgs(
-    mcpServerPath: string | undefined,
-    workspaceRoot: string,
-    workingFilePath?: string,
-    additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[],
-    stateRoot?: string,
-    secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<string[] | null> {
-    const hasMcp =
-      !!mcpServerPath || (userServers !== undefined && userServers.length > 0);
-    const preparation = await this.planMcpConfigArgs(
-      mcpServerPath,
-      workspaceRoot,
-      workingFilePath,
-      additionalEnv,
-      userServers,
-      stateRoot,
-      secretEnvironment
-    );
-    await applyPreparedMutations(preparation.mutations);
-    return hasMcp ? preparation.cliArgs : null;
-  }
-
   async planMcpConfigArgs(
     mcpServerPath: string | undefined,
     workspaceRoot: string,

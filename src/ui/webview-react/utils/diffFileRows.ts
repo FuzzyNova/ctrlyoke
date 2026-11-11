@@ -8,7 +8,7 @@ import {
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,
 } from "./outputLineMetrics";
-import { countStructuredPatchDisplayLines } from "./outputUtils";
+import { countStructuredPatchDisplayLines } from "./diffUtils";
 import {
   buildDiffRenderPlanFromStats,
   getRenderedDiffStats,

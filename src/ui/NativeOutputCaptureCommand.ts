@@ -6,6 +6,7 @@ import {
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { Log } from "../utils/Log";
 import { savePendingOutputCapture } from "./OutputCaptureAttachments";
+import { buildFileReference } from "../utils/ContextReferenceBuilder";
 
 type NativeOutputCaptureDocument = Pick<
   vscode.TextDocument,
@@ -98,7 +99,10 @@ export async function executeNativeOutputCaptureCommand(
 
     const relativePath = await saveOutputSnapshot(captureId);
     const applied = await editor.edit((editBuilder) => {
-      editBuilder.replace(placeholderRange!, `@${relativePath} `);
+      editBuilder.replace(
+        placeholderRange!,
+        `${buildFileReference(relativePath)} `
+      );
     });
     if (!applied) {
       throw new Error("Could not replace the output capture placeholder");

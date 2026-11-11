@@ -61,6 +61,7 @@ import {
   FINAL_STEP_PHASES,
   type StepStatus,
 } from "../../types/messages";
+import { isTerminalStepStatus } from "@root/types/DashboardConstants";
 import { sendMessage } from "@messaging/sendMessage";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
@@ -111,7 +112,6 @@ import {
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { remapIndicesThroughPermutation } from "@utils/stepMultiSelection";
-import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 
 type PendingDragContainer = {
   id: string;
@@ -982,11 +982,7 @@ const WorkflowStepsPanelInner: React.FC<{
       // terminal status and any _runtime exists — this covers the case where a step
       // completed after the last SESSION_RESTORED so harness/model weren't yet in
       // the working file snapshot but were since delivered via STEP_STATUS_CHANGED.
-      const isTerminalStatus =
-        status === STEP_STATUS.COMPLETED ||
-        status === STEP_STATUS.FAILED ||
-        status === STEP_STATUS.CANCELLED ||
-        status === STEP_STATUS.SKIPPED;
+      const isTerminalStatus = isTerminalStepStatus(status);
       if (
         (step._runtime?.harness ?? step._runtime?.model) ||
         (isTerminalStatus && step._runtime != null)
@@ -1418,9 +1414,6 @@ const WorkflowStepsPanelInner: React.FC<{
 
   // Get the latest CLI output of the final step's most recent pass
   const finalStepLatestOutput = useFinalStepLatestOutput();
-  const finalStepOutputText = finalStepLatestOutput
-    ? getStepAssistantTextForCopy(finalStepLatestOutput)
-    : undefined;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -1428,7 +1421,6 @@ const WorkflowStepsPanelInner: React.FC<{
       isReadOnly: finalStepIsReadOnly,
       isDisabled: finalStep?.enabled === false,
       onToggleEnabled: handleToggleFinalStepEnabled,
-      outputText: finalStepOutputText,
       latestOutput: finalStepLatestOutput,
       runtimeMeta:
         finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,

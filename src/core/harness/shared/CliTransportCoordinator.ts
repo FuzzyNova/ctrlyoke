@@ -1,4 +1,5 @@
 import type { CliEvent } from "../../../types/CliOutputTypes";
+import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes";
 import {
   EXECUTION_MODES,
   CLI_EVENT_TYPES,
@@ -30,13 +31,13 @@ import {
 import type { IHarnessAdapter } from "./interfaces/IHarnessAdapter";
 import {
   buildTerminalEndedMessage,
+  buildTerminalStartedMessage,
   buildTerminalRemovedMessage,
   getPtyProcessManager,
   ptyPostMessage,
   toPtySpawnArgs,
 } from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
-import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes";
 import { CliLogEventPump } from "./CliLogEventPump";
 import { FAILURE_KINDS } from "../../../types/DashboardConstants";
 import { CliTransportError } from "./CliTransportError";
@@ -376,19 +377,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     this.currentPtySession.parallelGroupId = metadata.parallelGroupId;
 
     const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
-    const terminalStartedMessage: TerminalStartedMessage = {
-      type: MESSAGE_TYPES.TERMINAL_STARTED,
-      workflowId: this.currentPtySession.workflowId,
-      sessionId: this.currentPtySession.id,
-      stepName: metadata.stepName,
-      stepIndex: metadata.stepIndex,
-      kind: this.currentPtySession.kind,
-      promptNumber: metadata.promptNumber,
-      harnessId: this.currentPtySession.harnessId,
-      parallelGroupId: metadata.parallelGroupId,
-      shellKind: this.currentPtySession.shellKind,
-      controllerClientId: this.currentPtySession.controllerClientId,
-    };
+    const terminalStartedMessage = buildTerminalStartedMessage(
+      this.currentPtySession
+    );
     postMessage(terminalStartedMessage);
 
     Log.debug(

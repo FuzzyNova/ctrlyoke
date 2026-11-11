@@ -8,6 +8,7 @@ import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
 import {
   estimateOutputDiffBlockHeight,
+  getStepName,
   parallelGroupActionTooltip,
   parallelGroupStepCount,
   type OutputRenderRow,
@@ -70,14 +71,6 @@ interface UseOutputMinimapModelInput {
   uniqueStepTargets: OutputMessage["target"][];
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
   onOpenMinimapDialog: (input: OpenMinimapDialogInput) => void;
-}
-
-function getStepName(
-  step: WorkflowStep | null | undefined,
-  fallback: string
-): string {
-  const name = step?.name?.trim();
-  return name || fallback;
 }
 
 function getStepScrollFractions(

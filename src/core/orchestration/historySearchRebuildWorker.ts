@@ -21,6 +21,7 @@ import {
   getErrnoCode,
 } from "../../utils/ErrorUtils";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { mapWithConcurrency } from "../../utils/MapWithConcurrency";
 import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { initializeRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
@@ -762,25 +763,6 @@ if (!isMainThread) {
       );
       parentPort?.postMessage(message);
     });
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let nextIndex = 0;
-  async function worker(): Promise<void> {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await fn(items[index]);
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, worker)
-  );
-  return results;
 }
 
 function getIndexManifestPath(

@@ -37,8 +37,6 @@ interface UseFinalStepContextMenuOptions {
   isReadOnly: boolean;
   isDisabled: boolean;
   onToggleEnabled: () => void;
-  /** Response/output text to copy; undefined disables the Copy Response (or, for a script, Copy Output) item. */
-  outputText?: string;
   /** Latest CLI output for the final step, used to build the Copy Metadata text. */
   latestOutput?: CliOutput | null;
   latestPrompt?: string;
@@ -53,7 +51,6 @@ export function useFinalStepContextMenu({
   isReadOnly,
   isDisabled,
   onToggleEnabled,
-  outputText,
   latestOutput,
   latestPrompt,
   runtimeMeta,
@@ -97,7 +94,6 @@ export function useFinalStepContextMenu({
         ? buildStepCopyMenuItems({
             step: finalStep,
             isFinalStep: true,
-            outputText,
             latestOutput,
             latestPrompt: latestPrompt ?? currentLatestPrompt,
             runtimeMeta,
@@ -185,7 +181,6 @@ export function useFinalStepContextMenu({
       isDisabled,
       isReadOnly,
       onToggleEnabled,
-      outputText,
       latestOutput,
       latestPrompt,
       currentLatestPrompt,

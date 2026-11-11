@@ -14,6 +14,7 @@ import {
 import type { LanguageServerRequestOrigin } from "../types/DashboardConstants";
 import {
   LspSymbolKind,
+  symbolKey,
   type IndexedSymbol,
   type SymbolIndex,
 } from "./SymbolIndex";
@@ -538,7 +539,4 @@ function flattenDocumentSymbols(
         item.name ?? containerName
       );
   }
-}
-function symbolKey(symbol: IndexedSymbol): string {
-  return `${symbol.viewerPath}\n${symbol.name}\n${symbol.kind}\n${symbol.startLine}:${symbol.endLine}`;
 }

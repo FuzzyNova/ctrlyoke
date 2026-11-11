@@ -3,6 +3,7 @@ import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import {
   SECRET_REGISTRY_STATES,
   SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
 import type {
@@ -42,8 +43,14 @@ const SECRET_GRID_COLUMNS =
   "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,auto)]";
 
 const SCOPE_OPTIONS = [
-  { value: SETTING_SCOPES.USER, label: "User" },
-  { value: SETTING_SCOPES.WORKSPACE, label: "Workspace" },
+  {
+    value: SETTING_SCOPES.USER,
+    label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.USER],
+  },
+  {
+    value: SETTING_SCOPES.WORKSPACE,
+    label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.WORKSPACE],
+  },
 ];
 
 function stateLabel(entry: SecretRegistryEntry): string {

@@ -1,12 +1,12 @@
 import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
-  SESSION_KINDS,
   TERMINAL_END_REASONS,
   USER_FEEDBACK_SEVERITY,
 } from "../types/DashboardConstants";
 import {
   buildTerminalEndedMessage,
+  buildTerminalStartedMessage,
   claimTerminalsOnReplay,
   getPtyProcessManager,
   ptyPostMessage,
@@ -20,7 +20,6 @@ import {
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
 import type { DashboardClientContext } from "./DashboardClientContext";
-import type { TerminalStartedMessage } from "../types/WebviewMessageTypes";
 
 type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
 
@@ -67,19 +66,7 @@ export class TerminalMessageHandlers {
       claimTerminalsOnReplay(ptyManager, workflowId, ctx.clientId);
     }
     for (const session of sessions) {
-      const terminalStartedMessage: TerminalStartedMessage = {
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
-        workflowId: session.workflowId,
-        sessionId: session.id,
-        stepName: session.stepName,
-        stepIndex: session.stepIndex,
-        kind: session.kind,
-        promptNumber: session.promptNumber,
-        harnessId: session.harnessId,
-        parallelGroupId: session.parallelGroupId,
-        shellKind: session.shellKind,
-        controllerClientId: session.controllerClientId,
-      };
+      const terminalStartedMessage = buildTerminalStartedMessage(session);
       ctx.emit(terminalStartedMessage);
       for (const chunk of session.reconnectBuffer) {
         ctx.emit({
@@ -168,23 +155,13 @@ export class TerminalMessageHandlers {
     // Register the spawning client as controller and update workflowRunControllers
     // so that subsequent restarts inherit the same controller via assignController.
     ptyManager.assignController(session.id, ctx.clientId);
-    const terminalStartedMessage: TerminalStartedMessage = {
-      type: MESSAGE_TYPES.TERMINAL_STARTED,
-      workflowId,
-      sessionId: session.id,
-      stepName: session.stepName,
-      stepIndex: session.stepIndex,
-      kind: SESSION_KINDS.SHELL,
-      shellKind: session.shellKind,
-      controllerClientId: session.controllerClientId,
-    };
+    const terminalStartedMessage = buildTerminalStartedMessage(session);
     ptyPostMessage(terminalStartedMessage);
   }
 
   handleRestartShell(message: any): void {
     const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.workflowId) return;
-    const workflowId = message.workflowId as string;
     let newSession: PtySession | undefined;
     try {
       newSession = ptyManager.restartShellSession(
@@ -202,16 +179,7 @@ export class TerminalMessageHandlers {
       return;
     }
     if (newSession) {
-      const terminalStartedMessage: TerminalStartedMessage = {
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
-        workflowId,
-        sessionId: newSession.id,
-        stepName: newSession.stepName,
-        stepIndex: newSession.stepIndex,
-        kind: SESSION_KINDS.SHELL,
-        shellKind: newSession.shellKind,
-        controllerClientId: newSession.controllerClientId,
-      };
+      const terminalStartedMessage = buildTerminalStartedMessage(newSession);
       ptyPostMessage(terminalStartedMessage);
     }
   }

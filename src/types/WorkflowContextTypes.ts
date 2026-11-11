@@ -1,4 +1,4 @@
-import * as path from "path";
+import { resolvedPathKey } from "../utils/PathCasing";
 import type {
   ConditionEvaluationSummary,
   PromptFile,
@@ -52,10 +52,7 @@ export interface ExecutionWorkspace {
 export function getExecutionWorkspaceIdentity(
   workspace: ExecutionWorkspace
 ): string {
-  const normalize = (value: string): string => {
-    const resolved = path.resolve(value);
-    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
-  };
+  const normalize = resolvedPathKey;
   return JSON.stringify({
     stateRoot: normalize(workspace.stateRoot),
     executionRoot: normalize(workspace.executionRoot),

@@ -29,6 +29,7 @@ import {
   HARNESS_INFO,
   getHarnessShortName,
   SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
   MCP_TRANSPORTS,
   SPECIAL_TARGET_IDS,
   DASHBOARD_HOST_CAPABILITIES,
@@ -47,10 +48,15 @@ import type {
 import { Icon } from "../shared/Icon";
 import {
   ScopeBadge,
+  formatPathForDisplay,
   encodeManagerTarget as encodeTarget,
   decodeManagerTarget as decodeTarget,
   ManagerConfirmModal,
 } from "@components/shared/ManagerUi";
+import {
+  getMcpServerDetailRows,
+  getMcpServerSummary,
+} from "@utils/mcpServerDisplay";
 
 type DefaultMcpServerValue = (string | McpServerConfig)[];
 
@@ -102,10 +108,6 @@ const LOCAL_MCP_SOURCE_LOCATION_BY_SOURCE = new Map(
   LOCAL_MCP_SOURCE_LOCATIONS.map((location) => [location.source, location])
 );
 
-function formatScopeLabel(scope: SettingWriteScope): string {
-  return scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
-}
-
 function formatLocalSourceLabel(source: LocalMcpServerEntry["source"]): string {
   const location = LOCAL_MCP_SOURCE_LOCATION_BY_SOURCE.get(source);
   if (!location) {
@@ -116,17 +118,7 @@ function formatLocalSourceLabel(source: LocalMcpServerEntry["source"]): string {
     location.targetId === SPECIAL_TARGET_IDS.VSCODE
       ? "VS Code"
       : HARNESS_INFO[location.targetId].shortName;
-  return `${targetLabel} ${formatScopeLabel(location.scope)}`;
-}
-
-function formatPathForDisplay(filePath: string): string {
-  return filePath.split("\\").join("/");
-}
-
-function getServerSummary(server: McpServerConfig): string {
-  return server.url
-    ? server.url
-    : `${server.command ?? ""}${server.args ? ` ${server.args.join(" ")}` : ""}`;
+  return `${targetLabel} ${SETTING_WRITE_SCOPE_LABELS[location.scope]}`;
 }
 
 function isDefaultServerEntry(
@@ -387,33 +379,8 @@ function ServerDetails({
   locations: ResolvedServerLocation[];
 }) {
   const config = server.config;
-  const detailRows: Array<{ label: string; value: string | null }> = [
-    { label: "id", value: config.id },
-    { label: "command", value: config.command ?? null },
-    { label: "args", value: config.args?.join(" ") ?? null },
-    { label: "url", value: config.url ?? null },
-    {
-      label: "transport",
-      value:
-        config.transport && config.transport !== MCP_TRANSPORTS.STREAMABLE_HTTP
-          ? config.transport
-          : null,
-    },
-    {
-      label: "env",
-      value: config.env ? Object.keys(config.env).join(", ") : null,
-    },
-    {
-      label: "headers",
-      value: config.headers ? Object.keys(config.headers).join(", ") : null,
-    },
-    {
-      label: "autoApprove",
-      value:
-        typeof config.autoApprove === "boolean"
-          ? String(config.autoApprove)
-          : (config.autoApprove?.join(", ") ?? null),
-    },
+  const detailRows = [
+    ...getMcpServerDetailRows(config),
     {
       label: "defaults",
       value: defaultsEnabled ? "enabled" : null,
@@ -442,9 +409,7 @@ function ServerDetails({
             className="flex items-center gap-2 text-xs text-description-fg"
           >
             <ScopeBadge
-              label={`${getExportTargetLabel(location.targetId)} · ${formatScopeLabel(
-                location.scope
-              )}`}
+              label={`${getExportTargetLabel(location.targetId)} · ${SETTING_WRITE_SCOPE_LABELS[location.scope]}`}
             />
             <span className="truncate font-mono">
               {formatPathForDisplay(location.path)}
@@ -884,7 +849,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
       <div className="flex flex-wrap items-center gap-2 lg:col-span-2">
         <span className="text-xxs text-description-fg">
-          Using top-level scope: {formatScopeLabel(activeScope)}
+          Using top-level scope: {SETTING_WRITE_SCOPE_LABELS[activeScope]}
         </span>
       </div>
 
@@ -973,9 +938,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             });
             const deleteItems: ActionDropdownItem[] = allLocations.map(
               (location) => ({
-                label: `${getExportTargetLabel(location.targetId)} (${formatScopeLabel(
-                  location.scope
-                )})`,
+                label: `${getExportTargetLabel(location.targetId)} (${SETTING_WRITE_SCOPE_LABELS[location.scope]})`,
                 value: encodeLocationValue(location),
                 description: formatPathForDisplay(location.path),
               })
@@ -993,7 +956,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       onChange={setEditForm}
                       onSubmit={handleSaveEdit}
                       onCancel={handleCancelEdit}
-                      submitLabel={`Save to ${formatScopeLabel(activeScope)}`}
+                      submitLabel={`Save to ${SETTING_WRITE_SCOPE_LABELS[activeScope]}`}
                       title={`Edit ${server.displayName}`}
                       subtitle={`Saving to the ${activeScope} ctrlyoke registry`}
                       autoFocus
@@ -1126,7 +1089,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       )}
 
                       <div className="mt-1 truncate font-mono text-xxs text-description-fg">
-                        {getServerSummary(server.config)}
+                        {getMcpServerSummary(server.config) ?? ""}
                       </div>
 
                       <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -1164,7 +1127,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                   setShowAddForm(false);
                   setAddForm(EMPTY_MCP_SERVER_FORM_STATE);
                 }}
-                submitLabel={`Add to ${formatScopeLabel(activeScope)}`}
+                submitLabel={`Add to ${SETTING_WRITE_SCOPE_LABELS[activeScope]}`}
                 title="Add MCP server"
                 subtitle={`Save to the ${activeScope} ctrlyoke registry`}
                 autoFocus

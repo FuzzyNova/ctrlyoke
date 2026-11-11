@@ -54,12 +54,8 @@ export {
 // Diff utilities
 
 // Output rendering utilities
-export {
-  shortenPath,
-  extractKeyParameters,
-  generateDiffLines,
-  type DiffLine,
-} from "./outputUtils";
+export { shortenPath, extractKeyParameters } from "./outputUtils";
+export { generateDiffLines, type DiffLine } from "@root/utils/DiffLines";
 export { generateMarkdownExport } from "./markdownExport";
 export {
   buildWorkspaceStatsExport,

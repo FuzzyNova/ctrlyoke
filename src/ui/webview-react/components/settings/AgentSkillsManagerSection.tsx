@@ -7,6 +7,7 @@ import {
   HARNESS_IDS,
   HARNESS_INFO,
   SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
   SPECIAL_TARGET_IDS,
   HARNESS_FILE_TYPES,
   MESSAGE_TYPES,
@@ -32,6 +33,7 @@ import {
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { Icon } from "../shared/Icon";
 import { SkillOriginBadge, SkillsRegistryPanel } from "./SkillsRegistryPanel";
+import { formatPathForDisplay } from "@components/shared/ManagerUi";
 
 // ============================================================================
 // Constants
@@ -64,10 +66,6 @@ function decodeTarget(encoded: string): {
     id: encoded.slice(0, colonIdx) as AnyTargetId,
     scope: encoded.slice(colonIdx + 1) as SettingWriteScope,
   };
-}
-
-function formatPathForDisplay(folderPath: string): string {
-  return folderPath.split("\\").join("/");
 }
 
 function getParentFolderPath(filePath: string): string {
@@ -162,13 +160,17 @@ function buildSaveFlyoutGroups(
 ): FlyoutGroup[] {
   const wsItems: ActionDropdownItem[] = getWorkspaceTargets(availableIds).map(
     (id) => {
-      const encoded = encodeTarget(id, "workspace");
+      const encoded = encodeTarget(id, SETTING_SCOPES.WORKSPACE);
       const present = presentKeys.has(encoded);
       return {
         label: getTargetLabel(id),
         value: encoded,
         description: formatPathForDisplay(
-          getTargetDirectoryPath(targetDirectories, id, "workspace") ?? ""
+          getTargetDirectoryPath(
+            targetDirectories,
+            id,
+            SETTING_SCOPES.WORKSPACE
+          ) ?? ""
         ),
         disabled: present,
         title: present ? "Already present" : undefined,
@@ -178,13 +180,14 @@ function buildSaveFlyoutGroups(
 
   const userItems: ActionDropdownItem[] = getUserTargets(availableIds).map(
     (id) => {
-      const encoded = encodeTarget(id, "user");
+      const encoded = encodeTarget(id, SETTING_SCOPES.USER);
       const present = presentKeys.has(encoded);
       return {
         label: getTargetLabel(id),
         value: encoded,
         description: formatPathForDisplay(
-          getTargetDirectoryPath(targetDirectories, id, "user") ?? ""
+          getTargetDirectoryPath(targetDirectories, id, SETTING_SCOPES.USER) ??
+            ""
         ),
         disabled: present,
         title: present ? "Already present" : undefined,
@@ -193,8 +196,16 @@ function buildSaveFlyoutGroups(
   );
 
   return [
-    { id: "workspace", label: "Workspace", items: wsItems },
-    { id: "user", label: "User", items: userItems },
+    {
+      id: SETTING_SCOPES.WORKSPACE,
+      label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.WORKSPACE],
+      items: wsItems,
+    },
+    {
+      id: SETTING_SCOPES.USER,
+      label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.USER],
+      items: userItems,
+    },
   ];
 }
 
@@ -204,24 +215,29 @@ function buildOpenFolderGroups(
 ): FlyoutGroup[] {
   return [
     {
-      id: "workspace",
-      label: "Workspace",
+      id: SETTING_SCOPES.WORKSPACE,
+      label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.WORKSPACE],
       items: getWorkspaceTargets(availableIds).map((id) => ({
         label: getTargetLabel(id),
-        value: encodeTarget(id, "workspace"),
+        value: encodeTarget(id, SETTING_SCOPES.WORKSPACE),
         description: formatPathForDisplay(
-          getTargetDirectoryPath(targetDirectories, id, "workspace") ?? ""
+          getTargetDirectoryPath(
+            targetDirectories,
+            id,
+            SETTING_SCOPES.WORKSPACE
+          ) ?? ""
         ),
       })),
     },
     {
-      id: "user",
-      label: "User",
+      id: SETTING_SCOPES.USER,
+      label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.USER],
       items: getUserTargets(availableIds).map((id) => ({
         label: getTargetLabel(id),
-        value: encodeTarget(id, "user"),
+        value: encodeTarget(id, SETTING_SCOPES.USER),
         description: formatPathForDisplay(
-          getTargetDirectoryPath(targetDirectories, id, "user") ?? ""
+          getTargetDirectoryPath(targetDirectories, id, SETTING_SCOPES.USER) ??
+            ""
         ),
       })),
     },

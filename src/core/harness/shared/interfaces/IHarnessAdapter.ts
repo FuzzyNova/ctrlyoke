@@ -376,23 +376,6 @@ export interface IHarnessAdapter {
     isInteractive: boolean
   ): string[];
 
-  /**
-   * Generate MCP server configuration arguments (optional)
-   * @param mcpServerPath Absolute path to MCP server executable
-   * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Active working file for this workflow (sets CTRLYOKE_WORKING_FILE)
-   * @returns CLI arguments array, or null if MCP not supported
-   */
-  getMcpConfigArgs?(
-    mcpServerPath: string | undefined,
-    workspaceRoot: string,
-    workingFilePath?: string,
-    additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[],
-    stateRoot?: string,
-    secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<string[] | null>;
-
   /** Plan MCP arguments and deferred mutations without touching the filesystem. */
   planMcpConfigArgs?(
     mcpServerPath: string | undefined,
@@ -412,7 +395,7 @@ export interface IHarnessAdapter {
    * (Copilot, Claude). Providers that embed config inline (Codex) do not.
    *
    * Must use CliMcpConfigGenerator.getConfigFilePath() so the path always
-   * matches what getMcpConfigArgs() wrote.
+   * matches what planMcpConfigArgs() wrote.
    *
    * @param workingFilePath Active working file path used when the config was created
    * @param workspaceRoot Workspace root directory

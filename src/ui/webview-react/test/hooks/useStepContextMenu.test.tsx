@@ -67,7 +67,6 @@ function TestHarness({
             isCurrentStep: deleteIndex === currentStep,
             isExecutionTargetLocked: false,
             direction,
-            outputText: "step output",
             latestOutput,
             runtimeMeta,
           })
@@ -405,6 +404,11 @@ describe("useStepContextMenu", () => {
           type: STEP_TYPES.SCRIPT,
           script: "echo test",
           enabled: false,
+        }}
+        latestOutput={{
+          scriptOutput: { command: "echo test", stdout: "test", stderr: "" },
+          elapsed: 1,
+          isStreaming: false,
         }}
       />
     );

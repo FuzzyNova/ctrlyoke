@@ -1,6 +1,9 @@
 import React from "react";
 import { Icon } from "./Icon";
-import { SETTING_SCOPES } from "@root/types/DashboardConstants";
+import {
+  SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
+} from "@root/types/DashboardConstants";
 
 export interface ScopeToggleOption<T extends string> {
   value: T;
@@ -14,13 +17,13 @@ export interface ScopeToggleOption<T extends string> {
 export const SETTING_SCOPE_OPTIONS = [
   {
     value: SETTING_SCOPES.USER,
-    label: "User",
+    label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.USER],
     icon: "codicon-person",
     title: "Save to User settings",
   },
   {
     value: SETTING_SCOPES.WORKSPACE,
-    label: "Workspace",
+    label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.WORKSPACE],
     icon: "codicon-project",
     title: "Save to Workspace settings",
   },

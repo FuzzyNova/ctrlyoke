@@ -2,10 +2,31 @@ import * as assert from "assert";
 import {
   finiteNumber,
   isRecord,
+  isStringArray,
+  isStringRecord,
   parseFiniteNumber,
 } from "../../utils/JsonTypeGuards";
 
 suite("JsonTypeGuards", () => {
+  suite("isStringArray", () => {
+    test("accepts an empty array and rejects mixed arrays and non-arrays", () => {
+      assert.strictEqual(isStringArray([]), true);
+      assert.strictEqual(isStringArray(["text", 1]), false);
+      assert.strictEqual(isStringArray("text"), false);
+    });
+  });
+
+  suite("isStringRecord", () => {
+    test("accepts objects with only string values and rejects everything else", () => {
+      assert.strictEqual(isStringRecord({}), true);
+      assert.strictEqual(isStringRecord({ a: "1", b: "" }), true);
+      assert.strictEqual(isStringRecord({ a: "1", b: 2 }), false);
+      assert.strictEqual(isStringRecord(["a"]), false);
+      assert.strictEqual(isStringRecord(null), false);
+      assert.strictEqual(isStringRecord("a"), false);
+    });
+  });
+
   suite("isRecord", () => {
     test("accepts non-null, non-array objects including class instances", () => {
       class Example {}

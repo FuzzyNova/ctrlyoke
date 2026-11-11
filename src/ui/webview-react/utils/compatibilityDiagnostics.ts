@@ -28,6 +28,20 @@ export type PermissionField =
   | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
   | typeof PERMISSION_CAPABILITY_KEYS.MODE;
 
+const PERMISSION_FIELDS: readonly PermissionField[] = [
+  PERMISSION_CAPABILITY_KEYS.MODE,
+  PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
+  PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
+];
+
+export function diagnosticsForPermissions(
+  diagnostics: readonly CompatibilityDiagnostic[]
+): CompatibilityDiagnostic[] {
+  return diagnostics.filter((diagnostic) =>
+    PERMISSION_FIELDS.includes(diagnostic.capability as PermissionField)
+  );
+}
+
 export function diagnosticsForPermissionField(
   diagnostics: readonly CompatibilityDiagnostic[],
   field: PermissionField

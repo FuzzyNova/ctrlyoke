@@ -47,7 +47,10 @@ import {
   type UndoRecordUpdatedMessage,
   type HistorySearchResult,
 } from "../types/messages";
-import { HISTORY_TRASH_ACTIONS } from "@root/types/DashboardConstants";
+import {
+  HISTORY_TRASH_ACTIONS,
+  isTerminalStepStatus,
+} from "@root/types/DashboardConstants";
 import type {
   OrderedCliHistoryEntry,
   OrderedStatusHistoryEntry,
@@ -426,16 +429,6 @@ function applyExecutionState(state: ExecutionState): void {
     // pre-continuation state until the run ends.
     useUiStore.getState().markExecutionRunStarted();
   }
-}
-
-function isTerminalStepStatus(status: unknown): boolean {
-  return (
-    status === STEP_STATUS.COMPLETED ||
-    status === STEP_STATUS.FAILED ||
-    status === STEP_STATUS.CANCELLED ||
-    status === STEP_STATUS.SKIPPED ||
-    status === STEP_STATUS.NO_TURN_STARTED
-  );
 }
 
 // ============================================================================

@@ -9,6 +9,7 @@ import type {
   WorktreeResolution,
 } from "../types/CtrlYokeTypes";
 import { evaluateWorkspaceEligibility } from "./WorktreeUtils";
+import { toWorktreeObjectConfig } from "./WorktreeConfigShape";
 
 /** The result used to construct an execution workspace for one workflow run. */
 export interface WorkspaceWorktreeResolution extends WorktreeResolution {
@@ -17,55 +18,20 @@ export interface WorkspaceWorktreeResolution extends WorktreeResolution {
 }
 
 function normalizeDefault(value: WorktreeDefaultConfig): WorktreeResolution {
-  if (value === false) {
-    return { origin: "default" };
+  const config = toWorktreeObjectConfig(value);
+  if (config === false) {
+    return { origin: WORKTREE_CONFIG_ORIGINS.DEFAULT };
   }
-  if (value === true) {
-    return {
-      origin: "default",
-      config: { mode: WORKTREE_MODES.MANAGED },
-    };
-  }
-  if (typeof value === "string") {
-    return {
-      origin: "default",
-      config: { mode: WORKTREE_MODES.NAMED, branch: value },
-    };
-  }
+  // Only an explicit object default is validated; a string shorthand keeps
+  // whatever branch it names.
   if (
-    value.mode === WORKTREE_MODES.NAMED &&
-    (!value.branch || value.branch.trim().length === 0)
+    typeof value === "object" &&
+    config.mode === WORKTREE_MODES.NAMED &&
+    (!config.branch || config.branch.trim().length === 0)
   ) {
     throw new Error("Named worktree mode requires a branch.");
   }
-  return {
-    origin: "default",
-    config: { ...value },
-  };
-}
-
-function normalizeAuthored(
-  value: Exclude<WorktreeConfig, false | undefined>
-): WorktreeResolution {
-  if (value === true) {
-    return {
-      origin: "authored",
-      config: { mode: WORKTREE_MODES.MANAGED },
-    };
-  }
-  if (typeof value === "string") {
-    return {
-      origin: "authored",
-      config: {
-        mode: WORKTREE_MODES.NAMED,
-        branch: value,
-      },
-    };
-  }
-  return {
-    origin: "authored",
-    config: { ...value },
-  };
+  return { origin: WORKTREE_CONFIG_ORIGINS.DEFAULT, config: { ...config } };
 }
 
 /** Resolve only the workflow-authored and settings-default tiers. */
@@ -73,13 +39,13 @@ export function resolveWorktreeSelection(
   authored: WorktreeConfig | undefined,
   defaultValue: WorktreeDefaultConfig
 ): WorktreeResolution {
-  if (authored !== undefined) {
-    if (authored === false) {
-      return { origin: "authored" };
-    }
-    return normalizeAuthored(authored);
+  if (authored === undefined) {
+    return normalizeDefault(defaultValue);
   }
-  return normalizeDefault(defaultValue);
+  const config = toWorktreeObjectConfig(authored);
+  return config === false
+    ? { origin: WORKTREE_CONFIG_ORIGINS.AUTHORED }
+    : { origin: WORKTREE_CONFIG_ORIGINS.AUTHORED, config: { ...config } };
 }
 
 /**

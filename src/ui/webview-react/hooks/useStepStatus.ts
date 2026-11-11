@@ -4,7 +4,10 @@ import {
   EXECUTION_STATES,
   type StepStatus,
 } from "../types/messages";
-import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  isTerminalStepStatus,
+} from "@root/types/DashboardConstants";
 import { isWorkflowRunning } from "../utils/status";
 import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
 
@@ -67,16 +70,7 @@ export function useStepStatus() {
         // been recorded yet — e.g. currentStep advanced before the
         // STEP_STATUS_CHANGED message arrived (CLI watch mode).
         const status = (prompt as { status?: StepStatus }).status;
-        switch (status) {
-          case STEP_STATUS.FAILED:
-          case STEP_STATUS.CANCELLED:
-          case STEP_STATUS.SKIPPED:
-          case STEP_STATUS.NO_TURN_STARTED:
-          case STEP_STATUS.COMPLETED:
-            return status;
-          default:
-            return STEP_STATUS.COMPLETED;
-        }
+        return isTerminalStepStatus(status) ? status : STEP_STATUS.COMPLETED;
       }
     }
     // Eagerly reflect terminal states for the current step before the

@@ -1,4 +1,5 @@
 import * as path from "path";
+import { pathsEqual } from "../../../utils/PathCasing";
 import {
   IHarnessAdapter,
   HarnessConfig,
@@ -509,16 +510,13 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
             ).filter((dir) => {
               const resolvedDir = path.resolve(dir);
               const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
-              return process.platform === "win32"
-                ? resolvedDir.toLowerCase() !==
-                    resolvedWorkspaceRoot.toLowerCase()
-                : resolvedDir !== resolvedWorkspaceRoot;
+              return !pathsEqual(resolvedDir, resolvedWorkspaceRoot);
             });
       if (resolvedSandboxMode === CODEX_SANDBOX_MODES.WORKSPACE_WRITE) {
         for (const adminDir of await gitWritableAdminDirs(workspaceRoot)) {
           if (
-            !workspaceDirs.some(
-              (dir) => path.resolve(dir) === path.resolve(adminDir)
+            !workspaceDirs.some((dir) =>
+              pathsEqual(path.resolve(dir), path.resolve(adminDir))
             )
           ) {
             workspaceDirs.push(adminDir);
@@ -876,7 +874,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
   }
 
   /**
-   * Generate MCP server configuration arguments for Codex CLI
+   * Plan MCP server configuration arguments for Codex CLI
    *
    * Codex CLI uses repeated -c/--config overrides in inline TOML format.
    * Supports the built-in ctrlyoke server and user-defined stdio servers.
@@ -884,30 +882,8 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Active working file for this workflow (sets CTRLYOKE_WORKING_FILE)
-   * @returns CLI arguments array with -c flag, or null if MCP not supported
+   * @returns CLI arguments and deferred mutations
    */
-  async getMcpConfigArgs(
-    mcpServerPath: string | undefined,
-    workspaceRoot: string,
-    workingFilePath?: string,
-    additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[],
-    stateRoot?: string,
-    secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<string[] | null> {
-    const preparation = await this.planMcpConfigArgs(
-      mcpServerPath,
-      workspaceRoot,
-      workingFilePath,
-      additionalEnv,
-      userServers,
-      stateRoot,
-      secretEnvironment
-    );
-    await applyPreparedMutations(preparation.mutations);
-    return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
-  }
-
   async planMcpConfigArgs(
     mcpServerPath: string | undefined,
     workspaceRoot: string,

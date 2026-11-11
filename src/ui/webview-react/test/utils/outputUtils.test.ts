@@ -13,11 +13,12 @@ import {
   formatTimeHMS,
   extractKeyParameters,
   getStepAssistantTextForCopy,
-  generateDiffLines,
-  normalizeStructuredPatch,
-  isStructuredPatchMalformed,
-  countStructuredPatchDisplayLines,
 } from "@utils/outputUtils";
+import {
+  generateDiffLines,
+  getStructuredPatchDiffLines,
+  normalizeStructuredPatch,
+} from "@root/utils/DiffLines";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import {
   generateMarkdownExport,
@@ -25,7 +26,11 @@ import {
 } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, SCRIPT_OUTPUT_SOURCES } from "@/types/messages";
-import { hasRenderableDiff } from "@utils/diffUtils";
+import {
+  countStructuredPatchDisplayLines,
+  hasRenderableDiff,
+  isStructuredPatchMalformed,
+} from "@utils/diffUtils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // shortenPath
@@ -400,6 +405,59 @@ describe("generateDiffLines", () => {
     const added = result.filter((l) => l.type === "added");
     expect(added[0].newLineNum).toBe(2);
     expect(added[1].newLineNum).toBe(3);
+  });
+
+  it("normalizes mixed Windows and Unix line endings before diffing", () => {
+    expect(generateDiffLines("first\r\nsecond\n", "first\nsecond\r\n")).toEqual(
+      [
+        { type: "context", oldLineNum: 1, newLineNum: 1, content: "first" },
+        { type: "context", oldLineNum: 2, newLineNum: 2, content: "second" },
+      ]
+    );
+  });
+});
+
+describe("getStructuredPatchDiffLines", () => {
+  it("skips patch metadata without advancing source line numbers", () => {
+    const [context] = getStructuredPatchDiffLines([
+      {
+        oldStart: 4,
+        oldLines: 1,
+        newStart: 7,
+        newLines: 1,
+        lines: [
+          "\\ No newline at end of file",
+          "@@ -4 +7 @@",
+          "diff --git a/file b/file",
+          "index abc..def 100644",
+          " context",
+        ],
+      },
+    ]);
+
+    expect(context).toEqual({
+      type: "context",
+      oldLineNum: 4,
+      newLineNum: 7,
+      content: "context",
+    });
+  });
+
+  it("preserves ordered content while normalization removes duplicate hunks", () => {
+    const hunk: UnifiedDiffHunk = {
+      oldStart: 1,
+      oldLines: 1,
+      newStart: 1,
+      newLines: 1,
+      lines: ["-old", "+new"],
+    };
+
+    expect(
+      getStructuredPatchDiffLines(normalizeStructuredPatch([hunk, hunk]))
+    ).toEqual([
+      { type: "removed", oldLineNum: 1, content: "old" },
+      { type: "added", newLineNum: 1, content: "new" },
+    ]);
   });
 });
 

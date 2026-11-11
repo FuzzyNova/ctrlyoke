@@ -734,7 +734,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
 
     // Remove this workflow's MCP servers from .agents/mcp_config.json
     // (ref-counted — only removed when no other workflow needs them). Uses the
-    // same workflow key as getMcpConfigArgs. Safe to call even when MCP was
+    // same workflow key as planMcpConfigArgs. Safe to call even when MCP was
     // never registered.
     await AntigravityHarnessAdapter.mcpTracker.unregisterWorkflow(
       workflowKey,
@@ -858,34 +858,12 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
   /**
    * Register MCP servers by writing `.agents/mcp_config.json` (via the shared
    * tracker for parallel-safe ref-counting). agy auto-discovers this file, so
-   * no CLI arg is needed — returns `[]` on success.
+   * no CLI arg is needed.
    *
    * agy has no `--allowed-mcp-server-names` flag, so no per-prompt server
    * scoping is applied — parallel workflows in one workspace share the file's
    * servers.
    */
-  async getMcpConfigArgs(
-    mcpServerPath: string | undefined,
-    workspaceRoot: string,
-    workingFilePath?: string,
-    additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[],
-    stateRoot?: string,
-    secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<string[] | null> {
-    const preparation = await this.planMcpConfigArgs(
-      mcpServerPath,
-      workspaceRoot,
-      workingFilePath,
-      additionalEnv,
-      userServers,
-      stateRoot,
-      secretEnvironment
-    );
-    await applyPreparedMutations(preparation.mutations);
-    return preparation.mutations.length > 0 ? preparation.cliArgs : null;
-  }
-
   async planMcpConfigArgs(
     mcpServerPath: string | undefined,
     workspaceRoot: string,

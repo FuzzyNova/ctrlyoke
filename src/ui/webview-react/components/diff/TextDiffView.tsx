@@ -35,10 +35,8 @@ import {
   getRenderedDiffStats,
   locateActiveDiffMatch,
 } from "@utils/rdvAdapter";
-import {
-  countStructuredPatchDisplayLines,
-  normalizeStructuredPatch,
-} from "@utils/outputUtils";
+import { countStructuredPatchDisplayLines } from "@utils/diffUtils";
+import { normalizeStructuredPatch } from "@root/utils/DiffLines";
 import {
   injectFindHighlightStyles,
   injectSyntaxHighlightStyles,

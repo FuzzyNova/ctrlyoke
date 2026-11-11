@@ -6,6 +6,7 @@ import {
   TERMINAL_SESSION_STATUS,
   type ShellKind,
 } from "@/types/messages";
+import { shellKindForName } from "@root/utils/ShellCatalog";
 import type { TerminalSession } from "@store/terminalStore";
 
 function normalizeShellName(name: string | undefined): string | undefined {
@@ -25,29 +26,7 @@ export function inferShellKind(
   }
 
   const name = normalizeShellName(stepName);
-  if (!name) {
-    return undefined;
-  }
-
-  if (/^pwsh([.-]|$)/.test(name)) return SHELL_KINDS.PWSH;
-  if (name.startsWith("powershell")) return SHELL_KINDS.POWERSHELL;
-  if (name === SHELL_TYPES.ZSH) return SHELL_KINDS.ZSH;
-  if (name === SHELL_TYPES.BASH) return SHELL_KINDS.BASH;
-  if (name === SHELL_TYPES.FISH) return SHELL_KINDS.FISH;
-  if (name === SHELL_TYPES.CMD) return SHELL_KINDS.CMD;
-  if (name === SHELL_TYPES.WSL) return SHELL_KINDS.WSL;
-  if (name === SHELL_TYPES.NU || name === SHELL_TYPES.NUSHELL) {
-    return SHELL_KINDS.NUSHELL;
-  }
-  if (
-    name === SHELL_TYPES.SH ||
-    name === SHELL_TYPES.DASH ||
-    name === SHELL_TYPES.KSH
-  ) {
-    return SHELL_KINDS.SH;
-  }
-  if (name.endsWith("sh")) return SHELL_KINDS.SH;
-  return undefined;
+  return name ? shellKindForName(name) : undefined;
 }
 
 /**

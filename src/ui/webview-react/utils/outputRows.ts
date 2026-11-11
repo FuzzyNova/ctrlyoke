@@ -577,7 +577,8 @@ export interface BuildOutputRowsResult {
   latestActivityRowKey?: string;
 }
 
-function getStepName(
+/** A step's trimmed authored name, or `fallback` when it has none. */
+export function getStepName(
   step: WorkflowStep | null | undefined,
   fallback: string
 ): string {
