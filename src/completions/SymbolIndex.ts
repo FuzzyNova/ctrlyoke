@@ -37,6 +37,10 @@ export interface IndexedSymbol {
   containerName?: string;
 }
 
+export function symbolKey(symbol: IndexedSymbol): string {
+  return `${symbol.viewerPath}\n${symbol.name}\n${symbol.kind}\n${symbol.startLine}:${symbol.endLine}`;
+}
+
 export interface SymbolIndex {
   workspaceSymbols(
     query: string,

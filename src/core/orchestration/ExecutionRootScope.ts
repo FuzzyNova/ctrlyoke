@@ -36,7 +36,7 @@ export const SCOPE_STORAGE_CATEGORIES = {
 export type ScopeStorageCategory =
   (typeof SCOPE_STORAGE_CATEGORIES)[keyof typeof SCOPE_STORAGE_CATEGORIES];
 
-async function readJson<T>(filePath: string): Promise<T | null> {
+export async function readJson<T>(filePath: string): Promise<T | null> {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
   } catch (error) {

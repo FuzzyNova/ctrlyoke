@@ -29,6 +29,7 @@ import {
   isCommitAncestor,
   localBranchExists,
   validateBranchName,
+  normalizeBranchName,
   type GitLocationLookup,
   type GitWorkingTreeCounts,
   type GitWorktreeEntry,
@@ -507,12 +508,6 @@ interface ResolvedRepositoryInputs {
   workspaceRoots: string[];
   approvedExternalRoots: string[];
   executionRoot: string;
-}
-
-function normalizeBranchName(branchName: string): string {
-  return branchName.startsWith("refs/heads/")
-    ? branchName.slice("refs/heads/".length)
-    : branchName;
 }
 
 /**

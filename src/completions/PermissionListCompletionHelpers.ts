@@ -1,5 +1,6 @@
 import { COPILOT_TO_CLAUDE_MAP } from "../core/harness/shared/CliToolPermissionMapper";
 import { TOOL_PERMISSION_CATEGORIES } from "../types/DashboardConstants";
+import { matchesPrefix } from "./PrefixMatch";
 
 /** Completion item shape used by the tool permission list editor. */
 export interface PermissionListCompletionItem {
@@ -62,10 +63,6 @@ export function parsePermissionCompletionContext(
     line,
     beforeCursor: linePrefix.slice(leadingWhitespace),
   };
-}
-
-function matchesPrefix(value: string, prefix: string): boolean {
-  return value.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase());
 }
 
 function buildToolCandidates(): PermissionListCompletionItem[] {

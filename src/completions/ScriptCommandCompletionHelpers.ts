@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import type { FileWatcherFactory, NamedRoot } from "../core/HostPorts";
 import { Log } from "../utils/Log";
+import { matchesPrefix } from "./PrefixMatch";
 
 /** Completion item shape used by the single-line script field. */
 export interface ScriptCommandCompletionItem {
@@ -595,10 +596,6 @@ function packageCandidates(scripts: ScriptRecord[]): CompletionCandidate[] {
     }
   }
   return candidates;
-}
-
-function matchesPrefix(value: string, prefix: string): boolean {
-  return value.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase());
 }
 
 function deduplicateCandidates(

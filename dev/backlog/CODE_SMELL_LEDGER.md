@@ -177,7 +177,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     Landed as shared Node-only `src/utils/Utf8Truncate.ts`; the commit-message bug is filed and fixed.
   - Five identical private helper pairs: `normalizeBranchName`,
     `mapWithConcurrency`, `symbolKey`, `matchesPrefix`, and the
-    `ExecutionRootScope`/`ExecutionRootLeaseManager` `readJson`.
+    `ExecutionRootScope`/`ExecutionRootLeaseManager` `readJson`. These five helper pairs
+    landed as shared exports/utilities with focused coverage for `mapWithConcurrency` and
+    `matchesPrefix`.
 
   Still open for a later pass: `flattenSteps` vs `flatStepCount` on non-object
   members (check what the loader does first); win32-only `toLowerCase()` path keys

@@ -10,6 +10,7 @@ import {
 import { lockFilePath, withFileLock } from "../../utils/FileLockUtils";
 import {
   resolveExecutionRootScope,
+  readJson,
   SCOPE_STORAGE_CATEGORIES,
   scopeStorageRoot,
   verifyScopeRecord as verifyExecutionRootScopeRecord,
@@ -113,15 +114,6 @@ async function withArbitrationLock<T>(
 ): Promise<T> {
   await fs.mkdir(scope.storageRoot, { recursive: true });
   return withFileLock(scope.arbitrationTarget, action);
-}
-
-async function readJson<T>(filePath: string): Promise<T | null> {
-  try {
-    return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
-  } catch (error) {
-    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return null;
-    throw error;
-  }
 }
 
 /** A missing or malformed lease cannot establish a live owner. */

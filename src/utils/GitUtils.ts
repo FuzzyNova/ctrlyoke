@@ -2065,7 +2065,7 @@ export interface AddWorktreeOptions {
   detached?: boolean;
 }
 
-function normalizeBranchName(branchName: string): string {
+export function normalizeBranchName(branchName: string): string {
   return branchName.startsWith("refs/heads/")
     ? branchName.slice("refs/heads/".length)
     : branchName;
