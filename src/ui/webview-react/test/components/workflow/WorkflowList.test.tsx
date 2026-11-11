@@ -178,6 +178,77 @@ describe("WorkflowList token totals", () => {
   );
 });
 
+describe("WorkflowList scheduled section", () => {
+  afterEach(() => cleanup());
+
+  const makeScheduled = (key: string, nextRunAt: number) => ({
+    address: {
+      workflowKey: key as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    } as const,
+    workflowName: key,
+    executionState: EXECUTION_STATES.IDLE,
+    schedule: {
+      enabled: true,
+      trigger: { at: new Date(nextRunAt).toISOString() },
+      hostId: "test-host",
+    },
+    scheduleNextRunAt: nextRunAt,
+  });
+  const baseProps = {
+    rows: [] as UnifiedWorkflowRow[],
+    currentAddress: null,
+    activeWorkflowId: null,
+    runningHasActiveTerminal: () => false,
+    onSelectRecent: () => undefined,
+    onSwitchRunning: () => undefined,
+    onPauseRunning: () => undefined,
+    onCancelPauseRunning: () => undefined,
+    onResumeRunning: () => undefined,
+    onStopRunning: () => undefined,
+  };
+
+  it("appears only when schedules exist and orders by next run", () => {
+    const { rerender } = render(<WorkflowList {...baseProps} />);
+    expect(
+      screen.queryByRole("region", { name: "Scheduled workflows" })
+    ).toBeNull();
+    rerender(
+      <WorkflowList
+        {...baseProps}
+        scheduledWorkflows={[
+          makeScheduled("Later", 200),
+          makeScheduled("Sooner", 100),
+        ]}
+      />
+    );
+    const section = screen.getByRole("region", { name: "Scheduled workflows" });
+    const rows = within(section).getAllByRole("listitem");
+    expect(rows[0]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("Sooner")
+    );
+    expect(rows[1]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("Later")
+    );
+  });
+
+  it("passes the scheduled lineage to the enable/disable callback", () => {
+    const scheduled = makeScheduled("Toggle me", 100);
+    const onToggleSchedule = vi.fn();
+    render(
+      <WorkflowList
+        {...baseProps}
+        scheduledWorkflows={[scheduled]}
+        onToggleSchedule={onToggleSchedule}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Disable schedule" }));
+    expect(onToggleSchedule).toHaveBeenCalledWith(scheduled);
+  });
+});
+
 describe("WorkflowList recent-history loading", () => {
   afterEach(() => cleanup());
 

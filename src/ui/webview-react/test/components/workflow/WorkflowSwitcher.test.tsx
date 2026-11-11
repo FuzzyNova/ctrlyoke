@@ -1873,6 +1873,53 @@ describe("WorkflowSwitcher — loaded state", () => {
     expect(screen.getByText("Favorite Workflow")).toBeInTheDocument();
     expect(screen.queryByText("Regular Workflow")).not.toBeInTheDocument();
   });
+
+  it("filters by schedule state and posts the inverse enabled value from Scheduled", async () => {
+    const user = userEvent.setup();
+    const schedule = {
+      enabled: true,
+      trigger: { cron: "0 9 * * *" },
+      hostId: "test-host",
+    } as const;
+    render(<WorkflowSwitcher />);
+    setRecentWorkflows([
+      {
+        workflowName: "Scheduled Workflow",
+        executionState: EXECUTION_STATES.IDLE,
+        schedule,
+        scheduleNextRunAt: Date.now() + 60_000,
+      },
+      {
+        workflowName: "Unscheduled Workflow",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
+    expect(
+      screen.getByRole("region", { name: "Scheduled workflows" })
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    await user.click(document.getElementById("workflow-schedule-filter")!);
+    await user.click(
+      within(document.body).getByRole("button", { name: "Scheduled" })
+    );
+    expect(screen.queryByText("Scheduled Workflow")).not.toBeInTheDocument();
+    expect(screen.getByText("Unscheduled Workflow")).toBeInTheDocument();
+    await user.click(
+      within(document.body).getByRole("button", { name: "Scheduled" })
+    );
+    await user.click(
+      within(
+        screen.getByRole("region", { name: "Scheduled workflows" })
+      ).getByRole("button", { name: "Disable schedule" })
+    );
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SET_SCHEDULE,
+      address: expect.objectContaining({ workflowKey: "test-0" }),
+      enabled: false,
+      trigger: schedule.trigger,
+    });
+  });
 });
 
 describe("WorkflowSwitcher — run navigation panel", () => {

@@ -88,6 +88,7 @@ export interface WorkflowListHandle {
 
 interface WorkflowListProps {
   rows: UnifiedWorkflowRow[];
+  scheduledWorkflows?: RecentWorkflow[];
   currentAddress: WorkflowViewAddress | null;
   activeWorkflowId: string | null;
   runningHasActiveTerminal: (workflowId: string) => boolean;
@@ -104,6 +105,7 @@ interface WorkflowListProps {
     target: WorkflowContextMenuTarget,
     opener: HTMLElement | null
   ) => void;
+  onToggleSchedule?: (workflow: RecentWorkflow) => void;
   /** Drills into a lineage's run panel without selecting/loading it. Omitted rows render no indicator. */
   onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
   onOpenContextMenu?: (
@@ -148,6 +150,8 @@ interface RecentWorkflowRowProps {
   ) => void;
   /** List-scoped: reserve the indicator's track even on this row when a sibling row is drillable, so time/badge columns stay aligned. */
   showRunIndicatorTrack: boolean;
+  onToggleSchedule?: (workflow: RecentWorkflow) => void;
+  scheduled?: boolean;
 }
 
 const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
@@ -162,14 +166,20 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   onDrillIntoRuns,
   onOpenContextMenu,
   showRunIndicatorTrack,
+  onToggleSchedule,
+  scheduled = false,
 }) => {
   const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
     typeof workflow.totalSteps === "number" && workflow.totalSteps > 0;
-  const timeAgo = formatRelativeTimeVerbose(
-    workflow.lastModifiedAt || workflow.startedAt
-  );
+  const timeAgo = scheduled
+    ? workflow.scheduleNextRunAt
+      ? `Next: ${new Date(workflow.scheduleNextRunAt).toLocaleString()}`
+      : workflow.schedule?.enabled
+        ? "Next run pending"
+        : "Disabled"
+    : formatRelativeTimeVerbose(workflow.lastModifiedAt || workflow.startedAt);
   const accessibleName = composeRowAccessibleName([
     workflow.workflowName,
     workflow.executionState,
@@ -302,6 +312,36 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         )}
 
         <RowActionRail>
+          {scheduled && workflow.schedule && onToggleSchedule && (
+            <button
+              type="button"
+              title={
+                workflow.schedule.enabled
+                  ? "Disable schedule"
+                  : "Enable schedule"
+              }
+              aria-label={
+                workflow.schedule.enabled
+                  ? "Disable schedule"
+                  : "Enable schedule"
+              }
+              aria-pressed={workflow.schedule.enabled}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSchedule(workflow);
+              }}
+              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground`}
+            >
+              <Icon
+                name={
+                  workflow.schedule.enabled
+                    ? "codicon-debug-pause"
+                    : "codicon-play"
+                }
+                className="block leading-none"
+              />
+            </button>
+          )}
           <button
             type="button"
             title={
@@ -425,6 +465,7 @@ export const WorkflowList = React.forwardRef<
 >(function WorkflowList(
   {
     rows,
+    scheduledWorkflows = [],
     currentAddress,
     activeWorkflowId,
     runningHasActiveTerminal,
@@ -438,6 +479,7 @@ export const WorkflowList = React.forwardRef<
     onRemove,
     onToggleFavorite,
     onEditSchedule,
+    onToggleSchedule,
     onDrillIntoRuns,
     onOpenContextMenu,
     onNewWorkflow,
@@ -488,6 +530,12 @@ export const WorkflowList = React.forwardRef<
   );
   const hasRunningRows = runningRows.length > 0;
   const hasRecentRows = recentRows.length > 0;
+  const orderedScheduledWorkflows = [...scheduledWorkflows].sort(
+    (a, b) =>
+      (a.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER) -
+      (b.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER)
+  );
+  const hasScheduledRows = orderedScheduledWorkflows.length > 0;
   // List-scoped, not row-scoped, and spanning *both* regions: reserve the
   // indicator track on every row as soon as one row anywhere is drillable, so
   // the state/time columns stay aligned between a pinned running row and the
@@ -566,6 +614,43 @@ export const WorkflowList = React.forwardRef<
                 />
               )}
             />
+          </div>
+        </div>
+      )}
+
+      {hasScheduledRows && (
+        <div
+          role="region"
+          aria-label="Scheduled workflows"
+          className="scheduled-workflows-region flex min-h-0 flex-col border-b border-dropdown-border max-h-[min(260px,50%)] shrink-0"
+        >
+          <div className="flex shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-xxs font-semibold uppercase tracking-wider text-description-fg">
+            <Icon name="clock" />
+            <span>Scheduled ({orderedScheduledWorkflows.length})</span>
+          </div>
+          <div
+            role="list"
+            aria-label="Scheduled workflows"
+            className="min-h-0 overflow-y-auto overflow-x-clip pb-1"
+          >
+            {orderedScheduledWorkflows.map((workflow) => (
+              <RecentWorkflowRow
+                key={`scheduled:${workflow.address.workflowKey}`}
+                workflow={workflow}
+                currentAddress={currentAddress}
+                hasActiveTerminal={recentHasActiveTerminal}
+                tier={tier}
+                onSelect={onSelectRecent}
+                onToggleFavorite={onToggleFavorite}
+                onEditSchedule={onEditSchedule}
+                onRemove={onRemove}
+                onDrillIntoRuns={onDrillIntoRuns}
+                onOpenContextMenu={onOpenContextMenu}
+                showRunIndicatorTrack={hasDrillableRow}
+                onToggleSchedule={onToggleSchedule}
+                scheduled
+              />
+            ))}
           </div>
         </div>
       )}

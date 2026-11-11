@@ -81,6 +81,9 @@ import {
   WORKFLOW_DROPDOWN_TARGET_WIDTH,
   WORKFLOW_STATUS_BUTTON_SIZES,
   type WorkflowRowTier,
+  ALL_WORKFLOW_SCHEDULE_FILTERS,
+  WORKFLOW_SCHEDULE_FILTER_OPTIONS,
+  WORKFLOW_SCHEDULE_FILTER_VALUES,
 } from "../../constants";
 import {
   ALL_WORKFLOW_HARNESSES,
@@ -357,6 +360,9 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const [selectedWorkflowHarnesses, setSelectedWorkflowHarnesses] = useState<
     string[]
   >(() => [...ALL_WORKFLOW_HARNESSES]);
+  const [selectedScheduleStates, setSelectedScheduleStates] = useState<
+    string[]
+  >(() => [...ALL_WORKFLOW_SCHEDULE_FILTERS]);
   const [workflowDateFilter, setWorkflowDateFilter] = useState<DateRangeFilter>(
     DEFAULT_DATE_RANGE_FILTER
   );
@@ -724,6 +730,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
 
   const filtersActive =
     selectedWorkflowStates.length !== ALL_WORKFLOW_STATES.length ||
+    selectedScheduleStates.length !== ALL_WORKFLOW_SCHEDULE_FILTERS.length ||
     selectedWorkflowHarnesses.length !== ALL_WORKFLOW_HARNESSES.length ||
     workflowDateFilter.from.length > 0 ||
     workflowDateFilter.to.length > 0 ||
@@ -731,6 +738,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
 
   const resetWorkflowFilters = useCallback(() => {
     setSelectedWorkflowStates([...ALL_WORKFLOW_STATES]);
+    setSelectedScheduleStates([...ALL_WORKFLOW_SCHEDULE_FILTERS]);
     setSelectedWorkflowHarnesses([...ALL_WORKFLOW_HARNESSES]);
     setWorkflowDateFilter(DEFAULT_DATE_RANGE_FILTER);
     setFavoriteWorkflowsOnly(false);
@@ -1309,6 +1317,15 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     },
     []
   );
+  const handleToggleSchedule = useCallback((workflow: RecentWorkflow) => {
+    if (!workflow.schedule) return;
+    sendMessage(MESSAGE_TYPES.SET_SCHEDULE, {
+      address: workflow.address,
+      enabled: !workflow.schedule.enabled,
+      trigger: workflow.schedule.trigger,
+      ...(workflow.schedule.until ? { until: workflow.schedule.until } : {}),
+    });
+  }, []);
 
   const handleDuplicateWorkflow = useCallback(
     (target: WorkflowContextMenuTarget, opener: HTMLElement | null) => {
@@ -1447,6 +1464,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       | "lastModifiedAt"
       | "startedAt"
       | "isFavorite"
+      | "schedule"
     > & {
       workflowKey?: string;
       filePath?: string;
@@ -1461,9 +1479,24 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
           recentWorkflow.address.workflowKey === workflow.workflowKey &&
           (recentWorkflow.isFavorite ?? false)
       );
+    const isScheduled = Boolean(
+      workflow.schedule ??
+      sortedRecentWorkflows.find(
+        (recentWorkflow) =>
+          recentWorkflow.address.workflowKey === workflow.workflowKey
+      )?.schedule
+    );
 
     if (
       (favoriteWorkflowsOnly && !isFavorite) ||
+      (!selectedScheduleStates.includes(
+        WORKFLOW_SCHEDULE_FILTER_VALUES.SCHEDULED
+      ) &&
+        isScheduled) ||
+      (!selectedScheduleStates.includes(
+        WORKFLOW_SCHEDULE_FILTER_VALUES.UNSCHEDULED
+      ) &&
+        !isScheduled) ||
       !selectedWorkflowStates.includes(workflow.executionState) ||
       (workflow.harness
         ? !selectedWorkflowHarnesses.includes(workflow.harness)
@@ -1515,6 +1548,16 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       workflowMatchesSearch(recentWorkflow) &&
       !runningSectionWorkflowKeys.has(recentWorkflow.address.workflowKey)
   );
+  const scheduledWorkflows = sortedRecentWorkflows
+    .filter(
+      (workflow) =>
+        Boolean(workflow.schedule) && workflowMatchesSearch(workflow)
+    )
+    .sort(
+      (a, b) =>
+        (a.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER) -
+        (b.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER)
+    );
   // One lineage-keyed row per entry, running lineages first — this is the
   // unified navigation model step 0 of the run-navigation plan calls for:
   // running state is a property of a row, not a separate section, and a
@@ -1618,6 +1661,24 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
               WORKFLOW_STATE_OPTIONS
             )}
             className="w-fit min-w-[96px]"
+            dropdownMaxHeight="260px"
+          />
+        </div>
+
+        <div className="shrink-0 text-xs text-description-fg">
+          <MultiCheckboxDropdown
+            id="workflow-schedule-filter"
+            selectedValues={selectedScheduleStates}
+            onChange={setSelectedScheduleStates}
+            options={WORKFLOW_SCHEDULE_FILTER_OPTIONS}
+            placeholder="No Schedules"
+            buttonLabel={formatMultiFilterLabel(
+              selectedScheduleStates,
+              ALL_WORKFLOW_SCHEDULE_FILTERS,
+              "Schedules",
+              WORKFLOW_SCHEDULE_FILTER_OPTIONS
+            )}
+            className="w-fit min-w-[112px]"
             dropdownMaxHeight="260px"
           />
         </div>
@@ -1871,6 +1932,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
           >
             <WorkflowList
               rows={workflowListRows}
+              scheduledWorkflows={scheduledWorkflows}
               currentAddress={displayedViewAddress}
               activeWorkflowId={activeWorkflowId}
               runningHasActiveTerminal={workflowHasActiveTerminal}
@@ -1884,6 +1946,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
               onRemove={handleRemoveWorkflow}
               onToggleFavorite={handleToggleFavorite}
               onEditSchedule={handleEditSchedule}
+              onToggleSchedule={handleToggleSchedule}
               onOpenContextMenu={openWorkflowContextMenu}
               onDrillIntoRuns={handleDrillIntoRuns}
               tier={dropdownRowTier}

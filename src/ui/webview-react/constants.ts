@@ -9,6 +9,21 @@ import {
 
 export { WORKFLOW_ROW_KINDS, WORKFLOW_ROW_TIERS };
 
+export const WORKFLOW_SCHEDULE_FILTER_VALUES = {
+  SCHEDULED: "scheduled",
+  UNSCHEDULED: "unscheduled",
+} as const;
+export const ALL_WORKFLOW_SCHEDULE_FILTERS = Object.values(
+  WORKFLOW_SCHEDULE_FILTER_VALUES
+);
+export const WORKFLOW_SCHEDULE_FILTER_OPTIONS = [
+  { value: WORKFLOW_SCHEDULE_FILTER_VALUES.SCHEDULED, label: "Scheduled" },
+  {
+    value: WORKFLOW_SCHEDULE_FILTER_VALUES.UNSCHEDULED,
+    label: "Not scheduled",
+  },
+];
+
 /** Collapsed panel size - fixed height/width bar when panel is minimized */
 export const PANEL_COLLAPSED_SIZE_DEFAULT = "30px";
 export const PANEL_COLLAPSED_SIZE_DEFAULT_PX = 30;

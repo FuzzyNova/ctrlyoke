@@ -1,9 +1,9 @@
 # Workflow Scheduling Plan
 
-> **Status:** Not yet implemented — design accepted in principle. The execution
-> substrate is **decided** (see below): schedules fire only while a long-lived
-> ctrlyoke host is running, and that is an accepted limitation, not a problem to
-> engineer around. Nothing here is built yet.
+> **Status:** v1 is implemented pending review. The execution substrate is
+> **decided** (see below): schedules fire only while a long-lived ctrlyoke host
+> is running, and that is an accepted limitation, not a problem to engineer
+> around.
 
 > **2026-10-10 audit:** Still not started (no `schedule` anywhere in schemas or types). The
 > design predated the run-storage rewrite, so the data model and firing semantics were corrected:
@@ -561,4 +561,4 @@ No remaining blockers — the plan is fully specified for a v1 implementation.
        actions, and tests.
 4. [x] UI authoring: the `ScheduleEditor` popover, the row clock button (rail 44 → 68), the
    context-menu entry, and tests.
-5. UI management: the "Scheduled" section and filter, public docs, `CHANGELOG.md`.
+5. [x] UI management: the "Scheduled" section and filter, public docs, `CHANGELOG.md`.

@@ -217,6 +217,9 @@ Click the workflow name in the header to open the **Workflows** menu.
 - Below it are your recent workflows. Starred workflows sort to the top. Click
   the star to add or remove a favorite.
 - Search by name, or filter by state, harness or **Favorites only**.
+- **Scheduled** lists workflows with a saved schedule, ordered by next run. Use
+  the clock to edit a schedule and the pause/play control to disable or enable it.
+  The filter row also lets you show scheduled or unscheduled workflows.
 
 Each row shows the workflow's step progress, its token total and estimated
 cost, and its run time. Durations everywhere in the dashboard read as a clock:
@@ -246,8 +249,37 @@ Right-click a workflow or run for:
   copy, `events.jsonl` timeline and manifest). In the browser dashboard the path
   is on the machine running ctrlyoke. See [Run files](/reference/run-files).
 - **Add to Favorites** / **Remove from Favorites**.
+- **Schedule…** / **Edit Schedule…** opens the workflow's schedule editor.
 - **Delete Workflow** / **Delete Run**: moves it to Recently deleted. You can
   restore it from **Settings → General → Run History**.
+
+### Scheduling workflows
+
+Use the clock on a workflow row, or choose **Schedule…** from its context menu.
+Choose a one-time run, a daily, weekly or monthly schedule, or enter a custom
+cron expression. The **Scheduled** section shows the next run and lets you
+pause or resume a saved schedule. Scheduled runs start a new workflow run from
+the beginning.
+
+Custom schedules use five numeric cron fields in this order: minute (0–59),
+hour (0–23), day of month (1–31), month (1–12), and day of week (0–7, where
+0 and 7 are Sunday). Each field supports `*`, comma-separated values, ranges
+such as `1-5`, and steps such as `*/15` or `1-30/2`. Month and weekday names
+and six-field (seconds) expressions are not supported. When both day of month
+and day of week are restricted, either matching field qualifies.
+
+Times use the local timezone of the machine running ctrlyoke. Daily schedules
+stay at the same local wall-clock time across daylight-saving changes. A time
+that falls in the spring-forward gap runs at the first valid minute after the
+clock change; an ambiguous time in the fall-back hour runs once.
+
+The built-in scheduler runs only while VS Code or `ctrlyoke server` is running.
+Missed occurrences are skipped when ctrlyoke is stopped or asleep, and a new
+occurrence is skipped if that workflow is already running. For a schedule
+stored in a synced state home, only the machine that created it (`hostId`) runs
+it; editing the schedule on another machine transfers that responsibility.
+If a task must run while ctrlyoke is closed, use an external cron or CI job to
+call `ctrlyoke run <workflow-file>`.
 
 ## Keyboard shortcuts {#keyboard-shortcuts}
 
