@@ -54,7 +54,6 @@ import {
   STEP_TYPES,
   PROMPT_PROPERTIES,
   PROMPT_DIAGNOSTIC_FIELDS,
-  PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
@@ -71,6 +70,7 @@ import { generateWorkflowNameFromPrompt } from "@root/utils/workflowNaming";
 import {
   diagnosticsForHookEvents,
   diagnosticsForMcpFiltering,
+  diagnosticsForPermissions,
   toFieldDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
@@ -262,13 +262,9 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   const mcpCompatibilityDiagnostics = diagnosticsForMcpFiltering(
     promptCompatibility.diagnostics
   );
-  const permissionCompatibilityDiagnostics =
-    promptCompatibility.diagnostics.filter(
-      (diagnostic) =>
-        diagnostic.capability === PERMISSION_CAPABILITY_KEYS.MODE ||
-        diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
-        diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
-    );
+  const permissionCompatibilityDiagnostics = diagnosticsForPermissions(
+    promptCompatibility.diagnostics
+  );
   const imageCompatibilityDiagnostics = promptCompatibility.diagnostics
     .filter(
       (diagnostic) =>

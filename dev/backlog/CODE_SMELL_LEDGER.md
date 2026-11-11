@@ -343,6 +343,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - The permission-diagnostics filter (mode/allowedTools/deniedTools) is written out in
     `StepEditor`, `PromptPropertiesDrawer` and `WorkflowPropertiesPanel`, next to the
     sibling `diagnosticsFor*` helpers in `utils/compatibilityDiagnostics.ts`.
+    Landed: the three editors use `diagnosticsForPermissions`; focused coverage verifies
+    all permission capabilities, exclusion, and input order.
   - `WorkspaceViewerHeader.getWorkspaceFilePath` re-implements
     `fileBrowserShared.toWorkspaceRelative`, plus a leading-slash strip.
 

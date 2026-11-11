@@ -95,7 +95,6 @@ import {
   sandboxSelectOptions,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
-  PERMISSION_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
   PRIOR_CONTEXT_DETAILS,
   type PriorContextDetail,
@@ -131,6 +130,7 @@ import {
   diagnosticsForPermissionField,
   diagnosticsForHookEvents,
   diagnosticsForMcpFiltering,
+  diagnosticsForPermissions,
   firstCompatibilityProperty,
   formatCompatibilitySource,
   sandboxSupportDiagnostic,
@@ -527,11 +527,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   ]);
 
   const compatibility = useCompatibilityDiagnostics();
-  const permissionDiagnostics = compatibility.diagnostics.filter(
-    (diagnostic) =>
-      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.MODE ||
-      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
-      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+  const permissionDiagnostics = diagnosticsForPermissions(
+    compatibility.diagnostics
   );
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);

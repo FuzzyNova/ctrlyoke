@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  diagnosticsForPermissions,
   sandboxSupportDiagnostic,
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
+  PERMISSION_CAPABILITY_KEYS,
 } from "@root/types/DashboardConstants";
 import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
 import {
@@ -19,6 +21,26 @@ import {
   type HarnessCapabilityRegistrySnapshot,
 } from "@root/types/CompatibilityTypes";
 import type { HarnessId } from "@root/types/DashboardConstants";
+
+describe("diagnosticsForPermissions", () => {
+  it("keeps permission diagnostics in input order and excludes other capabilities", () => {
+    const permissionCapabilities = [
+      PERMISSION_CAPABILITY_KEYS.MODE,
+      PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
+      PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
+    ];
+    const diagnostics = [
+      ...permissionCapabilities.map((capability) => ({
+        capability,
+      } as CompatibilityDiagnostic)),
+      { capability: "terminal" } as CompatibilityDiagnostic,
+    ];
+
+    expect(diagnosticsForPermissions(diagnostics)).toEqual(
+      diagnostics.slice(0, permissionCapabilities.length)
+    );
+  });
+});
 
 function target(
   mode: string,

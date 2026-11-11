@@ -35,7 +35,6 @@ import {
   sandboxSelectOptions,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
-  PERMISSION_CAPABILITY_KEYS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
@@ -97,6 +96,7 @@ import {
   diagnosticsForPermissionField,
   diagnosticsForHookEvents,
   diagnosticsForMcpFiltering,
+  diagnosticsForPermissions,
   firstCompatibilityProperty,
   formatCompatibilitySource,
   sandboxSupportDiagnostic,
@@ -405,11 +405,8 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
     promptProperties: properties,
     promptTarget: selectionTarget,
   });
-  const permissionDiagnostics = compatibility.diagnostics.filter(
-    (diagnostic) =>
-      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.MODE ||
-      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
-      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+  const permissionDiagnostics = diagnosticsForPermissions(
+    compatibility.diagnostics
   );
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
