@@ -269,6 +269,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Worktree config normalization: `worktreeObjectConfig` ×2, an inline copy in
     `WorkflowPropertiesPanel`, and `WorkflowSwitcher` re-implementing the store's
     `getEffectiveWorktree`.
+  - Landed shared `toWorktreeObjectConfig` normalization with focused helper and store coverage.
   - Setting-scope labels: "Workspace"/"User" retyped in about seven dashboard files,
     plus raw `"workspace"`/`"user"` literals in `AgentSkillsManagerSection` and
     `ManagerExportGroups`.

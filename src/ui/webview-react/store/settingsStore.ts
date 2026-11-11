@@ -24,7 +24,6 @@ import {
   PERMISSION_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
-  WORKTREE_MODES,
   COMPARE_SOURCES,
   TOAST_LEVEL_MODES,
   SETTING_SCOPES,
@@ -63,6 +62,7 @@ import {
   type WorktreeDefaultConfig,
 } from "@root/types/CtrlYokeSettings";
 import type { WorktreeObjectConfig } from "@root/types/CtrlYokeTypes";
+import { toWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 import type { CapabilitiesModel } from "@root/types/CapabilitiesTypes";
 import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
 
@@ -812,27 +812,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     getEffectiveWorktree: () => {
       const { workflowProperties, globalSettings } = get();
       const authored = workflowProperties.worktree;
-      if (authored === false) {
-        return false;
-      }
-      if (authored === true) {
-        return { mode: WORKTREE_MODES.MANAGED };
-      }
-      if (authored === undefined) {
-        const defaultWorktree = globalSettings.worktree ?? false;
-        if (defaultWorktree === false) return false;
-        if (defaultWorktree === true) {
-          return { mode: WORKTREE_MODES.MANAGED };
-        }
-        if (typeof defaultWorktree === "string") {
-          return { mode: WORKTREE_MODES.NAMED, branch: defaultWorktree };
-        }
-        return { ...defaultWorktree };
-      }
-      if (typeof authored === "string") {
-        return { mode: WORKTREE_MODES.NAMED, branch: authored };
-      }
-      return { ...authored };
+      const effective = toWorktreeObjectConfig(
+        authored === undefined ? globalSettings.worktree : authored
+      );
+      return effective === false ? false : { ...effective };
     },
 
     getEffectiveAgent: () => {

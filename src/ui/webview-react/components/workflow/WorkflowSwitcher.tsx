@@ -27,7 +27,6 @@ import {
   WORKFLOW_DROPDOWN_VIEWS,
   WORKFLOW_ROW_KINDS,
   WORKFLOW_ROW_TIERS,
-  WORKTREE_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_DELETE_SCOPES,
   RUN_SUMMARY_CACHE_STATUSES,
@@ -183,22 +182,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
   const effectiveWorktree = useMemo(() => {
-    const authored = workflowProperties.worktree;
-    if (authored === false) return false;
-    if (authored === true) return { mode: WORKTREE_MODES.MANAGED };
-    if (authored === undefined) {
-      const configured = globalSettings.worktree ?? false;
-      if (configured === false) return false;
-      if (configured === true) return { mode: WORKTREE_MODES.MANAGED };
-      if (typeof configured === "string") {
-        return { mode: WORKTREE_MODES.NAMED, branch: configured };
-      }
-      return configured;
-    }
-    if (typeof authored === "string") {
-      return { mode: WORKTREE_MODES.NAMED, branch: authored };
-    }
-    return authored;
+    return useSettingsStore.getState().getEffectiveWorktree();
   }, [globalSettings.worktree, workflowProperties.worktree]);
   const worktreeIndicator = useMemo(() => {
     if (effectiveWorktree === false) {

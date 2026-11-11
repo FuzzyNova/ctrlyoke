@@ -9,6 +9,7 @@ import type {
   ErrorBehavior,
   UserHookConfig,
   WorktreeConfig,
+  WorktreeObjectConfig,
 } from "@root/types/CtrlYokeTypes";
 import { EXECUTION_PROPERTY_KEYS } from "@root/types/CtrlYokeTypes";
 import {
@@ -140,12 +141,12 @@ import { Icon } from "../shared/Icon";
 import { findKeyValueRowValueInput } from "../shared/KeyValueRowsEditor";
 import { schemaAriaLabel, schemaFieldTitle } from "@utils/schemaPropertyLabels";
 import { commitWorkflowVars } from "@utils/workflowVars";
+import { toWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const WORKFLOW_PANEL_BREAKPOINT = 400;
 const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
-type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
 // The sandbox pair has its own controls on the Permissions page; keep this
 // panel's generic property guard scoped to the other execution properties.
 type ExecutionPropertyKey = Exclude<
@@ -178,7 +179,7 @@ function worktreeConfigForMode(
   mode: (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
   defaults: GlobalSettings["worktree"]
 ): WorktreeObjectConfig {
-  const normalizedDefaults = worktreeObjectConfig(defaults);
+  const normalizedDefaults = toWorktreeObjectConfig(defaults);
   if (mode === WORKTREE_MODES.MANAGED) {
     return {
       mode,
@@ -207,17 +208,6 @@ function worktreeConfigForMode(
     base: normalizedDefaults !== false ? (normalizedDefaults.base ?? "") : "",
     setup: normalizedDefaults !== false ? (normalizedDefaults.setup ?? "") : "",
   };
-}
-
-function worktreeObjectConfig(
-  value: WorktreeConfig | undefined
-): WorktreeObjectConfig | false {
-  if (value === undefined || value === false) return false;
-  if (value === true) return { mode: WORKTREE_MODES.MANAGED };
-  if (typeof value === "string") {
-    return { mode: WORKTREE_MODES.NAMED, branch: value };
-  }
-  return value;
 }
 
 const BUTTON_STATE = {
@@ -660,31 +650,20 @@ const WorkflowPropertiesPanelInner: React.FC<{
         globalSettings[property as keyof typeof globalSettings];
       if (workflowValue === undefined) return false;
       if (property === PROMPT_PROPERTIES.WORKTREE) {
-        const normalize = (value: unknown) => {
-          if (value === undefined || value === false) return false;
-          if (typeof value === "string") {
-            return { mode: WORKTREE_MODES.NAMED, branch: value };
-          }
-          if (value === true) return { mode: WORKTREE_MODES.MANAGED };
-          const config = value as {
-            mode: string;
-            branch?: string;
-            base?: string;
-            setup?: string;
-            keep?: boolean;
-            merge?: boolean;
-          };
+        const normalize = (value: WorktreeConfig | undefined) => {
+          const config = toWorktreeObjectConfig(value);
+          if (config === false) return false;
           return {
             mode: config.mode,
-            branch: config.branch ?? "",
+            branch: "branch" in config ? (config.branch ?? "") : "",
             base: config.base ?? "",
             setup: config.setup ?? "",
-            keep: config.keep ?? false,
-            merge: config.merge ?? false,
+            keep: "keep" in config ? (config.keep ?? false) : false,
+            merge: "merge" in config ? (config.merge ?? false) : false,
           };
         };
         return (
-          JSON.stringify(normalize(workflowValue)) !==
+          JSON.stringify(normalize(workflowProperties.worktree)) !==
           JSON.stringify(normalize(globalSettings.worktree))
         );
       }
@@ -1463,7 +1442,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const handleResetAllToDefault = useCallback(() => {
     const globalHarness = globalSettings.harness as string;
     const resetWorktree = globalSettings.worktree;
-    const resetWorktreeConfig = worktreeObjectConfig(resetWorktree);
+    const resetWorktreeConfig = toWorktreeObjectConfig(resetWorktree);
     // `satisfies` keeps this an inventory of every WorkflowProperties key, so
     // a new workflow property cannot be left out of the reset.
     const updates: Partial<WorkflowProperties> = {

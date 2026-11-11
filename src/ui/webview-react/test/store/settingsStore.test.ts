@@ -246,6 +246,35 @@ describe("getEffectiveWorktree", () => {
       branch: "feature/authored",
     });
   });
+
+  it("normalizes every authored and inherited shorthand form", () => {
+    const getEffective = () =>
+      useSettingsStore.getState().getEffectiveWorktree();
+    const setDefault = (worktree: GlobalSettings["worktree"]) =>
+      useSettingsStore.getState().updateGlobalSetting("worktree", worktree);
+    const setAuthored = (worktree: WorkflowProperties["worktree"]) =>
+      useSettingsStore.getState().setWorkflowProperties({ worktree });
+
+    setDefault({ mode: WORKTREE_MODES.MANAGED });
+    setAuthored(true);
+    expect(getEffective()).toEqual({ mode: WORKTREE_MODES.MANAGED });
+    const authoredObject = {
+      mode: WORKTREE_MODES.MANAGED,
+      keep: true,
+    } as const;
+    setAuthored(authoredObject);
+    expect(getEffective()).toEqual(authoredObject);
+    expect(getEffective()).not.toBe(authoredObject);
+
+    setAuthored(undefined);
+    setDefault(true);
+    expect(getEffective()).toEqual({ mode: WORKTREE_MODES.MANAGED });
+    setDefault("feature/default-string");
+    expect(getEffective()).toEqual({
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature/default-string",
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

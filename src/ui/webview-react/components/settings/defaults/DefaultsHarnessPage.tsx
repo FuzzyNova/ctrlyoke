@@ -7,10 +7,8 @@ import {
   WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
-import type {
-  WorktreeConfig,
-  WorktreeObjectConfig,
-} from "@root/types/CtrlYokeTypes";
+import type { WorktreeConfig } from "@root/types/CtrlYokeTypes";
+import { toWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 import { useSettingsStore } from "@store/settingsStore";
 import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
 import { CustomSelect } from "../../shared/CustomSelect";
@@ -37,17 +35,6 @@ interface Props {
   onReset: (path: string) => void;
 }
 
-function worktreeObjectConfig(
-  value: WorktreeConfig
-): WorktreeObjectConfig | false {
-  if (value === false) return false;
-  if (value === true) return { mode: WORKTREE_MODES.MANAGED };
-  if (typeof value === "string") {
-    return { mode: WORKTREE_MODES.NAMED, branch: value };
-  }
-  return value;
-}
-
 export function DefaultsHarnessPage({
   settings,
   activeScope,
@@ -56,7 +43,7 @@ export function DefaultsHarnessPage({
 }: Props) {
   const sources = settings.sources as Record<string, SettingSource>;
   const wf = settings.settings.defaults;
-  const worktreeConfig = worktreeObjectConfig(wf.worktree);
+  const worktreeConfig = toWorktreeObjectConfig(wf.worktree);
   const worktreeMode =
     worktreeConfig === false
       ? WORKTREE_MODE_SELECTIONS.NONE
