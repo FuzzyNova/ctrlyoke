@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dashboard file references now use the shared quoting rules, so paths with colons and top-level filenames remain intact.
 - CLI file edit diffs now skip patch metadata, deduplicate structured hunks, and normalize mixed line endings.
 - Undo/redo no longer loses a "No turn started" status.
 

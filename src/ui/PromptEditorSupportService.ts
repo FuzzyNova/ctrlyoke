@@ -39,10 +39,7 @@ import { OpenCodeHarnessAdapter } from "../core/harness/opencode/OpenCodeHarness
 import { QwenHarnessAdapter } from "../core/harness/qwen/QwenHarnessAdapter";
 import { AntigravityHarnessAdapter } from "../core/harness/antigravity/AntigravityHarnessAdapter";
 import { TempFileManager } from "../utils/TempFileManager";
-import {
-  buildFileReferenceValue,
-  buildPromptFileReferenceValue,
-} from "../utils/ContextReferenceBuilder";
+import { buildPromptFileReferenceValue } from "../utils/ContextReferenceBuilder";
 import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
 import { isValidLineRange } from "../utils/LineRangeUtils";
 import { splitLines } from "../utils/TextLines";
@@ -863,9 +860,7 @@ export class PromptEditorSupportService {
         extension,
         tempFileManager.getAttachmentsDir()
       );
-      const relativePath = buildFileReferenceValue(
-        tempFileManager.getRelativePath(absolutePath)
-      );
+      const relativePath = tempFileManager.getRelativePath(absolutePath);
 
       ctx.emit({
         type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,

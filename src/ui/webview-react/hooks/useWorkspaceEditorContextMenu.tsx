@@ -9,6 +9,7 @@ import { useLongPress } from "@hooks/useLongPress";
 import { useWorkflowFileMenuItems } from "@hooks/useWorkflowFileMenuItems";
 import { useEditorStore } from "@store/editorStore";
 import { PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
+import { buildFileReference } from "@root/utils/ContextReferenceBuilder";
 
 const NO_SYMBOL_TITLE = "No symbol at cursor";
 
@@ -20,10 +21,6 @@ function buildSelectionRef(
   return path.includes(" ")
     ? `#selection:"${path}":${startLine}-${endLine}`
     : `#selection:${path}:${startLine}-${endLine}`;
-}
-
-function buildFileRef(path: string): string {
-  return path.includes(" ") ? `@"${path}"` : `@${path}`;
 }
 
 /**
@@ -151,7 +148,7 @@ export function useWorkspaceEditorContextMenu({
           disabledTitle: "No file open",
           onClick: () => {
             if (!filePath) return;
-            enqueuePromptEditorReference(buildFileRef(filePath));
+            enqueuePromptEditorReference(buildFileReference(filePath));
           },
         },
         ...buildWorkflowFileMenuItems(filePath),

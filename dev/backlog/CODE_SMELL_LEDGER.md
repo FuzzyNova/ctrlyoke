@@ -275,6 +275,13 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - MCP server detail rows: `ServerDetails` rows and `getServerSummary` (drifted
     fallback) copied between `McpManagerSection` and `McpServersEditor`, a private
     `ScopeBadge` copy, and `formatPathForDisplay` ×2.
+  - Landed shared `ContextReferenceBuilder` formatting across dashboard and native
+    output/paste references; colon paths and top-level filenames now stay parseable.
+    The explorer's path normalization makes the builder's slash normalization a
+    no-op; the editor hook now benefits from the same normalization. Directory
+    formatting matches except for inputs with multiple trailing slashes, which the
+    shared builder collapses. Capture and paste handlers now return raw workspace-
+    relative paths for their callers to format once.
 
 ## Deferred
 

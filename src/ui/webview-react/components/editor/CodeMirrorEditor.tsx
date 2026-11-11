@@ -104,6 +104,7 @@ import {
 } from "@root/utils/PromptDiagnosticRules";
 import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
+import { buildFileReference } from "@root/utils/ContextReferenceBuilder";
 import { createWorkflowVariableExtension } from "@utils/codemirrorWorkflowVariables";
 import { isReferenceBoundaryBefore } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
@@ -895,9 +896,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         return;
       }
       // Trailing space terminates the @ref token so the user can keep typing.
-      if (!resolvePendingCapture(seq, `@${relativePath} `)) {
+      const reference = `${buildFileReference(relativePath)} `;
+      if (!resolvePendingCapture(seq, reference)) {
         notifyUser(
-          `Output snapshot saved at @${relativePath}`,
+          `Output snapshot saved at ${reference.trimEnd()}`,
           USER_FEEDBACK_SEVERITY.INFO
         );
       }
@@ -995,9 +997,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         return;
       }
       // Trailing space terminates the @ref token so the user can keep typing.
-      if (!resolvePendingPaste(seq, `@${relativePath} `)) {
+      const reference = `${buildFileReference(relativePath)} `;
+      if (!resolvePendingPaste(seq, reference)) {
         notifyUser(
-          `Pasted image saved at @${relativePath}`,
+          `Pasted image saved at ${reference.trimEnd()}`,
           USER_FEEDBACK_SEVERITY.INFO
         );
       }

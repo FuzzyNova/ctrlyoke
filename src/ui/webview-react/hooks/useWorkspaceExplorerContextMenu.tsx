@@ -14,6 +14,10 @@ import {
   workspaceMoveEntry,
 } from "@utils/hostedApi";
 import { WebviewLog } from "@utils/logger";
+import {
+  buildDirectoryReference,
+  buildFileReference,
+} from "@root/utils/ContextReferenceBuilder";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 import { WorkspaceFileDeleteConfirmModal } from "@components/shared/WorkspaceFileDeleteConfirmModal";
@@ -47,15 +51,6 @@ function normalizeWorkspacePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
-function buildFileRef(path: string): string {
-  return path.includes(" ") ? `@"${path}"` : `@${path}`;
-}
-
-function buildDirRef(path: string): string {
-  const p = path.endsWith("/") ? path : `${path}/`;
-  return p.includes(" ") ? `@"${p}"` : `@${p}`;
-}
-
 function buildPastedFilePath(sourcePath: string, destDir: string): string {
   const normalizedSourcePath = sourcePath.replace(/\\/g, "/");
   const normalizedDestDir = destDir.replace(/\\/g, "/").replace(/\/$/, "");
@@ -87,8 +82,8 @@ export function useWorkspaceExplorerContextMenu({
   const handleAddToCtrlYoke = useCallback((entry: WorkspaceEntry) => {
     const ref =
       entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
-        ? buildDirRef(entry.path)
-        : buildFileRef(entry.path);
+        ? buildDirectoryReference(entry.path)
+        : buildFileReference(entry.path);
     const editorStore = useEditorStore.getState();
     editorStore.preparePromptEditorForInsert();
     editorStore.enqueuePromptEditorInsert({

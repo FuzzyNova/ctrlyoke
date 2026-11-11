@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { MESSAGE_TYPES } from "@/types/messages";
@@ -130,6 +131,61 @@ describe("useWorkspaceExplorerContextMenu workflow actions", () => {
         screen.queryByRole("button", { name: label })
       ).not.toBeInTheDocument();
   });
+});
+
+describe("useWorkspaceExplorerContextMenu references", () => {
+  it.each([
+    {
+      entry: { name: "file.ts", path: "src/file.ts", kind: "file" as const },
+      expected: "@src/file.ts",
+    },
+    {
+      entry: {
+        name: "my file.ts",
+        path: "src/my file.ts",
+        kind: "file" as const,
+      },
+      expected: '@"src/my file.ts"',
+    },
+    {
+      entry: { name: "src", path: "src", kind: "directory" as const },
+      expected: "@src/",
+    },
+    {
+      entry: {
+        name: "a:b.md",
+        path: "docs/a:b.md",
+        kind: "file" as const,
+      },
+      expected: '@"docs/a:b.md"',
+    },
+    {
+      entry: {
+        name: "Makefile",
+        path: "Makefile",
+        kind: "file" as const,
+      },
+      expected: '@"Makefile"',
+    },
+  ])(
+    "inserts the canonical reference for $entry.path",
+    ({ entry, expected }) => {
+      render(<TestHarness entry={entry} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+      fireEvent.click(
+        screen.getByRole("menuitem", {
+          name:
+            entry.kind === "file"
+              ? "Add File to ctrlyoke"
+              : "Add Directory to ctrlyoke",
+        })
+      );
+
+      const inserts = useEditorStore.getState().pendingPromptEditorInserts;
+      expect(inserts[inserts.length - 1]?.references).toEqual([expected]);
+    }
+  );
 });
 
 describe("useWorkspaceExplorerContextMenu file mutations", () => {
