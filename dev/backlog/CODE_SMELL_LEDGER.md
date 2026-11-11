@@ -316,6 +316,32 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   leading slashes); `PromptPropertiesDrawer`/`WorkflowPropertiesPanel` permission
   diagnostics filter; `WorkflowStepsPanel`/`StepChipRail` final-step output text.
 
+- **2026-11-10, pass 13**: reviewed pass 12's two refactors. Removing `getMcpConfigArgs`
+  left no references, and its tests now call `planMcpConfigArgs` and then apply the
+  mutations. `buildTerminalStartedMessage` matches every copy it replaced. The
+  coordinator copy read step metadata from `metadata`, but the session fields are
+  assigned from it just before. The shell spawn/restart copies hardcoded
+  `kind: SHELL` and took `workflowId` from the message, but the session holds the same
+  values. Shell messages now also carry the session's `promptNumber`/`harnessId`/
+  `parallelGroupId`, which are undefined for a shell. Nothing to fix.
+
+  Hunted the dashboard and the core/webview seam (repeated 8-line window scan) and
+  picked up all three items pass 12 left open. Queued four steps:
+  - `terminalPresentation.inferShellKind` copies `ShellCatalog.resolveShellKind`'s
+    name → `ShellKind` ladder, even though `ShellCatalog` is kept pure so the webview
+    can import it. The two differ only in the fallback (`undefined` vs bash) and in
+    name normalization (trim vs strip-directory).
+  - Context-menu `outputText`: four sites (`WorkflowStepRow`, `StepChipRail` ×2,
+    `WorkflowStepsPanel`) compute `getStepAssistantTextForCopy(latestOutput)` and pass
+    it next to `latestOutput` through `StepContextMenuRequest`, `OpenContextMenuParams`,
+    `useFinalStepContextMenu` and `StepCopyMenuItemsInput`. `buildStepCopyMenuItems`
+    can derive it itself.
+  - The permission-diagnostics filter (mode/allowedTools/deniedTools) is written out in
+    `StepEditor`, `PromptPropertiesDrawer` and `WorkflowPropertiesPanel`, next to the
+    sibling `diagnosticsFor*` helpers in `utils/compatibilityDiagnostics.ts`.
+  - `WorkspaceViewerHeader.getWorkspaceFilePath` re-implements
+    `fileBrowserShared.toWorkspaceRelative`, plus a leading-slash strip.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -574,3 +600,6 @@ still deferred.
   any length) vs `HarnessVersion.ts` (parsed major/minor/patch): different inputs.
 - `normalizeAbsolutePath` in `platform/NodeFileWatcher.ts` and
   `VsCodeFileWatcher.ts`: a one-line `path.normalize(path.resolve())` idiom.
+- `ShellCatalog.findShellChoice` vs `resolveShellKind`: picker lookup against the
+  choice catalog and aliases, not the kind ladder. Its doc comment explains why an
+  unknown shell must stay `undefined`.
