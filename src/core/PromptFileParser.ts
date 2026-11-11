@@ -21,6 +21,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { toError } from "../utils/ErrorUtils";
+import { isRecord as isObject } from "../utils/JsonTypeGuards";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
@@ -110,10 +111,6 @@ class WorkflowStructureValidationError extends Error {
   ) {
     super(message);
   }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
