@@ -25,14 +25,11 @@ import {
   TOOL_RESULT_STATUSES,
   type ToolResultStatus,
 } from "@root/types/DashboardConstants";
+import { pluralize } from "@utils/string";
 
 interface AskUserQuestionOutputProps {
   data: AskUserQuestionData;
   findDecorations?: RowFindDecoration;
-}
-
-function pluralize(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function summarize(data: AskUserQuestionData): {

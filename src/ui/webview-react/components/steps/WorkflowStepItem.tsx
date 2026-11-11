@@ -25,6 +25,7 @@ import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { detectPlatform } from "@utils/platform";
 import { UI_PLATFORMS } from "@root/types/DashboardConstants";
+import { truncateNormalized } from "@utils/string";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
   type WorkflowStepDragHandleProps,
@@ -129,17 +130,6 @@ interface WorkflowStepProps {
    */
   dragHandleProps?: WorkflowStepDragHandleProps;
 }
-
-/**
- * Truncate text to a maximum length with ellipsis
- */
-const truncate = (text: string, maxLength: number = 60): string => {
-  if (!text) return "";
-  // Normalize whitespace to single spaces
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLength) return normalized;
-  return normalized.substring(0, maxLength) + "...";
-};
 
 /**
  * WorkflowStep - Individual step in the workflow steps list.
@@ -334,7 +324,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                   className={`mt-0.5 text-xxs opacity-60 font-mono truncate ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
                   title={text}
                 >
-                  {truncate(text, 60)}
+                  {truncateNormalized(text, 60)}
                 </div>
               )}
               {/* Status details (duration, end condition) but no harness/model */}

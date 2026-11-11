@@ -222,6 +222,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     `worktreeStatus.ts` and `AskUserQuestionOutput.tsx`, to go into `utils/string.ts`.
 
   Landed async realpath fallbacks in `PathSecurity.ts` with focused tests.
+  Landed the webview text helpers in `utils/string.ts` with focused coverage.
 
 ## Deferred
 

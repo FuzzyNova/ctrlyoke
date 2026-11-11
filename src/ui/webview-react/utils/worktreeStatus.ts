@@ -3,16 +3,13 @@ import {
   WORKTREE_MERGE_READINESS,
   type WorktreeMergeReadiness,
 } from "@root/types/DashboardConstants";
+import { pluralize } from "@utils/string";
 
 type WorkingTreeCounts = NonNullable<WorktreeManagementEntry["workingTree"]>;
 type ChangeCounts = WorkingTreeCounts["staged"];
 
 export function totalChanges(counts: ChangeCounts): number {
   return counts.added + counts.modified + counts.deleted;
-}
-
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 /**
@@ -55,7 +52,7 @@ export function describeWorktreeStatus(
     parts.push(
       ahead === 0 && behind === 0
         ? `same commits as ${sourceBranch}`
-        : `${plural(ahead, "commit")} ahead of ${sourceBranch}, ${behind} behind`
+        : `${pluralize(ahead, "commit")} ahead of ${sourceBranch}, ${behind} behind`
     );
   }
   if (workingTree) {
@@ -67,7 +64,7 @@ export function describeWorktreeStatus(
         : `${staged} staged and ${unstaged} unstaged ${unstaged + staged === 1 ? "change" : "changes"}`
     );
     if (workingTree.conflicted > 0) {
-      parts.push(plural(workingTree.conflicted, "conflicted file"));
+      parts.push(pluralize(workingTree.conflicted, "conflicted file"));
     }
   }
   return parts.join(" — ");

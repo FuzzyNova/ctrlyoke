@@ -3,6 +3,8 @@ import {
   escapeHtml,
   truncate,
   truncateSnippet,
+  truncateNormalized,
+  pluralize,
   getWorkflowName,
   capitalize,
   toTitleCase,
@@ -60,6 +62,37 @@ describe("truncateSnippet", () => {
 
   it("returns normalized text unchanged when it fits", () => {
     expect(truncateSnippet("  A\n short   snippet  ")).toBe("A short snippet");
+  });
+});
+
+describe("truncateNormalized", () => {
+  it("collapses and trims whitespace", () => {
+    expect(truncateNormalized("  one\n  two\tthree  ", 20)).toBe(
+      "one two three"
+    );
+  });
+
+  it("returns normalized text unchanged at the exact limit", () => {
+    expect(truncateNormalized("  abc  ", 3)).toBe("abc");
+  });
+
+  it("truncates over-length text and appends three dots", () => {
+    expect(truncateNormalized("abcdef", 3)).toBe("abc...");
+  });
+
+  it("handles empty input", () => {
+    expect(truncateNormalized("", 3)).toBe("");
+  });
+});
+
+describe("pluralize", () => {
+  it("adds a plural suffix for zero and multiple items", () => {
+    expect(pluralize(0, "question")).toBe("0 questions");
+    expect(pluralize(2, "question")).toBe("2 questions");
+  });
+
+  it("keeps the noun singular for one", () => {
+    expect(pluralize(1, "question")).toBe("1 question");
   });
 });
 
