@@ -1204,6 +1204,40 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(line.lastElementChild).toHaveClass("truncate");
   });
 
+  it("marks a streaming step with a bare dot after its label", () => {
+    const row: OutputRenderRow = {
+      key: "header-streaming-dot",
+      target: TARGET,
+      estimateSize: 44,
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+      output: { elapsed: 0, isStreaming: true },
+      stepIndex: 0,
+      isFinalStep: false,
+      stepLabel: "Step 1",
+      stepName: "Refactor the dashboard",
+      attemptIndex: 0,
+      runIndex: 0,
+    };
+
+    const { rerender } = render(
+      <OutputRow row={row} isExecutionActive={true} />
+    );
+    const dot = screen.getByTestId("cli-header-streaming-indicator");
+    // No "Streaming..." text competing with the step name for title room.
+    expect(dot.textContent).toBe("⬤");
+    expect(dot).toHaveAttribute("aria-hidden", "true");
+    expect(dot).toHaveAttribute("title", "Streaming");
+    // Sits right after the label, ahead of the truncating name.
+    expect(dot.nextElementSibling).toHaveTextContent("Refactor the dashboard");
+    // The heading still speaks the running state.
+    expect(
+      screen.getByRole("heading", { level: 3 }).getAttribute("aria-label")
+    ).toContain("running");
+
+    rerender(<OutputRow row={row} isExecutionActive={false} />);
+    expect(screen.queryByTestId("cli-header-streaming-indicator")).toBeNull();
+  });
+
   it("keeps the whole header on one line, truncating a long step name", () => {
     const stepName = "This is a prompt with a really ".repeat(6).trim();
     const row: OutputRenderRow = {

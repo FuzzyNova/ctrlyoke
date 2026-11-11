@@ -1509,10 +1509,19 @@ const CliHeaderRowView: React.FC<{
     harnessId && modelId
       ? getHarnessModelDisplayName(harnessId, modelId)
       : modelId;
+  // A bare pulsing dot right after the step label: the run banner already says
+  // the run is live, so this only marks which step is still producing output
+  // and must not take title room from the step name. The heading's aria-label
+  // carries the running state, so the dot is hidden from screen readers.
   const streamingIndicator =
     output.isStreaming && isExecutionActive ? (
-      <span className="shrink-0 text-output-streaming font-normal animate-pulse-streaming">
-        ⬤ Streaming...
+      <span
+        aria-hidden="true"
+        title="Streaming"
+        data-testid="cli-header-streaming-indicator"
+        className={`${CLI_HEADER_FIXED_ITEM_CLASS} text-xs text-output-streaming font-normal animate-pulse-streaming`}
+      >
+        ⬤
       </span>
     ) : null;
   // The title is the step's heading for screen-reader navigation; its visible
@@ -1589,6 +1598,7 @@ const CliHeaderRowView: React.FC<{
             />
             <span>{headerLabel}]</span>
           </span>
+          {streamingIndicator}
           {scriptTitle && (
             <span className={CLI_HEADER_NAME_CLASS}>
               {stepNameContent ?? scriptTitle}
@@ -1601,7 +1611,6 @@ const CliHeaderRowView: React.FC<{
               {executionBadge}
             </span>
           )}
-          {streamingIndicator}
         </span>
         {renderActions()}
       </div>
@@ -1634,6 +1643,7 @@ const CliHeaderRowView: React.FC<{
           <Icon name="comment" className="text-xs" />
           <span>{stepLabelContent ?? row.stepLabel}]</span>
         </span>
+        {streamingIndicator}
         {stepDisplayName && (
           <span className={CLI_HEADER_NAME_CLASS}>
             {stepNameContent ?? stepDisplayName}
@@ -1646,7 +1656,6 @@ const CliHeaderRowView: React.FC<{
             {executionBadge}
           </span>
         )}
-        {streamingIndicator}
         {/* Shrinks alongside the step name, the model truncating; a narrow
             pane has no room for it at all and leaves it to the tooltip. */}
         {harnessModelLabel && !row.narrowLayout && (
