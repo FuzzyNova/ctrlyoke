@@ -198,7 +198,9 @@ describe("ParallelGroupHeaderRowView", () => {
     useUiStore.setState({ stepHeaderPinned: true });
     render(<OutputRow row={buildHeaderRow()} isExecutionActive={true} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Unpin step headers" }));
+    const pinButton = screen.getByRole("button", { name: "Pin step headers" });
+    expect(pinButton).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(pinButton);
     expect(useUiStore.getState().stepHeaderPinned).toBe(false);
     expect(
       screen.getByRole("button", { name: "Pin step headers" })

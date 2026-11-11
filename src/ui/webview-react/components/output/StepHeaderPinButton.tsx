@@ -1,6 +1,6 @@
 import React from "react";
 import { useUiStore } from "@store/uiStore";
-import { Icon } from "../shared/Icon";
+import { PinToggleButton } from "../shared/PinToggleButton";
 
 /**
  * Global toggle for the sticky step header (`OutputPane`). It sits on every
@@ -12,20 +12,12 @@ export const StepHeaderPinButton: React.FC = () => {
   const isPinned = useUiStore((state) => state.stepHeaderPinned);
   const togglePinned = useUiStore((state) => state.toggleStepHeaderPinned);
   return (
-    <button
-      type="button"
-      onClick={togglePinned}
-      style={{ touchAction: "manipulation" }}
-      title={
-        isPinned
-          ? "Unpin step headers (scroll with output)"
-          : "Pin step headers to the top of the output while scrolling"
-      }
-      aria-label={isPinned ? "Unpin step headers" : "Pin step headers"}
-      aria-pressed={isPinned}
-      className="inline-flex shrink-0 items-center text-description-fg hover:text-foreground transition-colors"
-    >
-      <Icon name={isPinned ? "codicon-pinned" : "codicon-pin"} />
-    </button>
+    <PinToggleButton
+      pinned={isPinned}
+      onToggle={togglePinned}
+      pinTooltip="Pin step headers to the top of the output while scrolling"
+      unpinTooltip="Unpin step headers (scroll with output)"
+      ariaLabel="Pin step headers"
+    />
   );
 };

@@ -46,6 +46,7 @@ export {
 } from "./SplitButton";
 export { PanelBar } from "./PanelBar";
 export { IconToggleButton } from "./IconToggleButton";
+export { PinToggleButton } from "./PinToggleButton";
 export {
   MultiCheckboxDropdown,
   type MultiCheckboxDropdownProps,

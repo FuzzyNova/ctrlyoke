@@ -1810,7 +1810,7 @@ const PARALLEL_GROUP_HEADER_CHIP_ROW_GAP = 4; // mt-1, and gap-y-1 between wrapp
 const PARALLEL_GROUP_HEADER_CHIP_HORIZONTAL_CHROME = 14; // px-1.5 (12) + border (2)
 const PARALLEL_GROUP_HEADER_SUMMARY_GAP = 8; // gap-x-2
 const PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH = 20; // codicon (16) + gap-1 (4)
-const PARALLEL_GROUP_HEADER_PIN_WIDTH = 16; // StepHeaderPinButton's codicon
+const PARALLEL_GROUP_HEADER_PIN_WIDTH = 24; // StepHeaderPinButton: codicon (16) + px-1 (8)
 const PARALLEL_GROUP_HEADER_CHIP_GAP = 4; // gap-1
 // Proportional 12px UI text, measured against the same VS Code font stack the
 // rest of the chrome uses. Deliberately a touch wide: under-counting a wrap

@@ -35,6 +35,7 @@ import { sendMessage } from "@messaging/sendMessage";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { Icon } from "../shared/Icon";
+import { PinToggleButton } from "../shared/PinToggleButton";
 import {
   ImportedOriginBadge,
   importedOriginAccessibleName,
@@ -241,18 +242,13 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
             </button>
           )}
-          <button
-            type="button"
-            onClick={onTogglePinned}
-            title={
-              isPinned ? "Unpin (scrolls with output)" : "Pin to top of output"
-            }
-            aria-label={isPinned ? "Unpin run summary" : "Pin run summary"}
-            aria-pressed={isPinned}
-            className="icon-btn py-0.5 px-1"
-          >
-            <Icon name={isPinned ? "codicon-pinned" : "codicon-pin"} />
-          </button>
+          <PinToggleButton
+            pinned={isPinned}
+            onToggle={onTogglePinned}
+            pinTooltip="Pin to top of output"
+            unpinTooltip="Unpin (scrolls with output)"
+            ariaLabel="Pin run summary"
+          />
         </span>
       </div>
       {stopReason && (

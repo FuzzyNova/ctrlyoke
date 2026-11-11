@@ -246,8 +246,10 @@ describe("RunSummaryBanner", () => {
     });
 
     const pinButton = screen.getByRole("button", {
-      name: "Unpin run summary",
+      name: "Pin run summary",
     });
+    expect(pinButton).toHaveAttribute("aria-pressed", "true");
+    expect(pinButton.className).not.toContain("icon-btn");
     expect(container.querySelector(".codicon-pinned")).not.toBeNull();
 
     fireEvent.click(pinButton);
@@ -266,7 +268,7 @@ describe("RunSummaryBanner", () => {
     );
     expect(
       screen.getByRole("button", { name: "Pin run summary" })
-    ).toBeInTheDocument();
+    ).toHaveAttribute("aria-pressed", "false");
     expect(container.querySelector(".codicon-pin")).not.toBeNull();
   });
 
