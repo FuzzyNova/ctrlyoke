@@ -1991,9 +1991,7 @@ export function parseGitWorktreePorcelain(output: string): GitWorktreeEntry[] {
         headCommit = field.slice("HEAD ".length);
       } else if (field.startsWith("branch ")) {
         const ref = field.slice("branch ".length);
-        branchName = ref.startsWith("refs/heads/")
-          ? ref.slice("refs/heads/".length)
-          : ref;
+        branchName = normalizeBranchName(ref);
       } else if (field === "detached") {
         detached = true;
       } else if (field === "bare") {

@@ -1168,5 +1168,3 @@ function createAvailableSecretsBlock(secretNames: readonly string[]): string {
   );
   return `<availableSecrets>\n${entries.join("\n")}\n</availableSecrets>`;
 }
-
-/** Truncate by UTF-8 bytes without splitting a multi-byte code point. */
