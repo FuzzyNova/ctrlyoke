@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The `none` model option is now labelled **None (harness default)** in every model picker, with the note "No model flag is passed". Inside **Inherit (…)** and on the footer's model button it reads **Harness default**. `none` is the out-of-the-box model for every harness, so this is what a new workflow shows.
+- The output pane no longer adds status rows for pre-conditions, end conditions and script steps: no "Evaluating end condition: Running …" row before the script, and no "End condition passed (…) → continue" row after it. The script's own output already shows its command, verdict and next action. A status row still appears when a condition could not run at all, e.g. an end condition with no `script`. The CLI output and saved run history drop the same lines. An errored condition's verdict now names the retry that follows (for example "retry 2 of 3"), or the action taken once retries run out.
+- A finished script's stats line no longer repeats the duration its verdict line already shows.
+- Fixed status rows sometimes appearing twice after the hosted dashboard reconnected during a run, and two status messages occasionally merging into one row.
 
 ## [0.6.0] - 2026-11-10
 

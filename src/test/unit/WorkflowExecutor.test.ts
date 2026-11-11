@@ -47,7 +47,10 @@ import {
   StepOutputTextMode,
   SNAPSHOT_STRATEGIES,
   SNAPSHOT_UNAVAILABLE_REASONS,
+  SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
 } from "../../types/DashboardConstants";
+import { formatVerdictSummary } from "../../core/orchestration/ScriptExecutionReporter";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
   TIMELINE_ATTEMPT_TERMINAL_STATES,
@@ -599,12 +602,26 @@ suite("WorkflowExecutor condition shell reporting", () => {
         new MockPlatform(),
         results
       );
-      const messages: string[] = [];
+      // The end condition's own output row is the only place its verdict
+      // is shown, so read the verdict summaries from there.
+      const verdicts: string[] = [];
       const context = makeContext(integration);
-      context.onStatusMessage = (_stepIndex, message) => messages.push(message);
+      context.onScriptCompletedOutput = (_target, output) => {
+        if (
+          output.source === SCRIPT_OUTPUT_SOURCES.END_CONDITION &&
+          output.scriptVerdict
+        ) {
+          verdicts.push(
+            formatVerdictSummary(
+              SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
+              output.scriptVerdict
+            )
+          );
+        }
+      };
       queue.loadPrompts({ steps: [{ prompt: "check result", endCondition }] });
       await makeExecutor(queue, evaluator).execute(integration, context);
-      return messages.filter((message) => message.startsWith("End condition"));
+      return verdicts;
     };
 
     const defaultFailure = await run({ script: "check-result" }, [
@@ -3988,40 +4005,28 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     context.onStatusMessage = (stepIndex, message, severity) => {
       liveStatuses.push({ stepIndex, message, severity });
     };
+    const scriptVerdicts = new Map<string, string>();
+    context.onScriptCompletedOutput = (_target, output) => {
+      if (output.source && output.scriptVerdict) {
+        scriptVerdicts.set(
+          output.source,
+          formatVerdictSummary(output.source, output.scriptVerdict)
+        );
+      }
+    };
     await executor.execute(integration, context);
 
-    const preResult = liveStatuses.find((status) =>
-      status.message.startsWith("Pre-condition passed")
-    );
-    assert.ok(preResult);
-    assert.match(preResult.message, /stdout == pre-output/);
-    assert.match(preResult.message, /→ continue/);
-    assert.strictEqual(preResult.severity, "info");
-
-    const endResult = liveStatuses.find((status) =>
-      status.message.startsWith("End condition passed")
-    );
-    assert.ok(endResult);
-    assert.match(endResult.message, /stdout == end-output/);
-    assert.strictEqual(endResult.severity, "info");
-
-    assert.deepStrictEqual(
-      persistedStatuses.map(({ message, severity }) => ({
-        message,
-        severity,
-      })),
-      liveStatuses.map(({ message, severity }) => ({ message, severity }))
-    );
-    assert.ok(
-      persistedStatuses.every(
-        ({ target }) =>
-          JSON.stringify(target) ===
-          JSON.stringify({
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: 0,
-          })
-      )
-    );
+    // Each condition's verdict lives on its own output row; no status row
+    // announces or repeats it, live or persisted.
+    const preVerdict = scriptVerdicts.get(SCRIPT_OUTPUT_SOURCES.PRE_CONDITION);
+    assert.ok(preVerdict);
+    assert.match(preVerdict, /stdout == pre-output/);
+    assert.match(preVerdict, /→ continue/);
+    const endVerdict = scriptVerdicts.get(SCRIPT_OUTPUT_SOURCES.END_CONDITION);
+    assert.ok(endVerdict);
+    assert.match(endVerdict, /stdout == end-output/);
+    assert.deepStrictEqual(liveStatuses, []);
+    assert.deepStrictEqual(persistedStatuses, []);
 
     assert.deepStrictEqual(queue.getState().results[0].preCondition, {
       passed: true,
@@ -5118,16 +5123,8 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       phase: string | null;
     }> = [];
     const outputUpdates: Array<{ loopIndex: number; output: unknown }> = [];
-    const finalStepStatusMessages: Array<{
-      loopIndex: number;
-      message: string;
-      severity: string;
-    }> = [];
 
     const context = makeContext(integration);
-    context.onFinalStepStatusMessage = (loopIndex, message, severity) => {
-      finalStepStatusMessages.push({ loopIndex, message, severity });
-    };
     context.dashboardProvider = {
       updateStepStatus: () => {},
       updateRetryAttempt: () => {},
@@ -5184,11 +5181,12 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.ok(outputUpdates.every((u) => u.loopIndex === 0));
     assert.ok(outputUpdates.some((u: any) => u.output?.isStreaming === false));
     assert.ok(
-      finalStepStatusMessages.some(
-        (status) =>
-          status.loopIndex === 0 &&
-          status.message.startsWith("Evaluating pre-condition")
-      )
+      outputUpdates.some(
+        (u: any) =>
+          u.output?.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
+          u.output?.scriptVerdict?.outcome === "passed"
+      ),
+      "the final step's pre-condition output reaches the final-step sink"
     );
   });
 

@@ -16,7 +16,10 @@ import {
   SCRIPT_OPERATORS,
   STEP_STATUS,
   STEP_TYPES,
+  SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
 } from "../../types/DashboardConstants";
+import { formatVerdictSummary } from "../../core/orchestration/ScriptExecutionReporter";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
@@ -327,7 +330,7 @@ suite("interactive script steps", () => {
     const executor = makeExecutor(queue);
     let receivedTimeout = 0;
     let timeoutCallbackCalled = false;
-    const statusMessages: string[] = [];
+    const verdictSummaries: string[] = [];
     const context = makeContext(undefined, async (options) => {
       receivedTimeout = options.timeout;
       if (options.onTimeout) {
@@ -336,8 +339,16 @@ suite("interactive script steps", () => {
       }
       return 1;
     });
-    context.onStatusMessage = (_stepIndex, message) => {
-      statusMessages.push(message);
+    // The script's own output row carries its verdict.
+    context.onScriptCompletedOutput = (_target, output) => {
+      if (output.scriptVerdict) {
+        verdictSummaries.push(
+          formatVerdictSummary(
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
+            output.scriptVerdict
+          )
+        );
+      }
     };
 
     queue.loadPrompts({
@@ -359,10 +370,10 @@ suite("interactive script steps", () => {
     assert.strictEqual(receivedTimeout, 10);
     assert.strictEqual(timeoutCallbackCalled, true);
     assert.ok(
-      statusMessages.some((message) =>
+      verdictSummaries.some((message) =>
         message.includes("Script step errored (timed out) → stop")
       ),
-      statusMessages.join("\n")
+      verdictSummaries.join("\n")
     );
   });
 
@@ -373,14 +384,22 @@ suite("interactive script steps", () => {
       const queue = new PromptQueue();
       const executor = makeExecutor(queue);
       let ptyCalls = 0;
-      const statusMessages: string[] = [];
+      const verdictSummaries: string[] = [];
       const context = makeContext(undefined, async (options) => {
         ptyCalls++;
         options.onOutput(`${"a".repeat(40)}!`);
         return 0;
       });
-      context.onStatusMessage = (_stepIndex, message) => {
-        statusMessages.push(message);
+      // The script's own output row carries its verdict.
+      context.onScriptCompletedOutput = (_target, output) => {
+        if (output.scriptVerdict) {
+          verdictSummaries.push(
+            formatVerdictSummary(
+              SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
+              output.scriptVerdict
+            )
+          );
+        }
       };
 
       queue.loadPrompts({
@@ -408,12 +427,12 @@ suite("interactive script steps", () => {
         STEP_STATUS.COMPLETED
       );
       assert.ok(
-        statusMessages.some(
+        verdictSummaries.some(
           (message) =>
             message.includes("Script step errored (") &&
             message.includes("timed out after")
         ),
-        statusMessages.join("\n")
+        verdictSummaries.join("\n")
       );
     } finally {
       ConfigurationUtils.getRegexTimeoutSeconds = originalTimeout;

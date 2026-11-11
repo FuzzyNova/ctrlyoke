@@ -853,16 +853,6 @@ export class CliTerminalFormatter {
     CliTerminalFormatter._lastPrintedStreamSlot = undefined;
   }
 
-  /**
-   * Returns the exact one-line status summary emitted by the script reporter.
-   * The CLI uses it to collapse that status into the richer verdict block.
-   */
-  static getScriptVerdictStatusSummary(output: CliOutput): string | undefined {
-    const verdict = output.scriptVerdict;
-    const label = scriptOutputLabel(output);
-    return verdict && label ? formatVerdictSummary(label, verdict) : undefined;
-  }
-
   /** Renders the command, bounded streamed output, and completed script verdict. */
   static renderScriptOutput(
     output: CliOutput,

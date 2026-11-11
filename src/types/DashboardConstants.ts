@@ -4380,15 +4380,9 @@ export const SCRIPT_OUTPUT_SOURCES = {
 } as const;
 
 /**
- * Human labels for each script output source.
- *
- * These are load-bearing, not cosmetic: `WorkflowExecutor` passes them as the
- * `label` to `formatVerdictSummary()` when emitting a condition's one-line
- * status message, and the headless CLI rebuilds that exact same string from a
- * script output's `source` to recognize and collapse the duplicate (see the
- * `onTargetScriptOutput` subscription in `cli.ts`). If the two sides ever
- * disagree the CLI silently prints every verdict twice, so both must read the
- * label from here rather than repeating the literal.
+ * Human labels for each script output source, used wherever a script's
+ * verdict or failure is described in words (the CLI's verdict line, and the
+ * status row for an evaluation that never ran).
  */
 export const SCRIPT_SOURCE_LABELS: Record<
   (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES],

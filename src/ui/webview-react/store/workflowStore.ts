@@ -732,6 +732,46 @@ function reconcileActivityEntries(
   );
 }
 
+/**
+ * Whether the store already holds this exact live status: same target, text,
+ * severity and extension-clock timestamp.
+ *
+ * A status is pushed live and persisted to the timeline at the same moment,
+ * with the same origin timestamp. A client that loads the run's timeline
+ * (`hydrateLiveRunHistory`, e.g. a hosted browser reconnecting) can then still
+ * receive that same status live, after the snapshot that already contains it.
+ * The live copy carries a fresh webview `liveSequence`, so neither the ordered
+ * entries nor the sequence-keyed activity merge recognised it, and the row
+ * appeared twice. The timestamp keeps a genuine repeat of the same message,
+ * raised later, from being dropped.
+ */
+function hasLiveStatus(
+  orderedEntries: readonly OrderedHistoryEntry[],
+  activityEntries: readonly OutputActivityEntry[],
+  incoming: OrderedStatusHistoryEntry
+): boolean {
+  const { message, severity, timestamp } = incoming.statusMessage;
+  const timestampMs = timestamp ?? incoming.timestampMs;
+  return (
+    orderedEntries.some(
+      (entry) =>
+        entry.kind === OUTPUT_HISTORY_KINDS.STATUS &&
+        targetsEqual(entry.target, incoming.target) &&
+        entry.statusMessage.message === message &&
+        entry.statusMessage.severity === severity &&
+        (entry.statusMessage.timestamp ?? entry.timestampMs) === timestampMs
+    ) ||
+    activityEntries.some(
+      (entry) =>
+        entry.kind === OUTPUT_ACTIVITY_KINDS.STATUS &&
+        targetsEqual(entry.target, incoming.target) &&
+        entry.text === message &&
+        entry.severity === severity &&
+        entry.timestampMs === timestampMs
+    )
+  );
+}
+
 function overlayLiveHistoryEntries(
   persistedEntries: OrderedHistoryEntry[],
   overlayEntries: OrderedHistoryEntry[]
@@ -1185,43 +1225,53 @@ export const useWorkflowStore = create<
                 };
               }
             }
-            const activityEntries =
-              entry.kind === OUTPUT_HISTORY_KINDS.STATUS
-                ? mergeActivityEntry(state.liveActivityEntries, {
-                    timestampMs: entry.timestampMs,
-                    sequence: entry.sequence,
-                    target: entry.target,
-                    runIndex: 0,
-                    attemptIndex: 0,
-                    kind: OUTPUT_ACTIVITY_KINDS.STATUS,
-                    text: entry.statusMessage.message,
-                    severity: entry.statusMessage.severity,
-                  })
-                : state.liveActivityEntries;
+            if (entry.kind !== OUTPUT_HISTORY_KINDS.STATUS) {
+              return {
+                liveOrderedEntries: [...state.liveOrderedEntries, entry],
+                liveSequence: state.liveSequence + 1,
+              };
+            }
+            const statusEntry = entry as OrderedStatusHistoryEntry;
+            if (
+              hasLiveStatus(
+                state.liveOrderedEntries,
+                state.liveActivityEntries,
+                statusEntry
+              )
+            ) {
+              return state;
+            }
+            // A status is one whole message, never a streamed delta, so it is
+            // appended rather than merged: `mergeActivityEntry` matches on
+            // sequence, and this webview-local `liveSequence` can equal a
+            // durable activity's timeline sequence, which glued one status's
+            // text onto another's.
+            const statusActivity: OutputActivityEntry = {
+              timestampMs: statusEntry.timestampMs,
+              sequence: statusEntry.sequence,
+              target: statusEntry.target,
+              runIndex: 0,
+              attemptIndex: 0,
+              kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+              text: statusEntry.statusMessage.message,
+              severity: statusEntry.statusMessage.severity,
+            };
             return {
               liveOrderedEntries: [...state.liveOrderedEntries, entry],
-              liveActivityEntries: activityEntries,
+              liveActivityEntries: [
+                ...state.liveActivityEntries,
+                statusActivity,
+              ],
               liveSequence: state.liveSequence + 1,
-              historyOutputs:
-                state.historyOutputs &&
-                entry.kind === OUTPUT_HISTORY_KINDS.STATUS
-                  ? {
-                      ...state.historyOutputs,
-                      activityEntries: mergeActivityEntry(
-                        state.historyOutputs.activityEntries ?? [],
-                        {
-                          timestampMs: entry.timestampMs,
-                          sequence: entry.sequence,
-                          target: entry.target,
-                          runIndex: 0,
-                          attemptIndex: 0,
-                          kind: OUTPUT_ACTIVITY_KINDS.STATUS,
-                          text: entry.statusMessage.message,
-                          severity: entry.statusMessage.severity,
-                        }
-                      ),
-                    }
-                  : state.historyOutputs,
+              historyOutputs: state.historyOutputs
+                ? {
+                    ...state.historyOutputs,
+                    activityEntries: [
+                      ...(state.historyOutputs.activityEntries ?? []),
+                      statusActivity,
+                    ],
+                  }
+                : state.historyOutputs,
             };
           })
         ),

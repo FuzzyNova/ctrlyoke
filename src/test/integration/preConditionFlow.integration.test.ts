@@ -418,8 +418,17 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
   });
 
-  test("errored preCondition with onError continue runs the prompt and warns", async () => {
+  test("errored preCondition with onError continue runs the prompt and says so on its output", async () => {
     harness = createExecutionHarness(workspace);
+    const scriptOutputs: Array<{
+      output: {
+        source?: string;
+        scriptVerdict?: { outcome: string; action?: string };
+      };
+    }> = [];
+    harness.instance.onTargetScriptOutput((data) => {
+      scriptOutputs.push(data);
+    });
     await harness.instance.loadPromptFile(
       await writeWorkflow({
         preCondition: { script: ERROR_SCRIPT },
@@ -429,22 +438,32 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     await harness.instance.executeLoadedPromptFile();
 
     assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+    const verdict = scriptOutputs.find(
+      ({ output }) =>
+        output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
+        output.scriptVerdict !== undefined
+    )?.output.scriptVerdict;
+    assert.strictEqual(verdict?.outcome, "errored");
+    assert.strictEqual(verdict?.action, "continue");
+
+    // The script's own output row carries the verdict, so no status row
+    // repeats it.
     const eventsPath = (
       await findFiles(WorkflowPaths.runsRoot(workspace), "events.jsonl")
     )[0];
-    const warning = (await fs.readFile(eventsPath, "utf8"))
+    const statusMessages = (await fs.readFile(eventsPath, "utf8"))
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line))
-      .find(
+      .filter(
         (event) =>
-          event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED &&
-          event.payload.statusMessage.message.includes(
-            "Pre-condition could not run"
-          )
-      );
-    assert.ok(warning);
-    assert.strictEqual(warning.payload.statusMessage.severity, "warning");
+          event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED
+      )
+      .map((event) => event.payload.statusMessage.message as string);
+    assert.ok(
+      !statusMessages.some((message) => message.startsWith("Pre-condition")),
+      `unexpected pre-condition status rows: ${statusMessages.join(" | ")}`
+    );
   });
 
   test("gate and harness errors use separate retry budgets", async () => {

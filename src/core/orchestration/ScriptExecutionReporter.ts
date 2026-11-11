@@ -9,13 +9,11 @@ import {
   FINAL_STEP_PHASES,
   SCRIPT_OUTPUT_SOURCES,
   SCRIPT_VERDICT_OUTCOMES,
-  STATUS_MESSAGE_SEVERITY,
   type CompareSource,
   type ScriptOperator,
   type ConditionAction,
   type ExecutionPhase,
   type ScriptOutputSource,
-  type StatusMessageSeverity,
 } from "../../types/DashboardConstants";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
@@ -48,7 +46,6 @@ import {
   secretRedactionService,
   StreamingSecretRedactor,
 } from "../../utils/SecretRedactionService";
-import type { StatusMessageReporter } from "./StatusMessageReporter";
 import type { ScriptProcessRunner } from "./ScriptProcessRunner";
 import type { HarnessIntegration } from "../HarnessIntegration";
 
@@ -57,7 +54,6 @@ export interface ScriptExecutionReporterContext {
   workingFilePath?: string;
   workspaceFolderPath?: string;
   historyFilePath?: string;
-  statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   outputHistoryManager?: OutputHistoryManager;
   getScriptProcessRunner?: (
@@ -120,13 +116,10 @@ export interface ScriptExecutionReportRequest {
   /** Resolves the effective action after retry budget and condition policy are applied. */
   actionForResult?: (result: EvaluationResult) => ConditionAction;
   actionDetail?: string | ((result: EvaluationResult) => string | undefined);
-  statusLabel?: string;
   timeoutMs?: number;
   vars?: Record<string, string>;
   secretNames?: readonly string[];
   processRunner?: ScriptProcessRunner;
-  /** Conditions let their caller place the verdict summary beside the timeline row. */
-  emitStatus?: boolean;
   evaluate?: (onOutput: (chunk: string) => void) => Promise<EvaluationResult>;
 }
 
@@ -405,10 +398,6 @@ export class ScriptExecutionReporter {
       );
     }
 
-    if (request.emitStatus !== false) {
-      await this.emitStatus(request, verdict);
-    }
-
     return {
       evaluationResult: safeEvaluationResult,
       finalOutput,
@@ -499,26 +488,5 @@ export class ScriptExecutionReporter {
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       context.captureFinalStepCompletedOutput?.(target.loopIndex, output);
     }
-  }
-
-  private async emitStatus(
-    request: ScriptExecutionReportRequest,
-    verdict: ScriptVerdict
-  ): Promise<void> {
-    const { context, target } = request;
-    const label = request.statusLabel ?? "Script";
-    const outcome = verdict.outcome;
-    const message = formatVerdictSummary(label, verdict);
-    const severity: StatusMessageSeverity =
-      outcome === SCRIPT_VERDICT_OUTCOMES.PASSED
-        ? STATUS_MESSAGE_SEVERITY.INFO
-        : STATUS_MESSAGE_SEVERITY.ERROR;
-    const timestampMs = Date.now();
-
-    // Threaded through rather than left for the webview to stamp on receipt —
-    // the dashboard sorts output rows by timestamp, so a status message must
-    // carry the same extension-clock origin time as the CLI/script rows it's
-    // ordered against (see IDashboardSink.updateStatusMessage).
-    context.statusReporter.report(target, message, severity, { timestampMs });
   }
 }

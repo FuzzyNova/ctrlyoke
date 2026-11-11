@@ -14,7 +14,6 @@ import {
   FinalStepRuntimeState,
   EXECUTION_STATES,
   HarnessId,
-  type ScriptVerdict,
   type ErrorBehavior,
   type WorkflowAttemptTarget,
   type PreConditionAction,
@@ -161,7 +160,6 @@ import {
   type TimelineAttemptStartReason,
 } from "../types/WorkflowTimelineTypes";
 import {
-  formatVerdictSummary,
   createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
@@ -2345,14 +2343,6 @@ export class WorkflowExecutor {
         resolvedPreCondition !== undefined &&
         resolvedPreCondition.script?.trim()
       ) {
-        await this.trackStatusMessage(
-          context,
-          target,
-          `Evaluating pre-condition: Running ${this.getConditionScriptName(
-            resolvedPreCondition.script
-          )}`
-        );
-
         const preReport = await this.scriptExecutionReporter.report({
           context,
           source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
@@ -2366,15 +2356,19 @@ export class WorkflowExecutor {
           timestampMs: Date.now(),
           onPass: resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
-          statusLabel:
-            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
           timeoutMs:
             ConfigurationUtils.secondsToMs(resolvedPreCondition.timeoutSec) ??
             ConfigurationUtils.getScriptTimeoutMs(),
           vars: workflowFileForPre.vars,
           secretNames: resolvedPreSecretNames,
-          emitStatus: false,
-          actionForErrored: this.getErrorConditionAction(preErrorBehavior),
+          actionForErrored: this.getErrorConditionAction(
+            preErrorBehavior,
+            preConditionErrorRetryCount
+          ),
+          actionDetail: this.errorRetryActionDetail(
+            preErrorBehavior,
+            preConditionErrorRetryCount
+          ),
         });
         const preResult = preReport.evaluationResult;
         if (preResult.cancelled) {
@@ -2430,14 +2424,6 @@ export class WorkflowExecutor {
                 ? SCRIPT_VERDICT_OUTCOMES.PASSED
                 : SCRIPT_VERDICT_OUTCOMES.FAILED
             } action: ${preAction}`
-          );
-
-          await this.trackConditionResult(
-            context,
-            target,
-            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
-            preReport.verdict,
-            STATUS_MESSAGE_SEVERITY.WARNING
           );
 
           if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
@@ -3093,10 +3079,6 @@ export class WorkflowExecutor {
           ? undefined
           : (step.errorBehavior ??
             this.promptQueue.getWorkflowFile().errorBehavior);
-      const effectiveErrorBehavior = errorBehavior ?? {
-        onError: CONDITION_ACTIONS.STOP_WORKFLOW,
-      };
-
       const report = await this.scriptExecutionReporter.report({
         context,
         source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
@@ -3110,20 +3092,18 @@ export class WorkflowExecutor {
         timestampMs,
         onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
         onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
         timeoutMs: timeout,
         vars: this.promptQueue.getWorkflowFile().vars,
         secretNames,
         evaluate: evaluation,
-        emitStatus: false,
         actionForErrored: this.getErrorConditionAction(
-          errorBehavior ?? undefined
+          errorBehavior,
+          errorRetryCount
         ),
-        actionDetail: (result) =>
-          result.errored
-            ? getErrorBehaviorDecision(effectiveErrorBehavior, errorRetryCount)
-                .actionText
-            : undefined,
+        actionDetail: this.errorRetryActionDetail(
+          errorBehavior,
+          errorRetryCount
+        ),
       });
 
       const evalResult = report.evaluationResult;
@@ -3151,9 +3131,7 @@ export class WorkflowExecutor {
           evalResult,
           errorBehavior,
           attemptIndex,
-          errorRetryCount,
-          false,
-          report.verdict
+          errorRetryCount
         );
         if (errorDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           if (await this.checkExecutionTimeLimitBeforeRetry()) {
@@ -3167,14 +3145,6 @@ export class WorkflowExecutor {
         if (errorDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
           return false;
         }
-      } else {
-        await this.trackConditionResult(
-          context,
-          target,
-          SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
-          report.verdict,
-          STATUS_MESSAGE_SEVERITY.ERROR
-        );
       }
 
       const succeeded = !evalResult.errored && evalResult.passed;
@@ -3887,10 +3857,6 @@ export class WorkflowExecutor {
     );
   }
 
-  private getConditionScriptName(script: string): string {
-    return script.split(/[\\/]/).pop() || script;
-  }
-
   private async resolveScriptEnvironment(
     processEnv: Record<string, string> | undefined,
     secretNames: readonly string[],
@@ -4013,29 +3979,6 @@ export class WorkflowExecutor {
     };
   }
 
-  /**
-   * Publishes the one-line condition verdict beside the CLI output group.
-   */
-  private async trackConditionResult(
-    context: WorkflowExecutionContext,
-    target: ExecutionTarget,
-    label: string,
-    verdict: ScriptVerdict,
-    failureSeverity: string = STATUS_MESSAGE_SEVERITY.ERROR
-  ): Promise<void> {
-    const severity =
-      verdict.outcome === SCRIPT_VERDICT_OUTCOMES.PASSED
-        ? STATUS_MESSAGE_SEVERITY.INFO
-        : failureSeverity;
-
-    await this.trackStatusMessage(
-      context,
-      target,
-      formatVerdictSummary(label, verdict),
-      severity
-    );
-  }
-
   private recordPreConditionSummary(
     target: ExecutionTarget,
     summary: ReturnType<typeof createConditionEvaluationSummary>
@@ -4059,12 +4002,30 @@ export class WorkflowExecutor {
   }
 
   private getErrorConditionAction(
-    errorBehavior?: ErrorBehavior,
+    errorBehavior: ErrorBehavior | null | undefined,
     errorRetryCount = 0
   ): ConditionAction {
     return errorBehavior
       ? getErrorBehaviorDecision(errorBehavior, errorRetryCount).action
       : CONDITION_ACTIONS.STOP_WORKFLOW;
+  }
+
+  /**
+   * The verdict detail for an errored script: which error retry comes next,
+   * or what happens once they are spent. The script's output row is the only
+   * place this is shown, so it must reflect the current retry count.
+   */
+  private errorRetryActionDetail(
+    errorBehavior: ErrorBehavior | null | undefined,
+    errorRetryCount: number
+  ): (result: EvaluationResult) => string | undefined {
+    const policy = errorBehavior ?? {
+      onError: CONDITION_ACTIONS.STOP_WORKFLOW,
+    };
+    return (result) =>
+      result.errored
+        ? getErrorBehaviorDecision(policy, errorRetryCount).actionText
+        : undefined;
   }
 
   private getEvaluationErrorMessage(result: EvaluationResult): string {
@@ -4085,7 +4046,7 @@ export class WorkflowExecutor {
     attemptIndex: number,
     errorRetryCount: number,
     completeAttemptOnContinue: boolean = false,
-    scriptVerdict?: ScriptVerdict
+    scriptOutputShown: boolean = true
   ): Promise<PhaseDisposition> {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -4098,14 +4059,17 @@ export class WorkflowExecutor {
         : STATUS_MESSAGE_SEVERITY.ERROR;
     const reason = this.getEvaluationErrorMessage(result);
 
-    await this.trackStatusMessage(
-      context,
-      target,
-      scriptVerdict
-        ? formatVerdictSummary(phase, scriptVerdict)
-        : `${phase} could not run: ${reason} → ${actionText}`,
-      severity
-    );
+    // A script that ran already shows this verdict, action included, on its
+    // own output row; only an evaluation that never produced one needs a
+    // status row to say what happened.
+    if (!scriptOutputShown) {
+      await this.trackStatusMessage(
+        context,
+        target,
+        `${phase} could not run: ${reason} → ${actionText}`,
+        severity
+      );
+    }
 
     if (canRetry) {
       const nextAttemptIndex = attemptIndex + 1;
@@ -4354,7 +4318,9 @@ export class WorkflowExecutor {
         errorBehavior,
         attemptIndex,
         errorRetryCount,
-        true
+        true,
+        // Nothing ran, so there is no script output row to carry the verdict.
+        false
       );
     }
 
@@ -4385,48 +4351,53 @@ export class WorkflowExecutor {
         ? (endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
         : (endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
     };
+    const erroredActionDetail = this.errorRetryActionDetail(
+      errorBehavior,
+      errorRetryCount
+    );
     const endConditionActionDetail = (
       result: EvaluationResult
     ): string | undefined => {
+      if (result.errored) {
+        return erroredActionDetail(result);
+      }
       if (!willRetryEndCondition(result)) {
         return undefined;
       }
 
       return `retry ${this.promptQueue.getCurrentRetryCount(target) + 1} of ${formatRetryDenominator(this.promptQueue.getEffectiveMaxRetries(prompt))}`;
     };
+    const reportEndCondition = (
+      condition: ScriptProperties,
+      conditionAttemptIndex: number
+    ) =>
+      this.scriptExecutionReporter.report({
+        context,
+        source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+        properties: toReportedConditionProperties(condition),
+        phase: EXECUTION_PHASES.END_CONDITION,
+        target: this.toOutputExecutionTarget(target),
+        signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
+        runIndex,
+        attemptIndex: conditionAttemptIndex,
+        startReason: getAttemptStartReason(conditionAttemptIndex),
+        timestampMs: Date.now(),
+        onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
+        onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        actionForErrored: this.getErrorConditionAction(
+          errorBehavior,
+          errorRetryCount
+        ),
+        actionForResult: endConditionActionForResult,
+        timeoutMs:
+          ConfigurationUtils.secondsToMs(condition.timeoutSec) ??
+          ConfigurationUtils.getScriptTimeoutMs(),
+        vars,
+        secretNames,
+        actionDetail: endConditionActionDetail,
+      });
 
-    await this.trackStatusMessage(
-      context,
-      target,
-      `Evaluating end condition: Running ${this.getConditionScriptName(
-        endCondition.script
-      )}`
-    );
-
-    const endReport = await this.scriptExecutionReporter.report({
-      context,
-      source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-      properties: toReportedConditionProperties(endCondition),
-      phase: EXECUTION_PHASES.END_CONDITION,
-      target: this.toOutputExecutionTarget(target),
-      signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
-      runIndex,
-      attemptIndex,
-      startReason: getAttemptStartReason(attemptIndex),
-      timestampMs: Date.now(),
-      onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
-      onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-      actionForErrored: this.getErrorConditionAction(errorBehavior),
-      actionForResult: endConditionActionForResult,
-      statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
-      timeoutMs:
-        ConfigurationUtils.secondsToMs(endCondition.timeoutSec) ??
-        ConfigurationUtils.getScriptTimeoutMs(),
-      vars,
-      secretNames,
-      actionDetail: endConditionActionDetail,
-      emitStatus: false,
-    });
+    const endReport = await reportEndCondition(endCondition, attemptIndex);
     const evaluationResult = endReport.evaluationResult;
 
     if (evaluationResult.cancelled) {
@@ -4460,14 +4431,6 @@ export class WorkflowExecutor {
       );
     }
 
-    await this.trackConditionResult(
-      context,
-      target,
-      SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
-      endReport.verdict,
-      STATUS_MESSAGE_SEVERITY.ERROR
-    );
-
     const retryContext: RetryContext = {
       integration,
       totalSteps: this.promptQueue.getState().steps.length,
@@ -4478,49 +4441,8 @@ export class WorkflowExecutor {
       attemptTarget: target,
       attemptIndex,
       vars,
-      evaluateCondition: async (condition, retryAttemptIndex) =>
-        this.scriptExecutionReporter.report({
-          context,
-          source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-          properties: toReportedConditionProperties(condition),
-          phase: EXECUTION_PHASES.END_CONDITION,
-          target: this.toOutputExecutionTarget(target),
-          signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
-          runIndex,
-          attemptIndex: retryAttemptIndex,
-          startReason: getAttemptStartReason(retryAttemptIndex),
-          timestampMs: Date.now(),
-          onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
-          onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-          actionForErrored: this.getErrorConditionAction(errorBehavior),
-          actionForResult: endConditionActionForResult,
-          statusLabel:
-            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
-          timeoutMs:
-            ConfigurationUtils.secondsToMs(condition.timeoutSec) ??
-            ConfigurationUtils.getScriptTimeoutMs(),
-          vars,
-          secretNames,
-          actionDetail: endConditionActionDetail,
-          emitStatus: false,
-        }),
-      onEvaluation: async (
-        _retryEvaluation,
-        _retryAttemptIndex,
-        retryVerdict
-      ) => {
-        // Reporter-backed retry evaluations always provide a verdict. Keep the
-        // callback optional for direct EndConditionHandler tests.
-        if (retryVerdict && retryVerdict.outcome !== "errored") {
-          await this.trackConditionResult(
-            context,
-            target,
-            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
-            retryVerdict,
-            STATUS_MESSAGE_SEVERITY.ERROR
-          );
-        }
-      },
+      evaluateCondition: (condition, retryAttemptIndex) =>
+        reportEndCondition(condition, retryAttemptIndex),
     };
 
     const sendRetryPromptCallback = this.createSendRetryPromptCallback(

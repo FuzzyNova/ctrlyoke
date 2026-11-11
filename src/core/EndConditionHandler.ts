@@ -1,7 +1,6 @@
 import {
   PromptStep,
   type ScriptProperties,
-  type ScriptVerdict,
   type WorkflowAttemptTarget,
   type EndConditionAction,
 } from "../types/CtrlYokeTypes";
@@ -66,16 +65,7 @@ export interface RetryContext {
   evaluateCondition?: (
     condition: ScriptProperties,
     attemptIndex: number
-  ) => Promise<{
-    evaluationResult: EvaluationResult;
-    verdict?: ScriptVerdict;
-  }>;
-  /** Receives each end-condition re-evaluation performed after a retry prompt. */
-  onEvaluation?: (
-    evaluationResult: EvaluationResult,
-    attemptIndex: number,
-    verdict?: ScriptVerdict
-  ) => Promise<void>;
+  ) => Promise<{ evaluationResult: EvaluationResult }>;
 }
 
 /**
@@ -465,15 +455,8 @@ export class EndConditionHandler {
             retryContext.vars
           ),
         };
-    const retryEvaluation = retryReport.evaluationResult;
-    await retryContext.onEvaluation?.(
-      retryEvaluation,
-      retryAttemptIndex,
-      retryReport.verdict
-    );
-
     return {
-      evaluationResult: retryEvaluation,
+      evaluationResult: retryReport.evaluationResult,
       attemptIndex: retryAttemptIndex,
     };
   }

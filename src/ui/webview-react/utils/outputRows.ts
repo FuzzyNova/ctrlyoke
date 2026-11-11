@@ -1179,6 +1179,19 @@ function estimateCliHeaderHeight(outputFontSize: number): number {
   return Math.max(16, smFontSize * 1.4) + HEADER_VERTICAL_CHROME;
 }
 
+/**
+ * Whether a finished step's stats row shows its duration. A script's verdict
+ * row, rendered just above, already shows it, so the stats row leaves it out.
+ * Shared by the stats row and its height estimate.
+ */
+export function statsRowShowsElapsed(output: CliOutputType): boolean {
+  return (
+    !output.isStreaming &&
+    output.elapsed !== undefined &&
+    output.scriptVerdict === undefined
+  );
+}
+
 function estimateStatsRowHeight(
   row: StatsRow,
   outputContentWidth: number | undefined,
@@ -1192,7 +1205,7 @@ function estimateStatsRowHeight(
   if (row.output.structured?.metadata?.sessionId) {
     parts.push(`Session: ${row.output.structured.metadata.sessionId}`);
   }
-  if (!row.output.isStreaming && row.output.elapsed !== undefined) {
+  if (statsRowShowsElapsed(row.output)) {
     parts.push(`${row.output.elapsed}s`);
   }
   if (!row.output.isStreaming && row.outputText) {

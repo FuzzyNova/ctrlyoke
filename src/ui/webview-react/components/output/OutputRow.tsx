@@ -144,7 +144,10 @@ import type {
   ScriptOutputRow,
   StructuredEventRow,
 } from "@utils/outputRows";
-import { SUBAGENT_ROW_INDENT_PX } from "@utils/outputRows";
+import {
+  statsRowShowsElapsed,
+  SUBAGENT_ROW_INDENT_PX,
+} from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
@@ -1832,7 +1835,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
     );
   }
 
-  if (!output.isStreaming && output.elapsed !== undefined) {
+  if (statsRowShowsElapsed(output)) {
     parts.push(
       <span key="elapsed" title="Step duration">
         {formatClockDuration(output.elapsed * 1000)}

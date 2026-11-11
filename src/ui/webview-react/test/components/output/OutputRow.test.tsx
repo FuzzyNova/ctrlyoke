@@ -182,6 +182,46 @@ describe("OutputRow stats copy button", () => {
   });
 });
 
+describe("OutputRow stats duration", () => {
+  const scriptStatsRow = (withVerdict: boolean): OutputRenderRow => ({
+    key: "row-stats",
+    target: TARGET,
+    estimateSize: 24,
+    rowKind: OUTPUT_ROW_KINDS.STATS,
+    output: {
+      elapsed: 1.5,
+      isStreaming: false,
+      exitCode: 0,
+      source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+      scriptOutput: { command: "check.sh", stdout: "", stderr: "" },
+      ...(withVerdict
+        ? {
+            scriptVerdict: {
+              compareSource: "stdout",
+              operator: "isEmpty",
+              actual: "",
+              outcome: SCRIPT_VERDICT_OUTCOMES.PASSED,
+              action: "continue",
+              durationMs: 1500,
+            },
+          }
+        : {}),
+    },
+    outputText: "",
+  });
+
+  it("leaves the duration to the verdict row when the script has one", () => {
+    render(<OutputRow row={scriptStatsRow(true)} isExecutionActive={false} />);
+    expect(screen.queryByTitle("Step duration")).toBeNull();
+    expect(screen.getByText(/Exit code: 0/)).toBeInTheDocument();
+  });
+
+  it("shows the duration when the script has no verdict", () => {
+    render(<OutputRow row={scriptStatsRow(false)} isExecutionActive={false} />);
+    expect(screen.getByTitle("Step duration")).toHaveTextContent("0:01.5");
+  });
+});
+
 describe("OutputRow token stats", () => {
   it("shows current context without inventing a visible total", () => {
     const { container } = render(

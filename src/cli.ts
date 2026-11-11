@@ -1205,10 +1205,6 @@ async function runCommand(
       (deferredCount) =>
         CliTerminalFormatter.renderTerminalReturned(deferredCount)
     );
-    // The script reporter emits a rich verdict and also sends the historical
-    // one-line status message. Collapse the latter when its matching verdict
-    // has already reached this terminal, while preserving unrelated statuses.
-    const pendingScriptStatusMessages = new Map<string, number>();
     const parallelGroups = new Map<string, CliParallelGroupState>();
     const attempts = new CliAttemptTally();
     const renderedFinalStepLabels = new Set<number>();
@@ -1295,7 +1291,6 @@ async function runCommand(
         attempts.clear();
         parallelGroups.clear();
         renderedFinalStepLabels.clear();
-        pendingScriptStatusMessages.clear();
         CliTerminalFormatter.disposeEventStreams();
       });
     };
@@ -1355,14 +1350,6 @@ async function runCommand(
     instance.onTargetScriptOutput((data) =>
       outputGate.write(() => {
         renderFinalStepLabel(data.target);
-        const statusSummary =
-          CliTerminalFormatter.getScriptVerdictStatusSummary(data.output);
-        if (statusSummary) {
-          pendingScriptStatusMessages.set(
-            statusSummary,
-            (pendingScriptStatusMessages.get(statusSummary) ?? 0) + 1
-          );
-        }
         CliTerminalFormatter.renderScriptOutput(
           data.output,
           toCliOutputTarget(
@@ -1414,15 +1401,6 @@ async function runCommand(
             state.failed.add(data.stepIndex);
             renderParallelGroupProgress(state);
           }
-        }
-        const pendingCount = pendingScriptStatusMessages.get(data.message) ?? 0;
-        if (pendingCount > 0) {
-          if (pendingCount === 1) {
-            pendingScriptStatusMessages.delete(data.message);
-          } else {
-            pendingScriptStatusMessages.set(data.message, pendingCount - 1);
-          }
-          return;
         }
         CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
       })

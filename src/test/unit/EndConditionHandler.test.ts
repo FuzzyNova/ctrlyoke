@@ -406,10 +406,6 @@ suite("EndConditionHandler", () => {
       maxRetries?: number;
     }> = [];
     const retryAttemptIndices: number[] = [];
-    const retryEvaluations: Array<{
-      attemptIndex: number;
-      result: EvaluationResult;
-    }> = [];
 
     queue.loadPrompts({ steps: [prompt] });
     runtime.onDidAttemptTransition((transition) => {
@@ -434,9 +430,6 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
         vars: { CHECK: "expected" },
-        onEvaluation: async (evaluationResult, attemptIndex) => {
-          retryEvaluations.push({ attemptIndex, result: evaluationResult });
-        },
       },
       async (_retryPrompt, _currentIndex, attemptIndex) => {
         retryAttemptIndices.push(attemptIndex);
@@ -446,9 +439,6 @@ suite("EndConditionHandler", () => {
 
     assert.strictEqual(result.shouldContinue, true);
     assert.deepStrictEqual(retryAttemptIndices, [1]);
-    assert.strictEqual(retryEvaluations.length, 1);
-    assert.strictEqual(retryEvaluations[0].attemptIndex, 1);
-    assert.strictEqual(retryEvaluations[0].result.stdout, "ok");
     assert.deepStrictEqual(evaluator.varsSeen, [{ CHECK: "expected" }]);
     assert.deepStrictEqual(transitions, [
       {

@@ -1652,4 +1652,51 @@ describe("hydrateLiveRunHistory activity reconciliation", () => {
     store().hydrateLiveRunHistory(historyWithStatus());
     expect(statusCount()).toBe(1);
   });
+
+  it("does not append a live status that arrives after the timeline already holding it", () => {
+    // A reconnecting hosted client loads the run's timeline, then still
+    // receives the same status live: one status, two deliveries.
+    const durableStatus = {
+      timestampMs: 180,
+      sequence: 4,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+      text: "Retrying Prompt 1 (Attempt 1/2): fix it",
+      severity: "warning" as const,
+    };
+    const liveStatus = (timestamp: number) => ({
+      kind: OUTPUT_HISTORY_KINDS.STATUS,
+      target,
+      statusMessage: {
+        message: durableStatus.text,
+        severity: "warning" as const,
+        timestamp,
+      },
+      timestampMs: timestamp,
+      sequence: store().liveSequence,
+    });
+    const statusTexts = () =>
+      store()
+        .liveActivityEntries.filter(
+          (entry) => entry.kind === OUTPUT_ACTIVITY_KINDS.STATUS
+        )
+        .map((entry) => entry.text);
+
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    store().hydrateLiveRunHistory({
+      ...makeHistory(),
+      activityEntries: [durableStatus],
+    });
+    expect(statusTexts()).toEqual([durableStatus.text]);
+
+    store().appendLiveEntry(liveStatus(180));
+    expect(statusTexts()).toEqual([durableStatus.text]);
+
+    // The same text raised again later is a new status and still shows as
+    // its own row, even when its live sequence equals the durable one's.
+    store().appendLiveEntry(liveStatus(900));
+    expect(statusTexts()).toEqual([durableStatus.text, durableStatus.text]);
+  });
 });
