@@ -204,6 +204,26 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   Still open for a later pass: `realpathOrUndefined` in `SourceRuntimeArtifactResolver`
   vs `WorkflowBundleAnalyzer`, which are the same apart from a no-op `path.resolve`.
 
+- **2026-11-10, pass 9**: reviewed pass 8's three refactors. All preserve behavior, and
+  `npm test` passes. The only output changes are the intended ones:
+  `WorkflowStepsPanel` now treats `NO_TURN_STARTED` as terminal (filed bug), and on
+  win32 the Codex admin-dir dedupe now case-folds through `pathsEqual`.
+  Cleaned up:
+  - `useStepStatus` had re-inlined the terminal-status switch; it now uses
+    `isTerminalStepStatus`.
+  - The private `isObject` copies of `isRecord` in `PromptFileParser.ts` and
+    `HarnessLspExporter.ts` now import it.
+  - The `ensurePrivateDirectory` test moved out of `JsonTypeGuards.test.ts` into
+    `PrivateFileModes.test.ts`.
+
+  Queued two steps:
+  - Async realpath fallbacks: `realpathOrUndefined` (×2), `ExecutionRootScope.canonicalPath`,
+    and `GitUtils.gitCommonDir`'s inline copy, to go into `PathSecurity.ts` beside
+    `realpathOrSelf`.
+  - Webview text helpers: whitespace-normalizing `truncate` in `FinalStepFooter.tsx`
+    and `WorkflowStepItem.tsx`, and the identical `plural`/`pluralize` in
+    `worktreeStatus.ts` and `AskUserQuestionOutput.tsx`, to go into `utils/string.ts`.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -430,3 +450,15 @@ still deferred.
   chmods an existing directory, unlike `ensurePrivateDirectory`.
 - `sanitizeQwenProjectPath`'s win32 lowercase: it mirrors Qwen's own `sanitizeCwd`
   naming, not ctrlyoke's comparison rule.
+- Inline `` `${n} noun${n === 1 ? "" : "s"}` `` expressions (about 40 sites across CLI,
+  core and the dashboard): a one-line idiom, like the inline sleeps. Only the named
+  private copies were queued. `ClearHistoryModal.tsx`'s `plural` (uses `toLocaleString`
+  and irregular forms) and `speechText.ts`'s `plural` (irregular forms) differ.
+- Other truncate helpers: `utils/string.ts` `truncate`/`truncateSnippet`,
+  `utils/uxSnapshot.ts` `truncate` and `TextUtils.truncateText` each differ in where
+  they cut, whether they trim and which ellipsis they use, and callers rely on those.
+- `isObject` in `OpenCodeLogParser.ts`: accepts arrays on purpose, unlike `isRecord`.
+- Async realpath sites that differ from the shared fallbacks: `gitWritableAdminDirs`
+  keeps Git's un-normalized path, `UndoRedoCoordinator` throws, and
+  `WorkspacePathContainment`/`WorkspaceSnapshotService` walk ancestors or keep both
+  forms.

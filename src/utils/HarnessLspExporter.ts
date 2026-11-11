@@ -18,6 +18,7 @@ import {
 import { detectFormattingOptions } from "./WorkflowSourceEditor";
 import { readFileForEdit, writeTextFileAtomic } from "./AtomicFileUtils";
 import { formatDiscoveryPath } from "./DiscoveryUtils";
+import { isRecord as isObject } from "./JsonTypeGuards";
 
 type JsonObject = Record<string, unknown>;
 export interface HarnessLspExportResult {
@@ -25,9 +26,6 @@ export interface HarnessLspExportResult {
   exportedCount: number;
 }
 
-function isObject(value: unknown): value is JsonObject {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
 function languageMap(
   definition: LanguageServerDefinition,
   catalogMap?: Record<string, string>
