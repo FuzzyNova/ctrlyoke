@@ -6,6 +6,7 @@ import {
   type AntigravityStatuslineQuotaSnapshot,
 } from "../shared/usage/collectors/AntigravityQuotaCollector";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
+import { finiteNumber } from "../../../utils/JsonTypeGuards";
 
 interface SnapshotContextWindow {
   total_input_tokens?: unknown;
@@ -29,12 +30,6 @@ export interface AntigravityCurrentUsage {
   cacheReadInputTokens?: number;
 }
 
-function toFiniteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
 /**
  * Map the statusline payload's `context_window.current_usage` block to
  * ctrlyoke's naming.
@@ -52,10 +47,10 @@ export function parseStatuslineCurrentUsage(
   }
 
   const parsed: AntigravityCurrentUsage = {
-    inputTokens: toFiniteNumber(usage.input_tokens),
-    outputTokens: toFiniteNumber(usage.output_tokens),
-    cacheCreationInputTokens: toFiniteNumber(usage.cache_creation_input_tokens),
-    cacheReadInputTokens: toFiniteNumber(usage.cache_read_input_tokens),
+    inputTokens: finiteNumber(usage.input_tokens),
+    outputTokens: finiteNumber(usage.output_tokens),
+    cacheCreationInputTokens: finiteNumber(usage.cache_creation_input_tokens),
+    cacheReadInputTokens: finiteNumber(usage.cache_read_input_tokens),
   };
   return Object.values(parsed).some((value) => value !== undefined)
     ? parsed

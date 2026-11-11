@@ -48,7 +48,10 @@ import { sendMessage } from "@messaging/sendMessage";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useCompatibilityDiagnostics } from "@hooks/useCompatibilityDiagnostics";
-import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import {
+  sameScope,
+  useExecutionPreviewStore,
+} from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { downloadTextFile } from "@utils/download";
 import {
@@ -115,18 +118,6 @@ export interface DryRunModalProps {
   scope: ExecutionPreviewScope;
   /** Required when opened from within WorkspaceViewerModal. */
   elevated?: boolean;
-}
-
-function sameScope(
-  left: ExecutionPreviewScope | null,
-  right: ExecutionPreviewScope
-) {
-  return (
-    left?.kind === right.kind &&
-    (right.kind !== PREVIEW_SCOPES.STEP ||
-      (left?.kind === PREVIEW_SCOPES.STEP &&
-        left.stepIndex === right.stepIndex))
-  );
 }
 
 function getWorstSeverity(
@@ -1395,7 +1386,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
     []
   );
 
-  if (!sameScope(storeScope, scope)) return null;
+  if (!storeScope || !sameScope(storeScope, scope)) return null;
 
   const activeStep =
     preview &&

@@ -14,6 +14,7 @@ import { quantizeOutputMinimapBars } from "@utils/outputMinimapBars";
 import { groupOutputMinimapMarkers } from "@utils/outputMinimapMarkers";
 import { type PromptChangeSummary } from "@utils/promptUndo";
 import { OutputMinimapMarker } from "./OutputMinimapMarker";
+import { getResizeObserverEntryHeight } from "@utils/outputDom";
 
 // ============================================================================
 // Types
@@ -114,22 +115,6 @@ interface OutputMinimapProps {
  * navigation all operate in the same coordinate space.
  */
 const MIN_THUMB_PX = 24;
-
-function getResizeObserverEntryHeight(
-  entry: ResizeObserverEntry | undefined
-): number | null {
-  const borderBox = entry?.borderBoxSize?.[0];
-  if (borderBox) {
-    return borderBox.blockSize;
-  }
-
-  const contentBox = entry?.contentBoxSize?.[0];
-  if (contentBox) {
-    return contentBox.blockSize;
-  }
-
-  return entry?.contentRect.height ?? null;
-}
 
 const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   steps,

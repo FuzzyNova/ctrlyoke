@@ -43,7 +43,8 @@ function getStructuredPatchSignature(hunk: UnifiedDiffHunk): string {
   ].join("|");
 }
 
-function isDisplayableDiffLine(line: string): boolean {
+/** Whether a unified-diff line is content rather than patch metadata. */
+export function isDisplayableDiffLine(line: string): boolean {
   return !(
     line === "\\ No newline at end of file" ||
     line.startsWith("@@ ") ||

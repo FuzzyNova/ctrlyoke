@@ -224,6 +224,29 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   Landed async realpath fallbacks in `PathSecurity.ts` with focused tests.
   Landed the webview text helpers in `utils/string.ts` with focused coverage.
 
+- **2026-11-10, pass 10**: reviewed pass 9's two refactors. Both preserve behavior,
+  and `npm test` passes. `WorkflowBundleAnalyzer`'s old copy wrapped `fs.realpath` in
+  `path.resolve`, a no-op on realpath's absolute output; `WorkflowStepItem`'s old
+  `!text` guard is covered by its `text &&` call site. Hunted with a whole-`src/`
+  scan for byte-identical function bodies. Fixed directly:
+  - Private `toFiniteNumber` (`AntigravityStatuslineSidecar.ts`) and `isJsonObject`
+    (`HarnessSettingsJsonStore.ts`) now import `finiteNumber`/`isRecord`.
+  - `OutputMinimap.tsx` re-declared `getResizeObserverEntryHeight` from
+    `utils/outputDom.ts`; `useOutputMinimapModel.ts` re-declared `getStepName` from
+    `utils/outputRows.ts`; `rdvAdapter.ts` re-declared `isDisplayableDiffLine` from
+    `utils/diffUtils.ts`. All now import the original.
+  - `DryRunModal.tsx` and `executionPreviewStore.ts` had the same `sameScope`; the
+    modal imports the store's and keeps its null check at the call site.
+
+  Queued two steps:
+  - Usage-store leaf helpers: `numeric`, `stableCostSources`, the empty
+    `LifetimeUsageStoreData` builders (`LifetimeUsageStore`/`WorkspaceStatsService`)
+    and the local-day key (`HarnessUsageService`/`ObservedHarnessUsageStore`).
+  - CLI diff lines: `CliTerminalFormatter`'s private `DIFF_LINE_TYPES`,
+    `parseUnifiedDiff` and `generateDiffLines` drifted from the dashboard's
+    `diffUtils.ts`. The CLI skips the metadata-line filter, patch normalization and
+    CRLF normalization (bug to file).
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -462,3 +485,16 @@ still deferred.
   keeps Git's un-normalized path, `UndoRedoCoordinator` throws, and
   `WorkspacePathContainment`/`WorkspaceSnapshotService` walk ancestors or keep both
   forms.
+- `addUsage` (`ObservedHarnessUsageStore.ts`) vs `addHarnessContribution`
+  (`LifetimeUsageStore.ts`): they persist different shapes on subtraction
+  (cost sources and partial flags) and only one counts attempts. Merging would change
+  persisted usage files.
+- `getAtPath`/`setAtPath` in `WorkspaceSensitiveSettings.ts` vs
+  `HarnessSettingsJsonStore.ts`: copy-on-write that stops at a missing parent, vs
+  own-property lookups that create missing parents.
+- `formatAge` in `CliStatusCommand.ts` (`42s`/`5m`/`3h`) vs `HistoryTrashCommands.ts`
+  (`just now`/`3h ago`/`2d ago`): different outputs for different listings.
+- `pathsOverlap` in `ExecutionRootCoordination.ts` (glob claim patterns) vs
+  `WorktreeManager.ts` (filesystem containment): same name, different meaning.
+- `trustExternalRootsCommand` in `src/cli.ts`: a settings-loading wrapper around the
+  shared `cli/ExternalRootsTrustCommands.ts` function, not a copy.

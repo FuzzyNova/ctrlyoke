@@ -7,6 +7,7 @@ import { withFileLock } from "../../../utils/FileLockUtils";
 import { AsyncMutex } from "./AsyncMutex";
 import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
 import { NODE_ERROR_CODES } from "../../../types/DashboardConstants";
+import { isRecord } from "../../../utils/JsonTypeGuards";
 
 /**
  * Options for customizing where a tracker reads/writes its MCP config.
@@ -93,10 +94,6 @@ interface PathValue {
   readonly hadKey: boolean;
 }
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function getAtPath(
   settings: Record<string, unknown>,
   key: HarnessSettingsPersistentValueKey
@@ -104,7 +101,7 @@ function getAtPath(
   let current: unknown = settings;
 
   for (const segment of key.split(".")) {
-    if (!isJsonObject(current)) {
+    if (!isRecord(current)) {
       return { value: undefined, hadKey: false };
     }
 
@@ -128,7 +125,7 @@ function setAtPath(
   let current = settings;
 
   for (const segment of segments) {
-    if (!isJsonObject(current[segment])) {
+    if (!isRecord(current[segment])) {
       current[segment] = {};
     }
     current = current[segment] as Record<string, unknown>;
@@ -147,7 +144,7 @@ function deleteAtPath(
 
   for (const segment of segments) {
     if (
-      !isJsonObject(current) ||
+      !isRecord(current) ||
       !Object.prototype.hasOwnProperty.call(current, segment)
     ) {
       return;
@@ -155,7 +152,7 @@ function deleteAtPath(
     current = current[segment];
   }
 
-  if (isJsonObject(current)) {
+  if (isRecord(current)) {
     delete current[leaf];
   }
 }
