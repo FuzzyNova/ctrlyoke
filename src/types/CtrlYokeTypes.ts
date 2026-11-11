@@ -606,6 +606,18 @@ export interface WorkflowRunAddress {
   runRef: RunRef;
 }
 
+/** A per-lineage schedule interpreted in the host machine's local timezone. */
+export interface WorkflowSchedule {
+  /** Whether this schedule is active. */
+  enabled: boolean;
+  /** Exactly one local one-shot datetime or five-field cron expression. */
+  trigger: { at: string } | { cron: string };
+  /** Optional local end datetime for recurring cron schedules. */
+  until?: string;
+  /** Hostname that owns this schedule, captured when it is saved. */
+  hostId: string;
+}
+
 /**
  * Authoritative lineage metadata and allocation state, persisted at
  * `.runs/<workflowKey>/workflow.json` in run storage. `WorkflowLineageRepository` is the only writer.
@@ -619,6 +631,14 @@ export interface WorkflowLineageDescriptor {
   /** True for internal lineages that should not appear in the recent-workflows list. */
   isSystemGenerated?: boolean;
   isFavorite: boolean;
+  /** Per-lineage schedule; absent when this workflow has never been scheduled. */
+  schedule?: WorkflowSchedule;
+  /** Cached next schedule occurrence as epoch milliseconds. */
+  scheduleNextRunAt?: number;
+  /** Most recent scheduled run time as epoch milliseconds. */
+  scheduleLastRunAt?: number;
+  /** Most recent skipped occurrence while no host was running, in epoch milliseconds. */
+  scheduleLastMissedAt?: number;
   createdAt: number;
   lastModifiedAt: number;
   /** Repairable hint, not the storage source of truth — validate against manifests before trusting. */

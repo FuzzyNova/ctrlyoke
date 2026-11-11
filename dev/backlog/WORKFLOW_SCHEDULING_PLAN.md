@@ -548,7 +548,7 @@ No remaining blockers — the plan is fully specified for a v1 implementation.
 
 ## Staging
 
-1. Phase 0: types, validator, cron/next-run util, descriptor read-path validation, unit tests.
+1. [x] Phase 0: types, validator, cron/next-run util, descriptor read-path validation, unit tests — added `CronSchedule.ts`, `WorkflowSchedule.ts`, and their unit tests; updated descriptor types and validation.
 2. `WorkflowScheduler`: owned by `WorkflowOrchestrator`, startup arming, missed/overlap
    skip, fire through `seedAndExecuteAtRun`/`executeDraftAtAddress`, bookkeeping via
    `updateDescriptorMetadata`, and tests with fake timers.

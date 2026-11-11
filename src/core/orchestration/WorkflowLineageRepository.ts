@@ -29,6 +29,8 @@ import { migrateToCurrent } from "../../utils/FormatMigrations";
 import { removeRunDefinitionAnchors } from "../../utils/RunDefinitionAnchor";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { selectorNamesLineage } from "./WorkflowRunSelector";
+import { Log } from "../../utils/Log";
+import { validateWorkflowSchedule } from "../../utils/WorkflowSchedule";
 
 const DESCRIPTOR_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR];
@@ -205,10 +207,20 @@ export class WorkflowLineageRepository {
     descriptorPath: string
   ): Promise<WorkflowLineageDescriptor> {
     const content = await fs.promises.readFile(descriptorPath, "utf8");
-    return migrateToCurrent(
+    const descriptor = migrateToCurrent(
       PERSISTED_STORES.LINEAGE_DESCRIPTOR,
       JSON.parse(content)
     ).doc as WorkflowLineageDescriptor;
+    if (descriptor.schedule !== undefined) {
+      const validation = validateWorkflowSchedule(descriptor.schedule);
+      if (typeof validation === "string") {
+        Log.warn(`Dropping invalid schedule from lineage descriptor ${descriptor.workflowKey}: ${validation}`);
+        delete descriptor.schedule;
+      } else {
+        descriptor.schedule = validation;
+      }
+    }
+    return descriptor;
   }
 
   /**
