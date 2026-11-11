@@ -25,6 +25,7 @@ import {
   CLIPBOARD_OPERATIONS,
   WORKSPACE_ENTRY_KINDS,
 } from "@root/types/DashboardConstants";
+import { normalizePagedPath } from "@utils/pagedListing";
 
 export interface WorkspaceClipboard {
   operation: (typeof CLIPBOARD_OPERATIONS)[keyof typeof CLIPBOARD_OPERATIONS];
@@ -45,10 +46,6 @@ export interface UseWorkspaceExplorerContextMenuOptions {
   onRefresh: (affectedPath?: string) => void;
   onOpenFile: (path: string) => void;
   onViewFileHistory: (path: string) => void;
-}
-
-function normalizeWorkspacePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
 function buildPastedFilePath(sourcePath: string, destDir: string): string {
@@ -96,7 +93,7 @@ export function useWorkspaceExplorerContextMenu({
   const handleViewFileHistory = useCallback(
     (entry: WorkspaceEntry) => {
       if (entry.kind !== WORKSPACE_ENTRY_KINDS.FILE) return;
-      onViewFileHistory(normalizeWorkspacePath(entry.path));
+      onViewFileHistory(normalizePagedPath(entry.path));
     },
     [onViewFileHistory]
   );
@@ -248,7 +245,7 @@ export function useWorkspaceExplorerContextMenu({
               ]
             : []),
           ...(entry.kind === WORKSPACE_ENTRY_KINDS.FILE
-            ? buildWorkflowFileMenuItems(normalizeWorkspacePath(entry.path))
+            ? buildWorkflowFileMenuItems(normalizePagedPath(entry.path))
             : []),
           { type: "divider" },
           {

@@ -28,6 +28,7 @@ import {
   type WorkflowArtifactCleanupResult,
 } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { assertContextResolutionDiagnosticsAllowed } from "../../utils/ContextResolutionPolicy";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
@@ -35,11 +36,8 @@ import { SessionAttachmentLedger } from "../../utils/SessionAttachmentLedger";
 import { reportCliNotFound } from "../../utils/TelemetryEvents";
 import {
   CLI_EVENT_TYPES,
-  CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
-  formatContextResolutionFailureMessage,
-  isContextResolutionDiagnostic,
   type ExecutionMode,
   type HarnessId,
   HARNESS_IDS,
@@ -1149,18 +1147,7 @@ export class CliIntegration extends HarnessIntegration {
       );
     }
 
-    const blockingDiagnostics = prepared.diagnostics.filter((diagnostic) =>
-      isContextResolutionDiagnostic(diagnostic.code)
-    );
-    if (
-      ConfigurationUtils.getContextResolutionFailureMode() ===
-        CONTEXT_RESOLUTION_FAILURE_MODES.FAIL &&
-      blockingDiagnostics.length > 0
-    ) {
-      throw new Error(
-        formatContextResolutionFailureMessage(blockingDiagnostics)
-      );
-    }
+    assertContextResolutionDiagnosticsAllowed(prepared.diagnostics);
 
     session.preparePrompt(
       prepared.promptWithInstruction,

@@ -286,6 +286,33 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     shared builder collapses. Capture and paste handlers now return raw workspace-
     relative paths for their callers to format once.
 
+- **2026-11-10, pass 12**: reviewed pass 11's four commits (`@`-reference quoting,
+  worktree normalization, scope labels, MCP detail rows). All preserve behavior apart
+  from the filed quoting fix. The MCP manager's summary for a server with `args` but no
+  `command` is now empty instead of a leading-space args list, which doesn't matter.
+  Cleaned up:
+  - `WorktreeResolution.ts` still had a core-side copy of the shorthand → object
+    normalization, with raw `"authored"`/`"default"` origins. It now uses
+    `toWorktreeObjectConfig` and `WORKTREE_CONFIG_ORIGINS`. The named-branch check
+    still applies only to an explicit object default.
+  - `workspaceViewerStore.ts` and `useWorkspaceExplorerContextMenu.tsx` had private
+    copies of `pagedListing.normalizePagedPath`.
+  - `WorkflowExecutor` and `CliIntegration` had the same strict context-resolution
+    guard. It now lives in `src/utils/ContextResolutionPolicy.ts`.
+
+  Hunted with a scan for repeated 8-line windows across `src/`. Queued two steps:
+  - Dead `getMcpConfigArgs` in all six harness adapters plus the optional
+    `IHarnessAdapter` member. Production calls only `planMcpConfigArgs`. The six
+    copies had drifted on when they return `null`. Only Qwen/OpenCode tests call it.
+  - `TerminalStartedMessage` hand-built from a live `PtySession` in six places. The
+    orchestrator's replay copy drops `shellKind` (filed:
+    `dev/bugs/backlog/terminal-replay-drops-shell-kind.md`).
+
+  Still open for a later pass: `WorkspaceViewerHeader.getWorkspaceFilePath` vs
+  `fileBrowserShared.toWorkspaceRelative` (they differ on a path equal to the root and on
+  leading slashes); `PromptPropertiesDrawer`/`WorkflowPropertiesPanel` permission
+  diagnostics filter; `WorkflowStepsPanel`/`StepChipRail` final-step output text.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are

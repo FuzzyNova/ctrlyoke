@@ -20,6 +20,7 @@ import {
   type DiffPayloadKind,
 } from "@root/types/DashboardConstants";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
+import { normalizePagedPath } from "@utils/pagedListing";
 
 // ============================================================================
 // Types
@@ -82,10 +83,6 @@ export function sameLanguageReferencePosition(
   b: LanguageReferencePosition
 ): boolean {
   return a.path === b.path && a.line === b.line && a.character === b.character;
-}
-
-function normalizeWorkspacePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
 /**
@@ -558,9 +555,9 @@ export const useWorkspaceViewerStore = create<
       },
 
       deleteFilePath(path) {
-        const normalizedPath = normalizeWorkspacePath(path).replace(/\/$/, "");
+        const normalizedPath = normalizePagedPath(path).replace(/\/$/, "");
         const isWithinPath = (candidate: string) => {
-          const normalizedCandidate = normalizeWorkspacePath(candidate);
+          const normalizedCandidate = normalizePagedPath(candidate);
           return (
             normalizedCandidate === normalizedPath ||
             normalizedCandidate.startsWith(`${normalizedPath}/`)
@@ -595,13 +592,13 @@ export const useWorkspaceViewerStore = create<
       },
 
       moveFilePath(sourcePath, destinationPath) {
-        const source = normalizeWorkspacePath(sourcePath).replace(/\/$/, "");
-        const destination = normalizeWorkspacePath(destinationPath).replace(
+        const source = normalizePagedPath(sourcePath).replace(/\/$/, "");
+        const destination = normalizePagedPath(destinationPath).replace(
           /\/$/,
           ""
         );
         const remapPath = (path: string) => {
-          const normalizedPath = normalizeWorkspacePath(path);
+          const normalizedPath = normalizePagedPath(path);
           if (normalizedPath === source) return destination;
           return normalizedPath.startsWith(`${source}/`)
             ? `${destination}${normalizedPath.slice(source.length)}`
@@ -1055,7 +1052,7 @@ export const useWorkspaceViewerStore = create<
       },
 
       openToFileHistory(path) {
-        const normalizedPath = normalizeWorkspacePath(path);
+        const normalizedPath = normalizePagedPath(path);
         const repoId = get().selectedRepoId;
         const generation = get().fileHistoryGeneration + 1;
         set({

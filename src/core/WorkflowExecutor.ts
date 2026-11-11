@@ -38,8 +38,6 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   PROMPT_DIAGNOSTIC_CODES,
-  formatContextResolutionFailureMessage,
-  isContextResolutionDiagnostic,
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
@@ -68,7 +66,6 @@ import {
   type ExecutionMode,
 } from "../types/DashboardConstants";
 import { outputTargetKey } from "../utils/OutputTargetKeys";
-import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
 import { findStepIndexById } from "./StepIdentity";
 import { HarnessIntegration } from "./HarnessIntegration";
@@ -88,6 +85,7 @@ import {
   type ResolvedProperties,
 } from "../utils/SettingsPropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { assertContextResolutionDiagnosticsAllowed } from "../utils/ContextResolutionPolicy";
 import {
   exceedsLimit,
   formatRetryDenominator,
@@ -2538,9 +2536,7 @@ export class WorkflowExecutor {
               })),
       };
       context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
-      this.assertContextResolutionDiagnosticsAllowed(
-        mcpNormalization.diagnostics
-      );
+      assertContextResolutionDiagnosticsAllowed(mcpNormalization.diagnostics);
 
       const integration = context.getIntegrationForPrompt(
         prompt,
@@ -4987,9 +4983,7 @@ export class WorkflowExecutor {
               })),
       };
       context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
-      this.assertContextResolutionDiagnosticsAllowed(
-        mcpNormalization.diagnostics
-      );
+      assertContextResolutionDiagnosticsAllowed(mcpNormalization.diagnostics);
 
       if (context.historyFilePath && context.outputHistoryManager) {
         await context.outputHistoryManager.recordRetryScheduled(
@@ -5261,23 +5255,6 @@ export class WorkflowExecutor {
           "Define the variable in the workflow vars section or remove the placeholder if it was intended as text.",
       },
     ]);
-  }
-
-  private assertContextResolutionDiagnosticsAllowed(
-    diagnostics: readonly CompatibilityDiagnostic[]
-  ): void {
-    const blockingDiagnostics = diagnostics.filter((diagnostic) =>
-      isContextResolutionDiagnostic(diagnostic.code)
-    );
-    if (
-      ConfigurationUtils.getContextResolutionFailureMode() ===
-        CONTEXT_RESOLUTION_FAILURE_MODES.FAIL &&
-      blockingDiagnostics.length > 0
-    ) {
-      throw new Error(
-        formatContextResolutionFailureMessage(blockingDiagnostics)
-      );
-    }
   }
 
   private async resolveEffectivePrompt(
