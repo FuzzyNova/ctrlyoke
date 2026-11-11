@@ -201,9 +201,6 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Identical private copies of `ensurePrivateDirectory` and `isStringArray`.
     Landed as shared utilities in `PrivateFileModes.ts` and `JsonTypeGuards.ts`, with focused coverage.
 
-  Still open for a later pass: `realpathOrUndefined` in `SourceRuntimeArtifactResolver`
-  vs `WorkflowBundleAnalyzer`, which are the same apart from a no-op `path.resolve`.
-
 - **2026-11-10, pass 9**: reviewed pass 8's three refactors. All preserve behavior, and
   `npm test` passes. The only output changes are the intended ones:
   `WorkflowStepsPanel` now treats `NO_TURN_STARTED` as terminal (filed bug), and on
@@ -223,6 +220,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Webview text helpers: whitespace-normalizing `truncate` in `FinalStepFooter.tsx`
     and `WorkflowStepItem.tsx`, and the identical `plural`/`pluralize` in
     `worktreeStatus.ts` and `AskUserQuestionOutput.tsx`, to go into `utils/string.ts`.
+
+  Landed async realpath fallbacks in `PathSecurity.ts` with focused tests.
 
 ## Deferred
 

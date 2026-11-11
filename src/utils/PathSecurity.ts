@@ -18,6 +18,27 @@ export function realpathOrSelf(path: string): string {
   }
 }
 
+/** Resolve a path's real location, returning undefined when unavailable. */
+export async function realpathOrUndefined(
+  p: string
+): Promise<string | undefined> {
+  try {
+    return await fs.realpath(p);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Resolve and normalize a path, falling back to its normalized resolved form. */
+export async function realpathOrResolved(p: string): Promise<string> {
+  const resolved = path.resolve(p);
+  try {
+    return path.normalize(await fs.realpath(resolved));
+  } catch {
+    return path.normalize(resolved);
+  }
+}
+
 /**
  * Authorize filesystem references after resolving symlinks/junctions. Root
  * realpaths are cached for the lifetime of this checker so callers can share

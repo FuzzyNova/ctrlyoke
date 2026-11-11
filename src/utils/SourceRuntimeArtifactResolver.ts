@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { pathsEqual, foldPathForCompare } from "./PathCasing";
-import { isPathWithinDirectory } from "./PathSecurity";
+import { isPathWithinDirectory, realpathOrUndefined } from "./PathSecurity";
 import { getGitIgnoredPaths } from "./GitUtils";
 
 /**
@@ -112,15 +112,5 @@ async function pathExists(candidatePath: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function realpathOrUndefined(
-  candidatePath: string
-): Promise<string | undefined> {
-  try {
-    return await fs.realpath(candidatePath);
-  } catch {
-    return undefined;
   }
 }
