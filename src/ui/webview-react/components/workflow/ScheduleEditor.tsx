@@ -155,10 +155,10 @@ export function ScheduleEditor(props: ScheduleEditorProps) {
     hostId: schedule?.hostId ?? WORKFLOW_SCHEDULE_PREVIEW_HOST_ID,
   } as WorkflowSchedule;
   const scheduleValidation = validateWorkflowSchedule(previewSchedule);
-  const next = nextScheduleOccurrence(
-    previewSchedule,
-    Math.max(now, new Date(start).getTime() - 60_000)
-  );
+  // A cron trigger stores no start date (the picker's date only supplies the
+  // time, weekday or day of month), so the backend fires the first occurrence
+  // after now. Preview exactly that.
+  const next = nextScheduleOccurrence(previewSchedule, now);
   const rect = anchor?.getBoundingClientRect();
   const style: React.CSSProperties = {
     position: "fixed",

@@ -34,6 +34,21 @@ suite("CronSchedule", () => {
     const recurring = { enabled: true, hostId: "host", trigger: { cron: "0 10 * * *" }, until: "2025-01-01T09:30" };
     assert.strictEqual(nextScheduleOccurrence(recurring, at), null);
   });
+  test("skips non-matching days quickly and returns null for impossible dates", () => {
+    const after = new Date(2026, 0, 2).getTime();
+    const started = Date.now();
+    assert.strictEqual(nextCronOccurrence("0 0 31 2 *", after), null);
+    const yearly = nextCronOccurrence("0 0 1 1 *", after);
+    assert.strictEqual(new Date(yearly!).getFullYear(), 2027);
+    assert.ok(Date.now() - started < 5_000, "the day-skipping search should not scan every minute");
+  });
+  test("dom/dow OR rule matches either restricted field", () => {
+    // 2026-01-05 is a Monday, before the 15th.
+    const after = new Date(2026, 0, 3, 12, 0).getTime();
+    const next = new Date(nextCronOccurrence("0 9 15 * 1", after)!);
+    assert.strictEqual(next.getDate(), 5);
+    assert.strictEqual(next.getHours(), 9);
+  });
   test("spring gap fires at first valid minute and fall duplicate fires once", () => {
     const springAfter = new Date(2025, 2, 9, 1, 59).getTime();
     const spring = nextCronOccurrence("30 2 * * *", springAfter);

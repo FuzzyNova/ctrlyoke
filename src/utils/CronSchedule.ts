@@ -78,24 +78,29 @@ export function nextCronOccurrence(expression: string, afterMs: number): number 
   const end = afterMs + SEARCH_HORIZON_MS;
   const cursor = new Date(afterMs);
   cursor.setSeconds(0, 0);
-  let previousDate: Date | undefined = new Date(cursor);
+  // Wall-clock minute-of-day of the previous cursor position on the same date;
+  // -1 after a jump to the start of a new day, so a DST gap at midnight is still seen.
+  let previousMinuteOfDay = cursor.getHours() * 60 + cursor.getMinutes();
+  let previousDay = cursor.getDate();
+  // Local-time setters step past a repeated (fall-back) hour, so each wall time is seen once.
   cursor.setMinutes(cursor.getMinutes() + 1);
-  let previousWallKey: string | undefined = `${previousDate.getFullYear()}-${previousDate.getMonth()}-${previousDate.getDate()}-${previousDate.getHours()}-${previousDate.getMinutes()}`;
   while (cursor.getTime() <= end) {
-    const wallKey = `${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}-${cursor.getHours()}-${cursor.getMinutes()}`;
-    if (wallKey !== previousWallKey && cron.month.has(cursor.getMonth() + 1) && cron.hour.has(cursor.getHours()) && cron.minute.has(cursor.getMinutes()) && matchesDay(cron, cursor)) return cursor.getTime();
-    // A forward DST jump skips wall-clock minutes. A cron time inside the gap fires at the transition.
-    if (previousDate) {
-      const beforeMinute = previousDate.getHours() * 60 + previousDate.getMinutes();
-      const afterMinute = cursor.getHours() * 60 + cursor.getMinutes();
-      if (afterMinute > beforeMinute + 1 && cron.month.has(cursor.getMonth() + 1) && matchesDay(cron, cursor)) {
-        for (let minute = beforeMinute + 1; minute < afterMinute; minute++) {
-          if (cron.hour.has(Math.floor(minute / 60)) && cron.minute.has(minute % 60)) return cursor.getTime();
-        }
-      }
+    if (cursor.getDate() !== previousDay) previousMinuteOfDay = -1;
+    if (!cron.month.has(cursor.getMonth() + 1) || !matchesDay(cron, cursor)) {
+      // Nothing on this date can match: jump to the start of the next day.
+      previousDay = cursor.getDate();
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(0, 0, 0, 0);
+      continue;
     }
-    previousWallKey = wallKey;
-    previousDate = new Date(cursor);
+    const minuteOfDay = cursor.getHours() * 60 + cursor.getMinutes();
+    if (cron.hour.has(cursor.getHours()) && cron.minute.has(cursor.getMinutes())) return cursor.getTime();
+    // A forward DST jump skips wall-clock minutes. A cron time inside the gap fires at the transition.
+    for (let minute = previousMinuteOfDay + 1; minute < minuteOfDay; minute++) {
+      if (cron.hour.has(Math.floor(minute / 60)) && cron.minute.has(minute % 60)) return cursor.getTime();
+    }
+    previousMinuteOfDay = minuteOfDay;
+    previousDay = cursor.getDate();
     cursor.setMinutes(cursor.getMinutes() + 1);
   }
   return null;

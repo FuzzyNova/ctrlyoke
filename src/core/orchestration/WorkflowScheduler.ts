@@ -128,6 +128,8 @@ export class WorkflowScheduler {
 
   private arm(workflowKey: WorkflowKey, occurrenceAt: number): void {
     if (this.disposed) return;
+    // A refresh can re-arm while a wake is awaiting I/O; keep one timer per lineage.
+    this.clearTimer(workflowKey);
     const delay = Math.max(
       0,
       Math.min(occurrenceAt - this.options.now(), MAX_TIMER_DELAY_MS)
