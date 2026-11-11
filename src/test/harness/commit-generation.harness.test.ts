@@ -61,6 +61,11 @@ suite("Commit message generation end to end", function () {
 
   teardown(function () {
     restoreRunState();
+    // A failed case keeps its repo and run history so its events can be read.
+    if (this.currentTest?.state === "failed") {
+      console.log(`  ⚠  Kept ${tmpDir} for inspection`);
+      return;
+    }
     removeTempDir(tmpDir, (dir) =>
       console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
     );

@@ -82,6 +82,8 @@ export class CopilotToolPermissionMapper
   implements IToolPermissionMapper
 {
   readonly capabilities = COPILOT_PERMISSION_CAPABILITIES;
+  /** `write(<absolute path>)` passes through and Copilot scopes it to that file. */
+  readonly allowsSingleFileWrite = true;
 
   static isSafeMcpServerId(serverId: string): boolean {
     return (

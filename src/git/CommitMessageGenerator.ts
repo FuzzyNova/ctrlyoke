@@ -28,12 +28,16 @@ import {
 } from "../utils/GitUtils";
 import {
   CLI_EVENT_TYPES,
+  COMMIT_SUBMISSION_CHANNELS,
   EXECUTION_MODES,
   CTRLYOKE_MCP_MODES,
   FINAL_STEP_PHASES,
   MCP_SERVER_IDS,
   PERMISSION_MODES,
+  TOOL_PERMISSION_CATEGORIES,
+  type CommitSubmissionChannel,
 } from "../types/DashboardConstants";
+import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import { TIMELINE_ATTEMPT_TERMINAL_STATES } from "../types/WorkflowTimelineTypes";
 import type { ResolvedRunAttemptValue } from "../core/orchestration/RunOutputResolver";
 import {
@@ -118,30 +122,53 @@ async function writeCommitMessageLineageKey(
 }
 
 /**
- * The submission modes a commit generation tries, one headless run each, in
- * order. Native mode tries the MCP tool first and falls back to the skill's
- * CLI command when the run ends without a submission; skill mode never
- * attaches ctrlyoke's MCP server, so it only uses the skill.
+ * The submission channels a commit generation tries, one headless run each,
+ * in order. Native mode tries the MCP tool first and falls back to a run
+ * without ctrlyoke's MCP server when the first run ends without a
+ * submission; skill mode never attaches the server, so only that second kind
+ * of run happens. Without MCP, a harness that can scope a write to one file
+ * writes the output file directly; any other uses the skill's shell command.
  */
-export function getCommitSubmissionModes(
-  ctrlyokeMcpMode: CtrlYokeMcpMode
-): readonly CtrlYokeMcpMode[] {
+export function getCommitSubmissionChannels(
+  ctrlyokeMcpMode: CtrlYokeMcpMode,
+  allowsSingleFileWrite: boolean
+): readonly CommitSubmissionChannel[] {
+  const withoutMcp = allowsSingleFileWrite
+    ? COMMIT_SUBMISSION_CHANNELS.FILE
+    : COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND;
   return ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL
-    ? [CTRLYOKE_MCP_MODES.SKILL]
-    : [CTRLYOKE_MCP_MODES.NATIVE, CTRLYOKE_MCP_MODES.SKILL];
+    ? [withoutMcp]
+    : [COMMIT_SUBMISSION_CHANNELS.MCP_TOOL, withoutMcp];
 }
 
-/** The prompt line that tells the model how to submit in `mode`. */
-export function buildCommitSubmitInstruction(mode: CtrlYokeMcpMode): string {
-  return mode === CTRLYOKE_MCP_MODES.SKILL
-    ? `\n\nSubmit the commit message by running the \`${COMMIT_MESSAGE_MCP_TOOL}\` command from the \`${MCP_SKILL_NAMES.COMMIT_MESSAGE}\` skill. Do not output it as text.`
-    : `\n\nSubmit the commit message using the \`${COMMIT_MESSAGE_MCP_TOOL}\` tool. Do not output it as text. ${MCP_STARTUP_RETRY_INSTRUCTION}`;
+/** The prompt text that tells the model how to submit through `channel`. */
+export function buildCommitSubmitInstruction(
+  channel: CommitSubmissionChannel,
+  commitOutputPath: string
+): string {
+  switch (channel) {
+    case COMMIT_SUBMISSION_CHANNELS.MCP_TOOL:
+      return `\n\nSubmit the commit message using the \`${COMMIT_MESSAGE_MCP_TOOL}\` tool. Do not output it as text. ${MCP_STARTUP_RETRY_INSTRUCTION}`;
+    case COMMIT_SUBMISSION_CHANNELS.FILE:
+      return `\n\nSubmit the commit message by writing it, and nothing else, to the file \`${commitOutputPath}\` with your file-writing tool. That is the only file you are allowed to write. Do not output the message as text.`;
+    case COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND:
+      // The skill's example already carries this path, but Qwen sometimes
+      // invents its own, and ctrlyoke only reads this one.
+      return `\n\nSubmit the commit message by running the \`${COMMIT_MESSAGE_MCP_TOOL}\` command from the \`${MCP_SKILL_NAMES.COMMIT_MESSAGE}\` skill, with exactly \`--commit-output "${commitOutputPath}"\`. Do not output it as text.`;
+  }
 }
 
-function describeCommitSubmissionMode(mode: CtrlYokeMcpMode): string {
-  return mode === CTRLYOKE_MCP_MODES.SKILL
-    ? `the ${MCP_SKILL_NAMES.COMMIT_MESSAGE} skill`
-    : `the ${COMMIT_MESSAGE_MCP_TOOL} MCP tool`;
+function describeCommitSubmissionChannel(
+  channel: CommitSubmissionChannel
+): string {
+  switch (channel) {
+    case COMMIT_SUBMISSION_CHANNELS.MCP_TOOL:
+      return `the ${COMMIT_MESSAGE_MCP_TOOL} MCP tool`;
+    case COMMIT_SUBMISSION_CHANNELS.FILE:
+      return "writing the commit message file";
+    case COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND:
+      return `the ${MCP_SKILL_NAMES.COMMIT_MESSAGE} skill`;
+  }
 }
 
 /** The trimmed message a submission wrote, or undefined when none was. */
@@ -156,7 +183,7 @@ export async function readSubmittedCommitMessage(
 }
 
 interface CommitSubmissionRequest {
-  mode: CtrlYokeMcpMode;
+  channel: CommitSubmissionChannel;
   harness: HarnessId;
   model: string | undefined;
   diff: string;
@@ -168,9 +195,9 @@ interface CommitSubmissionRequest {
   token: AbortSignal | undefined;
 }
 
-/** One headless commit generation run through a single submission mode. */
+/** One headless commit generation run through a single submission channel. */
 export interface CommitSubmissionAttempt {
-  mode: CtrlYokeMcpMode;
+  channel: CommitSubmissionChannel;
   /** Undefined when the run completed without submitting a message. */
   message?: string;
   prompt: string;
@@ -180,35 +207,37 @@ export interface CommitSubmissionAttempt {
 }
 
 /**
- * Run `attempt` for each mode in turn until one submits a message. A run
+ * Run `attempt` for each channel in turn until one submits a message. A run
  * that throws (harness failure, cancellation) stops the sequence. When no
- * mode submits, the error names every mode tried and carries the last run's
- * address so the caller can point at its events.
+ * channel submits, the error names every channel tried and carries the last
+ * run's address so the caller can point at its events.
  */
-export async function submitThroughCommitModes(
-  modes: readonly CtrlYokeMcpMode[],
+export async function submitThroughCommitChannels(
+  channels: readonly CommitSubmissionChannel[],
   harness: HarnessId,
-  attempt: (mode: CtrlYokeMcpMode) => Promise<CommitSubmissionAttempt>,
+  attempt: (
+    channel: CommitSubmissionChannel
+  ) => Promise<CommitSubmissionAttempt>,
   token?: AbortSignal
 ): Promise<CommitSubmissionAttempt & { message: string }> {
   let last: CommitSubmissionAttempt | undefined;
-  for (const mode of modes) {
+  for (const channel of channels) {
     if (token?.aborted) {
       throw new Error("Commit message generation cancelled");
     }
     if (last) {
       Log.warn(
-        `[CommitMessageGenerator] ${harness} did not submit a commit message through ${describeCommitSubmissionMode(last.mode)}; retrying through ${describeCommitSubmissionMode(mode)}`
+        `[CommitMessageGenerator] ${harness} did not submit a commit message through ${describeCommitSubmissionChannel(last.channel)}; retrying through ${describeCommitSubmissionChannel(channel)}`
       );
     }
-    last = await attempt(mode);
+    last = await attempt(channel);
     const { message } = last;
     if (message) {
       return { ...last, message };
     }
   }
   throw new CommitMessageGenerationError(
-    `Commit message generation failed: ${harness} never submitted a commit message (tried ${modes.map(describeCommitSubmissionMode).join(", then ")}).`,
+    `Commit message generation failed: ${harness} never submitted a commit message (tried ${channels.map(describeCommitSubmissionChannel).join(", then ")}).`,
     last?.workflowKey,
     last?.runRef
   );
@@ -291,11 +320,57 @@ export interface CommitMessageWorkflowHost {
   createWorkflowInstance(): WorkflowInstance;
 }
 
+/** The commit run's tool permissions for one submission channel. */
+function commitToolPermissions(
+  channel: CommitSubmissionChannel,
+  commitOutputPath: string | undefined
+): ToolPermissionConfig {
+  switch (channel) {
+    case COMMIT_SUBMISSION_CHANNELS.MCP_TOOL:
+      return {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [
+          ...COMMIT_MESSAGE_ALLOWED_READ_TOOLS,
+          COMMIT_MESSAGE_MCP_PERMISSION_PATTERN,
+        ],
+        deniedTools: ["shell", ...COMMIT_MESSAGE_DENIED_TOOLS],
+      };
+    case COMMIT_SUBMISSION_CHANNELS.FILE:
+      if (!commitOutputPath) {
+        throw new Error(
+          "A file submission needs the commit message output path"
+        );
+      }
+      // Writing is allowed for this one file only. Nothing else is allowed,
+      // so a headless custom run still auto-denies every other write; a deny
+      // rule for `write`/`edit` would also override this allow on harnesses
+      // where deny wins.
+      return {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [
+          ...COMMIT_MESSAGE_ALLOWED_READ_TOOLS,
+          `${TOOL_PERMISSION_CATEGORIES.WRITE}(${commitOutputPath})`,
+        ],
+        deniedTools: ["shell"],
+      };
+    case COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND:
+      return {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [
+          ...COMMIT_MESSAGE_ALLOWED_READ_TOOLS,
+          COMMIT_MESSAGE_SKILL_COMMAND_PATTERN,
+        ],
+        deniedTools: COMMIT_MESSAGE_DENIED_TOOLS,
+      };
+  }
+}
+
 export function buildCommitWorkflowOverrides(
   harness: HarnessId,
   model: string | undefined,
   mcpServerConfig: McpServerConfig | undefined,
-  ctrlyokeMcpMode: CtrlYokeMcpMode = CTRLYOKE_MCP_MODES.NATIVE
+  channel: CommitSubmissionChannel = COMMIT_SUBMISSION_CHANNELS.MCP_TOOL,
+  commitOutputPath?: string
 ): Partial<PromptFile> {
   return {
     harness,
@@ -312,24 +387,12 @@ export function buildCommitWorkflowOverrides(
     mcpServers: mcpServerConfig ? [mcpServerConfig] : null,
     agent: null,
     skills:
-      ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL
+      channel === COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND
         ? [MCP_SKILL_NAMES.COMMIT_MESSAGE]
         : null,
     additionalArgs: null,
     hooks: null,
-    toolPermissions: {
-      mode: PERMISSION_MODES.CUSTOM,
-      allowedTools: [
-        ...COMMIT_MESSAGE_ALLOWED_READ_TOOLS,
-        ...(ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.NATIVE
-          ? [COMMIT_MESSAGE_MCP_PERMISSION_PATTERN]
-          : [COMMIT_MESSAGE_SKILL_COMMAND_PATTERN]),
-      ],
-      deniedTools:
-        ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.NATIVE
-          ? ["shell", ...COMMIT_MESSAGE_DENIED_TOOLS]
-          : COMMIT_MESSAGE_DENIED_TOOLS,
-    },
+    toolPermissions: commitToolPermissions(channel, commitOutputPath),
   };
 }
 
@@ -606,12 +669,18 @@ export class CommitMessageGenerator {
     const roots = getCommitMessageStatePaths(cwd, stateRoot);
     await fs.mkdir(roots.tempDir, { recursive: true });
 
-    const submitted = await submitThroughCommitModes(
-      getCommitSubmissionModes(ConfigurationUtils.getCtrlYokeMcpMode()),
+    const allowsSingleFileWrite =
+      IntegrationFactory.createCapabilityProvider(harness).toolPermissionMapper
+        .allowsSingleFileWrite === true;
+    const submitted = await submitThroughCommitChannels(
+      getCommitSubmissionChannels(
+        ConfigurationUtils.getCtrlYokeMcpMode(),
+        allowsSingleFileWrite
+      ),
       harness,
-      (mode) =>
+      (channel) =>
         this.runSubmissionAttempt({
-          mode,
+          channel,
           harness,
           model,
           diff,
@@ -634,7 +703,7 @@ export class CommitMessageGenerator {
   }
 
   /**
-   * Run one headless commit generation that submits through `mode`, and
+   * Run one headless commit generation that submits through `channel`, and
    * return the submitted message, or no message when nothing was submitted.
    * A run that fails outright (harness error, cancellation) throws instead.
    */
@@ -642,7 +711,7 @@ export class CommitMessageGenerator {
     request: CommitSubmissionRequest
   ): Promise<CommitSubmissionAttempt> {
     const {
-      mode,
+      channel,
       harness,
       model,
       diff,
@@ -655,7 +724,7 @@ export class CommitMessageGenerator {
     } = request;
     const commitOutputPath = path.join(
       roots.tempDir,
-      `commit-output-${mode}-${Date.now()}.txt`
+      `commit-output-${channel}-${Date.now()}.txt`
     );
 
     // Keep diff content inert for every prompt-reference parser, even when
@@ -664,11 +733,11 @@ export class CommitMessageGenerator {
       diff,
       commitPrompt,
       instructionsSection,
-      buildCommitSubmitInstruction(mode)
+      buildCommitSubmitInstruction(channel, commitOutputPath)
     );
 
     const mcpServerConfig: McpServerConfig | undefined =
-      mode === CTRLYOKE_MCP_MODES.NATIVE
+      channel === COMMIT_SUBMISSION_CHANNELS.MCP_TOOL
         ? {
             id: MCP_SERVER_IDS.CTRLYOKE_COMMIT,
             command: "node",
@@ -683,7 +752,7 @@ export class CommitMessageGenerator {
         : undefined;
 
     Log.debug(
-      `[CommitMessageGenerator] Generating a commit message with ${harness} through ${mode}`
+      `[CommitMessageGenerator] Generating a commit message with ${harness} through ${channel}`
     );
 
     const existingWorkflowKey = await readCommitMessageLineageKey(
@@ -734,7 +803,8 @@ export class CommitMessageGenerator {
         harness,
         model,
         mcpServerConfig,
-        mode
+        channel,
+        commitOutputPath
       );
       await instance.loadPromptStringAsRun(
         fullPrompt,
@@ -817,10 +887,10 @@ export class CommitMessageGenerator {
       const message = await readSubmittedCommitMessage(commitOutputPath);
       if (message) {
         Log.debug(
-          `[CommitMessageGenerator] Commit message submitted through ${mode}: length=${message.length}`
+          `[CommitMessageGenerator] Commit message submitted through ${channel}: length=${message.length}`
         );
         return {
-          mode,
+          channel,
           message,
           prompt: fullPrompt,
           cliCommand,
@@ -867,7 +937,7 @@ export class CommitMessageGenerator {
       }
 
       return {
-        mode,
+        channel,
         prompt: fullPrompt,
         cliCommand,
         workflowKey,

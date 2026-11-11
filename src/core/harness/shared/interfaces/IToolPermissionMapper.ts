@@ -89,6 +89,15 @@ export interface IToolPermissionMapper {
   readonly normalizeMcpServerId?: (serverId: string) => string;
 
   /**
+   * True when a headless `custom` run honors a `write(<absolute path>)` allow
+   * rule for exactly that file: the file can be written and every other
+   * write is still denied. Verified per harness by probing; Qwen (which drops
+   * its write tool entirely in headless default mode) and Codex (whose
+   * sandbox cannot allow a single file) leave it unset.
+   */
+  readonly allowsSingleFileWrite?: boolean;
+
+  /**
    * Static permission facts owned by this harness mapper and referenced by the
    * harness descriptor. The backend registry evaluates these declarations
    * against the installed version.

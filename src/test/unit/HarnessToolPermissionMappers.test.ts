@@ -4,7 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
-import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
+import {
+  ClaudeToolPermissionMapper,
+  toClaudeAbsolutePathRule,
+} from "../../core/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
 import {
   formatOpenCodeMcpToolName,
@@ -323,6 +326,29 @@ suite("HarnessToolPermissionMappers", () => {
         });
       }
 
+      test("an allowed write keeps its path target; a denied one covers every write", () => {
+        assert.deepStrictEqual(
+          mapper.convertToAntigravityRules(
+            ["write(/repo/.ctrlyoke/temp/out.txt)", "edit(C:\\repo\\out.txt)"],
+            "allow"
+          ),
+          {
+            rules: [
+              "write_file(/repo/.ctrlyoke/temp/out.txt)",
+              "write_file(C:/repo/out.txt)",
+            ],
+            lossy: [],
+          }
+        );
+        assert.deepStrictEqual(
+          mapper.convertToAntigravityRules(
+            ["write(/repo/.ctrlyoke/temp/out.txt)"],
+            "deny"
+          ),
+          { rules: ["write_file(*)"], lossy: [] }
+        );
+      });
+
       test("reports unsupported tools as lossy and deduplicates rules", () => {
         assert.deepStrictEqual(
           mapper.convertToAntigravityRules(
@@ -638,6 +664,33 @@ suite("HarnessToolPermissionMappers", () => {
   // ──────────────────────────────────────────────────────────────────────────
   suite("ClaudeToolPermissionMapper", () => {
     const mapper = new ClaudeToolPermissionMapper();
+
+    test("spells absolute paths as Claude's // path rules", () => {
+      assert.strictEqual(
+        toClaudeAbsolutePathRule("/repo/.ctrlyoke/temp/out.txt"),
+        "//repo/.ctrlyoke/temp/out.txt"
+      );
+      assert.strictEqual(
+        toClaudeAbsolutePathRule("C:\\Users\\a\\out.txt"),
+        "//c/Users/a/out.txt"
+      );
+    });
+
+    test("an absolute write or edit path becomes an Edit(//…) rule", async () => {
+      const args = await mapperArgs(
+        mapper,
+        cfg(
+          PERMISSION_MODES.CUSTOM,
+          ["write(/repo/out.txt)", "edit(/repo/b.txt)", "write(docs/a.md)"],
+          []
+        )
+      );
+      assert.deepStrictEqual(argsAfterFlag(args, "--allowedTools"), [
+        "Edit(//repo/out.txt)",
+        "Edit(//repo/b.txt)",
+        "Write(docs/a.md)",
+      ]);
+    });
 
     suite("prepare", () => {
       test("dangerouslyAllowAll → exactly ['--dangerously-skip-permissions']", async () => {

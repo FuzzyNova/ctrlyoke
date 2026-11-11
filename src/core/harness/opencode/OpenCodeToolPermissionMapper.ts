@@ -1,3 +1,4 @@
+import * as path from "path";
 import {
   IToolPermissionMapper,
   PermissionContext,
@@ -77,6 +78,25 @@ const OPENCODE_TOOL_ALIASES: Readonly<Record<string, string>> = {
   web_search: "websearch",
 };
 
+/**
+ * OpenCode matches an `edit` rule against the file's path relative to the
+ * project root, so an absolute path never matches (probed on 2.2.7: the
+ * absolute key denied the write, the relative key allowed exactly that file).
+ * An absolute path inside `workspaceRoot` becomes that relative path, with
+ * forward slashes; any other value is returned unchanged.
+ */
+export function toOpenCodeEditPath(
+  pattern: string,
+  workspaceRoot: string | undefined
+): string {
+  if (!workspaceRoot || !path.isAbsolute(pattern)) return pattern;
+  const relative = path.relative(workspaceRoot, pattern);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    return pattern;
+  }
+  return relative.split(path.sep).join("/");
+}
+
 /** Format an MCP tool name using OpenCode's `<server>_<tool>` convention. */
 export function formatOpenCodeMcpToolName(
   serverId: string,
@@ -124,6 +144,7 @@ export class OpenCodeToolPermissionMapper
 {
   readonly capabilities = OPENCODE_PERMISSION_CAPABILITIES;
   readonly formatMcpToolName = formatOpenCodeMcpToolName;
+  readonly allowsSingleFileWrite = true;
 
   /** Prepare OpenCode's process-local permission policy. */
   async prepare(
@@ -160,7 +181,8 @@ export class OpenCodeToolPermissionMapper
   buildPermissionPolicy(
     config: ToolPermissionConfig | undefined,
     collisionContext?: OpenCodePermissionCollisionContext,
-    externalDirectories: readonly string[] = []
+    externalDirectories: readonly string[] = [],
+    workspaceRoot?: string
   ): OpenCodePermissionPolicy | undefined {
     const emittedTopLevelKeys = new Set<string>();
     const emittedToolKeys = new Map<string, string>();
@@ -223,7 +245,8 @@ export class OpenCodeToolPermissionMapper
         collisionContext,
         emittedTopLevelKeys,
         emittedToolKeys,
-        emittedNestedKeys
+        emittedNestedKeys,
+        workspaceRoot
       );
     }
     // Before the deny rules, so a denial still wins.
@@ -235,7 +258,8 @@ export class OpenCodeToolPermissionMapper
       collisionContext,
       emittedTopLevelKeys,
       emittedToolKeys,
-      emittedNestedKeys
+      emittedNestedKeys,
+      workspaceRoot
     );
     return policy;
   }
@@ -283,7 +307,8 @@ export class OpenCodeToolPermissionMapper
     collisionContext: OpenCodePermissionCollisionContext | undefined,
     emittedTopLevelKeys: Set<string>,
     emittedToolKeys: Map<string, string>,
-    emittedNestedKeys: Map<string, Map<string, string>>
+    emittedNestedKeys: Map<string, Map<string, string>>,
+    workspaceRoot: string | undefined
   ): void {
     for (const sourcePattern of patterns) {
       if (containsOpenCodeConfigSubstitution(sourcePattern)) {
@@ -324,7 +349,11 @@ export class OpenCodeToolPermissionMapper
       const [sourceTool, sourceArgs] = parsed;
       const tool =
         OPENCODE_TOOL_ALIASES[sourceTool.toLowerCase()] ?? sourceTool;
-      const argumentPattern = this.convertArgumentPattern(tool, sourceArgs);
+      const argumentPattern = this.convertArgumentPattern(
+        tool,
+        sourceArgs,
+        workspaceRoot
+      );
       this.appendRule(
         policy,
         tool,
@@ -481,7 +510,8 @@ export class OpenCodeToolPermissionMapper
 
   private convertArgumentPattern(
     tool: string,
-    sourceArgs: string
+    sourceArgs: string,
+    workspaceRoot: string | undefined
   ): string | undefined {
     if (!sourceArgs) {
       return undefined;
@@ -490,6 +520,9 @@ export class OpenCodeToolPermissionMapper
     const inner = sourceArgs.slice(1, -1);
     if (!inner || inner === "*" || inner === "*:*") {
       return undefined;
+    }
+    if (tool === TOOL_PERMISSION_CATEGORIES.EDIT) {
+      return toOpenCodeEditPath(inner, workspaceRoot);
     }
     if (tool !== TOOL_PERMISSION_CATEGORIES.BASH) {
       return inner;

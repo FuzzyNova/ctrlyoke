@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard file references now use the shared quoting rules, so paths with colons and top-level filenames remain intact.
 - CLI file edit diffs now skip patch metadata, deduplicate structured hunks, and normalize mixed line endings.
 - Undo/redo no longer loses a "No turn started" status.
+- Commit message generation without ctrlyoke's MCP server (`execution.ctrlyokeMcpMode: "skill"`, or the retry after an MCP run that submitted nothing) now works on Copilot CLI and Antigravity. Their permission rules couldn't allow the skill's `node` command, so the run always failed. On Copilot CLI, Claude Code, OpenCode and Antigravity, the harness now writes the message to one file that is the only file the run may write. Codex and Qwen Code still use the skill.
+- A `write(<path>)` or `edit(<path>)` allow rule with an absolute path now limits writes to that path on Claude Code (as an `Edit(//<path>)` rule), on OpenCode (as a path relative to the workspace) and on Antigravity (as `write_file(<path>)`). Before, Claude Code and OpenCode never matched the path, and Antigravity allowed every write.
 - Commit message generation with OpenCode no longer fails now and then because the model's first call to the submit tool came before ctrlyoke's MCP server had connected. The model now retries the call until the tool appears.
 - With several projects' ctrlyoke servers running on one machine, a push notification now goes only to the PWA installed for the project it came from, instead of to every installed ctrlyoke PWA. A PWA set up before this fix is matched to its project the next time you open it, and until then it keeps receiving every project's notifications.
 

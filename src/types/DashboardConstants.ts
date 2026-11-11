@@ -3224,6 +3224,24 @@ export const CTRLYOKE_MCP_MODES = {
 export type CtrlYokeMcpMode =
   (typeof CTRLYOKE_MCP_MODES)[keyof typeof CTRLYOKE_MCP_MODES];
 
+/**
+ * How a commit message generation run hands its message back to ctrlyoke.
+ * Every channel ends with the message in the same output file.
+ * - `mcp-tool`: the `submit_commit_message` tool on the attached MCP server.
+ * - `file`: the harness writes the output file itself, allowed by a rule
+ *   scoped to that one file (harnesses with `allowsSingleFileWrite`).
+ * - `skill-command`: the commit-message skill's `ctrlyoke-mcp` shell
+ *   command, for harnesses that cannot scope a write to one file.
+ */
+export const COMMIT_SUBMISSION_CHANNELS = {
+  MCP_TOOL: "mcp-tool",
+  FILE: "file",
+  SKILL_COMMAND: "skill-command",
+} as const;
+
+export type CommitSubmissionChannel =
+  (typeof COMMIT_SUBMISSION_CHANNELS)[keyof typeof COMMIT_SUBMISSION_CHANNELS];
+
 /** Selector-only choice for the workflow value `worktree: false`. */
 export const WORKTREE_MODE_SELECTIONS = {
   NONE: "none",

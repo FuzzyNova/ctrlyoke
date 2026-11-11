@@ -13,9 +13,11 @@ import {
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
 import { normalizeClaudeMcpServerId } from "../../../utils/ToolPermissionUtils";
+import * as path from "path";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
+  TOOL_PERMISSION_CATEGORIES,
 } from "../../../types/DashboardConstants";
 
 const CLAUDE_PERMISSION_VERIFICATION = capabilitySuiteVerification([
@@ -40,6 +42,18 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
     verification: CLAUDE_PERMISSION_VERIFICATION,
   },
 };
+
+/**
+ * Spell an absolute path the way Claude's path rules expect: POSIX form with
+ * a leading `//`. On Windows Claude normalizes `C:\Users\a` to `/c/Users/a`
+ * before matching, so the rule becomes `//c/Users/a`.
+ */
+export function toClaudeAbsolutePathRule(absolutePath: string): string {
+  const posix = absolutePath
+    .replace(/\\/g, "/")
+    .replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`);
+  return `/${posix}`;
+}
 
 /**
  * Claude CLI Tool Permission Mapper
@@ -74,6 +88,7 @@ export class ClaudeToolPermissionMapper
 {
   readonly capabilities = CLAUDE_PERMISSION_CAPABILITIES;
   readonly normalizeMcpServerId = normalizeClaudeMcpServerId;
+  readonly allowsSingleFileWrite = true;
 
   /**
    * Build CLI arguments for tool permissions
@@ -159,6 +174,21 @@ export class ClaudeToolPermissionMapper
 
     const [toolName, toolArgs] = parsed;
     const lowercaseName = toolName.toLowerCase();
+
+    // Claude reads a path rule starting with one `/` as relative to the
+    // project and needs `//` for an absolute filesystem path. Only `Edit`
+    // path rules are honored for writes: `Write(//abs)` lets nothing through,
+    // `Edit(//abs)` allows exactly that file (probed on Claude Code headless
+    // `dontAsk`), and an Edit rule covers the Write tool too.
+    const inner = toolArgs.slice(1, -1);
+    if (
+      (lowercaseName === TOOL_PERMISSION_CATEGORIES.WRITE ||
+        lowercaseName === TOOL_PERMISSION_CATEGORIES.EDIT) &&
+      inner &&
+      path.isAbsolute(inner)
+    ) {
+      return `${COPILOT_TO_CLAUDE_MAP[TOOL_PERMISSION_CATEGORIES.EDIT]}(${toClaudeAbsolutePathRule(inner)})`;
+    }
 
     // Look up tool name mapping
     const claudeName = COPILOT_TO_CLAUDE_MAP[lowercaseName];

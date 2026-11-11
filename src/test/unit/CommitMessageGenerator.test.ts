@@ -12,10 +12,10 @@ import {
   CommitMessageGenerator,
   CommitMessageGenerationError,
   getCommitMessageStatePaths,
-  getCommitSubmissionModes,
+  getCommitSubmissionChannels,
   MAX_DIFF_BYTES,
   readSubmittedCommitMessage,
-  submitThroughCommitModes,
+  submitThroughCommitChannels,
   type CommitSubmissionAttempt,
 } from "../../git/CommitMessageGenerator";
 import {
@@ -33,8 +33,10 @@ import {
   CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PERMISSION_MODES,
-  type CtrlYokeMcpMode,
+  COMMIT_SUBMISSION_CHANNELS,
+  type CommitSubmissionChannel,
 } from "../../types/DashboardConstants";
+import { IntegrationFactory } from "../../core/IntegrationFactory";
 import type {
   McpServerConfig,
   RunRef,
@@ -44,26 +46,62 @@ import type {
 const execFileAsync = promisify(execFile);
 
 suite("CommitMessageGenerator", () => {
-  test("native mode tries the MCP tool, then the skill; skill mode only the skill", () => {
+  test("tries MCP first in native mode and picks the no-MCP channel by harness", () => {
+    const { MCP_TOOL, FILE, SKILL_COMMAND } = COMMIT_SUBMISSION_CHANNELS;
     assert.deepStrictEqual(
-      getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
-      [CTRLYOKE_MCP_MODES.NATIVE, CTRLYOKE_MCP_MODES.SKILL]
+      getCommitSubmissionChannels(CTRLYOKE_MCP_MODES.NATIVE, true),
+      [MCP_TOOL, FILE]
     );
-    assert.deepStrictEqual(getCommitSubmissionModes(CTRLYOKE_MCP_MODES.SKILL), [
-      CTRLYOKE_MCP_MODES.SKILL,
+    assert.deepStrictEqual(
+      getCommitSubmissionChannels(CTRLYOKE_MCP_MODES.NATIVE, false),
+      [MCP_TOOL, SKILL_COMMAND]
+    );
+    assert.deepStrictEqual(
+      getCommitSubmissionChannels(CTRLYOKE_MCP_MODES.SKILL, true),
+      [FILE]
+    );
+    assert.deepStrictEqual(
+      getCommitSubmissionChannels(CTRLYOKE_MCP_MODES.SKILL, false),
+      [SKILL_COMMAND]
+    );
+  });
+
+  test("only the harnesses verified to scope a write to one file use the file channel", () => {
+    const scoped = Object.values(HARNESS_IDS).filter(
+      (harness) =>
+        IntegrationFactory.createCapabilityProvider(harness)
+          .toolPermissionMapper.allowsSingleFileWrite === true
+    );
+    assert.deepStrictEqual(scoped.sort(), [
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
     ]);
   });
 
-  test("tells the model how to submit in each mode", () => {
-    const native = buildCommitSubmitInstruction(CTRLYOKE_MCP_MODES.NATIVE);
-    assert.ok(
-      native.includes(`\`${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}\` tool`)
+  test("tells the model how to submit through each channel", () => {
+    const outputPath = path.join(os.tmpdir(), "commit-output.txt");
+    const mcp = buildCommitSubmitInstruction(
+      COMMIT_SUBMISSION_CHANNELS.MCP_TOOL,
+      outputPath
     );
-    assert.ok(native.includes(MCP_STARTUP_RETRY_INSTRUCTION));
+    assert.ok(mcp.includes(`\`${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}\` tool`));
+    assert.ok(mcp.includes(MCP_STARTUP_RETRY_INSTRUCTION));
 
-    const skill = buildCommitSubmitInstruction(CTRLYOKE_MCP_MODES.SKILL);
+    const file = buildCommitSubmitInstruction(
+      COMMIT_SUBMISSION_CHANNELS.FILE,
+      outputPath
+    );
+    assert.ok(file.includes(`\`${outputPath}\``));
+    assert.ok(!file.includes(MCP_STARTUP_RETRY_INSTRUCTION));
+
+    const skill = buildCommitSubmitInstruction(
+      COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND,
+      outputPath
+    );
     assert.ok(skill.includes(MCP_SKILL_NAMES.COMMIT_MESSAGE));
-    assert.ok(!skill.includes(MCP_STARTUP_RETRY_INSTRUCTION));
+    assert.ok(skill.includes(`--commit-output "${outputPath}"`));
   });
 
   test("reads only a non-empty submitted message", async () => {
@@ -89,78 +127,80 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
-  suite("submitThroughCommitModes", () => {
+  suite("submitThroughCommitChannels", () => {
+    const { MCP_TOOL, FILE } = COMMIT_SUBMISSION_CHANNELS;
+    const channels = getCommitSubmissionChannels(
+      CTRLYOKE_MCP_MODES.NATIVE,
+      true
+    );
     const workflowKey = "commit-message-generation-1" as WorkflowKey;
     const attemptFor = (
-      mode: CtrlYokeMcpMode,
+      channel: CommitSubmissionChannel,
       message?: string
     ): CommitSubmissionAttempt => ({
-      mode,
+      channel,
       message,
-      prompt: `prompt for ${mode}`,
+      prompt: `prompt for ${channel}`,
       workflowKey,
-      runRef: `run-${mode}` as RunRef,
+      runRef: `run-${channel}` as RunRef,
     });
 
-    test("returns the MCP submission without running the skill", async () => {
-      const tried: CtrlYokeMcpMode[] = [];
-      const result = await submitThroughCommitModes(
-        getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+    test("returns the MCP submission without a second run", async () => {
+      const tried: CommitSubmissionChannel[] = [];
+      const result = await submitThroughCommitChannels(
+        channels,
         HARNESS_IDS.OPENCODE_CLI,
-        async (mode) => {
-          tried.push(mode);
-          return attemptFor(mode, "feat: from mcp");
+        async (channel) => {
+          tried.push(channel);
+          return attemptFor(channel, "feat: from mcp");
         }
       );
-      assert.deepStrictEqual(tried, [CTRLYOKE_MCP_MODES.NATIVE]);
+      assert.deepStrictEqual(tried, [MCP_TOOL]);
       assert.strictEqual(result.message, "feat: from mcp");
     });
 
-    test("falls back to the skill when the MCP run submits nothing", async () => {
-      const tried: CtrlYokeMcpMode[] = [];
-      const result = await submitThroughCommitModes(
-        getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+    test("falls back when the MCP run submits nothing", async () => {
+      const tried: CommitSubmissionChannel[] = [];
+      const result = await submitThroughCommitChannels(
+        channels,
         HARNESS_IDS.OPENCODE_CLI,
-        async (mode) => {
-          tried.push(mode);
+        async (channel) => {
+          tried.push(channel);
           return attemptFor(
-            mode,
-            mode === CTRLYOKE_MCP_MODES.SKILL ? "fix: from skill" : undefined
+            channel,
+            channel === FILE ? "fix: from file" : undefined
           );
         }
       );
-      assert.deepStrictEqual(tried, [
-        CTRLYOKE_MCP_MODES.NATIVE,
-        CTRLYOKE_MCP_MODES.SKILL,
-      ]);
-      assert.strictEqual(result.message, "fix: from skill");
-      assert.strictEqual(result.prompt, "prompt for skill");
+      assert.deepStrictEqual(tried, [MCP_TOOL, FILE]);
+      assert.strictEqual(result.message, "fix: from file");
+      assert.strictEqual(result.prompt, `prompt for ${FILE}`);
     });
 
-    test("fails with the last run's address when no mode submits", async () => {
+    test("fails with the last run's address when no channel submits", async () => {
       await assert.rejects(
-        submitThroughCommitModes(
-          getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+        submitThroughCommitChannels(
+          getCommitSubmissionChannels(CTRLYOKE_MCP_MODES.NATIVE, false),
           HARNESS_IDS.QWEN_CLI,
-          async (mode) => attemptFor(mode)
+          async (channel) => attemptFor(channel)
         ),
         (error: unknown) =>
           error instanceof CommitMessageGenerationError &&
           /never submitted a commit message/.test(error.message) &&
           error.message.includes(MCP_SKILL_NAMES.COMMIT_MESSAGE) &&
           error.workflowKey === workflowKey &&
-          error.runRef === "run-skill"
+          error.runRef === `run-${COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND}`
       );
     });
 
-    test("does not try the skill after a run that failed outright", async () => {
-      const tried: CtrlYokeMcpMode[] = [];
+    test("does not fall back after a run that failed outright", async () => {
+      const tried: CommitSubmissionChannel[] = [];
       await assert.rejects(
-        submitThroughCommitModes(
-          getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+        submitThroughCommitChannels(
+          channels,
           HARNESS_IDS.CODEX_CLI,
-          async (mode) => {
-            tried.push(mode);
+          async (channel) => {
+            tried.push(channel);
             throw new CommitMessageGenerationError(
               "Commit message generation did not complete successfully"
             );
@@ -168,26 +208,26 @@ suite("CommitMessageGenerator", () => {
         ),
         /did not complete successfully/
       );
-      assert.deepStrictEqual(tried, [CTRLYOKE_MCP_MODES.NATIVE]);
+      assert.deepStrictEqual(tried, [MCP_TOOL]);
     });
 
-    test("stops before the skill run when generation was cancelled", async () => {
+    test("stops before the fallback run when generation was cancelled", async () => {
       const controller = new AbortController();
-      const tried: CtrlYokeMcpMode[] = [];
+      const tried: CommitSubmissionChannel[] = [];
       await assert.rejects(
-        submitThroughCommitModes(
-          getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+        submitThroughCommitChannels(
+          channels,
           HARNESS_IDS.CLAUDE_CLI,
-          async (mode) => {
-            tried.push(mode);
+          async (channel) => {
+            tried.push(channel);
             controller.abort();
-            return attemptFor(mode);
+            return attemptFor(channel);
           },
           controller.signal
         ),
         /Commit message generation cancelled/
       );
-      assert.deepStrictEqual(tried, [CTRLYOKE_MCP_MODES.NATIVE]);
+      assert.deepStrictEqual(tried, [MCP_TOOL]);
     });
   });
 
@@ -358,7 +398,7 @@ suite("CommitMessageGenerator", () => {
       HARNESS_IDS.OPENCODE_CLI,
       "test-model",
       mcpServer,
-      CTRLYOKE_MCP_MODES.NATIVE
+      COMMIT_SUBMISSION_CHANNELS.MCP_TOOL
     );
 
     assert.strictEqual(overrides.executionMode, EXECUTION_MODES.HEADLESS);
@@ -383,12 +423,33 @@ suite("CommitMessageGenerator", () => {
     assert.strictEqual(overrides.hooks, null);
   });
 
-  test("uses the commit-message skill in skill mode", () => {
+  test("allows writing only the output file on the file channel", () => {
+    const outputPath = path.join(os.tmpdir(), "commit-output-file.txt");
     const overrides = buildCommitWorkflowOverrides(
-      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
       undefined,
       undefined,
-      CTRLYOKE_MCP_MODES.SKILL
+      COMMIT_SUBMISSION_CHANNELS.FILE,
+      outputPath
+    );
+
+    assert.strictEqual(overrides.mcpServers, null);
+    assert.strictEqual(overrides.skills, null);
+    // No write/edit deny: on harnesses where deny wins it would override the
+    // single-file allow. Every other write is denied as not allowed.
+    assert.deepStrictEqual(overrides.toolPermissions, {
+      mode: PERMISSION_MODES.CUSTOM,
+      allowedTools: ["read", "grep", "glob", `write(${outputPath})`],
+      deniedTools: ["shell"],
+    });
+  });
+
+  test("uses the commit-message skill on the skill-command channel", () => {
+    const overrides = buildCommitWorkflowOverrides(
+      HARNESS_IDS.CODEX_CLI,
+      undefined,
+      undefined,
+      COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND
     );
 
     assert.strictEqual(overrides.mcpServers, null);

@@ -309,7 +309,8 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     const permission = this.toolPermissionMapper.buildPermissionPolicy(
       options.toolPermissions ?? undefined,
       options.permissionCollisionContext,
-      options.externalDirectories
+      options.externalDirectories,
+      options.workspaceRoot
     );
     const mcpEntries = buildOpenCodeMcpEntries(
       options.mcpServerPath,
@@ -839,7 +840,8 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     const policy = this.toolPermissionMapper.buildPermissionPolicy(
       toolPermissions ?? undefined,
       collisionContext,
-      externalDirectories
+      externalDirectories,
+      context.workspaceRoot
     );
     const application = toolPermissions
       ? await this.toolPermissionMapper.prepare(toolPermissions, context)

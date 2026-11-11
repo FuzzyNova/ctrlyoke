@@ -1,9 +1,14 @@
 import * as assert from "assert";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
-import { OpenCodeToolPermissionMapper } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
+import {
+  OpenCodeToolPermissionMapper,
+  toOpenCodeEditPath,
+} from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type {
@@ -473,6 +478,24 @@ suite("ToolPermissionMappers", () => {
   // ──────────────────────────────────────────────────────────────────────────
   suite("OpenCodeToolPermissionMapper", () => {
     const mapper = new OpenCodeToolPermissionMapper();
+
+    test("an absolute edit path inside the workspace becomes project-relative", () => {
+      const root = path.join(os.tmpdir(), "oc-root");
+      const inside = path.join(root, ".ctrlyoke", "temp", "out.txt");
+      const outside = path.join(os.tmpdir(), "elsewhere", "out.txt");
+      const policy = mapper.buildPermissionPolicy(
+        cfg(PERMISSION_MODES.CUSTOM, [`write(${inside})`, `edit(${outside})`]),
+        undefined,
+        [],
+        root
+      );
+      assert.deepStrictEqual(policy?.edit, {
+        ".ctrlyoke/temp/out.txt": "allow",
+        [outside]: "allow",
+      });
+      assert.strictEqual(toOpenCodeEditPath("docs/a.md", root), "docs/a.md");
+      assert.strictEqual(toOpenCodeEditPath(inside, undefined), inside);
+    });
 
     suite("external directories", () => {
       const dirs = ["C:\\shared\\specs\\", "/srv/logs"];

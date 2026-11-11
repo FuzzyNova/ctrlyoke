@@ -151,6 +151,7 @@ export class AntigravityToolPermissionMapper
 {
   readonly capabilities = ANTIGRAVITY_PERMISSION_CAPABILITIES;
   readonly normalizeMcpServerId = normalizeAntigravityMcpServerId;
+  readonly allowsSingleFileWrite = true;
   readonly formatMcpToolName = (serverId: string, toolName: string): string =>
     `mcp__${normalizeAntigravityMcpServerId(serverId)}__${toolName}`;
 
@@ -189,8 +190,19 @@ export class AntigravityToolPermissionMapper
           else rules.add(`command(regex:${denyCommandRegex(words, command)})`);
         }
       } else if (FILE_READ_TOOLS.has(tool)) rules.add("read_file(*)");
-      else if (FILE_WRITE_TOOLS.has(tool)) rules.add("write_file(*)");
-      else if (tool === "web_fetch" || tool === "webfetch") {
+      else if (FILE_WRITE_TOOLS.has(tool)) {
+        // agy honors a path target on an allow rule (`write_file(<abs>)`
+        // writes exactly that file, probed on 1.5.6). A deny keeps the
+        // whole-tool form, which over-denies rather than under-denies.
+        const target = args.replace(/^\(|\)$/g, "").trim();
+        rules.add(
+          listKind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW &&
+            target &&
+            target !== "*"
+            ? `write_file(${target.replace(/\\/g, "/")})`
+            : "write_file(*)"
+        );
+      } else if (tool === "web_fetch" || tool === "webfetch") {
         const domain = args.replace(/^\(|\)$/g, "").trim();
         rules.add(`read_url(${domain || "*"})`);
       } else if (READ_ONLY_LIST_TOOLS.has(tool)) {

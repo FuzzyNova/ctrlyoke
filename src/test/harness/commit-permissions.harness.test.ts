@@ -21,7 +21,7 @@ import * as path from "path";
 import { buildCommitWorkflowOverrides } from "../../git/CommitMessageGenerator";
 import { MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME } from "../../utils/McpToolDefinitions";
 import {
-  CTRLYOKE_MCP_MODES,
+  COMMIT_SUBMISSION_CHANNELS,
   HARNESS_IDS,
   MCP_SERVER_IDS,
 } from "../../types/DashboardConstants";
@@ -71,7 +71,7 @@ suite("Commit message generation permissions", function () {
             ],
             autoApprove: true,
           },
-          CTRLYOKE_MCP_MODES.NATIVE
+          COMMIT_SUBMISSION_CHANNELS.MCP_TOOL
         ),
         steps: [
           {

@@ -78,15 +78,20 @@ your commit box.
 1. By default the run attaches ctrlyoke's MCP server and the harness calls
    the tool.
 2. If that run finishes without submitting, ctrlyoke runs the generation once
-   more with the commit-message skill, which submits through the
-   [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) command instead.
+   more without its MCP server:
+   - On Copilot CLI, Claude Code, OpenCode and Antigravity, the harness writes
+     the message to one file in `.ctrlyoke/temp/`. The run may write only
+     that file.
+   - On Codex and Qwen Code, which can't limit writes to a single file in a
+     headless run, the commit-message skill submits it through the
+     [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) command.
 3. If neither submits, generation fails with an error and the commit box stays
    empty. The error names the run, so you can open it and see what the harness
    did.
 
 With [`execution.ctrlyokeMcpMode`](/reference/settings#execution-ctrlyokemcpmode)
-set to `skill`, ctrlyoke never attaches its MCP server, so only the skill run
-happens.
+set to `skill`, ctrlyoke never attaches its MCP server, so only the second
+kind of run happens.
 
 ## The Commit Message settings tab
 
