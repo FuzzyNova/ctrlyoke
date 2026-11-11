@@ -1646,20 +1646,38 @@ export class WorkflowOrchestrator {
       workspaceRoot,
       descriptor
     );
-    if (descriptor.latestRunRef) {
-      await this.seedAndExecuteAtRun(
-        { workflowKey, runRef: descriptor.latestRunRef },
-        definitionRevision,
-        descriptor.revision,
-        SCHEDULER_CLIENT_ID
-      );
-    } else {
-      await this.executeDraftAtAddress(
-        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
-        definitionRevision,
-        descriptor.revision,
-        SCHEDULER_CLIENT_ID
-      );
+    const clientId = SCHEDULER_CLIENT_ID;
+    const bindingPath = descriptor.latestRunRef
+      ? WorkflowPaths.runFilePath(
+          workspaceRoot,
+          workflowKey,
+          descriptor.latestRunRef
+        )
+      : WorkflowPaths.draftFilePath(workspaceRoot, workflowKey);
+    try {
+      // Scheduled execution has no dashboard connection. Give the lifecycle
+      // path a private view binding so draft validation and external-root trust
+      // checks inspect this lineage, without changing any human client's view.
+      await this.loadWorkflowForClient(bindingPath, () => undefined, clientId, {
+        skipReplay: true,
+      });
+      if (descriptor.latestRunRef) {
+        await this.seedAndExecuteAtRun(
+          { workflowKey, runRef: descriptor.latestRunRef },
+          definitionRevision,
+          descriptor.revision,
+          clientId
+        );
+      } else {
+        await this.executeDraftAtAddress(
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+          definitionRevision,
+          descriptor.revision,
+          clientId
+        );
+      }
+    } finally {
+      this.unregisterClient(clientId);
     }
   }
 

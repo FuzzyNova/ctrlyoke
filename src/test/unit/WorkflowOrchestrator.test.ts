@@ -53,6 +53,7 @@ import {
   PROMPT_TERMINAL_STATUS,
   QUEUE_POSITION,
   RUNNER_IDS,
+  SCHEDULER_CLIENT_ID,
   VSCODE_CONTEXT_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
@@ -5532,6 +5533,80 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       );
 
       releaseExecution();
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("scheduled draft fire binds and releases only the scheduler client", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-scheduled-draft-")
+    );
+    try {
+      const manager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "scheduled draft" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Scheduled draft",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await manager.createWorkingFile(
+        "scheduled-draft",
+        [{ prompt: "scheduled draft" }],
+        workspace,
+        "Scheduled draft"
+      );
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.lineageRepository = new WorkflowLineageRepository();
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, { workflowKey: "panel-lineage", kind: "draft" }],
+      ]);
+      internal.viewMessageSinks = new Map();
+      const schedulerId = SCHEDULER_CLIENT_ID;
+      const addressRegistry =
+        internal.workflowInstanceRegistry.getViewAddressRegistry();
+      const panelAddress = internal.viewAddressRegistry.get(PANEL_CLIENT_ID);
+      let executedAddress: unknown;
+      internal.loadWorkflowForClient = async (
+        _filePath: string,
+        _send: (message: unknown) => void,
+        clientId: string,
+        options: { skipReplay?: boolean }
+      ) => {
+        assert.strictEqual(clientId, schedulerId);
+        assert.strictEqual(options.skipReplay, true);
+        addressRegistry.set(clientId, { workflowKey, kind: "draft" });
+      };
+      internal.executeDraftAtAddress = async (
+        address: unknown,
+        _definitionRevision: number,
+        _descriptorRevision: number,
+        clientId: string
+      ) => {
+        assert.strictEqual(clientId, schedulerId);
+        assert.deepStrictEqual(addressRegistry.get(clientId), {
+          workflowKey,
+          kind: "draft",
+        });
+        executedAddress = address;
+      };
+
+      await internal.fireScheduledWorkflow(workspace, workflowKey);
+
+      assert.ok(executedAddress, "the draft execution path should run");
+      assert.deepStrictEqual(
+        internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
+        panelAddress
+      );
+      assert.strictEqual(addressRegistry.has(schedulerId), false);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

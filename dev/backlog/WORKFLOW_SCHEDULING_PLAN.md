@@ -556,6 +556,9 @@ No remaining blockers — the plan is fully specified for a v1 implementation.
    applies the overlap guard and keeps the scheduled-fire client identity separate.
    A timer wake more than 60 seconds after its occurrence is treated as missed,
    since the host cannot reliably distinguish machine sleep from a delayed event loop.
+   Scheduled draft-only fires bind the private scheduler client to the lineage
+   before execution so draft validation and external-root approval checks apply;
+   that binding is released after preparation.
 3. [x] Backend and contract plumbing: `SET_SCHEDULE`/`CLEAR_SCHEDULE` messages and
        handlers, `RecentWorkflowEntry` fields, the `uiStore` `RecentWorkflow` fields and
        actions, and tests.
