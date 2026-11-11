@@ -1,4 +1,5 @@
 import * as path from "path";
+import { pathsEqual } from "../../../utils/PathCasing";
 import {
   IHarnessAdapter,
   HarnessConfig,
@@ -509,16 +510,13 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
             ).filter((dir) => {
               const resolvedDir = path.resolve(dir);
               const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
-              return process.platform === "win32"
-                ? resolvedDir.toLowerCase() !==
-                    resolvedWorkspaceRoot.toLowerCase()
-                : resolvedDir !== resolvedWorkspaceRoot;
+              return !pathsEqual(resolvedDir, resolvedWorkspaceRoot);
             });
       if (resolvedSandboxMode === CODEX_SANDBOX_MODES.WORKSPACE_WRITE) {
         for (const adminDir of await gitWritableAdminDirs(workspaceRoot)) {
           if (
-            !workspaceDirs.some(
-              (dir) => path.resolve(dir) === path.resolve(adminDir)
+            !workspaceDirs.some((dir) =>
+              pathsEqual(path.resolve(dir), path.resolve(adminDir))
             )
           ) {
             workspaceDirs.push(adminDir);

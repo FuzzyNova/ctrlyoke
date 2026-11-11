@@ -7,6 +7,7 @@ import {
   canonicalizeDriveLetter,
   canonicalizeSpawnCwd,
   lowercaseDriveLetter,
+  resolvedPathKey,
 } from "../../utils/PathCasing";
 
 suite("PathCasing", () => {
@@ -59,6 +60,24 @@ suite("PathCasing", () => {
       const dir = path.join("C:", "dev", "ctrlyoke");
       assert.strictEqual(pathsEqual(dir.toLowerCase(), dir), false);
       assert.strictEqual(pathsEqual(dir, dir), true);
+    });
+  });
+
+  suite("resolvedPathKey", () => {
+    test("resolves and folds on win32", () => {
+      setPlatform("win32");
+      assert.strictEqual(
+        resolvedPathKey("./Some/Relative/Path"),
+        path.resolve("./Some/Relative/Path").toLowerCase()
+      );
+    });
+
+    test("resolves without folding off win32", () => {
+      setPlatform("linux");
+      assert.strictEqual(
+        resolvedPathKey("./Some/Relative/Path"),
+        path.resolve("./Some/Relative/Path")
+      );
     });
   });
 

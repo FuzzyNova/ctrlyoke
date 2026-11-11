@@ -1,4 +1,5 @@
 import * as path from "path";
+import { resolvedPathKey } from "../../utils/PathCasing";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import { Log } from "../../utils/Log";
@@ -537,8 +538,7 @@ function dedupePaths(paths: readonly string[]): string[] {
   const result: string[] = [];
   for (const value of paths) {
     const resolved = path.resolve(value);
-    const key =
-      process.platform === "win32" ? resolved.toLowerCase() : resolved;
+    const key = resolvedPathKey(value);
     if (!seen.has(key)) {
       seen.add(key);
       result.push(resolved);

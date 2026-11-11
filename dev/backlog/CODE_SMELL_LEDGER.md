@@ -197,6 +197,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     shared `isTerminalStepStatus` guard and regression tests.
   - Win32 `resolve` + `toLowerCase()` path keys beside `PathCasing` (nine sites). The
     Codex admin-dir check also skips the fold.
+    Landed as the shared `resolvedPathKey` helper; Codex equality checks use `pathsEqual`.
   - Identical private copies of `ensurePrivateDirectory` and `isStringArray`.
 
   Still open for a later pass: `realpathOrUndefined` in `SourceRuntimeArtifactResolver`

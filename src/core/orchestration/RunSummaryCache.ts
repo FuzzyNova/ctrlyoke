@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { resolvedPathKey } from "../../utils/PathCasing";
 import type { RunSummaryRecord } from "./OutputHistoryManager";
 
 /**
@@ -85,8 +86,7 @@ const entries = new Map<string, CacheEntry>();
  * entry a read had stored.
  */
 function cacheKey(runDirectoryPath: string): string {
-  const resolved = path.resolve(runDirectoryPath);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  return resolvedPathKey(runDirectoryPath);
 }
 
 async function stampFile(filePath: string): Promise<FileStamp | null> {
