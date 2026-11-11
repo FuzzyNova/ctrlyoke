@@ -142,6 +142,12 @@ describe("MarkdownText", () => {
     expect(bold.tagName).toBe("STRONG");
   });
 
+  it("does not cap table height, so tables never scroll vertically", async () => {
+    render(<MarkdownText>{"| A | B |\n| - | - |\n| 1 | 2 |\n"}</MarkdownText>);
+    const table = await screen.findByRole("table");
+    expect(table.parentElement?.style.maxHeight).toBe("");
+  });
+
   it("renders italic text", async () => {
     render(<MarkdownText>_italic text_</MarkdownText>);
     const em = await screen.findByText("italic text");

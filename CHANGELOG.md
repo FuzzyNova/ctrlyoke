@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The output pane no longer adds status rows for pre-conditions, end conditions and script steps: no "Evaluating end condition: Running …" row before the script, and no "End condition passed (…) → continue" row after it. The script's own output already shows its command, verdict and next action. A status row still appears when a condition could not run at all, e.g. an end condition with no `script`. The CLI output and saved run history drop the same lines. An errored condition's verdict now names the retry that follows (for example "retry 2 of 3"), or the action taken once retries run out.
 - A finished script's stats line no longer repeats the duration its verdict line already shows.
 - A streaming step's header now shows a pulsing dot right after the step label instead of "⬤ Streaming..." at the end of the title, so the step name keeps its room on narrow panes. Hover the dot for "Streaming"; screen readers still announce the step as running.
+- Markdown tables in the output pane and the workspace viewer's Markdown preview now grow to fit their rows instead of stopping at 300px with their own vertical scrollbar. Wide tables still scroll horizontally.
 - Fixed status rows sometimes appearing twice after the hosted dashboard reconnected during a run, and two status messages occasionally merging into one row.
 
 ## [0.6.0] - 2026-11-10

@@ -1707,6 +1707,11 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       className={`markdown-text ${className ?? ""}`}
       components={components}
       controls={controls}
+      // Streamdown caps each table at 300px by default, which gives almost
+      // every table its own vertical scrollbar inside an already-scrolling
+      // pane. Let tables grow to their content; wide ones still scroll
+      // horizontally.
+      tableMaxHeight={Number.POSITIVE_INFINITY}
       remarkPlugins={remarkPlugins}
       allowedTags={FILE_REF_ALLOWED_TAGS}
       // No plugins prop: omitting avoids Shiki WASM CSP issues in VS Code webview
