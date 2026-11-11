@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard file references now use the shared quoting rules, so paths with colons and top-level filenames remain intact.
 - CLI file edit diffs now skip patch metadata, deduplicate structured hunks, and normalize mixed line endings.
 - Undo/redo no longer loses a "No turn started" status.
+- With several projects' ctrlyoke servers running on one machine, a push notification now goes only to the PWA installed for the project it came from, instead of to every installed ctrlyoke PWA. A PWA set up before this fix is matched to its project the next time you open it, and until then it keeps receiving every project's notifications.
 
 ### Changed
 

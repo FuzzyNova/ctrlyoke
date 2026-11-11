@@ -38,6 +38,7 @@ interface PushSubscriptionResponse {
 }
 
 interface PushSubscriptionListResponse {
+  subscriptions: Array<{ id: string }>;
   subscriptionCount: number;
   staleSubscriptionCount: number;
 }
@@ -72,7 +73,15 @@ export async function getBrowserNotificationStatus(): Promise<BrowserNotificatio
   try {
     const registration = await ensureServiceWorkerRegistration();
     const subscription = await registration.pushManager.getSubscription();
-    const list = await fetchSubscriptionList();
+    let list = await fetchSubscriptionList();
+    // This server pushes only to subscriptions it owns. One this browser holds
+    // that the server doesn't list was registered before ownership existed (or
+    // with another workspace on this origin), so register it here to claim it.
+    const storedId = localStorage.getItem(PUSH_SUBSCRIPTION_ID_KEY);
+    if (subscription && !list.subscriptions.some((s) => s.id === storedId)) {
+      await registerPushSubscription(subscription);
+      list = await fetchSubscriptionList();
+    }
     return {
       ...status,
       subscribed: Boolean(subscription),
@@ -209,6 +218,12 @@ async function subscribeForPushNotifications(): Promise<void> {
     });
   }
 
+  await registerPushSubscription(subscription);
+}
+
+async function registerPushSubscription(
+  subscription: PushSubscription
+): Promise<void> {
   const response = await apiFetchJson<PushSubscriptionResponse>(
     "/api/notifications/subscriptions",
     {

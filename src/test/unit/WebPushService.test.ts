@@ -15,6 +15,9 @@ import {
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { ctrlyokeStateHome } from "../../utils/ProjectStatePaths";
 
+const WORKSPACE_KEY = "project-a-111111111111";
+const OTHER_WORKSPACE_KEY = "project-b-222222222222";
+
 suite("WebPushService", () => {
   let workspaceRoot: string;
   let notificationsDir: string;
@@ -50,7 +53,7 @@ suite("WebPushService", () => {
   });
 
   test("generates JWK-backed VAPID keys while preserving public key output", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
 
     const publicKey = await service.getPublicKey();
     const stored = JSON.parse(
@@ -83,7 +86,7 @@ suite("WebPushService", () => {
   });
 
   test("writes subscriptions as pretty JSON with private permissions", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     await service.upsertSubscription(await createValidSubscription(), {});
 
     const content = await fs.promises.readFile(subscriptionsPath, "utf8");
@@ -95,7 +98,7 @@ suite("WebPushService", () => {
   });
 
   test("uses the support email as the default VAPID subject", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     await service.upsertSubscription(await createValidSubscription(), {});
     let subject: string | undefined;
     globalThis.fetch = async (_input, init = {}) => {
@@ -117,7 +120,7 @@ suite("WebPushService", () => {
   });
 
   test("does not overwrite an existing corrupt VAPID keys file", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     const corruptContent = "{ invalid json";
     await fs.promises.mkdir(notificationsDir, { recursive: true });
     await fs.promises.writeFile(vapidKeysPath, corruptContent, "utf8");
@@ -135,7 +138,7 @@ suite("WebPushService", () => {
   });
 
   test("strips a BOM before reading VAPID keys", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     const publicKey = await service.getPublicKey();
     const stored = await fs.promises.readFile(vapidKeysPath, "utf8");
     await fs.promises.writeFile(vapidKeysPath, `\uFEFF${stored}`, "utf8");
@@ -147,7 +150,7 @@ suite("WebPushService", () => {
   });
 
   test("does not wipe corrupt subscription data when upserting", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     const corruptContent = "{ invalid json";
     await fs.promises.mkdir(notificationsDir, { recursive: true });
     await fs.promises.writeFile(subscriptionsPath, corruptContent, "utf8");
@@ -164,7 +167,7 @@ suite("WebPushService", () => {
   });
 
   test("strips a BOM before reading subscriptions for an upsert", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     const existing = {
       id: "existing-device",
       endpointHash: "existing-hash",
@@ -189,7 +192,7 @@ suite("WebPushService", () => {
   });
 
   test("preserves invalid subscription entries through upsert and remove", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     const invalidEntry = { id: "invalid-device", unexpected: [1, "two"] };
     await fs.promises.mkdir(notificationsDir, { recursive: true });
     await fs.promises.writeFile(
@@ -211,7 +214,7 @@ suite("WebPushService", () => {
   });
 
   test("removes expired subscriptions when the push service returns 410", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     const subscription = await createValidSubscription();
 
     await service.getPublicKey();
@@ -241,7 +244,7 @@ suite("WebPushService", () => {
   });
 
   test("preserves a subscription upserted while a push is in flight", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     await service.getPublicKey();
     await service.upsertSubscription(await createValidSubscription(), {});
 
@@ -281,7 +284,7 @@ suite("WebPushService", () => {
   });
 
   test("does not hold the registry lock while sending a push", async () => {
-    const service = new WebPushService();
+    const service = new WebPushService({ workspaceKey: WORKSPACE_KEY });
     await service.getPublicKey();
     await service.upsertSubscription(await createValidSubscription(), {});
     let lockExistsDuringFetch = true;
@@ -305,7 +308,10 @@ suite("WebPushService", () => {
   });
 
   test("returns one stable public key when first-use servers initialize concurrently", async () => {
-    const services = Array.from({ length: 8 }, () => new WebPushService());
+    const services = Array.from(
+      { length: 8 },
+      () => new WebPushService({ workspaceKey: WORKSPACE_KEY })
+    );
     const publicKeys = await Promise.all(
       services.map((service) => service.getPublicKey())
     );
@@ -313,9 +319,81 @@ suite("WebPushService", () => {
     assert.ok(publicKeys.every((key) => key === publicKeys[0]));
   });
 
+  test("pushes only to subscriptions registered with its own workspace", async () => {
+    const serviceA = new WebPushService({ workspaceKey: WORKSPACE_KEY });
+    const serviceB = new WebPushService({ workspaceKey: OTHER_WORKSPACE_KEY });
+    await serviceA.upsertSubscription(
+      await createValidSubscription("https://example.com/push/a"),
+      {}
+    );
+    await serviceB.upsertSubscription(
+      await createValidSubscription("https://example.com/push/b"),
+      {}
+    );
+    const endpoints: string[] = [];
+    globalThis.fetch = async (input) => {
+      endpoints.push(String(input));
+      return new Response(null, { status: 201 });
+    };
+
+    const result = await serviceA.sendNotification(createEvent());
+
+    assert.deepStrictEqual(result, { sent: 1, removed: 0, failed: 0 });
+    assert.deepStrictEqual(endpoints, ["https://example.com/push/a"]);
+    const listedA = await serviceA.listSubscriptions();
+    const listedB = await serviceB.listSubscriptions();
+    assert.strictEqual(listedA.subscriptionCount, 1);
+    assert.strictEqual(listedB.subscriptionCount, 1);
+    assert.notStrictEqual(
+      listedA.subscriptions[0].id,
+      listedB.subscriptions[0].id
+    );
+  });
+
+  test("delivers unowned legacy subscriptions until a workspace claims them", async () => {
+    const legacyOwner = new WebPushService({ workspaceKey: WORKSPACE_KEY });
+    const legacy = await legacyOwner.upsertSubscription(
+      await createValidSubscription(),
+      {}
+    );
+    const registry = JSON.parse(
+      await fs.promises.readFile(subscriptionsPath, "utf8")
+    ) as { subscriptions: Array<Record<string, unknown>> };
+    delete registry.subscriptions[0].workspaceKey;
+    await fs.promises.writeFile(subscriptionsPath, JSON.stringify(registry));
+    let sends = 0;
+    globalThis.fetch = async () => {
+      sends += 1;
+      return new Response(null, { status: 201 });
+    };
+    const serviceA = new WebPushService({ workspaceKey: WORKSPACE_KEY });
+    const serviceB = new WebPushService({ workspaceKey: OTHER_WORKSPACE_KEY });
+
+    await serviceA.sendNotification(createEvent());
+    await serviceB.sendNotification(createEvent());
+    assert.strictEqual(sends, 2);
+    // Unlisted, so the PWA holding it re-registers and claims it.
+    assert.strictEqual(
+      (await serviceB.listSubscriptions()).subscriptionCount,
+      0
+    );
+
+    const claimed = await serviceB.upsertSubscription(
+      await createValidSubscription(),
+      {}
+    );
+    assert.strictEqual(claimed.id, legacy.id);
+    sends = 0;
+    await serviceA.sendNotification(createEvent());
+    assert.strictEqual(sends, 0);
+    await serviceB.sendNotification(createEvent());
+    assert.strictEqual(sends, 1);
+  });
+
   test("blocks push setup when remote access is not entitled", async () => {
     let blocked = 0;
-    const service = new WebPushService(undefined, {
+    const service = new WebPushService({
+      workspaceKey: WORKSPACE_KEY,
       canUseRemoteAccess: async () => false,
       onAccessBlocked: () => {
         blocked += 1;

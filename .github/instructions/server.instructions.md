@@ -18,7 +18,7 @@ Hosted browser server for the ctrlyoke dashboard. It serves the Vite webview bui
 Key supporting pieces:
 
 - `HostedWorkspaceViewerService` — workspace-scoped file/Git operations plus commit-message generation
-- `WebPushService` — VAPID keys + push subscription persistence under `.ctrlyoke/notifications/`
+- `WebPushService` — VAPID keys + push subscription persistence under `<ctrlyokeStateHome>/notifications/`, scoped per workspace
 - `HostedServiceWorkerScript` — injects `DashboardConstants` values into the raw service-worker template at request time
 - `PngIconService` — shared in-memory colorized PNG renderer for hosted app icons
   </architecture>
@@ -73,6 +73,7 @@ Key supporting pieces:
 - `WebPushService` serializes registry updates through an internal promise queue; do not bypass it with ad hoc file I/O.
 - `PngIconService` loads `@resvg/resvg-wasm` from `out/runtime-deps/node_modules/` on purpose. Keep `@resvg/resvg-wasm` isolated from the esbuild bundles rather than re-inlining it into `out/extension.js`.
 - Expired push subscriptions (404/410) are removed automatically during send attempts.
+- The subscription registry is machine-wide (`ctrlyokeStateHome()`), but each entry carries the `workspaceKey` (`projectKey`) of the server that registered it, and a server pushes only to its own entries. Without that, every project's server pushed to every installed PWA. Ownership is by workspace, not port: a restart can swap two servers' ports, and keying on port would cross-deliver again. Entries without `workspaceKey` (pre-ownership) are delivered by every server but left out of `listSubscriptions()`, so the client's status check (`browserNotifications.ts`) sees its own subscription missing and re-registers, which claims it.
 - `ctrlyoke-service-worker.js` is a placeholder template, not the final script. Message-type constants and icon paths are injected by `HostedServiceWorkerScript`, so avoid hardcoding duplicated literals into the template.
 </notifications>
 

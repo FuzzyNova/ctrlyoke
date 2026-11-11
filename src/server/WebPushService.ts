@@ -46,6 +46,14 @@ export interface StoredPushSubscription extends WebPushSubscriptionPayload {
   lastFailureMessage?: string;
   userAgent?: string;
   label?: string;
+  /**
+   * `projectKey` of the workspace whose hosted server registered this
+   * subscription. The registry is machine-wide, but each PWA (one origin per
+   * server) belongs to one workspace, so only that workspace's server pushes to
+   * it. Absent on entries written before ownership existed; those keep the old
+   * deliver-from-every-server behavior until their PWA re-registers.
+   */
+  workspaceKey?: string;
 }
 
 interface StoredVapidKeys {
@@ -84,6 +92,9 @@ export interface PushSubscriptionListResult {
 }
 
 export interface WebPushServiceOptions {
+  /** `projectKey` of the workspace this server hosts; scopes push delivery. */
+  workspaceKey: string;
+  vapidSubject?: string;
   canUseRemoteAccess?: () => Promise<boolean>;
   onAccessBlocked?: () => void;
 }
@@ -95,11 +106,13 @@ export class WebPushService {
   private operationQueue: Promise<unknown> = Promise.resolve();
   private readonly canUseRemoteAccess: () => Promise<boolean>;
   private readonly onAccessBlocked: (() => void) | undefined;
+  private readonly workspaceKey: string;
+  private readonly vapidSubject: string;
 
-  constructor(
-    private readonly vapidSubject: string = `mailto:${LICENSE_UI.SUPPORT_EMAIL}`,
-    options: WebPushServiceOptions = {}
-  ) {
+  constructor(options: WebPushServiceOptions) {
+    this.workspaceKey = options.workspaceKey;
+    this.vapidSubject =
+      options.vapidSubject ?? `mailto:${LICENSE_UI.SUPPORT_EMAIL}`;
     this.canUseRemoteAccess = options.canUseRemoteAccess ?? (async () => true);
     this.onAccessBlocked = options.onAccessBlocked;
     this.notificationsDir = path.join(
@@ -127,8 +140,13 @@ export class WebPushService {
       const registry = await this.withSubscriptionFileLock(() =>
         this.readSubscriptions()
       );
+      // Unowned (pre-ownership) entries are left out so the PWA that holds one
+      // sees itself as unregistered here and re-registers, claiming it.
       const subscriptions = registry.subscriptions
         .filter(isValidStoredSubscription)
+        .filter(
+          (subscription) => subscription.workspaceKey === this.workspaceKey
+        )
         .map((subscription) => ({
           id: subscription.id,
           createdAt: subscription.createdAt,
@@ -177,6 +195,9 @@ export class WebPushService {
           updatedAt: now,
           userAgent: metadata.userAgent,
           label: metadata.label,
+          // A PWA origin can be served by another workspace after a port swap;
+          // the server it last registered with owns it.
+          workspaceKey: this.workspaceKey,
         };
 
         if (existing) {
@@ -222,7 +243,9 @@ export class WebPushService {
     const subscriptions = await this.withSerializedAccess(() =>
       this.withSubscriptionFileLock(async () => {
         const registry = await this.readSubscriptions();
-        return registry.subscriptions.filter(isValidStoredSubscription);
+        return registry.subscriptions
+          .filter(isValidStoredSubscription)
+          .filter((subscription) => this.isDeliverable(subscription));
       })
     );
     if (subscriptions.length === 0) {
@@ -358,6 +381,13 @@ export class WebPushService {
     });
 
     return { sent, removed, failed };
+  }
+
+  private isDeliverable(subscription: StoredPushSubscription): boolean {
+    return (
+      subscription.workspaceKey === undefined ||
+      subscription.workspaceKey === this.workspaceKey
+    );
   }
 
   private async assertRemoteAccess(): Promise<void> {

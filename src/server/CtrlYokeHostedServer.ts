@@ -475,7 +475,8 @@ export class CtrlYokeHostedServer
     this.beginRemoteAccess = remoteAccess.begin;
     this.onRemoteAccessBlocked = remoteAccess.onBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
-    this.webPushService = new WebPushService(undefined, {
+    this.webPushService = new WebPushService({
+      workspaceKey: this.workspaceKey,
       canUseRemoteAccess: () => this.resolveRemoteAccess(),
       onAccessBlocked: () => this.notifyRemoteAccessBlocked(),
     });
