@@ -48,10 +48,15 @@ import type {
 import { Icon } from "../shared/Icon";
 import {
   ScopeBadge,
+  formatPathForDisplay,
   encodeManagerTarget as encodeTarget,
   decodeManagerTarget as decodeTarget,
   ManagerConfirmModal,
 } from "@components/shared/ManagerUi";
+import {
+  getMcpServerDetailRows,
+  getMcpServerSummary,
+} from "@utils/mcpServerDisplay";
 
 type DefaultMcpServerValue = (string | McpServerConfig)[];
 
@@ -114,16 +119,6 @@ function formatLocalSourceLabel(source: LocalMcpServerEntry["source"]): string {
       ? "VS Code"
       : HARNESS_INFO[location.targetId].shortName;
   return `${targetLabel} ${SETTING_WRITE_SCOPE_LABELS[location.scope]}`;
-}
-
-function formatPathForDisplay(filePath: string): string {
-  return filePath.split("\\").join("/");
-}
-
-function getServerSummary(server: McpServerConfig): string {
-  return server.url
-    ? server.url
-    : `${server.command ?? ""}${server.args ? ` ${server.args.join(" ")}` : ""}`;
 }
 
 function isDefaultServerEntry(
@@ -384,33 +379,8 @@ function ServerDetails({
   locations: ResolvedServerLocation[];
 }) {
   const config = server.config;
-  const detailRows: Array<{ label: string; value: string | null }> = [
-    { label: "id", value: config.id },
-    { label: "command", value: config.command ?? null },
-    { label: "args", value: config.args?.join(" ") ?? null },
-    { label: "url", value: config.url ?? null },
-    {
-      label: "transport",
-      value:
-        config.transport && config.transport !== MCP_TRANSPORTS.STREAMABLE_HTTP
-          ? config.transport
-          : null,
-    },
-    {
-      label: "env",
-      value: config.env ? Object.keys(config.env).join(", ") : null,
-    },
-    {
-      label: "headers",
-      value: config.headers ? Object.keys(config.headers).join(", ") : null,
-    },
-    {
-      label: "autoApprove",
-      value:
-        typeof config.autoApprove === "boolean"
-          ? String(config.autoApprove)
-          : (config.autoApprove?.join(", ") ?? null),
-    },
+  const detailRows = [
+    ...getMcpServerDetailRows(config),
     {
       label: "defaults",
       value: defaultsEnabled ? "enabled" : null,
@@ -1119,7 +1089,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       )}
 
                       <div className="mt-1 truncate font-mono text-xxs text-description-fg">
-                        {getServerSummary(server.config)}
+                        {getMcpServerSummary(server.config) ?? ""}
                       </div>
 
                       <div className="mt-1 flex flex-wrap items-center gap-1">

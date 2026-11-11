@@ -33,6 +33,7 @@ import {
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { Icon } from "../shared/Icon";
 import { SkillOriginBadge, SkillsRegistryPanel } from "./SkillsRegistryPanel";
+import { formatPathForDisplay } from "@components/shared/ManagerUi";
 
 // ============================================================================
 // Constants
@@ -65,10 +66,6 @@ function decodeTarget(encoded: string): {
     id: encoded.slice(0, colonIdx) as AnyTargetId,
     scope: encoded.slice(colonIdx + 1) as SettingWriteScope,
   };
-}
-
-function formatPathForDisplay(folderPath: string): string {
-  return folderPath.split("\\").join("/");
 }
 
 function getParentFolderPath(filePath: string): string {

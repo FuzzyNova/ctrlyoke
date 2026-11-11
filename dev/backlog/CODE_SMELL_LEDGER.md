@@ -263,6 +263,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `McpRegistryFileManager.ts` now lives in `JsonTypeGuards.ts`; `PromptFileParser`
   compared against a raw `"worktree"` instead of `PROMPT_PROPERTIES.WORKTREE`.
   Landed shared setting write-scope labels and replaced repeated dashboard labels and scope literals.
+  Landed shared MCP server detail rows and summaries, reused the shared scope badge and path formatter.
   Queued four steps:
   - Dashboard `@` references: the workspace explorer/editor context menus quote only
     on spaces instead of using `ContextReferenceBuilder` (colon paths break; bug to

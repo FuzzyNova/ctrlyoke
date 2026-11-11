@@ -1,7 +1,6 @@
 import {
   INHERIT_DEFAULT_OPTION,
   MCP_SERVER_IDS,
-  MCP_TRANSPORTS,
 } from "@root/types/DashboardConstants";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
@@ -21,7 +20,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
-import { type SettingWriteScope } from "@/types/messages";
 import { SETTING_WRITE_SCOPE_LABELS } from "@root/types/DashboardConstants";
 import { useMcpManagerStore } from "../../store/mcpManagerStore";
 import { useUiStore } from "@store/uiStore";
@@ -29,6 +27,11 @@ import { findLiteralCredentialEnvKeys } from "./KeyValueMapHelpers";
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { Icon } from "./Icon";
+import { ScopeBadge } from "@components/shared/ManagerUi";
+import {
+  getMcpServerDetailRows,
+  getMcpServerSummary,
+} from "@utils/mcpServerDisplay";
 
 type McpServerEntry = string | McpServerConfig;
 
@@ -194,14 +197,6 @@ function buildArray(
   return result;
 }
 
-function getServerSummary(server: McpServerConfig): string {
-  if (server.url) return server.url;
-  if (server.command) {
-    return `${server.command}${server.args ? ` ${server.args.join(" ")}` : ""}`;
-  }
-  return "Stored by ID";
-}
-
 function buildListedServers(
   value: McpServersValue,
   managedServers: ManagedMcpServer[] | undefined
@@ -243,14 +238,6 @@ function buildListedServers(
   return [...installedRows, ...legacyRows];
 }
 
-function ScopeBadge({ scope }: { scope: SettingWriteScope }) {
-  return (
-    <span className="inline-flex items-center rounded-sm border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
-      {SETTING_WRITE_SCOPE_LABELS[scope]}
-    </span>
-  );
-}
-
 function TruncatedServerText({
   value,
   className = "",
@@ -266,39 +253,7 @@ function TruncatedServerText({
 }
 
 function ServerDetails({ server }: { server: ListedServer }) {
-  const detailRows: Array<{ label: string; value: string | null }> = [
-    { label: "id", value: server.config.id },
-    { label: "command", value: server.config.command ?? null },
-    { label: "args", value: server.config.args?.join(" ") ?? null },
-    { label: "url", value: server.config.url ?? null },
-    {
-      label: "transport",
-      value:
-        server.config.transport &&
-        server.config.transport !== MCP_TRANSPORTS.STREAMABLE_HTTP
-          ? server.config.transport
-          : null,
-    },
-    {
-      label: "env",
-      value: server.config.env
-        ? Object.keys(server.config.env).join(", ")
-        : null,
-    },
-    {
-      label: "headers",
-      value: server.config.headers
-        ? Object.keys(server.config.headers).join(", ")
-        : null,
-    },
-    {
-      label: "autoApprove",
-      value:
-        typeof server.config.autoApprove === "boolean"
-          ? String(server.config.autoApprove)
-          : (server.config.autoApprove?.join(", ") ?? null),
-    },
-  ];
+  const detailRows = getMcpServerDetailRows(server.config);
 
   const uniqueScopes = [
     ...new Set(
@@ -331,7 +286,10 @@ function ServerDetails({ server }: { server: ListedServer }) {
           </div>
           <div className="flex flex-wrap gap-1">
             {uniqueScopes.map((scope) => (
-              <ScopeBadge key={scope} scope={scope} />
+              <ScopeBadge
+                key={scope}
+                label={SETTING_WRITE_SCOPE_LABELS[scope]}
+              />
             ))}
           </div>
         </div>
@@ -589,7 +547,10 @@ function McpServersPanel({
                       {uniqueScopes.length > 0 && (
                         <div className="ml-auto flex flex-wrap gap-1">
                           {uniqueScopes.map((scope) => (
-                            <ScopeBadge key={scope} scope={scope} />
+                            <ScopeBadge
+                              key={scope}
+                              label={SETTING_WRITE_SCOPE_LABELS[scope]}
+                            />
                           ))}
                         </div>
                       )}
@@ -602,7 +563,8 @@ function McpServersPanel({
                         value={
                           server.isLegacy
                             ? "Not installed in MCP Manager"
-                            : getServerSummary(server.config)
+                            : (getMcpServerSummary(server.config) ??
+                              "Stored by ID")
                         }
                         className="block"
                       />

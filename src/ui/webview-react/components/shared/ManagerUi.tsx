@@ -30,6 +30,10 @@ export function ScopeBadge({ label }: { label: string }) {
   );
 }
 
+export function formatPathForDisplay(filePath: string): string {
+  return filePath.split("\\").join("/");
+}
+
 export function ManagerConfirmModal({
   title,
   children,
