@@ -185,6 +185,22 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   members (check what the loader does first); win32-only `toLowerCase()` path keys
   beside `PathCasing`; the CLI terminal fallback assuming queue output targets.
 
+- **2026-11-10, pass 8**: reviewed pass 7's two refactors. Both preserve behavior,
+  and `npm test` passes. The shared `truncateUtf8` changes output only in the two
+  cases the bug fix intended: it no longer keeps a stray U+FFFD, and it keeps a
+  genuine trailing U+FFFD. Cleaned up: an orphaned `truncateUtf8` doc comment at the
+  end of `CliPromptPreparer.ts`, and `GitUtils.parseWorktreeList` re-inlining
+  `normalizeBranchName`. Queued three steps:
+  - Terminal step-status membership. `PROMPT_TERMINAL_STATUS` has five statuses,
+    but both undo/redo copies (`UndoRedoControl.tsx`, `useUndoRedoKeyHandler.ts`) and
+    `WorkflowStepsPanel.tsx` predate `NO_TURN_STARTED` and miss it. This is a bug fix.
+  - Win32 `resolve` + `toLowerCase()` path keys beside `PathCasing` (nine sites). The
+    Codex admin-dir check also skips the fold.
+  - Identical private copies of `ensurePrivateDirectory` and `isStringArray`.
+
+  Still open for a later pass: `realpathOrUndefined` in `SourceRuntimeArtifactResolver`
+  vs `WorkflowBundleAnalyzer`, which are the same apart from a no-op `path.resolve`.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -388,3 +404,26 @@ still deferred.
   caller normalizes paths first, and the cached store copies before mutating. A
   composed helper would save about 10 lines; the shared file I/O already landed in
   pass 6. (2026-11-09)
+
+- `flattenSteps` (`WorkflowFileCompletionCore.ts`) vs `flatStepCount`
+  (`WorkflowPromptDiagnostics.ts`). They disagree only when a `steps` entry is not an
+  object, and the schema diagnostic already rejects that document. Step numbers in
+  an invalid file don't need to agree.
+- `CliTerminalFormatter.targetKey`'s `queueTargetKey` fallback. Every producer of
+  `CliOutputTarget` sets `key` through `outputTargetKey`, so the fallback only covers
+  the target-less default.
+- Same-named private helpers that differ in meaning:
+  - `pathExists`: `access`, `lstat` and `stat` each treat symlinks and permissions
+    differently.
+  - `toPortablePath`: `path.sep` split vs backslash replace, which differ on POSIX.
+  - `countLines`: empty-text and trailing-newline rules differ.
+  - `escapeHtml`: text-only vs attribute-safe.
+  - `parseVersion`: the Codex quota probe accepts a `v` prefix, unlike `HarnessVersion`.
+  - `safeErrorCode` in the usage collectors.
+- `formatUnknownError` in `src/ui/webview-react/scripts/bootstrapScript.ts` and
+  `moduleLoaderScript.ts`: standalone inline bootstrap scripts that must load before
+  any module.
+- `FileSecretStore`'s directory creation: it sets the mode only on mkdir and never
+  chmods an existing directory, unlike `ensurePrivateDirectory`.
+- `sanitizeQwenProjectPath`'s win32 lowercase: it mirrors Qwen's own `sanitizeCwd`
+  naming, not ctrlyoke's comparison rule.
