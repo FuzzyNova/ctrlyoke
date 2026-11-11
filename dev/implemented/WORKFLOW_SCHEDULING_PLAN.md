@@ -1,6 +1,9 @@
 # Workflow Scheduling Plan
 
-> **Status:** v1 is implemented pending review. The execution substrate is
+> **Status:** v1 implemented and reviewed (2026-11-11). Follow-ups not in v1: a
+> runtime "would prompt → fail fast" guard for unattended harnesses, an editor
+> warning for interactive/non-bypass permission modes, and a "don't start before"
+> date for recurring schedules (a cron trigger stores no start date). The execution substrate is
 > **decided** (see below): schedules fire only while a long-lived ctrlyoke host
 > is running, and that is an accepted limitation, not a problem to engineer
 > around.
@@ -553,15 +556,15 @@ No remaining blockers — the plan is fully specified for a v1 implementation.
        skip, fire through `seedAndExecuteAtRun`/`executeDraftAtAddress`, bookkeeping via
        `updateDescriptorMetadata`, and tests with fake timers. Runtime detection of
        harnesses that would prompt remains a follow-up, as pinned above; this stage
-   applies the overlap guard and keeps the scheduled-fire client identity separate.
-   A timer wake more than 60 seconds after its occurrence is treated as missed,
-   since the host cannot reliably distinguish machine sleep from a delayed event loop.
-   Scheduled draft-only fires bind the private scheduler client to the lineage
-   before execution so draft validation and external-root approval checks apply;
-   that binding is released after preparation.
+       applies the overlap guard and keeps the scheduled-fire client identity separate.
+       A timer wake more than 60 seconds after its occurrence is treated as missed,
+       since the host cannot reliably distinguish machine sleep from a delayed event loop.
+       Scheduled draft-only fires bind the private scheduler client to the lineage
+       before execution so draft validation and external-root approval checks apply;
+       that binding is kept after the fire (releasing it at prepare time disposed the idle incoming instance before it ran).
 3. [x] Backend and contract plumbing: `SET_SCHEDULE`/`CLEAR_SCHEDULE` messages and
        handlers, `RecentWorkflowEntry` fields, the `uiStore` `RecentWorkflow` fields and
        actions, and tests.
 4. [x] UI authoring: the `ScheduleEditor` popover, the row clock button (rail 44 → 68), the
-   context-menu entry, and tests.
+       context-menu entry, and tests.
 5. [x] UI management: the "Scheduled" section and filter, public docs, `CHANGELOG.md`.

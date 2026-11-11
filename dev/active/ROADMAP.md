@@ -298,7 +298,7 @@ Start these after real launch feedback and the P1 safety contracts exist.
    [staging](../implemented/STANDALONE_STAGING_PLAN.md))
 5. **Workflow scheduling** — use the existing global execution limits and
    secrets. Keep the decided orchestrator-bound model; ctrlyoke must be running.
-   ([plan](../backlog/WORKFLOW_SCHEDULING_PLAN.md))
+   Shipped (v1, 2026-11-11). ([plan](../implemented/WORKFLOW_SCHEDULING_PLAN.md))
 6. **Parallel steps** — valuable for independent research/test branches, but
    only after worktree isolation and a feature-owned global concurrency cap
    define safe concurrency. Shipped (Stages 1–6), with `queue.maxParallelSteps`
@@ -554,7 +554,7 @@ criteria matter more than speculative dates.
 | [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md)                                           | P2 (implemented 2026-10-07)                                         |
 | [`STANDALONE_STAGING_PLAN.md`](../implemented/STANDALONE_STAGING_PLAN.md)                                         | P2 (implemented 2026-10-08)                                         |
 | [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md) | P2 (implemented 2026-10-08)                                         |
-| [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                                           | P2                                                                  |
+| [`WORKFLOW_SCHEDULING_PLAN.md`](../implemented/WORKFLOW_SCHEDULING_PLAN.md)                                       | P2 — shipped 2026-11-11                                             |
 | [`MCP_OUTPUT_PAGING_PLAN.md`](../implemented/MCP_OUTPUT_PAGING_PLAN.md)                                           | P2 — shipped 2026-09-05                                             |
 | [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                                 | Shipped                                                             |
 | [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)                     | Shipped 2026-10-06 (shim retirement moved to standalone plan)       |

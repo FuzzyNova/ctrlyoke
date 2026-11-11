@@ -5538,7 +5538,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     }
   });
 
-  test("scheduled draft fire binds and releases only the scheduler client", async () => {
+  test("scheduled draft fire binds only the scheduler client", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-scheduled-draft-")
     );
@@ -5606,7 +5606,73 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
         panelAddress
       );
-      assert.strictEqual(addressRegistry.has(schedulerId), false);
+      assert.ok(addressRegistry.has(schedulerId));
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("scheduled fire keeps the prepared, not-yet-running instance alive", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-scheduled-prepared-")
+    );
+    try {
+      const manager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "scheduled run" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Scheduled run",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await manager.createWorkingFile(
+        "scheduled-prepared",
+        [{ prompt: "scheduled run" }],
+        workspace,
+        "Scheduled run"
+      );
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.lineageRepository = new WorkflowLineageRepository();
+      const registry = internal.workflowInstanceRegistry;
+      let disposed = false;
+      const incoming = {
+        id: "incoming-scheduled-instance",
+        dispose: () => {
+          disposed = true;
+        },
+        getQueueState: () => ({
+          status: EXECUTION_STATES.IDLE,
+          workflowKey,
+        }),
+      };
+      internal.loadWorkflowForClient = async () => undefined;
+      // Mirror RunLifecycleService at prepare time: the incoming instance is
+      // parked as retired, viewed only by the scheduler client, and still idle
+      // because execution starts after onPrepared resolves.
+      internal.executeDraftAtAddress = async (
+        _address: unknown,
+        _definitionRevision: number,
+        _descriptorRevision: number,
+        clientId: string
+      ) => {
+        registry.getRetiredInstances().set(incoming.id, incoming);
+        registry.setViewedWorkflowId(clientId, incoming.id);
+      };
+
+      await internal.fireScheduledWorkflow(workspace, workflowKey);
+
+      assert.strictEqual(
+        disposed,
+        false,
+        "releasing the scheduler binding must not dispose the run about to execute"
+      );
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

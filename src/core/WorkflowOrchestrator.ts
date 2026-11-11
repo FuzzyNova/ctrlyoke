@@ -1654,30 +1654,33 @@ export class WorkflowOrchestrator {
           descriptor.latestRunRef
         )
       : WorkflowPaths.draftFilePath(workspaceRoot, workflowKey);
-    try {
-      // Scheduled execution has no dashboard connection. Give the lifecycle
-      // path a private view binding so draft validation and external-root trust
-      // checks inspect this lineage, without changing any human client's view.
-      await this.loadWorkflowForClient(bindingPath, () => undefined, clientId, {
-        skipReplay: true,
-      });
-      if (descriptor.latestRunRef) {
-        await this.seedAndExecuteAtRun(
-          { workflowKey, runRef: descriptor.latestRunRef },
-          definitionRevision,
-          descriptor.revision,
-          clientId
-        );
-      } else {
-        await this.executeDraftAtAddress(
-          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
-          definitionRevision,
-          descriptor.revision,
-          clientId
-        );
-      }
-    } finally {
-      this.unregisterClient(clientId);
+    // Scheduled execution has no dashboard connection. Give the lifecycle path
+    // a private view binding so draft validation and external-root trust checks
+    // inspect this lineage, without changing any human client's view.
+    //
+    // The binding is deliberately kept after the fire. The run's incoming
+    // instance is still idle (and, for a re-run, parked as retired) when
+    // preparation resolves, so unregistering here would leave it unviewed and
+    // the registry would dispose it before it ever executes. Like any client,
+    // the scheduler moves to the next lineage on the next fire, so at most one
+    // finished instance stays retained for it.
+    await this.loadWorkflowForClient(bindingPath, () => undefined, clientId, {
+      skipReplay: true,
+    });
+    if (descriptor.latestRunRef) {
+      await this.seedAndExecuteAtRun(
+        { workflowKey, runRef: descriptor.latestRunRef },
+        definitionRevision,
+        descriptor.revision,
+        clientId
+      );
+    } else {
+      await this.executeDraftAtAddress(
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        definitionRevision,
+        descriptor.revision,
+        clientId
+      );
     }
   }
 
