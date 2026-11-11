@@ -112,7 +112,6 @@ import {
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { remapIndicesThroughPermutation } from "@utils/stepMultiSelection";
-import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 
 type PendingDragContainer = {
   id: string;
@@ -1415,9 +1414,6 @@ const WorkflowStepsPanelInner: React.FC<{
 
   // Get the latest CLI output of the final step's most recent pass
   const finalStepLatestOutput = useFinalStepLatestOutput();
-  const finalStepOutputText = finalStepLatestOutput
-    ? getStepAssistantTextForCopy(finalStepLatestOutput)
-    : undefined;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -1425,7 +1421,6 @@ const WorkflowStepsPanelInner: React.FC<{
       isReadOnly: finalStepIsReadOnly,
       isDisabled: finalStep?.enabled === false,
       onToggleEnabled: handleToggleFinalStepEnabled,
-      outputText: finalStepOutputText,
       latestOutput: finalStepLatestOutput,
       runtimeMeta:
         finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,

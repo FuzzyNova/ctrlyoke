@@ -338,6 +338,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     it next to `latestOutput` through `StepContextMenuRequest`, `OpenContextMenuParams`,
     `useFinalStepContextMenu` and `StepCopyMenuItemsInput`. `buildStepCopyMenuItems`
     can derive it itself.
+    Landed: `buildStepCopyMenuItems` derives Copy Response text from `latestOutput`;
+    removed the duplicate parameter and covered missing, empty, and copied output.
   - The permission-diagnostics filter (mode/allowedTools/deniedTools) is written out in
     `StepEditor`, `PromptPropertiesDrawer` and `WorkflowPropertiesPanel`, next to the
     sibling `diagnosticsFor*` helpers in `utils/compatibilityDiagnostics.ts`.

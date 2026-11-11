@@ -21,7 +21,6 @@ import type { StepColorMode } from "@root/types/DashboardConstants";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
 import { type WorkflowStepDragHandleProps } from "@utils/dndKit";
-import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 import {
   IN_OUTPUT_VIEW_TITLE,
   InOutputViewBar,
@@ -49,7 +48,6 @@ export type StepContextMenuRequest = {
   isCurrentStep: boolean;
   isExecutionTargetLocked: boolean;
   direction: "rewind" | "forward";
-  outputText?: string;
   latestOutput?: WorkflowStepComponentProps["latestOutput"];
   runtimeMeta?: WorkflowStepComponentProps["runtimeMeta"];
   liveContextWindow?: WorkflowStepComponentProps["liveContextWindow"];
@@ -166,9 +164,6 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
           : undefined;
     }
 
-    const outputText = latestOutput
-      ? getStepAssistantTextForCopy(latestOutput)
-      : undefined;
     const handleContextMenu = useCallback(
       (x: number, y: number) =>
         onOpenContextMenu(x, y, {
@@ -178,7 +173,6 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
           isCurrentStep: isCurrent,
           isExecutionTargetLocked,
           direction: startPositionDirection,
-          outputText,
           latestOutput,
           runtimeMeta: !isScriptStep(step) ? step._runtime : undefined,
           liveContextWindow,
@@ -190,7 +184,6 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         latestOutput,
         liveContextWindow,
         onOpenContextMenu,
-        outputText,
         setPositionTarget,
         startPositionDirection,
         step,

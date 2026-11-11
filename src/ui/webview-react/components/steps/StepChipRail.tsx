@@ -76,7 +76,6 @@ import {
 import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
-import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 import {
   describeFinalPassesInView,
   InOutputViewBar,
@@ -614,9 +613,6 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
             isCurrentStep,
             isExecutionTargetLocked,
             direction: index < currentStep ? "rewind" : "forward",
-            outputText: getLatestOutput(index)
-              ? getStepAssistantTextForCopy(getLatestOutput(index)!)
-              : undefined,
             latestOutput: getLatestOutput(index),
             runtimeMeta: !isScriptWorkflowStep(prompt)
               ? prompt._runtime
@@ -730,9 +726,6 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
         ? finalStep._runtime
         : undefined,
   });
-  const finalStepOutputText = finalStepLatestOutput
-    ? getStepAssistantTextForCopy(finalStepLatestOutput)
-    : undefined;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -740,7 +733,6 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
       isReadOnly: finalStepIsReadOnly,
       isDisabled: finalStep?.enabled === false,
       onToggleEnabled: handleToggleFinalStepEnabled,
-      outputText: finalStepOutputText,
       latestOutput: finalStepLatestOutput,
       runtimeMeta:
         finalStep && !isScriptWorkflowStep(finalStep)
