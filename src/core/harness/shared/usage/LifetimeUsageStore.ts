@@ -3,12 +3,10 @@ import * as fs from "fs/promises";
 import type { Dirent } from "fs";
 import * as path from "path";
 import {
-  ATTEMPT_COST_SOURCES,
   EXECUTION_STATES,
   HARNESS_IDS,
   RUN_OUTCOME_BUCKETS,
   WORKFLOW_TOKEN_COVERAGE,
-  type AttemptCostSource,
   type HarnessId,
   type RunOutcomeBucket,
   NODE_ERROR_CODES,
@@ -42,6 +40,10 @@ import {
 } from "../../../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../../../utils/FormatMigrations";
 import { hasErrnoCode } from "../../../../utils/ErrorUtils";
+import {
+  nonNegativeNumber,
+  stableCostSources,
+} from "./UsageContributionValues";
 
 export const LIFETIME_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LIFETIME_USAGE];
@@ -102,28 +104,11 @@ export interface LifetimeBackfillBatch {
   dirMtimeMs?: number;
 }
 
-function numeric(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : 0;
-}
-
 function requiredNumeric(value: unknown): boolean {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function stableCostSources(
-  sources: readonly AttemptCostSource[] | undefined
-): AttemptCostSource[] | undefined {
-  if (!sources?.length) return undefined;
-  const sourceSet = new Set(sources);
-  const ordered = Object.values(ATTEMPT_COST_SOURCES).filter((source) =>
-    sourceSet.has(source)
-  );
-  return ordered.length ? ordered : undefined;
-}
-
-function emptyContribution(): LifetimeHarnessContribution {
+export function emptyLifetimeContribution(): LifetimeHarnessContribution {
   return {
     input: 0,
     output: 0,
@@ -133,7 +118,7 @@ function emptyContribution(): LifetimeHarnessContribution {
   };
 }
 
-function emptyOutcomes(): Record<RunOutcomeBucket, number> {
+export function emptyLifetimeOutcomes(): Record<RunOutcomeBucket, number> {
   return {
     [RUN_OUTCOME_BUCKETS.COMPLETED]: 0,
     [RUN_OUTCOME_BUCKETS.STOPPED]: 0,
@@ -141,13 +126,15 @@ function emptyOutcomes(): Record<RunOutcomeBucket, number> {
   };
 }
 
-function emptyStore(now: number): LifetimeUsageStoreData {
+export function emptyLifetimeUsageStoreData(
+  now: number
+): LifetimeUsageStoreData {
   return {
     schemaVersion: LIFETIME_USAGE_SCHEMA_VERSION,
     updatedAt: now,
-    totals: emptyContribution(),
+    totals: emptyLifetimeContribution(),
     byHarness: {},
-    outcomes: emptyOutcomes(),
+    outcomes: emptyLifetimeOutcomes(),
     runCount: 0,
     totalActiveExecutionMs: 0,
     wallClockDurationRunCount: 0,
@@ -177,19 +164,29 @@ function addHarnessContribution(
   right: LifetimeHarnessContribution,
   sign: 1 | -1
 ): LifetimeHarnessContribution {
-  const current = left ?? emptyContribution();
+  const current = left ?? emptyLifetimeContribution();
   const result: LifetimeHarnessContribution = {
-    input: Math.max(0, numeric(current.input) + sign * numeric(right.input)),
-    output: Math.max(0, numeric(current.output) + sign * numeric(right.output)),
-    total: Math.max(0, numeric(current.total) + sign * numeric(right.total)),
+    input: Math.max(
+      0,
+      nonNegativeNumber(current.input) + sign * nonNegativeNumber(right.input)
+    ),
+    output: Math.max(
+      0,
+      nonNegativeNumber(current.output) + sign * nonNegativeNumber(right.output)
+    ),
+    total: Math.max(
+      0,
+      nonNegativeNumber(current.total) + sign * nonNegativeNumber(right.total)
+    ),
     attemptCount: Math.max(
       0,
-      numeric(current.attemptCount) + sign * numeric(right.attemptCount)
+      nonNegativeNumber(current.attemptCount) +
+        sign * nonNegativeNumber(right.attemptCount)
     ),
     reportedAttemptCount: Math.max(
       0,
-      numeric(current.reportedAttemptCount) +
-        sign * numeric(right.reportedAttemptCount)
+      nonNegativeNumber(current.reportedAttemptCount) +
+        sign * nonNegativeNumber(right.reportedAttemptCount)
     ),
   };
   for (const field of [
@@ -200,7 +197,7 @@ function addHarnessContribution(
   ] as const) {
     const value = Math.max(
       0,
-      numeric(current[field]) + sign * numeric(right[field])
+      nonNegativeNumber(current[field]) + sign * nonNegativeNumber(right[field])
     );
     if (value > 0) result[field] = value;
   }
@@ -244,7 +241,7 @@ function addByHarness(
 function aggregateByHarness(
   source: Partial<Record<HarnessId, LifetimeHarnessContribution>>
 ): LifetimeHarnessContribution {
-  const result = emptyContribution();
+  const result = emptyLifetimeContribution();
   for (const values of Object.values(source)) {
     if (!values) continue;
     const next = addHarnessContribution(result, values, 1);
@@ -283,7 +280,8 @@ function applyRunToLineage(
   }
   lineage.activeExecutionMs = Math.max(
     0,
-    lineage.activeExecutionMs + sign * numeric(contribution.activeExecutionMs)
+    lineage.activeExecutionMs +
+      sign * nonNegativeNumber(contribution.activeExecutionMs)
   );
   if (contribution.durationIsWallClock) {
     lineage.wallClockDurationRunCount = Math.max(
@@ -307,7 +305,8 @@ function addRunToStore(
   }
   data.totalActiveExecutionMs = Math.max(
     0,
-    data.totalActiveExecutionMs + sign * numeric(contribution.activeExecutionMs)
+    data.totalActiveExecutionMs +
+      sign * nonNegativeNumber(contribution.activeExecutionMs)
   );
   if (contribution.durationIsWallClock) {
     data.wallClockDurationRunCount = Math.max(
@@ -342,16 +341,16 @@ function addLineageToStore(
 }
 
 function recomputeGrandTotals(data: LifetimeUsageStoreData): void {
-  data.totals = emptyContribution();
+  data.totals = emptyLifetimeContribution();
   data.byHarness = {};
-  data.outcomes = emptyOutcomes();
+  data.outcomes = emptyLifetimeOutcomes();
   data.runCount = 0;
   data.totalActiveExecutionMs = 0;
   data.wallClockDurationRunCount = 0;
   data.skippedRunCount = 0;
   for (const lineage of Object.values(data.lineages)) {
     addLineageToStore(data, lineage, 1);
-    data.skippedRunCount += numeric(lineage.skippedRunCount);
+    data.skippedRunCount += nonNegativeNumber(lineage.skippedRunCount);
   }
 }
 
@@ -362,11 +361,11 @@ function normalizeContribution(
   for (const [harnessId, values] of Object.entries(contribution.byHarness)) {
     if (!VALID_HARNESS_IDS.has(harnessId as HarnessId) || !values) continue;
     const normalized: LifetimeHarnessContribution = {
-      input: numeric(values.input),
-      output: numeric(values.output),
-      total: numeric(values.total),
-      attemptCount: numeric(values.attemptCount),
-      reportedAttemptCount: numeric(values.reportedAttemptCount),
+      input: nonNegativeNumber(values.input),
+      output: nonNegativeNumber(values.output),
+      total: nonNegativeNumber(values.total),
+      attemptCount: nonNegativeNumber(values.attemptCount),
+      reportedAttemptCount: nonNegativeNumber(values.reportedAttemptCount),
     };
     for (const field of [
       "cachedInput",
@@ -374,7 +373,7 @@ function normalizeContribution(
       "reasoningOutput",
       "costUsd",
     ] as const) {
-      const value = numeric(values[field]);
+      const value = nonNegativeNumber(values[field]);
       if (value > 0) normalized[field] = value;
     }
     normalized.costSources = stableCostSources(values.costSources);
@@ -385,15 +384,15 @@ function normalizeContribution(
   return {
     workflowKey: contribution.workflowKey,
     runRef: contribution.runRef,
-    updatedAt: numeric(contribution.updatedAt),
-    startedAt: numeric(contribution.startedAt),
+    updatedAt: nonNegativeNumber(contribution.updatedAt),
+    startedAt: nonNegativeNumber(contribution.startedAt),
     ...(contribution.completedAt !== undefined
-      ? { completedAt: numeric(contribution.completedAt) }
+      ? { completedAt: nonNegativeNumber(contribution.completedAt) }
       : {}),
     executionState: contribution.executionState,
-    stepCount: numeric(contribution.stepCount),
+    stepCount: nonNegativeNumber(contribution.stepCount),
     ...(contribution.activeExecutionMs !== undefined
-      ? { activeExecutionMs: numeric(contribution.activeExecutionMs) }
+      ? { activeExecutionMs: nonNegativeNumber(contribution.activeExecutionMs) }
       : {}),
     ...(contribution.durationIsWallClock ? { durationIsWallClock: true } : {}),
     byHarness,
@@ -440,22 +439,22 @@ function toLifetimeHarnessContribution(
   totals: WorkflowHarnessTokenTotals
 ): LifetimeHarnessContribution {
   return {
-    input: numeric(totals.input),
-    output: numeric(totals.output),
-    total: numeric(totals.total),
-    attemptCount: numeric(totals.attemptCount),
-    reportedAttemptCount: numeric(totals.reportedAttemptCount),
-    ...(numeric(totals.cachedInput) > 0
-      ? { cachedInput: numeric(totals.cachedInput) }
+    input: nonNegativeNumber(totals.input),
+    output: nonNegativeNumber(totals.output),
+    total: nonNegativeNumber(totals.total),
+    attemptCount: nonNegativeNumber(totals.attemptCount),
+    reportedAttemptCount: nonNegativeNumber(totals.reportedAttemptCount),
+    ...(nonNegativeNumber(totals.cachedInput) > 0
+      ? { cachedInput: nonNegativeNumber(totals.cachedInput) }
       : {}),
-    ...(numeric(totals.cacheCreated) > 0
-      ? { cacheCreated: numeric(totals.cacheCreated) }
+    ...(nonNegativeNumber(totals.cacheCreated) > 0
+      ? { cacheCreated: nonNegativeNumber(totals.cacheCreated) }
       : {}),
-    ...(numeric(totals.reasoningOutput) > 0
-      ? { reasoningOutput: numeric(totals.reasoningOutput) }
+    ...(nonNegativeNumber(totals.reasoningOutput) > 0
+      ? { reasoningOutput: nonNegativeNumber(totals.reasoningOutput) }
       : {}),
-    ...(numeric(totals.costUsd) > 0
-      ? { costUsd: numeric(totals.costUsd) }
+    ...(nonNegativeNumber(totals.costUsd) > 0
+      ? { costUsd: nonNegativeNumber(totals.costUsd) }
       : {}),
     ...(stableCostSources(totals.costSources) !== undefined
       ? { costSources: stableCostSources(totals.costSources) }
@@ -580,7 +579,7 @@ function createLineage(
   const byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>> = {};
   addByHarness(byHarness, contribution.byHarness, 1);
   const outcome = outcomeForState(contribution.executionState);
-  const outcomes = emptyOutcomes();
+  const outcomes = emptyLifetimeOutcomes();
   if (outcome) outcomes[outcome] = 1;
   return {
     subtotal: aggregateByHarness(byHarness),
@@ -588,7 +587,7 @@ function createLineage(
     runCount: 1,
     skippedRunCount: 0,
     outcomes,
-    activeExecutionMs: numeric(contribution.activeExecutionMs),
+    activeExecutionMs: nonNegativeNumber(contribution.activeExecutionMs),
     wallClockDurationRunCount: contribution.durationIsWallClock ? 1 : 0,
     countedFrom: contribution.runRef,
     countedThrough: contribution.runRef,
@@ -603,11 +602,11 @@ function createEmptyLineage(
   dirMtimeMs?: number
 ): LineageData {
   return {
-    subtotal: emptyContribution(),
+    subtotal: emptyLifetimeContribution(),
     byHarness: {},
     runCount: 0,
     skippedRunCount: 0,
-    outcomes: emptyOutcomes(),
+    outcomes: emptyLifetimeOutcomes(),
     activeExecutionMs: 0,
     wallClockDurationRunCount: 0,
     countedFrom,
@@ -770,8 +769,8 @@ export class LifetimeUsageStore {
               existingLineage.activeExecutionMs = Math.max(
                 0,
                 existingLineage.activeExecutionMs -
-                  numeric(previous.activeExecutionMs) +
-                  numeric(normalized.activeExecutionMs)
+                  nonNegativeNumber(previous.activeExecutionMs) +
+                  nonNegativeNumber(normalized.activeExecutionMs)
               );
               if (previous.executionState !== normalized.executionState) {
                 const previousOutcome = outcomeForState(
@@ -788,8 +787,8 @@ export class LifetimeUsageStore {
               data.totalActiveExecutionMs = Math.max(
                 0,
                 data.totalActiveExecutionMs -
-                  numeric(previous.activeExecutionMs) +
-                  numeric(normalized.activeExecutionMs)
+                  nonNegativeNumber(previous.activeExecutionMs) +
+                  nonNegativeNumber(normalized.activeExecutionMs)
               );
               const previousOutcome = outcomeForState(previous.executionState);
               const nextOutcome = outcomeForState(normalized.executionState);
@@ -1025,14 +1024,14 @@ export class LifetimeUsageStore {
     const lastRun = runEntries[runEntries.length - 1]!.name as RunRef;
     const byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>> =
       {};
-    const outcomes = emptyOutcomes();
+    const outcomes = emptyLifetimeOutcomes();
     let activeExecutionMs = 0;
     let wallClockDurationRunCount = 0;
     for (const contribution of contributions) {
       addByHarness(byHarness, contribution.byHarness, 1);
       const outcome = outcomeForState(contribution.executionState);
       if (outcome) outcomes[outcome]++;
-      activeExecutionMs += numeric(contribution.activeExecutionMs);
+      activeExecutionMs += nonNegativeNumber(contribution.activeExecutionMs);
       if (contribution.durationIsWallClock) wallClockDurationRunCount++;
     }
     const stats = await fs.stat(directory);
@@ -1135,13 +1134,13 @@ export class LifetimeUsageStore {
     try {
       const parsed = await this.readExisting();
       return parsed === undefined || predatesLineageSkippedRunCounts(parsed)
-        ? emptyStore(now)
+        ? emptyLifetimeUsageStoreData(now)
         : validateStore(parsed);
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
       this.lastErrorCode = LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA;
       await this.quarantineMalformedFile();
-      return emptyStore(now);
+      return emptyLifetimeUsageStoreData(now);
     }
   }
 

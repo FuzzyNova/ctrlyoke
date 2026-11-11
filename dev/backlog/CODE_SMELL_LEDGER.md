@@ -246,6 +246,11 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     `parseUnifiedDiff` and `generateDiffLines` drifted from the dashboard's
     `diffUtils.ts`. The CLI skips the metadata-line filter, patch normalization and
     CRLF normalization (bug to file).
+  - Ruled out the inline day-key copies in `src/utils/StatuslineFormat.ts` and
+    `src/core/orchestration/WorkflowTokenTotalsReducer.ts`: the former is standalone,
+    while the latter pads years to four digits and differs below year 1000.
+  - Landed shared usage-store helpers in `UsageContributionValues.ts`,
+    `UsageTimestampUtils.ts` and `LifetimeUsageStore.ts`, with focused coverage.
 
 ## Deferred
 

@@ -33,7 +33,10 @@ import {
   PERSISTED_STORES,
 } from "../../../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../../../utils/FormatMigrations";
-import { normalizeUsageTimestamp } from "./UsageTimestampUtils";
+import {
+  formatLocalDayKey,
+  normalizeUsageTimestamp,
+} from "./UsageTimestampUtils";
 import { ObservedHarnessUsageStore } from "./ObservedHarnessUsageStore";
 import type { IHarnessQuotaCollector } from "./IHarnessQuotaCollector";
 import { createDefaultHarnessQuotaCollectors } from "./collectors";
@@ -59,10 +62,6 @@ interface PersistedProviderUsage {
 
 const HARNESS_ID_LIST = Object.values(HARNESS_IDS) as HarnessId[];
 const VALID_HARNESS_IDS = new Set<HarnessId>(HARNESS_ID_LIST);
-
-function localDayKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 function addLocalDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -92,7 +91,7 @@ function observedSince(period: HarnessObservedPeriod, now: number): number {
 
 function observedKey(period: HarnessObservedPeriod, now: number): string {
   const date = new Date(observedSince(period, now));
-  return localDayKey(date);
+  return formatLocalDayKey(date);
 }
 
 function emptyObserved(

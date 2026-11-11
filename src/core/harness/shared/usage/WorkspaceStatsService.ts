@@ -3,23 +3,18 @@ import * as fs from "fs/promises";
 import type { Dirent } from "fs";
 import {
   EXECUTION_STATES,
-  RUN_OUTCOME_BUCKETS,
   WORKSPACE_STATS_BACKFILL_STATES,
-  type RunOutcomeBucket,
   type WorkspaceStatsBackfillState,
   NODE_ERROR_CODES,
 } from "../../../../types/DashboardConstants";
-import type {
-  LifetimeHarnessContribution,
-  WorkspaceStatsSnapshot,
-} from "../../../../types/UsageTypes";
+import type { WorkspaceStatsSnapshot } from "../../../../types/UsageTypes";
 import type { WorkflowRunManifest } from "../../../../types/WorkflowTimelineTypes";
 import type { RunRef, WorkflowKey } from "../../../../types/CtrlYokeTypes";
 import {
   contributionFromManifest,
   LifetimeUsageStore,
   LIFETIME_USAGE_ERROR_CODES,
-  LIFETIME_USAGE_SCHEMA_VERSION,
+  emptyLifetimeUsageStoreData,
   type LifetimeUsageStoreData,
 } from "./LifetimeUsageStore";
 import { isNewerSchemaError } from "../../../../utils/PersistedSchemaGuard";
@@ -54,39 +49,6 @@ interface ManifestReadResult {
 
 export interface WorkspaceStatsServiceOptions {
   stat?: typeof fs.stat;
-}
-
-function emptyContribution(): LifetimeHarnessContribution {
-  return {
-    input: 0,
-    output: 0,
-    total: 0,
-    attemptCount: 0,
-    reportedAttemptCount: 0,
-  };
-}
-
-function emptyOutcomes(): Record<RunOutcomeBucket, number> {
-  return {
-    [RUN_OUTCOME_BUCKETS.COMPLETED]: 0,
-    [RUN_OUTCOME_BUCKETS.STOPPED]: 0,
-    [RUN_OUTCOME_BUCKETS.ERROR]: 0,
-  };
-}
-
-function emptyData(now: number): LifetimeUsageStoreData {
-  return {
-    schemaVersion: LIFETIME_USAGE_SCHEMA_VERSION,
-    updatedAt: now,
-    totals: emptyContribution(),
-    byHarness: {},
-    outcomes: emptyOutcomes(),
-    runCount: 0,
-    totalActiveExecutionMs: 0,
-    wallClockDurationRunCount: 0,
-    skippedRunCount: 0,
-    lineages: {},
-  };
 }
 
 function isManifest(value: unknown): value is WorkflowRunManifest {
@@ -201,7 +163,7 @@ export class WorkspaceStatsService {
       this.storeReadErrorCode = isNewerSchemaError(error)
         ? LIFETIME_USAGE_ERROR_CODES.NEWER_DATA
         : WORKSPACE_STATS_ERROR_CODES.STORE_READ_FAILED;
-      return emptyData(now);
+      return emptyLifetimeUsageStoreData(now);
     }
   }
 

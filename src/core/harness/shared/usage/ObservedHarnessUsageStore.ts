@@ -39,6 +39,11 @@ import {
 } from "../../../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../../../utils/FormatMigrations";
 import { getErrnoCode } from "../../../../utils/ErrorUtils";
+import { formatLocalDayKey } from "./UsageTimestampUtils";
+import {
+  nonNegativeNumber,
+  stableCostSources,
+} from "./UsageContributionValues";
 
 export const OBSERVED_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.OBSERVED_USAGE];
@@ -112,11 +117,7 @@ function localMidnight(dayKey: string): number {
 function addDays(dayKey: string, days: number): string {
   const date = new Date(localMidnight(dayKey));
   date.setDate(date.getDate() + days);
-  return formatLocalDay(date);
-}
-
-function formatLocalDay(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return formatLocalDayKey(date);
 }
 
 function isoWeekStart(dayKey: string): string {
@@ -130,32 +131,15 @@ function monthStart(dayKey: string): string {
 }
 
 function retainedDayStart(now: number): string {
-  const today = formatLocalDay(new Date(now));
+  const today = formatLocalDayKey(new Date(now));
   const month = monthStart(today);
   const week = isoWeekStart(today);
   return [today, month, week].sort()[0]!;
 }
 
-function numeric(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : 0;
-}
-
 function optionalNumeric(value: unknown): number | undefined {
-  const result = numeric(value);
+  const result = nonNegativeNumber(value);
   return result > 0 ? result : undefined;
-}
-
-function stableCostSources(
-  sources: readonly AttemptCostSource[] | undefined
-): AttemptCostSource[] | undefined {
-  if (!sources?.length) return undefined;
-  const sourceSet = new Set(sources);
-  const ordered = Object.values(ATTEMPT_COST_SOURCES).filter((source) =>
-    sourceSet.has(source)
-  );
-  return ordered.length ? ordered : undefined;
 }
 
 function addUsage(
@@ -169,25 +153,37 @@ function addUsage(
     total: 0,
   };
   const result: UsageNumbers = {
-    input: Math.max(0, numeric(current.input) + sign * numeric(right.input)),
-    output: Math.max(0, numeric(current.output) + sign * numeric(right.output)),
-    total: Math.max(0, numeric(current.total) + sign * numeric(right.total)),
+    input: Math.max(
+      0,
+      nonNegativeNumber(current.input) + sign * nonNegativeNumber(right.input)
+    ),
+    output: Math.max(
+      0,
+      nonNegativeNumber(current.output) + sign * nonNegativeNumber(right.output)
+    ),
+    total: Math.max(
+      0,
+      nonNegativeNumber(current.total) + sign * nonNegativeNumber(right.total)
+    ),
   };
   const cachedInput = Math.max(
     0,
-    numeric(current.cachedInput) + sign * numeric(right.cachedInput)
+    nonNegativeNumber(current.cachedInput) +
+      sign * nonNegativeNumber(right.cachedInput)
   );
   const cacheCreated = Math.max(
     0,
-    numeric(current.cacheCreated) + sign * numeric(right.cacheCreated)
+    nonNegativeNumber(current.cacheCreated) +
+      sign * nonNegativeNumber(right.cacheCreated)
   );
   const reasoningOutput = Math.max(
     0,
-    numeric(current.reasoningOutput) + sign * numeric(right.reasoningOutput)
+    nonNegativeNumber(current.reasoningOutput) +
+      sign * nonNegativeNumber(right.reasoningOutput)
   );
   const costUsd = Math.max(
     0,
-    numeric(current.costUsd) + sign * numeric(right.costUsd)
+    nonNegativeNumber(current.costUsd) + sign * nonNegativeNumber(right.costUsd)
   );
   if (cachedInput > 0) result.cachedInput = cachedInput;
   if (cacheCreated > 0) result.cacheCreated = cacheCreated;
@@ -213,18 +209,18 @@ function toContribution(
   totals: WorkflowHarnessTokenTotals
 ): ObservedHarnessUsageDayContribution {
   return {
-    input: numeric(totals.input),
+    input: nonNegativeNumber(totals.input),
     ...(optionalNumeric(totals.cachedInput) !== undefined
       ? { cachedInput: optionalNumeric(totals.cachedInput) }
       : {}),
     ...(optionalNumeric(totals.cacheCreated) !== undefined
       ? { cacheCreated: optionalNumeric(totals.cacheCreated) }
       : {}),
-    output: numeric(totals.output),
+    output: nonNegativeNumber(totals.output),
     ...(optionalNumeric(totals.reasoningOutput) !== undefined
       ? { reasoningOutput: optionalNumeric(totals.reasoningOutput) }
       : {}),
-    total: numeric(totals.total),
+    total: nonNegativeNumber(totals.total),
     ...(optionalNumeric(totals.costUsd) !== undefined
       ? { costUsd: optionalNumeric(totals.costUsd) }
       : {}),
@@ -245,7 +241,7 @@ function normalizeContribution(
   now: number
 ): ObservedHarnessUsageRunContribution {
   const byLocalDay: ObservedHarnessUsageRunContribution["byLocalDay"] = {};
-  const latestDay = formatLocalDay(new Date(now));
+  const latestDay = formatLocalDayKey(new Date(now));
   const firstRetainedDay = retainedDayStart(now);
   for (const [dayKey, harnesses] of Object.entries(totals?.byLocalDay ?? {})) {
     if (
