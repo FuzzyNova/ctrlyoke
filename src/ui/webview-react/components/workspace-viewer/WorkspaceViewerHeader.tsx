@@ -8,6 +8,7 @@ import {
   type WorkspaceViewerTab,
 } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import { toWorkspaceRelative } from "../shared/fileBrowserShared";
 
 interface WorkspaceViewerHeaderProps {
   activeTab: WorkspaceViewerTab;
@@ -24,16 +25,7 @@ const getWorkspaceFilePath = (
   filePath: string,
   workspacePath?: string
 ): string => {
-  const norm = filePath.replace(/\\/g, "/");
-  let relative = norm;
-  // Strip workspace root prefix with case-insensitive comparison (Windows
-  // drive letters may differ in casing between uri.fsPath and AI output).
-  if (workspacePath) {
-    const root = workspacePath.replace(/\\/g, "/").replace(/\/$/, "");
-    if (norm.toLowerCase().startsWith(root.toLowerCase() + "/")) {
-      relative = norm.slice(root.length + 1);
-    }
-  }
+  let relative = toWorkspaceRelative(filePath, workspacePath);
   // Strip any remaining leading slashes (e.g. Unix absolute paths)
   relative = relative.replace(/^[/\\]+/, "");
   return workspaceName ? `${workspaceName}/${relative}` : relative;

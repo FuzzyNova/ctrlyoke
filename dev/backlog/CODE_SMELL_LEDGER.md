@@ -347,6 +347,10 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     all permission capabilities, exclusion, and input order.
   - `WorkspaceViewerHeader.getWorkspaceFilePath` re-implements
     `fileBrowserShared.toWorkspaceRelative`, plus a leading-slash strip.
+    Landed: the header now uses `toWorkspaceRelative` before its leading-slash strip
+    and workspace-name prefix. Characterization covers drive-case differences,
+    outside-root absolute paths, relative paths, and absent workspace names; a path
+    equal to the root is unreachable because the header only titles files.
 
 ## Deferred
 
