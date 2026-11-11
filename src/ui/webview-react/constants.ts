@@ -262,7 +262,7 @@ export function resolveWorkflowRowTier(width: number): WorkflowRowTier {
  * makes the scrollbar lie and drops seeks well short of their target on a
  * long list.
  */
-export const WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE = 54;
+export const WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE = 56;
 
 /**
  * Highest workflow count the header's count badge renders as a literal

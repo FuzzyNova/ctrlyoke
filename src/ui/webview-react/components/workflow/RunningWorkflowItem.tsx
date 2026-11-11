@@ -152,10 +152,9 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       }}
       role="listitem"
       aria-label={accessibleName}
-      // Padding matches the recent rows below exactly — the two regions are
-      // separate scroll containers, so any difference in row padding offsets
-      // every column between them.
-      className={`running-workflow-item ${WORKFLOW_ROW_CONTAINER_CLASS} group px-2 py-2 text-sm transition-colors ${
+      // Padding comes from `.workflow-row`, shared with the recent rows
+      // below, so the two regions' columns line up.
+      className={`running-workflow-item ${WORKFLOW_ROW_CONTAINER_CLASS} group text-sm transition-colors ${
         isCurrent
           ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"

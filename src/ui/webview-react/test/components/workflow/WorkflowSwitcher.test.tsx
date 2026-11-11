@@ -1923,6 +1923,12 @@ describe("WorkflowSwitcher — run navigation panel", () => {
       screen.getByRole("button", { name: "Back to workflow list" })
     ).toBeInTheDocument();
     expect(document.querySelector(".recent-workflows")).toBeInTheDocument();
+    // The list stays mounted under the run panel. Its row controls are
+    // positioned, so the list must be its own stacking context or they paint
+    // over the run panel (stars and `#3 ›` showing through the run rows).
+    expect(
+      document.querySelector(".recent-workflows")?.parentElement
+    ).toHaveClass("isolate");
     expect(screen.getAllByText("Multi-run Workflow").length).toBeGreaterThan(0);
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: MESSAGE_TYPES.LOAD_RUN_SUMMARIES })

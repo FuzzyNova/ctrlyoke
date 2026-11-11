@@ -171,7 +171,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       aria-selected={isViewed}
       aria-label={accessibleName}
       title={accessibleName}
-      className={`run-panel-row ${WORKFLOW_ROW_CONTAINER_CLASS} group px-2 py-2 text-sm transition-colors ${
+      className={`run-panel-row ${WORKFLOW_ROW_CONTAINER_CLASS} group text-sm transition-colors ${
         isViewed
           ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"

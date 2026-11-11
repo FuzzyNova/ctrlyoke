@@ -1698,7 +1698,15 @@ button .cy-lucide-icon {
     grid-template-columns: 14px minmax(0, 1fr) auto auto;
     grid-template-rows: auto auto;
     column-gap: 0.25rem;
-    row-gap: 1px;
+    /* Tight outer padding, a real gap between the lines: the state badge and
+       the action buttons beneath it are both right-aligned, so without the
+       gap they read as one stacked block. Every row kind gets its padding
+       here, never per component — the running and recent regions are
+       separate scroll containers, and any padding difference offsets every
+       column between them. Keep WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE and the
+       horizontal padding in constants.ts in step. */
+    row-gap: 4px;
+    padding: 6px 8px;
     align-items: center;
   }
 
@@ -1728,16 +1736,18 @@ button .cy-lucide-icon {
     grid-row: 2;
   }
 
-  /* Layered above the primary button, whose subgrid also covers this cell.
-     The negative margin lets 20px controls sit on the ~16px metadata line
-     without making the row taller than the virtualizer's estimate. */
+  /* Layered above the primary button, whose subgrid also covers this cell:
+     a positioned element paints over in-flow siblings without a z-index.
+     Never give it one — the run panel slides over the still-mounted workflow
+     list without a z-index of its own, and a z-indexed cluster here paints
+     the list's run selectors and stars on top of the run panel.
+     Its 20px buttons set the second line's height; the metadata centres on
+     them. */
   .workflow-row > .workflow-row-trailing {
     grid-column: 3 / span 2;
     grid-row: 2;
     justify-self: end;
     position: relative;
-    z-index: 1;
-    margin-block: -2px;
   }
 
   /* ── File / SCM / commit list rows ──────────────────────────────────────────

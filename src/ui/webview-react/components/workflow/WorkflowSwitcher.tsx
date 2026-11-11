@@ -1840,10 +1840,12 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       >
         {/* The workflow list stays mounted as the run panel's underlying
             surface. A row drill-in slides the run panel over it like a drawer,
-            so neither direction leaves a blank dropdown frame. */}
+            so neither direction leaves a blank dropdown frame. `isolate`
+            confines anything positioned inside the list to the list's own
+            stacking context, so none of it can paint over the run panel. */}
         <div className="relative flex flex-1 min-h-0 flex-col overflow-clip">
           <div
-            className={`flex h-full min-h-0 flex-col ${
+            className={`isolate flex h-full min-h-0 flex-col ${
               dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS
                 ? "pointer-events-none"
                 : ""

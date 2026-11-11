@@ -211,7 +211,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
       role="listitem"
       aria-label={accessibleName}
       title={workflow.address.workflowKey}
-      className={`workflow-menu-item ${WORKFLOW_ROW_CONTAINER_CLASS} group px-2 py-2 text-left text-sm transition-colors ${
+      className={`workflow-menu-item ${WORKFLOW_ROW_CONTAINER_CLASS} group text-left text-sm transition-colors ${
         isCurrent
           ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"
