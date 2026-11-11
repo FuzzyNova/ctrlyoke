@@ -1706,6 +1706,8 @@ export type ProjectRunnerStatus =
 // ============================================================================
 /** The VS Code sidebar/panel client. Always registered at startup. */
 export const PANEL_CLIENT_ID = "panel" as const;
+/** Client identity used for runs started by the workflow scheduler. */
+export const SCHEDULER_CLIENT_ID = "scheduler" as const;
 /** Prefix for all browser WebSocket client IDs (e.g. "browser:1"). */
 export const BROWSER_CLIENT_PREFIX = "browser:" as const;
 

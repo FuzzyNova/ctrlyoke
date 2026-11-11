@@ -549,9 +549,13 @@ No remaining blockers — the plan is fully specified for a v1 implementation.
 ## Staging
 
 1. [x] Phase 0: types, validator, cron/next-run util, descriptor read-path validation, unit tests — added `CronSchedule.ts`, `WorkflowSchedule.ts`, and their unit tests; updated descriptor types and validation.
-2. `WorkflowScheduler`: owned by `WorkflowOrchestrator`, startup arming, missed/overlap
-   skip, fire through `seedAndExecuteAtRun`/`executeDraftAtAddress`, bookkeeping via
-   `updateDescriptorMetadata`, and tests with fake timers.
+2. [x] `WorkflowScheduler`: owned by `WorkflowOrchestrator`, startup arming, missed/overlap
+       skip, fire through `seedAndExecuteAtRun`/`executeDraftAtAddress`, bookkeeping via
+       `updateDescriptorMetadata`, and tests with fake timers. Runtime detection of
+       harnesses that would prompt remains a follow-up, as pinned above; this stage
+   applies the overlap guard and keeps the scheduled-fire client identity separate.
+   A timer wake more than 60 seconds after its occurrence is treated as missed,
+   since the host cannot reliably distinguish machine sleep from a delayed event loop.
 3. Backend and contract plumbing: `SET_SCHEDULE`/`CLEAR_SCHEDULE` messages and
    handlers, `RecentWorkflowEntry` fields, the `uiStore` `RecentWorkflow` fields and
    actions, and tests.

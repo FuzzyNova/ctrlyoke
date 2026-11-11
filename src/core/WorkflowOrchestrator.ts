@@ -49,6 +49,7 @@ import {
   getHarnessDisplayName,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
+  SCHEDULER_CLIENT_ID,
   RUNNER_IDS,
   STEP_TYPES,
   USER_FEEDBACK_SEVERITY,
@@ -92,6 +93,12 @@ import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import {
+  WorkflowScheduler,
+  isLineageRunningOnDisk,
+  readScheduleDefinitionRevision,
+} from "./orchestration/WorkflowScheduler";
+import { currentScheduleHostId } from "../utils/WorkflowSchedule";
 import {
   RecentWorkflowCatalog,
   RecentWorkflowPublisher,
@@ -567,6 +574,7 @@ export class WorkflowOrchestrator {
     for (const id of value) target.add(id);
   }
   private readonly lineageRepository = new WorkflowLineageRepository();
+  private readonly workflowScheduler?: WorkflowScheduler;
   private definitionAuthorLedgerInstance?: DefinitionAuthorLedger;
   private get definitionAuthorLedger(): DefinitionAuthorLedger {
     return (this.definitionAuthorLedgerInstance ??=
@@ -747,6 +755,25 @@ export class WorkflowOrchestrator {
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolderPath =
       dependencies.workspaceFolderPathResolver();
+    if (this.currentWorkspaceFolderPath) {
+      const workspaceRoot = this.currentWorkspaceFolderPath;
+      this.workflowScheduler = new WorkflowScheduler({
+        lineageRepository: this.lineageRepository,
+        workspaceRoot,
+        now: Date.now,
+        timers: { setTimeout, clearTimeout },
+        getHostId: currentScheduleHostId,
+        isLineageRunning: async (workflowKey) =>
+          this.getWorkflowSummaries().some(
+            (summary) =>
+              summary.workflowKey === workflowKey &&
+              (summary.executionState === EXECUTION_STATES.RUNNING ||
+                summary.executionState === EXECUTION_STATES.PAUSING)
+          ) || isLineageRunningOnDisk(workspaceRoot, workflowKey),
+        fire: (workflowKey) =>
+          this.fireScheduledWorkflow(workspaceRoot, workflowKey),
+      });
+    }
     this.externalRunWatchCoordinator = new ExternalRunWatchCoordinator({
       broadcast: this.dashboardBroadcastHub,
       lineageRepository: this.lineageRepository,
@@ -1597,6 +1624,41 @@ export class WorkflowOrchestrator {
       // then allow startup to proceed without a panel send function.
       this.armPanelReadyGraceTimer(
         Date.now() + PANEL_READY_IN_FLIGHT_MAX_WAIT_MS
+      );
+    }
+    await this.workflowScheduler?.start();
+  }
+
+  /** Re-read and apply one lineage's persisted schedule after a schedule edit. */
+  async refreshSchedule(workflowKey: WorkflowKey): Promise<void> {
+    await this.workflowScheduler?.refresh(workflowKey);
+  }
+
+  private async fireScheduledWorkflow(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<void> {
+    const descriptor = await this.lineageRepository.readDescriptor(
+      workspaceRoot,
+      workflowKey
+    );
+    const definitionRevision = await readScheduleDefinitionRevision(
+      workspaceRoot,
+      descriptor
+    );
+    if (descriptor.latestRunRef) {
+      await this.seedAndExecuteAtRun(
+        { workflowKey, runRef: descriptor.latestRunRef },
+        definitionRevision,
+        descriptor.revision,
+        SCHEDULER_CLIENT_ID
+      );
+    } else {
+      await this.executeDraftAtAddress(
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        definitionRevision,
+        descriptor.revision,
+        SCHEDULER_CLIENT_ID
       );
     }
   }
@@ -5085,6 +5147,7 @@ export class WorkflowOrchestrator {
     disposeInstances: boolean,
     disposeEndConditionEvaluator = true
   ): void {
+    this.workflowScheduler?.dispose();
     if (this.panelReadyGraceTimer) {
       clearTimeout(this.panelReadyGraceTimer);
       this.panelReadyGraceTimer = undefined;
