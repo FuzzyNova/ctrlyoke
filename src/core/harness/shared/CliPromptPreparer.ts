@@ -75,6 +75,7 @@ import type {
   CompatibilityDiagnosticSeverity,
 } from "../../../types/CompatibilityTypes";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
+import { truncateUtf8 } from "../../../utils/Utf8Truncate";
 
 /** Added to headless prompts so agents wait for work that must outlive a turn. */
 export const HEADLESS_EXECUTION_NOTE =
@@ -1169,13 +1170,3 @@ function createAvailableSecretsBlock(secretNames: readonly string[]): string {
 }
 
 /** Truncate by UTF-8 bytes without splitting a multi-byte code point. */
-function truncateUtf8(content: string, maxBytes: number): string {
-  if (maxBytes <= 0) {
-    return "";
-  }
-  if (Buffer.byteLength(content, "utf8") <= maxBytes) {
-    return content;
-  }
-  const buffer = Buffer.from(content, "utf8").subarray(0, maxBytes);
-  return buffer.toString("utf8").replace(/\uFFFD$/, "");
-}

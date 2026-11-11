@@ -50,6 +50,7 @@ import {
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { truncateUtf8 } from "../utils/Utf8Truncate";
 
 const execFileAsync = promisify(execFile);
 
@@ -164,18 +165,6 @@ export function getCommitMessageStatePaths(
       PATH_CONSTANTS.TEMP_DIR
     ),
   };
-}
-
-function truncateUtf8(value: string, maxBytes: number): string {
-  const buffer = Buffer.from(value, "utf8");
-  if (buffer.length <= maxBytes) {
-    return value;
-  }
-  let truncated = buffer.subarray(0, maxBytes).toString("utf8");
-  while (Buffer.byteLength(truncated, "utf8") > maxBytes) {
-    truncated = truncated.slice(0, -1);
-  }
-  return truncated;
 }
 
 async function readFilePrefix(

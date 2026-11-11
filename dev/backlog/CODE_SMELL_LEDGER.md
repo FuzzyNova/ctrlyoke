@@ -174,6 +174,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - `truncateUtf8` in `CliPromptPreparer` and `CommitMessageGenerator`. The copies
     have drifted: the commit-message copy keeps a stray U+FFFD when the cut lands
     inside a 4-byte character.
+    Landed as shared Node-only `src/utils/Utf8Truncate.ts`; the commit-message bug is filed and fixed.
   - Five identical private helper pairs: `normalizeBranchName`,
     `mapWithConcurrency`, `symbolKey`, `matchesPrefix`, and the
     `ExecutionRootScope`/`ExecutionRootLeaseManager` `readJson`.
