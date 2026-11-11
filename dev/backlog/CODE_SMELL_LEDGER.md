@@ -168,6 +168,20 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     (`src/core/harness/shared/AskUserQuestionPreview.ts`), the first piece of the shared
     ask-user-question parser.
 
+- **2026-11-10, pass 7** (new workflow run, so no steps to review). Hunted the
+  pass-6 candidate list. `lstatIfExists` is already single-sourced in
+  `ProjectStateInspection.ts`. Queued two steps:
+  - `truncateUtf8` in `CliPromptPreparer` and `CommitMessageGenerator`. The copies
+    have drifted: the commit-message copy keeps a stray U+FFFD when the cut lands
+    inside a 4-byte character.
+  - Five identical private helper pairs: `normalizeBranchName`,
+    `mapWithConcurrency`, `symbolKey`, `matchesPrefix`, and the
+    `ExecutionRootScope`/`ExecutionRootLeaseManager` `readJson`.
+
+  Still open for a later pass: `flattenSteps` vs `flatStepCount` on non-object
+  members (check what the loader does first); win32-only `toLowerCase()` path keys
+  beside `PathCasing`; the CLI terminal fallback assuming queue output targets.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
