@@ -155,6 +155,8 @@ export {
   type CreateCustomTemplateMessage,
   type RecentWorkflowsMessage,
   type RecentWorkflowEntry,
+  type SetScheduleMessage,
+  type ClearScheduleMessage,
   type RecentWorkflowUpdatedMessage,
   type ActiveTerminalWorkflowRef,
   type ActiveTerminalWorkflowsMessage,

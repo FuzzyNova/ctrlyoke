@@ -342,6 +342,106 @@ suite("WorkflowLibraryHandlers", () => {
     );
   });
 
+  test("setting a schedule persists host identity and refreshes scheduling", async () => {
+    await withWorkspace("ctrlyoke-schedule-set-", async (workspaceRoot) => {
+      const repository = new WorkflowLineageRepository();
+      const { workflowKey } = await repository.createLineage(
+        workspaceRoot,
+        "wf-schedule",
+        "Schedule"
+      );
+      let refreshed = "";
+      const manager = {
+        refreshSchedule: async (key: WorkflowKey) => {
+          refreshed = key;
+        },
+      } as unknown as WorkflowOrchestrator;
+      const messages: any[] = [];
+      const handlers = createWorkflowLibraryHandlers(
+        (message) => messages.push(message),
+        {},
+        () => manager,
+        () => undefined,
+        fakeWorkspaceState()
+      );
+      await handlers.handleSetSchedule(
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        { enabled: true, trigger: { cron: "0 9 * * 1" } }
+      );
+      const descriptor = await repository.readDescriptor(
+        workspaceRoot,
+        workflowKey
+      );
+      assert.deepStrictEqual(descriptor.schedule?.trigger, {
+        cron: "0 9 * * 1",
+      });
+      assert.ok(descriptor.schedule?.hostId);
+      assert.strictEqual(refreshed, workflowKey);
+      assert.strictEqual(messages.at(-1)?.type, MESSAGE_TYPES.RECENT_WORKFLOWS);
+    });
+  });
+
+  test("rejects invalid schedules and clears schedule bookkeeping", async () => {
+    await withWorkspace("ctrlyoke-schedule-clear-", async (workspaceRoot) => {
+      const repository = new WorkflowLineageRepository();
+      const { workflowKey } = await repository.createLineage(
+        workspaceRoot,
+        "wf-schedule-clear",
+        "Schedule"
+      );
+      await repository.updateDescriptor(
+        workspaceRoot,
+        workflowKey,
+        (descriptor) => ({
+          ...descriptor,
+          schedule: {
+            enabled: true,
+            trigger: { cron: "* * * * *" },
+            hostId: "host",
+          },
+          scheduleNextRunAt: 123,
+          scheduleLastMissedAt: 456,
+        })
+      );
+      let refreshed = 0;
+      const manager = {
+        refreshSchedule: async () => {
+          refreshed += 1;
+        },
+      } as unknown as WorkflowOrchestrator;
+      const messages: any[] = [];
+      const handlers = createWorkflowLibraryHandlers(
+        (message) => messages.push(message),
+        {},
+        () => manager,
+        () => undefined,
+        fakeWorkspaceState()
+      );
+      const address = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      } as const;
+      await handlers.handleSetSchedule(address, {
+        enabled: true,
+        trigger: { cron: "bad" },
+      });
+      assert.strictEqual(refreshed, 0);
+      assert.strictEqual(
+        messages.at(-1)?.type,
+        MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+      );
+      await handlers.handleClearSchedule(address);
+      const descriptor = await repository.readDescriptor(
+        workspaceRoot,
+        workflowKey
+      );
+      assert.strictEqual(descriptor.schedule, undefined);
+      assert.strictEqual(descriptor.scheduleNextRunAt, undefined);
+      assert.strictEqual(descriptor.scheduleLastMissedAt, undefined);
+      assert.strictEqual(refreshed, 1);
+    });
+  });
+
   test("loads the template catalog without opening the new-workflow modal", async () => {
     const messages: any[] = [];
     const serializer = createWorkflowLibraryHandlers(

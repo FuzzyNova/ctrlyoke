@@ -103,6 +103,7 @@ import type {
   CoordinationScopeSnapshot,
   WorkflowValidationWarning,
   WorkflowStopReason,
+  WorkflowSchedule,
   ExecutionProperties,
   PromptResult,
   FinalStepRuntimeState,
@@ -1253,6 +1254,10 @@ export interface RecentWorkflowEntry {
   lastModifiedAt?: number;
   startedAt?: number;
   isFavorite?: boolean;
+  schedule?: WorkflowSchedule;
+  scheduleNextRunAt?: number;
+  scheduleLastMissedAt?: number;
+  scheduleOnOtherHost?: boolean;
   totalSteps?: number;
   harness?: HarnessId;
   /** The primary address is a run prepared but never executed (`isUnstartedRun`). */
@@ -1262,6 +1267,19 @@ export interface RecentWorkflowEntry {
   /** Primary run's pause-aware run time, once its clock has stopped (`frozenActiveExecutionMs`). */
   activeExecutionMs?: number;
   worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
+}
+
+export interface SetScheduleMessage {
+  type: typeof MESSAGE_TYPES.SET_SCHEDULE;
+  address: WorkflowViewAddress;
+  enabled: boolean;
+  trigger: WorkflowSchedule["trigger"];
+  until?: string;
+}
+
+export interface ClearScheduleMessage {
+  type: typeof MESSAGE_TYPES.CLEAR_SCHEDULE;
+  address: WorkflowViewAddress;
 }
 
 /**

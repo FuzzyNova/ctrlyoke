@@ -1281,6 +1281,39 @@ describe("updateRecentWorkflowFromSummary", () => {
   });
 });
 
+describe("recent workflow schedule actions", () => {
+  it("sets schedule fields and clears them when the schedule is removed", () => {
+    store().setRecentWorkflows([
+      {
+        address: {
+          workflowKey: "wf-schedule" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+        workflowName: "wf-schedule",
+        executionState: "idle",
+        scheduleNextRunAt: 100,
+        scheduleLastMissedAt: 50,
+        scheduleOnOtherHost: true,
+      },
+    ]);
+    store().setRecentWorkflowSchedule("wf-schedule" as never, {
+      enabled: true,
+      trigger: { at: "2030-01-01T09:00" },
+      hostId: "local-host",
+    });
+    expect(store().recentWorkflows[0]).toMatchObject({
+      schedule: { enabled: true, hostId: "local-host" },
+      scheduleOnOtherHost: false,
+    });
+    expect(store().recentWorkflows[0].scheduleNextRunAt).toBeUndefined();
+    store().clearRecentWorkflowSchedule("wf-schedule" as never);
+    expect(store().recentWorkflows[0]).not.toHaveProperty("schedule");
+    expect(store().recentWorkflows[0]).not.toHaveProperty(
+      "scheduleLastMissedAt"
+    );
+  });
+});
+
 describe("recent-workflow list and row sequencing", () => {
   const row = (workflowKey: string, executionState: string) => ({
     address: {

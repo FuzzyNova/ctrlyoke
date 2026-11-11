@@ -28,6 +28,7 @@ import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
+import { currentScheduleHostId } from "../../utils/WorkflowSchedule";
 import type { OutputHistoryManager } from "./OutputHistoryManager";
 import type { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
@@ -336,6 +337,12 @@ export class RecentWorkflowCatalog {
         startedAt: workingFile.startedAt || 0,
         lastModifiedAt: lastModified,
         isFavorite: descriptor.isFavorite,
+        schedule: descriptor.schedule,
+        scheduleNextRunAt: descriptor.scheduleNextRunAt,
+        scheduleLastMissedAt: descriptor.scheduleLastMissedAt,
+        scheduleOnOtherHost: descriptor.schedule
+          ? descriptor.schedule.hostId !== currentScheduleHostId()
+          : false,
         totalSteps: steps.length,
         harness,
         // A draft is unstarted by definition and already shows Run; the

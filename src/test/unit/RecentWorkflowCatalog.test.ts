@@ -108,6 +108,39 @@ async function withRunStorage(
 }
 
 suite("RecentWorkflowCatalog", () => {
+  test("projects schedule and schedule bookkeeping into the recent row", async () => {
+    await withRunStorage(async (workspaceRoot, repository) => {
+      const { workflowKey } = await repository.createLineage(
+        workspaceRoot,
+        "wf-scheduled",
+        "Scheduled"
+      );
+      await repository.updateDescriptor(
+        workspaceRoot,
+        workflowKey,
+        (descriptor) => ({
+          ...descriptor,
+          schedule: {
+            enabled: true,
+            trigger: { cron: "0 9 * * 1" },
+            hostId: `other-host-${process.pid}`,
+          },
+          scheduleNextRunAt: 123,
+          scheduleLastMissedAt: 100,
+        })
+      );
+      writeDraft(workspaceRoot, workflowKey, EXECUTION_STATES.IDLE);
+      const entry = await new RecentWorkflowCatalog(
+        repository,
+        new TestCatalogHost()
+      ).buildEntry(workspaceRoot, workflowKey);
+      assert.deepStrictEqual(entry?.schedule?.trigger, { cron: "0 9 * * 1" });
+      assert.strictEqual(entry?.scheduleNextRunAt, 123);
+      assert.strictEqual(entry?.scheduleLastMissedAt, 100);
+      assert.strictEqual(entry?.scheduleOnOtherHost, true);
+    });
+  });
+
   test("a built row takes executing state and step count from the live summary", async () => {
     await withRunStorage(async (workspaceRoot, repository) => {
       const { workflowKey } = await repository.createLineage(

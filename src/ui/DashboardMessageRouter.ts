@@ -2630,6 +2630,21 @@ export class DashboardMessageRouter {
       }
     });
 
+    table.set(MESSAGE_TYPES.SET_SCHEDULE, (message, ctx) =>
+      this.serializer.handleSetSchedule(
+        message.address,
+        {
+          enabled: message.enabled,
+          trigger: message.trigger,
+          until: message.until,
+        },
+        ctx.postMessage
+      )
+    );
+    table.set(MESSAGE_TYPES.CLEAR_SCHEDULE, (message, ctx) =>
+      this.serializer.handleClearSchedule(message.address, ctx.postMessage)
+    );
+
     table.set(MESSAGE_TYPES.LOAD_WORKFLOW, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {

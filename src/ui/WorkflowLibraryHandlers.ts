@@ -50,7 +50,15 @@ import {
 } from "../utils/HistoryTrashDescriptions";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { PostMessageFn } from "./DashboardClientEndpoint";
-import type { WorkflowViewAddress, WorkflowKey } from "../types/CtrlYokeTypes";
+import type {
+  WorkflowViewAddress,
+  WorkflowKey,
+  WorkflowSchedule,
+} from "../types/CtrlYokeTypes";
+import {
+  currentScheduleHostId,
+  validateWorkflowSchedule,
+} from "../utils/WorkflowSchedule";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
@@ -1356,6 +1364,85 @@ export class WorkflowLibraryHandlers {
       Log.error(
         "[WorkflowLibraryHandlers] Failed to toggle workflow favorite:",
         error
+      );
+    }
+  }
+
+  async handleSetSchedule(
+    address: WorkflowViewAddress,
+    input: {
+      enabled: boolean;
+      trigger: WorkflowSchedule["trigger"];
+      until?: string;
+    },
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) return;
+    const validation = validateWorkflowSchedule({
+      ...input,
+      hostId: currentScheduleHostId(),
+    });
+    if (typeof validation === "string") {
+      this.sendActionFailure(postMessage, "set workflow schedule", validation);
+      return;
+    }
+    try {
+      await this.lineageRepository.updateDescriptor(
+        workspaceRoot,
+        address.workflowKey,
+        (descriptor) => {
+          const updated = { ...descriptor, schedule: validation };
+          delete updated.scheduleNextRunAt;
+          return updated;
+        }
+      );
+      await this.getManager()?.refreshSchedule(address.workflowKey);
+      await this.handleGetRecentWorkflows(postMessage);
+    } catch (error) {
+      Log.error(
+        "[WorkflowLibraryHandlers] Failed to set workflow schedule:",
+        error
+      );
+      this.sendActionFailure(
+        postMessage,
+        "set workflow schedule",
+        `Failed to set workflow schedule: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
+  async handleClearSchedule(
+    address: WorkflowViewAddress,
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) return;
+    try {
+      await this.lineageRepository.updateDescriptor(
+        workspaceRoot,
+        address.workflowKey,
+        (descriptor) => {
+          const {
+            schedule: _schedule,
+            scheduleNextRunAt: _next,
+            scheduleLastMissedAt: _missed,
+            ...rest
+          } = descriptor;
+          return rest;
+        }
+      );
+      await this.getManager()?.refreshSchedule(address.workflowKey);
+      await this.handleGetRecentWorkflows(postMessage);
+    } catch (error) {
+      Log.error(
+        "[WorkflowLibraryHandlers] Failed to clear workflow schedule:",
+        error
+      );
+      this.sendActionFailure(
+        postMessage,
+        "clear workflow schedule",
+        `Failed to clear workflow schedule: ${getErrorMessage(error)}`
       );
     }
   }

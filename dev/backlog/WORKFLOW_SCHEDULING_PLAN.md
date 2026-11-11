@@ -556,9 +556,9 @@ No remaining blockers — the plan is fully specified for a v1 implementation.
    applies the overlap guard and keeps the scheduled-fire client identity separate.
    A timer wake more than 60 seconds after its occurrence is treated as missed,
    since the host cannot reliably distinguish machine sleep from a delayed event loop.
-3. Backend and contract plumbing: `SET_SCHEDULE`/`CLEAR_SCHEDULE` messages and
-   handlers, `RecentWorkflowEntry` fields, the `uiStore` `RecentWorkflow` fields and
-   actions, and tests.
+3. [x] Backend and contract plumbing: `SET_SCHEDULE`/`CLEAR_SCHEDULE` messages and
+       handlers, `RecentWorkflowEntry` fields, the `uiStore` `RecentWorkflow` fields and
+       actions, and tests.
 4. UI authoring: the `ScheduleEditor` popover, the row clock button (rail 44 → 68), the
    context-menu entry, and tests.
 5. UI management: the "Scheduled" section and filter, public docs, `CHANGELOG.md`.

@@ -666,6 +666,8 @@ export const MESSAGE_TYPES = {
   HISTORY_TRASH_EMPTY: "historyTrashEmpty", // Webview -> Extension: { confirmation } permanently delete every trashed entry
   HISTORY_TRASH_RESULT: "historyTrashResult", // Extension -> Webview: outcome of a restore/purge/empty action
   TOGGLE_WORKFLOW_FAVORITE: "toggleWorkflowFavorite", // Webview -> Extension: Toggle favorite on a recent workflow entry { filePath }
+  SET_SCHEDULE: "setSchedule",
+  CLEAR_SCHEDULE: "clearSchedule",
 
   // Settings view messages
   CHANGE_MODEL: "changeModel",

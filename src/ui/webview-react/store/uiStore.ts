@@ -40,6 +40,7 @@ import type {
   WorkflowTokenTotals,
   WorktreeRunProjection,
   WorkspaceWorktreeOwnership,
+  WorkflowSchedule,
 } from "@root/types/CtrlYokeTypes";
 import type { CreateWorkflowVariantRequest } from "@root/types/WebviewMessageTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
@@ -343,6 +344,10 @@ export interface RecentWorkflow {
   /** Primary run's pause-aware run time, once its clock has stopped. */
   activeExecutionMs?: number;
   worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
+  schedule?: WorkflowSchedule;
+  scheduleNextRunAt?: number;
+  scheduleLastMissedAt?: number;
+  scheduleOnOtherHost?: boolean;
 }
 
 /** Panel size snapshot for the desktop layout (steps/settings/editor in px; output as %). */
@@ -1135,6 +1140,11 @@ interface UiActions {
    * when the list was last requested — stale until the dropdown is reopened.
    */
   updateRecentWorkflowFromSummary: (summary: WorkflowSummary) => void;
+  setRecentWorkflowSchedule: (
+    workflowKey: WorkflowKey,
+    schedule: WorkflowSchedule
+  ) => void;
+  clearRecentWorkflowSchedule: (workflowKey: WorkflowKey) => void;
   toggleRecentWorkflowsDropdown: () => void;
   closeRecentWorkflowsDropdown: () => void;
 
@@ -2111,6 +2121,35 @@ export const useUiStore = create<UiState & UiActions>()(
           });
           return changed ? { recentWorkflows } : state;
         }),
+
+      setRecentWorkflowSchedule: (workflowKey, schedule) =>
+        set((state) => ({
+          recentWorkflows: state.recentWorkflows.map((workflow) =>
+            workflow.address.workflowKey === workflowKey
+              ? {
+                  ...workflow,
+                  schedule,
+                  scheduleNextRunAt: undefined,
+                  scheduleOnOtherHost: false,
+                }
+              : workflow
+          ),
+        })),
+
+      clearRecentWorkflowSchedule: (workflowKey) =>
+        set((state) => ({
+          recentWorkflows: state.recentWorkflows.map((workflow) => {
+            if (workflow.address.workflowKey !== workflowKey) return workflow;
+            const {
+              schedule: _schedule,
+              scheduleNextRunAt: _nextRunAt,
+              scheduleLastMissedAt: _lastMissedAt,
+              scheduleOnOtherHost: _otherHost,
+              ...rest
+            } = workflow;
+            return rest;
+          }),
+        })),
 
       toggleRecentWorkflowsDropdown: () =>
         set((state) => ({
