@@ -251,6 +251,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     while the latter pads years to four digits and differs below year 1000.
   - Landed shared usage-store helpers in `UsageContributionValues.ts`,
     `UsageTimestampUtils.ts` and `LifetimeUsageStore.ts`, with focused coverage.
+  - Landed shared CLI/dashboard diff-line helpers in `utils/DiffLines.ts`, fixing CLI metadata, duplicate hunks and mixed line endings.
 
 ## Deferred
 

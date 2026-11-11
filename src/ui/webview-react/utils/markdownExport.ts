@@ -45,7 +45,7 @@ import {
   generateDiffLines,
   getStructuredPatchDiffLines,
   normalizeStructuredPatch,
-} from "./diffUtils";
+} from "@root/utils/DiffLines";
 import { redactPreviewText } from "@root/types/PreviewRedactor";
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { getWebSearchLabel } from "@root/utils/WebSearchText";

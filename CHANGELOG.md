@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CLI file edit diffs now skip patch metadata, deduplicate structured hunks, and normalize mixed line endings.
 - Undo/redo no longer loses a "No turn started" status.
 
 ### Changed

@@ -13,7 +13,7 @@ import {
   getStructuredPatchDiffLines,
   isDisplayableDiffLine,
   normalizeStructuredPatch,
-} from "./diffUtils";
+} from "@root/utils/DiffLines";
 import {
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,

@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import * as Diff from "diff";
 import { COMMAND_DISPLAY_SHELL_LABELS } from "../types/CommandDisplayFormatter";
 import type { CliEvent } from "../types/CliOutputTypes";
 import type {
@@ -14,7 +13,6 @@ import type {
   WebSearchData,
   ToolCall,
   ToolResultData,
-  UnifiedDiffHunk,
   AskUserQuestionData,
   AskUserQuestionDeclined,
   CompactionData,
@@ -42,8 +40,15 @@ import {
   SCRIPT_VERDICT_OUTCOMES,
   STATUS_MESSAGE_SEVERITY,
   USER_STEER_ATTRIBUTIONS,
+  DIFF_LINE_TYPES,
   type HarnessId,
 } from "../types/DashboardConstants";
+import {
+  generateDiffLines,
+  getStructuredPatchDiffLines,
+  normalizeStructuredPatch,
+  type DiffLine,
+} from "../utils/DiffLines";
 import {
   type WorkflowStopReason,
   type ScriptVerdict,
@@ -236,95 +241,14 @@ export interface CliPromptHeaderData extends PromptStartData {
   includeStepPosition?: boolean;
 }
 
-const DIFF_LINE_TYPES = {
-  ADDED: "added",
-  REMOVED: "removed",
-  CONTEXT: "context",
-} as const;
-type DiffLineType = (typeof DIFF_LINE_TYPES)[keyof typeof DIFF_LINE_TYPES];
-
-// ---- Diff helpers (ported from webview outputUtils — no shared import to avoid bundle coupling) ----
-
-interface DiffLine {
-  type: DiffLineType;
-  oldLineNum?: number;
-  newLineNum?: number;
-  content: string;
-}
-
-function parseUnifiedDiff(hunks: UnifiedDiffHunk[]): DiffLine[] {
-  const lines: DiffLine[] = [];
-  for (const hunk of hunks) {
-    let oldLineNum = hunk.oldStart;
-    let newLineNum = hunk.newStart;
-    for (const line of hunk.lines) {
-      const prefix = line[0];
-      const content = line.slice(1);
-      if (prefix === "+") {
-        lines.push({ type: DIFF_LINE_TYPES.ADDED, newLineNum, content });
-        newLineNum++;
-      } else if (prefix === "-") {
-        lines.push({ type: DIFF_LINE_TYPES.REMOVED, oldLineNum, content });
-        oldLineNum++;
-      } else {
-        lines.push({
-          type: DIFF_LINE_TYPES.CONTEXT,
-          oldLineNum,
-          newLineNum,
-          content,
-        });
-        oldLineNum++;
-        newLineNum++;
-      }
-    }
-  }
-  return lines;
-}
-
-function generateDiffLines(oldContent: string, newContent: string): DiffLine[] {
-  const diffResult = Diff.diffLines(oldContent, newContent);
-  const lines: DiffLine[] = [];
-  let oldLineNum = 1;
-  let newLineNum = 1;
-  for (const part of diffResult) {
-    const partLines = part.value.split("\n");
-    if (partLines[partLines.length - 1] === "") partLines.pop();
-    for (const line of partLines) {
-      if (part.added) {
-        lines.push({
-          type: DIFF_LINE_TYPES.ADDED,
-          newLineNum,
-          content: line,
-        });
-        newLineNum++;
-      } else if (part.removed) {
-        lines.push({
-          type: DIFF_LINE_TYPES.REMOVED,
-          oldLineNum,
-          content: line,
-        });
-        oldLineNum++;
-      } else {
-        lines.push({
-          type: DIFF_LINE_TYPES.CONTEXT,
-          oldLineNum,
-          newLineNum,
-          content: line,
-        });
-        oldLineNum++;
-        newLineNum++;
-      }
-    }
-  }
-  return lines;
-}
-
 // ---- Diff renderer ----
 
 function renderDiffBlock(data: FileEditData): void {
   let lines: DiffLine[];
   if (data.structuredPatch && data.structuredPatch.length > 0) {
-    lines = parseUnifiedDiff(data.structuredPatch);
+    lines = getStructuredPatchDiffLines(
+      normalizeStructuredPatch(data.structuredPatch)
+    );
   } else if (data.oldContent !== undefined && data.newContent !== undefined) {
     lines = generateDiffLines(data.oldContent, data.newContent);
   } else {

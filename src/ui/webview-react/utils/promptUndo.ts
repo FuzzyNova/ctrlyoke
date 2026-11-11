@@ -38,7 +38,8 @@ import {
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
-import { hasRenderableDiff, normalizeStructuredPatch } from "@utils/diffUtils";
+import { hasRenderableDiff } from "@utils/diffUtils";
+import { normalizeStructuredPatch } from "@root/utils/DiffLines";
 import {
   normalizeCliFilePathKey,
   sameCliFilePath,
