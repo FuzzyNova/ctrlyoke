@@ -38,7 +38,10 @@ import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { ExternalExecutionResolver } from "../../core/orchestration/ExternalExecutionResolver";
 import { TypedEmitter } from "../../utils/TypedEmitter";
 import { DashboardUserInteractionPort } from "../../ui/DashboardUserInteractionPort";
-import { initPtyProcessManager } from "../../core/harness/PtyProcessManager";
+import {
+  initPtyProcessManager,
+  PtySession,
+} from "../../core/harness/PtyProcessManager";
 import { MockPlatform } from "../helpers/mockHarness";
 import {
   ACTION_TYPES,
@@ -2973,6 +2976,35 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     );
 
     assert.deepStrictEqual(operations, ["run-view", `terminals:${workflowId}`]);
+  });
+
+  test("replayed shell TERMINAL_STARTED retains shellKind", () => {
+    const orchestrator = createTestOrchestrator();
+    const workflowId = "workflow-shell-replay";
+    const manager = initPtyProcessManager(() => undefined);
+    const session = new PtySession(
+      "shell-session",
+      workflowId,
+      "interactive",
+      -1,
+      "shell",
+      { cols: 80, rows: 24 } as any,
+      undefined,
+      undefined,
+      undefined,
+      "bash"
+    );
+    (manager as any).sessions.set(session.id, session);
+    const sent: any[] = [];
+
+    (orchestrator as any).replayTerminalSessionsTo(
+      workflowId,
+      (message: unknown) => sent.push(message),
+      "browser:reconnect"
+    );
+
+    assert.strictEqual(sent[0].type, MESSAGE_TYPES.TERMINAL_STARTED);
+    assert.strictEqual(sent[0].shellKind, "bash");
   });
 
   test("loadRunSummariesForClient sends a request-correlated summary snapshot without binding a client view", async () => {

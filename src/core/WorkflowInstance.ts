@@ -107,11 +107,7 @@ import {
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
-import type {
-  CliEvent,
-  CliOutput,
-  TerminalStartedMessage,
-} from "../types/WebviewMessageTypes";
+import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import {
   reportWorkflowStarted,
@@ -214,6 +210,7 @@ import type { RunLifecycleInstancePort } from "./orchestration/RunLifecycleServi
 import type { DashboardHostActions, FileWatcherFactory } from "./HostPorts";
 import type { RunViewPublisherInstance } from "./orchestration/RunViewPublisher";
 import {
+  buildTerminalStartedMessage,
   buildTerminalEndedMessage,
   buildTerminalRemovedMessage,
   getPtyProcessManager,
@@ -3855,19 +3852,7 @@ export class WorkflowInstance
         continue;
       }
       session.parallelGroupId = group.id;
-      const terminalStartedMessage: TerminalStartedMessage = {
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
-        workflowId: session.workflowId,
-        sessionId: session.id,
-        stepName: session.stepName,
-        stepIndex: session.stepIndex,
-        kind: session.kind,
-        promptNumber: session.promptNumber,
-        harnessId: session.harnessId,
-        parallelGroupId: group.id,
-        shellKind: session.shellKind,
-        controllerClientId: session.controllerClientId,
-      };
+      const terminalStartedMessage = buildTerminalStartedMessage(session);
       ptyPostMessage(terminalStartedMessage);
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] Adopted PTY session ${session.id.slice(0, 8)} ` +

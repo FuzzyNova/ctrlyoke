@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-10 by smell-hunt pass 12 (code review, not a user report)
 - **Area:** `src/core/WorkflowOrchestrator.ts` (`replayTerminalSessionsTo`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -308,6 +308,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - `TerminalStartedMessage` hand-built from a live `PtySession` in six places. The
     orchestrator's replay copy drops `shellKind` (filed:
     `dev/bugs/backlog/terminal-replay-drops-shell-kind.md`).
+    Landed: added `buildTerminalStartedMessage` in `PtyProcessManager` and routed
+    all six existing-session copies through it; replay now preserves `shellKind`.
 
   Still open for a later pass: `WorkspaceViewerHeader.getWorkspaceFilePath` vs
   `fileBrowserShared.toWorkspaceRelative` (they differ on a path equal to the root and on

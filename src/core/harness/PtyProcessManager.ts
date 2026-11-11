@@ -24,6 +24,7 @@ import {
   type TerminalSessionStatus,
 } from "../../types/DashboardConstants";
 import type {
+  TerminalStartedMessage,
   TerminalEndedMessage,
   TerminalRemovedMessage,
 } from "../../types/WebviewMessageTypes";
@@ -430,6 +431,25 @@ export class PtySession {
       this.reconnectBufferSize -= dropped.length;
     }
   }
+}
+
+/** Build the canonical started message for an existing PTY session. */
+export function buildTerminalStartedMessage(
+  session: PtySession
+): TerminalStartedMessage {
+  return {
+    type: MESSAGE_TYPES.TERMINAL_STARTED,
+    workflowId: session.workflowId,
+    sessionId: session.id,
+    stepName: session.stepName,
+    stepIndex: session.stepIndex,
+    kind: session.kind,
+    promptNumber: session.promptNumber,
+    harnessId: session.harnessId,
+    parallelGroupId: session.parallelGroupId,
+    shellKind: session.shellKind,
+    controllerClientId: session.controllerClientId,
+  };
 }
 
 export interface SpawnPtyOptions {

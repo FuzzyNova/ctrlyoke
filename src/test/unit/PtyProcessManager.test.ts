@@ -5,6 +5,7 @@ import {
   PtyProcessManager,
   PtySession,
   buildTerminalEndedMessage,
+  buildTerminalStartedMessage,
   resolveEndedTerminalStatus,
   type PtyDimensionsPersistence,
 } from "../../core/harness/PtyProcessManager";
@@ -16,6 +17,49 @@ import {
 } from "../../types/DashboardConstants";
 
 suite("PtyProcessManager spawn dimensions", () => {
+  test("builds started messages from AI CLI and shell sessions", () => {
+    const pty = {} as IPty;
+    const aiSession = new PtySession(
+      "ai",
+      "workflow",
+      "step",
+      2,
+      SESSION_KINDS.AI_CLI,
+      pty,
+      3,
+      "claude-cli"
+    );
+    assert.deepStrictEqual(buildTerminalStartedMessage(aiSession), {
+      type: MESSAGE_TYPES.TERMINAL_STARTED,
+      workflowId: "workflow",
+      sessionId: "ai",
+      stepName: "step",
+      stepIndex: 2,
+      kind: SESSION_KINDS.AI_CLI,
+      promptNumber: 3,
+      harnessId: "claude-cli",
+      parallelGroupId: undefined,
+      shellKind: undefined,
+      controllerClientId: undefined,
+    });
+    const shellSession = new PtySession(
+      "shell",
+      "workflow",
+      "terminal",
+      -1,
+      SESSION_KINDS.SHELL,
+      pty,
+      undefined,
+      undefined,
+      undefined,
+      "bash"
+    );
+    assert.strictEqual(
+      buildTerminalStartedMessage(shellSession).shellKind,
+      "bash"
+    );
+  });
+
   test("defaults to 220x50 when no size has been persisted or observed", () => {
     const manager = new PtyProcessManager();
     assert.deepStrictEqual(manager.getSpawnDimensions(), {
