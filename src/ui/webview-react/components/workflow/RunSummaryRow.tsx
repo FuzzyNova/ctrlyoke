@@ -4,6 +4,9 @@ import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import {
   WorkflowRowLayout,
   RowActionRail,
+  WorkflowRowTrailing,
+  WORKFLOW_ROW_CONTAINER_CLASS,
+  ROW_ACTION_BUTTON_CLASS,
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
@@ -168,7 +171,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       aria-selected={isViewed}
       aria-label={accessibleName}
       title={accessibleName}
-      className={`run-panel-row group flex items-center gap-2 px-2 py-2 text-sm transition-colors ${
+      className={`run-panel-row ${WORKFLOW_ROW_CONTAINER_CLASS} group px-2 py-2 text-sm transition-colors ${
         isViewed
           ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"
@@ -231,22 +234,24 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
 
       {/* Delete track is reserved on every row (draft and executing runs can't
           be deleted) so the time column stays aligned down the list. */}
-      <RowActionRail>
-        {canDelete && (
-          <button
-            type="button"
-            title="Delete run"
-            aria-label={`Delete ${label}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete?.();
-            }}
-            className="flex h-5 w-5 items-center justify-center rounded-sm text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100"
-          >
-            <Icon name="trash" className="text-xs" />
-          </button>
-        )}
-      </RowActionRail>
+      <WorkflowRowTrailing>
+        <RowActionRail>
+          {canDelete && (
+            <button
+              type="button"
+              title="Delete run"
+              aria-label={`Delete ${label}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete?.();
+              }}
+              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100`}
+            >
+              <Icon name="trash" className="text-xs" />
+            </button>
+          )}
+        </RowActionRail>
+      </WorkflowRowTrailing>
     </div>
   );
 };

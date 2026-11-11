@@ -101,9 +101,7 @@ describe("RunSummaryRow", () => {
 
   it("shows run number, step count, state, and time, full text throughout", () => {
     const { container } = renderRow("stacked");
-    expect(
-      container.querySelector(".workflow-row-primary-stacked")
-    ).not.toBeNull();
+    expect(container.querySelector(".workflow-row-primary")).not.toBeNull();
     expect(screen.getByText("Run 14")).toBeInTheDocument();
     expect(screen.getByText("4 steps")).toBeInTheDocument();
     expect(screen.getByText(EXECUTION_STATES.COMPLETED)).toBeInTheDocument();

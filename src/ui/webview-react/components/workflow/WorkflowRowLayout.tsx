@@ -105,7 +105,7 @@ export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
             event.stopPropagation();
             drill.onDrill();
           }}
-          className="cy-dropdown-row flex h-8 items-center gap-0.5 rounded-sm px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
+          className="cy-dropdown-row flex h-5 items-center gap-0.5 rounded-sm px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
         >
           <span className="truncate">{drill.label}</span>
           <Icon name="chevron-right" className="block text-xxs leading-none" />
@@ -116,12 +116,12 @@ export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
 };
 
 /**
- * RowActionRail - the fixed-width trailing cluster every row kind ends with
+ * RowActionRail - the fixed-width action cluster every row kind ends with
  * (favourite/remove, pause/stop, delete-run).
  *
  * Fixed rather than content-sized for the same reason as the run-indicator
- * track: these siblings sit outside the primary button's grid, so any
- * difference in their total width shifts that row's whole metadata block
+ * track: it shares the metadata line, so any difference in its width moves
+ * where that row's metadata truncates and where its run indicator sits
  * relative to its neighbours.
  */
 export const RowActionRail: React.FC<{ children?: React.ReactNode }> = ({
@@ -131,6 +131,36 @@ export const RowActionRail: React.FC<{ children?: React.ReactNode }> = ({
     className="flex shrink-0 items-center justify-end gap-1"
     style={{ width: WORKFLOW_ROW_TRACKS.actions }}
   >
+    {children}
+  </span>
+);
+
+/**
+ * Shape of every icon button in a {@link RowActionRail}. One fixed 20px box
+ * for all row kinds, so a running row's pause/stop sit exactly over a recent
+ * row's favourite/remove in the region beneath.
+ */
+export const ROW_ACTION_BUTTON_CLASS =
+  "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm px-0 py-0 leading-none";
+
+/**
+ * Class every workflow dropdown row container carries. The container — not
+ * the primary button — owns the row grid, because the trailing controls are
+ * the button's siblings (see `.workflow-row` in `globals.css`).
+ */
+export const WORKFLOW_ROW_CONTAINER_CLASS = "workflow-row";
+
+/**
+ * WorkflowRowTrailing - the right end of a row's second (metadata) line:
+ * the run indicator, then the action rail.
+ *
+ * Kept off the first line on purpose: there, the controls ate into the name's
+ * width on a narrow dropdown, while the metadata line has room to give.
+ */
+export const WorkflowRowTrailing: React.FC<{ children?: React.ReactNode }> = ({
+  children,
+}) => (
+  <span className="workflow-row-trailing flex items-center gap-2">
     {children}
   </span>
 );
@@ -157,7 +187,9 @@ export function composeRowAccessibleName(
  *
  * Owning it here is what keeps the three row kinds from drifting: each caller
  * supplies the same set of content pieces and this lays them out identically,
- * name on its own line with metadata beneath.
+ * name and state badge on the first line, metadata beneath. The caller's row
+ * container carries {@link WORKFLOW_ROW_CONTAINER_CLASS} and ends with a
+ * {@link WorkflowRowTrailing}, which lands at the right of the metadata line.
  *
  * Callers pass full-length text content at every tier — abbreviating `4 steps`
  * to `4` saves ~40px on a line that has already been given its own row. The
@@ -183,7 +215,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   metaBadge,
 }) => {
   const visibleUsage = tier === WORKFLOW_ROW_TIERS.COMPACT ? undefined : usage;
-  const buttonClassName = `workflow-row-primary workflow-row-primary-stacked min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
+  const buttonClassName = `workflow-row-primary min-w-0 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
 
   // Absent metadata is omitted rather than reserved, so the second line never
   // shows a dangling separator for a lineage with no steps or no timestamp.
@@ -214,7 +246,9 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
       >
         {label}
       </span>
-      <span className="workflow-row-cell-badge flex justify-end">{badge}</span>
+      <span className="workflow-row-cell-badge flex justify-end justify-self-end">
+        {badge}
+      </span>
       <span className="workflow-row-cell-meta flex min-w-0 items-center gap-1 overflow-hidden text-xs text-description-fg">
         {metaParts.map((part, index) => (
           <React.Fragment key={part.key}>

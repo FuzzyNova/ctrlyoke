@@ -166,12 +166,12 @@ export const EDITOR_BUTTON_SIZES = {
 } as const;
 
 /**
- * Fixed track widths (px) for the workflow row layout's stacked first line
- * (harness icon, name, state badge) — every row in the dropdown (workflow
- * list, running region, run panel) uses this single two-line layout
- * regardless of dropdown width; only the badge/run-indicator form changes
- * below `WORKFLOW_DROPDOWN_COMPACT_WIDTH`. These are the source of truth for
- * that breakpoint, computed below.
+ * Fixed track widths (px) for the workflow row layout — every row in the
+ * dropdown (workflow list, running region, run panel) uses one two-line
+ * layout regardless of dropdown width: harness icon, name and state badge on
+ * the first line; metadata, run indicator and action rail on the second. Only
+ * the badge's form changes below `WORKFLOW_DROPDOWN_COMPACT_WIDTH`. These are
+ * the source of truth for that breakpoint, computed below.
  */
 export const WORKFLOW_ROW_TRACKS = {
   /** Mirrors the fixed `14px` harness-icon track; here so the budget below is complete. */
@@ -185,7 +185,7 @@ export const WORKFLOW_ROW_TRACKS = {
    * sits its badge tens of pixels out of line with its neighbours.
    */
   runIndicator: 52,
-  /** Trailing action rail: two icon buttons and the gap between them. */
+  /** Trailing action rail: two 20px icon buttons and the gap between them. */
   actions: 44,
 } as const;
 
@@ -195,18 +195,25 @@ const WORKFLOW_ROW_RAIL_GAP = 8;
 const WORKFLOW_ROW_MIN_NAME_WIDTH = 140;
 
 /**
- * Everything the stacked row's first line spends before the name gets a
- * pixel. The second (meta) line is free — it spans the name and badge
- * columns together and truncates its own content — so the first line is what
- * the breakpoint below has to be sized for.
+ * Everything the row's first line spends before the name gets a pixel: only
+ * the harness icon and the state badge. The run indicator and action rail sit
+ * at the end of the second (metadata) line, which truncates its own content,
+ * so the first line is what the breakpoint below has to be sized for.
  */
 const workflowStackedFirstLineWidth =
   WORKFLOW_ROW_HORIZONTAL_PADDING +
-  2 * WORKFLOW_ROW_RAIL_GAP +
   WORKFLOW_ROW_TRACKS.harness +
-  2 * WORKFLOW_ROW_COLUMN_GAP +
-  WORKFLOW_ROW_TRACKS.state +
+  3 * WORKFLOW_ROW_COLUMN_GAP +
+  WORKFLOW_ROW_TRACKS.state;
+
+/**
+ * Width (px) of the second line's trailing cluster (`WorkflowRowTrailing`)
+ * when the run-indicator track is reserved. The metadata takes whatever the
+ * line has left.
+ */
+export const WORKFLOW_ROW_TRAILING_WIDTH =
   WORKFLOW_ROW_TRACKS.runIndicator +
+  WORKFLOW_ROW_RAIL_GAP +
   WORKFLOW_ROW_TRACKS.actions;
 
 /**
@@ -218,13 +225,12 @@ const workflowStackedFirstLineWidth =
 export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
 
 /**
- * Width (px) below which stacked rows drop their state badge to its
- * icon-only form (and their run indicator to `#12`).
+ * Width (px) below which rows drop their state badge to its icon-only form.
  *
  * Every row already stacks its name onto its own line; this is the only
- * remaining breakpoint. The stacked first-line budget is computed from the
- * harness icon, full-text badge, run indicator, action rail, and their gaps.
- * Dropping the badge to its icon returns ~60px of that width.
+ * remaining breakpoint. The first-line budget is computed from the harness
+ * icon, full-text badge, and their gaps. Dropping the badge to its icon
+ * returns ~60px of that width.
  *
  * Set so the name keeps ~140px on the stacked first line while the badge still
  * carries text; below it the icon buys that width back instead. See
@@ -236,7 +242,7 @@ export const WORKFLOW_DROPDOWN_COMPACT_WIDTH =
 /**
  * How much a workflow dropdown row compacts at the width it is rendered at.
  * Every row is always two lines (name, then metadata) — `compact` additionally
- * drops the state badge to its icon-only form and the run indicator to `#12`.
+ * drops the state badge to its icon-only form.
  */
 export type WorkflowRowTier =
   (typeof WORKFLOW_ROW_TIERS)[keyof typeof WORKFLOW_ROW_TIERS];

@@ -8,6 +8,9 @@ import {
   WorkflowRowLayout,
   RunIndicatorCell,
   RowActionRail,
+  WorkflowRowTrailing,
+  WORKFLOW_ROW_CONTAINER_CLASS,
+  ROW_ACTION_BUTTON_CLASS,
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
@@ -208,7 +211,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
       role="listitem"
       aria-label={accessibleName}
       title={workflow.address.workflowKey}
-      className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${
+      className={`workflow-menu-item ${WORKFLOW_ROW_CONTAINER_CLASS} group px-2 py-2 text-left text-sm transition-colors ${
         isCurrent
           ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"
@@ -271,63 +274,71 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         }
       />
 
-      {/* Run indicator — sibling of the primary button, not part of its grid.
+      <WorkflowRowTrailing>
+        {/* Run indicator — sibling of the primary button, not inside it.
           Drills into the run panel without selecting/loading the lineage. */}
-      {showRunIndicatorTrack && (
-        <RunIndicatorCell
-          runNav={workflow.runNav}
-          workflowName={workflow.workflowName}
-          onDrill={
-            onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
-          }
-        />
-      )}
+        {showRunIndicatorTrack && (
+          <RunIndicatorCell
+            runNav={workflow.runNav}
+            workflowName={workflow.workflowName}
+            onDrill={
+              onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
+            }
+          />
+        )}
 
-      <RowActionRail>
-        {onToggleFavorite && (
-          <button
-            type="button"
-            title={
-              workflow.isFavorite ? "Remove from favorites" : "Add to favorites"
-            }
-            aria-label={
-              workflow.isFavorite ? "Remove from favorites" : "Add to favorites"
-            }
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite(workflow.address);
-            }}
-            className={`flex h-8 w-6 shrink-0 items-center justify-center rounded-sm px-0 py-0 leading-none transition-colors ${
-              workflow.isFavorite
-                ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-                : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-            }`}
-          >
-            <Icon
-              name={
-                workflow.isFavorite ? "codicon-star-full" : "codicon-star-empty"
+        <RowActionRail>
+          {onToggleFavorite && (
+            <button
+              type="button"
+              title={
+                workflow.isFavorite
+                  ? "Remove from favorites"
+                  : "Add to favorites"
               }
-              className="block leading-none"
-            />
-          </button>
-        )}
+              aria-label={
+                workflow.isFavorite
+                  ? "Remove from favorites"
+                  : "Add to favorites"
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(workflow.address);
+              }}
+              className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${
+                workflow.isFavorite
+                  ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+                  : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+              }`}
+            >
+              <Icon
+                name={
+                  workflow.isFavorite
+                    ? "codicon-star-full"
+                    : "codicon-star-empty"
+                }
+                className="block leading-none"
+              />
+            </button>
+          )}
 
-        {/* Delete button — visible only on row hover */}
-        {onRemove && (
-          <button
-            type="button"
-            title="Remove from history"
-            aria-label="Remove from history"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove(workflow.address);
-            }}
-            className="flex h-8 w-6 shrink-0 items-center justify-center rounded-sm px-0 py-0 leading-none text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100"
-          >
-            <Icon name="trash" className="block leading-none" />
-          </button>
-        )}
-      </RowActionRail>
+          {/* Delete button — visible only on row hover */}
+          {onRemove && (
+            <button
+              type="button"
+              title="Remove from history"
+              aria-label="Remove from history"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(workflow.address);
+              }}
+              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100`}
+            >
+              <Icon name="trash" className="block leading-none" />
+            </button>
+          )}
+        </RowActionRail>
+      </WorkflowRowTrailing>
     </div>
   );
 };

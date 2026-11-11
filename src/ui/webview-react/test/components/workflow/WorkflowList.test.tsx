@@ -297,6 +297,13 @@ describe("WorkflowList row action scoping", () => {
 
     expect(favoriteButton).toBeInTheDocument();
     expect(removeButton).toBeInTheDocument();
+    // The actions sit at the end of the metadata line, outside the primary
+    // button, so they never take width from the name line.
+    expect(workflowRow).toHaveClass("workflow-row");
+    for (const action of [favoriteButton, removeButton]) {
+      expect(action.closest(".workflow-row-trailing")).not.toBeNull();
+      expect(action.closest(".workflow-row-primary")).toBeNull();
+    }
 
     fireEvent.click(favoriteButton);
     fireEvent.click(removeButton);

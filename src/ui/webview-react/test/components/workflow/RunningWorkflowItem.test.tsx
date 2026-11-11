@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunningWorkflowItem } from "@components/workflow/RunningWorkflowItem";
+import { ROW_ACTION_BUTTON_CLASS } from "@components/workflow/WorkflowRowLayout";
 import { EXECUTION_STATES, RUNNER_IDS } from "@/types/messages";
 import { usePauseRequestStore } from "@store/pauseRequestStore";
 import { workflowRunAddress, workflowViewAddressKey } from "@utils/viewAddress";
@@ -25,6 +26,36 @@ describe("RunningWorkflowItem", () => {
     cleanup();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it("puts pause/stop on the metadata line in the shared action-button box", () => {
+    // Running rows must line up with the recent rows beneath them: same row
+    // grid, controls at the end of the second line, same 20px button box as
+    // the favourite/remove buttons.
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "aligned",
+          workflowKey: "workflow-a" as never,
+          runRef: "run-1" as never,
+          workflowName: "Aligned workflow",
+          filePath: "aligned.ctrlyoke.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 1,
+        }}
+        isCurrent={false}
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+    expect(screen.getByRole("listitem")).toHaveClass("workflow-row");
+    for (const name of ["Pause", "Stop"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button.closest(".workflow-row-trailing")).not.toBeNull();
+      expect(button.closest(".workflow-row-primary")).toBeNull();
+      expect(button).toHaveClass(...ROW_ACTION_BUTTON_CLASS.split(" "));
+    }
   });
 
   it("renders an unanswered pause request exactly like the pausing state", () => {

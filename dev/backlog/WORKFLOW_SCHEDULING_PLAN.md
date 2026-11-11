@@ -22,6 +22,11 @@
 > wrappers); bookkeeping writes go through `updateDescriptorMetadata`; and descriptor
 > compatibility is spelled out against the persisted-schema rules.
 
+> **2026-11-11:** The dropdown rows were restructured to two full-width lines
+> (name + state badge, then metadata + run selector + actions), which settles where
+> the schedule button goes: a third slot in the row's action rail on line 2. The
+> plan also adds a context-menu entry. See "UX" below.
+
 ## TL;DR
 
 - **Substrate decided (per product owner):** a schedule fires **only while a
@@ -57,10 +62,12 @@
   `execution.maxPromptTimeoutSec`, and `execution.scriptTimeoutSec`, including
   their existing `-1` semantics where allowed. Scheduling adds no per-schedule
   or workflow-authored limits hierarchy.
-- **UX:** schedule is a per-workflow property, authored from a compact drawer on
-  the workflow row (the brief's option A), surfaced back as a **"Scheduled"
-  section** in the same dropdown for management — _not_ a whole separate page,
-  at least not first.
+- **UX:** schedule is a per-workflow property, authored from a compact popover
+  opened by a **clock button in the row's action rail** (line 2:
+  `[run selector][schedule][star][trash]`) or a **"Schedule…" context-menu
+  entry** (the brief's option A). It is surfaced back as a **"Scheduled" section**
+  in the same dropdown for management, _not_ a whole separate page, at least not
+  first.
 
 ---
 
@@ -130,12 +137,51 @@ already the per-workflow action surface (favorite ★, delete 🗑 in
 
 ### Authoring (the brief's option A — recommended)
 
-Add a **schedule affordance** to each workflow row (both `RunningWorkflowItem`
-and the recent rows in `WorkflowList.tsx`), beside the favorite/delete buttons:
+Every dropdown row is two full-width lines (`WorkflowRowLayout` +
+`WorkflowRowTrailing`, `.workflow-row` in `globals.css`):
 
-- A **clock/schedule icon** button. **Lit/filled** when the workflow has an
-  active schedule (mirrors the favorite-star lit/empty pattern already in
-  `WorkflowList.tsx`), with the **next run time** as its `title`.
+```
+[harness] [workflow name ......................] [state badge]
+[harness] [steps · tokens · time · worktree/terminal] [run selector][schedule][star][trash]
+```
+
+The run selector and the action rail (`RowActionRail`) sit at the end of the
+**second** line, so they never take width from the name. The schedule button goes
+in that rail, **between the run selector and the star**:
+
+- **Recent rows** (`RecentWorkflowRow` in `WorkflowList.tsx`):
+  `[schedule][star][trash]`.
+- **Running rows** (`RunningWorkflowItem.tsx`): `[schedule][pause|continue][stop]`.
+  The schedule slot is the first rail slot on both row kinds, so the clock lines
+  up across the pinned running region and the recent list beneath it. A
+  running lineage can still have its schedule viewed and edited; only the fire is
+  skipped (see "Overlapping runs").
+- **Run-panel rows** (`RunSummaryRow.tsx`) get **no** schedule button. Those rows
+  are runs, and a schedule belongs to the lineage. The context-menu entry below
+  still reaches it from there, the same way favourites do.
+
+Button behaviour:
+
+- A **clock** codicon (`codicon-clock`, which exists in the bundled
+  `@vscode/codicons`). It is **lit and always visible** when the lineage has an
+  enabled schedule, and hover-revealed otherwise. This is the favourite star's
+  lit/empty pattern, and it uses the shared `ROW_ACTION_BUTTON_CLASS` box. A
+  paused (`enabled: false`) schedule shows a dimmed clock, still always visible,
+  so a kept-but-paused schedule doesn't vanish.
+- `title` / `aria-label`: "Next run: <local time>" when scheduled,
+  "Schedule workflow…" otherwise.
+- **Width:** the rail is a fixed-width track (`WORKFLOW_ROW_TRACKS.actions`,
+  currently two 20px buttons + gap = 44). It grows to three buttons
+  (3 × 20 + 2 × 4 = **68**), and `WORKFLOW_ROW_TRAILING_WIDTH` follows. The rail
+  lives on the metadata line, so this costs the metadata truncation point, not the
+  name. `WORKFLOW_DROPDOWN_COMPACT_WIDTH` only budgets the first line and doesn't
+  move. Update the second-line budget test in `workflowRowWidths.test.ts`.
+  Running rows reserve the same slot even when unscheduled. A rail that is
+  content-sized per row kind would offset the run selector between the two
+  regions.
+- Touch: hover-revealed buttons are invisible on touch, so the context-menu
+  entry (reached by long-press, `useLongPress`) is the touch path to an
+  unscheduled lineage. That is the same arrangement favourites have today.
 - Clicking opens a compact **schedule editor** — a small popover/drawer anchored
   to the row (not a full accordion that reflows the whole list) containing:
   - **Frequency**: Once · Daily · Weekly (weekday multiselect) · Monthly · Custom
@@ -149,6 +195,29 @@ Prefer a **popover over the row's own accordion**: the dropdown is already dense
 and width-locked (`syncWorkflowRowWidthLock` in `WorkflowSwitcher.tsx`), and an
 inline accordion that pushes siblings down fights that layout. A popover keyed to
 the row avoids reflow.
+
+### Context-menu entry
+
+Add a lineage-scoped item to `useWorkflowContextMenu.tsx`, in the group with
+**Add to / Remove from Favorites**, directly above it:
+
+- Label **"Schedule…"** when the lineage has no schedule, and **"Edit Schedule…"**
+  when it has one. Icon `codicon-clock`. `title` gives the next run time when one
+  exists.
+- It appears on **every** surface the menu opens from: list rows, running rows,
+  the header, and run-panel rows. A schedule is lineage-scoped like `isFavorite`,
+  which the menu already offers on run-panel rows for the same reason.
+- It is never disabled. A running or unstarted lineage can be scheduled, and a
+  draft-only lineage fires through `executeDraftAtAddress`.
+- `onClick` closes the dropdown menu and opens the same `ScheduleEditor` popover
+  the row button opens, anchored to the menu's `opener` element. Fall back to the
+  row when the menu opened at pointer coordinates.
+- Plumbing: add `schedule?` (or a `hasSchedule`/`nextRunAt` pair) to
+  `WorkflowContextMenuTarget`, filled from the `RecentWorkflow` entry by the same
+  three builders that fill `isFavorite` today: `RecentWorkflowRow`,
+  `RunningWorkflowItem`'s `lineage`, and `RunSummaryRow` (via `RunPanel`). Also
+  add an `onEditSchedule(target, opener)` option beside `onToggleFavorite` /
+  `onDuplicate`.
 
 ### Management (lightweight, in the same dropdown)
 
@@ -381,11 +450,16 @@ ripples across:
   both the VS Code webview and the hosted-server WebSocket transport unchanged).
 - `src/ui/webview-react/store/uiStore.ts` — extend `RecentWorkflow`
   (`schedule?`, `nextRunAt?`) and store actions.
-- `src/ui/webview-react/components/workflow/` — `WorkflowList.tsx` +
-  `RunningWorkflowItem.tsx` (row icon), a new `ScheduleEditor` popover, and the
-  "Scheduled" section in `WorkflowSwitcher.tsx`. Include a plain-language note in
-  the editor that runs only fire while ctrlyoke/VS Code (or the server) is
-  running.
+- `src/ui/webview-react/components/workflow/`: `WorkflowList.tsx` and
+  `RunningWorkflowItem.tsx` get the clock button as the first `RowActionRail`
+  slot. Add a new `ScheduleEditor` popover, and the "Scheduled" section in
+  `WorkflowSwitcher.tsx`. The editor carries a plain-language note that runs only
+  fire while ctrlyoke/VS Code (or the server) is running.
+- `src/ui/webview-react/constants.ts`: widen `WORKFLOW_ROW_TRACKS.actions` from
+  two buttons to three (44 → 68). Update `workflowRowWidths.test.ts` to match.
+- `src/ui/webview-react/hooks/useWorkflowContextMenu.tsx`: the "Schedule… /
+  Edit Schedule…" item, plus the `WorkflowContextMenuTarget` field and the
+  `onEditSchedule` option (see "Context-menu entry").
 - Tests: scheduler + next-run util in `src/test/**`; UI in
   `src/ui/webview-react/test/**`.
 

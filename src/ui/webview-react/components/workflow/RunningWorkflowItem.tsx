@@ -14,6 +14,9 @@ import {
   WorkflowRowLayout,
   RunIndicatorCell,
   RowActionRail,
+  WorkflowRowTrailing,
+  WORKFLOW_ROW_CONTAINER_CLASS,
+  ROW_ACTION_BUTTON_CLASS,
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
@@ -152,7 +155,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       // Padding matches the recent rows below exactly — the two regions are
       // separate scroll containers, so any difference in row padding offsets
       // every column between them.
-      className={`running-workflow-item group flex items-center gap-2 px-2 py-2 text-sm transition-colors ${
+      className={`running-workflow-item ${WORKFLOW_ROW_CONTAINER_CLASS} group px-2 py-2 text-sm transition-colors ${
         isCurrent
           ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"
@@ -216,85 +219,87 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         }
       />
 
-      {/* Run indicator — same track and position as the recent rows', so a
+      <WorkflowRowTrailing>
+        {/* Run indicator — same track and position as the recent rows', so a
           running lineage's earlier runs stay one click away and the columns
           to its right line up across both regions. */}
-      {showRunIndicatorTrack && (
-        <RunIndicatorCell
-          runNav={runNav}
-          workflowName={workflow.workflowName}
-          onDrill={onDrillIntoRuns}
-        />
-      )}
+        {showRunIndicatorTrack && (
+          <RunIndicatorCell
+            runNav={runNav}
+            workflowName={workflow.workflowName}
+            onDrill={onDrillIntoRuns}
+          />
+        )}
 
-      {/* Action buttons — pause/stop for locally-owned workflows only; an
+        {/* Action buttons — pause/stop for locally-owned workflows only; an
           externally-owned row shows its ownership badge in the meta line
           instead (see WorkflowRowLayout's `metaBadge`) and has no local
           controls to offer here. */}
-      <RowActionRail>
-        {workflow.externalOwner == null &&
-          (isRunning || isPausing || isPaused) && (
-            <>
-              {isRunning ? (
-                <button
-                  type="button"
-                  title="Pause"
-                  aria-label="Pause"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPause();
-                  }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className="p-0.5 rounded-sm text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-                >
-                  <Icon name="debug-pause" />
-                </button>
-              ) : isPausing ? (
-                <button
-                  type="button"
-                  title="Cancel pause"
-                  aria-label="Cancel pause"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCancelPause();
-                  }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className="p-0.5 rounded-sm text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-                >
-                  <Icon name="debug-continue" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  title="Continue"
-                  aria-label="Continue"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onResume();
-                  }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className="p-0.5 rounded-sm text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-                >
-                  <Icon name="debug-continue" />
-                </button>
-              )}
+        <RowActionRail>
+          {workflow.externalOwner == null &&
+            (isRunning || isPausing || isPaused) && (
+              <>
+                {isRunning ? (
+                  <button
+                    type="button"
+                    title="Pause"
+                    aria-label="Pause"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPause();
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors`}
+                  >
+                    <Icon name="debug-pause" />
+                  </button>
+                ) : isPausing ? (
+                  <button
+                    type="button"
+                    title="Cancel pause"
+                    aria-label="Cancel pause"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancelPause();
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors`}
+                  >
+                    <Icon name="debug-continue" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    title="Continue"
+                    aria-label="Continue"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onResume();
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors`}
+                  >
+                    <Icon name="debug-continue" />
+                  </button>
+                )}
 
-              <button
-                type="button"
-                title="Stop"
-                aria-label="Stop"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStop();
-                }}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="p-0.5 rounded-sm text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
-              >
-                <Icon name="debug-stop" />
-              </button>
-            </>
-          )}
-      </RowActionRail>
+                <button
+                  type="button"
+                  title="Stop"
+                  aria-label="Stop"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStop();
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors`}
+                >
+                  <Icon name="debug-stop" />
+                </button>
+              </>
+            )}
+        </RowActionRail>
+      </WorkflowRowTrailing>
     </div>
   );
 };

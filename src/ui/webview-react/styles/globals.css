@@ -1674,36 +1674,70 @@ button .cy-lucide-icon {
   /* Row layout for the workflow dropdown's rows (workflow list, running
      region, and run panel — see WorkflowRowLayout.tsx).
 
-     Every row is two lines: the name gets its own line, and metadata (step
-     count, usage, time) collapses onto a second, muted line beneath it, with
-     the harness icon spanning both. Below WORKFLOW_DROPDOWN_COMPACT_WIDTH the
-     state badge additionally drops to its icon-only form to buy the name
-     column back some width. */
-  .workflow-row-primary {
+     Every row is two full-width lines, with the harness icon spanning both:
+
+       [icon] [name ............................] [state badge]
+       [icon] [meta: steps · usage · time · glyphs] [run nav][actions]
+
+     The two lines size independently: the name gets everything except the
+     badge, and the metadata everything except the trailing controls. The
+     trailing controls (WorkflowRowTrailing) are a *sibling* of the primary
+     button — a button can't contain buttons — so the row container owns the
+     grid and the primary button joins it as a subgrid spanning every cell,
+     with the trailing cluster layered over its bottom-right cell.
+
+     Columns: icon | flexible | slack | right. The badge sits alone in `right`
+     and the trailing cluster spans `slack + right`, so `slack` absorbs only
+     however much wider the trailing cluster is than the badge; the name spans
+     `flexible + slack` and so never pays for the trailing controls.
+
+     Below WORKFLOW_DROPDOWN_COMPACT_WIDTH the state badge drops to its
+     icon-only form to buy the name back some width. */
+  .workflow-row {
     display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto;
     column-gap: 0.25rem;
+    row-gap: 1px;
     align-items: center;
   }
 
-  .workflow-row-primary-stacked {
-    grid-template-columns: 14px minmax(0, 1fr) max-content;
-    grid-template-areas:
-      "icon label badge"
-      "icon meta  meta";
-    row-gap: 1px;
+  .workflow-row > .workflow-row-primary {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    align-items: center;
   }
 
-  .workflow-row-primary-stacked > .workflow-row-cell-icon {
-    grid-area: icon;
+  .workflow-row-primary > .workflow-row-cell-icon {
+    grid-column: 1;
+    grid-row: 1 / -1;
   }
-  .workflow-row-primary-stacked > .workflow-row-cell-label {
-    grid-area: label;
+  .workflow-row-primary > .workflow-row-cell-label {
+    grid-column: 2 / span 2;
+    grid-row: 1;
   }
-  .workflow-row-primary-stacked > .workflow-row-cell-badge {
-    grid-area: badge;
+  .workflow-row-primary > .workflow-row-cell-badge {
+    grid-column: 4;
+    grid-row: 1;
   }
-  .workflow-row-primary-stacked > .workflow-row-cell-meta {
-    grid-area: meta;
+  .workflow-row-primary > .workflow-row-cell-meta {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  /* Layered above the primary button, whose subgrid also covers this cell.
+     The negative margin lets 20px controls sit on the ~16px metadata line
+     without making the row taller than the virtualizer's estimate. */
+  .workflow-row > .workflow-row-trailing {
+    grid-column: 3 / span 2;
+    grid-row: 2;
+    justify-self: end;
+    position: relative;
+    z-index: 1;
+    margin-block: -2px;
   }
 
   /* ── File / SCM / commit list rows ──────────────────────────────────────────

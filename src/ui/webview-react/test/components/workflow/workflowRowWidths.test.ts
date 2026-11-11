@@ -14,6 +14,7 @@ import {
   WORKFLOW_DROPDOWN_COMPACT_WIDTH,
   WORKFLOW_DROPDOWN_TARGET_WIDTH,
   WORKFLOW_ROW_TRACKS,
+  WORKFLOW_ROW_TRAILING_WIDTH,
 } from "@/constants";
 
 // text-xs (12px): uppercase badge glyphs run ~7.0px.
@@ -32,9 +33,9 @@ describe("workflow row width budget", () => {
 
   it("keeps the trailing rails fixed so row kinds stay column-aligned", () => {
     // Running rows (pause/stop) and recent rows (favourite/remove) sit in
-    // separate scroll regions; their trailing siblings are outside the grid,
-    // so anything content-sized there would offset one region's badge column
-    // from the other's. Two 20px icon buttons plus a 4px gap.
+    // separate scroll regions; anything content-sized at the end of their
+    // metadata line would move where one region's metadata truncates and
+    // where its run indicator sits. Two 20px icon buttons plus a 4px gap.
     expect(WORKFLOW_ROW_TRACKS.actions).toBeGreaterThanOrEqual(20 * 2 + 4);
     expect(WORKFLOW_ROW_TRACKS.runIndicator).toBeGreaterThanOrEqual(
       "#1042".length * 6.4 + INDICATOR_CHROME
@@ -58,22 +59,25 @@ describe("workflow row width budget", () => {
 });
 
 /**
- * Everything the stacked row's first line spends before the name gets a
- * pixel. The second (meta) line is free — it spans the name and badge
- * columns together and truncates its own content — so the first line is what
- * the breakpoint has to be sized for.
+ * Everything the row's first line spends before the name gets a pixel: the
+ * harness icon and the state badge only. The run indicator and action rail
+ * sit at the end of the second line, never beside the name.
  */
 function stackedFirstLineCost(badgeWidth: number): number {
   return (
     16 + // row px-2
-    2 * 8 + // gaps to the run-indicator and action rails
     WORKFLOW_ROW_TRACKS.harness +
-    2 * 4 + // column gaps: icon→label, label→badge
-    badgeWidth +
-    WORKFLOW_ROW_TRACKS.runIndicator +
-    WORKFLOW_ROW_TRACKS.actions
+    3 * 4 + // column gaps: icon→label, through the slack track, →badge
+    badgeWidth
   );
 }
+
+/** The second line's fixed cost before the metadata gets a pixel. */
+const secondLineCost =
+  16 + // row px-2
+  WORKFLOW_ROW_TRACKS.harness +
+  3 * 4 + // column gaps
+  WORKFLOW_ROW_TRAILING_WIDTH;
 
 describe("stacked first-line width budget", () => {
   it("keeps the name readable while the badge still carries text", () => {
@@ -93,5 +97,18 @@ describe("stacked first-line width budget", () => {
     // Even a 240px popup — the narrowest VS Code sidebar allows — still leaves
     // the name legible once the badge is an icon.
     expect(240 - stackedFirstLineCost(iconBadge)).toBeGreaterThanOrEqual(60);
+  });
+
+  it("does not charge the name for the run indicator or action rail", () => {
+    // The regression this layout fixes: on a narrow sidebar the trailing
+    // controls took half the first line. Now a 290px popup keeps well over
+    // half its width for the name even with a full-text badge.
+    expect(
+      290 - stackedFirstLineCost(WORKFLOW_ROW_TRACKS.state)
+    ).toBeGreaterThan(145);
+  });
+
+  it("leaves the metadata line readable beside the trailing controls", () => {
+    expect(240 - secondLineCost).toBeGreaterThanOrEqual(80);
   });
 });

@@ -1570,8 +1570,8 @@ describe("WorkflowSwitcher — loaded state", () => {
     );
     expect(favoriteButton).toHaveClass(
       "flex",
-      "h-8",
-      "w-6",
+      "h-5",
+      "w-5",
       "items-center",
       "justify-center",
       "px-0",

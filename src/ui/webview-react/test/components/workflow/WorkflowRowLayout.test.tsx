@@ -37,7 +37,7 @@ describe("WorkflowRowLayout", () => {
   it("renders the name on its own line with metadata on a second, muted line", () => {
     const { container } = renderLayout("stacked");
     const button = container.querySelector("button")!;
-    expect(button.className).toContain("workflow-row-primary-stacked");
+    expect(button.className).toContain("workflow-row-primary");
     expect(button.querySelector(".workflow-row-cell-label")?.textContent).toBe(
       "Fix login bug"
     );
@@ -52,7 +52,7 @@ describe("WorkflowRowLayout", () => {
   it("keeps the compact tier on the same grid, not a third layout", () => {
     const { container } = renderLayout("compact");
     expect(container.querySelector("button")?.className).toContain(
-      "workflow-row-primary-stacked"
+      "workflow-row-primary"
     );
   });
 
@@ -166,7 +166,7 @@ describe("RunIndicatorCell", () => {
     renderCell(drillable);
 
     const button = screen.getByRole("button", { name: /#7 —/ });
-    expect(button).toHaveClass("h-8", "items-center", "py-0", "leading-none");
+    expect(button).toHaveClass("h-5", "items-center", "py-0", "leading-none");
     expect(button.querySelector(".codicon")).toHaveClass(
       "block",
       "leading-none"
