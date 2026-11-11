@@ -6,7 +6,7 @@
  *
  * All I/O runs in the extension host (Node.js) — never in the webview.
  */
-import { isRecord as isPlainObject } from "./JsonTypeGuards";
+import { isRecord as isPlainObject, isStringArray } from "./JsonTypeGuards";
 
 import * as fs from "fs/promises";
 import { parse, type ParseError } from "jsonc-parser";
@@ -66,12 +66,6 @@ interface LocalConfigDescriptor {
     | "antigravity-json"
     | "opencode-json"
     | "codex-toml";
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-  );
 }
 
 function toStringRecord(value: unknown): Record<string, string> | undefined {

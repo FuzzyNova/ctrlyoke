@@ -23,6 +23,10 @@ import { withFileLock } from "../../../../utils/FileLockUtils";
 import { Log } from "../../../../utils/Log";
 import { providerSnapshotsPath } from "../../../../utils/UsagePaths";
 import {
+  ensurePrivateDirectory,
+  PRIVATE_FILE_MODE,
+} from "../../../../utils/PrivateFileModes";
+import {
   assertWritableSchema,
   CURRENT_SCHEMA_VERSIONS,
   isNewerSchemaError,
@@ -48,7 +52,6 @@ export interface HarnessUsageServiceOptions {
   isProviderRefreshEnabled?: () => boolean;
   shouldPersistObservedUsage?: () => boolean;
 }
-
 interface PersistedProviderUsage {
   schemaVersion: typeof PROVIDER_USAGE_SCHEMA_VERSION;
   snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>>;
@@ -492,11 +495,11 @@ export class HarnessUsageService {
         try {
           await fs.writeFile(tempPath, JSON.stringify(data, null, 2), {
             encoding: "utf8",
-            mode: 0o600,
+            mode: PRIVATE_FILE_MODE,
           });
-          await fs.chmod(tempPath, 0o600);
+          await fs.chmod(tempPath, PRIVATE_FILE_MODE);
           await renameWithTransientRetry(tempPath, this.providerSnapshotsFile);
-          await fs.chmod(this.providerSnapshotsFile, 0o600);
+          await fs.chmod(this.providerSnapshotsFile, PRIVATE_FILE_MODE);
         } catch (error) {
           await fs.unlink(tempPath).catch(() => undefined);
           throw error;
@@ -584,9 +587,4 @@ async function readPersistedProviderUsage(
     if (isNewerSchemaError(error)) throw error;
     return undefined;
   }
-}
-
-async function ensurePrivateDirectory(directory: string): Promise<void> {
-  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  await fs.chmod(directory, 0o700);
 }

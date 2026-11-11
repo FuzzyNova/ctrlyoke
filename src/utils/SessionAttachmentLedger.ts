@@ -14,6 +14,7 @@ import {
 import { projectStateRoot } from "./ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
 import { hasErrnoCode } from "./ErrorUtils";
+import { isStringArray } from "./JsonTypeGuards";
 
 /** The agents and skills a harness session has already been sent. */
 export interface SessionAttachments {
@@ -185,12 +186,6 @@ function union(
   added: readonly string[]
 ): string[] {
   return [...new Set([...(existing ?? []), ...added])];
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-  );
 }
 
 function isEntry(value: unknown): value is SessionAttachmentEntry {

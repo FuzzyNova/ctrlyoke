@@ -34,10 +34,13 @@ import {
 } from "./PersistedSchemaGuard";
 import { migrateToCurrent } from "./FormatMigrations";
 import { hasErrnoCode } from "./ErrorUtils";
+import {
+  ensurePrivateDirectory,
+  PRIVATE_DIRECTORY_MODE,
+  PRIVATE_FILE_MODE,
+} from "./PrivateFileModes";
 
 const PROJECT_METADATA_FILE_NAME = "project.json";
-const PRIVATE_DIRECTORY_MODE = 0o700;
-const PRIVATE_FILE_MODE = 0o600;
 const REGISTRY_LOCK_NAME = ".registry";
 /** `<slug>-<hash12>`, the shape `projectKey` produces; group 1 is the slug. */
 const PROJECT_KEY_PATTERN = /^(.+)-[0-9a-f]{12}$/;
@@ -819,11 +822,6 @@ async function writeMetadataAtomically(
     await fs.unlink(temporaryPath).catch(() => undefined);
     throw error;
   }
-}
-
-async function ensurePrivateDirectory(directory: string): Promise<void> {
-  await fs.mkdir(directory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  await fs.chmod(directory, PRIVATE_DIRECTORY_MODE);
 }
 
 async function rejectSymlinkProjectDirectory(

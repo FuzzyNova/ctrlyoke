@@ -199,6 +199,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     Codex admin-dir check also skips the fold.
     Landed as the shared `resolvedPathKey` helper; Codex equality checks use `pathsEqual`.
   - Identical private copies of `ensurePrivateDirectory` and `isStringArray`.
+    Landed as shared utilities in `PrivateFileModes.ts` and `JsonTypeGuards.ts`, with focused coverage.
 
   Still open for a later pass: `realpathOrUndefined` in `SourceRuntimeArtifactResolver`
   vs `WorkflowBundleAnalyzer`, which are the same apart from a no-op `path.resolve`.
