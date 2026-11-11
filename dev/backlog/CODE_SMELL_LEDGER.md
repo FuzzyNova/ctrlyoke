@@ -331,6 +331,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     name → `ShellKind` ladder, even though `ShellCatalog` is kept pure so the webview
     can import it. The two differ only in the fallback (`undefined` vs bash) and in
     name normalization (trim vs strip-directory).
+    Landed: extracted `shellKindForName`; core and webview keep their existing
+    normalization and fallback behavior.
   - Context-menu `outputText`: four sites (`WorkflowStepRow`, `StepChipRail` ×2,
     `WorkflowStepsPanel`) compute `getStepAssistantTextForCopy(latestOutput)` and pass
     it next to `latestOutput` through `StepContextMenuRequest`, `OpenContextMenuParams`,

@@ -51,6 +51,31 @@ describe("terminalPresentation", () => {
     expect(inferShellKind(undefined, "wsl")).toBe(SHELL_KINDS.WSL);
     expect(inferShellKind(undefined, "nushell")).toBe(SHELL_KINDS.NUSHELL);
   });
+
+  it("infers every shell-name branch while preserving webview normalization", () => {
+    const cases: Array<[string, string]> = [
+      ["pwsh-preview", SHELL_KINDS.PWSH],
+      ["powershell-core", SHELL_KINDS.POWERSHELL],
+      ["zsh", SHELL_KINDS.ZSH],
+      ["bash", SHELL_KINDS.BASH],
+      ["fish", SHELL_KINDS.FISH],
+      ["cmd", SHELL_KINDS.CMD],
+      ["wsl", SHELL_KINDS.WSL],
+      ["nu", SHELL_KINDS.NUSHELL],
+      ["nushell", SHELL_KINDS.NUSHELL],
+      ["sh", SHELL_KINDS.SH],
+      ["dash", SHELL_KINDS.SH],
+      ["ksh", SHELL_KINDS.SH],
+      ["customsh", SHELL_KINDS.SH],
+    ];
+    for (const [name, kind] of cases) {
+      expect(inferShellKind(undefined, name)).toBe(kind);
+    }
+    expect(inferShellKind(undefined, " unknown ")).toBeUndefined();
+    expect(inferShellKind(undefined, "  zsh  ")).toBe(SHELL_KINDS.ZSH);
+    expect(inferShellKind(undefined, "ZSH.EXE")).toBe(SHELL_KINDS.ZSH);
+    expect(inferShellKind(SHELL_KINDS.FISH, "bash")).toBe(SHELL_KINDS.FISH);
+  });
 });
 
 describe("isTerminalSessionInUseByActiveStep", () => {
