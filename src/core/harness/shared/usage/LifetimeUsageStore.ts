@@ -108,7 +108,7 @@ function requiredNumeric(value: unknown): boolean {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-export function emptyLifetimeContribution(): LifetimeHarnessContribution {
+function emptyLifetimeContribution(): LifetimeHarnessContribution {
   return {
     input: 0,
     output: 0,
@@ -118,7 +118,7 @@ export function emptyLifetimeContribution(): LifetimeHarnessContribution {
   };
 }
 
-export function emptyLifetimeOutcomes(): Record<RunOutcomeBucket, number> {
+function emptyLifetimeOutcomes(): Record<RunOutcomeBucket, number> {
   return {
     [RUN_OUTCOME_BUCKETS.COMPLETED]: 0,
     [RUN_OUTCOME_BUCKETS.STOPPED]: 0,

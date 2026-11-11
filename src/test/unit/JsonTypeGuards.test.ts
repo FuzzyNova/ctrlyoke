@@ -3,6 +3,7 @@ import {
   finiteNumber,
   isRecord,
   isStringArray,
+  isStringRecord,
   parseFiniteNumber,
 } from "../../utils/JsonTypeGuards";
 
@@ -12,6 +13,17 @@ suite("JsonTypeGuards", () => {
       assert.strictEqual(isStringArray([]), true);
       assert.strictEqual(isStringArray(["text", 1]), false);
       assert.strictEqual(isStringArray("text"), false);
+    });
+  });
+
+  suite("isStringRecord", () => {
+    test("accepts objects with only string values and rejects everything else", () => {
+      assert.strictEqual(isStringRecord({}), true);
+      assert.strictEqual(isStringRecord({ a: "1", b: "" }), true);
+      assert.strictEqual(isStringRecord({ a: "1", b: 2 }), false);
+      assert.strictEqual(isStringRecord(["a"]), false);
+      assert.strictEqual(isStringRecord(null), false);
+      assert.strictEqual(isStringRecord("a"), false);
     });
   });
 

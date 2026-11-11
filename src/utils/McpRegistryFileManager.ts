@@ -33,16 +33,7 @@ import {
   MCP_WORKFLOW_STATUS_TOOL_NAME,
 } from "./McpToolDefinitions";
 import { hasErrnoCode } from "./ErrorUtils";
-import { isStringArray } from "./JsonTypeGuards";
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.values(value).every((item) => typeof item === "string")
-  );
-}
+import { isStringArray, isStringRecord } from "./JsonTypeGuards";
 
 function isBooleanOrStringArray(
   value: unknown

@@ -10,6 +10,16 @@ export function isStringArray(value: unknown): value is string[] {
   );
 }
 
+/** Checks whether a value is a plain object whose values are all strings. */
+export function isStringRecord(
+  value: unknown
+): value is Record<string, string> {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
+}
+
 /** Returns a finite number without coercing strings or other values. */
 export function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)

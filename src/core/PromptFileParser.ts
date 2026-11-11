@@ -40,6 +40,7 @@ import {
 import {
   STEP_TYPES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
   WORKFLOW_VALIDATION_WARNING_CODES,
   type WorkflowDocumentIssueSeverity,
@@ -1364,7 +1365,7 @@ export class PromptFileParser {
       if (value !== undefined) {
         Object.assign(promptFile, {
           [key]:
-            key === "worktree" && value === true
+            key === PROMPT_PROPERTIES.WORKTREE && value === true
               ? { mode: WORKTREE_MODES.MANAGED }
               : value,
         });

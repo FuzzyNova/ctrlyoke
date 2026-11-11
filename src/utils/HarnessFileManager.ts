@@ -10,6 +10,7 @@ import {
 import { isPathWithinDirectory, isSafePathSegment } from "./PathSecurity";
 import { renameWithTransientRetry } from "./AtomicFileUtils";
 import { getErrorMessage } from "./ErrorUtils";
+import { isStringRecord } from "./JsonTypeGuards";
 import type { SkillOriginInfo } from "../types/WebviewMessageTypes";
 import type {
   HarnessId,
@@ -161,15 +162,6 @@ export function gitBlobSha(content: Uint8Array): string {
     .update(`blob ${content.byteLength}\0`)
     .update(content)
     .digest("hex");
-}
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.values(value).every((entry) => typeof entry === "string")
-  );
 }
 
 const SKILL_ORIGIN_TEXT_FIELDS = [

@@ -253,6 +253,29 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     `UsageTimestampUtils.ts` and `LifetimeUsageStore.ts`, with focused coverage.
   - Landed shared CLI/dashboard diff-line helpers in `utils/DiffLines.ts`, fixing CLI metadata, duplicate hunks and mixed line endings.
 
+- **2026-11-10, pass 11**: reviewed pass 10's two refactors. Both preserve behavior
+  and `npm test` passes. The usage-store copies were byte-identical; the CLI diff
+  changes are the filed bug's three intended fixes. Cleaned up: `LifetimeUsageStore`
+  exported `emptyLifetimeContribution`/`emptyLifetimeOutcomes` with no outside
+  consumer (now private again). Hunted by same-named private functions across
+  `src/`, focusing on the dashboard settings pages and workspace viewer. Fixed
+  directly: identical private `isStringRecord` in `HarnessFileManager.ts` and
+  `McpRegistryFileManager.ts` now lives in `JsonTypeGuards.ts`; `PromptFileParser`
+  compared against a raw `"worktree"` instead of `PROMPT_PROPERTIES.WORKTREE`.
+  Queued four steps:
+  - Dashboard `@` references: the workspace explorer/editor context menus quote only
+    on spaces instead of using `ContextReferenceBuilder` (colon paths break; bug to
+    file); snapshot/paste insertions don't quote at all.
+  - Worktree config normalization: `worktreeObjectConfig` ×2, an inline copy in
+    `WorkflowPropertiesPanel`, and `WorkflowSwitcher` re-implementing the store's
+    `getEffectiveWorktree`.
+  - Setting-scope labels: "Workspace"/"User" retyped in about seven dashboard files,
+    plus raw `"workspace"`/`"user"` literals in `AgentSkillsManagerSection` and
+    `ManagerExportGroups`.
+  - MCP server detail rows: `ServerDetails` rows and `getServerSummary` (drifted
+    fallback) copied between `McpManagerSection` and `McpServersEditor`, a private
+    `ScopeBadge` copy, and `formatPathForDisplay` ×2.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -504,3 +527,10 @@ still deferred.
   `WorktreeManager.ts` (filesystem containment): same name, different meaning.
 - `trustExternalRootsCommand` in `src/cli.ts`: a settings-loading wrapper around the
   shared `cli/ExternalRootsTrustCommands.ts` function, not a copy.
+- `formatStructuredPatch` in `ui/webview-react/utils/promptUndo.ts` vs
+  `src/utils/CliEventDiff.ts`: different headers (`a/`/`b/` prefixes), a reverse mode
+  and a trailing newline; each output feeds a different consumer.
+- `compareVersions` in `CtrlyokeInstallations.ts` (raw strings, prerelease stripped,
+  any length) vs `HarnessVersion.ts` (parsed major/minor/patch): different inputs.
+- `normalizeAbsolutePath` in `platform/NodeFileWatcher.ts` and
+  `VsCodeFileWatcher.ts`: a one-line `path.normalize(path.resolve())` idiom.
