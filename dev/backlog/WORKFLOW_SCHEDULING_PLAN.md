@@ -27,6 +27,13 @@
 > the schedule button goes: a third slot in the row's action rail on line 2. The
 > plan also adds a context-menu entry. See "UX" below.
 
+> **2026-11-11 (orchestrator staging):** Pinned the open implementation details so the
+> work could be staged. See "Implementation decisions (pinned for staging)" and
+> "Staging" at the end. In short: a hand-written 5-field cron evaluator in local time
+> (no new dependency); timers capped below `setTimeout`'s 2³¹−1 ms limit; a
+> `hostId` on the schedule settles the synced-home double-fire; the
+> unattended-harness guard is an editor annotation in v1, not a runtime fail-fast.
+
 ## TL;DR
 
 - **Substrate decided (per product owner):** a schedule fires **only while a
@@ -488,3 +495,66 @@ All major questions are **decided** — the plan is ready to implement:
 - Survive-close: out of scope; power users point **cron / CI at `ctrlyoke run`**.
 
 No remaining blockers — the plan is fully specified for a v1 implementation.
+
+---
+
+## Implementation decisions (pinned for staging)
+
+- **Shape (final for v1).** Add a `WorkflowSchedule` type to `CtrlYokeTypes.ts`:
+  `{ enabled: boolean; trigger: { at: string } | { cron: string }; until?: string; hostId: string }`
+  where `at`/`until` are local `YYYY-MM-DDTHH:mm[:ss]` strings with no offset. Add three
+  optional fields to `WorkflowLineageDescriptor`: `schedule?`, `scheduleNextRunAt?` and
+  `scheduleLastRunAt?` (epoch ms), plus `scheduleLastMissedAt?` for the "missed while
+  offline" hint. Prefix them `schedule` so they don't collide with run-level names. No
+  descriptor `schemaVersion` bump: the fields are optional and additive.
+- **Validation.** A new pure validator (`src/utils/WorkflowSchedule.ts`) is used on the
+  descriptor read path. An ill-formed `schedule` (bad cron, bad datetime, both or
+  neither of `at`/`cron`) is dropped with a `Log.warn`, and the lineage stays. The same
+  validator guards the set-schedule handler, which rejects bad input with an error.
+- **Next-run computation: hand-written, no dependency.** No cron package is installed,
+  and a 5-field evaluator is small. Put it in `src/utils/CronSchedule.ts`. Support
+  `*`, lists, ranges, steps (`*/n`, `a-b/n`), month and weekday numbers (0 and 7 are
+  both Sunday), and the standard Vixie rule: when both day-of-month and day-of-week are
+  restricted, a date matches either. Names (`MON`, `JAN`) and macros (`@daily`) are not
+  supported. Do all date math with local-time `Date` setters, never fixed offsets.
+  DST: a wall-clock time that doesn't exist in spring fires at the first valid minute
+  after it, and a time that occurs twice in autumn fires once (the first occurrence).
+  `nextOccurrence(schedule, afterMs)` returns `null` once past `until`, or for a
+  one-shot `at` in the past. Search for at most about 5 years, then return `null`.
+- **Timer cap.** `setTimeout` overflows above 2³¹−1 ms (~24.8 days) and fires
+  immediately. Arm each timer for `min(delay, 24h)` and recompute when it fires;
+  don't fire unless the occurrence time has really arrived. This also corrects drift
+  after sleep or a wall-clock change.
+- **Double-fire across synced machines.** `hostId` is `os.hostname()`, captured when the
+  schedule is saved. The scheduler arms only schedules whose `hostId` matches the
+  current host. The editor shows "Scheduled on <host>" when it doesn't, and saving from
+  this machine claims the schedule. Put the host lookup behind one helper so tests can
+  inject it.
+- **Scheduled-fire client ID.** Fires use their own `clientId` constant (e.g.
+  `SCHEDULER_CLIENT_ID` in `DashboardConstants.ts`), not the panel's, so the
+  revision-reconciliation ledger doesn't credit the panel with them.
+- **Overlap check.** Before firing, skip when the lineage has a live runner (an active
+  in-process instance for that `workflowKey`, or a non-reclaimable `runner.json`). Log
+  the skip and advance `scheduleNextRunAt`.
+- **Unattended harnesses (v1 scope).** The guard is an annotation only. The editor says
+  runs are unattended and only fire while ctrlyoke is running, and it warns when the
+  lineage's steps run in `interactive` mode or without a bypass/auto permission mode.
+  A runtime "would prompt → fail fast" detection is **deferred** (no reliable signal
+  exists today); record it as a follow-up, not v1 scope.
+- **Scheduler refresh API.** `WorkflowScheduler.refresh(workflowKey)` re-reads one
+  descriptor and re-arms it. Set/clear-schedule handlers call it after writing.
+  `dispose()` clears every timer. The scheduler starts at the end of
+  `WorkflowOrchestrator.initialize()`, and the orchestrator's dispose path tears it down.
+
+## Staging
+
+1. Phase 0: types, validator, cron/next-run util, descriptor read-path validation, unit tests.
+2. `WorkflowScheduler`: owned by `WorkflowOrchestrator`, startup arming, missed/overlap
+   skip, fire through `seedAndExecuteAtRun`/`executeDraftAtAddress`, bookkeeping via
+   `updateDescriptorMetadata`, and tests with fake timers.
+3. Backend and contract plumbing: `SET_SCHEDULE`/`CLEAR_SCHEDULE` messages and
+   handlers, `RecentWorkflowEntry` fields, the `uiStore` `RecentWorkflow` fields and
+   actions, and tests.
+4. UI authoring: the `ScheduleEditor` popover, the row clock button (rail 44 → 68), the
+   context-menu entry, and tests.
+5. UI management: the "Scheduled" section and filter, public docs, `CHANGELOG.md`.
