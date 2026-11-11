@@ -53,13 +53,8 @@ const PROMPT_TIMEOUT_SECONDS = 3600; // 1 hour
  */
 export const HARNESS_TIMEOUT_MS = 7_200_000; // 2 hours
 
-/**
- * Appended to every prompt that calls an MCP tool. Several harnesses (agy,
- * OpenCode 2.2.5) can start the first turn before their MCP servers finish
- * connecting, and a model that sees no tool then reports it as missing.
- */
-export const MCP_STARTUP_WAIT_INSTRUCTION =
-  "MCP servers can take up to a minute to load. If an MCP tool named here is not available yet, wait up to one minute for it to appear before deciding it is unavailable.";
+/** Appended to every harness-test prompt that calls an MCP tool. */
+export { MCP_STARTUP_RETRY_INSTRUCTION } from "../../../utils/McpToolDefinitions";
 
 export type { HarnessId };
 
@@ -301,6 +296,29 @@ function runPrepared(
       stderr: result.stderr ?? "",
     };
   });
+}
+
+/**
+ * Run a ctrlyoke CLI subcommand other than `run` (for example `commit`) in
+ * `cwd`. Unlike the workflow runners, exit code 3 has no special meaning
+ * here, so `skipped` is always false; callers check availability themselves.
+ */
+export function runCliCommand(
+  args: readonly string[],
+  cwd: string,
+  timeoutMs: number = HARNESS_TIMEOUT_MS
+): RunResult {
+  const result = spawnSync("node", [CLI_PATH, ...args], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    cwd,
+  });
+  return {
+    skipped: false,
+    exitCode: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
 }
 
 /**

@@ -17,6 +17,7 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
   MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
+  MCP_STARTUP_RETRY_INSTRUCTION,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "../utils/McpToolDefinitions";
 import { fenceLiteral } from "../utils/FileReferenceParser";
@@ -34,7 +35,6 @@ import {
   PERMISSION_MODES,
 } from "../types/DashboardConstants";
 import { TIMELINE_ATTEMPT_TERMINAL_STATES } from "../types/WorkflowTimelineTypes";
-import { getAssistantText } from "../utils/StepOutputText";
 import type { ResolvedRunAttemptValue } from "../core/orchestration/RunOutputResolver";
 import {
   MCP_SKILL_NAMES,
@@ -117,27 +117,101 @@ async function writeCommitMessageLineageKey(
   );
 }
 
-/** Return only a successful AI attempt's assistant-authored commit text. */
-export function resolveCommitMessageFallback(
-  attempt: ResolvedRunAttemptValue | undefined
-): string | undefined {
-  if (attempt?.terminalState !== TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED) {
+/**
+ * The submission modes a commit generation tries, one headless run each, in
+ * order. Native mode tries the MCP tool first and falls back to the skill's
+ * CLI command when the run ends without a submission; skill mode never
+ * attaches ctrlyoke's MCP server, so it only uses the skill.
+ */
+export function getCommitSubmissionModes(
+  ctrlyokeMcpMode: CtrlYokeMcpMode
+): readonly CtrlYokeMcpMode[] {
+  return ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL
+    ? [CTRLYOKE_MCP_MODES.SKILL]
+    : [CTRLYOKE_MCP_MODES.NATIVE, CTRLYOKE_MCP_MODES.SKILL];
+}
+
+/** The prompt line that tells the model how to submit in `mode`. */
+export function buildCommitSubmitInstruction(mode: CtrlYokeMcpMode): string {
+  return mode === CTRLYOKE_MCP_MODES.SKILL
+    ? `\n\nSubmit the commit message by running the \`${COMMIT_MESSAGE_MCP_TOOL}\` command from the \`${MCP_SKILL_NAMES.COMMIT_MESSAGE}\` skill. Do not output it as text.`
+    : `\n\nSubmit the commit message using the \`${COMMIT_MESSAGE_MCP_TOOL}\` tool. Do not output it as text. ${MCP_STARTUP_RETRY_INSTRUCTION}`;
+}
+
+function describeCommitSubmissionMode(mode: CtrlYokeMcpMode): string {
+  return mode === CTRLYOKE_MCP_MODES.SKILL
+    ? `the ${MCP_SKILL_NAMES.COMMIT_MESSAGE} skill`
+    : `the ${COMMIT_MESSAGE_MCP_TOOL} MCP tool`;
+}
+
+/** The trimmed message a submission wrote, or undefined when none was. */
+export async function readSubmittedCommitMessage(
+  commitOutputPath: string
+): Promise<string | undefined> {
+  try {
+    return (await fs.readFile(commitOutputPath, "utf8")).trim() || undefined;
+  } catch {
     return undefined;
   }
-  const assistantText = getAssistantText(
-    attempt.output?.structured?.events ?? []
-  ).trim();
-  if (!assistantText) return undefined;
+}
 
-  return assistantText
-    .replace(/^```[a-z]*\n?([\s\S]*?)\n?```$/i, "$1")
-    .trim()
-    .replace(/^`([\s\S]*)`$/, "$1")
-    .trim()
-    .replace(/^"([\s\S]*)"$/, "$1")
-    .trim()
-    .replace(/^'([\s\S]*)'$/, "$1")
-    .trim();
+interface CommitSubmissionRequest {
+  mode: CtrlYokeMcpMode;
+  harness: HarnessId;
+  model: string | undefined;
+  diff: string;
+  commitPrompt: string;
+  instructionsSection: string;
+  platform: NodePlatformAdapter;
+  mcpServerPath: string;
+  roots: ReturnType<typeof getCommitMessageStatePaths>;
+  token: AbortSignal | undefined;
+}
+
+/** One headless commit generation run through a single submission mode. */
+export interface CommitSubmissionAttempt {
+  mode: CtrlYokeMcpMode;
+  /** Undefined when the run completed without submitting a message. */
+  message?: string;
+  prompt: string;
+  cliCommand?: string;
+  workflowKey?: WorkflowKey;
+  runRef?: RunRef;
+}
+
+/**
+ * Run `attempt` for each mode in turn until one submits a message. A run
+ * that throws (harness failure, cancellation) stops the sequence. When no
+ * mode submits, the error names every mode tried and carries the last run's
+ * address so the caller can point at its events.
+ */
+export async function submitThroughCommitModes(
+  modes: readonly CtrlYokeMcpMode[],
+  harness: HarnessId,
+  attempt: (mode: CtrlYokeMcpMode) => Promise<CommitSubmissionAttempt>,
+  token?: AbortSignal
+): Promise<CommitSubmissionAttempt & { message: string }> {
+  let last: CommitSubmissionAttempt | undefined;
+  for (const mode of modes) {
+    if (token?.aborted) {
+      throw new Error("Commit message generation cancelled");
+    }
+    if (last) {
+      Log.warn(
+        `[CommitMessageGenerator] ${harness} did not submit a commit message through ${describeCommitSubmissionMode(last.mode)}; retrying through ${describeCommitSubmissionMode(mode)}`
+      );
+    }
+    last = await attempt(mode);
+    const { message } = last;
+    if (message) {
+      return { ...last, message };
+    }
+  }
+  throw new CommitMessageGenerationError(
+    `Commit message generation failed: ${harness} never submitted a commit message (tried ${modes.map(describeCommitSubmissionMode).join(", then ")}).`,
+    last?.workflowKey,
+    last?.runRef
+  );
 }
 
 export interface DiffResult {
@@ -513,70 +587,104 @@ export class CommitMessageGenerator {
 
     const platform = new NodePlatformAdapter(config);
 
-    // Probe for the MCP server so we can capture the commit message via a structured tool call
-    // rather than parsing prose response text. This eliminates "I'm going to read the prompt..."
-    // preamble from polluting the commit message.
+    // The message is only ever taken from a structured submission, which both
+    // the MCP tool and the skill's CLI command write to a file. Response text
+    // is never used: it can be a preamble, or the model explaining that the
+    // tool was unavailable, and either would land in the commit box.
     const mcpServerPath = path.join(
       platform.getExtensionPath(),
       "out",
       "mcp-server.js"
     );
-    const ctrlyokeMcpMode = ConfigurationUtils.getCtrlYokeMcpMode();
+    try {
+      await fs.access(mcpServerPath);
+    } catch {
+      throw new CommitMessageGenerationError(
+        `Commit message generation needs ctrlyoke's MCP server at ${mcpServerPath}, which was not found. Build ctrlyoke (npm run compile) and try again.`
+      );
+    }
     const roots = getCommitMessageStatePaths(cwd, stateRoot);
-    const { tempDir } = roots;
+    await fs.mkdir(roots.tempDir, { recursive: true });
+
+    const submitted = await submitThroughCommitModes(
+      getCommitSubmissionModes(ConfigurationUtils.getCtrlYokeMcpMode()),
+      harness,
+      (mode) =>
+        this.runSubmissionAttempt({
+          mode,
+          harness,
+          model,
+          diff,
+          commitPrompt,
+          instructionsSection,
+          platform,
+          mcpServerPath,
+          roots,
+          token,
+        }),
+      token
+    );
+    return {
+      message: submitted.message,
+      prompt: submitted.prompt,
+      cliCommand: submitted.cliCommand,
+      workflowKey: submitted.workflowKey,
+      runRef: submitted.runRef,
+    };
+  }
+
+  /**
+   * Run one headless commit generation that submits through `mode`, and
+   * return the submitted message, or no message when nothing was submitted.
+   * A run that fails outright (harness error, cancellation) throws instead.
+   */
+  private async runSubmissionAttempt(
+    request: CommitSubmissionRequest
+  ): Promise<CommitSubmissionAttempt> {
+    const {
+      mode,
+      harness,
+      model,
+      diff,
+      commitPrompt,
+      instructionsSection,
+      platform,
+      mcpServerPath,
+      roots,
+      token,
+    } = request;
     const commitOutputPath = path.join(
-      tempDir,
-      `commit-output-${Date.now()}.txt`
+      roots.tempDir,
+      `commit-output-${mode}-${Date.now()}.txt`
     );
 
-    let useMcpCapture = false;
-    if (ctrlyokeMcpMode !== CTRLYOKE_MCP_MODES.SKILL) {
-      try {
-        await fs.access(mcpServerPath);
-        useMcpCapture = true;
-      } catch {
-        // MCP server not found (e.g. dev environment without a build) — fall back to text extraction
-      }
-    }
-
-    if (useMcpCapture) {
-      await fs.mkdir(tempDir, { recursive: true });
-    }
-
-    // When MCP capture is active, append a single instruction line telling the AI to use the tool.
-    // The tool description already says "do not output as plain text", but an explicit instruction
-    // in the prompt reinforces it and prevents the AI from outputting the message twice.
-    const mcpInstruction = useMcpCapture
-      ? `\n\nSubmit the commit message using the \`${COMMIT_MESSAGE_MCP_TOOL}\` tool. Do not output it as text.`
-      : "";
     // Keep diff content inert for every prompt-reference parser, even when
     // added Markdown contains its own fenced code blocks.
     const fullPrompt = buildCommitMessagePrompt(
       diff,
       commitPrompt,
       instructionsSection,
-      mcpInstruction
+      buildCommitSubmitInstruction(mode)
     );
 
-    const mcpServerConfig: McpServerConfig | undefined = useMcpCapture
-      ? {
-          id: MCP_SERVER_IDS.CTRLYOKE_COMMIT,
-          command: "node",
-          args: [mcpServerPath.replace(/\\/g, "/")],
-          env: {
-            CTRLYOKE_WORKSPACE: roots.stateRoot.replace(/\\/g, "/"),
-            CTRLYOKE_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
-          },
-          autoApprove: true,
-          deniedTools: [...MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES],
-        }
-      : undefined;
+    const mcpServerConfig: McpServerConfig | undefined =
+      mode === CTRLYOKE_MCP_MODES.NATIVE
+        ? {
+            id: MCP_SERVER_IDS.CTRLYOKE_COMMIT,
+            command: "node",
+            args: [mcpServerPath.replace(/\\/g, "/")],
+            env: {
+              CTRLYOKE_WORKSPACE: roots.stateRoot.replace(/\\/g, "/"),
+              CTRLYOKE_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
+            },
+            autoApprove: true,
+            deniedTools: [...MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES],
+          }
+        : undefined;
 
-    if (useMcpCapture && mcpServerConfig) {
-      Log.debug(
-        `[CommitMessageGenerator] MCP capture enabled for ${harness} via ${mcpServerConfig.id}`
-      );
-    }
+    Log.debug(
+      `[CommitMessageGenerator] Generating a commit message with ${harness} through ${mode}`
+    );
 
     const existingWorkflowKey = await readCommitMessageLineageKey(
       roots.stateRoot
@@ -617,7 +725,6 @@ export class CommitMessageGenerator {
     // that could bleed into this one-shot call. SettingsPropertyResolver materializes
     // settings into resolved step properties, which take precedence over the
     // NodePlatformAdapter fallback used by CliIntegration.
-    let mcpToolCalled = false;
     let streamingChunkDisposable: { dispose(): void } | undefined;
     let streamingEventsDisposable: { dispose(): void } | undefined;
     let abortListener: (() => void) | undefined;
@@ -627,7 +734,7 @@ export class CommitMessageGenerator {
         harness,
         model,
         mcpServerConfig,
-        ctrlyokeMcpMode
+        mode
       );
       await instance.loadPromptStringAsRun(
         fullPrompt,
@@ -665,9 +772,6 @@ export class CommitMessageGenerator {
             "tool" in event.data &&
             typeof event.data.tool === "string"
           ) {
-            if (event.data.tool === COMMIT_MESSAGE_MCP_TOOL) {
-              mcpToolCalled = true;
-            }
             return `${event.type}:${event.data.tool}`;
           }
           if ("name" in event.data && typeof event.data.name === "string") {
@@ -708,48 +812,23 @@ export class CommitMessageGenerator {
       const workflowKey = generationState.workflowKey;
       const runRef = generationState.runRef;
 
-      // Primary path: read the commit message written by submit_commit_message.
-      if (useMcpCapture) {
-        let mcpMessage: string | undefined;
-        try {
-          const raw = await fs.readFile(commitOutputPath, "utf8");
-          mcpToolCalled = true;
-          mcpMessage = raw.trim() || undefined;
-        } catch {
-          // Tool was not called — fall through to text extraction below
-        }
-        try {
-          await fs.unlink(commitOutputPath);
-        } catch {
-          // Best-effort cleanup
-        }
-        if (mcpMessage) {
-          Log.debug(
-            `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=message-captured`
-          );
-          return {
-            message: mcpMessage,
-            prompt: fullPrompt,
-            cliCommand,
-            workflowKey,
-            runRef,
-          };
-        }
-
+      // Both the MCP tool and the skill's CLI command write the submitted
+      // message to commitOutputPath.
+      const message = await readSubmittedCommitMessage(commitOutputPath);
+      if (message) {
         Log.debug(
-          `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
+          `[CommitMessageGenerator] Commit message submitted through ${mode}: length=${message.length}`
         );
-
-        Log.warn(
-          `[CommitMessageGenerator] MCP capture was enabled for ${harness} but no commit message was submitted; falling back to response text extraction`
-        );
-      } else {
-        Log.debug(
-          `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
-        );
+        return {
+          mode,
+          message,
+          prompt: fullPrompt,
+          cliCommand,
+          workflowKey,
+          runRef,
+        };
       }
 
-      // Fallback: extract from response text (MCP unavailable or tool not called).
       const firstStep = generationState.steps[0];
       if (!firstStep || isScriptStep(firstStep)) {
         throw new CommitMessageGenerationError(
@@ -759,6 +838,9 @@ export class CommitMessageGenerator {
         );
       }
 
+      // Only a run that finished normally without submitting moves on to the
+      // next submission mode. A run that failed (harness error, auth, crash)
+      // would fail the same way again.
       const attempts =
         workflowKey && runRef
           ? await instance.outputHistoryManager
@@ -771,24 +853,21 @@ export class CommitMessageGenerator {
                 [{ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }]
               )
           : new Map();
-      const firstAttempt = attempts.get("queue:0");
-      const responseText = resolveCommitMessageFallback(firstAttempt);
-      if (responseText === undefined) {
+      const firstAttempt: ResolvedRunAttemptValue | undefined =
+        attempts.get("queue:0");
+      if (
+        firstAttempt?.terminalState !==
+        TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+      ) {
         throw new CommitMessageGenerationError(
-          firstAttempt?.terminalState ===
-            TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
-            ? "Commit message generation produced an empty response"
-            : "Commit message generation did not complete successfully",
+          "Commit message generation did not complete successfully",
           workflowKey,
           runRef
         );
       }
-      Log.debug(
-        `[CommitMessageGenerator] Resolved assistant response: length=${responseText.length}`
-      );
 
       return {
-        message: responseText,
+        mode,
         prompt: fullPrompt,
         cliCommand,
         workflowKey,
@@ -813,6 +892,7 @@ export class CommitMessageGenerator {
       if (token && abortListener) {
         token.removeEventListener("abort", abortListener);
       }
+      await fs.rm(commitOutputPath, { force: true }).catch(() => {});
     }
   }
 }

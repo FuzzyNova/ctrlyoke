@@ -30,6 +30,7 @@ import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
+  MCP_STARTUP_RETRY_INSTRUCTION,
   buildMcpProbeServerScript,
   logAndMaybeSkip,
   runWorkflowFile,
@@ -78,6 +79,7 @@ suite("Commit message generation permissions", function () {
             prompt: [
               `Call the ${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME} tool from the ${MCP_SERVER_IDS.CTRLYOKE_COMMIT} MCP server exactly once.`,
               "Do not call any other tool or try another way to cause the same effect.",
+              MCP_STARTUP_RETRY_INSTRUCTION,
             ].join(" "),
           },
         ],

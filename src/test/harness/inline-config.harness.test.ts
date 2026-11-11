@@ -39,7 +39,7 @@ import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
-  MCP_STARTUP_WAIT_INSTRUCTION,
+  MCP_STARTUP_RETRY_INSTRUCTION,
   buildHookRecorderScript,
   buildMcpProbeServerScript,
   findRunFiles,
@@ -487,7 +487,7 @@ function antigravityMcpWorkflow(
         prompt: [
           `Use the call_mcp_tool tool exactly once to call the tool ${toolName} on the MCP server ${normalizeAntigravityMcpServerId(server.id)}.`,
           "Do not call any other tool or try another way to cause the same effect.",
-          MCP_STARTUP_WAIT_INSTRUCTION,
+          MCP_STARTUP_RETRY_INSTRUCTION,
         ].join(" "),
       },
     ],
@@ -741,7 +741,7 @@ suite("Inline harness configuration regression tests", function () {
               prompt: [
                 "Call workflow_status before doing anything else.",
                 `After it returns, use the shell tool to run: node -e \"require('fs').writeFileSync('${marker}','mcp-connected')\"`,
-                MCP_STARTUP_WAIT_INSTRUCTION,
+                MCP_STARTUP_RETRY_INSTRUCTION,
               ].join(" "),
             },
           ],
@@ -779,7 +779,7 @@ suite("Inline harness configuration regression tests", function () {
               prompt: [
                 "Call the MCP tool opencode_probe-server_blocked_probe exactly once.",
                 "Do not call any other tool or try another way to cause the same effect.",
-                MCP_STARTUP_WAIT_INSTRUCTION,
+                MCP_STARTUP_RETRY_INSTRUCTION,
               ].join(" "),
             },
           ],
@@ -834,7 +834,7 @@ suite("Inline harness configuration regression tests", function () {
                 prompt: [
                   "Call the MCP tool opencode_probe-server_allowed_probe exactly once.",
                   "Do not call any other tool or try another way to cause the same effect.",
-                  MCP_STARTUP_WAIT_INSTRUCTION,
+                  MCP_STARTUP_RETRY_INSTRUCTION,
                 ].join(" "),
               },
             ],
@@ -1176,7 +1176,7 @@ suite("Inline harness configuration regression tests", function () {
         const prompt = [
           `Call the MCP tool mcp__qwen_${mode}_server__${toolName} exactly once.`,
           "Do not use shell or any other tool.",
-          MCP_STARTUP_WAIT_INSTRUCTION,
+          MCP_STARTUP_RETRY_INSTRUCTION,
         ].join(" ");
         const result =
           mode === EXECUTION_MODES.HEADLESS
@@ -1214,7 +1214,7 @@ suite("Inline harness configuration regression tests", function () {
               url: server.url,
               transport: "streamable-http",
             },
-            `Call mcp__qwen_http_server__${toolName} exactly once and do not call any other tool. ${MCP_STARTUP_WAIT_INSTRUCTION}`
+            `Call mcp__qwen_http_server__${toolName} exactly once and do not call any other tool. ${MCP_STARTUP_RETRY_INSTRUCTION}`
           ),
           tmpDir,
           "qwen-http-mcp"
@@ -1250,7 +1250,7 @@ suite("Inline harness configuration regression tests", function () {
       };
       const workflow = qwenMcpWorkflow(
         server,
-        `!API_TOKEN Call mcp__qwen_secret_server__qwen_secret_env_probe exactly once. Do not reveal the secret or use another tool. ${MCP_STARTUP_WAIT_INSTRUCTION}`
+        `!API_TOKEN Call mcp__qwen_secret_server__qwen_secret_env_probe exactly once. Do not reveal the secret or use another tool. ${MCP_STARTUP_RETRY_INSTRUCTION}`
       );
       let result: ReturnType<typeof runWorkflowFile>;
       try {
@@ -1278,7 +1278,7 @@ suite("Inline harness configuration regression tests", function () {
       const result = runWorkflowFile(
         qwenMcpWorkflow(
           server,
-          `Call mcp__qwen_no_settings_server__qwen_no_settings_probe exactly once and do not use any other tool. ${MCP_STARTUP_WAIT_INSTRUCTION}`
+          `Call mcp__qwen_no_settings_server__qwen_no_settings_probe exactly once and do not use any other tool. ${MCP_STARTUP_RETRY_INSTRUCTION}`
         ),
         tmpDir,
         "qwen-no-settings"
@@ -1308,7 +1308,7 @@ suite("Inline harness configuration regression tests", function () {
         runWorkflowFileAsync(
           qwenMcpWorkflow(
             leftServer,
-            `Call mcp__qwen_left_server__qwen_left_tool exactly once and do not call any other tool. ${MCP_STARTUP_WAIT_INSTRUCTION}`
+            `Call mcp__qwen_left_server__qwen_left_tool exactly once and do not call any other tool. ${MCP_STARTUP_RETRY_INSTRUCTION}`
           ),
           tmpDir,
           "qwen-concurrent-left"
@@ -1316,7 +1316,7 @@ suite("Inline harness configuration regression tests", function () {
         runWorkflowFileAsync(
           qwenMcpWorkflow(
             rightServer,
-            `Call mcp__qwen_right_server__qwen_right_tool exactly once and do not call any other tool. ${MCP_STARTUP_WAIT_INSTRUCTION}`
+            `Call mcp__qwen_right_server__qwen_right_tool exactly once and do not call any other tool. ${MCP_STARTUP_RETRY_INSTRUCTION}`
           ),
           tmpDir,
           "qwen-concurrent-right"

@@ -211,6 +211,26 @@ export const MCP_GLOBAL_STATUS_TOOL_NAME = "global_status";
 export const MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME = "submit_commit_message";
 export const MCP_SCRIPT_STEP_PROMPT_MARKER = "(script) ";
 
+/**
+ * Appended to a prompt whose first action is an MCP tool call. Several
+ * harnesses (OpenCode 2, agy) start the first turn before their stdio MCP
+ * servers have connected, so the tool is missing from the model's first tool
+ * list. The delay is on the harness side, not ctrlyoke's server, which
+ * answers `initialize` in about 200 ms.
+ *
+ * Telling the model to "wait" does not work: a headless model has no way to
+ * wait and simply ends its turn. Each failed call does give the harness
+ * another step, and OpenCode rebuilds the tool list on every step. So the
+ * model is told to keep calling the tool, and it switches to the real name
+ * once the tool appears. With a server that takes 5 s to connect, Haiku
+ * through OpenCode 2.2.7 succeeded on the third or fourth attempt in every
+ * probe run, even when it first guessed the wrong name. Harnesses that hide
+ * MCP tools behind a tool-search tool (Qwen) need a keyword search instead:
+ * an exact `select:` with the bare tool name matches nothing.
+ */
+export const MCP_STARTUP_RETRY_INSTRUCTION =
+  "MCP servers take a few seconds to connect after the session starts, and their tools are missing from your tool list until then. If an MCP tool named here is not listed yet, do not give up or end your turn. If you have a tool-search tool, search for it by keyword, since its full name usually carries a server prefix. Otherwise call it anyway by the name you expect it to have. Each attempt gives the server time to connect, and the tool appears once it has. Retry like this up to 10 times. Failed attempts do not count toward any limit on how many times to call it.";
+
 /** Tool used to edit a pending step in the workflow. */
 export const MCP_EDIT_STEP_TOOL_NAME = "edit_step";
 

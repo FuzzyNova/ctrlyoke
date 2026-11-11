@@ -7,13 +7,21 @@ import { suite, test } from "mocha";
 import { promisify } from "util";
 import {
   buildCommitMessagePrompt,
+  buildCommitSubmitInstruction,
   buildCommitWorkflowOverrides,
   CommitMessageGenerator,
   CommitMessageGenerationError,
   getCommitMessageStatePaths,
+  getCommitSubmissionModes,
   MAX_DIFF_BYTES,
-  resolveCommitMessageFallback,
+  readSubmittedCommitMessage,
+  submitThroughCommitModes,
+  type CommitSubmissionAttempt,
 } from "../../git/CommitMessageGenerator";
+import {
+  MCP_STARTUP_RETRY_INSTRUCTION,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
+} from "../../utils/McpToolDefinitions";
 import { parseSecretReferences } from "../../utils/SecretReferenceParser";
 import {
   parseAtReferences,
@@ -25,6 +33,7 @@ import {
   CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PERMISSION_MODES,
+  type CtrlYokeMcpMode,
 } from "../../types/DashboardConstants";
 import type {
   McpServerConfig,
@@ -35,41 +44,151 @@ import type {
 const execFileAsync = promisify(execFile);
 
 suite("CommitMessageGenerator", () => {
-  test("fallback uses only assistant text from a successful attempt", () => {
-    const failed = {
-      terminalState: "failed",
-      output: {
-        response: "harness failed: full failure body",
-        structured: {
-          events: [{ type: "text", data: { text: "harness failed" } }],
-        },
-      },
-    } as any;
-    assert.strictEqual(resolveCommitMessageFallback(failed), undefined);
-
-    const completed = {
-      terminalState: "completed",
-      output: {
-        response: "```diff\n+secret diff body\n```",
-        structured: {
-          events: [
-            { type: "thinking", data: { text: "private reasoning" } },
-            {
-              type: "fileEdit",
-              data: {
-                path: "src/file.ts",
-                diff: "```diff\n+secret diff body\n```",
-              },
-            },
-            { type: "text", data: { text: "`fix: handle empty input`" } },
-          ],
-        },
-      },
-    } as any;
-    assert.strictEqual(
-      resolveCommitMessageFallback(completed),
-      "fix: handle empty input"
+  test("native mode tries the MCP tool, then the skill; skill mode only the skill", () => {
+    assert.deepStrictEqual(
+      getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+      [CTRLYOKE_MCP_MODES.NATIVE, CTRLYOKE_MCP_MODES.SKILL]
     );
+    assert.deepStrictEqual(getCommitSubmissionModes(CTRLYOKE_MCP_MODES.SKILL), [
+      CTRLYOKE_MCP_MODES.SKILL,
+    ]);
+  });
+
+  test("tells the model how to submit in each mode", () => {
+    const native = buildCommitSubmitInstruction(CTRLYOKE_MCP_MODES.NATIVE);
+    assert.ok(
+      native.includes(`\`${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}\` tool`)
+    );
+    assert.ok(native.includes(MCP_STARTUP_RETRY_INSTRUCTION));
+
+    const skill = buildCommitSubmitInstruction(CTRLYOKE_MCP_MODES.SKILL);
+    assert.ok(skill.includes(MCP_SKILL_NAMES.COMMIT_MESSAGE));
+    assert.ok(!skill.includes(MCP_STARTUP_RETRY_INSTRUCTION));
+  });
+
+  test("reads only a non-empty submitted message", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-output-"));
+    try {
+      const outputPath = path.join(dir, "commit-output.txt");
+      assert.strictEqual(
+        await readSubmittedCommitMessage(outputPath),
+        undefined
+      );
+      await fs.writeFile(outputPath, "  \n");
+      assert.strictEqual(
+        await readSubmittedCommitMessage(outputPath),
+        undefined
+      );
+      await fs.writeFile(outputPath, "\nfix: handle empty input\n");
+      assert.strictEqual(
+        await readSubmittedCommitMessage(outputPath),
+        "fix: handle empty input"
+      );
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  suite("submitThroughCommitModes", () => {
+    const workflowKey = "commit-message-generation-1" as WorkflowKey;
+    const attemptFor = (
+      mode: CtrlYokeMcpMode,
+      message?: string
+    ): CommitSubmissionAttempt => ({
+      mode,
+      message,
+      prompt: `prompt for ${mode}`,
+      workflowKey,
+      runRef: `run-${mode}` as RunRef,
+    });
+
+    test("returns the MCP submission without running the skill", async () => {
+      const tried: CtrlYokeMcpMode[] = [];
+      const result = await submitThroughCommitModes(
+        getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+        HARNESS_IDS.OPENCODE_CLI,
+        async (mode) => {
+          tried.push(mode);
+          return attemptFor(mode, "feat: from mcp");
+        }
+      );
+      assert.deepStrictEqual(tried, [CTRLYOKE_MCP_MODES.NATIVE]);
+      assert.strictEqual(result.message, "feat: from mcp");
+    });
+
+    test("falls back to the skill when the MCP run submits nothing", async () => {
+      const tried: CtrlYokeMcpMode[] = [];
+      const result = await submitThroughCommitModes(
+        getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+        HARNESS_IDS.OPENCODE_CLI,
+        async (mode) => {
+          tried.push(mode);
+          return attemptFor(
+            mode,
+            mode === CTRLYOKE_MCP_MODES.SKILL ? "fix: from skill" : undefined
+          );
+        }
+      );
+      assert.deepStrictEqual(tried, [
+        CTRLYOKE_MCP_MODES.NATIVE,
+        CTRLYOKE_MCP_MODES.SKILL,
+      ]);
+      assert.strictEqual(result.message, "fix: from skill");
+      assert.strictEqual(result.prompt, "prompt for skill");
+    });
+
+    test("fails with the last run's address when no mode submits", async () => {
+      await assert.rejects(
+        submitThroughCommitModes(
+          getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+          HARNESS_IDS.QWEN_CLI,
+          async (mode) => attemptFor(mode)
+        ),
+        (error: unknown) =>
+          error instanceof CommitMessageGenerationError &&
+          /never submitted a commit message/.test(error.message) &&
+          error.message.includes(MCP_SKILL_NAMES.COMMIT_MESSAGE) &&
+          error.workflowKey === workflowKey &&
+          error.runRef === "run-skill"
+      );
+    });
+
+    test("does not try the skill after a run that failed outright", async () => {
+      const tried: CtrlYokeMcpMode[] = [];
+      await assert.rejects(
+        submitThroughCommitModes(
+          getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+          HARNESS_IDS.CODEX_CLI,
+          async (mode) => {
+            tried.push(mode);
+            throw new CommitMessageGenerationError(
+              "Commit message generation did not complete successfully"
+            );
+          }
+        ),
+        /did not complete successfully/
+      );
+      assert.deepStrictEqual(tried, [CTRLYOKE_MCP_MODES.NATIVE]);
+    });
+
+    test("stops before the skill run when generation was cancelled", async () => {
+      const controller = new AbortController();
+      const tried: CtrlYokeMcpMode[] = [];
+      await assert.rejects(
+        submitThroughCommitModes(
+          getCommitSubmissionModes(CTRLYOKE_MCP_MODES.NATIVE),
+          HARNESS_IDS.CLAUDE_CLI,
+          async (mode) => {
+            tried.push(mode);
+            controller.abort();
+            return attemptFor(mode);
+          },
+          controller.signal
+        ),
+        /Commit message generation cancelled/
+      );
+      assert.deepStrictEqual(tried, [CTRLYOKE_MCP_MODES.NATIVE]);
+    });
   });
 
   test("keeps commit state under state root while retaining repository cwd", () => {

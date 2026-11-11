@@ -69,6 +69,25 @@ skills, hooks, extra arguments or MCP servers of yours, never resumes a
 session, and runs headless in the workspace itself, never in a
 [worktree](/workflows/worktrees).
 
+## How the message comes back
+
+The harness hands the message back through ctrlyoke's `submit_commit_message`
+tool, never as reply text, so an explanation or a preamble can't end up in
+your commit box.
+
+1. By default the run attaches ctrlyoke's MCP server and the harness calls
+   the tool.
+2. If that run finishes without submitting, ctrlyoke runs the generation once
+   more with the commit-message skill, which submits through the
+   [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) command instead.
+3. If neither submits, generation fails with an error and the commit box stays
+   empty. The error names the run, so you can open it and see what the harness
+   did.
+
+With [`execution.ctrlyokeMcpMode`](/reference/settings#execution-ctrlyokemcpmode)
+set to `skill`, ctrlyoke never attaches its MCP server, so only the skill run
+happens.
+
 ## The Commit Message settings tab
 
 Open [Settings](/guide/settings) and choose **Commit Message**.

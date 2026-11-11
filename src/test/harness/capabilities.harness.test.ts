@@ -62,7 +62,7 @@ import {
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
-  MCP_STARTUP_WAIT_INSTRUCTION,
+  MCP_STARTUP_RETRY_INSTRUCTION,
   imageInputModel,
   buildHookRecorderScript,
   buildMcpProbeServerScript,
@@ -340,7 +340,7 @@ function mcpCalls(workspace: Workspace): string[] {
 const MCP_PROMPT = [
   `Call the MCP tool ${MCP_OPEN_TOOL} from the ${MCP_SERVER_ID} server once.`,
   `Then call the MCP tool ${MCP_BLOCKED_TOOL} from the ${MCP_SERVER_ID} server once.`,
-  MCP_STARTUP_WAIT_INSTRUCTION,
+  MCP_STARTUP_RETRY_INSTRUCTION,
   "If a tool is unavailable or refused, skip it. Do not use any other tool. Then reply DONE.",
 ].join(" ");
 

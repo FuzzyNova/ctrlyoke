@@ -30,7 +30,7 @@ import type { PromptFile } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_TIMEOUT_MS,
   HARNESS_MODELS,
-  MCP_STARTUP_WAIT_INSTRUCTION,
+  MCP_STARTUP_RETRY_INSTRUCTION,
   runWorkflowFile,
   logAndMaybeSkip,
 } from "./helpers/harnessRunner";
@@ -100,7 +100,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
         name: "cy-final-step",
         mcpServers: ["ctrlyoke"],
         prompt: [
-          MCP_STARTUP_WAIT_INSTRUCTION,
+          MCP_STARTUP_RETRY_INSTRUCTION,
           "Call the tool 'workflow_status' (no parameters).",
           "Examine the JSON response. Look for a completed step named 'cy-appended-step'.",
           "",
@@ -185,7 +185,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
             `"Run the shell command: echo MCP_STEP_DONE > \\"${escapedPath}\\". Do not explain — just run it."`,
             "After calling the tool, say: 'Queue extended.'",
             "Do not run any bash commands yourself in this step.",
-            MCP_STARTUP_WAIT_INSTRUCTION,
+            MCP_STARTUP_RETRY_INSTRUCTION,
           ].join(" "),
         },
       ],

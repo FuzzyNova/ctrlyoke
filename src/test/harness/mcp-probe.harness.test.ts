@@ -43,7 +43,7 @@ import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
   KEEP_WORKSPACES_ENV,
-  MCP_STARTUP_WAIT_INSTRUCTION,
+  MCP_STARTUP_RETRY_INSTRUCTION,
   findRunFiles,
   isolateRunState,
   logAndMaybeSkip,
@@ -161,7 +161,7 @@ suite("MCP event pipeline harness probe", function () {
             name: "mcp-event-probe",
             prompt: [
               "/mcp:ctrlyoke",
-              MCP_STARTUP_WAIT_INSTRUCTION,
+              MCP_STARTUP_RETRY_INSTRUCTION,
               "Call each ctrlyoke MCP tool exactly once, in this order:",
               "1. workflow_status with no arguments.",
               '2. post_note with {"text":"mcp probe note"}.',
