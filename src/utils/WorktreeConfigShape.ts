@@ -15,3 +15,17 @@ export function toWorktreeObjectConfig(
   }
   return value;
 }
+
+/**
+ * The worktree a workflow runs with: its authored value when set, otherwise the
+ * inherited settings value. Returns a copy so callers can't mutate either source.
+ */
+export function effectiveWorktreeObjectConfig(
+  authored: WorktreeConfig | undefined,
+  inherited: WorktreeConfig | undefined
+): WorktreeObjectConfig | false {
+  const effective = toWorktreeObjectConfig(
+    authored === undefined ? inherited : authored
+  );
+  return effective === false ? false : { ...effective };
+}

@@ -10,6 +10,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore, type RecentWorkflow } from "../../store/uiStore";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { effectiveWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
@@ -181,9 +182,14 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const closeFullscreenDrawers = useUiStore((s) => s.closeFullscreenDrawers);
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
-  const effectiveWorktree = useMemo(() => {
-    return useSettingsStore.getState().getEffectiveWorktree();
-  }, [globalSettings.worktree, workflowProperties.worktree]);
+  const effectiveWorktree = useMemo(
+    () =>
+      effectiveWorktreeObjectConfig(
+        workflowProperties.worktree,
+        globalSettings.worktree
+      ),
+    [globalSettings.worktree, workflowProperties.worktree]
+  );
   const worktreeIndicator = useMemo(() => {
     if (effectiveWorktree === false) {
       return undefined;

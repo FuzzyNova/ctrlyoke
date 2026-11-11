@@ -30,9 +30,12 @@ describe("diagnosticsForPermissions", () => {
       PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
     ];
     const diagnostics = [
-      ...permissionCapabilities.map((capability) => ({
-        capability,
-      } as CompatibilityDiagnostic)),
+      ...permissionCapabilities.map(
+        (capability) =>
+          ({
+            capability,
+          }) as CompatibilityDiagnostic
+      ),
       { capability: "terminal" } as CompatibilityDiagnostic,
     ];
 

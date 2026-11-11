@@ -62,7 +62,7 @@ import {
   type WorktreeDefaultConfig,
 } from "@root/types/CtrlYokeSettings";
 import type { WorktreeObjectConfig } from "@root/types/CtrlYokeTypes";
-import { toWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
+import { effectiveWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 import type { CapabilitiesModel } from "@root/types/CapabilitiesTypes";
 import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
 
@@ -811,11 +811,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
 
     getEffectiveWorktree: () => {
       const { workflowProperties, globalSettings } = get();
-      const authored = workflowProperties.worktree;
-      const effective = toWorktreeObjectConfig(
-        authored === undefined ? globalSettings.worktree : authored
+      return effectiveWorktreeObjectConfig(
+        workflowProperties.worktree,
+        globalSettings.worktree
       );
-      return effective === false ? false : { ...effective };
     },
 
     getEffectiveAgent: () => {
