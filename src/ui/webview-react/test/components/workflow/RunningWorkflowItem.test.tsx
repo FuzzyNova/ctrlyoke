@@ -28,6 +28,66 @@ describe("RunningWorkflowItem", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps the clock slot aligned and reflects enabled, paused, and unscheduled states", () => {
+    const base = {
+      workflow: {
+        id: "clock-row",
+        workflowKey: "workflow-clock" as never,
+        runRef: "run-clock" as never,
+        workflowName: "Clock row",
+        filePath: "clock.ctrlyoke.yaml",
+        executionState: EXECUTION_STATES.RUNNING,
+        currentStep: 0,
+        totalSteps: 1,
+      },
+      isCurrent: false,
+      hasActiveTerminal: false,
+      ...callbacks,
+    };
+    const nextRun = new Date(Date.now() + 60_000).getTime();
+    const schedule = {
+      trigger: { at: new Date(nextRun + 60_000).toISOString().slice(0, 16) },
+      hostId: "host",
+    };
+    const { rerender } = render(
+      <RunningWorkflowItem
+        {...base}
+        lineage={
+          {
+            address: { workflowKey: "workflow-clock" as never, kind: "draft" },
+            workflowName: "Clock row",
+            schedule: { ...schedule, enabled: true },
+            scheduleNextRunAt: nextRun,
+          } as never
+        }
+      />
+    );
+    const enabled = screen.getByRole("button", {
+      name: new RegExp("Next run"),
+    });
+    expect(enabled).toHaveClass("text-focus-fg");
+    expect(enabled.closest(".workflow-row-trailing")).not.toBeNull();
+    rerender(
+      <RunningWorkflowItem
+        {...base}
+        lineage={
+          {
+            address: { workflowKey: "workflow-clock" as never, kind: "draft" },
+            workflowName: "Clock row",
+            schedule: { ...schedule, enabled: false },
+          } as never
+        }
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: "Schedule workflow…" })
+    ).toHaveClass("opacity-60");
+    rerender(<RunningWorkflowItem {...base} />);
+    expect(
+      screen.getByRole("button", { name: "Schedule workflow…" })
+    ).toHaveClass("opacity-0");
+  });
+
   it("puts pause/stop on the metadata line in the shared action-button box", () => {
     // Running rows must line up with the recent rows beneath them: same row
     // grid, controls at the end of the second line, same 20px button box as

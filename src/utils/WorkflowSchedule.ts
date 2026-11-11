@@ -1,10 +1,5 @@
-import * as os from "os";
 import type { WorkflowSchedule } from "../types/CtrlYokeTypes";
 import { nextCronOccurrence, parseCronExpression } from "./CronSchedule";
-
-export function currentScheduleHostId(): string {
-  return os.hostname();
-}
 
 function parseLocalDateTime(value: unknown): number | null {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(value)) return null;

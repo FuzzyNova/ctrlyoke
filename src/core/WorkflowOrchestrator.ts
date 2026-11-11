@@ -98,7 +98,7 @@ import {
   isLineageRunningOnDisk,
   readScheduleDefinitionRevision,
 } from "./orchestration/WorkflowScheduler";
-import { currentScheduleHostId } from "../utils/WorkflowSchedule";
+import { currentScheduleHostId } from "../utils/WorkflowScheduleHost";
 import {
   RecentWorkflowCatalog,
   RecentWorkflowPublisher,

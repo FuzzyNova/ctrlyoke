@@ -34,6 +34,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
+import { ScheduleEditor } from "./ScheduleEditor";
 import { WORKTREE_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import { RunIdentityBadge } from "./RunIdentityBadge";
 import type { RunPanelRow } from "./RunSummaryRow";
@@ -1298,6 +1299,17 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     [handleDeleteRunPanelRow, handleRemoveWorkflow]
   );
 
+  const [scheduleEditor, setScheduleEditor] = useState<{
+    target: WorkflowContextMenuTarget;
+    anchor: HTMLElement | null;
+  } | null>(null);
+  const handleEditSchedule = useCallback(
+    (target: WorkflowContextMenuTarget, anchor: HTMLElement | null) => {
+      setScheduleEditor({ target, anchor });
+    },
+    []
+  );
+
   const handleDuplicateWorkflow = useCallback(
     (target: WorkflowContextMenuTarget, opener: HTMLElement | null) => {
       openDuplicateWorkflowDialog(
@@ -1319,6 +1331,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     onToggleFavorite: handleToggleFavorite,
     onDelete: handleWorkflowContextMenuDelete,
     onCloseDropdown: closeDropdown,
+    onEditSchedule: handleEditSchedule,
   });
 
   const openDisplayedWorkflowContextMenu = useCallback(
@@ -1336,6 +1349,10 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
           workflowName: displayName,
           scope: WORKFLOW_DELETE_SCOPES.LINEAGE,
           isFavorite: displayedLineage?.isFavorite,
+          schedule: displayedLineage?.schedule,
+          scheduleNextRunAt: displayedLineage?.scheduleNextRunAt,
+          scheduleLastMissedAt: displayedLineage?.scheduleLastMissedAt,
+          scheduleOnOtherHost: displayedLineage?.scheduleOnOtherHost,
           runDirectory: displayedRunDirectory ?? undefined,
           isExecuting: isWorkflowActive(executionState),
           isUnstarted: viewedRunUnstarted,
@@ -1866,6 +1883,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
               onStopRunning={handleStopWorkflow}
               onRemove={handleRemoveWorkflow}
               onToggleFavorite={handleToggleFavorite}
+              onEditSchedule={handleEditSchedule}
               onOpenContextMenu={openWorkflowContextMenu}
               onDrillIntoRuns={handleDrillIntoRuns}
               tier={dropdownRowTier}
@@ -1908,6 +1926,10 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
                 isViewingHistory={isViewingHistory}
                 executionRunRef={runPanelExecutionRunRef}
                 isFavorite={drilledRecentEntry?.isFavorite}
+                schedule={drilledRecentEntry?.schedule}
+                scheduleNextRunAt={drilledRecentEntry?.scheduleNextRunAt}
+                scheduleLastMissedAt={drilledRecentEntry?.scheduleLastMissedAt}
+                scheduleOnOtherHost={drilledRecentEntry?.scheduleOnOtherHost}
                 draftDirectory={drilledRecentEntry?.runNav?.draftDirectory}
                 confirmDeleteOperations={globalSettings.confirmDeleteOperations}
                 onBack={handleBackToWorkflowList}
@@ -1925,6 +1947,18 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
 
       {/* Delete workflow history confirmation modal */}
       {workflowContextMenuPortal}
+      {scheduleEditor && (
+        <ScheduleEditor
+          address={scheduleEditor.target.address}
+          workflowName={scheduleEditor.target.workflowName}
+          schedule={scheduleEditor.target.schedule}
+          scheduleNextRunAt={scheduleEditor.target.scheduleNextRunAt}
+          scheduleLastMissedAt={scheduleEditor.target.scheduleLastMissedAt}
+          scheduleOnOtherHost={scheduleEditor.target.scheduleOnOtherHost}
+          anchor={scheduleEditor.anchor}
+          onClose={() => setScheduleEditor(null)}
+        />
+      )}
       <ConfirmDeleteOperationModal
         isOpen={pendingDelete !== null}
         onCancel={handleRemoveWorkflowCancel}

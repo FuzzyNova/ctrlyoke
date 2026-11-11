@@ -12,6 +12,7 @@ import type {
   WorkflowKey,
   RunRef,
   WorkflowViewAddress,
+  WorkflowSchedule,
 } from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import {
@@ -62,6 +63,10 @@ interface RunPanelProps {
   executionRunRef?: string | null;
   /** Favorite state from the drilled lineage's recent entry. */
   isFavorite?: boolean;
+  schedule?: WorkflowSchedule;
+  scheduleNextRunAt?: number;
+  scheduleLastMissedAt?: number;
+  scheduleOnOtherHost?: boolean;
   /** Always the draft directory, even when the lineage's primary address is a run. */
   draftDirectory?: string;
   confirmDeleteOperations: boolean;
@@ -98,6 +103,10 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   isViewingHistory,
   executionRunRef,
   isFavorite,
+  schedule,
+  scheduleNextRunAt,
+  scheduleLastMissedAt,
+  scheduleOnOtherHost,
   draftDirectory,
   confirmDeleteOperations,
   onBack,
@@ -289,6 +298,10 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                   contextMenuAddress={addressForRow(workflowKey, row)}
                   workflowName={workflowName}
                   isFavorite={isFavorite}
+                  schedule={schedule}
+                  scheduleNextRunAt={scheduleNextRunAt}
+                  scheduleLastMissedAt={scheduleLastMissedAt}
+                  scheduleOnOtherHost={scheduleOnOtherHost}
                   draftDirectory={draftDirectory}
                   onOpenContextMenu={onOpenContextMenu}
                   onSelect={() => handleSelect(row)}

@@ -55,10 +55,8 @@ import type {
   WorkflowKey,
   WorkflowSchedule,
 } from "../types/CtrlYokeTypes";
-import {
-  currentScheduleHostId,
-  validateWorkflowSchedule,
-} from "../utils/WorkflowSchedule";
+import { validateWorkflowSchedule } from "../utils/WorkflowSchedule";
+import { currentScheduleHostId } from "../utils/WorkflowScheduleHost";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";

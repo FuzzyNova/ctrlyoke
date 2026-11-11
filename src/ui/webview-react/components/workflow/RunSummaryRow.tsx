@@ -20,7 +20,10 @@ import type { WorkflowRowTier } from "../../constants";
 import { getHarnessDisplayName, type HarnessId } from "../../types/messages";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
-import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type {
+  WorkflowSchedule,
+  WorkflowViewAddress,
+} from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
@@ -51,6 +54,10 @@ interface RunSummaryRowProps {
   contextMenuAddress?: WorkflowViewAddress;
   workflowName?: string;
   isFavorite?: boolean;
+  schedule?: WorkflowSchedule;
+  scheduleNextRunAt?: number;
+  scheduleLastMissedAt?: number;
+  scheduleOnOtherHost?: boolean;
   draftDirectory?: string;
   onOpenContextMenu?: (
     x: number,
@@ -86,6 +93,10 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
   contextMenuAddress,
   workflowName,
   isFavorite,
+  schedule,
+  scheduleNextRunAt,
+  scheduleLastMissedAt,
+  scheduleOnOtherHost,
   draftDirectory,
   onOpenContextMenu,
   onSelect,
@@ -140,6 +151,10 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
         workflowName: workflowName ?? label,
         scope: "run",
         isFavorite,
+        schedule,
+        scheduleNextRunAt,
+        scheduleLastMissedAt,
+        scheduleOnOtherHost,
         runDirectory:
           row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
             ? summary?.runDirectory

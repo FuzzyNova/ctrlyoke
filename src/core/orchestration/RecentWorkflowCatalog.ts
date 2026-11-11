@@ -28,7 +28,7 @@ import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
-import { currentScheduleHostId } from "../../utils/WorkflowSchedule";
+import { currentScheduleHostId } from "../../utils/WorkflowScheduleHost";
 import type { OutputHistoryManager } from "./OutputHistoryManager";
 import type { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 

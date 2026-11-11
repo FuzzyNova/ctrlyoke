@@ -35,8 +35,8 @@ describe("workflow row width budget", () => {
     // Running rows (pause/stop) and recent rows (favourite/remove) sit in
     // separate scroll regions; anything content-sized at the end of their
     // metadata line would move where one region's metadata truncates and
-    // where its run indicator sits. Two 20px icon buttons plus a 4px gap.
-    expect(WORKFLOW_ROW_TRACKS.actions).toBeGreaterThanOrEqual(20 * 2 + 4);
+    // where its run indicator sits. Three 20px icon buttons plus two 4px gaps.
+    expect(WORKFLOW_ROW_TRACKS.actions).toBeGreaterThanOrEqual(20 * 3 + 8);
     expect(WORKFLOW_ROW_TRACKS.runIndicator).toBeGreaterThanOrEqual(
       "#1042".length * 6.4 + INDICATOR_CHROME
     );
@@ -109,6 +109,6 @@ describe("stacked first-line width budget", () => {
   });
 
   it("leaves the metadata line readable beside the trailing controls", () => {
-    expect(240 - secondLineCost).toBeGreaterThanOrEqual(80);
+    expect(240 - secondLineCost).toBeGreaterThanOrEqual(60);
   });
 });

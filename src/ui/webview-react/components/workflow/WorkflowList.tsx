@@ -24,6 +24,7 @@ import {
   WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE,
   WORKFLOW_ROW_KINDS,
   WORKFLOW_ROW_TIERS,
+  WORKFLOW_SCHEDULE_LABELS,
   type WorkflowRowTier,
 } from "../../constants";
 import { getHarnessDisplayName } from "../../types/messages";
@@ -99,6 +100,10 @@ interface WorkflowListProps {
   onStopRunning: (workflow: WorkflowSummary) => void;
   onRemove?: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
+  onEditSchedule?: (
+    target: WorkflowContextMenuTarget,
+    opener: HTMLElement | null
+  ) => void;
   /** Drills into a lineage's run panel without selecting/loading it. Omitted rows render no indicator. */
   onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
   onOpenContextMenu?: (
@@ -129,6 +134,10 @@ interface RecentWorkflowRowProps {
   tier: WorkflowRowTier;
   onSelect: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
+  onEditSchedule?: (
+    target: WorkflowContextMenuTarget,
+    opener: HTMLElement | null
+  ) => void;
   onRemove?: (address: WorkflowViewAddress) => void;
   onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
   onOpenContextMenu?: (
@@ -148,6 +157,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   tier,
   onSelect,
   onToggleFavorite,
+  onEditSchedule,
   onRemove,
   onDrillIntoRuns,
   onOpenContextMenu,
@@ -183,6 +193,10 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         workflowName: workflow.workflowName,
         scope: "lineage",
         isFavorite: workflow.isFavorite,
+        schedule: workflow.schedule,
+        scheduleNextRunAt: workflow.scheduleNextRunAt,
+        scheduleLastMissedAt: workflow.scheduleLastMissedAt,
+        scheduleOnOtherHost: workflow.scheduleOnOtherHost,
         runDirectory: workflow.runDirectory,
         isExecuting: isWorkflowActive(
           workflow.executionState as ExecutionState
@@ -288,6 +302,41 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         )}
 
         <RowActionRail>
+          <button
+            type="button"
+            title={
+              workflow.scheduleNextRunAt
+                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(workflow.scheduleNextRunAt).toLocaleString()}`
+                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
+            }
+            aria-label={
+              workflow.scheduleNextRunAt
+                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(workflow.scheduleNextRunAt).toLocaleString()}`
+                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditSchedule?.(
+                {
+                  address: workflow.address,
+                  workflowName: workflow.workflowName,
+                  scope: "lineage",
+                  isFavorite: workflow.isFavorite,
+                  schedule: workflow.schedule,
+                  scheduleNextRunAt: workflow.scheduleNextRunAt,
+                  scheduleLastMissedAt: workflow.scheduleLastMissedAt,
+                  scheduleOnOtherHost: workflow.scheduleOnOtherHost,
+                  runDirectory: workflow.runDirectory,
+                  isExecuting: false,
+                  isUnstarted: workflow.unstarted,
+                },
+                e.currentTarget
+              );
+            }}
+            className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${workflow.schedule?.enabled ? "text-focus-fg" : workflow.schedule ? "text-description-fg opacity-60" : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground"}`}
+          >
+            <Icon name="codicon-clock" className="block leading-none" />
+          </button>
           {onToggleFavorite && (
             <button
               type="button"
@@ -388,6 +437,7 @@ export const WorkflowList = React.forwardRef<
     onStopRunning,
     onRemove,
     onToggleFavorite,
+    onEditSchedule,
     onDrillIntoRuns,
     onOpenContextMenu,
     onNewWorkflow,
@@ -507,6 +557,7 @@ export const WorkflowList = React.forwardRef<
                       : undefined
                   }
                   onOpenContextMenu={onOpenContextMenu}
+                  onEditSchedule={onEditSchedule}
                   onClick={() => onSwitchRunning(row.workflow.id)}
                   onPause={() => onPauseRunning(row.workflow)}
                   onCancelPause={() => onCancelPauseRunning(row.workflow)}
@@ -552,6 +603,7 @@ export const WorkflowList = React.forwardRef<
                 tier={tier}
                 onSelect={onSelectRecent}
                 onToggleFavorite={onToggleFavorite}
+                onEditSchedule={onEditSchedule}
                 onRemove={onRemove}
                 onDrillIntoRuns={onDrillIntoRuns}
                 onOpenContextMenu={onOpenContextMenu}

@@ -25,7 +25,10 @@ import {
   hasWorkflowTokenUsage,
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
-import type { WorkflowRowTier } from "../../constants";
+import {
+  WORKFLOW_SCHEDULE_LABELS,
+  type WorkflowRowTier,
+} from "../../constants";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
@@ -60,6 +63,10 @@ interface RunningWorkflowItemProps {
     target: WorkflowContextMenuTarget,
     opener?: HTMLElement | null
   ) => void;
+  onEditSchedule?: (
+    target: WorkflowContextMenuTarget,
+    opener: HTMLElement | null
+  ) => void;
   onClick: () => void;
   onPause: () => void;
   onCancelPause: () => void;
@@ -88,6 +95,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   showRunIndicatorTrack = false,
   onDrillIntoRuns,
   onOpenContextMenu,
+  onEditSchedule,
   onClick,
   onPause,
   onCancelPause,
@@ -128,6 +136,10 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         workflowName: lineage?.workflowName ?? workflow.workflowName,
         scope: "lineage",
         isFavorite: lineage?.isFavorite,
+        schedule: lineage?.schedule,
+        scheduleNextRunAt: lineage?.scheduleNextRunAt,
+        scheduleLastMissedAt: lineage?.scheduleLastMissedAt,
+        scheduleOnOtherHost: lineage?.scheduleOnOtherHost,
         runDirectory: lineage?.runDirectory,
         isExecuting: true,
       },
@@ -235,6 +247,43 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           instead (see WorkflowRowLayout's `metaBadge`) and has no local
           controls to offer here. */}
         <RowActionRail>
+          <button
+            type="button"
+            title={
+              lineage?.scheduleNextRunAt
+                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(lineage.scheduleNextRunAt).toLocaleString()}`
+                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
+            }
+            aria-label={
+              lineage?.scheduleNextRunAt
+                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(lineage.scheduleNextRunAt).toLocaleString()}`
+                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              const address = lineage?.address ?? runAddress;
+              if (address)
+                onEditSchedule?.(
+                  {
+                    address,
+                    workflowName:
+                      lineage?.workflowName ?? workflow.workflowName,
+                    scope: "lineage",
+                    isFavorite: lineage?.isFavorite,
+                    schedule: lineage?.schedule,
+                    scheduleNextRunAt: lineage?.scheduleNextRunAt,
+                    scheduleLastMissedAt: lineage?.scheduleLastMissedAt,
+                    scheduleOnOtherHost: lineage?.scheduleOnOtherHost,
+                    runDirectory: lineage?.runDirectory,
+                    isExecuting: true,
+                  },
+                  e.currentTarget
+                );
+            }}
+            className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${lineage?.schedule?.enabled ? "text-focus-fg" : lineage?.schedule ? "text-description-fg opacity-60" : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground"}`}
+          >
+            <Icon name="codicon-clock" />
+          </button>
           {workflow.externalOwner == null &&
             (isRunning || isPausing || isPaused) && (
               <>

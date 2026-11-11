@@ -559,6 +559,6 @@ No remaining blockers — the plan is fully specified for a v1 implementation.
 3. [x] Backend and contract plumbing: `SET_SCHEDULE`/`CLEAR_SCHEDULE` messages and
        handlers, `RecentWorkflowEntry` fields, the `uiStore` `RecentWorkflow` fields and
        actions, and tests.
-4. UI authoring: the `ScheduleEditor` popover, the row clock button (rail 44 → 68), the
+4. [x] UI authoring: the `ScheduleEditor` popover, the row clock button (rail 44 → 68), the
    context-menu entry, and tests.
 5. UI management: the "Scheduled" section and filter, public docs, `CHANGELOG.md`.

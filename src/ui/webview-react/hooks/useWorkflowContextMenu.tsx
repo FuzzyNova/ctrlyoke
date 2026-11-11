@@ -21,6 +21,8 @@ import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow"
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
+import type { WorkflowSchedule } from "@root/types/CtrlYokeTypes";
+import { WORKFLOW_SCHEDULE_LABELS } from "@/constants";
 
 export interface WorkflowContextMenuTarget {
   address: WorkflowViewAddress;
@@ -34,6 +36,10 @@ export interface WorkflowContextMenuTarget {
   scope: WorkflowDeleteScope;
   /** Lineage-scoped on every surface, including run-panel rows. */
   isFavorite?: boolean;
+  schedule?: WorkflowSchedule;
+  scheduleNextRunAt?: number;
+  scheduleLastMissedAt?: number;
+  scheduleOnOtherHost?: boolean;
   /** Absent → Copy renders disabled. */
   runDirectory?: string;
   /** Executing right now — disables Delete and New Run. */
@@ -54,6 +60,10 @@ interface UseWorkflowContextMenuOptions {
   onToggleFavorite: (address: WorkflowViewAddress) => void;
   onDelete: (target: WorkflowContextMenuTarget) => void;
   onCloseDropdown: () => void;
+  onEditSchedule: (
+    target: WorkflowContextMenuTarget,
+    opener: HTMLElement | null
+  ) => void;
 }
 
 const copyRunDirectoryTitle =
@@ -80,6 +90,7 @@ export function useWorkflowContextMenu({
   onToggleFavorite,
   onDelete,
   onCloseDropdown,
+  onEditSchedule,
 }: UseWorkflowContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const activeTerminalWorkflows = useTerminalStore(
@@ -262,6 +273,20 @@ export function useWorkflowContextMenu({
           },
           { type: "divider" },
           {
+            label: target.schedule
+              ? WORKFLOW_SCHEDULE_LABELS.editSchedule
+              : WORKFLOW_SCHEDULE_LABELS.schedule,
+            icon: "codicon-clock",
+            disabled: false,
+            title: target.scheduleNextRunAt
+              ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(target.scheduleNextRunAt).toLocaleString()}`
+              : undefined,
+            onClick: () => {
+              onCloseDropdown();
+              onEditSchedule(target, opener);
+            },
+          },
+          {
             label: target.isFavorite
               ? "Remove from Favorites"
               : "Add to Favorites",
@@ -292,6 +317,7 @@ export function useWorkflowContextMenu({
       onCloseDropdown,
       onDelete,
       onDuplicate,
+      onEditSchedule,
       onToggleFavorite,
     ]
   );

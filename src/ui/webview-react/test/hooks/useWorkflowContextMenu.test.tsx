@@ -56,6 +56,7 @@ function TestHarness({
       onToggleFavorite,
       onDelete,
       onCloseDropdown,
+      onEditSchedule: vi.fn(),
     }
   );
 
@@ -86,7 +87,7 @@ describe("useWorkflowContextMenu", () => {
 
   afterEach(() => cleanup());
 
-  it("renders new run, duplicate, copy, exit terminals, favorite, and scoped delete in order", () => {
+  it("renders schedule directly above favorite in the lineage action group", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
@@ -102,10 +103,12 @@ describe("useWorkflowContextMenu", () => {
       "Copy Run Directory Path",
       "Exit Terminal",
       "Exit All Idle Terminals",
+      "Schedule…",
       "Add to Favorites",
       "Delete Workflow",
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(3);
+    expect(screen.getByRole("menuitem", { name: "Schedule…" })).toBeEnabled();
     expect(
       screen.getByRole("menuitem", { name: "Copy Run Directory Path" })
     ).toHaveAttribute("title", expect.stringContaining("server's filesystem"));
@@ -196,6 +199,25 @@ describe("useWorkflowContextMenu", () => {
     ).toBeDisabled();
     expect(
       screen.getByRole("menuitem", { name: "Exit All Idle Terminals" })
+    ).toBeEnabled();
+  });
+
+  it("labels a scheduled lineage action Edit Schedule", () => {
+    render(
+      <TestHarness
+        menuTarget={{
+          ...target,
+          schedule: {
+            enabled: true,
+            trigger: { cron: "0 9 * * *" },
+            hostId: "host",
+          },
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.getByRole("menuitem", { name: "Edit Schedule…" })
     ).toBeEnabled();
   });
 

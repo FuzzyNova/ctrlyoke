@@ -185,9 +185,61 @@ export const WORKFLOW_ROW_TRACKS = {
    * sits its badge tens of pixels out of line with its neighbours.
    */
   runIndicator: 52,
-  /** Trailing action rail: two 20px icon buttons and the gap between them. */
-  actions: 44,
+  /** Trailing action rail: three 20px icon buttons and two 4px gaps. */
+  actions: 68,
 } as const;
+
+/** Shared labels used by lineage schedule controls and their context-menu entry. */
+export const WORKFLOW_SCHEDULE_LABELS = {
+  schedule: "Schedule…",
+  editSchedule: "Edit Schedule…",
+  scheduleWorkflow: "Schedule workflow…",
+  scheduleTitle: "Schedule",
+  nextRun: "Next run",
+  frequency: "Frequency",
+  once: "Once",
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
+  customCron: "Custom cron",
+  startDateTime: "Start date and time",
+  weekdays: "Weekdays",
+  cronExpression: "Cron expression",
+  untilOptional: "Until (optional)",
+  enabled: "Enabled",
+  noNextRun: "None",
+  paused: " (paused)",
+  hostRunningNote:
+    "Runs happen only while ctrlyoke/VS Code or ctrlyoke server is running. Missed runs are skipped. This run is unattended.",
+  otherHostNote: "Scheduled on another machine; saving here moves it.",
+  missedRunNote: "A scheduled run was missed while ctrlyoke was not running.",
+  cancel: "Cancel",
+  save: "Save",
+  remove: "Remove",
+  close: "Close schedule editor",
+} as const;
+
+/** Stable values used to control schedule picker behavior. */
+export const WORKFLOW_SCHEDULE_FREQUENCIES = {
+  once: "once",
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+  custom: "custom",
+} as const;
+
+export const WORKFLOW_SCHEDULE_WEEKDAYS = [
+  "Sun",
+  "Mon",
+  "Tue",
+  "Wed",
+  "Thu",
+  "Fri",
+  "Sat",
+] as const;
+
+export const WORKFLOW_SCHEDULE_DEFAULT_CRON = "0 9 * * 1-5";
+export const WORKFLOW_SCHEDULE_PREVIEW_HOST_ID = "preview";
 
 const WORKFLOW_ROW_HORIZONTAL_PADDING = 16;
 const WORKFLOW_ROW_COLUMN_GAP = 4;

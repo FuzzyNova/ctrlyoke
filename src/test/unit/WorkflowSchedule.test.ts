@@ -6,7 +6,8 @@ import { suite, test } from "mocha";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
-import { currentScheduleHostId, validateWorkflowSchedule } from "../../utils/WorkflowSchedule";
+import { validateWorkflowSchedule } from "../../utils/WorkflowSchedule";
+import { currentScheduleHostId } from "../../utils/WorkflowScheduleHost";
 
 suite("WorkflowSchedule", () => {
   test("validates trigger shape and required host identity", () => {
