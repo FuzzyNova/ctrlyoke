@@ -18,6 +18,7 @@ import { STEP_STATUS } from "../../types/messages";
 import {
   DEFAULT_WORKFLOW_NAME,
   UNDO_REDO_DIRECTIONS,
+  isTerminalStepStatus,
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
 import { HEADER_BUTTON_SIZES } from "@/constants";
@@ -84,21 +85,6 @@ function getStepStatus(step?: WorkflowStep | null) {
   return (step as RuntimeDecoratedStep | undefined | null)?.status;
 }
 
-function isTerminalStatus(
-  status: RuntimeDecoratedStep["status"]
-): status is
-  | typeof STEP_STATUS.COMPLETED
-  | typeof STEP_STATUS.FAILED
-  | typeof STEP_STATUS.CANCELLED
-  | typeof STEP_STATUS.SKIPPED {
-  return (
-    status === STEP_STATUS.COMPLETED ||
-    status === STEP_STATUS.FAILED ||
-    status === STEP_STATUS.CANCELLED ||
-    status === STEP_STATUS.SKIPPED
-  );
-}
-
 function sameEditableStep(
   a?: WorkflowStep | null,
   b?: WorkflowStep | null
@@ -129,8 +115,8 @@ function reconcileStepRuntime(
     return restoredStep;
   }
 
-  const restoredTerminal = isTerminalStatus(restoredStatus);
-  const previousTerminal = isTerminalStatus(previousStatus);
+  const restoredTerminal = isTerminalStepStatus(restoredStatus);
+  const previousTerminal = isTerminalStepStatus(previousStatus);
 
   if (previousTerminal && !restoredTerminal) {
     return {
@@ -143,10 +129,10 @@ function reconcileStepRuntime(
   return restoredStep;
 }
 
-function deriveCurrentStep(steps: WorkflowStep[]): number {
+export function deriveCurrentStep(steps: WorkflowStep[]): number {
   let nextCurrentStep = 0;
   for (const step of steps) {
-    if (!isTerminalStatus(getStepStatus(step))) {
+    if (!isTerminalStepStatus(getStepStatus(step))) {
       break;
     }
     nextCurrentStep += 1;

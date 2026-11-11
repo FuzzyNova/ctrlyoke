@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Undo/redo no longer loses a "No turn started" status.
+
 ### Changed
 
 - The `none` model option is now labelled **None (harness default)** in every model picker, with the note "No model flag is passed". Inside **Inherit (…)** and on the footer's model button it reads **Harness default**. `none` is the out-of-the-box model for every harness, so this is what a new workflow shows.

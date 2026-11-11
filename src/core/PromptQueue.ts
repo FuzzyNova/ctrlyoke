@@ -28,6 +28,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
+  isTerminalStepStatus,
   PARALLEL_GROUP_ADMISSION,
   STEP_CLAIM_OUTCOMES,
   type ParallelGroupAdmission,
@@ -1310,13 +1311,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /** Get the number of steps with any terminal result. */
   getTerminalCount(): number {
-    return this.state.results.filter(
-      (result) =>
-        result.status === STEP_STATUS.COMPLETED ||
-        result.status === STEP_STATUS.SKIPPED ||
-        result.status === STEP_STATUS.CANCELLED ||
-        result.status === STEP_STATUS.FAILED ||
-        result.status === STEP_STATUS.NO_TURN_STARTED
+    return this.state.results.filter((result) =>
+      isTerminalStepStatus(result.status)
     ).length;
   }
 

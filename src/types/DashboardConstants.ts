@@ -3647,6 +3647,16 @@ export const PROMPT_TERMINAL_STATUS = {
 export type PromptTerminalStatus =
   (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS];
 
+const PROMPT_TERMINAL_STATUSES: ReadonlySet<string> = new Set(
+  Object.values(PROMPT_TERMINAL_STATUS)
+);
+
+export function isTerminalStepStatus(
+  status: unknown
+): status is PromptTerminalStatus {
+  return typeof status === "string" && PROMPT_TERMINAL_STATUSES.has(status);
+}
+
 /** Shared compact labels used by step badges and history status filters. */
 export const PROMPT_TERMINAL_STATUS_LABELS: Record<
   PromptTerminalStatus,

@@ -6,6 +6,7 @@ import {
   STEP_STATUS,
   type StepStatus,
 } from "../types/messages";
+import { isTerminalStepStatus } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "./useVsCodeApi";
 import { postUndoRedoSync } from "../utils/undoRedoSync";
 import { useEditorStore } from "../store/editorStore";
@@ -77,21 +78,12 @@ function findCachedRuntime(
   return undefined;
 }
 
-function isTerminalStatus(status: StepStatus | undefined): boolean {
-  return (
-    status === STEP_STATUS.COMPLETED ||
-    status === STEP_STATUS.FAILED ||
-    status === STEP_STATUS.CANCELLED ||
-    status === STEP_STATUS.SKIPPED
-  );
-}
-
-function deriveCurrentStepFromRuntime(steps: WorkflowStep[]): number {
+export function deriveCurrentStepFromRuntime(steps: WorkflowStep[]): number {
   const firstPendingIndex = steps.findIndex((step) => {
     const decorated = step as RuntimeDecoratedStep;
     return (
       decorated._runtime?.completedAt === undefined &&
-      !isTerminalStatus(decorated.status)
+      !isTerminalStepStatus(decorated.status)
     );
   });
   return firstPendingIndex === -1 ? steps.length : firstPendingIndex;
@@ -131,7 +123,7 @@ export function mergeRuntimeForUndoRedo(
     // "pending" status written by loadWorkflow/EXECUTION_STARTED before the step
     // ran. A non-terminal restored status must never override a live/cached
     // "completed" status from a run that happened after the snapshot was taken.
-    const restoredStatus = isTerminalStatus(restored.status)
+    const restoredStatus = isTerminalStepStatus(restored.status)
       ? restored.status
       : undefined;
     const status = deriveStatusFromRuntime(

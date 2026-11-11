@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import {
   STEP_STATUS,
+  isTerminalStepStatus,
   type ExecutionState,
   type FinalStepPhase,
   type StepStatus,
@@ -55,14 +56,6 @@ type GroupMemberStatus = {
   enabled: boolean;
 };
 
-const terminalStatuses: StepStatus[] = [
-  STEP_STATUS.COMPLETED,
-  STEP_STATUS.FAILED,
-  STEP_STATUS.CANCELLED,
-  STEP_STATUS.SKIPPED,
-  STEP_STATUS.NO_TURN_STARTED,
-];
-
 export function deriveParallelGroupStatus(
   members: GroupMemberStatus[]
 ): ParallelGroupStatus {
@@ -75,9 +68,7 @@ export function deriveParallelGroupStatus(
     return "running";
   }
 
-  const terminal = members.every(({ status }) =>
-    terminalStatuses.includes(status)
-  );
+  const terminal = members.every(({ status }) => isTerminalStepStatus(status));
   if (terminal && members.some(({ status }) => status === STEP_STATUS.FAILED)) {
     return "failed";
   }

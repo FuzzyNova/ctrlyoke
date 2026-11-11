@@ -193,7 +193,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `normalizeBranchName`. Queued three steps:
   - Terminal step-status membership. `PROMPT_TERMINAL_STATUS` has five statuses,
     but both undo/redo copies (`UndoRedoControl.tsx`, `useUndoRedoKeyHandler.ts`) and
-    `WorkflowStepsPanel.tsx` predate `NO_TURN_STARTED` and miss it. This is a bug fix.
+    `WorkflowStepsPanel.tsx` predate `NO_TURN_STARTED` and miss it. Fixed with the
+    shared `isTerminalStepStatus` guard and regression tests.
   - Win32 `resolve` + `toLowerCase()` path keys beside `PathCasing` (nine sites). The
     Codex admin-dir check also skips the fold.
   - Identical private copies of `ensurePrivateDirectory` and `isStringArray`.

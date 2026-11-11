@@ -12,7 +12,23 @@ import {
   WORKSPACE_MEDIA_INFO_BY_EXTENSION,
   WORKSPACE_MEDIA_KINDS,
   workspaceMediaInfoForPath,
+  PROMPT_TERMINAL_STATUS,
+  isTerminalStepStatus,
 } from "../../types/DashboardConstants";
+
+suite("isTerminalStepStatus", () => {
+  test("recognizes every canonical prompt terminal status", () => {
+    for (const status of Object.values(PROMPT_TERMINAL_STATUS)) {
+      assert.strictEqual(isTerminalStepStatus(status), true);
+    }
+  });
+
+  test("rejects non-terminal and non-string values", () => {
+    assert.strictEqual(isTerminalStepStatus("running"), false);
+    assert.strictEqual(isTerminalStepStatus(undefined), false);
+    assert.strictEqual(isTerminalStepStatus(null), false);
+  });
+});
 
 suite("resolveQueueInsertIndex", () => {
   test("places parallelWithCurrent after the current live group", () => {

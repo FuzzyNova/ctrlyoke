@@ -61,6 +61,7 @@ import {
   FINAL_STEP_PHASES,
   type StepStatus,
 } from "../../types/messages";
+import { isTerminalStepStatus } from "@root/types/DashboardConstants";
 import { sendMessage } from "@messaging/sendMessage";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
@@ -982,11 +983,7 @@ const WorkflowStepsPanelInner: React.FC<{
       // terminal status and any _runtime exists — this covers the case where a step
       // completed after the last SESSION_RESTORED so harness/model weren't yet in
       // the working file snapshot but were since delivered via STEP_STATUS_CHANGED.
-      const isTerminalStatus =
-        status === STEP_STATUS.COMPLETED ||
-        status === STEP_STATUS.FAILED ||
-        status === STEP_STATUS.CANCELLED ||
-        status === STEP_STATUS.SKIPPED;
+      const isTerminalStatus = isTerminalStepStatus(status);
       if (
         (step._runtime?.harness ?? step._runtime?.model) ||
         (isTerminalStatus && step._runtime != null)
