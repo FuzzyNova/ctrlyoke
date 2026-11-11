@@ -7,6 +7,7 @@ import {
   getRequestedQwenModel,
   QwenHarnessAdapter,
 } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { applyPreparedMutations } from "../../core/harness/shared/interfaces/PreparedMutation";
 import { TEMP_FILE_CATEGORIES } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import type {
@@ -404,10 +405,12 @@ suite("QwenHarnessAdapter", () => {
       const workspaceRoot = await createTempWorkspace();
 
       try {
-        assert.strictEqual(
-          await provider.getMcpConfigArgs(undefined, workspaceRoot),
-          null
+        const preparation = await provider.planMcpConfigArgs(
+          undefined,
+          workspaceRoot
         );
+        await applyPreparedMutations(preparation.mutations);
+        assert.deepStrictEqual(preparation.cliArgs, []);
         assert.deepStrictEqual(await fs.readdir(workspaceRoot), []);
       } finally {
         await removeTempWorkspace(workspaceRoot);
@@ -436,7 +439,7 @@ suite("QwenHarnessAdapter", () => {
         url: "https://mcp.example.test/mcp",
       };
 
-      const args = await provider.getMcpConfigArgs(
+      const preparation = await provider.planMcpConfigArgs(
         "C:\\extension\\out\\mcp-server.js",
         workspaceRoot,
         workingFilePath,
@@ -447,6 +450,8 @@ suite("QwenHarnessAdapter", () => {
         },
         [localServer, remoteServer, streamableServer]
       );
+      await applyPreparedMutations(preparation.mutations);
+      const args = preparation.cliArgs;
 
       assert.ok(args);
       assert.deepStrictEqual(parseMcpConfig(args), {
@@ -482,7 +487,7 @@ suite("QwenHarnessAdapter", () => {
     test("substitutes resolved secret values into process-local MCP config", async () => {
       const provider = new QwenHarnessAdapter();
       const secret = "qwen-test-secret-value";
-      const args = await provider.getMcpConfigArgs(
+      const preparation = await provider.planMcpConfigArgs(
         undefined,
         "C:\\workspace\\project",
         undefined,
@@ -497,6 +502,8 @@ suite("QwenHarnessAdapter", () => {
         undefined,
         { API_TOKEN: secret }
       );
+      await applyPreparedMutations(preparation.mutations);
+      const args = preparation.cliArgs;
 
       assert.ok(args);
       const config = parseMcpConfig(args) as {
@@ -515,20 +522,24 @@ suite("QwenHarnessAdapter", () => {
       const secondProvider = new QwenHarnessAdapter();
 
       try {
-        const firstArgs = await firstProvider.getMcpConfigArgs(
+        const firstPreparation = await firstProvider.planMcpConfigArgs(
           undefined,
           workspaceRoot,
           undefined,
           undefined,
           [{ id: "first", command: "first-server" }]
         );
-        const secondArgs = await secondProvider.getMcpConfigArgs(
+        await applyPreparedMutations(firstPreparation.mutations);
+        const secondPreparation = await secondProvider.planMcpConfigArgs(
           undefined,
           workspaceRoot,
           undefined,
           undefined,
           [{ id: "second", command: "second-server" }]
         );
+        await applyPreparedMutations(secondPreparation.mutations);
+        const firstArgs = firstPreparation.cliArgs;
+        const secondArgs = secondPreparation.cliArgs;
 
         assert.deepStrictEqual(parseMcpConfig(firstArgs!), {
           mcpServers: { first: { command: "first-server" } },

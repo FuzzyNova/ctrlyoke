@@ -1029,7 +1029,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
   }
 
   /**
-   * Generate MCP server configuration arguments for Copilot CLI
+   * Plan MCP server configuration arguments for Copilot CLI
    *
    * Copilot CLI uses --additional-mcp-config @<file> format.
    * Config file format: JSON with "type": "local"/"http"/"sse" and "tools" field.
@@ -1037,30 +1037,8 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Active working file for this workflow (sets CTRLYOKE_WORKING_FILE)
-   * @returns CLI arguments array with --additional-mcp-config, or null if MCP not supported
+   * @returns CLI arguments and deferred config-file mutations
    */
-  async getMcpConfigArgs(
-    mcpServerPath: string | undefined,
-    workspaceRoot: string,
-    workingFilePath?: string,
-    additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[],
-    stateRoot?: string,
-    secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<string[] | null> {
-    const preparation = await this.planMcpConfigArgs(
-      mcpServerPath,
-      workspaceRoot,
-      workingFilePath,
-      additionalEnv,
-      userServers,
-      stateRoot,
-      secretEnvironment
-    );
-    await applyPreparedMutations(preparation.mutations);
-    return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
-  }
-
   async planMcpConfigArgs(
     mcpServerPath: string | undefined,
     workspaceRoot: string,

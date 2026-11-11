@@ -894,30 +894,8 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * The shared settings-entry builder keeps this schema aligned with Qwen's
    * native settings format without writing a workspace settings file.
    *
-   * @returns Two tokens (`--mcp-config` and its JSON value), or null without MCP
+   * @returns CLI arguments and deferred mutations
    */
-  async getMcpConfigArgs(
-    mcpServerPath: string | undefined,
-    workspaceRoot: string,
-    workingFilePath?: string,
-    additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[],
-    stateRoot?: string,
-    secretEnvironment?: Readonly<Record<string, string>>
-  ): Promise<string[] | null> {
-    const preparation = await this.planMcpConfigArgs(
-      mcpServerPath,
-      workspaceRoot,
-      workingFilePath,
-      additionalEnv,
-      userServers,
-      stateRoot,
-      secretEnvironment
-    );
-    await applyPreparedMutations(preparation.mutations);
-    return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
-  }
-
   async planMcpConfigArgs(
     mcpServerPath: string | undefined,
     workspaceRoot: string,

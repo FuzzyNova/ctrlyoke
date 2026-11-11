@@ -304,6 +304,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Dead `getMcpConfigArgs` in all six harness adapters plus the optional
     `IHarnessAdapter` member. Production calls only `planMcpConfigArgs`. The six
     copies had drifted on when they return `null`. Only Qwen/OpenCode tests call it.
+    Landed: removed the wrapper and migrated its tests to apply planned mutations.
   - `TerminalStartedMessage` hand-built from a live `PtySession` in six places. The
     orchestrator's replay copy drops `shellKind` (filed:
     `dev/bugs/backlog/terminal-replay-drops-shell-kind.md`).
