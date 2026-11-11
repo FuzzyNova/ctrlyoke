@@ -262,6 +262,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   directly: identical private `isStringRecord` in `HarnessFileManager.ts` and
   `McpRegistryFileManager.ts` now lives in `JsonTypeGuards.ts`; `PromptFileParser`
   compared against a raw `"worktree"` instead of `PROMPT_PROPERTIES.WORKTREE`.
+  Landed shared setting write-scope labels and replaced repeated dashboard labels and scope literals.
   Queued four steps:
   - Dashboard `@` references: the workspace explorer/editor context menus quote only
     on spaces instead of using `ContextReferenceBuilder` (colon paths break; bug to

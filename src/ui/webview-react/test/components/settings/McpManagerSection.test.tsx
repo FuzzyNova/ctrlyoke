@@ -115,6 +115,7 @@ describe("McpManagerSection", () => {
 
   it("hides the VS Code MCP gallery action when the host does not advertise it", () => {
     renderSection([]);
+    expect(screen.getByText("Using top-level scope: User")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "VS Code MCP" })
     ).not.toBeInTheDocument();

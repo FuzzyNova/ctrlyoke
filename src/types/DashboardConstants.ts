@@ -5686,6 +5686,11 @@ export const SETTING_SCOPES = {
   DEFAULT: "default",
 } as const;
 
+export const SETTING_WRITE_SCOPE_LABELS: Record<SettingWriteScope, string> = {
+  [SETTING_SCOPES.USER]: "User",
+  [SETTING_SCOPES.WORKSPACE]: "Workspace",
+};
+
 export type SettingScope = (typeof SETTING_SCOPES)[keyof typeof SETTING_SCOPES];
 /** Scopes that accept writes — workspace or user (excludes the read-only "default" tier) */
 export type SettingWriteScope = Exclude<

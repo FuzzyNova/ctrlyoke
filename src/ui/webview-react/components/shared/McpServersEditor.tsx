@@ -21,7 +21,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
-import { SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
+import { type SettingWriteScope } from "@/types/messages";
+import { SETTING_WRITE_SCOPE_LABELS } from "@root/types/DashboardConstants";
 import { useMcpManagerStore } from "../../store/mcpManagerStore";
 import { useUiStore } from "@store/uiStore";
 import { findLiteralCredentialEnvKeys } from "./KeyValueMapHelpers";
@@ -193,10 +194,6 @@ function buildArray(
   return result;
 }
 
-function formatScopeLabel(scope: SettingWriteScope): string {
-  return scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
-}
-
 function getServerSummary(server: McpServerConfig): string {
   if (server.url) return server.url;
   if (server.command) {
@@ -249,7 +246,7 @@ function buildListedServers(
 function ScopeBadge({ scope }: { scope: SettingWriteScope }) {
   return (
     <span className="inline-flex items-center rounded-sm border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
-      {formatScopeLabel(scope)}
+      {SETTING_WRITE_SCOPE_LABELS[scope]}
     </span>
   );
 }

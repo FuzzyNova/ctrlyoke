@@ -6,6 +6,7 @@ import {
   WORKSPACE_ENTRY_KINDS,
   DASHBOARD_HOST_CAPABILITIES,
   SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
 } from "@root/types/DashboardConstants";
 import React, {
@@ -708,8 +709,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       (variable) => variables[variable.name] !== variable.default
     );
     if (!savedScope && !differsFromDefault) return null;
-    const scopeLabel =
-      savedScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
+    const scopeLabel = savedScope ? SETTING_WRITE_SCOPE_LABELS[savedScope] : "";
     return (
       <span className="inline-flex items-center gap-2">
         {savedScope && (
@@ -724,7 +724,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           title={
             savedScope
               ? `Clear saved value from ${scopeLabel} settings`
-              : `Save ${group.length > 1 ? "these values" : "this value"} as the variable default in ${saveScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"} settings`
+              : `Save ${group.length > 1 ? "these values" : "this value"} as the variable default in ${SETTING_WRITE_SCOPE_LABELS[saveScope]} settings`
           }
         >
           {savedScope ? "Clear saved value" : "Save as default"}

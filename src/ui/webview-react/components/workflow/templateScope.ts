@@ -1,4 +1,8 @@
 import type { ScopeToggleOption } from "../shared";
+import {
+  SETTING_SCOPES,
+  SETTING_WRITE_SCOPE_LABELS,
+} from "@root/types/DashboardConstants";
 
 /** Where a custom template lives: this workspace only, or every workspace for this user. */
 export type TemplateScope = "user" | "workspace";
@@ -10,13 +14,13 @@ export const TEMPLATE_SCOPE_OPTIONS: readonly [
 ] = [
   {
     value: "workspace",
-    label: "Workspace",
+    label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.WORKSPACE],
     icon: "codicon-project",
     title: ".ctrlyoke/templates — this project only",
   },
   {
     value: "user",
-    label: "User",
+    label: SETTING_WRITE_SCOPE_LABELS[SETTING_SCOPES.USER],
     icon: "codicon-person",
     title: "~/.ctrlyoke/templates — available in every workspace",
   },
