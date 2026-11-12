@@ -771,6 +771,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     useSettingsStore.getState().updateGlobalSetting("worktree", {
       mode: WORKTREE_MODES.NAMED,
       branch: "ui-work",
+      checkout: "long-lived-slot",
       base: "main",
       setup: "npm ci",
     });
@@ -781,6 +782,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.getByLabelText("Worktree branch")).toHaveTextContent(
       "ui-work"
     );
+    expect(screen.getByLabelText("Worktree checkout")).toHaveValue("long-lived-slot");
     expect(screen.getByLabelText("Worktree base")).toHaveTextContent("main");
     expect(screen.getByLabelText("Worktree setup")).toHaveTextContent("npm ci");
     expect(screen.queryByText(/Keep directory/i)).not.toBeInTheDocument();
@@ -792,12 +794,45 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
           worktree: {
             mode: WORKTREE_MODES.NAMED,
             branch: "ui-work",
+            checkout: "long-lived-slot",
             base: "main",
             setup: "npm ci",
           },
         },
       })
     );
+  });
+
+  it("authors checkout slots, suggests only linked user checkouts, and omits an empty checkout", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature",
+    });
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "/repo/.worktrees",
+      sourceCheckoutRoot: "/repo",
+      sourceCheckoutBranch: "main",
+      entries: [
+        { worktreePath: "/repo", ownership: "user", branchState: "present", inUse: false, leaseOwners: [], stale: false, branchCleanupEligible: false, headCommit: "" },
+        { worktreePath: "/repo/.worktrees/linked-slot", ownership: "user", branchState: "present", inUse: false, leaseOwners: [], stale: false, branchCleanupEligible: false, headCommit: "" },
+        { worktreePath: "/repo/.worktrees/managed-slot", ownership: "managed", branchState: "present", inUse: false, leaseOwners: [], stale: false, branchCleanupEligible: false, headCommit: "" },
+      ],
+      staleManagedRecords: [],
+      generatedAt: 0,
+    });
+    render(<WorkflowPropertiesPanel />);
+    chooseWorktreeMode("Named");
+    const checkout = screen.getByLabelText("Worktree checkout");
+    expect(checkout).toHaveAttribute("list", "settings-worktree-checkout-options");
+    const suggestions = Array.from(document.querySelectorAll<HTMLOptionElement>("#settings-worktree-checkout-options option"));
+    expect(suggestions.map((option) => option.value)).toEqual(["linked-slot"]);
+
+    fireEvent.change(checkout, { target: { value: "linked-slot" } });
+    fireEvent.blur(checkout);
+    expect(useSettingsStore.getState().workflowProperties.worktree).toMatchObject({ checkout: "linked-slot" });
+    fireEvent.change(checkout, { target: { value: "" } });
+    fireEvent.blur(checkout);
+    expect(useSettingsStore.getState().workflowProperties.worktree).not.toHaveProperty("checkout");
   });
 
   it("reveals Managed base/setup/keep/merge, seeds them from defaults, and explains undo", () => {

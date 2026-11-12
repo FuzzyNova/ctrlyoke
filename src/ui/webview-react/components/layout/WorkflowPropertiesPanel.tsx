@@ -146,7 +146,7 @@ import { toWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 const WORKFLOW_PANEL_BREAKPOINT = 400;
 const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
-type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
+type WorktreeField = "checkout" | "branch" | "base" | "setup" | "keep" | "merge";
 // The sandbox pair has its own controls on the Permissions page; keep this
 // panel's generic property guard scoped to the other execution properties.
 type ExecutionPropertyKey = Exclude<
@@ -200,6 +200,11 @@ function worktreeConfigForMode(
   }
   return {
     mode: WORKTREE_MODES.NAMED,
+    ...(normalizedDefaults !== false &&
+    normalizedDefaults.mode === WORKTREE_MODES.NAMED &&
+    normalizedDefaults.checkout?.trim()
+      ? { checkout: normalizedDefaults.checkout.trim() }
+      : {}),
     branch:
       normalizedDefaults !== false &&
       normalizedDefaults.mode === WORKTREE_MODES.NAMED
@@ -424,12 +429,31 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveModel = getEffectiveModel();
   const effectiveExecutionMode = getEffectiveExecutionMode();
   const effectiveWorktree = getEffectiveWorktree();
+  const worktreeManagement = useSettingsStore((state) => state.worktreeManagement);
+  const checkoutOptions = useMemo(() => {
+    const management = worktreeManagement;
+    if (!management) return [];
+    return management.entries
+      .filter(
+        (entry) =>
+          entry.ownership !== "managed" &&
+          entry.worktreePath !== management.sourceCheckoutRoot
+      )
+      .map((entry) => {
+        const parts = entry.worktreePath.split(/[\\/]/).filter(Boolean);
+        return parts[parts.length - 1] ?? entry.worktreePath;
+      });
+  }, [worktreeManagement]);
   const effectiveWorktreeMode =
     effectiveWorktree === false ? WORKTREE_MODE_NONE : effectiveWorktree.mode;
   const effectiveWorktreeBranch =
     effectiveWorktree === false || !("branch" in effectiveWorktree)
       ? ""
       : (effectiveWorktree.branch ?? "");
+  const effectiveWorktreeCheckout =
+    effectiveWorktree === false || !("checkout" in effectiveWorktree)
+      ? ""
+      : (effectiveWorktree.checkout ?? "");
   const effectiveWorktreeBase =
     effectiveWorktree === false ? "" : (effectiveWorktree.base ?? "");
   const effectiveWorktreeSetup =
@@ -497,6 +521,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [worktreeBranchInput, setWorktreeBranchInput] = useState(
     effectiveWorktreeBranch
   );
+  const [worktreeCheckoutInput, setWorktreeCheckoutInput] = useState(
+    effectiveWorktreeCheckout
+  );
   const [worktreeBaseInput, setWorktreeBaseInput] = useState(
     effectiveWorktreeBase
   );
@@ -513,6 +540,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   useEffect(() => {
     setWorktreeMode(effectiveWorktreeMode);
     setWorktreeBranchInput(effectiveWorktreeBranch);
+    setWorktreeCheckoutInput(effectiveWorktreeCheckout);
     setWorktreeBaseInput(effectiveWorktreeBase);
     setWorktreeSetupInput(effectiveWorktreeSetup);
     setWorktreeKeepInput(effectiveWorktreeKeep);
@@ -520,6 +548,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   }, [
     effectiveWorktreeBase,
     effectiveWorktreeBranch,
+    effectiveWorktreeCheckout,
     effectiveWorktreeMode,
     effectiveWorktreeSetup,
     effectiveWorktreeKeep,
@@ -652,6 +681,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
           if (config === false) return false;
           return {
             mode: config.mode,
+            ...(config.mode === WORKTREE_MODES.NAMED && config.checkout?.trim()
+              ? { checkout: config.checkout.trim() }
+              : {}),
             branch: "branch" in config ? (config.branch ?? "") : "",
             base: config.base ?? "",
             setup: config.setup ?? "",
@@ -906,6 +938,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       if (mode === WORKTREE_MODE_NONE) {
         setWorktreeMode(WORKTREE_MODE_NONE);
         setWorktreeBranchInput("");
+        setWorktreeCheckoutInput("");
         setWorktreeBaseInput("");
         setWorktreeSetupInput("");
         setWorktreeKeepInput(false);
@@ -922,6 +955,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
       );
       setWorktreeMode(selectedMode);
       setWorktreeBranchInput("branch" in seeded ? (seeded.branch ?? "") : "");
+      setWorktreeCheckoutInput(
+        seeded.mode === WORKTREE_MODES.NAMED ? (seeded.checkout ?? "") : ""
+      );
       setWorktreeBaseInput(seeded.base ?? "");
       setWorktreeSetupInput(seeded.setup ?? "");
       setWorktreeKeepInput(
@@ -953,10 +989,16 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 current !== false && current.mode === WORKTREE_MODES.NAMED
                   ? (current.branch ?? "")
                   : "",
+              ...(current !== false && current.mode === WORKTREE_MODES.NAMED && current.checkout?.trim()
+                ? { checkout: current.checkout.trim() }
+                : {}),
               base: current !== false ? (current.base ?? "") : "",
               setup: current !== false ? (current.setup ?? "") : "",
             };
       const next = { ...currentConfig, [field]: value } as WorktreeConfig;
+      if (field === "checkout" && typeof value === "string" && !value.trim()) {
+        delete (next as { checkout?: string }).checkout;
+      }
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.WORKTREE, next);
       syncWorkflowPropertiesForUndo();
@@ -1485,6 +1527,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
         ? (resetWorktreeConfig.branch ?? "")
         : ""
     );
+    setWorktreeCheckoutInput(
+      resetWorktreeConfig !== false && resetWorktreeConfig.mode === WORKTREE_MODES.NAMED
+        ? (resetWorktreeConfig.checkout ?? "")
+        : ""
+    );
     setWorktreeBaseInput(
       resetWorktreeConfig !== false ? (resetWorktreeConfig.base ?? "") : ""
     );
@@ -1979,35 +2026,65 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <AnimatedSection visible={worktreeMode !== WORKTREE_MODE_NONE}>
                 <DrawerRow narrow={isNarrow}>
                   {worktreeMode === WORKTREE_MODES.NAMED && (
-                    <FormField
-                      label="Branch"
-                      schemaPath="worktree.branch"
-                      htmlFor="settings-worktree-branch"
-                      description="Existing or new local Git branch for the named worktree."
-                    >
-                      <BranchNameEditor
-                        id="settings-worktree-branch"
-                        aria-label="Worktree branch"
-                        value={worktreeBranchInput}
-                        onChange={setWorktreeBranchInput}
-                        onBlur={() =>
-                          handleWorktreeFieldChange(
-                            "branch",
-                            worktreeBranchInput
-                          )
-                        }
-                        aria-describedby={
-                          worktreeBranchDiagnostics.length > 0
-                            ? "settings-worktree-branch-diagnostic"
-                            : undefined
-                        }
-                        className={`w-full bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono`}
-                      />
-                      <FieldDiagnostic
-                        id="settings-worktree-branch-diagnostic"
-                        diagnostics={worktreeBranchDiagnostics}
-                      />
-                    </FormField>
+                    <>
+                      <FormField
+                        label="Checkout"
+                        schemaPath="worktree.checkout"
+                        htmlFor="settings-worktree-checkout"
+                        description="Existing linked checkout to reuse, or a new slot name or path. Empty derives the checkout from the branch."
+                      >
+                        <input
+                          id="settings-worktree-checkout"
+                          list="settings-worktree-checkout-options"
+                          aria-label="Worktree checkout"
+                          value={worktreeCheckoutInput}
+                          onChange={(event) =>
+                            setWorktreeCheckoutInput(event.currentTarget.value)
+                          }
+                          onBlur={() =>
+                            handleWorktreeFieldChange(
+                              "checkout",
+                              worktreeCheckoutInput
+                            )
+                          }
+                          className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
+                        />
+                        <datalist id="settings-worktree-checkout-options">
+                          {checkoutOptions.map((option) => (
+                            <option key={option}>{option}</option>
+                          ))}
+                        </datalist>
+                      </FormField>
+                      <FormField
+                        label="Branch"
+                        schemaPath="worktree.branch"
+                        htmlFor="settings-worktree-branch"
+                        description="Existing or new local Git branch. With a checkout set, it can differ from the checkout's name; ctrlyoke switches the checkout to it when the checkout is clean."
+                      >
+                        <BranchNameEditor
+                          id="settings-worktree-branch"
+                          aria-label="Worktree branch"
+                          value={worktreeBranchInput}
+                          onChange={setWorktreeBranchInput}
+                          onBlur={() =>
+                            handleWorktreeFieldChange(
+                              "branch",
+                              worktreeBranchInput
+                            )
+                          }
+                          aria-describedby={
+                            worktreeBranchDiagnostics.length > 0
+                              ? "settings-worktree-branch-diagnostic"
+                              : undefined
+                          }
+                          className={`w-full bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono`}
+                        />
+                        <FieldDiagnostic
+                          id="settings-worktree-branch-diagnostic"
+                          diagnostics={worktreeBranchDiagnostics}
+                        />
+                      </FormField>
+                    </>
                   )}
                   <FormField
                     label="Base"

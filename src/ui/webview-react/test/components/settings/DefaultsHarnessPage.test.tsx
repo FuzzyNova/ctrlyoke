@@ -116,6 +116,28 @@ describe("DefaultsHarnessPage execution defaults", () => {
     });
   });
 
+  it("round trips checkout defaults and omits the key when cleared", async () => {
+    const onUpdate = vi.fn();
+    const user = userEvent.setup();
+    const settings = createSettings();
+    settings.settings.defaults.worktree = {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature",
+      checkout: "shared-slot",
+    };
+    render(
+      <DefaultsHarnessPage settings={settings} activeScope={SETTING_SCOPES.USER} onUpdate={onUpdate} onReset={() => {}} />
+    );
+    const checkout = screen.getByLabelText("Checkout, property defaults.worktree.checkout");
+    expect(checkout).toHaveValue("shared-slot");
+    await user.clear(checkout);
+    await user.tab();
+    expect(onUpdate).toHaveBeenLastCalledWith("defaults.worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature",
+    });
+  });
+
   it("writes false when the None worktree default is selected", async () => {
     const onUpdate = vi.fn();
     const user = userEvent.setup();

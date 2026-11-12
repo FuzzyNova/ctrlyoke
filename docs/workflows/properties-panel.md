@@ -43,9 +43,13 @@ branch back into your working checkout after every run.
 
 ![Harness tab with a managed worktree, showing Base, Setup, Keep directory, and Merge](/screenshots/harness-tab-managed-worktree-800x1600.png){.panel-shot}
 
-A **Named** worktree targets a persistent branch you own. ctrlyoke creates it if
-needed but never commits, merges, or removes it, which suits workflows you keep
-appending to.
+A **Named** worktree targets a persistent branch you own. Optionally set
+**Checkout** to reuse a linked checkout as a long-lived slot; leave it empty to
+derive the checkout from the branch as before. When a checkout is set, its
+branch can differ from the checkout name and ctrlyoke switches to that branch
+when the checkout is clean. You can also enter a new slot name or path.
+ctrlyoke creates a named checkout if needed but never commits, merges, or
+removes it, which suits workflows you keep appending to.
 
 ![Harness tab with a named worktree on the bug-fix branch](/screenshots/harness-tab-named-worktree-800x1600.png){.panel-shot}
 

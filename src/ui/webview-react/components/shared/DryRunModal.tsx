@@ -240,6 +240,9 @@ function WorktreeSummary({
     ...(worktree.branch
       ? ([["Branch", worktree.branch]] as [string, React.ReactNode][])
       : []),
+    ...(worktree.checkout
+      ? ([["Checkout", worktree.checkout]] as [string, React.ReactNode][])
+      : []),
     ...(worktree.base
       ? ([["Base", worktree.base]] as [string, React.ReactNode][])
       : []),
@@ -271,6 +274,19 @@ function WorktreeSummary({
         <div className="mt-2 flex items-start gap-1 text-xxs text-description-fg">
           <Icon name="info" className="mt-px shrink-0" />
           <span>{worktree.plannedDirectoryNotice}</span>
+        </div>
+      )}
+      {worktree.eligible && worktree.switchBlocker && (
+        <div className="mt-2 text-xs text-error-fg">{worktree.switchBlocker}</div>
+      )}
+      {worktree.eligible && !worktree.switchBlocker && worktree.checkoutCurrentBranch && (
+        <div className="mt-2 text-xs text-description-fg">
+          Will switch from <code className="bg-code-block">{worktree.checkoutCurrentBranch}</code>
+        </div>
+      )}
+      {worktree.eligible && !worktree.switchBlocker && !worktree.checkoutCurrentBranch && worktree.checkout && worktree.plannedDirectory && (
+        <div className="mt-2 text-xs text-description-fg">
+          Will create checkout at <code className="bg-code-block break-all">{worktree.plannedDirectory}</code>
         </div>
       )}
     </section>

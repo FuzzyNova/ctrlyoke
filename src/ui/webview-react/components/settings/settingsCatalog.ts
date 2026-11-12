@@ -886,6 +886,15 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Branch",
     description: "Required local Git branch for the named default.",
   },
+  "defaults.worktree.checkout": {
+    id: "defaults.worktree.checkout",
+    path: "defaults.worktree.checkout",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Checkout",
+    description: SCHEMA_DESCRIPTIONS["defaults.worktree.checkout"],
+    revealedBy: "defaults.worktree",
+  },
   "defaults.worktree.base": {
     id: "defaults.worktree.base",
     path: "defaults.worktree.base",
@@ -1220,6 +1229,7 @@ const workflowHarnessOrder = [
   ]),
   "defaults.executionMode",
   "defaults.worktree",
+  "defaults.worktree.checkout",
   "defaults.worktree.branch",
   "defaults.worktree.base",
   "defaults.worktree.setup",
@@ -1283,6 +1293,7 @@ export function settingLabel(key: SettingsCatalogKey): string {
 
 const WORKTREE_MODE_DESCRIPTIONS = {
   named: {
+    checkout: SCHEMA_DESCRIPTIONS["defaults.worktree.checkout"],
     base: "Optional Git ref used as the starting point for a new branch.",
     setup:
       "Optional command run after creating a named worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it.",
@@ -1298,5 +1309,6 @@ export function worktreeSettingDescription(
   mode: keyof typeof WORKTREE_MODE_DESCRIPTIONS,
   field: keyof (typeof WORKTREE_MODE_DESCRIPTIONS)["named"]
 ): string {
-  return WORKTREE_MODE_DESCRIPTIONS[mode][field];
+  if (mode === "managed" && field === "checkout") return "";
+  return WORKTREE_MODE_DESCRIPTIONS[mode][field as keyof (typeof WORKTREE_MODE_DESCRIPTIONS)[typeof mode]];
 }

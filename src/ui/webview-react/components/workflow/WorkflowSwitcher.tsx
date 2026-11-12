@@ -37,6 +37,7 @@ import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
 import { SchedulePanel } from "./SchedulePanel";
 import { WORKTREE_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import { WORKTREE_MODES } from "@root/types/DashboardConstants";
 import { RunIdentityBadge } from "./RunIdentityBadge";
 import type { RunPanelRow } from "./RunSummaryRow";
 import { useRunSummaryCacheStore } from "../../store/runSummaryCacheStore";
@@ -206,8 +207,11 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       effectiveWorktree.mode;
     const branch =
       "branch" in effectiveWorktree && effectiveWorktree.branch?.trim();
+    const checkout = effectiveWorktree.mode === WORKTREE_MODES.NAMED
+      ? effectiveWorktree.checkout?.trim()
+      : undefined;
     return {
-      title: `${modeLabel} worktree${branch ? `: ${branch}` : ""}`,
+      title: `${modeLabel} worktree${checkout ? `: ${checkout} → ${branch || "branch-derived"}` : branch ? `: ${branch}` : ""}`,
     };
   }, [effectiveWorktree]);
   // Global set of workflows with a running PTY, broadcast by the extension. This

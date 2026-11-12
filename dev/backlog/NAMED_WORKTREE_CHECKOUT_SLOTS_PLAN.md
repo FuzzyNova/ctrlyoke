@@ -22,8 +22,10 @@ records anything it found that differs from this plan under the item.
       notice in the run view; workspace settings trust for path-form
       `checkout`.
       Deviation: none.
-- [ ] 5. Dashboard: Checkout field (properties panel, defaults page),
+- [x] 5. Dashboard: Checkout field (properties panel, defaults page),
       switcher indicator, Dry Run lines.
+      Deviation: the free-text checkout controls use native datalist
+      suggestions so users can select linked slots or enter a new name/path.
 - [ ] 6. Settings → Worktrees backend: `upstream` data, comparison
       classification, PR Sync refusal, `updateNamedWorktreeFromSource`.
 - [ ] 7. Settings → Worktrees UI: upstream bracket, PR readiness labels,

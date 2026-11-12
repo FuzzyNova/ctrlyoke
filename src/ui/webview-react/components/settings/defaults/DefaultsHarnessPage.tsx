@@ -64,14 +64,25 @@ export function DefaultsHarnessPage({
     onUpdate("defaults.worktree", next);
   };
   const updateWorktreeField = (
-    field: "branch" | "base" | "setup" | "keep" | "merge",
+    field: "checkout" | "branch" | "base" | "setup" | "keep" | "merge",
     value: string | boolean
   ) => {
     if (worktreeConfig === false) return;
-    onUpdate("defaults.worktree", { ...worktreeConfig, [field]: value });
+    const next = { ...worktreeConfig, [field]: value };
+    if (field === "checkout" && typeof value === "string" && !value.trim()) {
+      delete (next as { checkout?: string }).checkout;
+    }
+    onUpdate("defaults.worktree", next);
   };
   const availableAgents = useSettingsStore((s) => s.availableAgents);
   const availableSkills = useSettingsStore((s) => s.availableSkills);
+  const worktreeManagement = useSettingsStore((s) => s.worktreeManagement);
+  const checkoutOptions = worktreeManagement?.entries
+    .filter((entry) => entry.ownership !== "managed" && entry.worktreePath !== worktreeManagement.sourceCheckoutRoot)
+    .map((entry) => {
+      const parts = entry.worktreePath.split(/[\\/]/).filter(Boolean);
+      return parts[parts.length - 1] ?? entry.worktreePath;
+    }) ?? [];
   const rowProps = { sources, onReset, activeScope };
   const agentWarn = agentWarning(wf.agent, availableAgents);
   const skillsWarn = skillsWarning(wf.skills, availableSkills);
@@ -139,6 +150,24 @@ export function DefaultsHarnessPage({
         </SettingInputRow>
         {worktreeMode === WORKTREE_MODES.NAMED && (
           <>
+            <SettingInputRow
+              settingKey="defaults.worktree.checkout"
+              {...{ description: worktreeSettingDescription("named", "checkout") }}
+              id="defaults-worktree-checkout"
+              {...rowProps}
+            >
+              <LocalTextInput
+                id="defaults-worktree-checkout"
+                value={worktreeConfig !== false && worktreeConfig.mode === WORKTREE_MODES.NAMED ? (worktreeConfig.checkout ?? "") : ""}
+                onCommit={(value) => updateWorktreeField("checkout", value)}
+                list="defaults-worktree-checkout-options"
+                aria-label="Default checkout slot"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7"
+              />
+              <datalist id="defaults-worktree-checkout-options">
+                {checkoutOptions.map((option) => <option key={option}>{option}</option>)}
+              </datalist>
+            </SettingInputRow>
             <SettingInputRow
               settingKey="defaults.worktree.branch"
               id="defaults-worktree-branch"
