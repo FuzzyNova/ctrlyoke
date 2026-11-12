@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rows in the workflow dropdown and run list now have three lines. The first line holds the workflow name, the run selector (`#3 ›`) and the status. The second shows the step count, how long ago the workflow ran and the terminal and worktree icons. The third shows token usage, cost and run time. Before, all of these shared one line and were cut short on a narrow pane. The schedule, favourite, delete, pause and stop buttons are larger and sit to the right of the second and third lines. Before, on a narrow pane they took up the right half of the first line and squeezed the name. Running rows line up with the rows below them.
 - Markdown tables in the output pane and the workspace viewer's Markdown preview now grow to fit their rows instead of stopping at 300px with their own vertical scrollbar. Wide tables still scroll horizontally.
 - Fixed status rows sometimes appearing twice after the hosted dashboard reconnected during a run, and two status messages occasionally merging into one row.
+- The step properties drawer now reopens on the tab you last viewed, including after switching steps or reloading the dashboard. Before, it always opened on **Harness**.
 
 ## [0.6.0] - 2026-11-10
 

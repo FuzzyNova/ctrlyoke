@@ -10,6 +10,7 @@ import type {
   SettingWriteScope,
 } from "../types/messages";
 import { EXECUTION_STATES, type FooterPicker } from "../types/messages";
+import { DRAWER_PAGES, type DrawerPage } from "../types/drawerPages";
 import { isExecutionFinished } from "../utils/status";
 import type {
   OutputTab,
@@ -584,6 +585,8 @@ interface UiState {
 
   // Drawer state
   promptPropertiesDrawerOpen: boolean;
+  /** Last tab viewed in the step properties drawer; persisted so reopening restores it. */
+  promptPropertiesActivePage: DrawerPage;
 
   // Settings panel collapse
   settingsCollapsed: boolean;
@@ -985,6 +988,7 @@ interface UiActions {
   togglePromptPropertiesDrawer: () => void;
   openPromptPropertiesDrawer: () => void;
   closePromptPropertiesDrawer: () => void;
+  setPromptPropertiesActivePage: (page: DrawerPage) => void;
 
   // Settings panel
   toggleSettingsCollapse: () => void;
@@ -1367,6 +1371,7 @@ const initialState: UiState = {
   lastDesktopSizes: { ...DEFAULT_DESKTOP_SIZES },
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   promptPropertiesDrawerOpen: false,
+  promptPropertiesActivePage: DRAWER_PAGES.HARNESS,
   settingsCollapsed: false,
   outputScrollTargets: {},
   hiddenOutputTargets: {},
@@ -1510,6 +1515,7 @@ const persistedFields = [
   "terminalRailCollapsed",
   "terminalRailSizePx",
   "globalSettingsActiveTab",
+  "promptPropertiesActivePage",
   "displayedViewAddress",
   "mobileStepsOpen",
   "mobileStepsMode",
@@ -1624,6 +1630,9 @@ export const useUiStore = create<UiState & UiActions>()(
 
       closePromptPropertiesDrawer: () =>
         set({ promptPropertiesDrawerOpen: false }),
+
+      setPromptPropertiesActivePage: (page) =>
+        set({ promptPropertiesActivePage: page }),
 
       // ============================================================================
       // SETTINGS PANEL
