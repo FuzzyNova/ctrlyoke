@@ -192,17 +192,20 @@ export const EDITOR_BUTTON_SIZES = {
 export const WORKFLOW_ROW_TRACKS = {
   /** Mirrors the fixed `14px` harness-icon track; here so the budget below is complete. */
   harness: 14,
-  /** Fits the longest execution state label, "CANCELLING". */
-  state: 88,
   /**
-   * `#12 ›` drill affordance, reserved list-wide once any row is drillable —
-   * at *every* tier. It sets where the name truncates, so a row that dropped
-   * the track (or sized it to its own content) would cut its name at a
-   * different point from its neighbours'.
+   * Fits the longest execution state label, "CANCELLING", and is never
+   * narrower than `actions`: at full text the rail sits wholly under the
+   * badge.
+   */
+  state: 90,
+  /**
+   * Widest `#1042 ›` drill affordance. The indicator itself is content-sized
+   * and absent on rows with no other runs; this is its worst case in the
+   * first-line budget below.
    */
   runIndicator: 52,
-  /** Trailing action rail: three 24px icon buttons and two 4px gaps. */
-  actions: 80,
+  /** Trailing action rail: three touching 30px icon buttons. */
+  actions: 90,
 } as const;
 
 /** Shared labels used by lineage schedule controls and their context-menu entry. */

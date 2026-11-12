@@ -1745,7 +1745,9 @@ button .cy-lucide-icon {
      cell, with those controls layered over its empty cells.
 
      Columns: icon | flexible | run-nav | badge. The name gets `flexible`, so
-     the run indicator always sits flush against the badge. The rail (fixed
+     the run indicator always sits flush against the badge; a row with no
+     other runs to browse renders no run indicator, and its name takes the
+     run-nav column too. The rail (fixed
      WORKFLOW_ROW_TRACKS.actions) spans `run-nav + badge`, right-aligned and
      centred across both metadata lines — it never widens the badge column,
      which would leave the run indicator floating away from an icon-only
@@ -1791,6 +1793,11 @@ button .cy-lucide-icon {
   .workflow-row-primary > .workflow-row-cell-label {
     grid-column: 2;
     grid-row: 1;
+  }
+  .workflow-row:not(:has(> .workflow-row-run-nav))
+    > .workflow-row-primary
+    > .workflow-row-cell-label {
+    grid-column: 2 / span 2;
   }
   .workflow-row-primary > .workflow-row-cell-badge {
     grid-column: 4;

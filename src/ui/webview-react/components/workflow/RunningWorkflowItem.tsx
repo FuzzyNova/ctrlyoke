@@ -16,7 +16,8 @@ import {
   RowActionRail,
   WorkflowRowTrailing,
   WORKFLOW_ROW_CONTAINER_CLASS,
-  ROW_ACTION_BUTTON_CLASS,
+  RowActionButton,
+  ScheduleRowActionButton,
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
@@ -25,10 +26,7 @@ import {
   hasWorkflowTokenUsage,
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
-import {
-  WORKFLOW_SCHEDULE_LABELS,
-  type WorkflowRowTier,
-} from "../../constants";
+import { type WorkflowRowTier } from "../../constants";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
@@ -54,8 +52,6 @@ interface RunningWorkflowItemProps {
    */
   runNav?: WorkflowRunNavigationSummary;
   lineage?: RecentWorkflow;
-  /** List-scoped: reserve the indicator track whenever any row in either region is drillable. */
-  showRunIndicatorTrack?: boolean;
   onDrillIntoRuns?: () => void;
   onOpenContextMenu?: (
     x: number,
@@ -92,7 +88,6 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   tier = "stacked",
   runNav,
   lineage,
-  showRunIndicatorTrack = false,
   onDrillIntoRuns,
   onOpenContextMenu,
   onEditSchedule,
@@ -230,16 +225,13 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         }
       />
 
-      {/* Run indicator — same track and position as the recent rows', so a
-        running lineage's earlier runs stay one click away and its name
-        truncates in line with the rows below. */}
-      {showRunIndicatorTrack && (
-        <RunIndicatorCell
-          runNav={runNav}
-          workflowName={workflow.workflowName}
-          onDrill={onDrillIntoRuns}
-        />
-      )}
+      {/* Run indicator — same position as the recent rows', so a running
+        lineage's earlier runs stay one click away. */}
+      <RunIndicatorCell
+        runNav={runNav}
+        workflowName={workflow.workflowName}
+        onDrill={onDrillIntoRuns}
+      />
 
       <WorkflowRowTrailing>
         {/* Action buttons — pause/stop for locally-owned workflows only; an
@@ -247,20 +239,10 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           instead (see WorkflowRowLayout's `metaBadge`) and has no local
           controls to offer here. */}
         <RowActionRail>
-          <button
-            type="button"
-            title={
-              lineage?.scheduleNextRunAt
-                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(lineage.scheduleNextRunAt).toLocaleString()}`
-                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
-            }
-            aria-label={
-              lineage?.scheduleNextRunAt
-                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(lineage.scheduleNextRunAt).toLocaleString()}`
-                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
-            }
-            onClick={(e) => {
-              e.stopPropagation();
+          <ScheduleRowActionButton
+            schedule={lineage?.schedule}
+            scheduleNextRunAt={lineage?.scheduleNextRunAt}
+            onOpen={(opener) => {
               const address = lineage?.address ?? runAddress;
               if (address)
                 onEditSchedule?.(
@@ -277,73 +259,41 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                     runDirectory: lineage?.runDirectory,
                     isExecuting: true,
                   },
-                  e.currentTarget
+                  opener
                 );
             }}
-            className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${lineage?.schedule?.enabled ? "text-focus-fg" : lineage?.schedule ? "text-description-fg opacity-60" : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground"}`}
-          >
-            <Icon name="codicon-clock" />
-          </button>
+          />
           {workflow.externalOwner == null &&
             (isRunning || isPausing || isPaused) && (
               <>
                 {isRunning ? (
-                  <button
-                    type="button"
+                  <RowActionButton
+                    icon="debug-pause"
                     title="Pause"
-                    aria-label="Pause"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPause();
-                    }}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors`}
-                  >
-                    <Icon name="debug-pause" />
-                  </button>
+                    onClick={onPause}
+                    toneClassName="text-description-fg hover:text-foreground"
+                  />
                 ) : isPausing ? (
-                  <button
-                    type="button"
+                  <RowActionButton
+                    icon="debug-continue"
                     title="Cancel pause"
-                    aria-label="Cancel pause"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCancelPause();
-                    }}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors`}
-                  >
-                    <Icon name="debug-continue" />
-                  </button>
+                    onClick={onCancelPause}
+                    toneClassName="text-description-fg hover:text-foreground"
+                  />
                 ) : (
-                  <button
-                    type="button"
+                  <RowActionButton
+                    icon="debug-continue"
                     title="Continue"
-                    aria-label="Continue"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onResume();
-                    }}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors`}
-                  >
-                    <Icon name="debug-continue" />
-                  </button>
+                    onClick={onResume}
+                    toneClassName="text-description-fg hover:text-foreground"
+                  />
                 )}
-
-                <button
-                  type="button"
+                <RowActionButton
+                  icon="debug-stop"
                   title="Stop"
-                  aria-label="Stop"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStop();
-                  }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors`}
-                >
-                  <Icon name="debug-stop" />
-                </button>
+                  onClick={onStop}
+                  toneClassName="text-description-fg hover:text-error-fg"
+                />
               </>
             )}
         </RowActionRail>

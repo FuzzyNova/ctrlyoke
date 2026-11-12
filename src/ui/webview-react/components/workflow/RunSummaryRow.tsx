@@ -6,7 +6,7 @@ import {
   RowActionRail,
   WorkflowRowTrailing,
   WORKFLOW_ROW_CONTAINER_CLASS,
-  ROW_ACTION_BUTTON_CLASS,
+  RowActionButton,
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
@@ -249,18 +249,14 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       <WorkflowRowTrailing>
         <RowActionRail>
           {canDelete && (
-            <button
-              type="button"
+            <RowActionButton
+              icon="trash"
               title="Delete run"
-              aria-label={`Delete ${label}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete?.();
-              }}
-              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100`}
-            >
-              <Icon name="trash" className="text-xs" />
-            </button>
+              ariaLabel={`Delete ${label}`}
+              onClick={() => onDelete?.()}
+              revealOnHover
+              toneClassName="text-description-fg hover:text-error-fg"
+            />
           )}
         </RowActionRail>
       </WorkflowRowTrailing>

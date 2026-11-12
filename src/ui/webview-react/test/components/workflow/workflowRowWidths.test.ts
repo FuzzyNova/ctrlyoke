@@ -33,9 +33,9 @@ describe("workflow row width budget", () => {
   it("keeps the trailing rails fixed so row kinds stay column-aligned", () => {
     // Running rows (pause/stop) and recent rows (favourite/remove) sit in
     // separate scroll regions; anything content-sized beside their metadata
-    // would move where one region's metadata truncates. Three 24px icon
-    // buttons plus two 4px gaps.
-    expect(WORKFLOW_ROW_TRACKS.actions).toBeGreaterThanOrEqual(24 * 3 + 8);
+    // would move where one region's metadata truncates. Three touching 30px
+    // icon buttons.
+    expect(WORKFLOW_ROW_TRACKS.actions).toBeGreaterThanOrEqual(30 * 3);
     expect(WORKFLOW_ROW_TRACKS.runIndicator).toBeGreaterThanOrEqual(
       "#1042".length * 6.4 + INDICATOR_CHROME
     );

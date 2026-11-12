@@ -5,6 +5,7 @@
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { ROW_ACTION_BUTTON_CLASS } from "@components/workflow/WorkflowRowLayout";
 import {
   render,
   screen,
@@ -1568,16 +1569,7 @@ describe("WorkflowSwitcher — loaded state", () => {
         name: "Add to favorites",
       }
     );
-    expect(favoriteButton).toHaveClass(
-      "flex",
-      "h-6",
-      "w-6",
-      "items-center",
-      "justify-center",
-      "px-0",
-      "py-0",
-      "leading-none"
-    );
+    expect(favoriteButton).toHaveClass(...ROW_ACTION_BUTTON_CLASS.split(" "));
     expect(favoriteButton.firstElementChild).toHaveClass(
       "block",
       "leading-none"

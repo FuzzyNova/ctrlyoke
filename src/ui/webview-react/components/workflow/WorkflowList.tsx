@@ -14,7 +14,8 @@ import {
   RowActionRail,
   WorkflowRowTrailing,
   WORKFLOW_ROW_CONTAINER_CLASS,
-  ROW_ACTION_BUTTON_CLASS,
+  RowActionButton,
+  ScheduleRowActionButton,
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
@@ -34,13 +35,9 @@ import {
 import { getHarnessDisplayName } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
-import type {
-  WorkflowRunNavigationSummary,
-  WorkflowViewAddress,
-} from "@root/types/CtrlYokeTypes";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { ExecutionState } from "../../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
-import { isDrillableRunNav } from "@utils/runNavigation";
 import { upcomingScheduleRunAt } from "@utils/workflowScheduleDisplay";
 import { isWorkflowActive } from "../../utils/status";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
@@ -80,15 +77,6 @@ export type UnifiedWorkflowRow =
       key: string;
       workflow: RecentWorkflow;
     };
-
-/** The run-navigation summary a row's drill affordance reads, whichever kind it is. */
-function rowRunNav(
-  row: UnifiedWorkflowRow
-): WorkflowRunNavigationSummary | undefined {
-  return row.kind === WORKFLOW_ROW_KINDS.RECENT
-    ? row.workflow.runNav
-    : row.lineage?.runNav;
-}
 
 /** Imperative handle for saving/restoring the recent-list scroll position across a drill-in/back round trip. */
 export interface WorkflowListHandle {
@@ -157,8 +145,6 @@ interface RecentWorkflowRowProps {
     target: WorkflowContextMenuTarget,
     opener?: HTMLElement | null
   ) => void;
-  /** List-scoped: reserve the indicator's track even on this row when a sibling row is drillable, so time/badge columns stay aligned. */
-  showRunIndicatorTrack: boolean;
   /** Row sits in the Scheduled section: its metadata shows the next run instead of the last activity. */
   scheduled?: boolean;
 }
@@ -221,7 +207,6 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   onRemove,
   onDrillIntoRuns,
   onOpenContextMenu,
-  showRunIndicatorTrack,
   scheduled = false,
 }) => {
   const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
@@ -358,32 +343,18 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
 
       {/* Run indicator — sibling of the primary button, not inside it.
         Drills into the run panel without selecting/loading the lineage. */}
-      {showRunIndicatorTrack && (
-        <RunIndicatorCell
-          runNav={workflow.runNav}
-          workflowName={workflow.workflowName}
-          onDrill={
-            onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
-          }
-        />
-      )}
+      <RunIndicatorCell
+        runNav={workflow.runNav}
+        workflowName={workflow.workflowName}
+        onDrill={onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined}
+      />
 
       <WorkflowRowTrailing>
         <RowActionRail>
-          <button
-            type="button"
-            title={
-              workflow.scheduleNextRunAt
-                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(workflow.scheduleNextRunAt).toLocaleString()}`
-                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
-            }
-            aria-label={
-              workflow.scheduleNextRunAt
-                ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(workflow.scheduleNextRunAt).toLocaleString()}`
-                : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
-            }
-            onClick={(e) => {
-              e.stopPropagation();
+          <ScheduleRowActionButton
+            schedule={workflow.schedule}
+            scheduleNextRunAt={workflow.scheduleNextRunAt}
+            onOpen={(opener) =>
               onEditSchedule?.(
                 {
                   address: workflow.address,
@@ -398,61 +369,37 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
                   isExecuting: false,
                   isUnstarted: workflow.unstarted,
                 },
-                e.currentTarget
-              );
-            }}
-            className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${workflow.schedule?.enabled ? "text-focus-fg" : workflow.schedule ? "text-description-fg opacity-60" : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground"}`}
-          >
-            <Icon name="codicon-clock" className="block leading-none" />
-          </button>
+                opener
+              )
+            }
+          />
           {onToggleFavorite && (
-            <button
-              type="button"
+            <RowActionButton
+              icon={
+                workflow.isFavorite ? "codicon-star-full" : "codicon-star-empty"
+              }
               title={
                 workflow.isFavorite
                   ? "Remove from favorites"
                   : "Add to favorites"
               }
-              aria-label={
+              onClick={() => onToggleFavorite(workflow.address)}
+              revealOnHover={!workflow.isFavorite}
+              toneClassName={
                 workflow.isFavorite
-                  ? "Remove from favorites"
-                  : "Add to favorites"
+                  ? "text-favorite hover:opacity-80"
+                  : "text-description-fg hover:text-favorite"
               }
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(workflow.address);
-              }}
-              className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${
-                workflow.isFavorite
-                  ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-                  : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-              }`}
-            >
-              <Icon
-                name={
-                  workflow.isFavorite
-                    ? "codicon-star-full"
-                    : "codicon-star-empty"
-                }
-                className="block leading-none"
-              />
-            </button>
+            />
           )}
-
-          {/* Delete button — visible only on row hover */}
           {onRemove && (
-            <button
-              type="button"
+            <RowActionButton
+              icon="trash"
               title="Remove from history"
-              aria-label="Remove from history"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove(workflow.address);
-              }}
-              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100`}
-            >
-              <Icon name="trash" className="block leading-none" />
-            </button>
+              onClick={() => onRemove(workflow.address)}
+              revealOnHover
+              toneClassName="text-description-fg hover:text-error-fg"
+            />
           )}
         </RowActionRail>
       </WorkflowRowTrailing>
@@ -586,14 +533,6 @@ export const WorkflowList = React.forwardRef<
     `cy-collapsible-cap ${
       !expanded ? "shrink-0" : hasRecentRows ? pinnedCapClass : "flex-1 min-h-0"
     }`;
-  // List-scoped, not row-scoped, and spanning *both* regions: reserve the
-  // indicator track on every row as soon as one row anywhere is drillable, so
-  // the state/time columns stay aligned between a pinned running row and the
-  // recent rows directly beneath it. A list with no drillable rows renders
-  // without the track at all.
-  const hasDrillableRow =
-    rows.some((row) => isDrillableRunNav(rowRunNav(row))) ||
-    scheduledWorkflows.some((workflow) => isDrillableRunNav(workflow.runNav));
   const estimatedRowHeight = WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE;
 
   return (
@@ -662,7 +601,6 @@ export const WorkflowList = React.forwardRef<
                     tier={tier}
                     runNav={row.lineage?.runNav}
                     lineage={row.lineage}
-                    showRunIndicatorTrack={hasDrillableRow}
                     onDrillIntoRuns={
                       row.lineage && onDrillIntoRuns
                         ? () => onDrillIntoRuns(row.lineage!)
@@ -729,7 +667,6 @@ export const WorkflowList = React.forwardRef<
                     onRemove={onRemove}
                     onDrillIntoRuns={onDrillIntoRuns}
                     onOpenContextMenu={onOpenContextMenu}
-                    showRunIndicatorTrack={hasDrillableRow}
                     scheduled
                   />
                 )}
@@ -778,7 +715,6 @@ export const WorkflowList = React.forwardRef<
                 onRemove={onRemove}
                 onDrillIntoRuns={onDrillIntoRuns}
                 onOpenContextMenu={onOpenContextMenu}
-                showRunIndicatorTrack={hasDrillableRow}
               />
             )}
           />

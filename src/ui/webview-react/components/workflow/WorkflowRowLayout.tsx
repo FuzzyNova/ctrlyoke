@@ -1,9 +1,16 @@
 import React from "react";
 import { WORKFLOW_ROW_TIERS } from "@root/types/DashboardConstants";
-import { WORKFLOW_ROW_TRACKS, type WorkflowRowTier } from "../../constants";
+import {
+  WORKFLOW_ROW_TRACKS,
+  WORKFLOW_SCHEDULE_LABELS,
+  type WorkflowRowTier,
+} from "../../constants";
 import { runNavIndicatorLabel, isDrillableRunNav } from "@utils/runNavigation";
-import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
-import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
+import type {
+  WorkflowRunNavigationSummary,
+  WorkflowSchedule,
+  WorktreeRunProjection,
+} from "@root/types/CtrlYokeTypes";
 import { Icon } from "../shared/Icon";
 
 /**
@@ -77,58 +84,53 @@ interface RunIndicatorCellProps {
  * container (never nested inside the primary button), placed on the first
  * line just left of the state badge it describes.
  *
- * The track is fixed-width and reserved list-wide whenever *any* row is
- * drillable, including across the running/recent split: it is what positions
- * the name's right edge, so a row that dropped the track would truncate its
- * name at a different point from its neighbours'.
+ * Renders nothing when there is nothing to drill into, and is content-sized
+ * when there is: the name takes every pixel the indicator doesn't use (see
+ * `.workflow-row:not(:has(> .workflow-row-run-nav))` in `globals.css`). Badge
+ * alignment doesn't depend on it — the badge column is right-aligned on its
+ * own.
  */
 export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
   runNav,
   workflowName,
   onDrill,
 }) => {
-  const drill =
-    runNav && isDrillableRunNav(runNav) && onDrill
-      ? { label: runNavIndicatorLabel(runNav, true), onDrill }
-      : null;
+  if (!runNav || !isDrillableRunNav(runNav) || !onDrill) return null;
+  const label = runNavIndicatorLabel(runNav, true);
 
   return (
-    <span
-      className="workflow-row-run-nav flex shrink-0 justify-end"
-      style={{ width: WORKFLOW_ROW_TRACKS.runIndicator }}
-    >
-      {drill && (
-        <button
-          type="button"
-          title={`Browse runs of ${workflowName}`}
-          aria-label={`${drill.label} — browse runs of ${workflowName}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            drill.onDrill();
-          }}
-          className="cy-dropdown-row flex h-5 items-center gap-0.5 rounded-sm px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
-        >
-          <span className="truncate">{drill.label}</span>
-          <Icon name="chevron-right" className="block text-xxs leading-none" />
-        </button>
-      )}
+    <span className="workflow-row-run-nav flex shrink-0 justify-end">
+      <button
+        type="button"
+        title={`Browse runs of ${workflowName}`}
+        aria-label={`${label} — browse runs of ${workflowName}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDrill();
+        }}
+        className="cy-dropdown-row flex h-5 items-center gap-0.5 rounded-sm px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
+      >
+        <span className="truncate">{label}</span>
+        <Icon name="chevron-right" className="block text-xxs leading-none" />
+      </button>
     </span>
   );
 };
 
 /**
  * RowActionRail - the fixed-width action cluster every row kind ends with
- * (favourite/remove, pause/stop, delete-run).
+ * (schedule/favourite/remove, schedule/pause/stop, delete-run).
  *
- * Fixed rather than content-sized for the same reason as the run-indicator
- * track: it shares the metadata lines, so any difference in its width moves
- * where that row's metadata truncates relative to its neighbours.
+ * Fixed rather than content-sized: it shares the metadata lines, so any
+ * difference in its width moves where that row's metadata truncates relative
+ * to its neighbours. Its buttons touch (no gap): each 30px box already pads
+ * its 16px icon by 7px a side, which is all the separation the icons need.
  */
 export const RowActionRail: React.FC<{ children?: React.ReactNode }> = ({
   children,
 }) => (
   <span
-    className="flex shrink-0 items-center justify-end gap-1"
+    className="flex shrink-0 items-center justify-end"
     style={{ width: WORKFLOW_ROW_TRACKS.actions }}
   >
     {children}
@@ -136,13 +138,94 @@ export const RowActionRail: React.FC<{ children?: React.ReactNode }> = ({
 );
 
 /**
- * Shape of every icon button in a {@link RowActionRail}. One fixed 24px box
- * for all row kinds, so a running row's pause/stop sit exactly over a recent
- * row's favourite/remove in the region beneath. The rail spans both metadata
- * lines, which is what pays for the larger hit target.
+ * Shape and hover treatment of every icon button in a {@link RowActionRail}.
+ * One fixed 30px box for all row kinds, so a running row's pause/stop sit
+ * exactly over a recent row's favourite/remove in the region beneath, and one
+ * hover background so no button drifts from its neighbours. Use it through
+ * {@link RowActionButton}; it is exported for tests.
  */
 export const ROW_ACTION_BUTTON_CLASS =
-  "flex h-6 w-6 shrink-0 items-center justify-center rounded-sm px-0 py-0 leading-none";
+  "flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-sm px-0 py-0 leading-none transition-colors hover:bg-toolbar-hover-bg";
+
+/** Hides an optional action until its row is hovered or the button focused. */
+const ROW_ACTION_REVEAL_CLASS =
+  "opacity-0 group-hover:opacity-100 focus:opacity-100";
+
+interface RowActionButtonProps {
+  /** Codicon name. */
+  icon: string;
+  /** Tooltip, and the accessible name unless {@link ariaLabel} is given. */
+  title: string;
+  ariaLabel?: string;
+  /** Receives the button as the opener, for controls that open a panel. */
+  onClick: (opener: HTMLButtonElement) => void;
+  /** Hidden until the row is hovered or the button focused. */
+  revealOnHover?: boolean;
+  /** Text colours, resting and on hover. Shape and background stay shared. */
+  toneClassName: string;
+}
+
+/**
+ * RowActionButton - one icon button in a {@link RowActionRail}. Owns the
+ * button's shape, hover background and reveal-on-hover behaviour, and stops
+ * clicks and key presses from reaching the row's primary button, so callers
+ * pick only an icon, a label and a colour.
+ */
+export const RowActionButton: React.FC<RowActionButtonProps> = ({
+  icon,
+  title,
+  ariaLabel,
+  onClick,
+  revealOnHover = false,
+  toneClassName,
+}) => (
+  <button
+    type="button"
+    title={title}
+    aria-label={ariaLabel ?? title}
+    onClick={(event) => {
+      event.stopPropagation();
+      onClick(event.currentTarget);
+    }}
+    onKeyDown={(event) => event.stopPropagation()}
+    className={`${ROW_ACTION_BUTTON_CLASS} ${revealOnHover ? ROW_ACTION_REVEAL_CLASS : ""} ${toneClassName}`}
+  >
+    <Icon name={icon} className="block leading-none" />
+  </button>
+);
+
+interface ScheduleRowActionButtonProps {
+  schedule: WorkflowSchedule | undefined;
+  scheduleNextRunAt: number | undefined;
+  onOpen: (opener: HTMLButtonElement) => void;
+}
+
+/**
+ * The clock button that opens a lineage's schedule, shared by recent and
+ * running rows. Lit while the schedule is on, dimmed while it is paused, and
+ * revealed on hover only when the lineage has never been scheduled.
+ */
+export const ScheduleRowActionButton: React.FC<
+  ScheduleRowActionButtonProps
+> = ({ schedule, scheduleNextRunAt, onOpen }) => (
+  <RowActionButton
+    icon="codicon-clock"
+    title={
+      scheduleNextRunAt
+        ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(scheduleNextRunAt).toLocaleString()}`
+        : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
+    }
+    onClick={onOpen}
+    revealOnHover={!schedule}
+    toneClassName={
+      schedule?.enabled
+        ? "text-focus-fg"
+        : schedule
+          ? "text-description-fg opacity-60"
+          : "text-description-fg hover:text-foreground"
+    }
+  />
+);
 
 /**
  * Class every workflow dropdown row container carries. The container — not

@@ -7,6 +7,9 @@ import { render, screen } from "@testing-library/react";
 import {
   WorkflowRowLayout,
   RunIndicatorCell,
+  RowActionButton,
+  ScheduleRowActionButton,
+  ROW_ACTION_BUTTON_CLASS,
   composeRowAccessibleName,
   isCompactRow,
 } from "@components/workflow/WorkflowRowLayout";
@@ -167,8 +170,8 @@ describe("RunIndicatorCell", () => {
     runCount: 1,
   } as WorkflowRunNavigationSummary;
 
-  /** Renders one cell and returns its reserved track element. */
-  function renderCell(runNav: WorkflowRunNavigationSummary): HTMLSpanElement {
+  /** Renders one cell and returns its outer element, if it rendered one. */
+  function renderCell(runNav: WorkflowRunNavigationSummary): Element | null {
     const { container } = render(
       <RunIndicatorCell
         runNav={runNav}
@@ -176,33 +179,23 @@ describe("RunIndicatorCell", () => {
         onDrill={vi.fn()}
       />
     );
-    return container.querySelector("span")!;
+    return container.firstElementChild;
   }
-
-  // Everything to a row's right positions its state badge, so a row that
-  // dropped this track (or sized it to its own content) sat its badge tens of
-  // pixels out of line with its neighbours — visible as a ragged status
-  // column the moment one row in a list had no runs to drill into.
-  it("reserves the same track for drillable and non-drillable rows", () => {
-    const drillableWidth = renderCell(drillable).style.width;
-    const emptyWidth = renderCell(singleRun).style.width;
-    expect(drillableWidth).not.toBe("");
-    expect(emptyWidth).toBe(drillableWidth);
-  });
-
-  it("reserves WORKFLOW_ROW_TRACKS.runIndicator", () => {
-    expect(renderCell(drillable).style.width).toBe(
-      `${WORKFLOW_ROW_TRACKS.runIndicator}px`
-    );
-  });
 
   it("carries the class that places it on the first line beside the badge", () => {
     expect(renderCell(drillable)).toHaveClass("workflow-row-run-nav");
   });
 
-  it("renders no button when there is nothing to drill into", () => {
-    renderCell(singleRun);
+  // The row's name takes the run-nav column when no indicator is rendered
+  // (`.workflow-row:not(:has(> .workflow-row-run-nav))`), so an empty
+  // placeholder would hold that space for nothing.
+  it("renders nothing at all when there is nothing to drill into", () => {
+    expect(renderCell(singleRun)).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("sizes to its content instead of reserving a fixed track", () => {
+    expect((renderCell(drillable) as HTMLElement).style.width).toBe("");
   });
 
   it("abbreviates the run to its short form", () => {
@@ -219,6 +212,56 @@ describe("RunIndicatorCell", () => {
       "block",
       "leading-none"
     );
+  });
+});
+
+describe("row action buttons", () => {
+  // The schedule button once missed the hover background its neighbours had;
+  // every rail button now takes shape and hover from one class.
+  it.each([
+    ["never scheduled", undefined],
+    ["scheduled", { enabled: true }],
+    ["paused", { enabled: false }],
+  ] as const)(
+    "gives the %s schedule button the shared shape and hover background",
+    (_state, schedule) => {
+      render(
+        <ScheduleRowActionButton
+          schedule={schedule as never}
+          scheduleNextRunAt={undefined}
+          onOpen={vi.fn()}
+        />
+      );
+      expect(screen.getByRole("button")).toHaveClass(
+        ...ROW_ACTION_BUTTON_CLASS.split(" ")
+      );
+    }
+  );
+
+  it("is a 30px box with a hover background", () => {
+    expect(ROW_ACTION_BUTTON_CLASS).toContain("h-[30px]");
+    expect(ROW_ACTION_BUTTON_CLASS).toContain("w-[30px]");
+    expect(ROW_ACTION_BUTTON_CLASS).toContain("hover:bg-toolbar-hover-bg");
+  });
+
+  it("hands the button to onClick as the opener without clicking the row", () => {
+    const onClick = vi.fn();
+    const onRowClick = vi.fn();
+    render(
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- test harness standing in for the row
+      <div onClick={onRowClick}>
+        <RowActionButton
+          icon="trash"
+          title="Remove from history"
+          onClick={onClick}
+          toneClassName="text-description-fg"
+        />
+      </div>
+    );
+    const button = screen.getByRole("button", { name: "Remove from history" });
+    button.click();
+    expect(onClick).toHaveBeenCalledWith(button);
+    expect(onRowClick).not.toHaveBeenCalled();
   });
 });
 
