@@ -38,6 +38,7 @@ import {
 import {
   createManagedBranchName,
   createWorktreeDirectoryName,
+  checkoutSwitchBlockers,
   resolveThroughNearestExistingAncestor,
   resolveWorktreeRoot as resolveConfiguredRoot,
   withWorktreeMutationLock,
@@ -2350,6 +2351,18 @@ export class WorktreeManager {
     // the lease: a continue that cannot get the lease must leave the run file's
     // previous worktree record untouched rather than claim a new provisioning.
     if (needsProvisioning) {
+      const pathCollision = initialEntries.find((entry) =>
+        pathsEqual(entry.worktreePath, worktreePath!)
+      );
+      if (pathCollision && pathCollision.branchName !== branchName) {
+        throw new Error(
+          checkoutSwitchBlockers.pathCollision(
+            worktreePath!,
+            pathCollision.branchName ?? "detached HEAD",
+            branchName
+          )
+        );
+      }
       await this.persistRuntime(provisioningRuntime);
       const mutation = await withWorktreeMutationLock(
         commonDirectory,
@@ -2371,6 +2384,18 @@ export class WorktreeManager {
             sourceCheckoutRoot,
             branchName
           );
+          const collision = entries.find((entry) =>
+            pathsEqual(entry.worktreePath, worktreePath!)
+          );
+          if (collision && collision.branchName !== branchName) {
+            throw new Error(
+              checkoutSwitchBlockers.pathCollision(
+                worktreePath!,
+                collision.branchName ?? "detached HEAD",
+                branchName
+              )
+            );
+          }
           await addWorktree(sourceCheckoutRoot, worktreePath!, {
             branchName,
             ...(localBranchCommit

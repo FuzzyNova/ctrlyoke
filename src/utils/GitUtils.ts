@@ -1777,6 +1777,7 @@ export interface GitWorktreeEntry {
   detached: boolean;
   bare: boolean;
   lockedReason?: string;
+  prunable?: boolean;
   prunableReason?: string;
 }
 
@@ -1979,6 +1980,7 @@ export function parseGitWorktreePorcelain(output: string): GitWorktreeEntry[] {
     let detached = false;
     let bare = false;
     let lockedReason: string | undefined;
+    let prunable = false;
     let prunableReason: string | undefined;
 
     for (const field of record) {
@@ -1996,6 +1998,7 @@ export function parseGitWorktreePorcelain(output: string): GitWorktreeEntry[] {
       } else if (field === "locked" || field.startsWith("locked ")) {
         lockedReason = field.slice("locked".length).trim() || undefined;
       } else if (field === "prunable" || field.startsWith("prunable ")) {
+        prunable = true;
         prunableReason = field.slice("prunable".length).trim() || undefined;
       }
     }
@@ -2008,6 +2011,7 @@ export function parseGitWorktreePorcelain(output: string): GitWorktreeEntry[] {
         detached,
         bare,
         lockedReason,
+        ...(prunable ? { prunable: true } : {}),
         prunableReason,
       });
     }
@@ -2116,6 +2120,22 @@ export async function addWorktree(
     args.push(await resolveCommit(repoRoot, options.baseRef));
   } else if (branchName && !options.createBranch) {
     args.push(branchName);
+  }
+  await execGit(args, { timeout: getGitTimeoutMs(true) });
+}
+
+/** Switch a linked checkout to a local branch, creating it without tracking when requested. */
+export async function switchBranch(
+  dir: string,
+  branch: string,
+  options: { createFrom?: string } = {}
+): Promise<void> {
+  await validateBranchName(branch);
+  const args = ["-C", dir, "switch"];
+  if (options.createFrom) {
+    args.push("--no-track", "-c", branch, options.createFrom);
+  } else {
+    args.push(branch);
   }
   await execGit(args, { timeout: getGitTimeoutMs(true) });
 }

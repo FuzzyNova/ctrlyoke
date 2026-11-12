@@ -16,8 +16,14 @@ import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcess
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   listWorktrees,
+  switchBranch,
   setGitTimeoutOverridesForTests,
 } from "../../utils/GitUtils";
+import {
+  previewWorktreePlacement,
+  createWorktreeDirectoryName,
+} from "../../utils/WorktreeUtils";
+import { WORKTREE_IDENTITY_KINDS } from "../../types/DashboardConstants";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_LIFECYCLE_STATES,
@@ -254,6 +260,147 @@ suite("WorktreeManager", function () {
       "feature/existing"
     );
     await attached.lease.release();
+  });
+
+  test("switchBranch switches to existing and non-tracking new branches", async () => {
+    const { repository } = await makeRepository("switch-branch");
+    execFileSync("git", ["-C", repository, "branch", "feature/existing"]);
+    await switchBranch(repository, "feature/existing");
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "branch", "--show-current"], {
+        encoding: "utf8",
+      }).trim(),
+      "feature/existing"
+    );
+    execFileSync("git", [
+      "-C",
+      repository,
+      "remote",
+      "add",
+      "origin",
+      "https://example.invalid/repo.git",
+    ]);
+    execFileSync("git", [
+      "-C",
+      repository,
+      "update-ref",
+      "refs/remotes/origin/main",
+      "HEAD",
+    ]);
+    await switchBranch(repository, "feature/new", {
+      createFrom: "origin/main",
+    });
+    assert.strictEqual(
+      execFileSync(
+        "git",
+        [
+          "-C",
+          repository,
+          "for-each-ref",
+          "--format=%(upstream)",
+          "refs/heads/feature/new",
+        ],
+        { encoding: "utf8" }
+      ).trim(),
+      ""
+    );
+  });
+
+  test("previews checkout switches, blockers, and new slot paths", async () => {
+    const { parent, repository } = await makeRepository("checkout-preview");
+    const slotPath = path.join(parent, "slots", "bug-fix");
+    await fs.mkdir(path.dirname(slotPath), { recursive: true });
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "old-branch", slotPath],
+      { stdio: "ignore" }
+    );
+    const switchPreview = await previewWorktreePlacement({
+      sourceCheckoutRoot: repository,
+      mode: "named",
+      branch: "new-branch",
+      checkout: "bug-fix",
+    });
+    assert.strictEqual(switchPreview.directory, slotPath);
+    assert.strictEqual(switchPreview.checkoutCurrentBranch, "old-branch");
+    assert.strictEqual(switchPreview.switchBlocker, undefined);
+    await fs.writeFile(path.join(slotPath, "dirty.txt"), "dirty\n");
+    const dirtyPreview = await previewWorktreePlacement({
+      sourceCheckoutRoot: repository,
+      mode: "named",
+      branch: "new-branch",
+      checkout: "bug-fix",
+    });
+    assert.match(dirtyPreview.switchBlocker ?? "", /uncommitted changes/);
+    await fs.rm(path.join(slotPath, "dirty.txt"));
+    const mergeHead = execFileSync(
+      "git",
+      ["-C", slotPath, "rev-parse", "--git-path", "MERGE_HEAD"],
+      { encoding: "utf8" }
+    ).trim();
+    await fs.mkdir(path.dirname(mergeHead), { recursive: true });
+    await fs.writeFile(mergeHead, "deadbeef\n");
+    const mergePreview = await previewWorktreePlacement({
+      sourceCheckoutRoot: repository,
+      mode: "named",
+      branch: "new-branch",
+      checkout: "bug-fix",
+    });
+    assert.match(mergePreview.switchBlocker ?? "", /Git operation in progress/);
+    await fs.rm(mergeHead);
+    const common = path.resolve(
+      repository,
+      execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
+        encoding: "utf8",
+      }).trim()
+    );
+    const newPreview = await previewWorktreePlacement({
+      sourceCheckoutRoot: repository,
+      mode: "named",
+      branch: "new-branch",
+      checkout: "new-slot",
+    });
+    assert.strictEqual(
+      newPreview.directory,
+      path.join(
+        parent,
+        "repository.worktrees",
+        createWorktreeDirectoryName("new-slot", common, {
+          kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
+          name: "new-slot",
+        })
+      )
+    );
+  });
+
+  test("reports when a branch-derived path now belongs to a slot", async () => {
+    const { parent, repository } = await makeRepository("slot-collision");
+    const common = path.resolve(
+      repository,
+      execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
+        encoding: "utf8",
+      }).trim()
+    );
+    const derivedPath = path.join(
+      parent,
+      "worktrees",
+      createWorktreeDirectoryName("new-branch", common, {
+        kind: WORKTREE_IDENTITY_KINDS.NAMED,
+        branchRef: "new-branch",
+      })
+    );
+    await fs.mkdir(path.dirname(derivedPath), { recursive: true });
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "old-branch", derivedPath],
+      { stdio: "ignore" }
+    );
+    await assert.rejects(
+      resolve(manager(parent), repository, "new-branch"),
+      new RegExp(
+        `now holds branch \\"old-branch\\". Add checkout: ${path.basename(derivedPath)}`
+      )
+    );
   });
 
   test("creates a missing branch", async () => {

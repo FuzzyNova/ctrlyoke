@@ -639,7 +639,8 @@ suite("GitUtils worktree plumbing", function () {
       "worktree C:/repo/space path/line\nname\0" +
       "HEAD abc123\0branch refs/heads/feature/odd\0\0" +
       "worktree /repo/detached\0HEAD def456\0detached\0locked held by user\0" +
-      "prunable missing\0\0";
+      "prunable missing\0\0" +
+      "worktree /repo/prunable\0HEAD ghi789\0branch refs/heads/old\0prunable\0\0";
 
     assert.deepStrictEqual(parseGitWorktreePorcelain(output), [
       {
@@ -658,7 +659,18 @@ suite("GitUtils worktree plumbing", function () {
         detached: true,
         bare: false,
         lockedReason: "held by user",
+        prunable: true,
         prunableReason: "missing",
+      },
+      {
+        worktreePath: path.normalize("/repo/prunable"),
+        headCommit: "ghi789",
+        branchName: "old",
+        detached: false,
+        bare: false,
+        lockedReason: undefined,
+        prunable: true,
+        prunableReason: undefined,
       },
     ]);
   });

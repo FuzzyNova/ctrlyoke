@@ -8,12 +8,16 @@ import {
   gitCommonDir,
   listWorktrees,
   repoToplevel,
+  currentBranch,
+  hasGitOperationInProgress,
+  hasUncommittedChanges,
   type GitWorktreeEntry,
   validateBranchName,
 } from "./GitUtils";
 import { withFileLock } from "./FileLockUtils";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
+import { pathsEqual } from "./PathCasing";
 import { ConfigurationUtils } from "./ConfigurationUtils";
 import {
   WORKTREE_IDENTITY_KINDS,
@@ -73,6 +77,115 @@ export type WorktreeNameIdentity =
     }
   | { kind: typeof WORKTREE_IDENTITY_KINDS.NAMED; branchRef: string }
   | { kind: typeof WORKTREE_IDENTITY_KINDS.CHECKOUT; name: string };
+
+export type CheckoutSlotResolution =
+  | { kind: "existing"; entry: GitWorktreeEntry }
+  | { kind: "planned"; path: string };
+
+function expandCheckoutPath(value: string): string {
+  const home = os.homedir();
+  if (value === "~") return path.resolve(home);
+  if (value.startsWith("~/") || value.startsWith(`~${path.sep}`)) {
+    return path.resolve(home, value.slice(2));
+  }
+  if (!path.isAbsolute(value)) {
+    throw new Error(
+      "Checkout must be an absolute path, a ~-prefixed path, or a bare name."
+    );
+  }
+  return path.resolve(value);
+}
+
+/** Read-only resolution of an authored checkout path or named slot. */
+export async function resolveCheckoutSlot(
+  sourceCheckoutRoot: string,
+  checkout: string,
+  entries: readonly GitWorktreeEntry[],
+  commonDirectory: string,
+  root: string
+): Promise<CheckoutSlotResolution> {
+  const value = checkout.trim();
+  if (!value) throw new Error("Checkout must not be empty.");
+  const pathForm =
+    path.isAbsolute(value) ||
+    value === "~" ||
+    value.startsWith("~/") ||
+    value.startsWith(`~${path.sep}`) ||
+    value.includes("/") ||
+    value.includes("\\");
+  if (pathForm) {
+    const target = expandCheckoutPath(value);
+    if (pathsEqual(target, sourceCheckoutRoot))
+      throw new Error("The source checkout cannot be used as a checkout slot.");
+    const entry = entries.find((candidate) =>
+      pathsEqual(candidate.worktreePath, target)
+    );
+    if (entry?.prunable || entry?.prunableReason !== undefined)
+      throw new Error(
+        `Checkout "${target}" is prunable. Use Repair or Prune in Settings → Worktrees.`
+      );
+    if (entry) return { kind: "existing", entry };
+    try {
+      await fs.access(target);
+      throw new Error(
+        `Checkout path already exists but is not a registered worktree: ${target}`
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    return { kind: "planned", path: target };
+  }
+  const identities = [
+    value,
+    createWorktreeDirectoryName(value, commonDirectory, {
+      kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
+      name: value,
+    }),
+    createWorktreeDirectoryName(value, commonDirectory, {
+      kind: WORKTREE_IDENTITY_KINDS.NAMED,
+      branchRef: value,
+    }),
+  ];
+  const matches = entries.filter(
+    (entry) =>
+      !entry.bare &&
+      !pathsEqual(entry.worktreePath, sourceCheckoutRoot) &&
+      identities.includes(path.basename(entry.worktreePath))
+  );
+  if (matches.length > 1) {
+    throw new Error(
+      `Checkout "${value}" matches multiple registered worktrees: ${matches.map((entry) => entry.worktreePath).join(", ")}. Specify a path instead.`
+    );
+  }
+  if (matches.length === 1) {
+    if (matches[0].prunable || matches[0].prunableReason !== undefined)
+      throw new Error(
+        `Checkout "${matches[0].worktreePath}" is prunable. Use Repair or Prune in Settings → Worktrees.`
+      );
+    return { kind: "existing", entry: matches[0] };
+  }
+  return {
+    kind: "planned",
+    path: path.join(
+      root,
+      createWorktreeDirectoryName(value, commonDirectory, {
+        kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
+        name: value,
+      })
+    ),
+  };
+}
+
+export const checkoutSwitchBlockers = {
+  operation: (checkout: string, operation: string) =>
+    `Checkout "${checkout}" has a Git ${operation} in progress. Finish or abort it, then run again.`,
+  dirty: (checkout: string, branch: string) =>
+    `Checkout "${checkout}" has uncommitted changes on branch "${branch}". Commit or stash them, then run again.`,
+  branchElsewhere: (branch: string, checkout: string, path: string) =>
+    `Branch "${branch}" is checked out in "${path}", not in checkout "${checkout}".`,
+  pathCollision: (worktreePath: string, otherBranch: string, branch: string) =>
+    `"${worktreePath}" now holds branch "${otherBranch}". Add checkout: ${path.basename(worktreePath)} to run "${branch}" in it.`,
+};
 
 /**
  * Generate the only physical-name format used by worktree support. The hash
@@ -253,6 +366,9 @@ export interface WorktreePlacementPreview {
   isExact: boolean;
   /** Explains why `directory` is absent, or why it is only a best guess. */
   notice?: string;
+  checkout?: string;
+  checkoutCurrentBranch?: string;
+  switchBlocker?: string;
 }
 
 /**
@@ -274,6 +390,7 @@ export async function previewWorktreePlacement(
         sourceCheckoutRoot: string;
         mode: typeof WORKTREE_MODES.NAMED;
         branch: string;
+        checkout?: string;
       }
 ): Promise<WorktreePlacementPreview> {
   const repositoryRoot = await repoToplevel(options.sourceCheckoutRoot);
@@ -292,8 +409,89 @@ export async function previewWorktreePlacement(
     const existing = entries.find(
       (entry) => entry.branchName === options.branch
     );
-    if (existing) {
+    if (existing && !options.checkout) {
       return { directory: existing.worktreePath, isExact: true };
+    }
+    if (options.checkout) {
+      const common = await gitCommonDir(repositoryRoot);
+      if (!common)
+        return {
+          isExact: false,
+          notice:
+            "Cannot resolve the repository's Git common directory to preview the checkout slot.",
+        };
+      const explicitRoot = ConfigurationUtils.getWorktreeRoot()?.trim();
+      const root = explicitRoot
+        ? expandExplicitRoot(explicitRoot, os.homedir())
+        : path.join(
+            path.dirname(repositoryRoot),
+            `${path.basename(repositoryRoot)}.worktrees`
+          );
+      try {
+        const slot = await resolveCheckoutSlot(
+          repositoryRoot,
+          options.checkout,
+          entries,
+          common,
+          root
+        );
+        if (slot.kind === "planned") {
+          const elsewhere = entries.find(
+            (entry) => entry.branchName === options.branch
+          );
+          return {
+            directory: slot.path,
+            isExact: false,
+            checkout: options.checkout,
+            switchBlocker: elsewhere
+              ? checkoutSwitchBlockers.branchElsewhere(
+                  options.branch,
+                  options.checkout,
+                  elsewhere.worktreePath
+                )
+              : undefined,
+          };
+        }
+        const slotBranch = await currentBranch(slot.entry.worktreePath);
+        const elsewhere = entries.find(
+          (entry) => entry.branchName === options.branch
+        );
+        let switchBlocker: string | undefined;
+        if (
+          elsewhere &&
+          !pathsEqual(elsewhere.worktreePath, slot.entry.worktreePath)
+        ) {
+          switchBlocker = checkoutSwitchBlockers.branchElsewhere(
+            options.branch,
+            options.checkout,
+            elsewhere.worktreePath
+          );
+        } else if (slotBranch !== options.branch) {
+          if (await hasGitOperationInProgress(slot.entry.worktreePath))
+            switchBlocker = checkoutSwitchBlockers.operation(
+              options.checkout,
+              "operation"
+            );
+          else if (await hasUncommittedChanges(slot.entry.worktreePath))
+            switchBlocker = checkoutSwitchBlockers.dirty(
+              options.checkout,
+              slotBranch ?? "detached HEAD"
+            );
+        }
+        return {
+          directory: slot.entry.worktreePath,
+          isExact: true,
+          checkout: options.checkout,
+          checkoutCurrentBranch: slotBranch ?? undefined,
+          switchBlocker,
+        };
+      } catch (error) {
+        return {
+          isExact: false,
+          notice: error instanceof Error ? error.message : String(error),
+          checkout: options.checkout,
+        };
+      }
     }
   }
 
@@ -326,9 +524,26 @@ export async function previewWorktreePlacement(
     commonDirectory,
     { kind: WORKTREE_IDENTITY_KINDS.NAMED, branchRef: options.branch }
   );
+  const directory = path.join(root, directoryName);
+  const collision = await listWorktrees(repositoryRoot)
+    .then((entries) =>
+      entries.find(
+        (entry) =>
+          pathsEqual(entry.worktreePath, directory) &&
+          entry.branchName !== options.branch
+      )
+    )
+    .catch(() => undefined);
   return {
-    directory: path.join(root, directoryName),
+    directory,
     isExact: false,
+    switchBlocker: collision
+      ? checkoutSwitchBlockers.pathCollision(
+          directory,
+          collision.branchName ?? "detached HEAD",
+          options.branch
+        )
+      : undefined,
     notice: explicitRoot
       ? undefined
       : "Assumes the default worktree location; the actual run may use a fallback location if this one can't be created.",

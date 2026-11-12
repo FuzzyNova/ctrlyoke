@@ -12,9 +12,10 @@ records anything it found that differs from this plan under the item.
 - [x] 1. Contracts: `checkout` schema field, types, normalization, `"checkout"`
       name identity, run-file format 3 → 4 (`checkout`, `previousBranch`).
       Deviation: none.
-- [ ] 2. Slot resolution helper (`resolveCheckoutSlot`), `switchBranch`, the
+- [x] 2. Slot resolution helper (`resolveCheckoutSlot`), `switchBranch`, the
       branch-derived collision error, and Dry Run prediction
       (`previewWorktreePlacement`, `WorktreeExecutionPreview`).
+      Deviation: none.
 - [ ] 3. `resolveNamedWorktree` with `checkout`: attach / switch / create,
       lease ordering, runtime recording, plumbing from `WorkflowInstance`.
 - [ ] 4. Continue resolves from the recorded run worktree; "Switched …"

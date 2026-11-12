@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
-import { suite, test } from "mocha";
+import { suite, teardown, test } from "mocha";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 import { WORKTREE_IDENTITY_KINDS } from "../../types/DashboardConstants";
 import {
@@ -11,15 +11,129 @@ import {
   createWorktreeDirectoryName,
   evaluateWorkspaceEligibility,
   resolveThroughNearestExistingAncestor,
+  resolveCheckoutSlot,
   resolveWorktreeRoot,
   slugifyWorktreeName,
   validateWorktreeBranchName,
 } from "../../utils/WorktreeUtils";
+import type { GitWorktreeEntry } from "../../utils/GitUtils";
 
 suite("WorktreeUtils", function () {
+  const temporaryDirectories: string[] = [];
+  teardown(async () => {
+    await Promise.all(
+      temporaryDirectories
+        .splice(0)
+        .map((directory) => fs.rm(directory, { recursive: true, force: true }))
+    );
+  });
+
   async function makeDirectory(name: string): Promise<string> {
-    return fs.mkdtemp(path.join(os.tmpdir(), `ctrlyoke-${name}-`));
+    const directory = await fs.mkdtemp(
+      path.join(os.tmpdir(), `ctrlyoke-${name}-`)
+    );
+    temporaryDirectories.push(directory);
+    return directory;
   }
+
+  test("resolves checkout aliases, ambiguity, and planned paths", async () => {
+    const parent = await makeDirectory("checkout-slots");
+    const source = path.join(parent, "repo");
+    const root = path.join(parent, "slots");
+    await fs.mkdir(source);
+    await fs.mkdir(root);
+    const common = path.join(source, ".git");
+    const exact = path.join(root, "bug-fix");
+    const checkoutHash = path.join(
+      root,
+      createWorktreeDirectoryName("bug-fix", common, {
+        kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
+        name: "bug-fix",
+      })
+    );
+    const namedHash = path.join(
+      root,
+      createWorktreeDirectoryName("bug-fix", common, {
+        kind: WORKTREE_IDENTITY_KINDS.NAMED,
+        branchRef: "bug-fix",
+      })
+    );
+    const entry = (worktreePath: string): GitWorktreeEntry => ({
+      worktreePath,
+      headCommit: "abc",
+      branchName: "old",
+      detached: false,
+      bare: false,
+    });
+    for (const candidate of [exact, checkoutHash, namedHash]) {
+      const result = await resolveCheckoutSlot(
+        source,
+        "bug-fix",
+        [entry(candidate)],
+        common,
+        root
+      );
+      assert.strictEqual(result.kind, "existing");
+      if (result.kind === "existing")
+        assert.strictEqual(result.entry.worktreePath, candidate);
+    }
+    await assert.rejects(
+      resolveCheckoutSlot(
+        source,
+        "bug-fix",
+        [entry(exact), entry(checkoutHash)],
+        common,
+        root
+      ),
+      /matches multiple registered worktrees/
+    );
+    const planned = await resolveCheckoutSlot(
+      source,
+      "bug-fix",
+      [],
+      common,
+      root
+    );
+    assert.deepStrictEqual(planned, { kind: "planned", path: checkoutHash });
+  });
+
+  test("rejects unsafe and prunable checkout paths", async () => {
+    const parent = await makeDirectory("checkout-paths");
+    const source = path.join(parent, "repo");
+    const root = path.join(parent, "slots");
+    const common = path.join(source, ".git");
+    const existing = path.join(parent, "unregistered");
+    await fs.mkdir(source);
+    await fs.mkdir(root);
+    await fs.mkdir(existing);
+    await assert.rejects(
+      resolveCheckoutSlot(source, existing, [], common, root),
+      /not a registered worktree/
+    );
+    await assert.rejects(
+      resolveCheckoutSlot(source, "relative/path", [], common, root),
+      /absolute path/
+    );
+    await assert.rejects(
+      resolveCheckoutSlot(
+        source,
+        "stale",
+        [
+          {
+            worktreePath: path.join(root, "stale"),
+            headCommit: "abc",
+            branchName: "old",
+            detached: false,
+            bare: false,
+            prunable: true,
+          },
+        ],
+        common,
+        root
+      ),
+      /Repair or Prune/
+    );
+  });
 
   test("resolves explicit, sibling, and filesystem-fallback roots", async () => {
     const parent = await makeDirectory("roots");
