@@ -10,11 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Named worktrees can target a long-lived checkout slot with `worktree.checkout`; clean slots switch to the requested branch and retain setup state per checkout.
+- Settings → Worktrees offers **Update from** for PR branches and compares their status with their configured upstream.
 
 ### Changed
 
 - Workspace-scope `defaults.worktree` values with a path-form `checkout` now require approval, since they choose where ctrlyoke creates a checkout.
 - A branch-derived named worktree path that now belongs to a different branch reports the occupied path and suggests selecting it with `checkout`.
+- PR branches no longer offer two-way **Sync** or appear in **Sync All**, avoiding merging unreviewed PR work into the source checkout.
 
 ### Fixed
 

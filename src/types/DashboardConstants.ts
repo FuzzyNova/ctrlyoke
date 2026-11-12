@@ -2966,6 +2966,9 @@ export const WORKTREE_MERGE_READINESS = {
   READY: "ready",
   BEHIND: "behind",
   UP_TO_DATE: "upToDate",
+  UNPUSHED: "unpushed",
+  PUSHED: "pushed",
+  UPSTREAM_GONE: "upstreamGone",
 } as const;
 
 export type WorktreeMergeReadiness =

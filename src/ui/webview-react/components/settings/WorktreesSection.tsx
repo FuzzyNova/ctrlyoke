@@ -28,6 +28,10 @@ import {
 } from "@utils/scmStatus";
 import { WorktreeGitStatus } from "./WorktreeGitStatus";
 import {
+  isPullRequestWorktree,
+  stripWorktreeDirectoryHashSuffix,
+} from "@utils/worktreeStatus";
+import {
   ActionButton,
   actionFeedbackDurationMs,
   type ActionFeedback,
@@ -205,11 +209,18 @@ function isSourceCheckoutEntry(
 /** Shared by the per-row Sync button and the section-level Sync All orchestrator. */
 function isSyncEligible(
   entry: WorktreeManagementEntry,
-  sourceCheckoutRoot?: string
+  sourceCheckoutRoot?: string,
+  sourceCheckoutBranch?: string | null,
+  sourceCheckoutUpstream?: string
 ): boolean {
   return (
     entry.ownership === WORKTREE_LIFECYCLE_OWNERS.USER &&
     !isSourceCheckoutEntry(entry, sourceCheckoutRoot) &&
+    !isPullRequestWorktree(
+      entry,
+      sourceCheckoutBranch,
+      sourceCheckoutUpstream
+    ) &&
     !entry.inUse &&
     !entry.stale &&
     !!entry.branchName &&
@@ -387,7 +398,12 @@ export function WorktreesSection({
   const syncEligibleEntries = useMemo(
     () =>
       (management?.entries ?? []).filter((entry) =>
-        isSyncEligible(entry, management?.sourceCheckoutRoot)
+        isSyncEligible(
+          entry,
+          management?.sourceCheckoutRoot,
+          management?.sourceCheckoutBranch,
+          management?.sourceCheckoutUpstream
+        )
       ),
     [management]
   );
@@ -428,7 +444,14 @@ export function WorktreesSection({
     if (!management) return;
     const sourceCheckoutRoot = management.sourceCheckoutRoot;
     const order = management.entries
-      .filter((entry) => isSyncEligible(entry, sourceCheckoutRoot))
+      .filter((entry) =>
+        isSyncEligible(
+          entry,
+          sourceCheckoutRoot,
+          management.sourceCheckoutBranch,
+          management.sourceCheckoutUpstream
+        )
+      )
       .map((entry) => entry.worktreePath);
     if (!order.length) return;
     const sequence =
@@ -451,7 +474,15 @@ export function WorktreesSection({
       const entry = latest?.entries.find(
         (candidate) => candidate.worktreePath === worktreePath
       );
-      if (!entry || !isSyncEligible(entry, latest?.sourceCheckoutRoot)) {
+      if (
+        !entry ||
+        !isSyncEligible(
+          entry,
+          latest?.sourceCheckoutRoot,
+          latest?.sourceCheckoutBranch,
+          latest?.sourceCheckoutUpstream
+        )
+      ) {
         continue;
       }
       const [requestId] = feedback.begin(worktreeRowKey(worktreePath, "sync"));
@@ -637,6 +668,7 @@ export function WorktreesSection({
                 requestConfirm={setPendingConfirm}
                 sourceCheckoutRoot={management.sourceCheckoutRoot}
                 sourceCheckoutBranch={management.sourceCheckoutBranch}
+                sourceCheckoutUpstream={management.sourceCheckoutUpstream}
               />
             ))}
           </div>
@@ -737,6 +769,7 @@ function WorktreeRow({
   requestConfirm,
   sourceCheckoutRoot,
   sourceCheckoutBranch,
+  sourceCheckoutUpstream,
 }: {
   entry: WorktreeManagementEntry;
   branchColorClass: string;
@@ -747,6 +780,7 @@ function WorktreeRow({
   requestConfirm: RequestConfirm;
   sourceCheckoutRoot?: string;
   sourceCheckoutBranch?: string | null;
+  sourceCheckoutUpstream?: string;
 }) {
   const canOpenWorktreeOwner = useUiStore((state) =>
     state.hostCapabilities.includes(
@@ -852,7 +886,17 @@ function WorktreeRow({
     const [requestId] = feedback.begin(rowKey("repair"));
     sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REPAIR, requestId, entry);
   };
-  const canSync = isSyncEligible(entry, sourceCheckoutRoot);
+  const isPr = isPullRequestWorktree(
+    entry,
+    sourceCheckoutBranch,
+    sourceCheckoutUpstream
+  );
+  const canSync = isSyncEligible(
+    entry,
+    sourceCheckoutRoot,
+    sourceCheckoutBranch,
+    sourceCheckoutUpstream
+  );
   const doSync = () => {
     const [requestId] = feedback.begin(rowKey("sync"));
     vscode.postMessage({
@@ -875,6 +919,16 @@ function WorktreeRow({
       onConfirm: doSync,
     });
   };
+  const updateFromSource = () => {
+    const [requestId] = feedback.begin(rowKey("update-from-source"));
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_NAMED_WORKTREE_FROM_SOURCE,
+      worktreePath: entry.worktreePath,
+      requestId,
+    });
+  };
+  const directoryName = entry.worktreePath.split(/[\\/]/).pop() ?? "";
+  const slotName = stripWorktreeDirectoryHashSuffix(directoryName);
   return (
     <div
       className={`rounded-sm border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}
@@ -882,8 +936,14 @@ function WorktreeRow({
       <WorktreeGitStatus
         entry={entry}
         sourceCheckoutBranch={sourceCheckoutBranch}
+        sourceCheckoutUpstream={sourceCheckoutUpstream}
         branchColorClass={branchColorClass}
       />
+      {entry.branchName && slotName !== entry.branchName && (
+        <div className="mt-1 text-xs text-description-fg">
+          {slotName} · {entry.branchName}
+        </div>
+      )}
       <div className="mt-1 font-mono break-all text-foreground">
         {entry.worktreePath}
       </div>
@@ -917,10 +977,16 @@ function WorktreeRow({
           </div>
         )
       )}
-      {entry.divergence && (
+      {entry.divergence &&
+        entry.divergence.comparisonLabel !== entry.upstream?.label && (
+          <div className="mt-1 text-description-fg">
+            {entry.branchName} — {entry.divergence.ahead} ahead,{" "}
+            {entry.divergence.behind} behind {entry.divergence.comparisonLabel}
+          </div>
+        )}
+      {isPr && (entry.sourceComparison?.behind ?? 0) > 0 && (
         <div className="mt-1 text-description-fg">
-          {entry.branchName} — {entry.divergence.ahead} ahead,{" "}
-          {entry.divergence.behind} behind {entry.divergence.comparisonLabel}
+          {entry.sourceComparison?.behind} behind {sourceCheckoutBranch}
         </div>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
@@ -968,6 +1034,20 @@ function WorktreeRow({
             onClick={sync}
           />
         )}
+        {isPr &&
+          entry.ownership === WORKTREE_LIFECYCLE_OWNERS.USER &&
+          !entry.inUse &&
+          !entry.stale &&
+          entry.branchName &&
+          entry.branchState === WORKTREE_UI_STATUSES.BRANCH_PRESENT && (
+            <ActionButton
+              label={`Update from ${sourceCheckoutBranch ?? "source checkout"}`}
+              pendingLabel="Updating…"
+              pending={feedback.isPending(rowKey("update-from-source"))}
+              feedback={feedback.getFeedback(rowKey("update-from-source"))}
+              onClick={updateFromSource}
+            />
+          )}
         {entry.branchCleanupEligible && entry.branchName && (
           <ActionButton
             label="Delete merged branch"

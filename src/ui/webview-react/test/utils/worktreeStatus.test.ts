@@ -3,6 +3,8 @@ import { WORKTREE_MERGE_READINESS } from "@root/types/DashboardConstants";
 import {
   describeWorktreeStatus,
   resolveWorktreeMergeReadiness,
+  isPullRequestWorktree,
+  stripWorktreeDirectoryHashSuffix,
 } from "@utils/worktreeStatus";
 
 const clean = {
@@ -75,5 +77,50 @@ describe("describeWorktreeStatus", () => {
     ).toBe(
       "feature/x — 1 commit ahead of main, 4 behind — 1 staged and 2 unstaged changes"
     );
+  });
+});
+
+describe("PR worktree status", () => {
+  it("uses upstream comparison, readiness, and hash-free slot names", () => {
+    const entry = {
+      upstream: { label: "origin/feature", gone: false, ahead: 2, behind: 3 },
+      workingTree: clean,
+      sourceComparison: { ahead: 20, behind: 1 },
+    };
+    expect(isPullRequestWorktree(entry, "main", "origin/main")).toBe(true);
+    expect(
+      isPullRequestWorktree(
+        { upstream: { label: "origin/main", gone: false } },
+        "main",
+        "origin/main"
+      )
+    ).toBe(false);
+    expect(resolveWorktreeMergeReadiness(entry, "pr")).toBe(
+      WORKTREE_MERGE_READINESS.UNPUSHED
+    );
+    expect(
+      describeWorktreeStatus({ branchName: "feature", ...entry }, "main", "pr")
+    ).toContain("2 commits ahead of upstream origin/feature, 3 behind");
+    expect(stripWorktreeDirectoryHashSuffix("bug-fix-0123456789ab")).toBe(
+      "bug-fix"
+    );
+  });
+
+  it("reports pushed and gone upstream states", () => {
+    expect(
+      resolveWorktreeMergeReadiness(
+        {
+          workingTree: clean,
+          upstream: { label: "origin/pr", gone: false, ahead: 0, behind: 0 },
+        },
+        "pr"
+      )
+    ).toBe(WORKTREE_MERGE_READINESS.PUSHED);
+    expect(
+      resolveWorktreeMergeReadiness(
+        { workingTree: clean, upstream: { label: "origin/pr", gone: true } },
+        "pr"
+      )
+    ).toBe(WORKTREE_MERGE_READINESS.UPSTREAM_GONE);
   });
 });

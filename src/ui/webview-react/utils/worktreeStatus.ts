@@ -4,6 +4,8 @@ import {
   type WorktreeMergeReadiness,
 } from "@root/types/DashboardConstants";
 import { pluralize } from "@utils/string";
+import { classifyWorktreeComparison } from "@root/utils/WorktreeComparison";
+import { WORKTREE_COMPARISON_KINDS } from "@root/types/DashboardConstants";
 
 type WorkingTreeCounts = NonNullable<WorktreeManagementEntry["workingTree"]>;
 type ChangeCounts = WorkingTreeCounts["staged"];
@@ -19,9 +21,13 @@ export function totalChanges(counts: ChangeCounts): number {
  * source checkout when it is clean (it has nothing to merge into).
  */
 export function resolveWorktreeMergeReadiness(
-  entry: Pick<WorktreeManagementEntry, "workingTree" | "sourceComparison">
+  entry: Pick<
+    WorktreeManagementEntry,
+    "workingTree" | "sourceComparison" | "upstream"
+  >,
+  comparisonKind: "local" | "pr" = "local"
 ): WorktreeMergeReadiness | undefined {
-  const { workingTree, sourceComparison } = entry;
+  const { workingTree, sourceComparison, upstream } = entry;
   if (!workingTree) return undefined;
   if (workingTree.conflicted > 0) return WORKTREE_MERGE_READINESS.CONFLICTED;
   if (
@@ -29,6 +35,14 @@ export function resolveWorktreeMergeReadiness(
     0
   ) {
     return WORKTREE_MERGE_READINESS.UNCOMMITTED;
+  }
+  if (comparisonKind === "pr") {
+    if (upstream?.gone) return WORKTREE_MERGE_READINESS.UPSTREAM_GONE;
+    if (upstream?.ahead === undefined || upstream.behind === undefined)
+      return undefined;
+    if (upstream.ahead > 0) return WORKTREE_MERGE_READINESS.UNPUSHED;
+    if (upstream.behind > 0) return WORKTREE_MERGE_READINESS.BEHIND;
+    return WORKTREE_MERGE_READINESS.PUSHED;
   }
   if (!sourceComparison) return undefined;
   if (sourceComparison.ahead > 0) return WORKTREE_MERGE_READINESS.READY;
@@ -41,13 +55,25 @@ export function resolveWorktreeMergeReadiness(
 export function describeWorktreeStatus(
   entry: Pick<
     WorktreeManagementEntry,
-    "branchName" | "workingTree" | "sourceComparison"
+    "branchName" | "workingTree" | "sourceComparison" | "upstream"
   >,
-  sourceBranch: string | null | undefined
+  sourceBranch: string | null | undefined,
+  comparisonKind: "local" | "pr" = "local"
 ): string {
   const parts = [entry.branchName ?? "Detached HEAD"];
   const { sourceComparison, workingTree } = entry;
-  if (sourceComparison && sourceBranch) {
+  if (comparisonKind === "pr" && entry.upstream) {
+    const { ahead, behind, gone, label } = entry.upstream;
+    parts.push(
+      gone
+        ? `upstream ${label} is gone`
+        : ahead === undefined || behind === undefined
+          ? `compared with upstream ${label}`
+          : ahead === 0 && behind === 0
+            ? `same commits as upstream ${label}`
+            : `${pluralize(ahead, "commit")} ahead of upstream ${label}, ${behind} behind`
+    );
+  } else if (sourceComparison && sourceBranch) {
     const { ahead, behind } = sourceComparison;
     parts.push(
       ahead === 0 && behind === 0
@@ -68,4 +94,23 @@ export function describeWorktreeStatus(
     }
   }
   return parts.join(" — ");
+}
+
+export function isPullRequestWorktree(
+  entry: Pick<WorktreeManagementEntry, "upstream">,
+  sourceBranch: string | null | undefined,
+  sourceUpstream?: string
+): boolean {
+  return (
+    classifyWorktreeComparison({
+      upstream: entry.upstream,
+      sourceBranch: sourceBranch ?? null,
+      sourceUpstream,
+    }) === WORKTREE_COMPARISON_KINDS.PR
+  );
+}
+
+/** Remove the deterministic 12-hex suffix used on ctrlyoke worktree directories. */
+export function stripWorktreeDirectoryHashSuffix(name: string): string {
+  return name.replace(/-[a-f\d]{12}$/i, "");
 }

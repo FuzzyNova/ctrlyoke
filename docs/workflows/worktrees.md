@@ -223,32 +223,34 @@ user-owned for named ones), branch, and whether a run is using it. The command
 Each row starts with a [posh-git](https://github.com/dahlbyk/posh-git) style
 status line, such as `[feature/x ↑18 +1 ~0 -0 | +0 ~3 -0 !]`:
 
-| Part               | Means                                                                                               |
-| ------------------ | --------------------------------------------------------------------------------------------------- |
-| `↑n` / `↓n` / `≡`  | Commits the branch has that your checkout's branch doesn't, commits it lacks, or the same commits.  |
-| `+a ~m -d`         | Added, modified and deleted files. Staged changes come first; after a `\|`, changes not yet staged. |
-| `!n`               | Files with unresolved merge conflicts.                                                              |
-| Trailing `!` / `~` | The worktree has unstaged changes / only staged changes.                                            |
+| Part               | Means                                                                                                                                                                  |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `↑n` / `↓n` / `≡`  | For local branches, commits ahead of/behind your checkout's branch; for PR branches, commits ahead of/behind the configured upstream. `×` means that upstream is gone. |
+| `+a ~m -d`         | Added, modified and deleted files. Staged changes come first; after a `\|`, changes not yet staged.                                                                    |
+| `!n`               | Files with unresolved merge conflicts.                                                                                                                                 |
+| Trailing `!` / `~` | The worktree has unstaged changes / only staged changes.                                                                                                               |
 
-Next to it, the row says whether the branch is **Ready to merge** (no
+Next to it, the row says whether a local branch is **Ready to merge** (no
 uncommitted changes and commits to bring in), has **Uncommitted changes** or
-**Merge conflicts**, or is **Up to date** or **Behind** your branch. Hover the
-status line for the same information in words. The counts refresh when the
-tab opens and when you select **Refresh**.
+**Merge conflicts**, or is **Up to date** or **Behind** your branch. PR branches
+show **Unpushed commits**, **Pushed**, **Behind &lt;upstream&gt;**, or
+**Upstream gone**. Hover the status line for the comparison target in words.
+The counts refresh when the tab opens and when you select **Refresh**.
 
 Actions on a row depend on the worktree:
 
-| Action                        | Does                                                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Sync with &lt;branch&gt;**  | For a named worktree: merges its branch into your checkout's branch, then merges that branch back into it. |
-| **Delete merged branch**      | Deletes a ctrlyoke branch that is provably merged into the branch it was created from.                     |
-| **Delete branch…**            | Deletes a ctrlyoke branch that isn't provably merged, after confirmation.                                  |
-| **Remove** / **Force remove** | Removes a managed worktree's directory. Force remove also discards uncommitted changes in it.              |
-| **Repair entry**              | Fixes a stale Git worktree entry.                                                                          |
+| Action                         | Does                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **Sync with &lt;branch&gt;**   | For a named worktree: merges its branch into your checkout's branch, then merges that branch back into it.               |
+| **Update from &lt;branch&gt;** | For a PR branch: merges your checkout's branch into the PR branch without merging the PR branch back into your checkout. |
+| **Delete merged branch**       | Deletes a ctrlyoke branch that is provably merged into the branch it was created from.                                   |
+| **Delete branch…**             | Deletes a ctrlyoke branch that isn't provably merged, after confirmation.                                                |
+| **Remove** / **Force remove**  | Removes a managed worktree's directory. Force remove also discards uncommitted changes in it.                            |
+| **Repair entry**               | Fixes a stale Git worktree entry.                                                                                        |
 
 Above and below the list:
 
-- **Sync All with &lt;branch&gt;** syncs every named worktree in turn. A branch
+- **Sync All with &lt;branch&gt;** syncs every eligible local named worktree in turn. PR branches are excluded because Sync would merge unreviewed PR work into your checkout. A branch
   that can't merge cleanly is skipped and reported; the rest still run.
 - **Clean up safe merged branches** deletes the selected ctrlyoke branches.
   Only inactive branches proven merged are preselected; squash and rebase

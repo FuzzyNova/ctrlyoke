@@ -613,4 +613,83 @@ describe("WorktreesSection", () => {
       screen.getByText(/repository sibling, then user fallback/i)
     ).toBeInTheDocument();
   });
+
+  it("offers Update from for PR branches, excludes them from Sync, and labels checkout slots", () => {
+    const postMessage = vi.fn();
+    window.vscodeApi = {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      sourceCheckoutUpstream: "origin/main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        {
+          worktreePath: "C:/repo.worktrees/bug-fix-0123456789ab",
+          headCommit: "abc",
+          branchName: "fix-race-condition",
+          ownership: "user",
+          branchState: "present",
+          inUse: false,
+          leaseOwners: [],
+          stale: false,
+          branchCleanupEligible: false,
+          upstream: {
+            label: "origin/fix-race-condition",
+            gone: false,
+            ahead: 1,
+            behind: 2,
+          },
+          sourceComparison: { ahead: 10, behind: 4 },
+          workingTree: {
+            staged: { added: 0, modified: 0, deleted: 0 },
+            unstaged: { added: 0, modified: 0, deleted: 0 },
+            conflicted: 0,
+          },
+        },
+      ],
+    });
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("worktree-git-status")).toHaveTextContent(
+      "↓2 ↑1"
+    );
+    expect(screen.getByTestId("worktree-git-status")).toHaveAttribute(
+      "title",
+      expect.stringContaining("upstream origin/fix-race-condition")
+    );
+    expect(screen.getByText("4 behind main")).toBeInTheDocument();
+    expect(
+      screen.getByText("bug-fix · fix-race-condition")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Update from main" })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Sync with/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sync All with main" })
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Update from main" }));
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.UPDATE_NAMED_WORKTREE_FROM_SOURCE,
+        worktreePath: "C:/repo.worktrees/bug-fix-0123456789ab",
+        requestId: expect.any(String),
+      })
+    );
+  });
 });

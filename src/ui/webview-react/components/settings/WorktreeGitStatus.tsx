@@ -6,6 +6,7 @@ import {
 import { SCM_CHANGE_COUNT_COLOR_CLASS } from "@utils/scmStatus";
 import {
   describeWorktreeStatus,
+  isPullRequestWorktree,
   resolveWorktreeMergeReadiness,
   totalChanges,
 } from "@utils/worktreeStatus";
@@ -38,6 +39,18 @@ const READINESS_DISPLAY: Record<
     label: () => "Up to date",
     colorClass: "text-description-fg",
   },
+  [WORKTREE_MERGE_READINESS.UNPUSHED]: {
+    label: () => "Unpushed commits",
+    colorClass: SCM_CHANGE_COUNT_COLOR_CLASS.added,
+  },
+  [WORKTREE_MERGE_READINESS.PUSHED]: {
+    label: () => "Pushed",
+    colorClass: "text-description-fg",
+  },
+  [WORKTREE_MERGE_READINESS.UPSTREAM_GONE]: {
+    label: () => "Upstream gone",
+    colorClass: SCM_CHANGE_COUNT_COLOR_CLASS.deleted,
+  },
 };
 
 function ChangeCountGroup({ counts }: { counts: ChangeCounts }) {
@@ -61,25 +74,36 @@ function ChangeCountGroup({ counts }: { counts: ChangeCounts }) {
  * posh-git style one-line status: `[branch ↓behind ↑ahead +a ~m -d | +a ~m -d !]`.
  * The index (staged) group comes first and the working-tree group second,
  * each shown only when non-empty; the trailing `!` means unstaged changes
- * exist and `~` means only staged ones do. Arrows compare against the source
- * checkout's branch rather than an upstream, because that is the branch Sync
- * and a merge target here.
+ * exist and `~` means only staged ones do. PR branches compare with their
+ * upstream; local branches compare with the source checkout branch.
  */
 export function WorktreeGitStatus({
   entry,
   sourceCheckoutBranch,
+  sourceCheckoutUpstream,
   branchColorClass,
 }: {
   entry: WorktreeManagementEntry;
   sourceCheckoutBranch: string | null | undefined;
+  sourceCheckoutUpstream?: string;
   branchColorClass: string;
 }) {
   const { workingTree, sourceComparison } = entry;
+  const isPr = isPullRequestWorktree(
+    entry,
+    sourceCheckoutBranch,
+    sourceCheckoutUpstream
+  );
+  const comparison = isPr ? entry.upstream : sourceComparison;
   const stagedCount = workingTree ? totalChanges(workingTree.staged) : 0;
   const unstagedCount = workingTree ? totalChanges(workingTree.unstaged) : 0;
-  const readiness = resolveWorktreeMergeReadiness(entry);
+  const readiness = resolveWorktreeMergeReadiness(entry, isPr ? "pr" : "local");
   const readinessDisplay = readiness ? READINESS_DISPLAY[readiness] : undefined;
-  const description = describeWorktreeStatus(entry, sourceCheckoutBranch);
+  const description = describeWorktreeStatus(
+    entry,
+    sourceCheckoutBranch,
+    isPr ? "pr" : "local"
+  );
 
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -94,21 +118,25 @@ export function WorktreeGitStatus({
         <span className={branchColorClass}>
           {entry.branchName ?? "(detached)"}
         </span>
-        {sourceComparison &&
-          (sourceComparison.ahead === 0 && sourceComparison.behind === 0 ? (
+        {comparison &&
+          (isPr && entry.upstream?.gone ? (
+            <span className={SCM_CHANGE_COUNT_COLOR_CLASS.deleted}> ×</span>
+          ) : comparison.ahead === undefined ||
+            comparison.behind === undefined ? null : comparison.ahead === 0 &&
+            comparison.behind === 0 ? (
             <span className="text-description-fg"> ≡</span>
           ) : (
             <>
-              {sourceComparison.behind > 0 && (
+              {comparison.behind > 0 && (
                 <span className={SCM_CHANGE_COUNT_COLOR_CLASS.deleted}>
                   {" "}
-                  ↓{sourceComparison.behind}
+                  ↓{comparison.behind}
                 </span>
               )}
-              {sourceComparison.ahead > 0 && (
+              {comparison.ahead > 0 && (
                 <span className={SCM_CHANGE_COUNT_COLOR_CLASS.added}>
                   {" "}
-                  ↑{sourceComparison.ahead}
+                  ↑{comparison.ahead}
                 </span>
               )}
             </>
@@ -137,7 +165,13 @@ export function WorktreeGitStatus({
       </span>
       {readinessDisplay && (
         <span className={`text-xs ${readinessDisplay.colorClass}`}>
-          {readinessDisplay.label(sourceCheckoutBranch ?? "checkout")}
+          {readiness === WORKTREE_MERGE_READINESS.BEHIND
+            ? readinessDisplay.label(
+                isPr
+                  ? (entry.upstream?.label ?? "upstream")
+                  : (sourceCheckoutBranch ?? "checkout")
+              )
+            : readinessDisplay.label(sourceCheckoutBranch ?? "checkout")}
         </span>
       )}
     </div>
