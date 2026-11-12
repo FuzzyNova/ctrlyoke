@@ -150,9 +150,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                   · {terminalExecutionRunLabel}
                 </span>
               )}
-              {terminalSessionActive && (
-                <LiveDot />
-              )}
+              {terminalSessionActive && <LiveDot />}
             </button>
           </div>
         ) : (

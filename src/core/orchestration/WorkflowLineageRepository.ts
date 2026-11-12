@@ -214,7 +214,9 @@ export class WorkflowLineageRepository {
     if (descriptor.schedule !== undefined) {
       const validation = validateWorkflowSchedule(descriptor.schedule);
       if (typeof validation === "string") {
-        Log.warn(`Dropping invalid schedule from lineage descriptor ${descriptor.workflowKey}: ${validation}`);
+        Log.warn(
+          `Dropping invalid schedule from lineage descriptor ${descriptor.workflowKey}: ${validation}`
+        );
         delete descriptor.schedule;
       } else {
         descriptor.schedule = validation;

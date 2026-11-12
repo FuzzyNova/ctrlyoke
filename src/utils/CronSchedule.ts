@@ -10,20 +10,32 @@ export interface ParsedCronExpression {
 }
 
 export type CronParseResult =
-  | { ok: true; value: ParsedCronExpression }
-  | { ok: false; error: string };
+  { ok: true; value: ParsedCronExpression } | { ok: false; error: string };
 
 const FIELD_RANGES = [
-  [0, 59], [0, 23], [1, 31], [1, 12], [0, 7],
+  [0, 59],
+  [0, 23],
+  [1, 31],
+  [1, 12],
+  [0, 7],
 ] as const;
 
-function parseField(text: string, min: number, max: number, sunday = false): Set<number> | null {
+function parseField(
+  text: string,
+  min: number,
+  max: number,
+  sunday = false
+): Set<number> | null {
   if (!text) return null;
   const values = new Set<number>();
   for (const part of text.split(",")) {
     if (!part) return null;
     const [base, stepText, extra] = part.split("/");
-    if (extra !== undefined || (stepText !== undefined && !/^\d+$/.test(stepText))) return null;
+    if (
+      extra !== undefined ||
+      (stepText !== undefined && !/^\d+$/.test(stepText))
+    )
+      return null;
     const step = stepText === undefined ? 1 : Number(stepText);
     if (!Number.isSafeInteger(step) || step < 1) return null;
     let start: number;
@@ -40,8 +52,10 @@ function parseField(text: string, min: number, max: number, sunday = false): Set
       start = Number(range[1]);
       end = Number(range[2]);
     }
-    if (start < min || start > max || end < min || end > max || start > end) return null;
-    for (let value = start; value <= end; value += step) values.add(sunday && value === 7 ? 0 : value);
+    if (start < min || start > max || end < min || end > max || start > end)
+      return null;
+    for (let value = start; value <= end; value += step)
+      values.add(sunday && value === 7 ? 0 : value);
   }
   return values.size ? values : null;
 }
@@ -49,15 +63,27 @@ function parseField(text: string, min: number, max: number, sunday = false): Set
 /** Parses and validates the supported five-field cron grammar (numeric fields only). */
 export function parseCronExpression(expression: string): CronParseResult {
   const fields = expression.trim().split(/\s+/);
-  if (fields.length !== 5) return { ok: false, error: "Cron expression must have exactly five fields" };
-  const parsed = fields.map((field, i) => parseField(field, FIELD_RANGES[i][0], FIELD_RANGES[i][1], i === 4));
+  if (fields.length !== 5)
+    return {
+      ok: false,
+      error: "Cron expression must have exactly five fields",
+    };
+  const parsed = fields.map((field, i) =>
+    parseField(field, FIELD_RANGES[i][0], FIELD_RANGES[i][1], i === 4)
+  );
   const failed = parsed.findIndex((field) => field === null);
-  if (failed >= 0) return { ok: false, error: `Invalid cron field ${failed + 1}` };
+  if (failed >= 0)
+    return { ok: false, error: `Invalid cron field ${failed + 1}` };
   return {
     ok: true,
     value: {
-      minute: parsed[0]!, hour: parsed[1]!, dayOfMonth: parsed[2]!, month: parsed[3]!, dayOfWeek: parsed[4]!,
-      dayOfMonthRestricted: fields[2] !== "*", dayOfWeekRestricted: fields[4] !== "*",
+      minute: parsed[0]!,
+      hour: parsed[1]!,
+      dayOfMonth: parsed[2]!,
+      month: parsed[3]!,
+      dayOfWeek: parsed[4]!,
+      dayOfMonthRestricted: fields[2] !== "*",
+      dayOfWeekRestricted: fields[4] !== "*",
     },
   };
 }
@@ -71,7 +97,10 @@ function matchesDay(cron: ParsedCronExpression, date: Date): boolean {
 }
 
 /** Returns the next matching local wall-clock minute after `afterMs`, within five years. */
-export function nextCronOccurrence(expression: string, afterMs: number): number | null {
+export function nextCronOccurrence(
+  expression: string,
+  afterMs: number
+): number | null {
   const result = parseCronExpression(expression);
   if (!result.ok || !Number.isFinite(afterMs)) return null;
   const cron = result.value;
@@ -94,10 +123,18 @@ export function nextCronOccurrence(expression: string, afterMs: number): number 
       continue;
     }
     const minuteOfDay = cursor.getHours() * 60 + cursor.getMinutes();
-    if (cron.hour.has(cursor.getHours()) && cron.minute.has(cursor.getMinutes())) return cursor.getTime();
+    if (
+      cron.hour.has(cursor.getHours()) &&
+      cron.minute.has(cursor.getMinutes())
+    )
+      return cursor.getTime();
     // A forward DST jump skips wall-clock minutes. A cron time inside the gap fires at the transition.
     for (let minute = previousMinuteOfDay + 1; minute < minuteOfDay; minute++) {
-      if (cron.hour.has(Math.floor(minute / 60)) && cron.minute.has(minute % 60)) return cursor.getTime();
+      if (
+        cron.hour.has(Math.floor(minute / 60)) &&
+        cron.minute.has(minute % 60)
+      )
+        return cursor.getTime();
     }
     previousMinuteOfDay = minuteOfDay;
     previousDay = cursor.getDate();

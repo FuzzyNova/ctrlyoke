@@ -239,8 +239,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
               onClick={onBackToLive}
               className="text-link-fg hover:underline focus:outline-hidden"
             >
-              Back to Live{" "}
-              <LiveDot className="align-middle" />
+              Back to Live <LiveDot className="align-middle" />
             </button>
           )}
           <PinToggleButton
