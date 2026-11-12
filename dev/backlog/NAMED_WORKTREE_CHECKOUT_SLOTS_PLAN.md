@@ -4,6 +4,30 @@
 again on 2026-11-12 (`0e5bd6ea0`). All open questions are resolved.
 **Priority:** P2
 
+## Progress
+
+Each implementation step ticks its item in the commit that lands it, and
+records anything it found that differs from this plan under the item.
+
+- [ ] 1. Contracts: `checkout` schema field, types, normalization, `"checkout"`
+      name identity, run-file format 3 → 4 (`checkout`, `previousBranch`).
+- [ ] 2. Slot resolution helper (`resolveCheckoutSlot`), `switchBranch`, the
+      branch-derived collision error, and Dry Run prediction
+      (`previewWorktreePlacement`, `WorktreeExecutionPreview`).
+- [ ] 3. `resolveNamedWorktree` with `checkout`: attach / switch / create,
+      lease ordering, runtime recording, plumbing from `WorkflowInstance`.
+- [ ] 4. Continue resolves from the recorded run worktree; "Switched …"
+      notice in the run view; workspace settings trust for path-form
+      `checkout`.
+- [ ] 5. Dashboard: Checkout field (properties panel, defaults page),
+      switcher indicator, Dry Run lines.
+- [ ] 6. Settings → Worktrees backend: `upstream` data, comparison
+      classification, PR Sync refusal, `updateNamedWorktreeFromSource`.
+- [ ] 7. Settings → Worktrees UI: upstream bracket, PR readiness labels,
+      source drift line, Sync gating, Update from, slot label.
+- [ ] 8. Docs pass (`docs/workflows/worktrees.md`, `properties-panel.md`),
+      CHANGELOG check, plan moved to `dev/implemented/`.
+
 ## Problem
 
 Named mode treats a worktree's **branch** as its identity: the checkout
