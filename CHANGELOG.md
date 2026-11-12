@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Workspace-scope `defaults.worktree` values with a path-form `checkout` now require approval, since they choose where ctrlyoke creates a checkout.
 - A branch-derived named worktree path that now belongs to a different branch reports the occupied path and suggests selecting it with `checkout`.
 
 ### Fixed

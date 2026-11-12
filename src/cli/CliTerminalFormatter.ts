@@ -27,6 +27,7 @@ import {
   getBackgroundWorkAbandonedNotice,
 } from "../utils/BackgroundWorkHoldText";
 import { queueTargetKey } from "../utils/OutputTargetKeys";
+import { worktreeSwitchNotice } from "../utils/WorktreeSwitchNotice";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
@@ -528,6 +529,8 @@ export class CliTerminalFormatter {
 
     console.log(chalk.dim(`Worktree: ${worktree.worktreePath}`));
     console.log(chalk.dim(`Branch: ${worktree.branchName}`));
+    const switchNotice = worktreeSwitchNotice(worktree);
+    if (switchNotice) console.log(chalk.yellow(switchNotice));
     const outcome = formatWorktreeOutcome(worktree);
     if (outcome) {
       const color =

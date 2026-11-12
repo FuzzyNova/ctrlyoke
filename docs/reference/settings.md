@@ -453,7 +453,7 @@ Fields:
 - **Default:** `false`
 - **Workflow field:** [`worktree`](/reference/workflow-schema#workflow-file-worktree) — a workflow or step value overrides this default
 
-Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible. A workspace-scope value with a `setup` command takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A value without `setup`, or one whose `setup` matches your user value's, applies without asking.
+Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible. A workspace-scope value with a `setup` command or path-form `checkout` takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A bare-name checkout applies without asking. A value without setup or a path checkout, or one whose setup command and path checkout match your user value's, applies without asking.
 
 Accepted forms:
 

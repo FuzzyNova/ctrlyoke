@@ -276,6 +276,21 @@ suite("WorktreeManager", function () {
       )
     );
     await info.lease.release();
+
+    const continued = await resolve(
+      instance,
+      repository,
+      "old-slot-branch",
+      { checkout: slotPath }
+    );
+    assert.strictEqual(
+      execFileSync("git", ["-C", slotPath, "branch", "--show-current"], {
+        encoding: "utf8",
+      }).trim(),
+      "old-slot-branch",
+      "a clean slot switches back to the branch recorded by the continued run"
+    );
+    await continued.lease.release();
   });
 
   test("refuses to switch a dirty checkout slot", async () => {

@@ -79,6 +79,20 @@ describe("RunSummaryBanner", () => {
     );
   });
 
+  it("shows the checkout branch switch notice", () => {
+    renderBanner({
+      worktree: {
+        ...worktree,
+        checkout: "bug-fix",
+        previousBranch: "old-branch",
+      },
+    });
+
+    expect(screen.getAllByRole("status")[1]).toHaveTextContent(
+      "Switched bug-fix from `old-branch` to `feature/historical`"
+    );
+  });
+
   it("shows the run time beside the start date when one is known", () => {
     const { rerender } = renderBanner({ duration: { durationMs: 149_700 } });
     expect(screen.getByTestId("run-id-banner")).toHaveTextContent(/· 2:29$/);

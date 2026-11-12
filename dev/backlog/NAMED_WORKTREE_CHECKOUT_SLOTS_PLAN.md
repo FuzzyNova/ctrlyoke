@@ -18,9 +18,10 @@ records anything it found that differs from this plan under the item.
       Deviation: none.
 - [x] 3. `resolveNamedWorktree` with `checkout`: attach / switch / create,
       lease ordering, runtime recording, plumbing from `WorkflowInstance`.
-- [ ] 4. Continue resolves from the recorded run worktree; "Switched …"
+- [x] 4. Continue resolves from the recorded run worktree; "Switched …"
       notice in the run view; workspace settings trust for path-form
       `checkout`.
+      Deviation: none.
 - [ ] 5. Dashboard: Checkout field (properties panel, defaults page),
       switcher indicator, Dry Run lines.
 - [ ] 6. Settings → Worktrees backend: `upstream` data, comparison

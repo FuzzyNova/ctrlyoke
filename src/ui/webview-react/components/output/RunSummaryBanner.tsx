@@ -32,6 +32,7 @@ import {
   type WorktreeOutcomeSeverity,
 } from "@root/utils/formatWorktreeOutcome";
 import { sendMessage } from "@messaging/sendMessage";
+import { worktreeSwitchNotice } from "@root/utils/WorktreeSwitchNotice";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { Icon } from "../shared/Icon";
@@ -147,6 +148,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   const worktreeOutcome = worktree
     ? formatWorktreeOutcome(worktree)
     : undefined;
+  const switchNotice = worktreeSwitchNotice(worktree);
   const [copiedBranch, setCopiedBranch] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
   const canOpenWorktree = useUiStore((state) =>
@@ -382,6 +384,11 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
                   )}
                 </span>
               )}
+            </div>
+          )}
+          {switchNotice && (
+            <div className="text-warning-fg" role="status">
+              {switchNotice}
             </div>
           )}
         </div>

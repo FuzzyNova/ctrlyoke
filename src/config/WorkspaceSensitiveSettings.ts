@@ -16,6 +16,7 @@ import {
 } from "../types/DashboardConstants";
 import { stableStringify } from "../utils/StableJson";
 import { escapeUntrustedDisplayText } from "../utils/EscapeUntrustedDisplayText";
+import { classifyCheckoutValue } from "../utils/WorktreeConfigShape";
 
 /**
  * One workspace-scoped value that can choose a program for ctrlyoke to run.
@@ -155,6 +156,16 @@ function hasWorktreeSetupCommand(value: unknown): boolean {
   return worktreeSetupCommand(value) !== undefined;
 }
 
+function worktreeCheckoutPath(value: unknown): string | undefined {
+  if (!isPlainObject(value) || !isNonEmptyString(value.checkout)) return undefined;
+  const checkout = (value.checkout as string).trim();
+  return classifyCheckoutValue(checkout) === "path" ? checkout : undefined;
+}
+
+function isSensitiveWorktreeDefault(value: unknown): boolean {
+  return hasWorktreeSetupCommand(value) || worktreeCheckoutPath(value) !== undefined;
+}
+
 /**
  * The user's own value already runs the same setup command, so the workspace
  * changing only mode, branch, base, merge or keep asks nothing new.
@@ -163,9 +174,8 @@ function worktreeSetupCoveredByUser(
   workspaceValue: unknown,
   userValue: unknown
 ): boolean {
-  return (
-    worktreeSetupCommand(workspaceValue) === worktreeSetupCommand(userValue)
-  );
+  return worktreeSetupCommand(workspaceValue) === worktreeSetupCommand(userValue) &&
+    worktreeCheckoutPath(workspaceValue) === worktreeCheckoutPath(userValue);
 }
 
 function rankedSettingCoveredByUser(
@@ -194,7 +204,13 @@ function sandboxCoveredByUser(workspace: unknown, user: unknown): boolean {
 
 /** Lead with the command; the generic sorted JSON can truncate it away. */
 function summarizeWorktreeSetup(value: unknown): string {
-  return summarizeValue(`setup command ${worktreeSetupCommand(value) ?? ""}`);
+  const details = [
+    worktreeSetupCommand(value)
+      ? `setup command ${worktreeSetupCommand(value)}`
+      : undefined,
+    worktreeCheckoutPath(value) ? `checkout path ${worktreeCheckoutPath(value)}` : undefined,
+  ].filter(Boolean);
+  return summarizeValue(details.join(", "));
 }
 
 /**
@@ -277,7 +293,7 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
   {
     path: SETTING_PATHS.DEFAULTS_WORKTREE,
     shape: SENSITIVE_SETTING_SHAPES.VALUE,
-    isSensitive: hasWorktreeSetupCommand,
+    isSensitive: isSensitiveWorktreeDefault,
     isCoveredByUser: worktreeSetupCoveredByUser,
     summarize: summarizeWorktreeSetup,
   },

@@ -4,13 +4,45 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { WORKTREE_MODES } from "../../types/DashboardConstants";
-import type { WorktreeDefaultConfig } from "../../types/CtrlYokeTypes";
+import type {
+  WorktreeDefaultConfig,
+  WorkingFileWorktreeRuntime,
+} from "../../types/CtrlYokeTypes";
 import {
   resolveWorktreeForWorkspace,
   resolveWorktreeSelection,
+  recordedWorktreeConfigForContinue,
 } from "../../utils/WorktreeResolution";
 
 suite("WorktreeResolution", () => {
+  test("continues a recorded checkout branch with current setup after defaults change", () => {
+    const recorded = {
+      mode: WORKTREE_MODES.NAMED,
+      checkout: "bug-fix",
+      branchName: "recorded-branch",
+      executionCheckoutRoot: "/repo.worktrees/bug-fix",
+      baseCommit: "captured-base",
+    } as WorkingFileWorktreeRuntime;
+    const result = recordedWorktreeConfigForContinue(recorded, {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "new-default-branch",
+      setup: "npm ci",
+    });
+
+    assert.deepStrictEqual(result, {
+      mode: WORKTREE_MODES.NAMED,
+      checkout: "/repo.worktrees/bug-fix",
+      branch: "recorded-branch",
+      base: "captured-base",
+      setup: "npm ci",
+    });
+    assert.strictEqual(
+      recordedWorktreeConfigForContinue(recorded, false),
+      undefined,
+      "a disabled current config still takes the worktree abandonment path"
+    );
+  });
+
   const temporaryDirectories: string[] = [];
 
   teardown(async () => {

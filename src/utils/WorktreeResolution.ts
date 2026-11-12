@@ -6,7 +6,9 @@ import {
 import type {
   WorktreeConfig,
   WorktreeDefaultConfig,
+  WorktreeObjectConfig,
   WorktreeResolution,
+  WorkingFileWorktreeRuntime,
 } from "../types/CtrlYokeTypes";
 import { evaluateWorkspaceEligibility } from "./WorktreeUtils";
 import {
@@ -100,5 +102,27 @@ export async function resolveWorktreeForWorkspace(
   return {
     origin: selection.origin,
     notice: `Configured worktree default did not apply: ${reason}`,
+  };
+}
+
+/** Preserve a recorded named checkout during continue while taking setup from current config. */
+export function recordedWorktreeConfigForContinue(
+  recorded: WorkingFileWorktreeRuntime | undefined,
+  current: WorktreeObjectConfig | false
+): WorktreeObjectConfig | undefined {
+  if (
+    !recorded ||
+    recorded.mode !== WORKTREE_MODES.NAMED ||
+    recorded.checkout === undefined ||
+    current === false
+  ) {
+    return undefined;
+  }
+  return {
+    mode: WORKTREE_MODES.NAMED,
+    checkout: recorded.executionCheckoutRoot,
+    branch: recorded.branchName,
+    base: recorded.baseCommit,
+    ...(current.setup ? { setup: current.setup } : {}),
   };
 }
