@@ -26,8 +26,9 @@ records anything it found that differs from this plan under the item.
       switcher indicator, Dry Run lines.
       Deviation: the free-text checkout controls use native datalist
       suggestions so users can select linked slots or enter a new name/path.
-- [ ] 6. Settings → Worktrees backend: `upstream` data, comparison
+- [x] 6. Settings → Worktrees backend: `upstream` data, comparison
       classification, PR Sync refusal, `updateNamedWorktreeFromSource`.
+      Deviation: none.
 - [ ] 7. Settings → Worktrees UI: upstream bracket, PR readiness labels,
       source drift line, Sync gating, Update from, slot label.
 - [ ] 8. Docs pass (`docs/workflows/worktrees.md`, `properties-panel.md`),

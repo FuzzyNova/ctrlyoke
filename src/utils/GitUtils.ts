@@ -2248,6 +2248,28 @@ export async function getBranchUpstream(
   }
 }
 
+/** Return a configured upstream's short label and whether Git reports it gone. */
+export async function getBranchUpstreamStatus(
+  repoRoot: string,
+  branchName: string
+): Promise<{ label: string; gone: boolean } | undefined> {
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      repoRoot,
+      "for-each-ref",
+      "--format=%(upstream:short)%00%(upstream:track)",
+      `refs/heads/${branchName}`,
+    ]);
+    const [labelText, trackText] = stdout.trimEnd().split("\0");
+    const label = labelText?.trim();
+    if (!label) return undefined;
+    return { label, gone: (trackText ?? "").includes("[gone]") };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Return ancestry-based ahead/behind counts for two commit-ish values. */
 export async function getAheadBehind(
   repoRoot: string,

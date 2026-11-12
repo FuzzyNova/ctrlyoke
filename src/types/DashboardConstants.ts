@@ -779,6 +779,7 @@ export const MESSAGE_TYPES = {
   WORKTREE_MANAGEMENT_STATE: "worktreeManagementState",
   WORKTREE_MANAGEMENT_ACTION: "worktreeManagementAction",
   SYNC_NAMED_WORKTREE: "syncNamedWorktree", // Webview -> Extension: two-way merge a named worktree's branch with the source checkout's current branch
+  UPDATE_NAMED_WORKTREE_FROM_SOURCE: "updateNamedWorktreeFromSource", // Webview -> Extension: merge the source branch into a named worktree
   WORKTREE_MANAGEMENT_ACTION_RESULT: "worktreeManagementActionResult", // Extension -> Webview: round-trip result for a worktree management action/sync, correlated by the requestId the webview sent
   EXIT_IDLE_TERMINALS: "exitIdleTerminals", // Webview -> Extension: exit the harness terminals idle workflows kept open (one lineage or all), releasing any named worktree they held
   DASHBOARD_HOST_ACTION_RESULT: "dashboardHostActionResult", // Extension -> Webview: scoped native-host action outcome
@@ -2926,6 +2927,11 @@ export type WorktreeIdentityKind =
   (typeof WORKTREE_IDENTITY_KINDS)[keyof typeof WORKTREE_IDENTITY_KINDS];
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
+
+export const WORKTREE_COMPARISON_KINDS = {
+  LOCAL: "local",
+  PR: "pr",
+} as const;
 
 export const WORKTREE_LIFECYCLE_OWNERS = {
   CTRLYOKE: "ctrlyoke",

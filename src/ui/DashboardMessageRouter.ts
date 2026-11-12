@@ -3056,6 +3056,42 @@ export class DashboardMessageRouter {
       }
       await sendWorktreeManagementState(true, ctx);
     });
+    table.set(
+      MESSAGE_TYPES.UPDATE_NAMED_WORKTREE_FROM_SOURCE,
+      async (message, ctx) => {
+        const orchestrator = this.getOrchestrator();
+        if (!orchestrator) return;
+        let success = true;
+        let resultMessage: string;
+        let errorMessage: string | undefined;
+        try {
+          const result = await orchestrator.updateNamedWorktreeFromSource(
+            message.worktreePath
+          );
+          success =
+            result.mergeOutcome === WORKTREE_MERGE_OUTCOMES.FAST_FORWARD ||
+            result.mergeOutcome === WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT;
+          resultMessage = success
+            ? `Worktree updated from source. ${result.mergeOutcome}`
+            : `Worktree update finished with issues. ${result.message ?? result.mergeOutcome}`;
+          if (!success) errorMessage = resultMessage;
+        } catch (error) {
+          success = false;
+          resultMessage = `Worktree update failed: ${getErrorMessage(error)}`;
+          errorMessage = resultMessage;
+        }
+        if (message.requestId || errorMessage) {
+          ctx.emit({
+            type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+            ...(message.requestId ? { requestId: message.requestId } : {}),
+            success,
+            message: resultMessage,
+            ...(errorMessage ? { error: errorMessage } : {}),
+          });
+        }
+        await sendWorktreeManagementState(true, ctx);
+      }
+    );
     table.set(MESSAGE_TYPES.EXIT_IDLE_TERMINALS, async (rawMessage, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;

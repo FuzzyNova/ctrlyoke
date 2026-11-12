@@ -12,6 +12,7 @@ import {
   getDiffFilesBetweenRefs,
   getAheadBehind,
   getBranchUpstream,
+  getBranchUpstreamStatus,
   getUnmergedPaths,
   getWorkingTreeCounts,
   deleteLocalBranch,
@@ -56,6 +57,7 @@ import {
   WORKTREE_LIFECYCLE_OWNERS,
   WORKTREE_LIFECYCLE_STATES,
   WORKTREE_MODES,
+  WORKTREE_COMPARISON_KINDS,
   WORKTREE_IDENTITY_KINDS,
   WORKTREE_RECOVERY_OUTCOMES,
   WORKTREE_SETUP_OUTCOMES,
@@ -66,6 +68,7 @@ import {
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
+import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   WorkspaceInitializer,
@@ -365,6 +368,7 @@ export interface WorktreeManagementEntry {
    * detached source checkout, and branches Git no longer has.
    */
   sourceComparison?: { ahead: number; behind: number };
+  upstream?: { label: string; gone: boolean; ahead?: number; behind?: number };
 }
 
 export interface WorktreeManagementState {
@@ -372,6 +376,7 @@ export interface WorktreeManagementState {
   /** Canonical Git toplevel entries are compared against, e.g. to hide sync/removal actions on the source checkout's own row. */
   sourceCheckoutRoot: string;
   sourceCheckoutBranch: string | null;
+  sourceCheckoutUpstream?: string;
   entries: WorktreeManagementEntry[];
   staleManagedRecords: ManagedWorktreeOwnershipRecord[];
   generatedAt: number;
@@ -1072,56 +1077,24 @@ export class WorktreeManager {
     sourceCheckoutRoot: string;
     worktreePath: string;
   }): Promise<WorktreeSyncResult> {
-    const {
-      repositoryRoot: sourceCheckoutRoot,
-      commonDirectory,
-      git,
-    } = await this.resolveRepositoryContext(options.sourceCheckoutRoot);
-    const entries = await listGitWorktrees(sourceCheckoutRoot);
-    const entry = entries.find((candidate) =>
-      pathsEqual(candidate.worktreePath, options.worktreePath)
-    );
-    if (!entry) {
+    const target = await this.resolveNamedWorktreeSyncTarget(options);
+    const { sourceCheckoutRoot, entry, worktreeBranch, sourceBranch, git } =
+      target;
+    if (
+      classifyWorktreeComparison({
+        upstream: await getBranchUpstreamStatus(
+          sourceCheckoutRoot,
+          worktreeBranch
+        ),
+        sourceBranch,
+        sourceUpstream: await getBranchUpstream(
+          sourceCheckoutRoot,
+          sourceBranch
+        ),
+      }) === WORKTREE_COMPARISON_KINDS.PR
+    ) {
       throw new Error(
-        "The worktree admin entry is stale; repair or refresh first."
-      );
-    }
-    if (!entry.branchName) {
-      throw new Error("A detached worktree has no branch to sync.");
-    }
-    if (pathsEqual(entry.worktreePath, sourceCheckoutRoot)) {
-      throw new Error("The source checkout cannot be synced with itself.");
-    }
-    const worktreeBranch = entry.branchName;
-
-    // Managed worktrees already have a dedicated, lease-integrated merge
-    // path tied to their own run; sync is for user-owned named worktrees.
-    const records = await this.readRecords(commonDirectory);
-    if (records.some((record) => record.branchName === worktreeBranch)) {
-      throw new Error(
-        "Managed worktrees use the workflow's own merge action, not sync."
-      );
-    }
-
-    const worktreeInspections = await ExecutionRootLeaseManager.inspectLeases(
-      entry.worktreePath,
-      undefined,
-      git
-    );
-    const liveWorktreeLease = worktreeInspections.find(
-      (inspection) => !inspection.stale
-    );
-    if (liveWorktreeLease) {
-      const owner = liveWorktreeLease.lease;
-      throw new Error(
-        `Worktree is in use by workflow ${owner.workflowKey}, run ${owner.runRef}.`
-      );
-    }
-
-    const sourceBranch = await currentBranch(sourceCheckoutRoot);
-    if (!sourceBranch) {
-      throw new Error(
-        "Sync is unavailable while the source checkout is on a detached HEAD."
+        `Cannot sync PR branch "${worktreeBranch}" into the source checkout. Use Update from to merge the source branch into this worktree.`
       );
     }
 
@@ -1158,6 +1131,74 @@ export class WorktreeManager {
     } finally {
       await sourceLease.release().catch(() => undefined);
     }
+  }
+
+  /** Merge the source checkout's branch into a user-owned worktree only. */
+  public async updateNamedWorktreeFromSource(options: {
+    sourceCheckoutRoot: string;
+    worktreePath: string;
+  }): Promise<WorktreeMergeResult> {
+    const { entry, worktreeBranch, sourceBranch } =
+      await this.resolveNamedWorktreeSyncTarget(options);
+    return this.guardedSyncMerge(
+      entry.worktreePath,
+      `refs/heads/${sourceBranch}`,
+      worktreeBranch
+    );
+  }
+
+  private async resolveNamedWorktreeSyncTarget(options: {
+    sourceCheckoutRoot: string;
+    worktreePath: string;
+  }): Promise<{
+    sourceCheckoutRoot: string;
+    entry: GitWorktreeEntry;
+    worktreeBranch: string;
+    sourceBranch: string;
+    git: GitLocationLookup;
+  }> {
+    const {
+      repositoryRoot: sourceCheckoutRoot,
+      commonDirectory,
+      git,
+    } = await this.resolveRepositoryContext(options.sourceCheckoutRoot);
+    const entry = (await listGitWorktrees(sourceCheckoutRoot)).find(
+      (candidate) => pathsEqual(candidate.worktreePath, options.worktreePath)
+    );
+    if (!entry)
+      throw new Error(
+        "The worktree admin entry is stale; repair or refresh first."
+      );
+    if (!entry.branchName)
+      throw new Error("A detached worktree has no branch to sync.");
+    if (pathsEqual(entry.worktreePath, sourceCheckoutRoot)) {
+      throw new Error("The source checkout cannot be synced with itself.");
+    }
+    const worktreeBranch = entry.branchName;
+    const records = await this.readRecords(commonDirectory);
+    if (records.some((record) => record.branchName === worktreeBranch)) {
+      throw new Error(
+        "Managed worktrees use the workflow's own merge action, not sync."
+      );
+    }
+    const inspections = await ExecutionRootLeaseManager.inspectLeases(
+      entry.worktreePath,
+      undefined,
+      git
+    );
+    const lease = inspections.find((inspection) => !inspection.stale)?.lease;
+    if (lease) {
+      throw new Error(
+        `Worktree is in use by workflow ${lease.workflowKey}, run ${lease.runRef}.`
+      );
+    }
+    const sourceBranch = await currentBranch(sourceCheckoutRoot);
+    if (!sourceBranch) {
+      throw new Error(
+        "Sync is unavailable while the source checkout is on a detached HEAD."
+      );
+    }
+    return { sourceCheckoutRoot, entry, worktreeBranch, sourceBranch, git };
   }
 
   private async guardedSyncMerge(
@@ -1824,6 +1865,9 @@ export class WorktreeManager {
       listGitWorktrees(sourceRoot),
       currentBranch(sourceRoot),
     ]);
+    const sourceUpstream = sourceBranch
+      ? await getBranchUpstream(sourceRoot, sourceBranch)
+      : undefined;
     const now = this.now();
     const managedEntries: WorktreeManagementEntry[] = [];
 
@@ -1864,7 +1908,7 @@ export class WorktreeManager {
           : undefined;
       // Both are informational: a failure leaves the field out rather than
       // failing the whole management snapshot.
-      const [workingTree, sourceComparison] = await Promise.all([
+      const [workingTree, sourceComparison, upstream] = await Promise.all([
         directoryState === WORKTREE_DIRECTORY_STATES.PRESENT &&
         !entry.prunableReason
           ? getWorkingTreeCounts(entry.worktreePath).catch(() => undefined)
@@ -1878,6 +1922,22 @@ export class WorktreeManager {
               `refs/heads/${sourceBranch}`,
               `refs/heads/${branchName}`
             ).catch(() => undefined)
+          : undefined,
+        branchName && branchState === WORKTREE_BRANCH_STATES.PRESENT
+          ? (async () => {
+              const configured = await getBranchUpstreamStatus(
+                sourceRoot,
+                branchName
+              ).catch(() => undefined);
+              if (!configured) return undefined;
+              if (configured.gone) return configured;
+              const counts = await getAheadBehind(
+                sourceRoot,
+                configured.label,
+                `refs/heads/${branchName}`
+              ).catch(() => undefined);
+              return counts ? { ...configured, ...counts } : configured;
+            })()
           : undefined,
       ]);
       const createdAt = record?.createdAt;
@@ -1924,6 +1984,7 @@ export class WorktreeManager {
         ...(divergence ? { divergence } : {}),
         ...(workingTree ? { workingTree } : {}),
         ...(sourceComparison ? { sourceComparison } : {}),
+        ...(upstream ? { upstream } : {}),
       });
     }
 
@@ -2012,6 +2073,7 @@ export class WorktreeManager {
       resolvedRoot: await this.resolveWorktreeRootFor(sourceRoot),
       sourceCheckoutRoot: sourceRoot,
       sourceCheckoutBranch: sourceBranch,
+      ...(sourceUpstream ? { sourceCheckoutUpstream: sourceUpstream } : {}),
       entries: managedEntries,
       staleManagedRecords,
       generatedAt: now,
@@ -2023,33 +2085,6 @@ export class WorktreeManager {
     sourceCheckoutRoot: string
   ): Promise<WorktreeManagementState> {
     const repository = await this.resolveRepositoryContext(sourceCheckoutRoot);
-    const sourceRoot = repository.repositoryRoot;
-    const entries = await listGitWorktrees(sourceRoot);
-    for (const entry of entries) {
-      if (!entry.branchName || pathsEqual(entry.worktreePath, sourceRoot))
-        continue;
-      const label = await getBranchUpstream(sourceRoot, entry.branchName);
-      if (!label) continue;
-      try {
-        const comparisonCommit = await resolveCommit(sourceRoot, label);
-        const counts = await getAheadBehind(
-          sourceRoot,
-          comparisonCommit,
-          `refs/heads/${entry.branchName}`
-        );
-        WorktreeManager.namedDivergenceCache.set(
-          this.divergenceCacheKey(sourceRoot, entry.branchName),
-          {
-            comparisonLabel: label,
-            comparisonCommit,
-            ...counts,
-            calculatedAt: this.now(),
-          }
-        );
-      } catch {
-        // Divergence is informational. An unavailable upstream never blocks a run.
-      }
-    }
     return this.getManagementStateIn(repository);
   }
 
@@ -2583,9 +2618,7 @@ export class WorktreeManager {
     await WorkspaceInitializer.initializeIfNeeded(executionRoot);
     const dirty = await hasUncommittedChanges(executionCheckoutRoot);
     const baseCommit = await resolveCommit(executionCheckoutRoot, "HEAD");
-    const comparisonBaseLabel =
-      options.base?.trim() ||
-      (await getBranchUpstream(executionCheckoutRoot, branchName));
+    const comparisonBaseLabel = options.base?.trim();
     let comparisonBaseCommit: string | undefined;
     if (comparisonBaseLabel) {
       try {

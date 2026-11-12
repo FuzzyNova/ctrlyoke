@@ -1845,12 +1845,14 @@ export interface WorktreeManagementEntry {
   workingTree?: GitWorkingTreeCounts;
   /** Commit counts against `WorktreeManagementState.sourceCheckoutBranch`; absent for the source checkout. */
   sourceComparison?: { ahead: number; behind: number };
+  upstream?: { label: string; gone: boolean; ahead?: number; behind?: number };
 }
 
 export interface WorktreeManagementState {
   resolvedRoot: string;
   sourceCheckoutRoot: string;
   sourceCheckoutBranch: string | null;
+  sourceCheckoutUpstream?: string;
   entries: WorktreeManagementEntry[];
   staleManagedRecords: unknown[];
   generatedAt: number;
@@ -1882,6 +1884,12 @@ export interface SyncNamedWorktreeMessage {
   type: typeof MESSAGE_TYPES.SYNC_NAMED_WORKTREE;
   worktreePath: string;
   /** Echoed back on WorktreeManagementActionResultMessage so the requesting button can resolve its pending state. */
+  requestId?: string;
+}
+
+export interface UpdateNamedWorktreeFromSourceMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_NAMED_WORKTREE_FROM_SOURCE;
+  worktreePath: string;
   requestId?: string;
 }
 

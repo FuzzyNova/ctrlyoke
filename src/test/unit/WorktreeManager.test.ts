@@ -24,6 +24,7 @@ import {
   createWorktreeDirectoryName,
 } from "../../utils/WorktreeUtils";
 import { WORKTREE_IDENTITY_KINDS } from "../../types/DashboardConstants";
+import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_LIFECYCLE_STATES,
@@ -277,12 +278,9 @@ suite("WorktreeManager", function () {
     );
     await info.lease.release();
 
-    const continued = await resolve(
-      instance,
-      repository,
-      "old-slot-branch",
-      { checkout: slotPath }
-    );
+    const continued = await resolve(instance, repository, "old-slot-branch", {
+      checkout: slotPath,
+    });
     assert.strictEqual(
       execFileSync("git", ["-C", slotPath, "branch", "--show-current"], {
         encoding: "utf8",
@@ -2818,6 +2816,7 @@ suite("WorktreeManager", function () {
       (candidate) => candidate.branchName === "feature/status"
     );
     assert.deepStrictEqual(entry?.sourceComparison, { ahead: 2, behind: 1 });
+    assert.strictEqual(entry?.upstream, undefined);
     assert.deepStrictEqual(entry?.workingTree, {
       staged: { added: 1, modified: 0, deleted: 0 },
       unstaged: { added: 1, modified: 1, deleted: 0 },
@@ -2833,6 +2832,78 @@ suite("WorktreeManager", function () {
       unstaged: { added: 0, modified: 0, deleted: 0 },
       conflicted: 0,
     });
+  });
+
+  test("reports upstream counts and marks a deleted remote branch gone", async () => {
+    const { parent, repository } = await makeRepository("management-upstream");
+    const remote = path.join(parent, "remote.git");
+    execFileSync("git", ["init", "--bare", remote], { stdio: "ignore" });
+    execFileSync("git", ["-C", repository, "remote", "add", "origin", remote]);
+    execFileSync("git", ["-C", repository, "branch", "feature/upstream"]);
+    execFileSync(
+      "git",
+      ["-C", repository, "push", "-u", "origin", "feature/upstream"],
+      { stdio: "ignore" }
+    );
+    const info = await resolve(manager(parent), repository, "feature/upstream");
+    await info.lease.release();
+
+    let state = await manager(parent).getManagementState(repository);
+    let entry = state.entries.find(
+      (candidate) => candidate.branchName === "feature/upstream"
+    );
+    assert.deepStrictEqual(entry?.upstream, {
+      label: "origin/feature/upstream",
+      gone: false,
+      ahead: 0,
+      behind: 0,
+    });
+    assert.strictEqual(
+      classifyWorktreeComparison({
+        upstream: entry?.upstream,
+        sourceBranch: "main",
+        sourceUpstream: "origin/main",
+      }),
+      "pr"
+    );
+
+    execFileSync(
+      "git",
+      ["-C", repository, "push", "origin", ":feature/upstream"],
+      { stdio: "ignore" }
+    );
+    execFileSync("git", ["-C", repository, "fetch", "--prune", "origin"], {
+      stdio: "ignore",
+    });
+    state = await manager(parent).getManagementState(repository);
+    entry = state.entries.find(
+      (candidate) => candidate.branchName === "feature/upstream"
+    );
+    assert.deepStrictEqual(entry?.upstream, {
+      label: "origin/feature/upstream",
+      gone: true,
+    });
+
+    assert.strictEqual(
+      classifyWorktreeComparison({
+        upstream: entry?.upstream,
+        sourceBranch: "main",
+        sourceUpstream: "origin/main",
+      }),
+      "pr"
+    );
+    assert.strictEqual(
+      classifyWorktreeComparison({
+        upstream: { label: "origin/main", gone: false },
+        sourceBranch: "main",
+        sourceUpstream: "origin/main",
+      }),
+      "local"
+    );
+    assert.strictEqual(
+      classifyWorktreeComparison({ upstream: undefined, sourceBranch: "main" }),
+      "local"
+    );
   });
 
   test("syncs a named worktree with the source checkout in both directions", async () => {
@@ -2893,6 +2964,66 @@ suite("WorktreeManager", function () {
     assert.strictEqual(
       await exists(path.join(info.worktreePath, "source-file.txt")),
       true
+    );
+  });
+
+  test("refuses two-way sync for a PR branch", async () => {
+    const { parent, repository } = await makeRepository("sync-pr-refusal");
+    const remote = path.join(parent, "remote.git");
+    execFileSync("git", ["init", "--bare", remote], { stdio: "ignore" });
+    execFileSync("git", ["-C", repository, "remote", "add", "origin", remote]);
+    execFileSync("git", ["-C", repository, "branch", "feature/pr"]);
+    execFileSync(
+      "git",
+      ["-C", repository, "push", "-u", "origin", "feature/pr"],
+      { stdio: "ignore" }
+    );
+    const instance = manager(parent);
+    const info = await resolve(instance, repository, "feature/pr");
+    await info.lease.release();
+    await assert.rejects(
+      instance.syncNamedWorktree({
+        sourceCheckoutRoot: repository,
+        worktreePath: info.worktreePath,
+      }),
+      /Cannot sync PR branch.*Use Update from/
+    );
+  });
+
+  test("updates a named worktree from source without changing the source branch", async () => {
+    const { parent, repository } = await makeRepository("update-from-source");
+    const instance = manager(parent);
+    const sourceBranch = execFileSync(
+      "git",
+      ["-C", repository, "branch", "--show-current"],
+      { encoding: "utf8" }
+    ).trim();
+    execFileSync("git", ["-C", repository, "branch", "feature/update"]);
+    const info = await resolve(instance, repository, "feature/update");
+    await info.lease.release();
+    await fs.writeFile(path.join(repository, "source-update.txt"), "source\n");
+    execFileSync("git", ["-C", repository, "add", "source-update.txt"]);
+    execFileSync("git", ["-C", repository, "commit", "-m", "source update"], {
+      stdio: "ignore",
+    });
+
+    const outcome = await instance.updateNamedWorktreeFromSource({
+      sourceCheckoutRoot: repository,
+      worktreePath: info.worktreePath,
+    });
+    assert.strictEqual(outcome.mergeOutcome, "fast-forward");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(info.worktreePath, "source-update.txt"),
+        "utf8"
+      ),
+      "source\n"
+    );
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "branch", "--show-current"], {
+        encoding: "utf8",
+      }).trim(),
+      sourceBranch
     );
   });
 

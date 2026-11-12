@@ -3858,6 +3858,13 @@ export class WorkflowOrchestrator {
     });
   }
 
+  async updateNamedWorktreeFromSource(worktreePath: string) {
+    return new WorktreeManager().updateNamedWorktreeFromSource({
+      sourceCheckoutRoot: this.requireWorkspaceRoot(),
+      worktreePath,
+    });
+  }
+
   async updateWorkingFileProperties(
     mutation: WorkflowDefinitionMutation | undefined,
     properties: Record<string, unknown>,
