@@ -53,6 +53,7 @@ import {
   WORKTREE_LIFECYCLE_OWNERS,
   WORKTREE_LIFECYCLE_STATES,
   WORKTREE_MODES,
+  WORKTREE_IDENTITY_KINDS,
   WORKTREE_RECOVERY_OUTCOMES,
   WORKTREE_SETUP_OUTCOMES,
   WORKFLOW_LOCK_LIVENESS,
@@ -1546,7 +1547,7 @@ export class WorktreeManager {
               options.workflowName ?? String(identity.workflowKey),
               commonDirectory,
               {
-                kind: "managed",
+                kind: WORKTREE_IDENTITY_KINDS.MANAGED,
                 workflowKey: identity.workflowKey,
                 runRef: identity.runRef,
               }
@@ -2326,7 +2327,7 @@ export class WorktreeManager {
       worktreePath = path.join(
         root!,
         createWorktreeDirectoryName(branchName, commonDirectory, {
-          kind: "named",
+          kind: WORKTREE_IDENTITY_KINDS.NAMED,
           branchRef: branchName,
         })
       );

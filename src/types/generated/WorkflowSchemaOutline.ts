@@ -967,6 +967,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "branch": {
         "valueKind": "string",
         "description": "Local Git branch name for the named worktree."
+      },
+      "checkout": {
+        "valueKind": "string",
+        "description": "Optional persistent checkout slot. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. When a different branch is requested, ctrlyoke switches this checkout only when it is clean and never switches it back. Setup runs once per checkout slot, not once per branch."
       }
     },
     "forbiddenKeys": []

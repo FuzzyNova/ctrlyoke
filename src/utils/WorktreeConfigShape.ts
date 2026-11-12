@@ -4,6 +4,19 @@ import type {
   WorktreeObjectConfig,
 } from "../types/CtrlYokeTypes";
 
+export type CheckoutValueKind = "path" | "name";
+
+/** Classify checkout values independently of the host platform. */
+export function classifyCheckoutValue(value: string): CheckoutValueKind {
+  return value === "~" ||
+    /^~[\\/]/.test(value) ||
+    value.startsWith("/") ||
+    value.startsWith("\\\\") ||
+    /^[A-Za-z]:[\\/]/.test(value)
+    ? "path"
+    : "name";
+}
+
 /** Convert shorthand worktree selections to the object form used by the UI. */
 export function toWorktreeObjectConfig(
   value: WorktreeConfig | undefined
@@ -12,6 +25,10 @@ export function toWorktreeObjectConfig(
   if (value === true) return { mode: WORKTREE_MODES.MANAGED };
   if (typeof value === "string") {
     return { mode: WORKTREE_MODES.NAMED, branch: value };
+  }
+  if (value.mode === WORKTREE_MODES.MANAGED && "checkout" in value) {
+    const { checkout: _checkout, ...managed } = value;
+    return managed as WorktreeObjectConfig;
   }
   return value;
 }

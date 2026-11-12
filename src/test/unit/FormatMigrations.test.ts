@@ -141,6 +141,38 @@ suite("FormatMigrations", () => {
     }
   });
 
+  test("reads a run-file v3 fixture and recognizes the v4 run-file contract", async () => {
+    const fixtureRoot = path.resolve(
+      __dirname,
+      "../../../src/test/fixtures/formats/run-file"
+    );
+    const v3 = JSON.parse(
+      await fs.readFile(
+        path.join(fixtureRoot, "v3/representative.json"),
+        "utf8"
+      )
+    );
+    const migrated = migrateToCurrent(PERSISTED_STORES.RUN_FILE, v3);
+    assert.strictEqual(migrated.fromVersion, 3);
+    assert.deepStrictEqual(migrated.doc, v3);
+    assert.ok(
+      migrated.applied.includes("Record the checkout slot and previous branch")
+    );
+
+    const v4 = JSON.parse(
+      await fs.readFile(
+        path.join(fixtureRoot, "v4/representative.json"),
+        "utf8"
+      )
+    );
+    assert.strictEqual(
+      v4._runtime.schemaVersion,
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE]
+    );
+    assert.strictEqual(v4._runtime.worktree.checkout, "bug-fix");
+    assert.strictEqual(v4._runtime.worktree.previousBranch, "feature/old");
+  });
+
   test("settings v1 → v2 moves the Codex sandbox mode to defaults.sandboxMode", () => {
     const migrate = (doc: unknown) =>
       migrateToCurrent(PERSISTED_STORES.SETTINGS, doc).doc;

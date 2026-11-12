@@ -9,8 +9,9 @@ again on 2026-11-12 (`0e5bd6ea0`). All open questions are resolved.
 Each implementation step ticks its item in the commit that lands it, and
 records anything it found that differs from this plan under the item.
 
-- [ ] 1. Contracts: `checkout` schema field, types, normalization, `"checkout"`
+- [x] 1. Contracts: `checkout` schema field, types, normalization, `"checkout"`
       name identity, run-file format 3 → 4 (`checkout`, `previousBranch`).
+      Deviation: none.
 - [ ] 2. Slot resolution helper (`resolveCheckoutSlot`), `switchBranch`, the
       branch-derived collision error, and Dry Run prediction
       (`previewWorktreePlacement`, `WorktreeExecutionPreview`).

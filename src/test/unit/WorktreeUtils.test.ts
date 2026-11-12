@@ -5,6 +5,7 @@ import * as path from "path";
 import { execFileSync } from "child_process";
 import { suite, test } from "mocha";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
+import { WORKTREE_IDENTITY_KINDS } from "../../types/DashboardConstants";
 import {
   assertWorktreePlacement,
   createWorktreeDirectoryName,
@@ -210,11 +211,21 @@ suite("WorktreeUtils", function () {
     const name = createWorktreeDirectoryName(
       "feature/with a very long readable name that must be bounded",
       "/repo/.git",
-      { kind: "named", branchRef: "feature/../../escape" }
+      { kind: WORKTREE_IDENTITY_KINDS.NAMED, branchRef: "feature/../../escape" }
     );
     assert.match(name, /^[a-z0-9-]+-[0-9a-f]{12}$/);
     assert.ok(!name.includes("/"));
     assert.ok(name.length <= 53);
+    assert.notStrictEqual(
+      createWorktreeDirectoryName("slot", "/repo/.git", {
+        kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
+        name: "slot",
+      }),
+      createWorktreeDirectoryName("slot", "/repo/.git", {
+        kind: WORKTREE_IDENTITY_KINDS.NAMED,
+        branchRef: "slot",
+      })
+    );
     await validateWorktreeBranchName("feature/safe");
     await validateWorktreeBranchName("auto");
     await assert.rejects(

@@ -374,6 +374,17 @@ $defs:
             minLength: 1
             description: Local Git branch name for the named worktree.
             title: Branch
+          checkout:
+            type: string
+            minLength: 1
+            pattern: ^(?:~[/\\].*|/.*|[A-Za-z]:[/\\].*|\\\\.*|[^/\\]+)$
+            description: >-
+              Optional persistent checkout slot. Use an absolute path, a ~-prefixed path, or a bare
+              name with no slash or backslash; relative paths containing separators are rejected.
+              When a different branch is requested, ctrlyoke switches this checkout only when it is
+              clean and never switches it back. Setup runs once per checkout slot, not once per
+              branch.
+            title: Checkout
           base:
             type: string
             minLength: 1
@@ -385,7 +396,7 @@ $defs:
               Optional setup command run after a new named worktree is created. Setup is outside the
               step-scoped errorBehavior policy: it runs before any step is in flight, so a
               non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded
-              outcome is skipped.
+              outcome is skipped. For a checkout slot, setup runs once per checkout, not per branch.
             title: Setup
         required:
           - mode
@@ -1763,6 +1774,14 @@ $defs:
           branchName:
             type: string
             title: Branch Name
+          checkout:
+            type: string
+            description: Named checkout slot used by this run, when configured.
+            title: Checkout
+          previousBranch:
+            type: string
+            description: Branch checked out in the slot before this run switched it, when applicable.
+            title: Previous Branch
           worktreePath:
             type: string
             title: Worktree Path

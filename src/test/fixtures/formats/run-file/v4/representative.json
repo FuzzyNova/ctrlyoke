@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "steps": [{ "prompt": "Run fixture" }],
+  "_runtime": {
+    "schemaVersion": 4,
+    "lastActivityAt": 1700000000000,
+    "currentIndex": 0,
+    "executionState": "completed",
+    "worktree": {
+      "schemaVersion": 1,
+      "mode": "named",
+      "origin": "discovered",
+      "branchName": "feature/new",
+      "checkout": "bug-fix",
+      "previousBranch": "feature/old",
+      "worktreePath": "/repo.worktrees/bug-fix",
+      "executionRoot": "/repo.worktrees/bug-fix",
+      "executionCheckoutRoot": "/repo.worktrees/bug-fix",
+      "sourceCheckoutRoot": "/repo",
+      "namedWorkspaceRoots": [],
+      "baseCommit": "abc123",
+      "lifecycleOwner": "user",
+      "lifecycleState": "ready",
+      "directoryState": "present",
+      "branchState": "present",
+      "updatedAt": 1700000000000
+    }
+  }
+}

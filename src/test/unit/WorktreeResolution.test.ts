@@ -123,6 +123,40 @@ suite("WorktreeResolution", () => {
     });
   });
 
+  test("normalizes a named checkout and rejects invalid checkout values", () => {
+    assert.deepStrictEqual(
+      resolveWorktreeSelection(
+        { mode: WORKTREE_MODES.NAMED, branch: "feature", checkout: "  slot  " },
+        false
+      ).config,
+      {
+        mode: WORKTREE_MODES.NAMED,
+        branch: "feature",
+        checkout: "slot",
+      }
+    );
+    for (const checkout of ["", "  ", "relative/path", "relative\\path"]) {
+      assert.throws(
+        () =>
+          resolveWorktreeSelection(
+            { mode: WORKTREE_MODES.NAMED, branch: "feature", checkout },
+            false
+          ),
+        /checkout/
+      );
+    }
+  });
+
+  test("managed worktree config drops checkout", () => {
+    assert.deepStrictEqual(
+      resolveWorktreeSelection(
+        { mode: WORKTREE_MODES.MANAGED, checkout: "slot" } as never,
+        false
+      ).config,
+      { mode: WORKTREE_MODES.MANAGED }
+    );
+  });
+
   test("reuses the workflow worktree schema for settings defaults", async () => {
     const settingsSchemaPath = path.resolve(
       __dirname,
@@ -156,10 +190,15 @@ suite("WorktreeResolution", () => {
       // Settings live under /schema/v2/, so the ref names the v1 workflow schema.
       "../v1/workflow.json#/$defs/worktreeConfig"
     );
-    assert.ok(
-      workflowSchema.$defs.worktreeConfig.oneOf.some(
-        (variant) => variant.properties && "merge" in variant.properties
-      )
+    const managed = workflowSchema.$defs.worktreeConfig.oneOf.find(
+      (variant) => variant.properties && "merge" in variant.properties
     );
+    const named = workflowSchema.$defs.worktreeConfig.oneOf.find(
+      (variant) => variant.properties && "branch" in variant.properties
+    );
+    assert.ok(managed);
+    assert.ok(named);
+    assert.ok(named.properties && "checkout" in named.properties);
+    assert.ok(managed.properties && !("checkout" in managed.properties));
   });
 });

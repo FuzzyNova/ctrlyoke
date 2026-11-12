@@ -15,7 +15,11 @@ import { withFileLock } from "./FileLockUtils";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { ConfigurationUtils } from "./ConfigurationUtils";
-import { WORKTREE_MODES, NODE_ERROR_CODES } from "../types/DashboardConstants";
+import {
+  WORKTREE_IDENTITY_KINDS,
+  WORKTREE_MODES,
+  NODE_ERROR_CODES,
+} from "../types/DashboardConstants";
 import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 export interface WorkspaceEligibility {
@@ -62,8 +66,13 @@ export function slugifyWorktreeName(value: string): string {
 }
 
 export type WorktreeNameIdentity =
-  | { kind: typeof WORKTREE_MODES.MANAGED; workflowKey: string; runRef: string }
-  | { kind: typeof WORKTREE_MODES.NAMED; branchRef: string };
+  | {
+      kind: typeof WORKTREE_IDENTITY_KINDS.MANAGED;
+      workflowKey: string;
+      runRef: string;
+    }
+  | { kind: typeof WORKTREE_IDENTITY_KINDS.NAMED; branchRef: string }
+  | { kind: typeof WORKTREE_IDENTITY_KINDS.CHECKOUT; name: string };
 
 /**
  * Generate the only physical-name format used by worktree support. The hash
@@ -76,9 +85,11 @@ export function createWorktreeDirectoryName(
   identity: WorktreeNameIdentity
 ): string {
   const logicalIdentity =
-    identity.kind === WORKTREE_MODES.MANAGED
+    identity.kind === WORKTREE_IDENTITY_KINDS.MANAGED
       ? `${identity.workflowKey}/${identity.runRef}`
-      : identity.branchRef;
+      : identity.kind === WORKTREE_IDENTITY_KINDS.CHECKOUT
+        ? `checkout:${identity.name}`
+        : identity.branchRef;
   const hash = crypto
     .createHash("sha256")
     .update(`${canonicalCommonDirectory}\0${logicalIdentity}`, "utf8")
@@ -313,7 +324,7 @@ export async function previewWorktreePlacement(
   const directoryName = createWorktreeDirectoryName(
     options.branch,
     commonDirectory,
-    { kind: "named", branchRef: options.branch }
+    { kind: WORKTREE_IDENTITY_KINDS.NAMED, branchRef: options.branch }
   );
   return {
     directory: path.join(root, directoryName),

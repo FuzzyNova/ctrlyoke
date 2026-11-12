@@ -2916,6 +2916,15 @@ export const WORKTREE_MODES = {
   NAMED: "named",
 } as const;
 
+export const WORKTREE_IDENTITY_KINDS = {
+  MANAGED: "managed",
+  NAMED: "named",
+  CHECKOUT: "checkout",
+} as const;
+
+export type WorktreeIdentityKind =
+  (typeof WORKTREE_IDENTITY_KINDS)[keyof typeof WORKTREE_IDENTITY_KINDS];
+
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
 export const WORKTREE_LIFECYCLE_OWNERS = {

@@ -107,6 +107,12 @@ export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
       describe: "Allow the noTurnStarted prompt terminal status",
       migrate: (doc) => doc,
     },
+    {
+      store: PERSISTED_STORES.RUN_FILE,
+      from: 3,
+      describe: "Record the checkout slot and previous branch",
+      migrate: (doc) => doc,
+    },
   ],
   [PERSISTED_STORES.LINEAGE_DESCRIPTOR]: [],
   [PERSISTED_STORES.RUNNER_LOCK]: [],

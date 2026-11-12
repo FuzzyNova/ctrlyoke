@@ -232,6 +232,18 @@ Whether ctrlyoke created the worktree, found it already present, or recovered it
 - **Type:** `string`
 - **Required:** yes
 
+### `worktree.checkout` {#workflow-runtime-worktree-checkout}
+
+- **Type:** `string`
+
+Named checkout slot used by this run, when configured.
+
+### `worktree.previousBranch` {#workflow-runtime-worktree-previousbranch}
+
+- **Type:** `string`
+
+Branch checked out in the slot before this run switched it, when applicable.
+
 ### `worktree.worktreePath` {#workflow-runtime-worktree-worktreepath}
 
 - **Type:** `string`

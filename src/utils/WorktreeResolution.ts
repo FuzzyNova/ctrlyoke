@@ -9,7 +9,29 @@ import type {
   WorktreeResolution,
 } from "../types/CtrlYokeTypes";
 import { evaluateWorkspaceEligibility } from "./WorktreeUtils";
-import { toWorktreeObjectConfig } from "./WorktreeConfigShape";
+import {
+  classifyCheckoutValue,
+  toWorktreeObjectConfig,
+} from "./WorktreeConfigShape";
+
+function normalizeNamedCheckout(
+  config: ReturnType<typeof toWorktreeObjectConfig>
+) {
+  if (
+    config === false ||
+    config.mode !== WORKTREE_MODES.NAMED ||
+    config.checkout === undefined
+  )
+    return config;
+  const checkout = config.checkout.trim();
+  if (!checkout) throw new Error("Named worktree checkout must not be empty.");
+  if (classifyCheckoutValue(checkout) === "name" && /[\\/]/.test(checkout)) {
+    throw new Error(
+      "Named worktree checkout must be an absolute or ~-prefixed path, or a bare name without slash or backslash."
+    );
+  }
+  return { ...config, checkout };
+}
 
 /** The result used to construct an execution workspace for one workflow run. */
 export interface WorkspaceWorktreeResolution extends WorktreeResolution {
@@ -18,7 +40,7 @@ export interface WorkspaceWorktreeResolution extends WorktreeResolution {
 }
 
 function normalizeDefault(value: WorktreeDefaultConfig): WorktreeResolution {
-  const config = toWorktreeObjectConfig(value);
+  const config = normalizeNamedCheckout(toWorktreeObjectConfig(value));
   if (config === false) {
     return { origin: WORKTREE_CONFIG_ORIGINS.DEFAULT };
   }
@@ -42,7 +64,7 @@ export function resolveWorktreeSelection(
   if (authored === undefined) {
     return normalizeDefault(defaultValue);
   }
-  const config = toWorktreeObjectConfig(authored);
+  const config = normalizeNamedCheckout(toWorktreeObjectConfig(authored));
   return config === false
     ? { origin: WORKTREE_CONFIG_ORIGINS.AUTHORED }
     : { origin: WORKTREE_CONFIG_ORIGINS.AUTHORED, config: { ...config } };

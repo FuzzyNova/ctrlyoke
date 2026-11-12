@@ -258,6 +258,7 @@ export type WorktreeConfig =
   | {
       mode: typeof WORKTREE_MODES.NAMED;
       branch: string;
+      checkout?: string;
       base?: string;
       setup?: string;
     };
@@ -706,6 +707,8 @@ export interface WorkingFileWorktreeRuntime {
   mode: typeof WORKTREE_MODES.MANAGED | typeof WORKTREE_MODES.NAMED;
   origin: "created" | "discovered" | "recovered";
   branchName: string;
+  checkout?: string;
+  previousBranch?: string;
   worktreePath: string;
   executionRoot: string;
   executionCheckoutRoot: string;
@@ -740,6 +743,8 @@ export type WorktreeRunProjection = Pick<
   WorkingFileWorktreeRuntime,
   | "mode"
   | "branchName"
+  | "checkout"
+  | "previousBranch"
   | "worktreePath"
   | "sourceCheckoutRoot"
   | "sourceCheckoutDirty"
@@ -767,6 +772,10 @@ export function projectWorktreeRuntime(
   return {
     mode: worktree.mode,
     branchName: worktree.branchName,
+    ...(worktree.checkout !== undefined ? { checkout: worktree.checkout } : {}),
+    ...(worktree.previousBranch !== undefined
+      ? { previousBranch: worktree.previousBranch }
+      : {}),
     worktreePath: worktree.worktreePath,
     sourceCheckoutRoot: worktree.sourceCheckoutRoot,
     ...(worktree.sourceCheckoutDirty !== undefined

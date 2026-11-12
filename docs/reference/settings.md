@@ -449,7 +449,7 @@ Fields:
 
 ### `defaults.worktree` {#defaults-worktree}
 
-- **Type:** `false` or `true` or `string` or `{ mode: "managed", merge?, keep?, … }` or `{ mode: "named", branch, base?, … }`
+- **Type:** `false` or `true` or `string` or `{ mode: "managed", merge?, keep?, … }` or `{ mode: "named", branch, checkout?, … }`
 - **Default:** `false`
 - **Workflow field:** [`worktree`](/reference/workflow-schema#workflow-file-worktree) — a workflow or step value overrides this default
 
@@ -461,7 +461,7 @@ Accepted forms:
 - `true` — Managed-worktree shorthand.
 - `string` — Named-worktree branch shorthand. The value must be a valid local Git branch name.
 - `{ mode: "managed", merge?, keep?, … }` — Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.
-- `{ mode: "named", branch, base?, … }` — Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to.
+- `{ mode: "named", branch, checkout?, … }` — Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to.
 
 **When `mode` is `"managed"`:**
 
@@ -477,8 +477,9 @@ Fields:
 Fields:
 
 - `branch` · `string` · required — Local Git branch name for the named worktree.
+- `checkout` · `string` — Optional persistent checkout slot. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. When a different branch is requested, ctrlyoke switches this checkout only when it is clean and never switches it back. Setup runs once per checkout slot, not once per branch.
 - `base` · `string` — Optional Git ref resolved to a commit when the worktree is created.
-- `setup` · `string` — Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.
+- `setup` · `string` — Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped. For a checkout slot, setup runs once per checkout, not per branch.
 
 ## `worktrees` {#worktrees}
 
