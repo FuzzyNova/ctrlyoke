@@ -1224,7 +1224,9 @@ describe("OutputRow auto-expand on hidden active match", () => {
     );
     const dot = screen.getByTestId("cli-header-streaming-indicator");
     // No "Streaming..." text competing with the step name for title room.
-    expect(dot.textContent).toBe("⬤");
+    expect(dot.textContent).toBe("");
+    // The same small dot as every other "live" marker, not a text glyph.
+    expect(dot).toHaveClass("h-1.5", "w-1.5", "bg-indicator-success");
     expect(dot).toHaveAttribute("aria-hidden", "true");
     expect(dot).toHaveAttribute("title", "Streaming");
     // Sits right after the label, ahead of the truncating name.

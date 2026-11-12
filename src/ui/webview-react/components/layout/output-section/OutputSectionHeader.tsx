@@ -1,7 +1,7 @@
 import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
 import { FONT_SIZE_LIMITS } from "@root/types/CtrlYokeSettings";
 import React from "react";
-import { ExpandCollapseAllDiffsButton } from "@components/shared";
+import { ExpandCollapseAllDiffsButton, LiveDot } from "@components/shared";
 import { PromptChangesButton } from "@components/shared/PromptChangesButton";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
 import type { PromptChangeSummary } from "@utils/promptUndo";
@@ -151,7 +151,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 </span>
               )}
               {terminalSessionActive && (
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
+                <LiveDot />
               )}
             </button>
           </div>

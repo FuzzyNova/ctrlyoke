@@ -29,6 +29,7 @@ import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 import { RUN_IMPORT_SOURCE_KINDS } from "@root/types/RunBundleTypes";
 import { Icon } from "../shared/Icon";
+import { LiveDot } from "../shared/LiveDot";
 import {
   ImportedOriginBadge,
   importedOriginAccessibleName,
@@ -204,11 +205,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
         worktree={summary?.worktree}
         glyph={
           isLive ? (
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-full bg-indicator-success animate-pulse"
-              title="Executing now"
-              aria-label="Executing now"
-            />
+            <LiveDot title="Executing now" aria-label="Executing now" />
           ) : isPending && !isViewed ? (
             <Icon
               name="loading"

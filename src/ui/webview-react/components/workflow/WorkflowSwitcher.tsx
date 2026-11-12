@@ -60,7 +60,11 @@ import type {
   RunRef,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
-import { DateRangeFilterControls, MultiCheckboxDropdown } from "../shared";
+import {
+  DateRangeFilterControls,
+  LiveDot,
+  MultiCheckboxDropdown,
+} from "../shared";
 import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import {
   applyPauseRequest,
@@ -1920,12 +1924,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
             {effectiveLoadedWorkflows.some(
               (w) =>
                 isWorkflowRunning(w.executionState) && w.id !== activeWorkflowId
-            ) && (
-              <span
-                className="inline-block w-2 h-2 rounded-full bg-indicator-success animate-pulse"
-                title="Another workflow is running"
-              />
-            )}
+            ) && <LiveDot title="Another workflow is running" />}
             {recentWorkflows.length > 0 && (
               <span className="workflow-count-badge hidden sm:inline-flex items-center justify-center text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full h-4 min-w-[16px] px-1 leading-none">
                 {formatWorkflowCountBadge(recentWorkflows.length)}

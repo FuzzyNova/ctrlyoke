@@ -168,6 +168,7 @@ import {
   formatScriptOutputTailToggleLabel,
 } from "@utils/outputTruncation";
 import { Icon } from "../shared/Icon";
+import { LiveDot } from "../shared/LiveDot";
 import { PromptChangesButton } from "../shared/PromptChangesButton";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
 import {
@@ -1515,14 +1516,12 @@ const CliHeaderRowView: React.FC<{
   // carries the running state, so the dot is hidden from screen readers.
   const streamingIndicator =
     output.isStreaming && isExecutionActive ? (
-      <span
+      <LiveDot
         aria-hidden="true"
         title="Streaming"
         data-testid="cli-header-streaming-indicator"
-        className={`${CLI_HEADER_FIXED_ITEM_CLASS} text-xs text-output-streaming font-normal animate-pulse-streaming`}
-      >
-        ⬤
-      </span>
+        className={CLI_HEADER_FIXED_ITEM_CLASS}
+      />
     ) : null;
   // The title is the step's heading for screen-reader navigation; its visible
   // text (brackets, timestamp, icons) reads poorly, so it gets a plain name.

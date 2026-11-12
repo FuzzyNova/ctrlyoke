@@ -36,6 +36,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { Icon } from "../shared/Icon";
 import { PinToggleButton } from "../shared/PinToggleButton";
+import { LiveDot } from "../shared/LiveDot";
 import {
   ImportedOriginBadge,
   importedOriginAccessibleName,
@@ -239,7 +240,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
               className="text-link-fg hover:underline focus:outline-hidden"
             >
               Back to Live{" "}
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
+              <LiveDot className="align-middle" />
             </button>
           )}
           <PinToggleButton

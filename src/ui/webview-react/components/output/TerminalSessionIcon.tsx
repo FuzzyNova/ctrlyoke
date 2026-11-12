@@ -5,6 +5,7 @@ import { TERMINAL_SESSION_STATUS } from "@/types/messages";
 import type { TerminalSession } from "@store/terminalStore";
 import { getShellCodiconName } from "@utils/terminalPresentation";
 import { Icon } from "../shared/Icon";
+import { LiveDot } from "../shared/LiveDot";
 
 interface TerminalSessionIconProps {
   session: Pick<
@@ -32,9 +33,7 @@ export const TerminalSessionIcon: React.FC<TerminalSessionIconProps> = ({
   }
 
   if (session.status === TERMINAL_SESSION_STATUS.RUNNING) {
-    return (
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse shrink-0" />
-    );
+    return <LiveDot />;
   }
   if (session.status === TERMINAL_SESSION_STATUS.FAILED) {
     return (
