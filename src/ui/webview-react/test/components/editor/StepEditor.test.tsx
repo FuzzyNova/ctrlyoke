@@ -55,6 +55,7 @@ import {
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
+import { DRAWER_PAGES } from "@/types/drawerPages";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
@@ -93,6 +94,8 @@ beforeEach(() => {
     displayedDescriptorRevision: null,
     activeWorkflowId: null,
     toastQueue: [],
+    promptPropertiesDrawerOpen: false,
+    promptPropertiesActivePage: DRAWER_PAGES.HARNESS,
   });
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   (
@@ -1167,6 +1170,26 @@ describe("StepEditor — prompt-file action", () => {
 });
 
 describe("StepEditor — prompt secret grants", () => {
+  it("reopens the properties drawer on the last-viewed tab", () => {
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        { prompt: "old prompt" }
+      );
+    useUiStore.getState().openPromptPropertiesDrawer();
+
+    render(<StepEditor />);
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+    act(() => useUiStore.getState().closePromptPropertiesDrawer());
+    act(() => useUiStore.getState().openPromptPropertiesDrawer());
+
+    expect(screen.getByRole("tab", { name: "Permissions" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
   it("posts a selected secret in the UPDATE_PROMPT payload", async () => {
     useSecretRegistryStore.getState().setEntries("workspace", [
       {

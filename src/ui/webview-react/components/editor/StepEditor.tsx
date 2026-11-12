@@ -229,9 +229,17 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     useActiveInteractiveSession(activeWorkflowId);
 
   // ── Drawer tab state (lifted from PromptPropertiesDrawer for footer tab bar) ─────
-  const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(
-    DRAWER_PAGES.HARNESS
+  // Persisted in uiStore so reopening the drawer restores the last-viewed tab.
+  const storedDrawerPage = useUiStore((s) => s.promptPropertiesActivePage);
+  const setDrawerActivePage = useUiStore(
+    (s) => s.setPromptPropertiesActivePage
   );
+  // A persisted value from another build may name a page that no longer exists.
+  const drawerActivePage: DrawerPage = (
+    Object.values(DRAWER_PAGES) as readonly string[]
+  ).includes(storedDrawerPage)
+    ? storedDrawerPage
+    : DRAWER_PAGES.HARNESS;
   const handleCompatibilityReview = useCallback(
     (page: DrawerPage, focusId: string) => {
       setDrawerActivePage(page);
@@ -239,15 +247,8 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         document.getElementById(focusId)?.focus();
       });
     },
-    []
+    [setDrawerActivePage]
   );
-
-  // Reset to first tab when drawer opens for a new prompt
-  useEffect(() => {
-    if (promptPropertiesDrawerOpen) {
-      setDrawerActivePage(DRAWER_PAGES.HARNESS);
-    }
-  }, [promptPropertiesDrawerOpen, selectionTarget]);
 
   const drawerCurrentHarness = (properties.harness ??
     workflowProperties.harness ??

@@ -7,6 +7,7 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES } from "@/types/messages";
+import { DRAWER_PAGES } from "@/types/drawerPages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 import {
   PICKER_SHORTCUT_TARGETS,
@@ -256,6 +257,18 @@ describe("properties drawer", () => {
     expect(store().promptPropertiesDrawerOpen).toBe(true);
     store().togglePromptPropertiesDrawer();
     expect(store().promptPropertiesDrawerOpen).toBe(false);
+  });
+
+  it("keeps the last-viewed tab across close and reopen, and persists it", () => {
+    store().openPromptPropertiesDrawer();
+    store().setPromptPropertiesActivePage(DRAWER_PAGES.HOOKS);
+    store().closePromptPropertiesDrawer();
+    store().openPromptPropertiesDrawer();
+    expect(store().promptPropertiesActivePage).toBe(DRAWER_PAGES.HOOKS);
+    const persisted = useUiStore.persist.getOptions().partialize?.(store());
+    expect(persisted).toMatchObject({
+      promptPropertiesActivePage: DRAWER_PAGES.HOOKS,
+    });
   });
 });
 
