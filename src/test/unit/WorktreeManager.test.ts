@@ -345,9 +345,7 @@ suite("WorktreeManager", function () {
     }).trim();
   }
 
-  async function makeNamedDirectory(
-    name: string
-  ): Promise<{
+  async function makeNamedDirectory(name: string): Promise<{
     parent: string;
     repository: string;
     namedDirectoryPath: string;
