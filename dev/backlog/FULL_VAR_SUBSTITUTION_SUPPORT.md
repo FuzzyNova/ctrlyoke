@@ -3,7 +3,7 @@
 **Status:** Not started. Written 2026-11-12 against `0e5bd6ea0`.
 **Priority:** P2
 **Related:**
-[NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md](NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md)
+[NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md](../implemented/NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md)
 (wants `{{branch}}` in `worktree.branch`),
 [TEMPLATE_AUTHORING_MODE_PLAN.md](TEMPLATE_AUTHORING_MODE_PLAN.md) (`emitAs:
 var` needs the substituted field set from one source),

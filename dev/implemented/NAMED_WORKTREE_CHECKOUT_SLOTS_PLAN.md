@@ -1,7 +1,7 @@
 # Named Worktree Checkout Slots
 
-**Status:** Ready to implement. Written 2026-10-30; checked against the code
-again on 2026-11-12 (`0e5bd6ea0`). All open questions are resolved.
+**Status:** Implemented 2026-11-12. Written 2026-10-30; checked against the
+code again on 2026-11-12 (`0e5bd6ea0`). All open questions are resolved.
 **Priority:** P2
 
 ## Progress
@@ -32,8 +32,14 @@ records anything it found that differs from this plan under the item.
 - [x] 7. Settings → Worktrees UI: upstream bracket, PR readiness labels,
       source drift line, Sync gating, Update from, slot label.
 - Deviation: none.
-- [ ] 8. Docs pass (`docs/workflows/worktrees.md`, `properties-panel.md`),
+- [x] 8. Docs pass (`docs/workflows/worktrees.md`, `properties-panel.md`),
       CHANGELOG check, plan moved to `dev/implemented/`.
+      Deviation: the landed tests do not explicitly cover refusing an untracked
+      dirty slot, a slot with managed-worktree ownership, a branch checked out
+      in a different slot, or a held lease specifically during a slot switch;
+      those cases remain implementation-level test gaps. The planned docs for
+      the Checkout field were already added to
+      `docs/workflows/properties-panel.md` with item 5.
 
 ## Problem
 
@@ -285,9 +291,9 @@ that block. The authored or default `worktree` is consulted only to detect that
 it was turned off (`false`), which keeps today's
 `abandonActiveWorktree` path. This also keeps continue correct once `branch`
 accepts `{{vars}}` (see
-[FULL_VAR_SUBSTITUTION_SUPPORT.md](FULL_VAR_SUBSTITUTION_SUPPORT.md)): the
-recorded, already-substituted branch is reused rather than substituted again
-with different values.
+[FULL_VAR_SUBSTITUTION_SUPPORT.md](../backlog/FULL_VAR_SUBSTITUTION_SUPPORT.md)):
+the recorded, already-substituted branch is reused rather than substituted
+again with different values.
 
 ### Setup
 
@@ -479,7 +485,8 @@ behind?: number }` to `WorktreeManagementEntry` (both the
 
 - **`{{vars}}` in `branch` and `checkout`.** Resolved: yes. Variable
   substitution is extended to (nearly) every workflow field in a separate
-  change, [FULL_VAR_SUBSTITUTION_SUPPORT.md](FULL_VAR_SUBSTITUTION_SUPPORT.md),
+  change,
+  [FULL_VAR_SUBSTITUTION_SUPPORT.md](../backlog/FULL_VAR_SUBSTITUTION_SUPPORT.md),
   which covers `worktree.branch`, `worktree.base` and `worktree.checkout`. A
   reusable "bug-fix slot" workflow then writes `branch: "{{branch}}"` and runs
   with `--var branch=fix-race-condition`. This plan does not depend on it and
