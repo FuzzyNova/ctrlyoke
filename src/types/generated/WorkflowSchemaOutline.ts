@@ -968,9 +968,9 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "string",
         "description": "Local Git branch name for the named worktree."
       },
-      "checkout": {
+      "directory": {
         "valueKind": "string",
-        "description": "Optional persistent checkout slot. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. When a different branch is requested, ctrlyoke switches this checkout only when it is clean and never switches it back. Setup runs once per checkout slot, not once per branch."
+        "description": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as exactly `<worktree root>/<name>`, with no hash suffix. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch."
       }
     },
     "forbiddenKeys": []

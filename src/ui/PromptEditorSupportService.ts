@@ -87,6 +87,7 @@ import {
   parsePermissionCompletionContext,
 } from "../completions/PermissionListCompletionHelpers";
 import { getBranchCompletions } from "../completions/BranchCompletionHelpers";
+import { getWorktreeDirectoryCompletions } from "../completions/WorktreeDirectoryCompletionHelpers";
 import { getStashList, gitRefExists } from "../utils/GitUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { decodePriorContextTokenRef } from "../utils/FileReferenceParser";
@@ -519,22 +520,50 @@ export class PromptEditorSupportService {
     filterText: string,
     seq: number
   ): Promise<void> {
+    await this.emitRepositoryListCompletions(
+      ctx,
+      MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
+      getBranchCompletions,
+      filterText,
+      seq
+    );
+  }
+
+  async handleWorktreeDirectoryListRequest(
+    ctx: DashboardClientContext,
+    filterText: string,
+    seq: number
+  ): Promise<void> {
+    await this.emitRepositoryListCompletions(
+      ctx,
+      MESSAGE_TYPES.WORKTREE_DIRECTORY_LIST_RESPONSE,
+      getWorktreeDirectoryCompletions,
+      filterText,
+      seq
+    );
+  }
+
+  /** Answer a Git-backed completion request; any failure yields no items. */
+  private async emitRepositoryListCompletions(
+    ctx: DashboardClientContext,
+    type:
+      | typeof MESSAGE_TYPES.BRANCH_LIST_RESPONSE
+      | typeof MESSAGE_TYPES.WORKTREE_DIRECTORY_LIST_RESPONSE,
+    getCompletions: (
+      repoRoot: string | undefined,
+      filterText: string
+    ) => Promise<PlainCompletionItem[]>,
+    filterText: string,
+    seq: number
+  ): Promise<void> {
+    let items: PlainCompletionItem[] = [];
     try {
       const repoRoot = this.getWorkspaceRoot() || undefined;
-      const items = await getBranchCompletions(repoRoot, filterText);
-      ctx.emit({
-        type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
-        items,
-        seq,
-      });
+      items = await getCompletions(repoRoot, filterText);
     } catch (error) {
-      Log.trace("[Dashboard] Failed to get branch completions:", error);
-      ctx.emit({
-        type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
-        items: [],
-        seq,
-      });
+      Log.trace(`[Dashboard] Failed to get ${type} completions:`, error);
     }
+    ctx.emit({ type, items, seq });
   }
 
   private emitCompletionsResponse(

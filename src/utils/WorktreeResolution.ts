@@ -1,7 +1,7 @@
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
   WORKTREE_CONFIG_ORIGINS,
-  CHECKOUT_VALUE_KINDS,
+  WORKTREE_DIRECTORY_VALUE_KINDS,
   WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import type {
@@ -13,30 +13,32 @@ import type {
 } from "../types/CtrlYokeTypes";
 import { evaluateWorkspaceEligibility } from "./WorktreeUtils";
 import {
-  classifyCheckoutValue,
+  classifyWorktreeDirectoryValue,
   toWorktreeObjectConfig,
+  worktreeDirectoryNameError,
 } from "./WorktreeConfigShape";
 
-function normalizeNamedCheckout(
+function normalizeNamedDirectory(
   config: ReturnType<typeof toWorktreeObjectConfig>
 ) {
   if (
     config === false ||
     config.mode !== WORKTREE_MODES.NAMED ||
-    config.checkout === undefined
+    config.directory === undefined
   )
     return config;
-  const checkout = config.checkout.trim();
-  if (!checkout) throw new Error("Named worktree checkout must not be empty.");
-  if (
-    classifyCheckoutValue(checkout) === CHECKOUT_VALUE_KINDS.NAME &&
-    /[\\/]/.test(checkout)
-  ) {
-    throw new Error(
-      "Named worktree checkout must be an absolute or ~-prefixed path, or a bare name without slash or backslash."
-    );
+  const directory = config.directory.trim();
+  if (!directory)
+    throw new Error("Named worktree directory must not be empty.");
+  const nameError =
+    classifyWorktreeDirectoryValue(directory) ===
+    WORKTREE_DIRECTORY_VALUE_KINDS.NAME
+      ? worktreeDirectoryNameError(directory)
+      : undefined;
+  if (nameError) {
+    throw new Error(`Named worktree directory ${nameError}.`);
   }
-  return { ...config, checkout };
+  return { ...config, directory };
 }
 
 /** The result used to construct an execution workspace for one workflow run. */
@@ -46,7 +48,7 @@ export interface WorkspaceWorktreeResolution extends WorktreeResolution {
 }
 
 function normalizeDefault(value: WorktreeDefaultConfig): WorktreeResolution {
-  const config = normalizeNamedCheckout(toWorktreeObjectConfig(value));
+  const config = normalizeNamedDirectory(toWorktreeObjectConfig(value));
   if (config === false) {
     return { origin: WORKTREE_CONFIG_ORIGINS.DEFAULT };
   }
@@ -70,7 +72,7 @@ export function resolveWorktreeSelection(
   if (authored === undefined) {
     return normalizeDefault(defaultValue);
   }
-  const config = normalizeNamedCheckout(toWorktreeObjectConfig(authored));
+  const config = normalizeNamedDirectory(toWorktreeObjectConfig(authored));
   return config === false
     ? { origin: WORKTREE_CONFIG_ORIGINS.AUTHORED }
     : { origin: WORKTREE_CONFIG_ORIGINS.AUTHORED, config: { ...config } };
@@ -109,7 +111,7 @@ export async function resolveWorktreeForWorkspace(
   };
 }
 
-/** Preserve a recorded named checkout during continue while taking setup from current config. */
+/** Preserve a recorded named directory during continue while taking setup from current config. */
 export function recordedWorktreeConfigForContinue(
   recorded: WorkingFileWorktreeRuntime | undefined,
   current: WorktreeObjectConfig | false
@@ -117,14 +119,14 @@ export function recordedWorktreeConfigForContinue(
   if (
     !recorded ||
     recorded.mode !== WORKTREE_MODES.NAMED ||
-    recorded.checkout === undefined ||
+    recorded.directory === undefined ||
     current === false
   ) {
     return undefined;
   }
   return {
     mode: WORKTREE_MODES.NAMED,
-    checkout: recorded.executionCheckoutRoot,
+    directory: recorded.executionCheckoutRoot,
     branch: recorded.branchName,
     base: recorded.baseCommit,
     ...(current.setup ? { setup: current.setup } : {}),

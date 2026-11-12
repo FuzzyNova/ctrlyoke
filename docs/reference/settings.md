@@ -449,11 +449,11 @@ Fields:
 
 ### `defaults.worktree` {#defaults-worktree}
 
-- **Type:** `false` or `true` or `string` or `{ mode: "managed", merge?, keep?, … }` or `{ mode: "named", branch, checkout?, … }`
+- **Type:** `false` or `true` or `string` or `{ mode: "managed", merge?, keep?, … }` or `{ mode: "named", branch, directory?, … }`
 - **Default:** `false`
 - **Workflow field:** [`worktree`](/reference/workflow-schema#workflow-file-worktree) — a workflow or step value overrides this default
 
-Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible. A workspace-scope value with a `setup` command or path-form `checkout` takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A bare-name checkout applies without asking. A value without setup or a path checkout, or one whose setup command and path checkout match your user value's, applies without asking.
+Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible. A workspace-scope value with a `setup` command or path-form `directory` takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A bare-name directory applies without asking. A value without setup or a path directory, or one whose setup command and path directory match your user value's, applies without asking.
 
 Accepted forms:
 
@@ -461,7 +461,7 @@ Accepted forms:
 - `true` — Managed-worktree shorthand.
 - `string` — Named-worktree branch shorthand. The value must be a valid local Git branch name.
 - `{ mode: "managed", merge?, keep?, … }` — Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.
-- `{ mode: "named", branch, checkout?, … }` — Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to.
+- `{ mode: "named", branch, directory?, … }` — Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to.
 
 **When `mode` is `"managed"`:**
 
@@ -477,9 +477,9 @@ Fields:
 Fields:
 
 - `branch` · `string` · required — Local Git branch name for the named worktree.
-- `checkout` · `string` — Optional persistent checkout slot. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. When a different branch is requested, ctrlyoke switches this checkout only when it is clean and never switches it back. Setup runs once per checkout slot, not once per branch.
+- `directory` · `string` — Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as exactly `<worktree root>/<name>`, with no hash suffix. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch.
 - `base` · `string` — Optional Git ref resolved to a commit when the worktree is created.
-- `setup` · `string` — Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped. For a checkout slot, setup runs once per checkout, not per branch.
+- `setup` · `string` — Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped. With `directory` set, setup runs once per directory, not per branch.
 
 ## `worktrees` {#worktrees}
 

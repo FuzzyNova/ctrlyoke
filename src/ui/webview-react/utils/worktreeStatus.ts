@@ -5,10 +5,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { pluralize } from "@utils/string";
 import { classifyWorktreeComparison } from "@root/utils/WorktreeComparison";
-import {
-  WORKTREE_COMPARISON_KINDS,
-  WORKTREE_MODES,
-} from "@root/types/DashboardConstants";
+import { WORKTREE_COMPARISON_KINDS } from "@root/types/DashboardConstants";
 import type { WorktreeComparisonKind } from "@root/utils/WorktreeComparison";
 
 type WorkingTreeCounts = NonNullable<WorktreeManagementEntry["workingTree"]>;
@@ -117,30 +114,4 @@ export function isPullRequestWorktree(
 /** Remove the deterministic 12-hex suffix used on ctrlyoke worktree directories. */
 export function stripWorktreeDirectoryHashSuffix(name: string): string {
   return name.replace(/-[a-f\d]{12}$/i, "");
-}
-
-/**
- * Linked worktrees that can serve as a named `checkout` slot, by directory
- * basename: never the source checkout and never a managed run's checkout.
- */
-export function checkoutSlotOptions(
-  management:
-    | {
-        sourceCheckoutRoot: string;
-        entries: readonly WorktreeManagementEntry[];
-      }
-    | null
-    | undefined
-): string[] {
-  if (!management) return [];
-  return management.entries
-    .filter(
-      (entry) =>
-        entry.ownership !== WORKTREE_MODES.MANAGED &&
-        entry.worktreePath !== management.sourceCheckoutRoot
-    )
-    .map((entry) => {
-      const parts = entry.worktreePath.split(/[\\/]/).filter(Boolean);
-      return parts[parts.length - 1] ?? entry.worktreePath;
-    });
 }

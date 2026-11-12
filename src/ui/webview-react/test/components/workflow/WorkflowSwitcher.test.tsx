@@ -760,7 +760,7 @@ describe("WorkflowSwitcher — loaded state", () => {
     expect(screen.queryByText(EXECUTION_STATES.IDLE)).not.toBeInTheDocument();
   });
 
-  it("shows the worktree indicator with its checkout and branch in the wide header", () => {
+  it("shows the worktree indicator with its directory and branch in the wide header", () => {
     const getBoundingClientRect = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
       .mockReturnValue({ width: 500 } as DOMRect);
@@ -768,7 +768,7 @@ describe("WorkflowSwitcher — loaded state", () => {
       workflowProperties: {
         worktree: {
           mode: WORKTREE_MODES.NAMED,
-          checkout: "shared-slot",
+          directory: "shared-dir",
           branch: "feature/status",
         },
       },
@@ -777,11 +777,11 @@ describe("WorkflowSwitcher — loaded state", () => {
     render(<WorkflowSwitcher />);
 
     const indicator = screen.getByLabelText(
-      "Named worktree: shared-slot → feature/status"
+      "Named worktree: shared-dir → feature/status"
     );
     expect(indicator).toHaveAttribute(
       "title",
-      "Named worktree: shared-slot → feature/status"
+      "Named worktree: shared-dir → feature/status"
     );
     expect(
       indicator.querySelector(".codicon-worktree-compact")

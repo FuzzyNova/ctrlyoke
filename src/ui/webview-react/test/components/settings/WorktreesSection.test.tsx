@@ -614,7 +614,7 @@ describe("WorktreesSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers Update from for PR branches, excludes them from Sync, and labels checkout slots", () => {
+  it("offers Update from for PR branches, excludes them from Sync, and labels named directories", () => {
     const postMessage = vi.fn();
     window.vscodeApi = {
       postMessage,

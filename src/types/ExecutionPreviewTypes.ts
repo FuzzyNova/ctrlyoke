@@ -54,8 +54,10 @@ export interface WorktreeExecutionPreview {
   /** Which tier supplied the mode: the workflow itself, or a settings default. */
   origin: WorktreeConfigOrigin;
   branch?: string;
-  checkout?: string;
-  checkoutCurrentBranch?: string;
+  /** The authored named-worktree `directory`, when one was set. */
+  directory?: string;
+  /** Branch the existing `directory` holds now, before any switch. */
+  directoryCurrentBranch?: string;
   switchBlocker?: string;
   base?: string;
   eligible: boolean;

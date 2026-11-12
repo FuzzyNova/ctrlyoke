@@ -1641,6 +1641,17 @@ export class DashboardMessageRouter {
       );
     });
 
+    table.set(
+      MESSAGE_TYPES.WORKTREE_DIRECTORY_LIST_REQUEST,
+      async (message, ctx) => {
+        await this.promptEditorSupport.handleWorktreeDirectoryListRequest(
+          ctx,
+          message.filterText,
+          message.seq
+        );
+      }
+    );
+
     table.set(MESSAGE_TYPES.OPEN_FILE, (message, ctx) => {
       this.promptEditorSupport.handleOpenFile(
         ctx,

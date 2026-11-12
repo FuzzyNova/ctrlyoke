@@ -15,10 +15,10 @@ import {
 } from "../../utils/WorktreeResolution";
 
 suite("WorktreeResolution", () => {
-  test("continues a recorded checkout branch with current setup after defaults change", () => {
+  test("continues a recorded named directory branch with current setup after defaults change", () => {
     const recorded = {
       mode: WORKTREE_MODES.NAMED,
-      checkout: "bug-fix",
+      directory: "bug-fix",
       branchName: "recorded-branch",
       executionCheckoutRoot: "/repo.worktrees/bug-fix",
       baseCommit: "captured-base",
@@ -31,7 +31,7 @@ suite("WorktreeResolution", () => {
 
     assert.deepStrictEqual(result, {
       mode: WORKTREE_MODES.NAMED,
-      checkout: "/repo.worktrees/bug-fix",
+      directory: "/repo.worktrees/bug-fix",
       branch: "recorded-branch",
       base: "captured-base",
       setup: "npm ci",
@@ -155,34 +155,45 @@ suite("WorktreeResolution", () => {
     });
   });
 
-  test("normalizes a named checkout and rejects invalid checkout values", () => {
+  test("normalizes a named directory and rejects invalid directory values", () => {
     assert.deepStrictEqual(
       resolveWorktreeSelection(
-        { mode: WORKTREE_MODES.NAMED, branch: "feature", checkout: "  slot  " },
+        {
+          mode: WORKTREE_MODES.NAMED,
+          branch: "feature",
+          directory: "  research  ",
+        },
         false
       ).config,
       {
         mode: WORKTREE_MODES.NAMED,
         branch: "feature",
-        checkout: "slot",
+        directory: "research",
       }
     );
-    for (const checkout of ["", "  ", "relative/path", "relative\\path"]) {
+    for (const directory of [
+      "",
+      "  ",
+      "relative/path",
+      "relative\\path",
+      "..",
+      "a:b",
+    ]) {
       assert.throws(
         () =>
           resolveWorktreeSelection(
-            { mode: WORKTREE_MODES.NAMED, branch: "feature", checkout },
+            { mode: WORKTREE_MODES.NAMED, branch: "feature", directory },
             false
           ),
-        /checkout/
+        /directory/
       );
     }
   });
 
-  test("managed worktree config drops checkout", () => {
+  test("managed worktree config drops directory", () => {
     assert.deepStrictEqual(
       resolveWorktreeSelection(
-        { mode: WORKTREE_MODES.MANAGED, checkout: "slot" } as never,
+        { mode: WORKTREE_MODES.MANAGED, directory: "research" } as never,
         false
       ).config,
       { mode: WORKTREE_MODES.MANAGED }
@@ -230,7 +241,7 @@ suite("WorktreeResolution", () => {
     );
     assert.ok(managed);
     assert.ok(named);
-    assert.ok(named.properties && "checkout" in named.properties);
-    assert.ok(managed.properties && !("checkout" in managed.properties));
+    assert.ok(named.properties && "directory" in named.properties);
+    assert.ok(managed.properties && !("directory" in managed.properties));
   });
 });

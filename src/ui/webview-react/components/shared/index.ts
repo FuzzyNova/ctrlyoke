@@ -104,6 +104,7 @@ export {
   LocalAdditionalArgsEditor,
 } from "./AdditionalArgsEditor";
 export { BranchNameEditor } from "./BranchNameEditor";
+export { WorktreeDirectoryEditor } from "./WorktreeDirectoryEditor";
 export { ErrorBehaviorEditor } from "./ErrorBehaviorEditor";
 export {
   SecretGrantsEditor,

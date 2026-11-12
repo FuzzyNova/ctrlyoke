@@ -11,7 +11,7 @@
       "mode": "named",
       "origin": "discovered",
       "branchName": "feature/new",
-      "checkout": "bug-fix",
+      "directory": "bug-fix",
       "previousBranch": "feature/old",
       "worktreePath": "/repo.worktrees/bug-fix",
       "executionRoot": "/repo.worktrees/bug-fix",

@@ -4868,8 +4868,8 @@ export class WorkflowInstance
           ? await this.worktreeManager.resolveNamedWorktree({
               ...sharedOptions,
               branchName: config.branch,
-              ...(config.checkout !== undefined
-                ? { checkout: config.checkout }
+              ...(config.directory !== undefined
+                ? { directory: config.directory }
                 : {}),
             })
           : (() => {

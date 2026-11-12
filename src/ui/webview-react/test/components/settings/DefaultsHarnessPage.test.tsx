@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DefaultsHarnessPage } from "@components/settings/defaults/DefaultsHarnessPage";
@@ -116,14 +117,13 @@ describe("DefaultsHarnessPage execution defaults", () => {
     });
   });
 
-  it("round trips checkout defaults and omits the key when cleared", async () => {
+  it("round trips directory defaults and omits the key when cleared", async () => {
     const onUpdate = vi.fn();
-    const user = userEvent.setup();
     const settings = createSettings();
     settings.settings.defaults.worktree = {
       mode: WORKTREE_MODES.NAMED,
       branch: "feature",
-      checkout: "shared-slot",
+      directory: "shared-dir",
     };
     render(
       <DefaultsHarnessPage
@@ -133,12 +133,19 @@ describe("DefaultsHarnessPage execution defaults", () => {
         onReset={() => {}}
       />
     );
-    const checkout = screen.getByLabelText(
-      "Checkout, property defaults.worktree.checkout"
+    const directory = screen.getByLabelText(
+      "Directory, property defaults.worktree.directory"
     );
-    expect(checkout).toHaveValue("shared-slot");
-    await user.clear(checkout);
-    await user.tab();
+    expect(directory).toHaveAttribute("contenteditable", "true");
+    expect(directory).toHaveTextContent("shared-dir");
+    const view = EditorView.findFromDOM(directory);
+    if (!view) throw new Error("Directory CodeMirror view was not rendered");
+    act(() => {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: "" },
+      });
+    });
+    fireEvent.blur(directory);
     expect(onUpdate).toHaveBeenLastCalledWith("defaults.worktree", {
       mode: WORKTREE_MODES.NAMED,
       branch: "feature",

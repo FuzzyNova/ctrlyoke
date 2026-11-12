@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WORKTREE_MODES } from "@root/types/DashboardConstants";
 import {
-  classifyCheckoutValue,
+  classifyWorktreeDirectoryValue,
   effectiveWorktreeObjectConfig,
   toWorktreeObjectConfig,
 } from "@root/utils/WorktreeConfigShape";
@@ -24,28 +24,32 @@ describe("toWorktreeObjectConfig", () => {
     });
   });
 
-  it("preserves checkout on named configs and classifies its form", () => {
+  it("preserves directory on named configs and classifies its form", () => {
     expect(
       toWorktreeObjectConfig({
         mode: WORKTREE_MODES.NAMED,
         branch: "fix",
-        checkout: " slot ",
+        directory: " research ",
       })
     ).toEqual({
       mode: WORKTREE_MODES.NAMED,
       branch: "fix",
-      checkout: " slot ",
+      directory: " research ",
     });
-    expect(classifyCheckoutValue("slot")).toBe("name");
-    expect(classifyCheckoutValue("../slot")).toBe("name");
-    expect(classifyCheckoutValue("~/worktrees/slot")).toBe("path");
-    expect(classifyCheckoutValue("/worktrees/slot")).toBe("path");
+    expect(classifyWorktreeDirectoryValue("research")).toBe("name");
+    expect(classifyWorktreeDirectoryValue("../research")).toBe("name");
+    expect(classifyWorktreeDirectoryValue("~/worktrees/research")).toBe("path");
+    expect(classifyWorktreeDirectoryValue("/worktrees/research")).toBe("path");
     expect(
       effectiveWorktreeObjectConfig(
-        { mode: WORKTREE_MODES.NAMED, branch: "fix", checkout: "slot" },
+        { mode: WORKTREE_MODES.NAMED, branch: "fix", directory: "research" },
         undefined
       )
-    ).toEqual({ mode: WORKTREE_MODES.NAMED, branch: "fix", checkout: "slot" });
+    ).toEqual({
+      mode: WORKTREE_MODES.NAMED,
+      branch: "fix",
+      directory: "research",
+    });
   });
 
   it("returns an object config by reference", () => {

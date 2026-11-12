@@ -79,11 +79,11 @@ describe("RunSummaryBanner", () => {
     );
   });
 
-  it("shows the checkout branch switch notice", () => {
+  it("shows the directory branch switch notice", () => {
     renderBanner({
       worktree: {
         ...worktree,
-        checkout: "bug-fix",
+        directory: "bug-fix",
         previousBranch: "old-branch",
       },
     });

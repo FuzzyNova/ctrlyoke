@@ -1684,6 +1684,20 @@ export interface BranchListResponseMessage {
   seq: number;
 }
 
+/** Webview -> Extension: request named worktree directory completions. */
+export interface WorktreeDirectoryListRequestMessage {
+  type: typeof MESSAGE_TYPES.WORKTREE_DIRECTORY_LIST_REQUEST;
+  filterText: string;
+  seq: number;
+}
+
+/** Extension -> Webview: named worktree directory completion results. */
+export interface WorktreeDirectoryListResponseMessage {
+  type: typeof MESSAGE_TYPES.WORKTREE_DIRECTORY_LIST_RESPONSE;
+  items: PlainCompletionItem[];
+  seq: number;
+}
+
 /** Webview → Extension: validate a lone prompt-file reference. */
 export interface ValidateFileRefMessage {
   type: typeof MESSAGE_TYPES.VALIDATE_FILE_REF;
@@ -3695,6 +3709,7 @@ export type IncomingMessage =
   | HarnessFlagCompletionsResponseMessage
   | PermissionCompletionsResponseMessage
   | BranchListResponseMessage
+  | WorktreeDirectoryListResponseMessage
   | {
       type: typeof MESSAGE_TYPES.CONTEXT_REFS_VALIDATION;
       results: Array<{

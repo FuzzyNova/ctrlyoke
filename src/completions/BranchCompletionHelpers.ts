@@ -1,15 +1,9 @@
 import type { PlainCompletionItem } from "./CompletionCore";
 import { listLocalBranches } from "../utils/GitUtils";
 import { COMPLETION_ITEM_KINDS } from "../types/DashboardConstants";
+import { RepositoryListCache } from "./RepositoryListCache";
 
-const BRANCH_CACHE_DURATION_MS = 10_000;
-
-interface BranchCacheEntry {
-  branches: string[];
-  timestamp: number;
-}
-
-const branchCache = new Map<string, BranchCacheEntry>();
+const branchCache = new RepositoryListCache(listLocalBranches);
 
 /** Clear cached branch lists; intended for tests and workspace resets. */
 export function clearBranchCompletionCache(): void {
@@ -29,21 +23,7 @@ export async function getBranchCompletions(
     return [];
   }
 
-  const now = Date.now();
-  const cached = branchCache.get(repoRoot);
-  let branches: string[];
-
-  if (cached && now - cached.timestamp < BRANCH_CACHE_DURATION_MS) {
-    branches = cached.branches;
-  } else {
-    try {
-      branches = await listLocalBranches(repoRoot);
-    } catch {
-      branches = [];
-    }
-    branchCache.set(repoRoot, { branches, timestamp: now });
-  }
-
+  const branches = await branchCache.get(repoRoot);
   const prefix = filterText.toLocaleLowerCase();
   return branches
     .filter((branch) => branch.toLocaleLowerCase().startsWith(prefix))

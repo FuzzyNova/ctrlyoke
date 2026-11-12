@@ -373,11 +373,11 @@
               "minLength": 1,
               "description": "Local Git branch name for the named worktree."
             },
-            "checkout": {
+            "directory": {
               "type": "string",
               "minLength": 1,
               "pattern": "^(?:~[/\\\\].*|/.*|[A-Za-z]:[/\\\\].*|\\\\\\\\.*|[^/\\\\]+)$",
-              "description": "Optional persistent checkout slot. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. When a different branch is requested, ctrlyoke switches this checkout only when it is clean and never switches it back. Setup runs once per checkout slot, not once per branch."
+              "description": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as exactly `<worktree root>/<name>`, with no hash suffix. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch."
             },
             "base": {
               "type": "string",
@@ -386,7 +386,7 @@
             },
             "setup": {
               "type": "string",
-              "description": "Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped. For a checkout slot, setup runs once per checkout, not per branch."
+              "description": "Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped. With `directory` set, setup runs once per directory, not per branch."
             }
           },
           "required": ["mode", "branch"],
@@ -1556,13 +1556,13 @@
             "branchName": {
               "type": "string"
             },
-            "checkout": {
+            "directory": {
               "type": "string",
-              "description": "Named checkout slot used by this run, when configured."
+              "description": "The authored named-worktree `directory` this run used, when configured."
             },
             "previousBranch": {
               "type": "string",
-              "description": "Branch checked out in the slot before this run switched it, when applicable."
+              "description": "Branch the named directory held before this run switched it, when applicable."
             },
             "worktreePath": {
               "type": "string"

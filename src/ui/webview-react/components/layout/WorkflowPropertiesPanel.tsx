@@ -69,6 +69,7 @@ import {
   KeyValueRowsEditor,
   TrustedRootsListEditor,
   BranchNameEditor,
+  WorktreeDirectoryEditor,
   AnimatedSection,
   AutoResumeStatusRow,
   ExitButton,
@@ -145,13 +146,12 @@ import {
   toWorktreeObjectConfig,
   withWorktreeField,
 } from "@root/utils/WorktreeConfigShape";
-import { checkoutSlotOptions } from "@utils/worktreeStatus";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const WORKFLOW_PANEL_BREAKPOINT = 400;
 const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
 type WorktreeField =
-  "checkout" | "branch" | "base" | "setup" | "keep" | "merge";
+  "directory" | "branch" | "base" | "setup" | "keep" | "merge";
 // The sandbox pair has its own controls on the Permissions page; keep this
 // panel's generic property guard scoped to the other execution properties.
 type ExecutionPropertyKey = Exclude<
@@ -207,8 +207,8 @@ function worktreeConfigForMode(
     mode: WORKTREE_MODES.NAMED,
     ...(normalizedDefaults !== false &&
     normalizedDefaults.mode === WORKTREE_MODES.NAMED &&
-    normalizedDefaults.checkout?.trim()
-      ? { checkout: normalizedDefaults.checkout.trim() }
+    normalizedDefaults.directory?.trim()
+      ? { directory: normalizedDefaults.directory.trim() }
       : {}),
     branch:
       normalizedDefaults !== false &&
@@ -434,23 +434,16 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveModel = getEffectiveModel();
   const effectiveExecutionMode = getEffectiveExecutionMode();
   const effectiveWorktree = getEffectiveWorktree();
-  const worktreeManagement = useSettingsStore(
-    (state) => state.worktreeManagement
-  );
-  const checkoutOptions = useMemo(
-    () => checkoutSlotOptions(worktreeManagement),
-    [worktreeManagement]
-  );
   const effectiveWorktreeMode =
     effectiveWorktree === false ? WORKTREE_MODE_NONE : effectiveWorktree.mode;
   const effectiveWorktreeBranch =
     effectiveWorktree === false || !("branch" in effectiveWorktree)
       ? ""
       : (effectiveWorktree.branch ?? "");
-  const effectiveWorktreeCheckout =
-    effectiveWorktree === false || !("checkout" in effectiveWorktree)
+  const effectiveWorktreeDirectory =
+    effectiveWorktree === false || !("directory" in effectiveWorktree)
       ? ""
-      : (effectiveWorktree.checkout ?? "");
+      : (effectiveWorktree.directory ?? "");
   const effectiveWorktreeBase =
     effectiveWorktree === false ? "" : (effectiveWorktree.base ?? "");
   const effectiveWorktreeSetup =
@@ -518,8 +511,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [worktreeBranchInput, setWorktreeBranchInput] = useState(
     effectiveWorktreeBranch
   );
-  const [worktreeCheckoutInput, setWorktreeCheckoutInput] = useState(
-    effectiveWorktreeCheckout
+  const [worktreeDirectoryInput, setWorktreeDirectoryInput] = useState(
+    effectiveWorktreeDirectory
   );
   const [worktreeBaseInput, setWorktreeBaseInput] = useState(
     effectiveWorktreeBase
@@ -537,7 +530,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   useEffect(() => {
     setWorktreeMode(effectiveWorktreeMode);
     setWorktreeBranchInput(effectiveWorktreeBranch);
-    setWorktreeCheckoutInput(effectiveWorktreeCheckout);
+    setWorktreeDirectoryInput(effectiveWorktreeDirectory);
     setWorktreeBaseInput(effectiveWorktreeBase);
     setWorktreeSetupInput(effectiveWorktreeSetup);
     setWorktreeKeepInput(effectiveWorktreeKeep);
@@ -545,7 +538,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   }, [
     effectiveWorktreeBase,
     effectiveWorktreeBranch,
-    effectiveWorktreeCheckout,
+    effectiveWorktreeDirectory,
     effectiveWorktreeMode,
     effectiveWorktreeSetup,
     effectiveWorktreeKeep,
@@ -678,8 +671,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
           if (config === false) return false;
           return {
             mode: config.mode,
-            ...(config.mode === WORKTREE_MODES.NAMED && config.checkout?.trim()
-              ? { checkout: config.checkout.trim() }
+            ...(config.mode === WORKTREE_MODES.NAMED && config.directory?.trim()
+              ? { directory: config.directory.trim() }
               : {}),
             branch: "branch" in config ? (config.branch ?? "") : "",
             base: config.base ?? "",
@@ -935,7 +928,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       if (mode === WORKTREE_MODE_NONE) {
         setWorktreeMode(WORKTREE_MODE_NONE);
         setWorktreeBranchInput("");
-        setWorktreeCheckoutInput("");
+        setWorktreeDirectoryInput("");
         setWorktreeBaseInput("");
         setWorktreeSetupInput("");
         setWorktreeKeepInput(false);
@@ -952,8 +945,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
       );
       setWorktreeMode(selectedMode);
       setWorktreeBranchInput("branch" in seeded ? (seeded.branch ?? "") : "");
-      setWorktreeCheckoutInput(
-        seeded.mode === WORKTREE_MODES.NAMED ? (seeded.checkout ?? "") : ""
+      setWorktreeDirectoryInput(
+        seeded.mode === WORKTREE_MODES.NAMED ? (seeded.directory ?? "") : ""
       );
       setWorktreeBaseInput(seeded.base ?? "");
       setWorktreeSetupInput(seeded.setup ?? "");
@@ -988,8 +981,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   : "",
               ...(current !== false &&
               current.mode === WORKTREE_MODES.NAMED &&
-              current.checkout?.trim()
-                ? { checkout: current.checkout.trim() }
+              current.directory?.trim()
+                ? { directory: current.directory.trim() }
                 : {}),
               base: current !== false ? (current.base ?? "") : "",
               setup: current !== false ? (current.setup ?? "") : "",
@@ -1527,10 +1520,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
         ? (resetWorktreeConfig.branch ?? "")
         : ""
     );
-    setWorktreeCheckoutInput(
+    setWorktreeDirectoryInput(
       resetWorktreeConfig !== false &&
         resetWorktreeConfig.mode === WORKTREE_MODES.NAMED
-        ? (resetWorktreeConfig.checkout ?? "")
+        ? (resetWorktreeConfig.directory ?? "")
         : ""
     );
     setWorktreeBaseInput(
@@ -2029,38 +2022,31 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   {worktreeMode === WORKTREE_MODES.NAMED && (
                     <>
                       <FormField
-                        label="Checkout"
-                        schemaPath="worktree.checkout"
-                        htmlFor="settings-worktree-checkout"
-                        description="Existing linked checkout to reuse, or a new slot name or path. Empty derives the checkout from the branch."
+                        label="Directory"
+                        schemaPath="worktree.directory"
+                        htmlFor="settings-worktree-directory"
+                        description="Long-lived worktree directory: an existing one to reuse, or a new name (created as exactly that folder under the worktree root) or path. Empty derives the directory from the branch."
                       >
-                        <input
-                          id="settings-worktree-checkout"
-                          list="settings-worktree-checkout-options"
-                          aria-label="Worktree checkout"
-                          value={worktreeCheckoutInput}
-                          onChange={(event) =>
-                            setWorktreeCheckoutInput(event.currentTarget.value)
-                          }
+                        <WorktreeDirectoryEditor
+                          id="settings-worktree-directory"
+                          aria-label="Worktree directory"
+                          value={worktreeDirectoryInput}
+                          onChange={setWorktreeDirectoryInput}
                           onBlur={() =>
                             handleWorktreeFieldChange(
-                              "checkout",
-                              worktreeCheckoutInput
+                              "directory",
+                              worktreeDirectoryInput
                             )
                           }
+                          placeholder="Derived from branch"
                           className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                         />
-                        <datalist id="settings-worktree-checkout-options">
-                          {checkoutOptions.map((option) => (
-                            <option key={option}>{option}</option>
-                          ))}
-                        </datalist>
                       </FormField>
                       <FormField
                         label="Branch"
                         schemaPath="worktree.branch"
                         htmlFor="settings-worktree-branch"
-                        description="Existing or new local Git branch. With a checkout set, it can differ from the checkout's name; ctrlyoke switches the checkout to it when the checkout is clean."
+                        description="Existing or new local Git branch. With a directory set, the branch can differ from the directory's name; ctrlyoke switches the directory to it when the directory is clean."
                       >
                         <BranchNameEditor
                           id="settings-worktree-branch"

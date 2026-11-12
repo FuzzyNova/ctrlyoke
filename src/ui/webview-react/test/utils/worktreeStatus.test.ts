@@ -81,7 +81,7 @@ describe("describeWorktreeStatus", () => {
 });
 
 describe("PR worktree status", () => {
-  it("uses upstream comparison, readiness, and hash-free slot names", () => {
+  it("uses upstream comparison, readiness, and hash-free directory labels", () => {
     const entry = {
       upstream: { label: "origin/feature", gone: false, ahead: 2, behind: 3 },
       workingTree: clean,

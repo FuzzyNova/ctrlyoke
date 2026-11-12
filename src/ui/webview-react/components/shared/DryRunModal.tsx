@@ -240,8 +240,8 @@ function WorktreeSummary({
     ...(worktree.branch
       ? ([["Branch", worktree.branch]] as [string, React.ReactNode][])
       : []),
-    ...(worktree.checkout
-      ? ([["Checkout", worktree.checkout]] as [string, React.ReactNode][])
+    ...(worktree.directory
+      ? ([["Directory", worktree.directory]] as [string, React.ReactNode][])
       : []),
     ...(worktree.base
       ? ([["Base", worktree.base]] as [string, React.ReactNode][])
@@ -283,21 +283,23 @@ function WorktreeSummary({
       )}
       {worktree.eligible &&
         !worktree.switchBlocker &&
-        worktree.checkoutCurrentBranch && (
+        worktree.directoryCurrentBranch &&
+        worktree.directoryCurrentBranch !== worktree.branch && (
           <div className="mt-2 text-xs text-description-fg">
             Will switch from{" "}
             <code className="bg-code-block">
-              {worktree.checkoutCurrentBranch}
+              {worktree.directoryCurrentBranch}
             </code>
           </div>
         )}
       {worktree.eligible &&
         !worktree.switchBlocker &&
-        !worktree.checkoutCurrentBranch &&
-        worktree.checkout &&
+        !worktree.directoryCurrentBranch &&
+        worktree.directory &&
+        !worktree.plannedDirectoryIsExact &&
         worktree.plannedDirectory && (
           <div className="mt-2 text-xs text-description-fg">
-            Will create checkout at{" "}
+            Will create directory at{" "}
             <code className="bg-code-block break-all">
               {worktree.plannedDirectory}
             </code>

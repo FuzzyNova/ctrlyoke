@@ -771,7 +771,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     useSettingsStore.getState().updateGlobalSetting("worktree", {
       mode: WORKTREE_MODES.NAMED,
       branch: "ui-work",
-      checkout: "long-lived-slot",
+      directory: "long-lived-dir",
       base: "main",
       setup: "npm ci",
     });
@@ -782,8 +782,8 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.getByLabelText("Worktree branch")).toHaveTextContent(
       "ui-work"
     );
-    expect(screen.getByLabelText("Worktree checkout")).toHaveValue(
-      "long-lived-slot"
+    expect(screen.getByLabelText("Worktree directory")).toHaveTextContent(
+      "long-lived-dir"
     );
     expect(screen.getByLabelText("Worktree base")).toHaveTextContent("main");
     expect(screen.getByLabelText("Worktree setup")).toHaveTextContent("npm ci");
@@ -796,7 +796,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
           worktree: {
             mode: WORKTREE_MODES.NAMED,
             branch: "ui-work",
-            checkout: "long-lived-slot",
+            directory: "long-lived-dir",
             base: "main",
             setup: "npm ci",
           },
@@ -805,74 +805,36 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     );
   });
 
-  it("authors checkout slots, suggests only linked user checkouts, and omits an empty checkout", () => {
+  it("authors a named directory through its completion editor and omits an empty directory", () => {
     useSettingsStore.getState().updateGlobalSetting("worktree", {
       mode: WORKTREE_MODES.NAMED,
       branch: "feature",
     });
-    useSettingsStore.getState().setWorktreeManagement({
-      resolvedRoot: "/repo/.worktrees",
-      sourceCheckoutRoot: "/repo",
-      sourceCheckoutBranch: "main",
-      entries: [
-        {
-          worktreePath: "/repo",
-          ownership: "user",
-          branchState: "present",
-          inUse: false,
-          leaseOwners: [],
-          stale: false,
-          branchCleanupEligible: false,
-          headCommit: "",
-        },
-        {
-          worktreePath: "/repo/.worktrees/linked-slot",
-          ownership: "user",
-          branchState: "present",
-          inUse: false,
-          leaseOwners: [],
-          stale: false,
-          branchCleanupEligible: false,
-          headCommit: "",
-        },
-        {
-          worktreePath: "/repo/.worktrees/managed-slot",
-          ownership: "managed",
-          branchState: "present",
-          inUse: false,
-          leaseOwners: [],
-          stale: false,
-          branchCleanupEligible: false,
-          headCommit: "",
-        },
-      ],
-      staleManagedRecords: [],
-      generatedAt: 0,
-    });
     render(<WorkflowPropertiesPanel />);
     chooseWorktreeMode("Named");
-    const checkout = screen.getByLabelText("Worktree checkout");
-    expect(checkout).toHaveAttribute(
-      "list",
-      "settings-worktree-checkout-options"
-    );
-    const suggestions = Array.from(
-      document.querySelectorAll<HTMLOptionElement>(
-        "#settings-worktree-checkout-options option"
-      )
-    );
-    expect(suggestions.map((option) => option.value)).toEqual(["linked-slot"]);
 
-    fireEvent.change(checkout, { target: { value: "linked-slot" } });
-    fireEvent.blur(checkout);
+    const directory = screen.getByLabelText("Worktree directory");
+    expect(directory).toHaveAttribute("contenteditable", "true");
+    const view = EditorView.findFromDOM(directory);
+    if (!view) throw new Error("Directory CodeMirror view was not rendered");
+    const setDirectory = (value: string) => {
+      act(() => {
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: value },
+        });
+      });
+      fireEvent.blur(directory);
+    };
+
+    setDirectory("linked-dir");
     expect(
       useSettingsStore.getState().workflowProperties.worktree
-    ).toMatchObject({ checkout: "linked-slot" });
-    fireEvent.change(checkout, { target: { value: "" } });
-    fireEvent.blur(checkout);
+    ).toMatchObject({ directory: "linked-dir" });
+
+    setDirectory("");
     expect(
       useSettingsStore.getState().workflowProperties.worktree
-    ).not.toHaveProperty("checkout");
+    ).not.toHaveProperty("directory");
   });
 
   it("reveals Managed base/setup/keep/merge, seeds them from defaults, and explains undo", () => {

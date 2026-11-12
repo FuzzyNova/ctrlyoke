@@ -110,7 +110,7 @@ export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
     {
       store: PERSISTED_STORES.RUN_FILE,
       from: 3,
-      describe: "Record the checkout slot and previous branch",
+      describe: "Record the named worktree directory and previous branch",
       migrate: (doc) => doc,
     },
   ],

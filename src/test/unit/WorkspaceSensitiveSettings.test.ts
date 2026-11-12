@@ -426,12 +426,12 @@ suite("WorkspaceSensitiveSettings", () => {
       }
     });
 
-    test("trust-gates path checkouts, but not bare-name slots", () => {
+    test("trust-gates path directories, but not bare names", () => {
       assert.deepStrictEqual(
         worktreeRequests({
           mode: "named",
           branch: "feature",
-          checkout: "/tmp/slot",
+          directory: "/tmp/dir",
         }).map((r) => r.settingPath),
         [SETTING_PATHS.DEFAULTS_WORKTREE]
       );
@@ -439,7 +439,7 @@ suite("WorkspaceSensitiveSettings", () => {
         worktreeRequests({
           mode: "named",
           branch: "feature",
-          checkout: "bug-fix",
+          directory: "bug-fix",
         }),
         []
       );
@@ -447,24 +447,24 @@ suite("WorkspaceSensitiveSettings", () => {
         worktreeRequests({
           mode: "named",
           branch: "feature",
-          checkout: "~/repo/slot",
+          directory: "~/repo/dir",
         })[0]!.summary,
-        /checkout path ~\/repo\/slot/
+        /directory path ~\/repo\/dir/
       );
     });
 
-    test("covers path checkouts only when the user has the same path", () => {
+    test("covers path directories only when the user has the same path", () => {
       const checkout = {
         mode: "named",
         branch: "feature",
-        checkout: "/tmp/slot",
+        directory: "/tmp/dir",
       };
       assert.deepStrictEqual(worktreeRequests(checkout, checkout), []);
       assert.strictEqual(
         worktreeRequests(checkout, {
           mode: "named",
           branch: "feature",
-          checkout: "/tmp/other",
+          directory: "/tmp/other",
         }).length,
         1
       );

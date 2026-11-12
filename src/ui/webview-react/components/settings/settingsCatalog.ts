@@ -5,7 +5,7 @@ import {
   STATUS_LINE_HARNESS_IDS,
   HOOK_EVENT_NAMES,
   HOOK_EVENT_METADATA,
-  WORKTREE_CHECKOUT_FIELD,
+  WORKTREE_DIRECTORY_FIELD,
   WORKTREE_MODES,
   WORKTREE_KEEP_HELP_TEXT,
   type HarnessId,
@@ -888,13 +888,13 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Branch",
     description: "Required local Git branch for the named default.",
   },
-  "defaults.worktree.checkout": {
-    id: "defaults.worktree.checkout",
-    path: "defaults.worktree.checkout",
+  "defaults.worktree.directory": {
+    id: "defaults.worktree.directory",
+    path: "defaults.worktree.directory",
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "harness",
-    label: "Checkout",
-    description: SCHEMA_DESCRIPTIONS["defaults.worktree.checkout"],
+    label: "Directory",
+    description: SCHEMA_DESCRIPTIONS["defaults.worktree.directory"],
     revealedBy: "defaults.worktree",
   },
   "defaults.worktree.base": {
@@ -1231,7 +1231,7 @@ const workflowHarnessOrder = [
   ]),
   "defaults.executionMode",
   "defaults.worktree",
-  "defaults.worktree.checkout",
+  "defaults.worktree.directory",
   "defaults.worktree.branch",
   "defaults.worktree.base",
   "defaults.worktree.setup",
@@ -1295,7 +1295,7 @@ export function settingLabel(key: SettingsCatalogKey): string {
 
 const WORKTREE_MODE_DESCRIPTIONS = {
   named: {
-    checkout: SCHEMA_DESCRIPTIONS["defaults.worktree.checkout"],
+    directory: SCHEMA_DESCRIPTIONS["defaults.worktree.directory"],
     base: "Optional Git ref used as the starting point for a new branch.",
     setup:
       "Optional command run after creating a named worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it.",
@@ -1311,7 +1311,7 @@ export function worktreeSettingDescription(
   mode: keyof typeof WORKTREE_MODE_DESCRIPTIONS,
   field: keyof (typeof WORKTREE_MODE_DESCRIPTIONS)["named"]
 ): string {
-  if (mode === WORKTREE_MODES.MANAGED && field === WORKTREE_CHECKOUT_FIELD)
+  if (mode === WORKTREE_MODES.MANAGED && field === WORKTREE_DIRECTORY_FIELD)
     return "";
   return WORKTREE_MODE_DESCRIPTIONS[mode][
     field as keyof (typeof WORKTREE_MODE_DESCRIPTIONS)[typeof mode]

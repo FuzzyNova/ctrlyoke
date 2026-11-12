@@ -766,6 +766,8 @@ export const MESSAGE_TYPES = {
   PERMISSION_COMPLETIONS_RESPONSE: "permissionCompletionsResponse",
   BRANCH_LIST_REQUEST: "branchListRequest",
   BRANCH_LIST_RESPONSE: "branchListResponse",
+  WORKTREE_DIRECTORY_LIST_REQUEST: "worktreeDirectoryListRequest",
+  WORKTREE_DIRECTORY_LIST_RESPONSE: "worktreeDirectoryListResponse",
   OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
   OPEN_SETTINGS_FILE: "openSettingsFile", // Webview -> Extension: open the user/workspace settings.json for a given scope
   OPEN_SKILL: "openSkill", // Open a resolved ctrlyoke SKILL.md link
@@ -2920,7 +2922,6 @@ export const WORKTREE_MODES = {
 export const WORKTREE_IDENTITY_KINDS = {
   MANAGED: "managed",
   NAMED: "named",
-  CHECKOUT: "checkout",
 } as const;
 
 export type WorktreeIdentityKind =
@@ -2928,20 +2929,20 @@ export type WorktreeIdentityKind =
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
-/** Whether a `checkout` value names a slot by path or by bare name. */
-export const CHECKOUT_VALUE_KINDS = {
+/** Whether a named worktree `directory` value is a path or a bare name. */
+export const WORKTREE_DIRECTORY_VALUE_KINDS = {
   PATH: "path",
   NAME: "name",
 } as const;
 
-/** What `resolveCheckoutSlot` found: a registered worktree or a path to create. */
-export const CHECKOUT_SLOT_KINDS = {
+/** What `resolveWorktreeDirectory` found: a registered worktree or a path to create. */
+export const WORKTREE_DIRECTORY_KINDS = {
   EXISTING: "existing",
   PLANNED: "planned",
 } as const;
 
-/** The named-worktree `checkout` field, which is omitted rather than stored empty. */
-export const WORKTREE_CHECKOUT_FIELD = "checkout";
+/** The named-worktree `directory` field, which is omitted rather than stored empty. */
+export const WORKTREE_DIRECTORY_FIELD = "directory";
 
 export const WORKTREE_COMPARISON_KINDS = {
   LOCAL: "local",
@@ -5897,6 +5898,7 @@ export const WINDOW_LISTENER_REPLY_TYPES: ReadonlySet<MessageType> = new Set([
   MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
   MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
   MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
+  MESSAGE_TYPES.WORKTREE_DIRECTORY_LIST_RESPONSE,
   MESSAGE_TYPES.PERMISSION_COMPLETIONS_RESPONSE,
   MESSAGE_TYPES.FILE_REF_VALIDATION,
   MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,

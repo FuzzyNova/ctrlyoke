@@ -139,47 +139,52 @@ ready, or use **Sync** in the [Worktrees settings tab](#managing-worktrees).
 While the run's harness terminal stays open, the worktree stays reserved; see
 [Worktrees held by an open terminal](#held-by-open-terminal).
 
-### Checkout slots
+### Long-lived directories {#long-lived-directories}
 
-Use `checkout` to reuse a long-lived worktree directory for different branches.
-This is useful when keeping a checkout's dependencies and build caches is more
-important than having a separate directory for every branch:
+By default a named worktree's directory comes from its branch. Set
+`directory` to keep one long-lived worktree directory and check different
+branches into it over time. This is useful when keeping a directory's
+dependencies and build caches matters more than having a separate directory
+for every branch:
 
 ```yaml
 worktree:
   mode: named
-  checkout: bug-fix # long-lived slot name, or an absolute/~-prefixed path
+  directory: bug-fix # a directory name, or an absolute/~-prefixed path
   branch: fix-race-condition # branch for this run
   base: origin/main # used only if the branch does not exist yet
-  setup: npm ci # runs once per checkout
+  setup: npm ci # runs once per directory
 steps:
   - prompt: Fix the race condition and add a regression test.
 ```
 
-`checkout` is optional on the named object. Without it, named worktrees keep
-using the branch-derived directory. A bare name (no slash or backslash) finds
-one registered linked worktree whose directory is named exactly `bug-fix`, or
-has ctrlyoke's checkout-slot or branch-derived hash suffix. This lets a slot
-created by hand, or an existing branch checkout such as `bug-fix-<hash>`, be
-reused without moving it. If more than one checkout matches, give its path.
-An absolute or `~`-prefixed path can select a registered worktree or a new
-location; ctrlyoke creates the latter. A relative path containing separators
-is rejected. An existing folder that is not a linked worktree of this
-repository is never adopted.
+`directory` is optional on the named object. A bare name (no slash or
+backslash) reuses the registered linked worktree whose directory is named
+exactly `bug-fix`, wherever it is, or the directory ctrlyoke already derived
+for a branch named `bug-fix` (`bug-fix-<hash>`), so a worktree you created by
+hand or an older one can be reused without moving it. If more than one
+matches, give its path. With no match, ctrlyoke creates the worktree at
+exactly `<worktree root>/bug-fix`, with no hash suffix. So
+`directory: research` with `branch: research` creates a `research` branch in a
+`research` directory you can keep. An absolute or `~`-prefixed path selects a
+registered worktree, or a new location that ctrlyoke creates. A relative path
+containing separators is rejected. An existing folder that is not a linked
+worktree of this repository is never adopted.
 
-When the requested branch differs from the branch in the slot, ctrlyoke
-switches only if the checkout is clean and no Git operation is in progress.
-The previous run's changes remain in the slot, so commit them before switching
-to another branch. If the slot is dirty, ctrlyoke refuses and tells you to
-commit or stash the changes; ctrlyoke never stashes or discards them. After
-committing (and pushing, if needed), run again. To keep work on multiple
-branches uncommitted, use a separate checkout for each branch.
+When the requested branch differs from the branch the directory holds,
+ctrlyoke switches only if the directory is clean and no Git operation is in
+progress. The previous run's changes stay in the directory, so commit them
+before switching to another branch. If the directory is dirty, ctrlyoke
+refuses and tells you to commit or stash the changes; ctrlyoke never stashes
+or discards them. After committing (and pushing, if needed), run again. To
+keep work on several branches uncommitted, use a separate directory for each
+branch.
 
-`setup` runs once per checkout, not once per branch, and does not run again
+`setup` runs once per directory, not once per branch, and does not run again
 after a branch switch. A continued run uses the branch recorded by that run,
-even if the workflow's current defaults have changed. ctrlyoke leaves the slot
-on the selected branch when the run ends; it never switches back or pushes.
-Commit and push the branch yourself when it is ready for review.
+even if the workflow's current defaults have changed. ctrlyoke leaves the
+directory on the selected branch when the run ends; it never switches back or
+pushes. Commit and push the branch yourself when it is ready for review.
 
 ## Setup commands
 

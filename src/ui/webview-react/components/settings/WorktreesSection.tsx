@@ -928,7 +928,7 @@ function WorktreeRow({
     });
   };
   const directoryName = entry.worktreePath.split(/[\\/]/).pop() ?? "";
-  const slotName = stripWorktreeDirectoryHashSuffix(directoryName);
+  const directoryLabel = stripWorktreeDirectoryHashSuffix(directoryName);
   return (
     <div
       className={`rounded-sm border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}
@@ -939,9 +939,9 @@ function WorktreeRow({
         sourceCheckoutUpstream={sourceCheckoutUpstream}
         branchColorClass={branchColorClass}
       />
-      {entry.branchName && slotName !== entry.branchName && (
+      {entry.branchName && directoryLabel !== entry.branchName && (
         <div className="mt-1 text-xs text-description-fg">
-          {slotName} · {entry.branchName}
+          {directoryLabel} · {entry.branchName}
         </div>
       )}
       <div className="mt-1 font-mono break-all text-foreground">

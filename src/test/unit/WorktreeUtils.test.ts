@@ -6,7 +6,7 @@ import { execFileSync } from "child_process";
 import { suite, teardown, test } from "mocha";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 import {
-  CHECKOUT_SLOT_KINDS,
+  WORKTREE_DIRECTORY_KINDS,
   WORKTREE_IDENTITY_KINDS,
 } from "../../types/DashboardConstants";
 import {
@@ -14,7 +14,7 @@ import {
   createWorktreeDirectoryName,
   evaluateWorkspaceEligibility,
   resolveThroughNearestExistingAncestor,
-  resolveCheckoutSlot,
+  resolveWorktreeDirectory,
   resolveWorktreeRoot,
   slugifyWorktreeName,
   validateWorktreeBranchName,
@@ -39,21 +39,14 @@ suite("WorktreeUtils", function () {
     return directory;
   }
 
-  test("resolves checkout aliases, ambiguity, and planned paths", async () => {
-    const parent = await makeDirectory("checkout-slots");
+  test("resolves named directory aliases, ambiguity, and planned paths", async () => {
+    const parent = await makeDirectory("named-directories");
     const source = path.join(parent, "repo");
-    const root = path.join(parent, "slots");
+    const root = path.join(parent, "worktrees");
     await fs.mkdir(source);
     await fs.mkdir(root);
     const common = path.join(source, ".git");
     const exact = path.join(root, "bug-fix");
-    const checkoutHash = path.join(
-      root,
-      createWorktreeDirectoryName("bug-fix", common, {
-        kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
-        name: "bug-fix",
-      })
-    );
     const namedHash = path.join(
       root,
       createWorktreeDirectoryName("bug-fix", common, {
@@ -68,29 +61,29 @@ suite("WorktreeUtils", function () {
       detached: false,
       bare: false,
     });
-    for (const candidate of [exact, checkoutHash, namedHash]) {
-      const result = await resolveCheckoutSlot(
+    for (const candidate of [exact, namedHash]) {
+      const result = await resolveWorktreeDirectory(
         source,
         "bug-fix",
         [entry(candidate)],
         common,
         root
       );
-      assert.strictEqual(result.kind, CHECKOUT_SLOT_KINDS.EXISTING);
-      if (result.kind === CHECKOUT_SLOT_KINDS.EXISTING)
+      assert.strictEqual(result.kind, WORKTREE_DIRECTORY_KINDS.EXISTING);
+      if (result.kind === WORKTREE_DIRECTORY_KINDS.EXISTING)
         assert.strictEqual(result.entry.worktreePath, candidate);
     }
     await assert.rejects(
-      resolveCheckoutSlot(
+      resolveWorktreeDirectory(
         source,
         "bug-fix",
-        [entry(exact), entry(checkoutHash)],
+        [entry(exact), entry(namedHash)],
         common,
         root
       ),
       /matches multiple registered worktrees/
     );
-    const planned = await resolveCheckoutSlot(
+    const planned = await resolveWorktreeDirectory(
       source,
       "bug-fix",
       [],
@@ -98,30 +91,36 @@ suite("WorktreeUtils", function () {
       root
     );
     assert.deepStrictEqual(planned, {
-      kind: CHECKOUT_SLOT_KINDS.PLANNED,
-      path: checkoutHash,
+      kind: WORKTREE_DIRECTORY_KINDS.PLANNED,
+      path: exact,
     });
+    for (const invalid of [".", "..", "a:b", "trailing."]) {
+      await assert.rejects(
+        resolveWorktreeDirectory(source, invalid, [], common, root),
+        new RegExp(`Directory "${invalid.replace(/\./g, "\\.")}"`)
+      );
+    }
   });
 
-  test("rejects unsafe and prunable checkout paths", async () => {
-    const parent = await makeDirectory("checkout-paths");
+  test("rejects unsafe and prunable directory paths", async () => {
+    const parent = await makeDirectory("directory-paths");
     const source = path.join(parent, "repo");
-    const root = path.join(parent, "slots");
+    const root = path.join(parent, "worktrees");
     const common = path.join(source, ".git");
     const existing = path.join(parent, "unregistered");
     await fs.mkdir(source);
     await fs.mkdir(root);
     await fs.mkdir(existing);
     await assert.rejects(
-      resolveCheckoutSlot(source, existing, [], common, root),
+      resolveWorktreeDirectory(source, existing, [], common, root),
       /not a registered worktree/
     );
     await assert.rejects(
-      resolveCheckoutSlot(source, "relative/path", [], common, root),
+      resolveWorktreeDirectory(source, "relative/path", [], common, root),
       /absolute path/
     );
     await assert.rejects(
-      resolveCheckoutSlot(
+      resolveWorktreeDirectory(
         source,
         "stale",
         [
@@ -336,16 +335,6 @@ suite("WorktreeUtils", function () {
     assert.match(name, /^[a-z0-9-]+-[0-9a-f]{12}$/);
     assert.ok(!name.includes("/"));
     assert.ok(name.length <= 53);
-    assert.notStrictEqual(
-      createWorktreeDirectoryName("slot", "/repo/.git", {
-        kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
-        name: "slot",
-      }),
-      createWorktreeDirectoryName("slot", "/repo/.git", {
-        kind: WORKTREE_IDENTITY_KINDS.NAMED,
-        branchRef: "slot",
-      })
-    );
     await validateWorktreeBranchName("feature/safe");
     await validateWorktreeBranchName("auto");
     await assert.rejects(

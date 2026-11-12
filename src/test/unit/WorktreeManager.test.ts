@@ -241,76 +241,101 @@ suite("WorktreeManager", function () {
     await info.lease.release();
   });
 
-  test("switches a clean checkout slot to a new branch and records its slot", async () => {
+  test("switches a clean named directory to a new branch and records its directory", async () => {
     const { parent, repository } = await makeRepository("checkout-switch");
-    const slotPath = path.join(parent, "bug-fix");
+    const namedDirectoryPath = path.join(parent, "bug-fix");
     execFileSync(
       "git",
-      ["-C", repository, "worktree", "add", "-b", "old-slot-branch", slotPath],
+      [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "old-dir-branch",
+        namedDirectoryPath,
+      ],
       { stdio: "ignore" }
     );
-    const updates: Array<{ checkout?: string; previousBranch?: string }> = [];
+    const updates: Array<{ directory?: string; previousBranch?: string }> = [];
     const instance = new WorktreeManager({
       worktreeRoot: path.join(parent, "worktrees"),
       updateWorktreeRuntime: async (patch) => {
         updates.push(patch);
       },
     });
-    const info = await resolve(
-      instance,
-      repository,
-      "feature/new-slot-branch",
-      { checkout: "bug-fix" }
-    );
-    assert.strictEqual(info.worktreePath, slotPath);
+    const info = await resolve(instance, repository, "feature/new-dir-branch", {
+      directory: "bug-fix",
+    });
+    assert.strictEqual(info.worktreePath, namedDirectoryPath);
     assert.strictEqual(
-      execFileSync("git", ["-C", slotPath, "branch", "--show-current"], {
-        encoding: "utf8",
-      }).trim(),
-      "feature/new-slot-branch"
+      execFileSync(
+        "git",
+        ["-C", namedDirectoryPath, "branch", "--show-current"],
+        {
+          encoding: "utf8",
+        }
+      ).trim(),
+      "feature/new-dir-branch"
     );
     assert.ok(
       updates.some(
         (patch) =>
-          patch.checkout === "bug-fix" &&
-          patch.previousBranch === "old-slot-branch"
+          patch.directory === "bug-fix" &&
+          patch.previousBranch === "old-dir-branch"
       )
     );
     await info.lease.release();
 
-    const continued = await resolve(instance, repository, "old-slot-branch", {
-      checkout: slotPath,
+    const continued = await resolve(instance, repository, "old-dir-branch", {
+      directory: namedDirectoryPath,
     });
     assert.strictEqual(
-      execFileSync("git", ["-C", slotPath, "branch", "--show-current"], {
-        encoding: "utf8",
-      }).trim(),
-      "old-slot-branch",
-      "a clean slot switches back to the branch recorded by the continued run"
+      execFileSync(
+        "git",
+        ["-C", namedDirectoryPath, "branch", "--show-current"],
+        {
+          encoding: "utf8",
+        }
+      ).trim(),
+      "old-dir-branch",
+      "a clean directory switches back to the branch recorded by the continued run"
     );
     await continued.lease.release();
   });
 
-  test("refuses to switch a dirty checkout slot", async () => {
+  test("refuses to switch a dirty named directory", async () => {
     const { parent, repository } = await makeRepository("checkout-dirty");
-    const slotPath = path.join(parent, "bug-fix");
+    const namedDirectoryPath = path.join(parent, "bug-fix");
     execFileSync(
       "git",
-      ["-C", repository, "worktree", "add", "-b", "old-slot-branch", slotPath],
+      [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "old-dir-branch",
+        namedDirectoryPath,
+      ],
       { stdio: "ignore" }
     );
-    await fs.writeFile(path.join(slotPath, "README.md"), "changed\n");
+    await fs.writeFile(path.join(namedDirectoryPath, "README.md"), "changed\n");
     await assert.rejects(
-      resolve(manager(parent), repository, "feature/new-slot-branch", {
-        checkout: "bug-fix",
+      resolve(manager(parent), repository, "feature/new-dir-branch", {
+        directory: "bug-fix",
       }),
-      /has uncommitted changes on branch "old-slot-branch"/
+      /has uncommitted changes on branch "old-dir-branch"/
     );
     assert.strictEqual(
-      execFileSync("git", ["-C", slotPath, "branch", "--show-current"], {
-        encoding: "utf8",
-      }).trim(),
-      "old-slot-branch"
+      execFileSync(
+        "git",
+        ["-C", namedDirectoryPath, "branch", "--show-current"],
+        {
+          encoding: "utf8",
+        }
+      ).trim(),
+      "old-dir-branch"
     );
   });
 
@@ -320,74 +345,91 @@ suite("WorktreeManager", function () {
     }).trim();
   }
 
-  async function makeSlot(
+  async function makeNamedDirectory(
     name: string
-  ): Promise<{ parent: string; repository: string; slotPath: string }> {
+  ): Promise<{
+    parent: string;
+    repository: string;
+    namedDirectoryPath: string;
+  }> {
     const { parent, repository } = await makeRepository(name);
-    const slotPath = path.join(parent, "bug-fix");
+    const namedDirectoryPath = path.join(parent, "bug-fix");
     execFileSync(
       "git",
-      ["-C", repository, "worktree", "add", "-b", "old-slot-branch", slotPath],
+      [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "old-dir-branch",
+        namedDirectoryPath,
+      ],
       { stdio: "ignore" }
     );
-    return { parent, repository, slotPath };
+    return { parent, repository, namedDirectoryPath };
   }
 
-  test("switches a clean checkout slot to an existing branch", async () => {
-    const { parent, repository, slotPath } =
-      await makeSlot("checkout-existing");
+  test("switches a clean named directory to an existing branch", async () => {
+    const { parent, repository, namedDirectoryPath } =
+      await makeNamedDirectory("checkout-existing");
     execFileSync("git", ["-C", repository, "branch", "feature/existing"]);
     const info = await resolve(
       manager(parent),
       repository,
       "feature/existing",
       {
-        checkout: "bug-fix",
+        directory: "bug-fix",
       }
     );
-    assert.strictEqual(info.worktreePath, slotPath);
+    assert.strictEqual(info.worktreePath, namedDirectoryPath);
     assert.strictEqual(info.origin, "discovered");
-    assert.strictEqual(currentBranchOf(slotPath), "feature/existing");
+    assert.strictEqual(currentBranchOf(namedDirectoryPath), "feature/existing");
     await info.lease.release();
   });
 
-  test("refuses to switch a checkout slot with only an untracked file", async () => {
-    const { parent, repository, slotPath } =
-      await makeSlot("checkout-untracked");
-    await fs.writeFile(path.join(slotPath, "notes.txt"), "draft\n");
+  test("refuses to switch a named directory with only an untracked file", async () => {
+    const { parent, repository, namedDirectoryPath } =
+      await makeNamedDirectory("checkout-untracked");
+    await fs.writeFile(path.join(namedDirectoryPath, "notes.txt"), "draft\n");
     await assert.rejects(
       resolve(manager(parent), repository, "feature/next", {
-        checkout: "bug-fix",
+        directory: "bug-fix",
       }),
-      /has uncommitted changes on branch "old-slot-branch"/
+      /has uncommitted changes on branch "old-dir-branch"/
     );
-    assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+    assert.strictEqual(currentBranchOf(namedDirectoryPath), "old-dir-branch");
   });
 
-  test("refuses to switch a checkout slot with a merge in progress", async () => {
-    const { parent, repository, slotPath } = await makeSlot("checkout-merge");
+  test("refuses to switch a named directory with a merge in progress", async () => {
+    const { parent, repository, namedDirectoryPath } =
+      await makeNamedDirectory("checkout-merge");
     const gitDir = execFileSync(
       "git",
-      ["-C", slotPath, "rev-parse", "--absolute-git-dir"],
+      ["-C", namedDirectoryPath, "rev-parse", "--absolute-git-dir"],
       { encoding: "utf8" }
     ).trim();
-    const head = execFileSync("git", ["-C", slotPath, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-    }).trim();
+    const head = execFileSync(
+      "git",
+      ["-C", namedDirectoryPath, "rev-parse", "HEAD"],
+      {
+        encoding: "utf8",
+      }
+    ).trim();
     await fs.writeFile(path.join(gitDir, "MERGE_HEAD"), `${head}\n`);
     await assert.rejects(
       resolve(manager(parent), repository, "feature/next", {
-        checkout: "bug-fix",
+        directory: "bug-fix",
       }),
       /in progress/
     );
-    assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+    assert.strictEqual(currentBranchOf(namedDirectoryPath), "old-dir-branch");
   });
 
-  test("refuses a branch checked out in a different checkout slot", async () => {
-    const { parent, repository, slotPath } =
-      await makeSlot("checkout-elsewhere");
-    const other = path.join(parent, "feature-slot");
+  test("refuses a branch checked out in a different named directory", async () => {
+    const { parent, repository, namedDirectoryPath } =
+      await makeNamedDirectory("checkout-elsewhere");
+    const other = path.join(parent, "feature-dir");
     execFileSync(
       "git",
       ["-C", repository, "worktree", "add", "-b", "feature/taken", other],
@@ -395,20 +437,20 @@ suite("WorktreeManager", function () {
     );
     await assert.rejects(
       resolve(manager(parent), repository, "feature/taken", {
-        checkout: "bug-fix",
+        directory: "bug-fix",
       }),
-      /Branch "feature\/taken" is checked out in .*not in checkout "bug-fix"/
+      /Branch "feature\/taken" is checked out in .*not in directory "bug-fix"/
     );
-    assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+    assert.strictEqual(currentBranchOf(namedDirectoryPath), "old-dir-branch");
   });
 
-  test("refuses to use a managed run's checkout as a slot", async () => {
+  test("refuses to use a managed run's checkout as a named directory", async () => {
     const { parent, repository } = await makeRepository("checkout-managed");
     const managed = await ensureManaged(manager(parent), repository);
     await managed.lease.release();
     await assert.rejects(
       resolve(manager(parent), repository, "feature/next", {
-        checkout: managed.worktreePath,
+        directory: managed.worktreePath,
       }),
       /managed/
     );
@@ -418,13 +460,43 @@ suite("WorktreeManager", function () {
     );
   });
 
-  test("a held slot lease leaves the slot branch and run file untouched, and is not leaked", async () => {
-    const { parent, repository, slotPath } = await makeSlot("checkout-lease");
+  test("lists linked worktrees as named directories, never the source or a managed checkout", async () => {
+    const { parent, repository } = await makeNamedDirectory("checkout-list");
+    const managed = await ensureManaged(manager(parent), repository);
+    await managed.lease.release();
+    const detached = path.join(parent, "detached-dir");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "--detach", detached],
+      { stdio: "ignore" }
+    );
+
+    const directories =
+      await manager(parent).listWorktreeDirectories(repository);
+
+    assert.deepStrictEqual(
+      directories
+        .map(({ name, branchName, detached }) => ({
+          name,
+          branchName,
+          detached,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      [
+        { name: "bug-fix", branchName: "old-dir-branch", detached: false },
+        { name: "detached-dir", branchName: undefined, detached: true },
+      ]
+    );
+  });
+
+  test("a held directory lease leaves the directory branch and run file untouched, and is not leaked", async () => {
+    const { parent, repository, namedDirectoryPath } =
+      await makeNamedDirectory("checkout-lease");
     const ids = identity();
     const nativeLease = await ExecutionRootLeaseManager.acquire({
       mode: "shared-native",
       stateRoot: repository,
-      executionRoot: slotPath,
+      executionRoot: namedDirectoryPath,
       ...ids,
       runner: "vscode",
       instanceId: "native-test",
@@ -433,24 +505,24 @@ suite("WorktreeManager", function () {
     try {
       await assert.rejects(
         resolve(manager(parent, updates), repository, "feature/next", {
-          checkout: "bug-fix",
+          directory: "bug-fix",
         }),
         /Execution root is in use/
       );
       assert.deepStrictEqual(updates, []);
-      assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+      assert.strictEqual(currentBranchOf(namedDirectoryPath), "old-dir-branch");
     } finally {
       await nativeLease.release();
     }
-    // A refused attempt must not keep the slot locked.
+    // A refused attempt must not keep the directory locked.
     const info = await resolve(manager(parent), repository, "feature/next", {
-      checkout: "bug-fix",
+      directory: "bug-fix",
     });
-    assert.strictEqual(currentBranchOf(slotPath), "feature/next");
+    assert.strictEqual(currentBranchOf(namedDirectoryPath), "feature/next");
     await info.lease.release();
   });
 
-  test("releases the slot lease when resolution fails after the switch", async () => {
+  test("releases the directory lease when resolution fails after the switch", async () => {
     const { parent, repository } = await makeRepository("checkout-late-fail");
     const failingSetup = new WorktreeManager({
       worktreeRoot: path.join(parent, "worktrees"),
@@ -463,43 +535,42 @@ suite("WorktreeManager", function () {
       }),
     });
     const first = await resolve(failingSetup, repository, "feature/one", {
-      checkout: "bug-fix",
+      directory: "bug-fix",
       setup: "npm ci",
     }).catch(() => undefined);
     await first?.lease.release();
-    const slotPath = path.join(
+    const namedDirectoryPath = path.join(
       parent,
       "worktrees",
       (await fs.readdir(path.join(parent, "worktrees")))[0]!
     );
     // The recorded setup failed, so resolving without a setup command fails
-    // after the slot has already been switched and its lease taken.
+    // after the directory has already been switched and its lease taken.
     await assert.rejects(
       resolve(manager(parent), repository, "feature/two", {
-        checkout: "bug-fix",
+        directory: "bug-fix",
       }),
       /setup is failed/
     );
     assert.deepStrictEqual(
-      await ExecutionRootLeaseManager.inspectLeases(slotPath),
+      await ExecutionRootLeaseManager.inspectLeases(namedDirectoryPath),
       []
     );
   });
 
-  test("creates a missing checkout slot at the slot path, not the branch path", async () => {
-    const { parent, repository } = await makeRepository("checkout-create");
+  test("creates a missing named directory at exactly <root>/<name>, not the branch path", async () => {
+    const { parent, repository } = await makeRepository("directory-create");
     const info = await resolve(manager(parent), repository, "feature/fresh", {
-      checkout: "bug-fix",
+      directory: "bug-fix",
     });
     assert.strictEqual(
-      path.dirname(info.worktreePath),
-      path.join(parent, "worktrees")
+      info.worktreePath,
+      path.join(parent, "worktrees", "bug-fix")
     );
-    assert.match(path.basename(info.worktreePath), /^bug-fix-[0-9a-f]{12}$/);
     assert.strictEqual(currentBranchOf(info.worktreePath), "feature/fresh");
     await info.lease.release();
 
-    // The created slot resolves again by its bare name.
+    // The created directory resolves again by its bare name.
     execFileSync(
       "git",
       ["-C", info.worktreePath, "switch", "-c", "feature/later"],
@@ -508,27 +579,54 @@ suite("WorktreeManager", function () {
       }
     );
     const again = await resolve(manager(parent), repository, "feature/fresh", {
-      checkout: "bug-fix",
+      directory: "bug-fix",
     });
     assert.strictEqual(again.worktreePath, info.worktreePath);
     assert.strictEqual(currentBranchOf(info.worktreePath), "feature/fresh");
     await again.lease.release();
   });
 
-  test("does not re-run setup after a checkout slot switch", async () => {
+  test("creates a hash-free directory and a new branch when both share a name", async () => {
+    const { parent, repository } = await makeRepository("directory-research");
+    const info = await resolve(manager(parent), repository, "research", {
+      directory: "research",
+    });
+    assert.strictEqual(
+      info.worktreePath,
+      path.join(parent, "worktrees", "research")
+    );
+    assert.strictEqual(currentBranchOf(info.worktreePath), "research");
+    assert.ok(localBranchExists(repository, "research"));
+    await info.lease.release();
+  });
+
+  test("refuses to adopt an unregistered folder at <root>/<name>", async () => {
+    const { parent, repository } = await makeRepository("directory-occupied");
+    const occupied = path.join(parent, "worktrees", "research");
+    await fs.mkdir(occupied, { recursive: true });
+    await assert.rejects(
+      resolve(manager(parent), repository, "research", {
+        directory: "research",
+      }),
+      /already exists but is not a registered worktree/
+    );
+    assert.ok(!localBranchExists(repository, "research"));
+  });
+
+  test("does not re-run setup after a named directory switch", async () => {
     const { parent, repository } = await makeRepository("checkout-setup");
     const counter = path.join(parent, "setup-count.txt");
     const setup = `node -e "require('fs').appendFileSync(${JSON.stringify(
       JSON.stringify(counter.replace(/\\/g, "/"))
     ).slice(1, -1)}, 'x')"`;
     const first = await resolve(manager(parent), repository, "feature/one", {
-      checkout: "bug-fix",
+      directory: "bug-fix",
       setup,
     });
     assert.strictEqual(first.setupOutcome, "succeeded");
     await first.lease.release();
     const second = await resolve(manager(parent), repository, "feature/two", {
-      checkout: "bug-fix",
+      directory: "bug-fix",
       setup,
     });
     assert.strictEqual(second.worktreePath, first.worktreePath);
@@ -603,36 +701,44 @@ suite("WorktreeManager", function () {
     );
   });
 
-  test("previews checkout switches, blockers, and new slot paths", async () => {
+  test("previews checkout switches, blockers, and new directory paths", async () => {
     const { parent, repository } = await makeRepository("checkout-preview");
-    const slotPath = path.join(parent, "slots", "bug-fix");
-    await fs.mkdir(path.dirname(slotPath), { recursive: true });
+    const namedDirectoryPath = path.join(parent, "worktrees", "bug-fix");
+    await fs.mkdir(path.dirname(namedDirectoryPath), { recursive: true });
     execFileSync(
       "git",
-      ["-C", repository, "worktree", "add", "-b", "old-branch", slotPath],
+      [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "old-branch",
+        namedDirectoryPath,
+      ],
       { stdio: "ignore" }
     );
     const switchPreview = await previewWorktreePlacement({
       sourceCheckoutRoot: repository,
       mode: "named",
       branch: "new-branch",
-      checkout: "bug-fix",
+      directory: "bug-fix",
     });
-    assert.strictEqual(switchPreview.directory, slotPath);
-    assert.strictEqual(switchPreview.checkoutCurrentBranch, "old-branch");
+    assert.strictEqual(switchPreview.directory, namedDirectoryPath);
+    assert.strictEqual(switchPreview.directoryCurrentBranch, "old-branch");
     assert.strictEqual(switchPreview.switchBlocker, undefined);
-    await fs.writeFile(path.join(slotPath, "dirty.txt"), "dirty\n");
+    await fs.writeFile(path.join(namedDirectoryPath, "dirty.txt"), "dirty\n");
     const dirtyPreview = await previewWorktreePlacement({
       sourceCheckoutRoot: repository,
       mode: "named",
       branch: "new-branch",
-      checkout: "bug-fix",
+      directory: "bug-fix",
     });
     assert.match(dirtyPreview.switchBlocker ?? "", /uncommitted changes/);
-    await fs.rm(path.join(slotPath, "dirty.txt"));
+    await fs.rm(path.join(namedDirectoryPath, "dirty.txt"));
     const mergeHead = execFileSync(
       "git",
-      ["-C", slotPath, "rev-parse", "--git-path", "MERGE_HEAD"],
+      ["-C", namedDirectoryPath, "rev-parse", "--git-path", "MERGE_HEAD"],
       { encoding: "utf8" }
     ).trim();
     await fs.mkdir(path.dirname(mergeHead), { recursive: true });
@@ -641,37 +747,25 @@ suite("WorktreeManager", function () {
       sourceCheckoutRoot: repository,
       mode: "named",
       branch: "new-branch",
-      checkout: "bug-fix",
+      directory: "bug-fix",
     });
     assert.match(mergePreview.switchBlocker ?? "", /Git operation in progress/);
     await fs.rm(mergeHead);
-    const common = path.resolve(
-      repository,
-      execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
-        encoding: "utf8",
-      }).trim()
-    );
     const newPreview = await previewWorktreePlacement({
       sourceCheckoutRoot: repository,
       mode: "named",
       branch: "new-branch",
-      checkout: "new-slot",
+      directory: "new-dir",
     });
     assert.strictEqual(
       newPreview.directory,
-      path.join(
-        parent,
-        "repository.worktrees",
-        createWorktreeDirectoryName("new-slot", common, {
-          kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
-          name: "new-slot",
-        })
-      )
+      path.join(parent, "repository.worktrees", "new-dir"),
+      "a new named directory is previewed at exactly <root>/<name>"
     );
   });
 
-  test("reports when a branch-derived path now belongs to a slot", async () => {
-    const { parent, repository } = await makeRepository("slot-collision");
+  test("reports when a branch-derived path now belongs to a named directory", async () => {
+    const { parent, repository } = await makeRepository("directory-collision");
     const common = path.resolve(
       repository,
       execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
@@ -695,7 +789,7 @@ suite("WorktreeManager", function () {
     await assert.rejects(
       resolve(manager(parent), repository, "new-branch"),
       new RegExp(
-        `now holds branch \\"old-branch\\". Add checkout: ${path.basename(derivedPath)}`
+        `now holds branch \\"old-branch\\". Add directory: ${path.basename(derivedPath)}`
       )
     );
   });

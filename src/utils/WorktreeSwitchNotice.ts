@@ -1,9 +1,9 @@
 import type { WorktreeRunProjection } from "../types/CtrlYokeTypes";
 
-/** Human-readable notice for a named checkout switched for this run. */
+/** Human-readable notice for a named worktree directory switched for this run. */
 export function worktreeSwitchNotice(
   worktree: WorktreeRunProjection | undefined
 ): string | undefined {
-  if (!worktree?.checkout || !worktree.previousBranch) return undefined;
-  return `Switched ${worktree.checkout} from \`${worktree.previousBranch}\` to \`${worktree.branchName}\``;
+  if (!worktree?.directory || !worktree.previousBranch) return undefined;
+  return `Switched ${worktree.directory} from \`${worktree.previousBranch}\` to \`${worktree.branchName}\``;
 }

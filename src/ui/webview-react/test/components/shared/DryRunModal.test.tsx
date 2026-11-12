@@ -256,21 +256,21 @@ describe("DryRunModal", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows named checkout switch, create, and blocker details", () => {
+  it("shows named directory switch, create, and blocker details", () => {
     const worktree = {
       mode: WORKTREE_MODES.NAMED,
       eligible: true,
       origin: WORKTREE_CONFIG_ORIGINS.AUTHORED,
       branch: "feature",
-      checkout: "shared-slot",
-      plannedDirectory: "/repo/shared-slot",
+      directory: "shared-dir",
+      plannedDirectory: "/repo/shared-dir",
       plannedDirectoryIsExact: true,
     } as const;
     openPreview(
       { kind: "workflow" },
       {
         ...preview,
-        worktree: { ...worktree, checkoutCurrentBranch: "old-branch" },
+        worktree: { ...worktree, directoryCurrentBranch: "old-branch" },
       }
     );
     const { rerender } = render(<DryRunModal scope={{ kind: "workflow" }} />);
@@ -278,10 +278,26 @@ describe("DryRunModal", () => {
       "old-branch"
     );
 
-    openPreview({ kind: "workflow" }, { ...preview, worktree });
+    openPreview(
+      { kind: "workflow" },
+      {
+        ...preview,
+        worktree: { ...worktree, directoryCurrentBranch: "feature" },
+      }
+    );
     rerender(<DryRunModal scope={{ kind: "workflow" }} />);
-    expect(screen.getByText(/Will create checkout at/)).toHaveTextContent(
-      "/repo/shared-slot"
+    expect(screen.queryByText(/Will switch from/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Will create directory at/)
+    ).not.toBeInTheDocument();
+
+    openPreview(
+      { kind: "workflow" },
+      { ...preview, worktree: { ...worktree, plannedDirectoryIsExact: false } }
+    );
+    rerender(<DryRunModal scope={{ kind: "workflow" }} />);
+    expect(screen.getByText(/Will create directory at/)).toHaveTextContent(
+      "/repo/shared-dir"
     );
 
     openPreview(
@@ -290,13 +306,13 @@ describe("DryRunModal", () => {
         ...preview,
         worktree: {
           ...worktree,
-          switchBlocker: "Checkout has uncommitted changes",
+          switchBlocker: "Directory has uncommitted changes",
         },
       }
     );
     rerender(<DryRunModal scope={{ kind: "workflow" }} />);
     expect(
-      screen.getByText("Checkout has uncommitted changes")
+      screen.getByText("Directory has uncommitted changes")
     ).toBeInTheDocument();
   });
 

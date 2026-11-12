@@ -12,7 +12,8 @@ import {
   toWorktreeObjectConfig,
   withWorktreeField,
 } from "@root/utils/WorktreeConfigShape";
-import { checkoutSlotOptions } from "@utils/worktreeStatus";
+import { useLocalValue } from "@hooks/useLocalInput";
+import { schemaAriaLabel } from "@utils/schemaPropertyLabels";
 import { useSettingsStore } from "@store/settingsStore";
 import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
 import { CustomSelect } from "../../shared/CustomSelect";
@@ -21,6 +22,7 @@ import { toSkillSelectOption } from "../../shared/skillSelectOptions";
 import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { LocalTextInput } from "../../shared/LocalInputs";
+import { WorktreeDirectoryEditor } from "../../shared/WorktreeDirectoryEditor";
 import { FieldDiagnostic } from "../../shared/FieldDiagnostic";
 import { SecretGrantsEditor } from "../../shared/SecretGrantsEditor";
 import {
@@ -68,7 +70,7 @@ export function DefaultsHarnessPage({
     onUpdate("defaults.worktree", next);
   };
   const updateWorktreeField = (
-    field: "checkout" | "branch" | "base" | "setup" | "keep" | "merge",
+    field: "directory" | "branch" | "base" | "setup" | "keep" | "merge",
     value: string | boolean
   ) => {
     if (worktreeConfig === false) return;
@@ -77,8 +79,12 @@ export function DefaultsHarnessPage({
   };
   const availableAgents = useSettingsStore((s) => s.availableAgents);
   const availableSkills = useSettingsStore((s) => s.availableSkills);
-  const worktreeManagement = useSettingsStore((s) => s.worktreeManagement);
-  const checkoutOptions = checkoutSlotOptions(worktreeManagement);
+  const directoryInput = useLocalValue(
+    worktreeConfig !== false && worktreeConfig.mode === WORKTREE_MODES.NAMED
+      ? (worktreeConfig.directory ?? "")
+      : "",
+    (value) => updateWorktreeField("directory", value)
+  );
   const rowProps = { sources, onReset, activeScope };
   const agentWarn = agentWarning(wf.agent, availableAgents);
   const skillsWarn = skillsWarning(wf.skills, availableSkills);
@@ -147,31 +153,25 @@ export function DefaultsHarnessPage({
         {worktreeMode === WORKTREE_MODES.NAMED && (
           <>
             <SettingInputRow
-              settingKey="defaults.worktree.checkout"
+              settingKey="defaults.worktree.directory"
               {...{
-                description: worktreeSettingDescription("named", "checkout"),
+                description: worktreeSettingDescription("named", "directory"),
               }}
-              id="defaults-worktree-checkout"
+              id="defaults-worktree-directory"
               {...rowProps}
             >
-              <LocalTextInput
-                id="defaults-worktree-checkout"
-                value={
-                  worktreeConfig !== false &&
-                  worktreeConfig.mode === WORKTREE_MODES.NAMED
-                    ? (worktreeConfig.checkout ?? "")
-                    : ""
-                }
-                onCommit={(value) => updateWorktreeField("checkout", value)}
-                list="defaults-worktree-checkout-options"
-                aria-label="Default checkout slot"
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7"
+              <WorktreeDirectoryEditor
+                id="defaults-worktree-directory"
+                aria-label={schemaAriaLabel(
+                  "Directory",
+                  "defaults.worktree.directory"
+                )}
+                value={directoryInput.value}
+                onChange={directoryInput.onChange}
+                onBlur={directoryInput.onBlur}
+                placeholder="Derived from branch"
+                className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
               />
-              <datalist id="defaults-worktree-checkout-options">
-                {checkoutOptions.map((option) => (
-                  <option key={option}>{option}</option>
-                ))}
-              </datalist>
             </SettingInputRow>
             <SettingInputRow
               settingKey="defaults.worktree.branch"

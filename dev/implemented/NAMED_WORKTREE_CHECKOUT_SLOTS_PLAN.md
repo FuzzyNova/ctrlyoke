@@ -44,6 +44,18 @@ records anything it found that differs from this plan under the item.
       checkout, branch in another slot, held lease, setup not re-run, slot
       creation path). Single-sourced the new flow-control literals and the
       duplicated checkout-option and empty-checkout logic in the dashboard.
+- [x] Follow-up before release: the field is renamed **`directory`** (run-file
+      `_runtime.worktree.directory`, still format 4). `checkout` read as
+      `git checkout <branch>` and suggested Git's boolean `--checkout`
+      flag, neither of which it is. A new bare-name directory is now created
+      at exactly `<root>/<name>` with no hash suffix, so `directory: research`
+      with `branch: research` gives a clean, long-lived `research` worktree;
+      the `"checkout"` hash identity is gone, and a non-worktree folder already
+      at that path is refused. Bare names must be one portable path segment.
+      The dashboard field is a completion editor (`WorktreeDirectoryEditor`)
+      fed by `WorktreeManager.listWorktreeDirectories` over
+      `WORKTREE_DIRECTORY_LIST_REQUEST`. The sections below keep the original
+      `checkout` wording.
 
 ## Problem
 

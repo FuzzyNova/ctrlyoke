@@ -258,7 +258,7 @@ export type WorktreeConfig =
   | {
       mode: typeof WORKTREE_MODES.NAMED;
       branch: string;
-      checkout?: string;
+      directory?: string;
       base?: string;
       setup?: string;
     };
@@ -707,7 +707,8 @@ export interface WorkingFileWorktreeRuntime {
   mode: typeof WORKTREE_MODES.MANAGED | typeof WORKTREE_MODES.NAMED;
   origin: "created" | "discovered" | "recovered";
   branchName: string;
-  checkout?: string;
+  /** The authored named-worktree `directory` this run used, when set. */
+  directory?: string;
   previousBranch?: string;
   worktreePath: string;
   executionRoot: string;
@@ -743,7 +744,7 @@ export type WorktreeRunProjection = Pick<
   WorkingFileWorktreeRuntime,
   | "mode"
   | "branchName"
-  | "checkout"
+  | "directory"
   | "previousBranch"
   | "worktreePath"
   | "sourceCheckoutRoot"
@@ -772,7 +773,9 @@ export function projectWorktreeRuntime(
   return {
     mode: worktree.mode,
     branchName: worktree.branchName,
-    ...(worktree.checkout !== undefined ? { checkout: worktree.checkout } : {}),
+    ...(worktree.directory !== undefined
+      ? { directory: worktree.directory }
+      : {}),
     ...(worktree.previousBranch !== undefined
       ? { previousBranch: worktree.previousBranch }
       : {}),

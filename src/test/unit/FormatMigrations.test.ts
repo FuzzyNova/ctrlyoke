@@ -156,7 +156,9 @@ suite("FormatMigrations", () => {
     assert.strictEqual(migrated.fromVersion, 3);
     assert.deepStrictEqual(migrated.doc, v3);
     assert.ok(
-      migrated.applied.includes("Record the checkout slot and previous branch")
+      migrated.applied.includes(
+        "Record the named worktree directory and previous branch"
+      )
     );
 
     const v4 = JSON.parse(
@@ -169,7 +171,7 @@ suite("FormatMigrations", () => {
       v4._runtime.schemaVersion,
       CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE]
     );
-    assert.strictEqual(v4._runtime.worktree.checkout, "bug-fix");
+    assert.strictEqual(v4._runtime.worktree.directory, "bug-fix");
     assert.strictEqual(v4._runtime.worktree.previousBranch, "feature/old");
   });
 

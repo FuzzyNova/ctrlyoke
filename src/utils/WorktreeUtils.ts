@@ -19,8 +19,9 @@ import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { pathsEqual } from "./PathCasing";
 import { ConfigurationUtils } from "./ConfigurationUtils";
+import { worktreeDirectoryNameError } from "./WorktreeConfigShape";
 import {
-  CHECKOUT_SLOT_KINDS,
+  WORKTREE_DIRECTORY_KINDS,
   WORKTREE_IDENTITY_KINDS,
   WORKTREE_MODES,
   NODE_ERROR_CODES,
@@ -76,14 +77,13 @@ export type WorktreeNameIdentity =
       workflowKey: string;
       runRef: string;
     }
-  | { kind: typeof WORKTREE_IDENTITY_KINDS.NAMED; branchRef: string }
-  | { kind: typeof WORKTREE_IDENTITY_KINDS.CHECKOUT; name: string };
+  | { kind: typeof WORKTREE_IDENTITY_KINDS.NAMED; branchRef: string };
 
-export type CheckoutSlotResolution =
-  | { kind: typeof CHECKOUT_SLOT_KINDS.EXISTING; entry: GitWorktreeEntry }
-  | { kind: typeof CHECKOUT_SLOT_KINDS.PLANNED; path: string };
+export type WorktreeDirectoryResolution =
+  | { kind: typeof WORKTREE_DIRECTORY_KINDS.EXISTING; entry: GitWorktreeEntry }
+  | { kind: typeof WORKTREE_DIRECTORY_KINDS.PLANNED; path: string };
 
-function expandCheckoutPath(value: string): string {
+function expandDirectoryPath(value: string): string {
   const home = os.homedir();
   if (value === "~") return path.resolve(home);
   if (value.startsWith("~/") || value.startsWith(`~${path.sep}`)) {
@@ -91,22 +91,50 @@ function expandCheckoutPath(value: string): string {
   }
   if (!path.isAbsolute(value)) {
     throw new Error(
-      "Checkout must be an absolute path, a ~-prefixed path, or a bare name."
+      "Directory must be an absolute path, a ~-prefixed path, or a bare name."
     );
   }
   return path.resolve(value);
 }
 
-/** Read-only resolution of an authored checkout path or named slot. */
-export async function resolveCheckoutSlot(
+function prunableDirectoryError(worktreePath: string): Error {
+  return new Error(
+    `Directory "${worktreePath}" is prunable. Use Repair or Prune in Settings → Worktrees.`
+  );
+}
+
+/**
+ * A directory ctrlyoke would create must not already exist: it never adopts
+ * a folder Git does not know as a worktree of this repository.
+ */
+async function assertUnregisteredPathIsFree(target: string): Promise<void> {
+  try {
+    await fs.access(target);
+  } catch (error) {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return;
+    throw error;
+  }
+  throw new Error(
+    `Directory "${target}" already exists but is not a registered worktree of this repository.`
+  );
+}
+
+/**
+ * Read-only resolution of an authored named-worktree `directory`. A path
+ * names the directory itself. A bare name matches a registered linked
+ * worktree whose directory is exactly that name, or the branch-derived
+ * `<slug>-<hash>` directory ctrlyoke creates for a branch of that name; with
+ * no match, the new directory is exactly `<root>/<name>`, with no hash.
+ */
+export async function resolveWorktreeDirectory(
   sourceCheckoutRoot: string,
-  checkout: string,
+  directory: string,
   entries: readonly GitWorktreeEntry[],
   commonDirectory: string,
   root: string
-): Promise<CheckoutSlotResolution> {
-  const value = checkout.trim();
-  if (!value) throw new Error("Checkout must not be empty.");
+): Promise<WorktreeDirectoryResolution> {
+  const value = directory.trim();
+  if (!value) throw new Error("Directory must not be empty.");
   const pathForm =
     path.isAbsolute(value) ||
     value === "~" ||
@@ -115,33 +143,24 @@ export async function resolveCheckoutSlot(
     value.includes("/") ||
     value.includes("\\");
   if (pathForm) {
-    const target = expandCheckoutPath(value);
+    const target = expandDirectoryPath(value);
     if (pathsEqual(target, sourceCheckoutRoot))
-      throw new Error("The source checkout cannot be used as a checkout slot.");
+      throw new Error(
+        "The source checkout cannot be used as a named worktree directory."
+      );
     const entry = entries.find((candidate) =>
       pathsEqual(candidate.worktreePath, target)
     );
     if (entry?.prunable || entry?.prunableReason !== undefined)
-      throw new Error(
-        `Checkout "${target}" is prunable. Use Repair or Prune in Settings → Worktrees.`
-      );
-    if (entry) return { kind: CHECKOUT_SLOT_KINDS.EXISTING, entry };
-    try {
-      await fs.access(target);
-      throw new Error(
-        `Checkout path already exists but is not a registered worktree: ${target}`
-      );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    return { kind: CHECKOUT_SLOT_KINDS.PLANNED, path: target };
+      throw prunableDirectoryError(target);
+    if (entry) return { kind: WORKTREE_DIRECTORY_KINDS.EXISTING, entry };
+    await assertUnregisteredPathIsFree(target);
+    return { kind: WORKTREE_DIRECTORY_KINDS.PLANNED, path: target };
   }
+  const nameError = worktreeDirectoryNameError(value);
+  if (nameError) throw new Error(`Directory "${value}" ${nameError}.`);
   const identities = [
     value,
-    createWorktreeDirectoryName(value, commonDirectory, {
-      kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
-      name: value,
-    }),
     createWorktreeDirectoryName(value, commonDirectory, {
       kind: WORKTREE_IDENTITY_KINDS.NAMED,
       branchRef: value,
@@ -155,37 +174,28 @@ export async function resolveCheckoutSlot(
   );
   if (matches.length > 1) {
     throw new Error(
-      `Checkout "${value}" matches multiple registered worktrees: ${matches.map((entry) => entry.worktreePath).join(", ")}. Specify a path instead.`
+      `Directory "${value}" matches multiple registered worktrees: ${matches.map((entry) => entry.worktreePath).join(", ")}. Specify a path instead.`
     );
   }
   if (matches.length === 1) {
     if (matches[0].prunable || matches[0].prunableReason !== undefined)
-      throw new Error(
-        `Checkout "${matches[0].worktreePath}" is prunable. Use Repair or Prune in Settings → Worktrees.`
-      );
-    return { kind: CHECKOUT_SLOT_KINDS.EXISTING, entry: matches[0] };
+      throw prunableDirectoryError(matches[0].worktreePath);
+    return { kind: WORKTREE_DIRECTORY_KINDS.EXISTING, entry: matches[0] };
   }
-  return {
-    kind: CHECKOUT_SLOT_KINDS.PLANNED,
-    path: path.join(
-      root,
-      createWorktreeDirectoryName(value, commonDirectory, {
-        kind: WORKTREE_IDENTITY_KINDS.CHECKOUT,
-        name: value,
-      })
-    ),
-  };
+  const target = path.join(root, value);
+  await assertUnregisteredPathIsFree(target);
+  return { kind: WORKTREE_DIRECTORY_KINDS.PLANNED, path: target };
 }
 
-export const checkoutSwitchBlockers = {
-  operation: (checkout: string, operation: string) =>
-    `Checkout "${checkout}" has a Git ${operation} in progress. Finish or abort it, then run again.`,
-  dirty: (checkout: string, branch: string) =>
-    `Checkout "${checkout}" has uncommitted changes on branch "${branch}". Commit or stash them, then run again.`,
-  branchElsewhere: (branch: string, checkout: string, path: string) =>
-    `Branch "${branch}" is checked out in "${path}", not in checkout "${checkout}".`,
+export const worktreeDirectoryBlockers = {
+  operation: (directory: string, operation: string) =>
+    `Directory "${directory}" has a Git ${operation} in progress. Finish or abort it, then run again.`,
+  dirty: (directory: string, branch: string) =>
+    `Directory "${directory}" has uncommitted changes on branch "${branch}". Commit or stash them, then run again.`,
+  branchElsewhere: (branch: string, directory: string, path: string) =>
+    `Branch "${branch}" is checked out in "${path}", not in directory "${directory}".`,
   pathCollision: (worktreePath: string, otherBranch: string, branch: string) =>
-    `"${worktreePath}" now holds branch "${otherBranch}". Add checkout: ${path.basename(worktreePath)} to run "${branch}" in it.`,
+    `"${worktreePath}" now holds branch "${otherBranch}". Add directory: ${path.basename(worktreePath)} to run "${branch}" in it.`,
 };
 
 /**
@@ -201,9 +211,7 @@ export function createWorktreeDirectoryName(
   const logicalIdentity =
     identity.kind === WORKTREE_IDENTITY_KINDS.MANAGED
       ? `${identity.workflowKey}/${identity.runRef}`
-      : identity.kind === WORKTREE_IDENTITY_KINDS.CHECKOUT
-        ? `checkout:${identity.name}`
-        : identity.branchRef;
+      : identity.branchRef;
   const hash = crypto
     .createHash("sha256")
     .update(`${canonicalCommonDirectory}\0${logicalIdentity}`, "utf8")
@@ -367,8 +375,9 @@ export interface WorktreePlacementPreview {
   isExact: boolean;
   /** Explains why `directory` is absent, or why it is only a best guess. */
   notice?: string;
-  checkout?: string;
-  checkoutCurrentBranch?: string;
+  /** The authored named-worktree `directory`, when one was set. */
+  authoredDirectory?: string;
+  directoryCurrentBranch?: string;
   switchBlocker?: string;
 }
 
@@ -391,7 +400,7 @@ export async function previewWorktreePlacement(
         sourceCheckoutRoot: string;
         mode: typeof WORKTREE_MODES.NAMED;
         branch: string;
-        checkout?: string;
+        directory?: string;
       }
 ): Promise<WorktreePlacementPreview> {
   const repositoryRoot = await repoToplevel(options.sourceCheckoutRoot);
@@ -410,16 +419,16 @@ export async function previewWorktreePlacement(
     const existing = entries.find(
       (entry) => entry.branchName === options.branch
     );
-    if (existing && !options.checkout) {
+    if (existing && !options.directory) {
       return { directory: existing.worktreePath, isExact: true };
     }
-    if (options.checkout) {
+    if (options.directory) {
       const common = await gitCommonDir(repositoryRoot);
       if (!common)
         return {
           isExact: false,
           notice:
-            "Cannot resolve the repository's Git common directory to preview the checkout slot.",
+            "Cannot resolve the repository's Git common directory to preview the worktree directory.",
         };
       const explicitRoot = ConfigurationUtils.getWorktreeRoot()?.trim();
       const root = explicitRoot
@@ -429,68 +438,79 @@ export async function previewWorktreePlacement(
             `${path.basename(repositoryRoot)}.worktrees`
           );
       try {
-        const slot = await resolveCheckoutSlot(
+        const resolvedDirectory = await resolveWorktreeDirectory(
           repositoryRoot,
-          options.checkout,
+          options.directory,
           entries,
           common,
           root
         );
-        if (slot.kind === CHECKOUT_SLOT_KINDS.PLANNED) {
+        if (resolvedDirectory.kind === WORKTREE_DIRECTORY_KINDS.PLANNED) {
           const elsewhere = entries.find(
             (entry) => entry.branchName === options.branch
           );
           return {
-            directory: slot.path,
+            directory: resolvedDirectory.path,
             isExact: false,
-            checkout: options.checkout,
+            authoredDirectory: options.directory,
             switchBlocker: elsewhere
-              ? checkoutSwitchBlockers.branchElsewhere(
+              ? worktreeDirectoryBlockers.branchElsewhere(
                   options.branch,
-                  options.checkout,
+                  options.directory,
                   elsewhere.worktreePath
                 )
               : undefined,
           };
         }
-        const slotBranch = await currentBranch(slot.entry.worktreePath);
+        const directoryBranch = await currentBranch(
+          resolvedDirectory.entry.worktreePath
+        );
         const elsewhere = entries.find(
           (entry) => entry.branchName === options.branch
         );
         let switchBlocker: string | undefined;
         if (
           elsewhere &&
-          !pathsEqual(elsewhere.worktreePath, slot.entry.worktreePath)
+          !pathsEqual(
+            elsewhere.worktreePath,
+            resolvedDirectory.entry.worktreePath
+          )
         ) {
-          switchBlocker = checkoutSwitchBlockers.branchElsewhere(
+          switchBlocker = worktreeDirectoryBlockers.branchElsewhere(
             options.branch,
-            options.checkout,
+            options.directory,
             elsewhere.worktreePath
           );
-        } else if (slotBranch !== options.branch) {
-          if (await hasGitOperationInProgress(slot.entry.worktreePath))
-            switchBlocker = checkoutSwitchBlockers.operation(
-              options.checkout,
+        } else if (directoryBranch !== options.branch) {
+          if (
+            await hasGitOperationInProgress(
+              resolvedDirectory.entry.worktreePath
+            )
+          )
+            switchBlocker = worktreeDirectoryBlockers.operation(
+              options.directory,
               "operation"
             );
-          else if (await hasUncommittedChanges(slot.entry.worktreePath))
-            switchBlocker = checkoutSwitchBlockers.dirty(
-              options.checkout,
-              slotBranch ?? "detached HEAD"
+          else if (
+            await hasUncommittedChanges(resolvedDirectory.entry.worktreePath)
+          )
+            switchBlocker = worktreeDirectoryBlockers.dirty(
+              options.directory,
+              directoryBranch ?? "detached HEAD"
             );
         }
         return {
-          directory: slot.entry.worktreePath,
+          directory: resolvedDirectory.entry.worktreePath,
           isExact: true,
-          checkout: options.checkout,
-          checkoutCurrentBranch: slotBranch ?? undefined,
+          authoredDirectory: options.directory,
+          directoryCurrentBranch: directoryBranch ?? undefined,
           switchBlocker,
         };
       } catch (error) {
         return {
           isExact: false,
           notice: error instanceof Error ? error.message : String(error),
-          checkout: options.checkout,
+          authoredDirectory: options.directory,
         };
       }
     }
@@ -539,7 +559,7 @@ export async function previewWorktreePlacement(
     directory,
     isExact: false,
     switchBlocker: collision
-      ? checkoutSwitchBlockers.pathCollision(
+      ? worktreeDirectoryBlockers.pathCollision(
           directory,
           collision.branchName ?? "detached HEAD",
           options.branch

@@ -934,8 +934,8 @@ export class ExecutionPreviewService {
     const { mode, base } = selection.config;
     const branch =
       "branch" in selection.config ? selection.config.branch : undefined;
-    const checkout =
-      "checkout" in selection.config ? selection.config.checkout : undefined;
+    const directory =
+      "directory" in selection.config ? selection.config.directory : undefined;
     const workspaceRoot = this.options.workspaceRoot;
     const eligibility = await evaluateWorkspaceEligibility(
       this.options.namedWorkspaceRoots ?? []
@@ -967,7 +967,7 @@ export class ExecutionPreviewService {
               sourceCheckoutRoot: workspaceRoot,
               mode: "named",
               branch,
-              checkout,
+              directory,
             })
           : {
               isExact: false,
@@ -997,8 +997,8 @@ export class ExecutionPreviewService {
         plannedDirectory: placement.directory,
         plannedDirectoryIsExact: placement.isExact,
         plannedDirectoryNotice: placement.notice,
-        checkout: placement.checkout ?? checkout,
-        checkoutCurrentBranch: placement.checkoutCurrentBranch,
+        directory: placement.authoredDirectory ?? directory,
+        directoryCurrentBranch: placement.directoryCurrentBranch,
         switchBlocker: placement.switchBlocker,
       },
       executionWorkspace,

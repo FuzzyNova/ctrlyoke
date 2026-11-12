@@ -8,7 +8,7 @@ import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import { isToolPermissionConfigNoWiderThan } from "../utils/ToolPermissionUtils";
 import {
-  CHECKOUT_VALUE_KINDS,
+  WORKTREE_DIRECTORY_VALUE_KINDS,
   PERMISSION_CAPABILITY_KEYS,
   SANDBOX_MODE_ORDER,
   SETTING_PATHS,
@@ -17,7 +17,7 @@ import {
 } from "../types/DashboardConstants";
 import { stableStringify } from "../utils/StableJson";
 import { escapeUntrustedDisplayText } from "../utils/EscapeUntrustedDisplayText";
-import { classifyCheckoutValue } from "../utils/WorktreeConfigShape";
+import { classifyWorktreeDirectoryValue } from "../utils/WorktreeConfigShape";
 
 /**
  * One workspace-scoped value that can choose a program for ctrlyoke to run.
@@ -157,18 +157,19 @@ function hasWorktreeSetupCommand(value: unknown): boolean {
   return worktreeSetupCommand(value) !== undefined;
 }
 
-function worktreeCheckoutPath(value: unknown): string | undefined {
-  if (!isPlainObject(value) || !isNonEmptyString(value.checkout))
+function worktreeDirectoryPath(value: unknown): string | undefined {
+  if (!isPlainObject(value) || !isNonEmptyString(value.directory))
     return undefined;
-  const checkout = (value.checkout as string).trim();
-  return classifyCheckoutValue(checkout) === CHECKOUT_VALUE_KINDS.PATH
-    ? checkout
+  const directory = (value.directory as string).trim();
+  return classifyWorktreeDirectoryValue(directory) ===
+    WORKTREE_DIRECTORY_VALUE_KINDS.PATH
+    ? directory
     : undefined;
 }
 
 function isSensitiveWorktreeDefault(value: unknown): boolean {
   return (
-    hasWorktreeSetupCommand(value) || worktreeCheckoutPath(value) !== undefined
+    hasWorktreeSetupCommand(value) || worktreeDirectoryPath(value) !== undefined
   );
 }
 
@@ -182,7 +183,7 @@ function worktreeSetupCoveredByUser(
 ): boolean {
   return (
     worktreeSetupCommand(workspaceValue) === worktreeSetupCommand(userValue) &&
-    worktreeCheckoutPath(workspaceValue) === worktreeCheckoutPath(userValue)
+    worktreeDirectoryPath(workspaceValue) === worktreeDirectoryPath(userValue)
   );
 }
 
@@ -216,8 +217,8 @@ function summarizeWorktreeSetup(value: unknown): string {
     worktreeSetupCommand(value)
       ? `setup command ${worktreeSetupCommand(value)}`
       : undefined,
-    worktreeCheckoutPath(value)
-      ? `checkout path ${worktreeCheckoutPath(value)}`
+    worktreeDirectoryPath(value)
+      ? `directory path ${worktreeDirectoryPath(value)}`
       : undefined,
   ].filter(Boolean);
   return summarizeValue(details.join(", "));

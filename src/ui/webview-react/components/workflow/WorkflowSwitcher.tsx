@@ -207,12 +207,12 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       effectiveWorktree.mode;
     const branch =
       "branch" in effectiveWorktree && effectiveWorktree.branch?.trim();
-    const checkout =
+    const directory =
       effectiveWorktree.mode === WORKTREE_MODES.NAMED
-        ? effectiveWorktree.checkout?.trim()
+        ? effectiveWorktree.directory?.trim()
         : undefined;
     return {
-      title: `${modeLabel} worktree${checkout ? `: ${checkout} → ${branch || "branch-derived"}` : branch ? `: ${branch}` : ""}`,
+      title: `${modeLabel} worktree${directory ? `: ${directory} → ${branch || "branch-derived"}` : branch ? `: ${branch}` : ""}`,
     };
   }, [effectiveWorktree]);
   // Global set of workflows with a running PTY, broadcast by the extension. This
