@@ -183,6 +183,18 @@ export class WorkflowScheduler {
             const updated = { ...current, scheduleLastRunAt: scheduledAt };
             if (nextAt === null) delete updated.scheduleNextRunAt;
             else updated.scheduleNextRunAt = nextAt;
+            // A one-shot is used up once it has run: drop it so the lineage
+            // no longer reads as scheduled. Only the same one-shot, in case
+            // the user saved a new schedule while the fire was starting.
+            if (
+              current.schedule &&
+              "at" in current.schedule.trigger &&
+              "at" in schedule.trigger &&
+              current.schedule.trigger.at === schedule.trigger.at
+            ) {
+              delete updated.schedule;
+              delete updated.scheduleLastMissedAt;
+            }
             return updated;
           });
         } catch (error) {

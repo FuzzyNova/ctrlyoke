@@ -37,6 +37,7 @@ import type {
 import type { ExecutionState } from "../../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isDrillableRunNav } from "@utils/runNavigation";
+import { upcomingScheduleRunAt } from "@utils/workflowScheduleDisplay";
 import { isWorkflowActive } from "../../utils/status";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
@@ -173,12 +174,15 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
     typeof workflow.totalSteps === "number" && workflow.totalSteps > 0;
+  const upcomingRunAt = scheduled
+    ? upcomingScheduleRunAt(workflow, Date.now())
+    : null;
   const timeAgo = scheduled
-    ? workflow.scheduleNextRunAt
-      ? `Next: ${new Date(workflow.scheduleNextRunAt).toLocaleString()}`
-      : workflow.schedule?.enabled
-        ? "Next run pending"
-        : "Disabled"
+    ? !workflow.schedule?.enabled
+      ? WORKFLOW_SCHEDULE_LABELS.pausedNextRun
+      : upcomingRunAt !== null
+        ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(upcomingRunAt).toLocaleString()}`
+        : WORKFLOW_SCHEDULE_LABELS.noNextRun
     : formatRelativeTimeVerbose(workflow.lastModifiedAt || workflow.startedAt);
   const accessibleName = composeRowAccessibleName([
     workflow.workflowName,
@@ -312,36 +316,6 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         )}
 
         <RowActionRail>
-          {scheduled && workflow.schedule && onToggleSchedule && (
-            <button
-              type="button"
-              title={
-                workflow.schedule.enabled
-                  ? "Disable schedule"
-                  : "Enable schedule"
-              }
-              aria-label={
-                workflow.schedule.enabled
-                  ? "Disable schedule"
-                  : "Enable schedule"
-              }
-              aria-pressed={workflow.schedule.enabled}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSchedule(workflow);
-              }}
-              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground`}
-            >
-              <Icon
-                name={
-                  workflow.schedule.enabled
-                    ? "codicon-debug-pause"
-                    : "codicon-play"
-                }
-                className="block leading-none"
-              />
-            </button>
-          )}
           <button
             type="button"
             title={
@@ -377,54 +351,95 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           >
             <Icon name="codicon-clock" className="block leading-none" />
           </button>
-          {onToggleFavorite && (
-            <button
-              type="button"
-              title={
-                workflow.isFavorite
-                  ? "Remove from favorites"
-                  : "Add to favorites"
-              }
-              aria-label={
-                workflow.isFavorite
-                  ? "Remove from favorites"
-                  : "Add to favorites"
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(workflow.address);
-              }}
-              className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${
-                workflow.isFavorite
-                  ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-                  : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-              }`}
-            >
-              <Icon
-                name={
-                  workflow.isFavorite
-                    ? "codicon-star-full"
-                    : "codicon-star-empty"
-                }
-                className="block leading-none"
-              />
-            </button>
-          )}
+          {scheduled ? (
+            <>
+              {workflow.schedule && onToggleSchedule && (
+                <button
+                  type="button"
+                  title={
+                    workflow.schedule.enabled
+                      ? "Disable schedule"
+                      : "Enable schedule"
+                  }
+                  aria-label={
+                    workflow.schedule.enabled
+                      ? "Disable schedule"
+                      : "Enable schedule"
+                  }
+                  aria-pressed={workflow.schedule.enabled}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleSchedule(workflow);
+                  }}
+                  className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground`}
+                >
+                  <Icon
+                    name={
+                      workflow.schedule.enabled
+                        ? "codicon-debug-pause"
+                        : "codicon-play"
+                    }
+                    className="block leading-none"
+                  />
+                </button>
+              )}
+              {/* Empty third slot keeps the rail's slots aligned with the
+                  rows around it. Favourite/remove stay on the lineage's row in
+                  the recent list; this section only manages the schedule. */}
+              <span aria-hidden="true" className={ROW_ACTION_BUTTON_CLASS} />
+            </>
+          ) : (
+            <>
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  title={
+                    workflow.isFavorite
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                  aria-label={
+                    workflow.isFavorite
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(workflow.address);
+                  }}
+                  className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${
+                    workflow.isFavorite
+                      ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+                      : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+                  }`}
+                >
+                  <Icon
+                    name={
+                      workflow.isFavorite
+                        ? "codicon-star-full"
+                        : "codicon-star-empty"
+                    }
+                    className="block leading-none"
+                  />
+                </button>
+              )}
 
-          {/* Delete button — visible only on row hover */}
-          {onRemove && (
-            <button
-              type="button"
-              title="Remove from history"
-              aria-label="Remove from history"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove(workflow.address);
-              }}
-              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100`}
-            >
-              <Icon name="trash" className="block leading-none" />
-            </button>
+              {/* Delete button — visible only on row hover */}
+              {onRemove && (
+                <button
+                  type="button"
+                  title="Remove from history"
+                  aria-label="Remove from history"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(workflow.address);
+                  }}
+                  className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100`}
+                >
+                  <Icon name="trash" className="block leading-none" />
+                </button>
+              )}
+            </>
           )}
         </RowActionRail>
       </WorkflowRowTrailing>
@@ -530,10 +545,11 @@ export const WorkflowList = React.forwardRef<
   );
   const hasRunningRows = runningRows.length > 0;
   const hasRecentRows = recentRows.length > 0;
+  const scheduleNow = Date.now();
   const orderedScheduledWorkflows = [...scheduledWorkflows].sort(
     (a, b) =>
-      (a.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER) -
-      (b.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER)
+      (upcomingScheduleRunAt(a, scheduleNow) ?? Number.MAX_SAFE_INTEGER) -
+      (upcomingScheduleRunAt(b, scheduleNow) ?? Number.MAX_SAFE_INTEGER)
   );
   const hasScheduledRows = orderedScheduledWorkflows.length > 0;
   // List-scoped, not row-scoped, and spanning *both* regions: reserve the

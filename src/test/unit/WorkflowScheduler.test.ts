@@ -136,8 +136,28 @@ suite("WorkflowScheduler", () => {
     assert.strictEqual(testCase.descriptor().scheduleLastRunAt, occurrence);
     assert.strictEqual(testCase.descriptor().revision, 7);
     assert.strictEqual(testCase.descriptor().scheduleNextRunAt, undefined);
+    // The one-shot is used up, so the lineage stops reading as scheduled.
+    assert.strictEqual(testCase.descriptor().schedule, undefined);
     testCase.scheduler.dispose();
     assert.strictEqual(testCase.timers.entries.size, 0);
+  });
+
+  test("keeps a recurring schedule after it fires", async () => {
+    const testCase = setup({
+      descriptor: makeDescriptor({
+        schedule: {
+          enabled: true,
+          hostId: "test-host",
+          trigger: { cron: "0 9 * * *" },
+        },
+      }),
+    });
+    await testCase.scheduler.start();
+    testCase.setNow(occurrence);
+    await testCase.timers.fireNext();
+    assert.strictEqual(testCase.fires(), 1);
+    assert.ok(testCase.descriptor().schedule);
+    assert.ok(testCase.descriptor().scheduleNextRunAt! > occurrence);
   });
 
   test("refresh re-arms or disarms; overlapping occurrence is skipped", async () => {

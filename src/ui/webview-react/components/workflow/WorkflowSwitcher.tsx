@@ -104,6 +104,7 @@ import {
 import { formatMultiFilterLabel } from "../../utils/filterLabels";
 import { Icon } from "../shared/Icon";
 import { getWorkflowNameFromPath } from "@utils/workflowDisplayName";
+import { upcomingScheduleRunAt } from "@utils/workflowScheduleDisplay";
 
 interface WorkflowSwitcherProps {
   className?: string;
@@ -1594,16 +1595,16 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       workflowMatchesSearch(recentWorkflow) &&
       !runningSectionWorkflowKeys.has(recentWorkflow.address.workflowKey)
   );
-  const scheduledWorkflows = sortedRecentWorkflows
-    .filter(
-      (workflow) =>
-        Boolean(workflow.schedule) && workflowMatchesSearch(workflow)
-    )
-    .sort(
-      (a, b) =>
-        (a.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER) -
-        (b.scheduleNextRunAt ?? Number.MAX_SAFE_INTEGER)
-    );
+  // Upcoming schedules only: a lineage leaves the section once its schedule
+  // can never fire again (a one-shot that already ran), and while it is
+  // running it lives in the Running section, whose row keeps the clock.
+  const scheduleNow = Date.now();
+  const scheduledWorkflows = sortedRecentWorkflows.filter(
+    (workflow) =>
+      !runningSectionWorkflowKeys.has(workflow.address.workflowKey) &&
+      upcomingScheduleRunAt(workflow, scheduleNow) !== null &&
+      workflowMatchesSearch(workflow)
+  );
   // One lineage-keyed row per entry, running lineages first — this is the
   // unified navigation model step 0 of the run-navigation plan calls for:
   // running state is a property of a row, not a separate section, and a

@@ -217,8 +217,8 @@ describe("WorkflowList scheduled section", () => {
       <WorkflowList
         {...baseProps}
         scheduledWorkflows={[
-          makeScheduled("Later", 200),
-          makeScheduled("Sooner", 100),
+          makeScheduled("Later", Date.now() + 200_000),
+          makeScheduled("Sooner", Date.now() + 100_000),
         ]}
       />
     );
@@ -235,7 +235,7 @@ describe("WorkflowList scheduled section", () => {
   });
 
   it("passes the scheduled lineage to the enable/disable callback", () => {
-    const scheduled = makeScheduled("Toggle me", 100);
+    const scheduled = makeScheduled("Toggle me", Date.now() + 100_000);
     const onToggleSchedule = vi.fn();
     render(
       <WorkflowList
@@ -246,6 +246,28 @@ describe("WorkflowList scheduled section", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Disable schedule" }));
     expect(onToggleSchedule).toHaveBeenCalledWith(scheduled);
+  });
+
+  it("fits the schedule controls in the three-slot rail without favourite or remove", () => {
+    render(
+      <WorkflowList
+        {...baseProps}
+        scheduledWorkflows={[makeScheduled("Rail", Date.now() + 100_000)]}
+        onToggleSchedule={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+    const row = within(
+      screen.getByRole("region", { name: "Scheduled workflows" })
+    ).getByRole("listitem");
+    const buttons = within(row)
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label"));
+    expect(buttons).toContain("Disable schedule");
+    expect(buttons).not.toContain("Add to favorites");
+    expect(buttons).not.toContain("Remove from history");
+    expect(row.textContent).not.toContain("Next run pending");
   });
 });
 

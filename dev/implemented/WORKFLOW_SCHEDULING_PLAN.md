@@ -45,6 +45,14 @@
 > for a schedule that didn't exist yet. See "Authoring view (as built)" below; the
 > popover text further down is kept as the original design record.
 
+> **2026-11-11 (list follow-up):** The **Scheduled** section lists only schedules
+> that can still fire (a paused one counts if resuming it could fire) and leaves out
+> running lineages, whose Running row already carries the clock. Scheduled rows'
+> rail is `[clock][pause/play][empty]`; they no longer squeeze favourite and remove
+> into it, which had pushed the rail over the run indicator. A one-shot `at`
+> schedule is deleted from the descriptor after its fire starts, so the lineage
+> stops reading as scheduled in the main list and the Scheduled filter.
+
 ## TL;DR
 
 - **Substrate decided (per product owner):** a schedule fires **only while a

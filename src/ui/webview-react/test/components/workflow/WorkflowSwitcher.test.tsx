@@ -1921,6 +1921,84 @@ describe("WorkflowSwitcher — loaded state", () => {
     });
   });
 
+  it("lists only schedules that can still fire, and leaves running lineages to the Running section", async () => {
+    const user = userEvent.setup();
+    const runningKey = "running-scheduled" as never;
+    useUiStore.setState({
+      loadedWorkflows: [
+        {
+          id: "workflow-running",
+          workflowKey: runningKey,
+          runRef: "run-3" as never,
+          workflowName: "Running Scheduled",
+          filePath: "/workspace/running.ctrlyoke.json",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+        },
+      ],
+    });
+    render(<WorkflowSwitcher />);
+    setRecentWorkflows([
+      {
+        workflowName: "Fired Once",
+        executionState: EXECUTION_STATES.COMPLETED,
+        // A one-shot that already ran: the host dropped its next run.
+        schedule: {
+          enabled: true,
+          trigger: { at: "2020-01-01T09:00" },
+          hostId: "test-host",
+        },
+      },
+      {
+        workflowName: "Paused Daily",
+        executionState: EXECUTION_STATES.IDLE,
+        schedule: {
+          enabled: false,
+          trigger: { cron: "0 9 * * *" },
+          hostId: "test-host",
+        },
+      },
+      {
+        address: {
+          workflowKey: runningKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-3" as never,
+        },
+        workflowName: "Running Scheduled",
+        executionState: EXECUTION_STATES.RUNNING,
+        schedule: {
+          enabled: true,
+          trigger: { cron: "0 9 * * *" },
+          hostId: "test-host",
+        },
+        scheduleNextRunAt: Date.now() + 60_000,
+      },
+    ]);
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
+
+    const scheduled = screen.getByRole("region", {
+      name: "Scheduled workflows",
+    });
+    const scheduledRows = within(scheduled).getAllByRole("listitem");
+    expect(scheduledRows).toHaveLength(1);
+    expect(scheduledRows[0]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("Paused Daily")
+    );
+    expect(scheduledRows[0]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("Paused")
+    );
+    // The running lineage keeps its clock on the Running row instead.
+    const running = within(
+      screen.getByRole("region", { name: "Running workflows" })
+    ).getByRole("listitem", { name: /Running Scheduled/ });
+    expect(
+      within(running).getByRole("button", { name: /Next run:/ })
+    ).toBeInTheDocument();
+  });
+
   it("opens the schedule panel inside the dropdown and backs out to the list", async () => {
     const user = userEvent.setup();
     render(<WorkflowSwitcher />);
