@@ -134,7 +134,8 @@ add or remove them, and turns spell check off with
 
 ## Pasting images {#images}
 
-Paste an image from the clipboard (PNG, JPEG, GIF or WebP, up to 15 MB) and
+Paste an image from the clipboard (PNG, JPEG, GIF or WebP, up to 15 MB), with
+the keyboard or the right-click menu's **Paste**, and
 ctrlyoke saves it to `.ctrlyoke/attachments/` as
 `pasted-image-<hash>.<ext>`, then inserts an `@` reference to it at the cursor.
 Pasting the same image again reuses the same file. The folder is git-ignored.

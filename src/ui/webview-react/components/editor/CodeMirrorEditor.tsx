@@ -73,10 +73,8 @@ import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
   PROMPT_EDITOR_INSERT_MODES,
-  MAX_PASTED_IMAGE_BYTES,
   PASTING_IMAGE_PLACEHOLDER,
   PASTED_IMAGE_SAVE_TIMEOUT_MS,
-  mimeTypeToImageExtension,
   type PromptEditorInsertRequest,
 } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
@@ -123,6 +121,13 @@ import {
   isTouchOnSelectionHandle,
   placeCaretForContextMenu,
 } from "@utils/editorEditMenuItems";
+import {
+  clipboardEventImages,
+  nextPastedImageSeq,
+  postPastedImage,
+  supportedClipboardImages,
+  type ClipboardImage,
+} from "@utils/pastedImages";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
 import { promptTokenCompletionExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
@@ -226,7 +231,6 @@ const MOUSE_SELECTION_TEARDOWN_EVENTS = {
 
 const FILE_OPERATION_PLACEHOLDER_REMOVAL_TIMEOUT_MS = 5 * 60_000;
 const DETACHED_PLACEHOLDER_TTL_MS = 30 * 60_000;
-let nextPasteSeq = 0;
 let nextCaptureSeq = 0;
 
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
@@ -1011,15 +1015,15 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // Insert a placeholder at the cursor, then read the image and ship it to the
   // extension host to be saved. The placeholder is reconciled by
   // handlePastedImageSaved when PASTED_IMAGE_SAVED arrives (or on timeout).
-  const processPastedImageFile = useCallback(
-    (file: File, mimeType: string, view: EditorView) => {
+  const processPastedImage = useCallback(
+    (image: ClipboardImage, view: EditorView) => {
       const pos = view.state.selection.main.head;
       view.dispatch({
         changes: { from: pos, insert: PASTING_IMAGE_PLACEHOLDER },
         selection: { anchor: pos + PASTING_IMAGE_PLACEHOLDER.length },
       });
 
-      const seq = ++nextPasteSeq;
+      const seq = nextPastedImageSeq();
       const timeoutId = setTimeout(() => {
         const entry = pendingPastesRef.current.get(seq);
         if (!entry) return;
@@ -1048,66 +1052,35 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         seq
       );
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = typeof reader.result === "string" ? reader.result : "";
-        const base64 = result.slice(result.indexOf(",") + 1);
-        // Approximate decoded size before shipping a large payload via postMessage.
-        const approxBytes = Math.floor((base64.length * 3) / 4);
-        if (!base64) {
-          handlePastedImageSaved(seq, undefined, "Failed to read pasted image");
-          return;
-        }
-        if (approxBytes > MAX_PASTED_IMAGE_BYTES) {
-          handlePastedImageSaved(
-            seq,
-            undefined,
-            "Pasted image exceeds the maximum allowed size"
-          );
-          return;
-        }
-        vscode.postMessage({
-          type: MESSAGE_TYPES.SAVE_PASTED_IMAGE,
-          seq,
-          dataBase64: base64,
-          mimeType,
-        });
-      };
-      reader.onerror = () => {
-        handlePastedImageSaved(seq, undefined, "Failed to read pasted image");
-      };
-      reader.readAsDataURL(file);
+      postPastedImage(vscode, seq, image, (error) =>
+        handlePastedImageSaved(seq, undefined, error)
+      );
     },
     [handlePastedImageSaved, schedulePlaceholderRemoval, vscode]
   );
 
+  // Shared by Ctrl/Cmd+V and the context menu's Paste. Supports multiple
+  // images in one clipboard.
+  const pasteImages = useCallback(
+    (images: ClipboardImage[], view: EditorView) => {
+      for (const image of supportedClipboardImages(images)) {
+        processPastedImage(image, view);
+      }
+    },
+    [processPastedImage]
+  );
+
   // Paste handler: intercept clipboard images, let everything else fall through
-  // to CodeMirror's default paste. Supports multiple images in one clipboard.
+  // to CodeMirror's default paste.
   const handleImagePaste = useCallback(
     (event: ClipboardEvent, view: EditorView): boolean => {
-      const items = event.clipboardData?.items;
-      if (!items) return false;
-      const imageItems = Array.from(items).filter((item) =>
-        item.type.startsWith("image/")
-      );
-      if (imageItems.length === 0) return false;
-
+      const images = clipboardEventImages(event);
+      if (images.length === 0) return false;
       event.preventDefault();
-      for (const item of imageItems) {
-        if (!mimeTypeToImageExtension(item.type)) {
-          notifyUser(
-            `Unsupported image type: ${item.type}`,
-            USER_FEEDBACK_SEVERITY.ERROR
-          );
-          continue;
-        }
-        const file = item.getAsFile();
-        if (!file) continue;
-        processPastedImageFile(file, item.type, view);
-      }
+      pasteImages(images, view);
       return true;
     },
-    [processPastedImageFile]
+    [pasteImages]
   );
 
   // Clear any outstanding async attachment timeouts when the component
@@ -1141,7 +1114,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           pendingValidationRequestsRef.current.delete(message.seq);
           resolve(message.results || []);
         }
-      } else if (message.type === MESSAGE_TYPES.PASTED_IMAGE_SAVED) {
+      } else if (
+        message.type === MESSAGE_TYPES.PASTED_IMAGE_SAVED &&
+        // The seq space is shared by every editor; answer only our own pastes.
+        pendingPastesRef.current.has(message.seq)
+      ) {
         handlePastedImageSaved(
           message.seq,
           message.relativePath,
@@ -1567,17 +1544,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const view = viewRef.current;
       if (!view) return;
       placeCaretForContextMenu(view, x, y);
+      const readOnly = readOnlyRef.current || view.state.readOnly;
       openReferenceChipMenu(
         x,
         y,
-        buildEditorEditMenuItems(
-          view,
-          readOnlyRef.current || view.state.readOnly
-        ),
+        buildEditorEditMenuItems(view, readOnly, {
+          pasteImages:
+            mode === CODE_MIRROR_EDITOR_MODES.PROMPT && !readOnly
+              ? (images) => pasteImages(images, view)
+              : undefined,
+        }),
         fromTouch
       );
     },
-    [openReferenceChipMenu]
+    [mode, openReferenceChipMenu, pasteImages]
   );
   const openEditMenuFromTouch = useCallback(
     (x: number, y: number) => openEditMenu(x, y, true),

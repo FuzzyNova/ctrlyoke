@@ -113,6 +113,53 @@ describe("buildEditorEditMenuItems", () => {
     );
   });
 
+  it("hands clipboard images to pasteImages instead of pasting text", async () => {
+    const blob = new Blob(["image"], { type: "image/png" });
+    const read = vi.fn().mockResolvedValue([
+      {
+        types: ["text/html", "image/png"],
+        getType: vi.fn().mockResolvedValue(blob),
+      },
+    ]);
+    const readText = vi.fn().mockResolvedValue("text");
+    vi.stubGlobal("navigator", { clipboard: { read, readText } });
+    const pasteImages = vi.fn();
+    const view = createView("", 0);
+
+    item(
+      buildEditorEditMenuItems(view, false, { pasteImages }),
+      "Paste"
+    ).onClick();
+
+    await vi.waitFor(() =>
+      expect(pasteImages).toHaveBeenCalledWith([
+        { blob, mimeType: "image/png" },
+      ])
+    );
+    expect(readText).not.toHaveBeenCalled();
+    expect(view.state.doc.toString()).toBe("");
+  });
+
+  it("pastes text when the clipboard has no image or cannot be read as items", async () => {
+    const readText = vi.fn().mockResolvedValue("pasted");
+    const pasteImages = vi.fn();
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        read: vi.fn().mockRejectedValue(new Error("denied")),
+        readText,
+      },
+    });
+    const view = createView("", 0);
+
+    item(
+      buildEditorEditMenuItems(view, false, { pasteImages }),
+      "Paste"
+    ).onClick();
+
+    await vi.waitFor(() => expect(view.state.doc.toString()).toBe("pasted"));
+    expect(pasteImages).not.toHaveBeenCalled();
+  });
+
   it("disables editing items when read-only or nothing applies", () => {
     const readOnly = buildEditorEditMenuItems(createView("a b", 0, 1), true);
     expect(item(readOnly, "Cut").disabled).toBe(true);

@@ -3,6 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import { selectAll, selectLine } from "@codemirror/commands";
 import type { ContextMenuEntry } from "@components/shared/ContextMenu";
 import { readClipboardText, writeClipboardText } from "@utils/clipboard";
+import { readClipboardImages, type ClipboardImage } from "@utils/pastedImages";
 
 const NO_SELECTION_TITLE = "No text selected";
 const READ_ONLY_TITLE = "Editor is read-only";
@@ -83,6 +84,45 @@ export function findWordRangeAt(
     : { from: line.from + start, to: line.from + end };
 }
 
+function pasteClipboardText(view: EditorView): Promise<void> {
+  return readClipboardText().then((text) => {
+    if (!text) return;
+    view.dispatch(
+      view.state.update(view.state.replaceSelection(text), {
+        userEvent: "input.paste",
+        scrollIntoView: true,
+      })
+    );
+  });
+}
+
+/**
+ * Pastes the clipboard's images through `pasteImages` when it holds any, and
+ * its text otherwise. A clipboard the async API cannot read as items (no
+ * permission, or no `read()` in this webview) falls back to its text.
+ */
+async function pasteClipboard(
+  view: EditorView,
+  pasteImages: ((images: ClipboardImage[]) => void) | undefined
+): Promise<void> {
+  if (pasteImages) {
+    const images = await readClipboardImages().catch(() => []);
+    if (images.length > 0) {
+      pasteImages(images);
+      return;
+    }
+  }
+  await pasteClipboardText(view);
+}
+
+export interface EditorEditMenuOptions {
+  /**
+   * Set where the caret accepts pasted images (a prompt): Paste then hands
+   * the clipboard's images here instead of pasting its text.
+   */
+  pasteImages?: (images: ClipboardImage[]) => void;
+}
+
 /**
  * Cut/Copy/Paste and Select Word/Line/All for a CodeMirror context menu,
  * shared by the prompt editor and the workspace file editor. Each selection
@@ -91,7 +131,8 @@ export function findWordRangeAt(
  */
 export function buildEditorEditMenuItems(
   view: EditorView,
-  readOnly: boolean
+  readOnly: boolean,
+  { pasteImages }: EditorEditMenuOptions = {}
 ): ContextMenuEntry[] {
   const { state } = view;
   const selection = state.selection.main;
@@ -134,16 +175,7 @@ export function buildEditorEditMenuItems(
       disabled: readOnly,
       disabledTitle: READ_ONLY_TITLE,
       onClick: () => {
-        void readClipboardText()
-          .then((text) => {
-            if (!text) return;
-            view.dispatch(
-              view.state.update(view.state.replaceSelection(text), {
-                userEvent: "input.paste",
-                scrollIntoView: true,
-              })
-            );
-          })
+        void pasteClipboard(view, pasteImages)
           .catch(() => undefined)
           .finally(() => view.focus());
       },

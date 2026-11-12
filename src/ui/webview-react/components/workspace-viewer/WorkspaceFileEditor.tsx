@@ -58,6 +58,11 @@ import {
   isTouchOnSelectionHandle,
   placeCaretForContextMenu,
 } from "@utils/editorEditMenuItems";
+import {
+  clipboardEventImages,
+  pasteImagesAsReferences,
+  pastedImagePlaceholderField,
+} from "@utils/pastedImages";
 import { getCtrlYokeFileKind } from "@root/utils/WorkflowFileKind";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import {
@@ -203,6 +208,8 @@ export const WorkspaceFileEditor = forwardRef<
           : undefined,
       [ctrlyokeFileKind, workflowSupportRevision]
     );
+    const workflowPromptRangesFieldRef = useRef(workflowPromptRangesField);
+    workflowPromptRangesFieldRef.current = workflowPromptRangesField;
     const atomicContextReferences = useSettingsStore(
       (state) => state.globalSettings.atomicContextReferences
     );
@@ -373,9 +380,16 @@ export const WorkspaceFileEditor = forwardRef<
           !!viewRef.current && isTouchOnSelectionHandle(viewRef.current, x, y),
         getEditMenuItems: () => {
           const view = viewRef.current;
-          return view
-            ? buildEditorEditMenuItems(view, view.state.readOnly)
-            : [];
+          if (!view) return [];
+          return buildEditorEditMenuItems(view, view.state.readOnly, {
+            pasteImages: canPasteImagesAtSelection(
+              view,
+              workflowPromptRangesFieldRef.current
+            )
+              ? (images) =>
+                  pasteImagesAsReferences(view, images, getVsCodeApi())
+              : undefined,
+          });
         },
         hasSymbolAtCaret: () => {
           const view = viewRef.current;
@@ -445,7 +459,12 @@ export const WorkspaceFileEditor = forwardRef<
                 kind: ctrlyokeFileKind,
                 getSupport: () => workflowSupportRef.current,
               }),
-              ...(workflowPromptRangesField ? [workflowPromptRangesField] : []),
+              ...(workflowPromptRangesField
+                ? [
+                    workflowPromptRangesField,
+                    createPromptImagePasteExtension(workflowPromptRangesField),
+                  ]
+                : []),
               ...(atomicContextReferences && workflowPromptRangesField
                 ? [
                     createAtomicReferenceExtension(
@@ -508,6 +527,9 @@ export const WorkspaceFileEditor = forwardRef<
         createWorkspaceEditorHighlightExtension(),
         createWorkspaceEditorLinkThemeExtension(),
         createWorkspaceReferenceDecorationExtension(),
+        // Outside the file-support compartment, so reconfiguring it never
+        // drops a pasted image that is still saving.
+        pastedImagePlaceholderField,
         createWorkspaceReferenceLinkHandlerExtension(
           ctrlyokeFileKind,
           () => workflowSupportRef.current,
@@ -816,6 +838,41 @@ function createWorkspaceEditorLinkThemeExtension() {
     },
     ".cm-link:hover": {
       color: "var(--vscode-textLink-activeForeground)",
+    },
+  });
+}
+
+/**
+ * True when the whole selection sits inside one prompt text of a ctrlyoke
+ * file, where an image can be pasted as an `@` reference like it can in the
+ * dashboard's prompt editor.
+ */
+function canPasteImagesAtSelection(
+  view: EditorView,
+  field: StateField<readonly WorkflowTextSpan[]> | undefined
+): boolean {
+  if (!field || view.state.readOnly) return false;
+  const spans = view.state.field(field, false);
+  if (!spans) return false;
+  const { from, to } = view.state.selection.main;
+  return spans.some(
+    (span) =>
+      span.exact && from >= span.sourceRange.start && to <= span.sourceRange.end
+  );
+}
+
+/** Ctrl/Cmd+V of an image into a prompt; any other paste is CodeMirror's. */
+function createPromptImagePasteExtension(
+  field: StateField<readonly WorkflowTextSpan[]>
+): Extension {
+  return EditorView.domEventHandlers({
+    paste: (event, view) => {
+      if (!canPasteImagesAtSelection(view, field)) return false;
+      const images = clipboardEventImages(event);
+      if (images.length === 0) return false;
+      event.preventDefault();
+      pasteImagesAsReferences(view, images, getVsCodeApi());
+      return true;
     },
   });
 }

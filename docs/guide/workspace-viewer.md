@@ -156,6 +156,11 @@ editing items as the [prompt editor's menu](/guide/prompt-editor#chips):
 **Cut**, **Copy**, **Paste**, **Select Word**, **Select Line** and **Select
 All**.
 
+In a `.prompt.md` file, or in a prompt inside a workflow file, you can
+[paste an image](/guide/prompt-editor#images) the way you would in the prompt
+editor, with the keyboard or the menu's **Paste**. ctrlyoke saves it and
+inserts an `@` reference to it at the cursor.
+
 ## Search
 
 ![The Search tab with the query normalizeTag, the Files, Content and Both scope buttons, Include git-ignored files unticked, and content matches grouped by file with line numbers](/screenshots/workspace-viewer-search-1600x830.png)
