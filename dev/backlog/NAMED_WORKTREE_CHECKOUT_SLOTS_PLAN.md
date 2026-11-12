@@ -16,7 +16,7 @@ records anything it found that differs from this plan under the item.
       branch-derived collision error, and Dry Run prediction
       (`previewWorktreePlacement`, `WorktreeExecutionPreview`).
       Deviation: none.
-- [ ] 3. `resolveNamedWorktree` with `checkout`: attach / switch / create,
+- [x] 3. `resolveNamedWorktree` with `checkout`: attach / switch / create,
       lease ordering, runtime recording, plumbing from `WorkflowInstance`.
 - [ ] 4. Continue resolves from the recorded run worktree; "Switched …"
       notice in the run view; workspace settings trust for path-form

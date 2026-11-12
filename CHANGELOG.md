@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Named worktrees can target a long-lived checkout slot with `worktree.checkout`; clean slots switch to the requested branch and retain setup state per checkout.
+
+### Changed
+
+- A branch-derived named worktree path that now belongs to a different branch reports the occupied path and suggests selecting it with `checkout`.
+
 ### Fixed
 
 - Dashboard file references now use the shared quoting rules, so paths with colons and top-level filenames remain intact.

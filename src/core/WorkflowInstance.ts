@@ -4853,6 +4853,9 @@ export class WorkflowInstance
           ? await this.worktreeManager.resolveNamedWorktree({
               ...sharedOptions,
               branchName: config.branch,
+              ...(config.checkout !== undefined
+                ? { checkout: config.checkout }
+                : {}),
             })
           : (() => {
               throw new Error("Named worktree execution requires a branch.");

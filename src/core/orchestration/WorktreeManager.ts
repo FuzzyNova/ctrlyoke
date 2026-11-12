@@ -29,6 +29,7 @@ import {
   resolveCommit,
   isCommitAncestor,
   localBranchExists,
+  switchBranch,
   validateBranchName,
   normalizeBranchName,
   type GitLocationLookup,
@@ -42,6 +43,7 @@ import {
   resolveThroughNearestExistingAncestor,
   resolveWorktreeRoot as resolveConfiguredRoot,
   withWorktreeMutationLock,
+  resolveCheckoutSlot,
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
@@ -424,6 +426,7 @@ export interface WorktreeSyncResult {
 export interface ResolveNamedWorktreeOptions {
   sourceCheckoutRoot: string;
   branchName: string;
+  checkout?: string;
   base?: string;
   stateRoot: string;
   /** Trusted workspace roots as authored; the state root is intentionally omitted from the result. */
@@ -2292,7 +2295,7 @@ export class WorktreeManager {
     );
     await validateBranchName(branchName);
     const initialEntries = await listGitWorktrees(sourceCheckoutRoot);
-    const initialBranchCheckout = initialEntries.find(
+    let initialBranchCheckout = initialEntries.find(
       (entry) => entry.branchName === branchName
     );
 
@@ -2305,9 +2308,120 @@ export class WorktreeManager {
       );
     }
 
-    const root = initialBranchCheckout
-      ? undefined
-      : await this.resolveWorktreeRootFor(sourceCheckoutRoot);
+    const root =
+      initialBranchCheckout && !options.checkout
+        ? undefined
+        : await this.resolveWorktreeRootFor(sourceCheckoutRoot);
+    let slotPath: string | undefined;
+    let previousBranch: string | undefined;
+    let slotLease: ExecutionLeaseHandle | undefined;
+    if (options.checkout) {
+      const slot = await resolveCheckoutSlot(
+        sourceCheckoutRoot,
+        options.checkout,
+        initialEntries,
+        commonDirectory,
+        root!
+      );
+      slotPath = slot.kind === "existing" ? slot.entry.worktreePath : slot.path;
+      if (
+        initialBranchCheckout &&
+        !pathsEqual(initialBranchCheckout.worktreePath, slotPath)
+      ) {
+        throw new Error(
+          checkoutSwitchBlockers.branchElsewhere(
+            branchName,
+            options.checkout,
+            initialBranchCheckout.worktreePath
+          )
+        );
+      }
+      if (slot.kind === "existing" && slot.entry.branchName !== branchName) {
+        const executionRoot = path.resolve(
+          slotPath,
+          path.relative(sourceCheckoutRoot, repositoryInputs.executionRoot)
+        );
+        slotLease = await this.leaseManager.acquire(
+          {
+            mode: "exclusive-worktree",
+            stateRoot: options.stateRoot,
+            executionRoot,
+            workflowKey: options.workflowKey,
+            runRef: options.runRef,
+            runner: options.runner ?? "vscode",
+            instanceId: options.instanceId ?? crypto.randomUUID(),
+          },
+          git
+        );
+        try {
+          await withWorktreeMutationLock(commonDirectory, async () => {
+            const entries = await listGitWorktrees(sourceCheckoutRoot);
+            const liveSlot = entries.find((entry) =>
+              pathsEqual(entry.worktreePath, slotPath!)
+            );
+            if (!liveSlot)
+              throw new Error(
+                `Checkout "${options.checkout}" is no longer registered.`
+              );
+            const operation = await hasGitOperationInProgress(slotPath!);
+            if (operation)
+              throw new Error(
+                checkoutSwitchBlockers.operation(options.checkout!, "operation")
+              );
+            const current = liveSlot.branchName ?? "detached HEAD";
+            if (await hasUncommittedChanges(slotPath!))
+              throw new Error(
+                checkoutSwitchBlockers.dirty(options.checkout!, current)
+              );
+            if (
+              liveSlot.branchName &&
+              (await this.readRecords(commonDirectory)).some(
+                (record) => record.branchName === liveSlot.branchName
+              )
+            ) {
+              throw new Error(
+                `Checkout "${options.checkout}" holds managed branch "${liveSlot.branchName}".`
+              );
+            }
+            const elsewhere = entries.find(
+              (entry) =>
+                entry.branchName === branchName &&
+                !pathsEqual(entry.worktreePath, slotPath!)
+            );
+            if (elsewhere)
+              throw new Error(
+                checkoutSwitchBlockers.branchElsewhere(
+                  branchName,
+                  options.checkout!,
+                  elsewhere.worktreePath
+                )
+              );
+            previousBranch = liveSlot.branchName ?? undefined;
+            const localCommit = await this.tryResolveLocalBranch(
+              sourceCheckoutRoot,
+              branchName
+            );
+            const baseCommit =
+              localCommit ??
+              (await resolveCommit(
+                sourceCheckoutRoot,
+                options.base?.trim() || "HEAD"
+              ));
+            await switchBranch(
+              slotPath!,
+              branchName,
+              localCommit ? {} : { createFrom: baseCommit }
+            );
+            initialBranchCheckout = (
+              await listGitWorktrees(sourceCheckoutRoot)
+            ).find((entry) => entry.branchName === branchName);
+          });
+        } catch (error) {
+          await slotLease.release();
+          throw error;
+        }
+      }
+    }
     const existingLocalBranchCommit = initialBranchCheckout
       ? undefined
       : await this.tryResolveLocalBranch(sourceCheckoutRoot, branchName);
@@ -2322,8 +2436,14 @@ export class WorktreeManager {
     let origin: WorktreeOrigin = initialBranchCheckout
       ? "discovered"
       : "created";
-    let worktreePath = initialBranchCheckout?.worktreePath;
-    const needsProvisioning = !worktreePath;
+    if (slotLease) origin = "discovered";
+    let worktreePath = slotPath ?? initialBranchCheckout?.worktreePath;
+    const needsProvisioning =
+      !worktreePath ||
+      (options.checkout !== undefined &&
+        !initialEntries.some((entry) =>
+          pathsEqual(entry.worktreePath, worktreePath!)
+        ));
     if (needsProvisioning) {
       worktreePath = path.join(
         root!,
@@ -2336,6 +2456,8 @@ export class WorktreeManager {
 
     const provisioningRuntime: WorkingFileWorktreeRuntimePatch = {
       ...this.buildRuntime(repositoryInputs, branchName, worktreePath!),
+      ...(options.checkout !== undefined ? { checkout: options.checkout } : {}),
+      ...(previousBranch !== undefined ? { previousBranch } : {}),
       origin,
       lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
       directoryState: needsProvisioning
@@ -2523,18 +2645,20 @@ export class WorktreeManager {
 
     let lease: ExecutionLeaseHandle;
     try {
-      lease = await this.leaseManager.acquire(
-        {
-          mode: "exclusive-worktree",
-          stateRoot: options.stateRoot,
-          executionRoot: executionWorkspace.executionRoot,
-          workflowKey: options.workflowKey,
-          runRef: options.runRef,
-          runner: options.runner ?? "vscode",
-          instanceId: options.instanceId ?? crypto.randomUUID(),
-        },
-        git
-      );
+      lease =
+        slotLease ??
+        (await this.leaseManager.acquire(
+          {
+            mode: "exclusive-worktree",
+            stateRoot: options.stateRoot,
+            executionRoot: executionWorkspace.executionRoot,
+            workflowKey: options.workflowKey,
+            runRef: options.runRef,
+            runner: options.runner ?? "vscode",
+            instanceId: options.instanceId ?? crypto.randomUUID(),
+          },
+          git
+        ));
     } catch (error) {
       if (needsProvisioning) {
         // The checkout now exists; record that instead of "missing".

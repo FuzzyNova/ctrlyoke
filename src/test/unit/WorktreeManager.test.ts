@@ -240,6 +240,67 @@ suite("WorktreeManager", function () {
     await info.lease.release();
   });
 
+  test("switches a clean checkout slot to a new branch and records its slot", async () => {
+    const { parent, repository } = await makeRepository("checkout-switch");
+    const slotPath = path.join(parent, "bug-fix");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "old-slot-branch", slotPath],
+      { stdio: "ignore" }
+    );
+    const updates: Array<{ checkout?: string; previousBranch?: string }> = [];
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async (patch) => {
+        updates.push(patch);
+      },
+    });
+    const info = await resolve(
+      instance,
+      repository,
+      "feature/new-slot-branch",
+      { checkout: "bug-fix" }
+    );
+    assert.strictEqual(info.worktreePath, slotPath);
+    assert.strictEqual(
+      execFileSync("git", ["-C", slotPath, "branch", "--show-current"], {
+        encoding: "utf8",
+      }).trim(),
+      "feature/new-slot-branch"
+    );
+    assert.ok(
+      updates.some(
+        (patch) =>
+          patch.checkout === "bug-fix" &&
+          patch.previousBranch === "old-slot-branch"
+      )
+    );
+    await info.lease.release();
+  });
+
+  test("refuses to switch a dirty checkout slot", async () => {
+    const { parent, repository } = await makeRepository("checkout-dirty");
+    const slotPath = path.join(parent, "bug-fix");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "old-slot-branch", slotPath],
+      { stdio: "ignore" }
+    );
+    await fs.writeFile(path.join(slotPath, "README.md"), "changed\n");
+    await assert.rejects(
+      resolve(manager(parent), repository, "feature/new-slot-branch", {
+        checkout: "bug-fix",
+      }),
+      /has uncommitted changes on branch "old-slot-branch"/
+    );
+    assert.strictEqual(
+      execFileSync("git", ["-C", slotPath, "branch", "--show-current"], {
+        encoding: "utf8",
+      }).trim(),
+      "old-slot-branch"
+    );
+  });
+
   test("attaches an existing local branch", async () => {
     const first = await makeRepository("attach");
     execFileSync("git", ["-C", first.repository, "branch", "feature/existing"]);
