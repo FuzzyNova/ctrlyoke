@@ -1570,8 +1570,8 @@ describe("WorkflowSwitcher — loaded state", () => {
     );
     expect(favoriteButton).toHaveClass(
       "flex",
-      "h-5",
-      "w-5",
+      "h-6",
+      "w-6",
       "items-center",
       "justify-center",
       "px-0",
@@ -2174,9 +2174,14 @@ describe("WorkflowSwitcher — run navigation panel", () => {
     ]);
 
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
-    await user.click(
-      screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
-    );
+    const runSelector = screen.getByRole("button", {
+      name: /Browse runs of Multi-run Workflow/i,
+    });
+    // The run selector sits on the name line beside the badge, away from the
+    // action rail (and its delete button) beside the metadata lines.
+    expect(runSelector.closest(".workflow-row-run-nav")).not.toBeNull();
+    expect(runSelector.closest(".workflow-row-trailing")).toBeNull();
+    await user.click(runSelector);
 
     expect(
       screen.getByRole("button", { name: "Back to workflow list" })

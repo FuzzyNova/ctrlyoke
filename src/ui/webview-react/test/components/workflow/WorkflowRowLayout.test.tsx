@@ -49,6 +49,50 @@ describe("WorkflowRowLayout", () => {
     );
   });
 
+  it.each(["stacked", "compact"] as const)(
+    "puts usage and run time on their own third line at the %s tier",
+    (tier) => {
+      const { container } = renderLayout(tier, {
+        usage: "410k",
+        duration: "8:51",
+      });
+      expect(
+        container.querySelector(".workflow-row-cell-meta-activity")?.textContent
+      ).toBe("4 steps·2 hours ago");
+      expect(
+        container.querySelector(".workflow-row-cell-meta-usage")?.textContent
+      ).toBe("410k·8:51");
+    }
+  );
+
+  it("renders an empty usage line so every row keeps the same height", () => {
+    const { container } = renderLayout("stacked");
+    const usageLine = container.querySelector(".workflow-row-cell-meta-usage");
+    expect(usageLine).not.toBeNull();
+    expect(usageLine?.textContent).toBe("");
+  });
+
+  it("reserves the widest state's width for a full-text badge only", () => {
+    const badgeCell = (tier: WorkflowRowTier) =>
+      renderLayout(tier).container.querySelector<HTMLElement>(
+        ".workflow-row-cell-badge"
+      )!;
+    expect(badgeCell("stacked").style.minWidth).toBe(
+      `${WORKFLOW_ROW_TRACKS.state}px`
+    );
+    expect(badgeCell("compact").style.minWidth).toBe("");
+  });
+
+  // At compact the rail reaches into the run-nav column beside the icon-only
+  // badge (so the run indicator stays flush against the badge); the
+  // metadata lines must stop short of it.
+  it("marks only the compact tier so its metadata stops before the rail", () => {
+    const primary = (tier: WorkflowRowTier) =>
+      renderLayout(tier).container.querySelector("button")!;
+    expect(primary("compact")).toHaveClass("workflow-row-primary-compact");
+    expect(primary("stacked")).not.toHaveClass("workflow-row-primary-compact");
+  });
+
   it("keeps the compact tier on the same grid, not a third layout", () => {
     const { container } = renderLayout("compact");
     expect(container.querySelector("button")?.className).toContain(
@@ -150,6 +194,10 @@ describe("RunIndicatorCell", () => {
     expect(renderCell(drillable).style.width).toBe(
       `${WORKFLOW_ROW_TRACKS.runIndicator}px`
     );
+  });
+
+  it("carries the class that places it on the first line beside the badge", () => {
+    expect(renderCell(drillable)).toHaveClass("workflow-row-run-nav");
   });
 
   it("renders no button when there is nothing to drill into", () => {

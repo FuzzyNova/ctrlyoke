@@ -230,18 +230,18 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         }
       />
 
-      <WorkflowRowTrailing>
-        {/* Run indicator — same track and position as the recent rows', so a
-          running lineage's earlier runs stay one click away and the columns
-          to its right line up across both regions. */}
-        {showRunIndicatorTrack && (
-          <RunIndicatorCell
-            runNav={runNav}
-            workflowName={workflow.workflowName}
-            onDrill={onDrillIntoRuns}
-          />
-        )}
+      {/* Run indicator — same track and position as the recent rows', so a
+        running lineage's earlier runs stay one click away and its name
+        truncates in line with the rows below. */}
+      {showRunIndicatorTrack && (
+        <RunIndicatorCell
+          runNav={runNav}
+          workflowName={workflow.workflowName}
+          onDrill={onDrillIntoRuns}
+        />
+      )}
 
+      <WorkflowRowTrailing>
         {/* Action buttons — pause/stop for locally-owned workflows only; an
           externally-owned row shows its ownership badge in the meta line
           instead (see WorkflowRowLayout's `metaBadge`) and has no local

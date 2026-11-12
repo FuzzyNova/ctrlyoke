@@ -356,19 +356,19 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         }
       />
 
-      <WorkflowRowTrailing>
-        {/* Run indicator — sibling of the primary button, not inside it.
-          Drills into the run panel without selecting/loading the lineage. */}
-        {showRunIndicatorTrack && (
-          <RunIndicatorCell
-            runNav={workflow.runNav}
-            workflowName={workflow.workflowName}
-            onDrill={
-              onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
-            }
-          />
-        )}
+      {/* Run indicator — sibling of the primary button, not inside it.
+        Drills into the run panel without selecting/loading the lineage. */}
+      {showRunIndicatorTrack && (
+        <RunIndicatorCell
+          runNav={workflow.runNav}
+          workflowName={workflow.workflowName}
+          onDrill={
+            onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
+          }
+        />
+      )}
 
+      <WorkflowRowTrailing>
         <RowActionRail>
           <button
             type="button"

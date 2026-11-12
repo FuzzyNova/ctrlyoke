@@ -58,7 +58,7 @@ function renderRow(tier: WorkflowRowTier) {
 }
 
 describe("RunSummaryRow", () => {
-  it("shows the run's settled run time between usage and time ago", () => {
+  it("shows the run's settled run time after its usage", () => {
     const { container } = render(
       <RunSummaryRow
         row={{
@@ -74,8 +74,8 @@ describe("RunSummaryRow", () => {
       />
     );
     expect(
-      container.querySelector(".workflow-row-cell-meta")?.textContent
-    ).toMatch(/410k.*·.*8:51.*·.*ago/);
+      container.querySelector(".workflow-row-cell-meta-usage")?.textContent
+    ).toMatch(/410k.*·.*8:51/);
     expect(
       screen.getByRole("button", { name: /^Run 14/ })
     ).toHaveAccessibleName(/run time 8 minutes 51 seconds/);
@@ -127,7 +127,10 @@ describe("RunSummaryRow", () => {
     ).not.toBeNull();
     expect(screen.getByText("Run 14")).toBeInTheDocument();
     expect(screen.getByText("4 steps")).toBeInTheDocument();
-    expect(screen.queryByTestId("workflow-token-usage")).toBeNull();
+    // Usage has its own metadata line, so the compact tier keeps it too.
+    expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
+      "410k"
+    );
   });
 
   it("shows a lower-bound run cost when one attempt was unpriceable", () => {

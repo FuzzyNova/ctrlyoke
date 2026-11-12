@@ -1732,38 +1732,42 @@ button .cy-lucide-icon {
   /* Row layout for the workflow dropdown's rows (workflow list, running
      region, and run panel — see WorkflowRowLayout.tsx).
 
-     Every row is two full-width lines, with the harness icon spanning both:
+     Every row is three lines, with the harness icon beside the name and the
+     metadata indented under it:
 
-       [icon] [name ............................] [state badge]
-       [icon] [meta: steps · usage · time · glyphs] [run nav][actions]
+       [icon] [name ........................] [#3 ›] [state badge]
+              [steps · time ago · glyphs ..........]  [actions  ]
+              [usage · run time ...................]  [  rail   ]
 
-     The two lines size independently: the name gets everything except the
-     badge, and the metadata everything except the trailing controls. The
-     trailing controls (WorkflowRowTrailing) are a *sibling* of the primary
-     button — a button can't contain buttons — so the row container owns the
-     grid and the primary button joins it as a subgrid spanning every cell,
-     with the trailing cluster layered over its bottom-right cell.
+     The run indicator (#3 ›) and the action rail are *siblings* of the
+     primary button — a button can't contain buttons — so the row container
+     owns the grid and the primary button joins it as a subgrid spanning every
+     cell, with those controls layered over its empty cells.
 
-     Columns: icon | flexible | slack | right. The badge sits alone in `right`
-     and the trailing cluster spans `slack + right`, so `slack` absorbs only
-     however much wider the trailing cluster is than the badge; the name spans
-     `flexible + slack` and so never pays for the trailing controls.
+     Columns: icon | flexible | run-nav | badge. The name gets `flexible`, so
+     the run indicator always sits flush against the badge. The rail (fixed
+     WORKFLOW_ROW_TRACKS.actions) spans `run-nav + badge`, right-aligned and
+     centred across both metadata lines — it never widens the badge column,
+     which would leave the run indicator floating away from an icon-only
+     badge.
 
-     Below WORKFLOW_DROPDOWN_COMPACT_WIDTH the state badge drops to its
-     icon-only form to buy the name back some width. */
+     A full-text badge (min-width WORKFLOW_ROW_TRACKS.state) is at least as
+     wide as the rail, so there the rail sits wholly under the badge and the
+     metadata lines also take the run-nav column. Below
+     WORKFLOW_DROPDOWN_COMPACT_WIDTH the badge drops to its icon-only form to
+     buy the name back some width, the rail reaches into the run-nav column,
+     and the metadata lines stop at `flexible`. */
   .workflow-row {
     display: grid;
     grid-template-columns: 14px minmax(0, 1fr) auto auto;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     column-gap: 0.25rem;
-    /* Tight outer padding, a real gap between the lines: the state badge and
-       the action buttons beneath it are both right-aligned, so without the
-       gap they read as one stacked block. Every row kind gets its padding
-       here, never per component — the running and recent regions are
-       separate scroll containers, and any padding difference offsets every
-       column between them. Keep WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE and the
-       horizontal padding in constants.ts in step. */
-    row-gap: 4px;
+    /* Every row kind gets its padding here, never per component — the
+       running and recent regions are separate scroll containers, and any
+       padding difference offsets every column between them. Keep
+       WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE and the horizontal padding in
+       constants.ts in step. */
+    row-gap: 2px;
     padding: 6px 8px;
     align-items: center;
   }
@@ -1777,33 +1781,50 @@ button .cy-lucide-icon {
     align-items: center;
   }
 
+  /* On the name's line, not centred across all three: it identifies the
+     harness that ran this workflow, so it reads with the name. Centred, it
+     sat beside the step count instead. */
   .workflow-row-primary > .workflow-row-cell-icon {
     grid-column: 1;
-    grid-row: 1 / -1;
+    grid-row: 1;
   }
   .workflow-row-primary > .workflow-row-cell-label {
-    grid-column: 2 / span 2;
+    grid-column: 2;
     grid-row: 1;
   }
   .workflow-row-primary > .workflow-row-cell-badge {
     grid-column: 4;
     grid-row: 1;
   }
+  /* Always rendered, even empty, so every row is the same height. */
   .workflow-row-primary > .workflow-row-cell-meta {
+    grid-column: 2 / span 2;
+    min-height: 16px;
+  }
+  .workflow-row-primary.workflow-row-primary-compact > .workflow-row-cell-meta {
     grid-column: 2;
+  }
+  .workflow-row-primary > .workflow-row-cell-meta-activity {
     grid-row: 2;
   }
+  .workflow-row-primary > .workflow-row-cell-meta-usage {
+    grid-row: 3;
+  }
 
-  /* Layered above the primary button, whose subgrid also covers this cell:
-     a positioned element paints over in-flow siblings without a z-index.
-     Never give it one — the run panel slides over the still-mounted workflow
-     list without a z-index of its own, and a z-indexed cluster here paints
-     the list's run selectors and stars on top of the run panel.
-     Its 20px buttons set the second line's height; the metadata centres on
-     them. */
+  /* Both controls are layered above the primary button, whose subgrid also
+     covers their cells: a positioned element paints over in-flow siblings
+     without a z-index. Never give them one — the run panel slides over the
+     still-mounted workflow list without a z-index of its own, and a z-indexed
+     control here paints the list's run selectors and stars on top of the run
+     panel. */
+  .workflow-row > .workflow-row-run-nav {
+    grid-column: 3;
+    grid-row: 1;
+    position: relative;
+  }
   .workflow-row > .workflow-row-trailing {
     grid-column: 3 / span 2;
-    grid-row: 2;
+    grid-row: 2 / span 2;
     justify-self: end;
     position: relative;
   }

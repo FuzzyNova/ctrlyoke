@@ -182,9 +182,10 @@ export const EDITOR_BUTTON_SIZES = {
 
 /**
  * Fixed track widths (px) for the workflow row layout — every row in the
- * dropdown (workflow list, running region, run panel) uses one two-line
- * layout regardless of dropdown width: harness icon, name and state badge on
- * the first line; metadata, run indicator and action rail on the second. Only
+ * dropdown (workflow list, running region, run panel) uses one three-line
+ * layout regardless of dropdown width: harness icon, name, run indicator and
+ * state badge on the first line; two lines of metadata beneath, with the
+ * action rail centred across them. Only
  * the badge's form changes below `WORKFLOW_DROPDOWN_COMPACT_WIDTH`. These are
  * the source of truth for that breakpoint, computed below.
  */
@@ -195,13 +196,13 @@ export const WORKFLOW_ROW_TRACKS = {
   state: 88,
   /**
    * `#12 ›` drill affordance, reserved list-wide once any row is drillable —
-   * at *every* tier. Everything to a row's right is what positions its state
-   * badge, so a row that dropped the track (or sized it to its own content)
-   * sits its badge tens of pixels out of line with its neighbours.
+   * at *every* tier. It sets where the name truncates, so a row that dropped
+   * the track (or sized it to its own content) would cut its name at a
+   * different point from its neighbours'.
    */
   runIndicator: 52,
-  /** Trailing action rail: three 20px icon buttons and two 4px gaps. */
-  actions: 68,
+  /** Trailing action rail: three 24px icon buttons and two 4px gaps. */
+  actions: 80,
 } as const;
 
 /** Shared labels used by lineage schedule controls and their context-menu entry. */
@@ -267,30 +268,20 @@ export const WORKFLOW_SCHEDULE_PREVIEW_HOST_ID = "preview";
 
 const WORKFLOW_ROW_HORIZONTAL_PADDING = 16;
 const WORKFLOW_ROW_COLUMN_GAP = 4;
-const WORKFLOW_ROW_RAIL_GAP = 8;
 const WORKFLOW_ROW_MIN_NAME_WIDTH = 140;
 
 /**
- * Everything the row's first line spends before the name gets a pixel: only
- * the harness icon and the state badge. The run indicator and action rail sit
- * at the end of the second (metadata) line, which truncates its own content,
- * so the first line is what the breakpoint below has to be sized for.
+ * Everything the row's first line spends before the name gets a pixel: the
+ * harness icon, the run indicator and the state badge. The action rail sits
+ * beside the metadata lines, which truncate their own content, so the first
+ * line is what the breakpoint below has to be sized for.
  */
 const workflowStackedFirstLineWidth =
   WORKFLOW_ROW_HORIZONTAL_PADDING +
   WORKFLOW_ROW_TRACKS.harness +
   3 * WORKFLOW_ROW_COLUMN_GAP +
-  WORKFLOW_ROW_TRACKS.state;
-
-/**
- * Width (px) of the second line's trailing cluster (`WorkflowRowTrailing`)
- * when the run-indicator track is reserved. The metadata takes whatever the
- * line has left.
- */
-export const WORKFLOW_ROW_TRAILING_WIDTH =
   WORKFLOW_ROW_TRACKS.runIndicator +
-  WORKFLOW_ROW_RAIL_GAP +
-  WORKFLOW_ROW_TRACKS.actions;
+  WORKFLOW_ROW_TRACKS.state;
 
 /**
  * Width (px) the workflow dropdown opens to on desktop, before being clamped to
@@ -305,7 +296,7 @@ export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
  *
  * Every row already stacks its name onto its own line; this is the only
  * remaining breakpoint. The first-line budget is computed from the harness
- * icon, full-text badge, and their gaps. Dropping the badge to its icon
+ * icon, run indicator, full-text badge, and their gaps. Dropping the badge to its icon
  * returns ~60px of that width.
  *
  * Set so the name keeps ~140px on the stacked first line while the badge still
@@ -317,7 +308,7 @@ export const WORKFLOW_DROPDOWN_COMPACT_WIDTH =
 
 /**
  * How much a workflow dropdown row compacts at the width it is rendered at.
- * Every row is always two lines (name, then metadata) — `compact` additionally
+ * Every row is always three lines (name, then two of metadata) — `compact` additionally
  * drops the state badge to its icon-only form.
  */
 export type WorkflowRowTier =
@@ -332,13 +323,13 @@ export function resolveWorkflowRowTier(width: number): WorkflowRowTier {
 
 /**
  * Virtualizer size estimate (px) for a workflow dropdown row. Every row is
- * two lines regardless of tier. The virtualizer corrects to the real measured
+ * three lines regardless of tier. The virtualizer corrects to the real measured
  * height once a row is realized, but the estimate drives total scroll height
  * and `scrollToIndex` before that — an estimate short of the real row height
  * makes the scrollbar lie and drops seeks well short of their target on a
  * long list.
  */
-export const WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE = 56;
+export const WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE = 70;
 
 /**
  * Highest workflow count the header's count badge renders as a literal

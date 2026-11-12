@@ -112,13 +112,10 @@ describe("WorkflowList token totals", () => {
       expect(
         screen.getByRole("button", { name: /410,000 total tokens/ })
       ).toBeInTheDocument();
-      if (tier === WORKFLOW_ROW_TIERS.COMPACT) {
-        expect(screen.queryByTestId("workflow-token-usage")).toBeNull();
-      } else {
-        expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
-          "410k"
-        );
-      }
+      // Usage has its own metadata line, so it shows at every tier.
+      expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
+        "410k"
+      );
     }
   );
 
@@ -134,11 +131,9 @@ describe("WorkflowList token totals", () => {
       expect(
         screen.getByRole("button", { name: /at least 410,000 observed tokens/ })
       ).toBeInTheDocument();
-      if (tier !== WORKFLOW_ROW_TIERS.COMPACT) {
-        expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
-          "≥410k"
-        );
-      }
+      expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
+        "≥410k"
+      );
     }
   );
 
@@ -155,14 +150,10 @@ describe("WorkflowList token totals", () => {
       expect(
         screen.getByRole("button", { name: /410,000 total tokens/ })
       ).toBeInTheDocument();
-      if (tier === WORKFLOW_ROW_TIERS.COMPACT) {
-        expect(usage).toBeNull();
-      } else {
-        expect(usage).toHaveAttribute(
-          "title",
-          expect.stringContaining("still increasing")
-        );
-      }
+      expect(usage).toHaveAttribute(
+        "title",
+        expect.stringContaining("still increasing")
+      );
     }
   );
 
@@ -478,8 +469,8 @@ describe("WorkflowList row action scoping", () => {
 
     expect(favoriteButton).toBeInTheDocument();
     expect(removeButton).toBeInTheDocument();
-    // The actions sit at the end of the metadata line, outside the primary
-    // button, so they never take width from the name line.
+    // The actions sit beside the metadata lines, outside the primary button,
+    // so they never take width from the name line.
     expect(workflowRow).toHaveClass("workflow-row");
     for (const action of [favoriteButton, removeButton]) {
       expect(action.closest(".workflow-row-trailing")).not.toBeNull();
@@ -582,8 +573,11 @@ describe("WorkflowList recent row worktree", () => {
       );
 
       expect(
-        document.querySelector(".workflow-row-cell-meta")?.textContent
-      ).toMatch(/3 steps.*·.*8:51.*·.*14 minutes ago/);
+        document.querySelector(".workflow-row-cell-meta-activity")?.textContent
+      ).toMatch(/3 steps.*·.*14 minutes ago/);
+      expect(
+        document.querySelector(".workflow-row-cell-meta-usage")?.textContent
+      ).toBe("8:51");
       expect(
         screen.getByRole("button", { name: /run time 8 minutes 51 seconds/ })
       ).toBeInTheDocument();
