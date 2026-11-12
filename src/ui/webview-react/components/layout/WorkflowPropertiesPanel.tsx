@@ -56,6 +56,7 @@ import {
   PriorContextSelect,
   DrawerTabBar,
   DrawerRow,
+  PropertyGroup,
   McpServersEditor,
   type McpServersValue,
   FieldDiagnostic,
@@ -1952,7 +1953,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 />
               </FormField>
 
-              {/* Row 4: Execution Mode + Worktree */}
+              {/* Row 4: Execution Mode */}
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Execution Mode"
@@ -1986,188 +1987,199 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     )}
                   />
                 </FormField>
-                <FormField
-                  label="Worktree"
-                  schemaPath="worktree"
-                  htmlFor="settings-worktree-mode"
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.WORKTREE}
-                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.WORKTREE)}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          PROMPT_PROPERTIES.WORKTREE,
-                          workflowProperties.worktree
-                        )
-                      }
-                    />
-                  }
-                >
-                  <CustomSelect
-                    id="settings-worktree-mode"
-                    schemaPath="worktree"
-                    triggerAriaLabel="Worktree"
-                    value={worktreeMode}
-                    onChange={handleWorktreeModeChange}
-                    options={toSelectOptions(
-                      WORKTREE_SELECTION_OPTIONS_META,
-                      "worktree"
-                    )}
-                  />
-                </FormField>
               </DrawerRow>
 
-              <AnimatedSection visible={worktreeMode !== WORKTREE_MODE_NONE}>
+              {/* Worktree group: the mode selector and the fields it reveals */}
+              <PropertyGroup>
                 <DrawerRow narrow={isNarrow}>
-                  {worktreeMode === WORKTREE_MODES.NAMED && (
-                    <>
+                  <FormField
+                    label="Worktree"
+                    schemaPath="worktree"
+                    htmlFor="settings-worktree-mode"
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property={PROMPT_PROPERTIES.WORKTREE}
+                        show={isDifferentFromGlobal(PROMPT_PROPERTIES.WORKTREE)}
+                        onSetDefault={() =>
+                          handleSetAsDefault(
+                            PROMPT_PROPERTIES.WORKTREE,
+                            workflowProperties.worktree
+                          )
+                        }
+                      />
+                    }
+                  >
+                    <CustomSelect
+                      id="settings-worktree-mode"
+                      schemaPath="worktree"
+                      triggerAriaLabel="Worktree"
+                      value={worktreeMode}
+                      onChange={handleWorktreeModeChange}
+                      options={toSelectOptions(
+                        WORKTREE_SELECTION_OPTIONS_META,
+                        "worktree"
+                      )}
+                    />
+                  </FormField>
+                </DrawerRow>
+
+                <AnimatedSection visible={worktreeMode !== WORKTREE_MODE_NONE}>
+                  <div className="space-y-2">
+                    <DrawerRow narrow={isNarrow}>
+                      {worktreeMode === WORKTREE_MODES.NAMED && (
+                        <>
+                          <FormField
+                            label="Directory"
+                            schemaPath="worktree.directory"
+                            htmlFor="settings-worktree-directory"
+                            description="Long-lived worktree directory: an existing one to reuse, or a new name (created as exactly that folder under the worktree root) or path. Empty derives the directory from the branch."
+                          >
+                            <WorktreeDirectoryEditor
+                              id="settings-worktree-directory"
+                              aria-label="Worktree directory"
+                              value={worktreeDirectoryInput}
+                              onChange={setWorktreeDirectoryInput}
+                              onBlur={() =>
+                                handleWorktreeFieldChange(
+                                  "directory",
+                                  worktreeDirectoryInput
+                                )
+                              }
+                              placeholder="Derived from branch"
+                              className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
+                            />
+                          </FormField>
+                          <FormField
+                            label="Branch"
+                            schemaPath="worktree.branch"
+                            htmlFor="settings-worktree-branch"
+                            description="Existing or new local Git branch. With a directory set, the branch can differ from the directory's name; ctrlyoke switches the directory to it when the directory is clean."
+                          >
+                            <BranchNameEditor
+                              id="settings-worktree-branch"
+                              aria-label="Worktree branch"
+                              value={worktreeBranchInput}
+                              onChange={setWorktreeBranchInput}
+                              onBlur={() =>
+                                handleWorktreeFieldChange(
+                                  "branch",
+                                  worktreeBranchInput
+                                )
+                              }
+                              aria-describedby={
+                                worktreeBranchDiagnostics.length > 0
+                                  ? "settings-worktree-branch-diagnostic"
+                                  : undefined
+                              }
+                              className={`w-full bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono`}
+                            />
+                            <FieldDiagnostic
+                              id="settings-worktree-branch-diagnostic"
+                              diagnostics={worktreeBranchDiagnostics}
+                            />
+                          </FormField>
+                        </>
+                      )}
                       <FormField
-                        label="Directory"
-                        schemaPath="worktree.directory"
-                        htmlFor="settings-worktree-directory"
-                        description="Long-lived worktree directory: an existing one to reuse, or a new name (created as exactly that folder under the worktree root) or path. Empty derives the directory from the branch."
+                        label="Base"
+                        schemaPath="worktree.base"
+                        htmlFor="settings-worktree-base"
+                        description="Optional Git ref used as the starting point for a new worktree."
                       >
-                        <WorktreeDirectoryEditor
-                          id="settings-worktree-directory"
-                          aria-label="Worktree directory"
-                          value={worktreeDirectoryInput}
-                          onChange={setWorktreeDirectoryInput}
+                        <BranchNameEditor
+                          id="settings-worktree-base"
+                          aria-label="Worktree base"
+                          value={worktreeBaseInput}
+                          onChange={setWorktreeBaseInput}
                           onBlur={() =>
-                            handleWorktreeFieldChange(
-                              "directory",
-                              worktreeDirectoryInput
-                            )
+                            handleWorktreeFieldChange("base", worktreeBaseInput)
                           }
-                          placeholder="Derived from branch"
+                          placeholder="Current branch (HEAD)"
                           className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                         />
                       </FormField>
                       <FormField
-                        label="Branch"
-                        schemaPath="worktree.branch"
-                        htmlFor="settings-worktree-branch"
-                        description="Existing or new local Git branch. With a directory set, the branch can differ from the directory's name; ctrlyoke switches the directory to it when the directory is clean."
+                        label="Setup"
+                        schemaPath="worktree.setup"
+                        htmlFor="settings-worktree-setup"
+                        description="Optional command run after a new worktree is created. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
                       >
-                        <BranchNameEditor
-                          id="settings-worktree-branch"
-                          aria-label="Worktree branch"
-                          value={worktreeBranchInput}
-                          onChange={setWorktreeBranchInput}
+                        <ScriptCommandEditor
+                          id="settings-worktree-setup"
+                          aria-label="Worktree setup"
+                          value={worktreeSetupInput}
+                          onChange={setWorktreeSetupInput}
                           onBlur={() =>
                             handleWorktreeFieldChange(
-                              "branch",
-                              worktreeBranchInput
+                              "setup",
+                              worktreeSetupInput
                             )
                           }
-                          aria-describedby={
-                            worktreeBranchDiagnostics.length > 0
-                              ? "settings-worktree-branch-diagnostic"
-                              : undefined
-                          }
-                          className={`w-full bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono`}
-                        />
-                        <FieldDiagnostic
-                          id="settings-worktree-branch-diagnostic"
-                          diagnostics={worktreeBranchDiagnostics}
+                          placeholder="e.g. npm ci"
+                          className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                         />
                       </FormField>
-                    </>
-                  )}
-                  <FormField
-                    label="Base"
-                    schemaPath="worktree.base"
-                    htmlFor="settings-worktree-base"
-                    description="Optional Git ref used as the starting point for a new worktree."
-                  >
-                    <BranchNameEditor
-                      id="settings-worktree-base"
-                      aria-label="Worktree base"
-                      value={worktreeBaseInput}
-                      onChange={setWorktreeBaseInput}
-                      onBlur={() =>
-                        handleWorktreeFieldChange("base", worktreeBaseInput)
-                      }
-                      placeholder="Current branch (HEAD)"
-                      className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
-                    />
-                  </FormField>
-                  <FormField
-                    label="Setup"
-                    schemaPath="worktree.setup"
-                    htmlFor="settings-worktree-setup"
-                    description="Optional command run after a new worktree is created. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
-                  >
-                    <ScriptCommandEditor
-                      id="settings-worktree-setup"
-                      aria-label="Worktree setup"
-                      value={worktreeSetupInput}
-                      onChange={setWorktreeSetupInput}
-                      onBlur={() =>
-                        handleWorktreeFieldChange("setup", worktreeSetupInput)
-                      }
-                      placeholder="e.g. npm ci"
-                      className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
-                    />
-                  </FormField>
-                  {worktreeMode === WORKTREE_MODES.MANAGED && (
-                    <>
-                      <FormField
-                        label="Keep directory"
-                        schemaPath="worktree.keep"
-                        htmlFor="settings-worktree-keep"
-                        description={WORKTREE_KEEP_HELP_TEXT}
-                      >
-                        <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
-                          <input
-                            type="checkbox"
-                            id="settings-worktree-keep"
-                            aria-label="Keep directory"
-                            checked={worktreeKeepInput}
-                            onChange={(event) => {
-                              const keep = event.target.checked;
-                              setWorktreeKeepInput(keep);
-                              handleWorktreeFieldChange("keep", keep);
-                            }}
-                            className="accent-button-bg"
-                          />
-                          Keep managed worktree for review and undo
-                        </label>
-                      </FormField>
-                      <FormField
-                        label="Merge"
-                        schemaPath="worktree.merge"
-                        htmlFor="settings-worktree-merge"
-                        description="Merge the managed branch into the working checkout after every run."
-                      >
-                        <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
-                          <input
-                            type="checkbox"
-                            id="settings-worktree-merge"
-                            aria-label="Merge"
-                            checked={worktreeMergeInput}
-                            onChange={(event) => {
-                              const merge = event.target.checked;
-                              setWorktreeMergeInput(merge);
-                              handleWorktreeFieldChange("merge", merge);
-                            }}
-                            className="accent-button-bg"
-                          />
-                          Merge into the working checkout after every run
-                        </label>
-                      </FormField>
-                    </>
-                  )}
-                </DrawerRow>
-              </AnimatedSection>
+                      {worktreeMode === WORKTREE_MODES.MANAGED && (
+                        <>
+                          <FormField
+                            label="Keep directory"
+                            schemaPath="worktree.keep"
+                            htmlFor="settings-worktree-keep"
+                            description={WORKTREE_KEEP_HELP_TEXT}
+                          >
+                            <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
+                              <input
+                                type="checkbox"
+                                id="settings-worktree-keep"
+                                aria-label="Keep directory"
+                                checked={worktreeKeepInput}
+                                onChange={(event) => {
+                                  const keep = event.target.checked;
+                                  setWorktreeKeepInput(keep);
+                                  handleWorktreeFieldChange("keep", keep);
+                                }}
+                                className="accent-button-bg"
+                              />
+                              Keep managed worktree for review and undo
+                            </label>
+                          </FormField>
+                          <FormField
+                            label="Merge"
+                            schemaPath="worktree.merge"
+                            htmlFor="settings-worktree-merge"
+                            description="Merge the managed branch into the working checkout after every run."
+                          >
+                            <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
+                              <input
+                                type="checkbox"
+                                id="settings-worktree-merge"
+                                aria-label="Merge"
+                                checked={worktreeMergeInput}
+                                onChange={(event) => {
+                                  const merge = event.target.checked;
+                                  setWorktreeMergeInput(merge);
+                                  handleWorktreeFieldChange("merge", merge);
+                                }}
+                                className="accent-button-bg"
+                              />
+                              Merge into the working checkout after every run
+                            </label>
+                          </FormField>
+                        </>
+                      )}
+                    </DrawerRow>
+                  </div>
+                </AnimatedSection>
 
-              {workflowProperties.worktree === undefined &&
-                worktreeMode !== WORKTREE_MODE_NONE && (
-                  <p className="text-xxs text-warning-fg" role="status">
-                    This worktree default is inherited from settings.
-                    {worktreeMode === WORKTREE_MODES.NAMED &&
-                      " It uses one workspace-wide exclusive lease, so concurrent runs of this workflow serialize on the same branch."}
-                  </p>
-                )}
+                {workflowProperties.worktree === undefined &&
+                  worktreeMode !== WORKTREE_MODE_NONE && (
+                    <p className="text-xxs text-warning-fg" role="status">
+                      This worktree default is inherited from settings.
+                      {worktreeMode === WORKTREE_MODES.NAMED &&
+                        " It uses one workspace-wide exclusive lease, so concurrent runs of this workflow serialize on the same branch."}
+                    </p>
+                  )}
+              </PropertyGroup>
             </>
           )}
 
@@ -2310,8 +2322,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
           {activePage === DRAWER_PAGES.VALIDATION && (
             <div className="space-y-4">
               {/* Pre-Condition Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
+              <PropertyGroup>
+                <div className="flex items-center justify-between">
                   <label
                     htmlFor="settings-pre-condition-enabled"
                     className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer"
@@ -2343,7 +2355,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   )}
                 </div>
-                <p className="text-xs text-description-fg mb-3">
+                <p className="text-xs text-description-fg">
                   Runs a script before each prompt. Use to gate execution based
                   on a condition.
                 </p>
@@ -2365,11 +2377,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   </div>
                 </AnimatedSection>
-              </div>
+              </PropertyGroup>
 
               {/* End Condition Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
+              <PropertyGroup>
+                <div className="flex items-center justify-between">
                   <label
                     htmlFor="settings-end-condition-enabled"
                     className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer"
@@ -2401,7 +2413,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   )}
                 </div>
-                <p className="text-xs text-description-fg mb-3">
+                <p className="text-xs text-description-fg">
                   Use to validate the prompt&apos;s work and determine whether
                   it should be re-run.
                 </p>
@@ -2423,11 +2435,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   </div>
                 </AnimatedSection>
-              </div>
+              </PropertyGroup>
 
               {/* Error Behavior Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
+              <PropertyGroup>
+                <div className="flex items-center justify-between">
                   <label
                     htmlFor="settings-error-on-error"
                     className="text-xs font-semibold uppercase text-description-fg"
@@ -2447,7 +2459,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     }
                   />
                 </div>
-                <p className="text-xs text-description-fg mb-3">
+                <p className="text-xs text-description-fg">
                   What to do if a pre-condition, prompt/harness, end-condition,
                   or script step encounters an internal error: stop, retry, or
                   continue.
@@ -2458,7 +2470,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   onChange={handleErrorBehaviorChange}
                   idPrefix="settings-error"
                 />
-              </div>
+              </PropertyGroup>
 
               <FormField
                 label="Max Steps"
@@ -2532,92 +2544,96 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
           {activePage === DRAWER_PAGES.PERMISSIONS && (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 flex flex-col min-h-0">
-                <FormField
-                  label={SANDBOX_UI_LABELS.FIELD}
-                  schemaPath="sandbox"
-                  htmlFor="settings-sandbox"
-                >
-                  <CustomSelect
-                    id="settings-sandbox"
-                    triggerAriaLabel={SANDBOX_UI_LABELS.FIELD}
-                    value={sandboxSelectionFromValue(
-                      workflowProperties.sandbox
-                    )}
-                    onChange={(value) => {
-                      const sandbox = sandboxValueFromSelection(value);
-                      postWorkflowPropertiesUpdate({ sandbox });
-                    }}
-                    options={sandboxSelectOptions(globalSettings.sandbox)}
-                  />
-                  {sandboxSupport && (
-                    <FieldDiagnostic
-                      id="settings-sandbox-diagnostic"
-                      diagnostics={[sandboxSupport]}
-                      className="mt-1"
-                    />
-                  )}
-                </FormField>
-                {/* Mode only means something while the sandbox is On. */}
-                <AnimatedSection visible={sandboxModeVisible}>
+              <div className="flex-1 flex flex-col min-h-0 gap-2">
+                {/* Sandbox group: Mode only means something while the sandbox is On. */}
+                <PropertyGroup>
                   <FormField
-                    label={SANDBOX_UI_LABELS.MODE_FIELD}
-                    schemaPath="sandboxMode"
-                    htmlFor="settings-sandbox-mode"
+                    label={SANDBOX_UI_LABELS.FIELD}
+                    schemaPath="sandbox"
+                    htmlFor="settings-sandbox"
                   >
                     <CustomSelect
-                      id="settings-sandbox-mode"
-                      schemaPath="sandboxMode"
-                      triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
-                      value={sandboxModeSelectionFromValue(
-                        workflowProperties.sandboxMode
+                      id="settings-sandbox"
+                      triggerAriaLabel={SANDBOX_UI_LABELS.FIELD}
+                      value={sandboxSelectionFromValue(
+                        workflowProperties.sandbox
                       )}
                       onChange={(value) => {
-                        const sandboxMode =
-                          sandboxModeValueFromSelection(value);
-                        postWorkflowPropertiesUpdate({ sandboxMode });
+                        const sandbox = sandboxValueFromSelection(value);
+                        postWorkflowPropertiesUpdate({ sandbox });
                       }}
-                      options={sandboxModeSelectOptions(
-                        globalSettings.sandboxMode
+                      options={sandboxSelectOptions(globalSettings.sandbox)}
+                    />
+                    {sandboxSupport && (
+                      <FieldDiagnostic
+                        id="settings-sandbox-diagnostic"
+                        diagnostics={[sandboxSupport]}
+                        className="mt-1"
+                      />
+                    )}
+                  </FormField>
+                  <AnimatedSection visible={sandboxModeVisible}>
+                    <FormField
+                      label={SANDBOX_UI_LABELS.MODE_FIELD}
+                      schemaPath="sandboxMode"
+                      htmlFor="settings-sandbox-mode"
+                    >
+                      <CustomSelect
+                        id="settings-sandbox-mode"
+                        schemaPath="sandboxMode"
+                        triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
+                        value={sandboxModeSelectionFromValue(
+                          workflowProperties.sandboxMode
+                        )}
+                        onChange={(value) => {
+                          const sandboxMode =
+                            sandboxModeValueFromSelection(value);
+                          postWorkflowPropertiesUpdate({ sandboxMode });
+                        }}
+                        options={sandboxModeSelectOptions(
+                          globalSettings.sandboxMode
+                        )}
+                      />
+                    </FormField>
+                  </AnimatedSection>
+                </PropertyGroup>
+
+                <PropertyGroup>
+                  <FormField
+                    label="Trusted External Roots"
+                    schemaPath="trustedExternalRoots"
+                    htmlFor="settings-trusted-external-roots-mode"
+                    description="Restrict this workflow to selected external directories, inherit the user and workspace roots, or disable external-root access."
+                  >
+                    <CustomSelect
+                      id="settings-trusted-external-roots-mode"
+                      schemaPath="trustedExternalRoots"
+                      triggerAriaLabel="Trusted External Roots"
+                      value={trustedRootsMode}
+                      onChange={handleTrustedRootsModeChange}
+                      options={toSelectOptions(
+                        TRUSTED_ROOTS_SELECTION_OPTIONS_META,
+                        "trustedExternalRoots"
+                      ).map((option) =>
+                        option.value === TRUSTED_ROOTS_MODES.INHERIT
+                          ? {
+                              ...option,
+                              label: `Inherit (${liveTrustedExternalRoots.length > 0 ? "Custom" : "None"})`,
+                            }
+                          : option
                       )}
                     />
-                  </FormField>
-                </AnimatedSection>
-
-                <FormField
-                  label="Trusted External Roots"
-                  schemaPath="trustedExternalRoots"
-                  htmlFor="settings-trusted-external-roots-mode"
-                  description="Restrict this workflow to selected external directories, inherit the user and workspace roots, or disable external-root access."
-                >
-                  <CustomSelect
-                    id="settings-trusted-external-roots-mode"
-                    schemaPath="trustedExternalRoots"
-                    triggerAriaLabel="Trusted External Roots"
-                    value={trustedRootsMode}
-                    onChange={handleTrustedRootsModeChange}
-                    options={toSelectOptions(
-                      TRUSTED_ROOTS_SELECTION_OPTIONS_META,
-                      "trustedExternalRoots"
-                    ).map((option) =>
-                      option.value === TRUSTED_ROOTS_MODES.INHERIT
-                        ? {
-                            ...option,
-                            label: `Inherit (${liveTrustedExternalRoots.length > 0 ? "Custom" : "None"})`,
-                          }
-                        : option
+                    {trustedRootsMode === TRUSTED_ROOTS_MODES.CUSTOM && (
+                      <TrustedRootsListEditor
+                        entries={trustedRootsInput.map((path) => ({ path }))}
+                        showDecisionStatus={false}
+                        onAdd={handleTrustedRootAdd}
+                        onBrowse={handleBrowseTrustedRoot}
+                        onRemove={handleTrustedRootRemove}
+                      />
                     )}
-                  />
-                  {trustedRootsMode === TRUSTED_ROOTS_MODES.CUSTOM && (
-                    <TrustedRootsListEditor
-                      entries={trustedRootsInput.map((path) => ({ path }))}
-                      showDecisionStatus={false}
-                      onAdd={handleTrustedRootAdd}
-                      onBrowse={handleBrowseTrustedRoot}
-                      onRemove={handleTrustedRootRemove}
-                    />
-                  )}
-                </FormField>
+                  </FormField>
+                </PropertyGroup>
 
                 <FormField
                   label="Secrets"
@@ -2662,198 +2678,204 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   />
                 </FormField>
 
-                {/* Permission Mode sits with the lists it governs. */}
-                <FormField
-                  label="Tool Permission Mode"
-                  schemaPath="toolPermissions.mode"
-                  htmlFor="settings-permission-mode"
-                  description="Tool permission mode for CLI harnesses"
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.TOOL_PERMISSIONS}
-                      show={isDifferentFromGlobal(
-                        PROMPT_PROPERTIES.TOOL_PERMISSIONS
-                      )}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-                          workflowProperties.toolPermissions
-                        )
-                      }
-                    />
-                  }
-                >
-                  <CustomSelect
-                    id="settings-permission-mode"
+                {/* Permission Mode sits in one group with the lists it governs. */}
+                <PropertyGroup className="flex-1 flex flex-col min-h-0 gap-2">
+                  <FormField
+                    label="Tool Permission Mode"
                     schemaPath="toolPermissions.mode"
-                    triggerAriaLabel="Tool Permission Mode"
-                    value={permMode}
-                    onChange={(mode) => {
-                      handleToolPermissionsChange({
-                        mode: mode as ToolPermissionMode,
-                        allowedTools: allowedToolsInput,
-                        deniedTools: deniedToolsInput,
-                      });
-                    }}
-                    options={toSelectOptions(
-                      PERMISSION_MODE_OPTIONS_META,
-                      "toolPermissions.mode"
-                    )}
-                    warning={
-                      modeDiagnostics.find(
-                        (diagnostic) =>
-                          diagnostic.severity ===
-                          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
-                      )?.message
-                    }
-                    warningId="settings-permission-mode-diagnostic"
-                  />
-                </FormField>
-
-                {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
-                <div className="flex-1 flex flex-col gap-2 min-h-0 mt-2">
-                  <FormField
-                    label="Allowed Tools"
-                    schemaPath="toolPermissions.allowedTools"
-                    htmlFor="settings-allowed-tools"
-                    description="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
-                    className="flex-1 min-h-0"
+                    htmlFor="settings-permission-mode"
+                    description="Tool permission mode for CLI harnesses"
                     setAsDefaultButton={
                       <SetAsDefaultButton
-                        property={`${PROMPT_PROPERTIES.TOOL_PERMISSIONS}.allowedTools`}
-                        show={
-                          JSON.stringify(effectiveAllowedTools) !==
-                          JSON.stringify(
-                            globalSettings.toolPermissions.allowedTools ?? []
-                          )
-                        }
+                        property={PROMPT_PROPERTIES.TOOL_PERMISSIONS}
+                        show={isDifferentFromGlobal(
+                          PROMPT_PROPERTIES.TOOL_PERMISSIONS
+                        )}
                         onSetDefault={() =>
                           handleSetAsDefault(
                             PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-                            {
-                              ...(workflowProperties.toolPermissions ?? {}),
-                              allowedTools: effectiveAllowedTools,
-                              deniedTools: effectiveDeniedTools,
-                            }
+                            workflowProperties.toolPermissions
                           )
                         }
                       />
                     }
                   >
-                    <PermissionListEditor
-                      id="settings-allowed-tools"
-                      aria-label="Allowed Tools"
-                      value={allowedToolsInput}
-                      onChange={setAllowedToolsInput}
-                      onBlur={(allowedTools) =>
+                    <CustomSelect
+                      id="settings-permission-mode"
+                      schemaPath="toolPermissions.mode"
+                      triggerAriaLabel="Tool Permission Mode"
+                      value={permMode}
+                      onChange={(mode) => {
                         handleToolPermissionsChange({
-                          ...(toolPerms || {}),
-                          allowedTools,
-                          deniedTools: deniedToolsInput,
-                        })
-                      }
-                      disabled={permMode !== PERMISSION_MODES.CUSTOM}
-                      aria-describedby={
-                        allowedFieldDiagnostics.length > 0
-                          ? "settings-allowed-tools-diagnostic"
-                          : undefined
-                      }
-                      placeholder={"read\nglob\ngrep"}
-                      fontSize="0.75rem"
-                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono${
-                        permMode !== PERMISSION_MODES.CUSTOM
-                          ? " opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
-                    />
-                    <FieldDiagnostic
-                      id="settings-allowed-tools-diagnostic"
-                      diagnostics={
-                        allowedAggregate
-                          ? [allowedAggregate]
-                          : allowedDiagnostics.map((diagnostic) =>
-                              toFieldDiagnostic(
-                                diagnostic,
-                                formatCompatibilitySource(diagnostic.sourceTier)
-                              )
-                            )
-                      }
-                    />
-                  </FormField>
-
-                  <FormField
-                    label="Denied Tools"
-                    schemaPath="toolPermissions.deniedTools"
-                    htmlFor="settings-denied-tools"
-                    description="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
-                    className="flex-1 min-h-0"
-                    setAsDefaultButton={
-                      <SetAsDefaultButton
-                        property={`${PROMPT_PROPERTIES.TOOL_PERMISSIONS}.deniedTools`}
-                        show={
-                          JSON.stringify(effectiveDeniedTools) !==
-                          JSON.stringify(
-                            globalSettings.toolPermissions.deniedTools ?? []
-                          )
-                        }
-                        onSetDefault={() =>
-                          handleSetAsDefault(
-                            PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-                            {
-                              ...(workflowProperties.toolPermissions ?? {}),
-                              allowedTools: effectiveAllowedTools,
-                              deniedTools: effectiveDeniedTools,
-                            }
-                          )
-                        }
-                      />
-                    }
-                  >
-                    <PermissionListEditor
-                      id="settings-denied-tools"
-                      aria-label="Denied Tools"
-                      value={deniedToolsInput}
-                      onChange={setDeniedToolsInput}
-                      onBlur={(deniedTools) =>
-                        handleToolPermissionsChange({
-                          ...(toolPerms || {}),
+                          mode: mode as ToolPermissionMode,
                           allowedTools: allowedToolsInput,
-                          deniedTools,
-                        })
+                          deniedTools: deniedToolsInput,
+                        });
+                      }}
+                      options={toSelectOptions(
+                        PERMISSION_MODE_OPTIONS_META,
+                        "toolPermissions.mode"
+                      )}
+                      warning={
+                        modeDiagnostics.find(
+                          (diagnostic) =>
+                            diagnostic.severity ===
+                            COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                        )?.message
                       }
-                      disabled={
-                        permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
-                        permMode === PERMISSION_MODES.NONE
-                      }
-                      aria-describedby={
-                        deniedFieldDiagnostics.length > 0
-                          ? "settings-denied-tools-diagnostic"
-                          : undefined
-                      }
-                      placeholder={"shell(rm:*)\nwrite"}
-                      fontSize="0.75rem"
-                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedFieldDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono${
-                        permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
-                        permMode === PERMISSION_MODES.NONE
-                          ? " opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
-                    />
-                    <FieldDiagnostic
-                      id="settings-denied-tools-diagnostic"
-                      diagnostics={
-                        deniedAggregate
-                          ? [deniedAggregate]
-                          : deniedDiagnostics.map((diagnostic) =>
-                              toFieldDiagnostic(
-                                diagnostic,
-                                formatCompatibilitySource(diagnostic.sourceTier)
-                              )
-                            )
-                      }
+                      warningId="settings-permission-mode-diagnostic"
                     />
                   </FormField>
-                </div>
+
+                  {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
+                  <div className="flex-1 flex flex-col gap-2 min-h-0">
+                    <FormField
+                      label="Allowed Tools"
+                      schemaPath="toolPermissions.allowedTools"
+                      htmlFor="settings-allowed-tools"
+                      description="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
+                      className="flex-1 min-h-0"
+                      setAsDefaultButton={
+                        <SetAsDefaultButton
+                          property={`${PROMPT_PROPERTIES.TOOL_PERMISSIONS}.allowedTools`}
+                          show={
+                            JSON.stringify(effectiveAllowedTools) !==
+                            JSON.stringify(
+                              globalSettings.toolPermissions.allowedTools ?? []
+                            )
+                          }
+                          onSetDefault={() =>
+                            handleSetAsDefault(
+                              PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+                              {
+                                ...(workflowProperties.toolPermissions ?? {}),
+                                allowedTools: effectiveAllowedTools,
+                                deniedTools: effectiveDeniedTools,
+                              }
+                            )
+                          }
+                        />
+                      }
+                    >
+                      <PermissionListEditor
+                        id="settings-allowed-tools"
+                        aria-label="Allowed Tools"
+                        value={allowedToolsInput}
+                        onChange={setAllowedToolsInput}
+                        onBlur={(allowedTools) =>
+                          handleToolPermissionsChange({
+                            ...(toolPerms || {}),
+                            allowedTools,
+                            deniedTools: deniedToolsInput,
+                          })
+                        }
+                        disabled={permMode !== PERMISSION_MODES.CUSTOM}
+                        aria-describedby={
+                          allowedFieldDiagnostics.length > 0
+                            ? "settings-allowed-tools-diagnostic"
+                            : undefined
+                        }
+                        placeholder={"read\nglob\ngrep"}
+                        fontSize="0.75rem"
+                        className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono${
+                          permMode !== PERMISSION_MODES.CUSTOM
+                            ? " opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                      />
+                      <FieldDiagnostic
+                        id="settings-allowed-tools-diagnostic"
+                        diagnostics={
+                          allowedAggregate
+                            ? [allowedAggregate]
+                            : allowedDiagnostics.map((diagnostic) =>
+                                toFieldDiagnostic(
+                                  diagnostic,
+                                  formatCompatibilitySource(
+                                    diagnostic.sourceTier
+                                  )
+                                )
+                              )
+                        }
+                      />
+                    </FormField>
+
+                    <FormField
+                      label="Denied Tools"
+                      schemaPath="toolPermissions.deniedTools"
+                      htmlFor="settings-denied-tools"
+                      description="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
+                      className="flex-1 min-h-0"
+                      setAsDefaultButton={
+                        <SetAsDefaultButton
+                          property={`${PROMPT_PROPERTIES.TOOL_PERMISSIONS}.deniedTools`}
+                          show={
+                            JSON.stringify(effectiveDeniedTools) !==
+                            JSON.stringify(
+                              globalSettings.toolPermissions.deniedTools ?? []
+                            )
+                          }
+                          onSetDefault={() =>
+                            handleSetAsDefault(
+                              PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+                              {
+                                ...(workflowProperties.toolPermissions ?? {}),
+                                allowedTools: effectiveAllowedTools,
+                                deniedTools: effectiveDeniedTools,
+                              }
+                            )
+                          }
+                        />
+                      }
+                    >
+                      <PermissionListEditor
+                        id="settings-denied-tools"
+                        aria-label="Denied Tools"
+                        value={deniedToolsInput}
+                        onChange={setDeniedToolsInput}
+                        onBlur={(deniedTools) =>
+                          handleToolPermissionsChange({
+                            ...(toolPerms || {}),
+                            allowedTools: allowedToolsInput,
+                            deniedTools,
+                          })
+                        }
+                        disabled={
+                          permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+                          permMode === PERMISSION_MODES.NONE
+                        }
+                        aria-describedby={
+                          deniedFieldDiagnostics.length > 0
+                            ? "settings-denied-tools-diagnostic"
+                            : undefined
+                        }
+                        placeholder={"shell(rm:*)\nwrite"}
+                        fontSize="0.75rem"
+                        className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedFieldDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono${
+                          permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+                          permMode === PERMISSION_MODES.NONE
+                            ? " opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                      />
+                      <FieldDiagnostic
+                        id="settings-denied-tools-diagnostic"
+                        diagnostics={
+                          deniedAggregate
+                            ? [deniedAggregate]
+                            : deniedDiagnostics.map((diagnostic) =>
+                                toFieldDiagnostic(
+                                  diagnostic,
+                                  formatCompatibilitySource(
+                                    diagnostic.sourceTier
+                                  )
+                                )
+                              )
+                        }
+                      />
+                    </FormField>
+                  </div>
+                </PropertyGroup>
               </div>
             </div>
           )}

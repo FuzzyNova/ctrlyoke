@@ -53,6 +53,7 @@ import {
   toAgentSelectOption,
   toSkillSelectOption,
   DrawerRow,
+  PropertyGroup,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
   formatPriorContextLabel,
@@ -1153,7 +1154,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
               </button>
             </div>
             {/* Pre-Condition Section */}
-            <div className="space-y-2">
+            <PropertyGroup>
               <label
                 htmlFor="prop-pre-condition-mode"
                 className="text-xs font-semibold uppercase text-description-fg"
@@ -1188,7 +1189,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
               <AnimatedSection
                 visible={preConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
               >
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded-sm">
+                <div className="space-y-3">
                   <ScriptConditionEditor
                     variant={PROMPT_PROPERTIES.PRE_CONDITION}
                     schemaPath="preCondition"
@@ -1208,10 +1209,10 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                   />
                 </div>
               </AnimatedSection>
-            </div>
+            </PropertyGroup>
 
             {/* End Condition Section */}
-            <div className="space-y-2">
+            <PropertyGroup>
               <label
                 htmlFor="prop-end-condition-mode"
                 className="text-xs font-semibold uppercase text-description-fg"
@@ -1243,7 +1244,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
               <AnimatedSection
                 visible={endConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
               >
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded-sm">
+                <div className="space-y-3">
                   <ScriptConditionEditor
                     variant={PROMPT_PROPERTIES.END_CONDITION}
                     schemaPath="endCondition"
@@ -1263,10 +1264,10 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                   />
                 </div>
               </AnimatedSection>
-            </div>
+            </PropertyGroup>
 
             {/* Error Behavior Section */}
-            <div className="space-y-2">
+            <PropertyGroup>
               <label
                 htmlFor="prop-error-behavior-mode"
                 className="text-xs font-semibold uppercase text-description-fg"
@@ -1295,7 +1296,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
               <AnimatedSection
                 visible={errorBehaviorMode === PROPERTY_EDITOR_MODES.CUSTOM}
               >
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded-sm">
+                <div className="space-y-3">
                   <ErrorBehaviorEditor
                     schemaPath="errorBehavior"
                     value={displayedProperties.errorBehavior}
@@ -1307,7 +1308,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                   />
                 </div>
               </AnimatedSection>
-            </div>
+            </PropertyGroup>
           </div>
         )}
 
@@ -1331,69 +1332,73 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
         {/* Page: Permissions */}
         {activePage === DRAWER_PAGES.PERMISSIONS && (
           <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="prop-sandbox"
-                  className="text-xs font-semibold uppercase text-description-fg"
-                >
-                  {SANDBOX_UI_LABELS.FIELD}
-                </label>
-                <CustomSelect
-                  id="prop-sandbox"
-                  schemaPath="sandbox"
-                  triggerAriaLabel={SANDBOX_UI_LABELS.FIELD}
-                  value={sandboxSelectionFromValue(displayedProperties.sandbox)}
-                  onChange={(value) =>
-                    setProperty(
-                      PROMPT_PROPERTIES.SANDBOX,
-                      sandboxValueFromSelection(value)
-                    )
-                  }
-                  options={sandboxSelectOptions(inheritedSandbox)}
-                  disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
-                />
-                {sandboxSupport && (
-                  <FieldDiagnostic
-                    id="prop-sandbox-diagnostic"
-                    diagnostics={[sandboxSupport]}
-                    className="mt-1"
-                  />
-                )}
-              </div>
-              {/* Mode only means something while the sandbox is On. */}
-              <AnimatedSection visible={sandboxModeVisible}>
+            <div className="flex-1 flex flex-col min-h-0 gap-2">
+              {/* Sandbox group: Mode only means something while the sandbox is On. */}
+              <PropertyGroup>
                 <div className="flex flex-col gap-1">
                   <label
-                    htmlFor="prop-sandbox-mode"
+                    htmlFor="prop-sandbox"
                     className="text-xs font-semibold uppercase text-description-fg"
                   >
-                    {SANDBOX_UI_LABELS.MODE_FIELD}
+                    {SANDBOX_UI_LABELS.FIELD}
                   </label>
                   <CustomSelect
-                    id="prop-sandbox-mode"
-                    schemaPath="sandboxMode"
-                    triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
-                    value={sandboxModeSelectionFromValue(
-                      displayedProperties.sandboxMode
+                    id="prop-sandbox"
+                    schemaPath="sandbox"
+                    triggerAriaLabel={SANDBOX_UI_LABELS.FIELD}
+                    value={sandboxSelectionFromValue(
+                      displayedProperties.sandbox
                     )}
                     onChange={(value) =>
                       setProperty(
-                        PROMPT_PROPERTIES.SANDBOX_MODE,
-                        sandboxModeValueFromSelection(value)
+                        PROMPT_PROPERTIES.SANDBOX,
+                        sandboxValueFromSelection(value)
                       )
                     }
-                    options={sandboxModeSelectOptions(
-                      workflowProperties.sandboxMode ??
-                        globalSettings.sandboxMode
-                    )}
-                    disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX_MODE)}
+                    options={sandboxSelectOptions(inheritedSandbox)}
+                    disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
                   />
+                  {sandboxSupport && (
+                    <FieldDiagnostic
+                      id="prop-sandbox-diagnostic"
+                      diagnostics={[sandboxSupport]}
+                      className="mt-1"
+                    />
+                  )}
                 </div>
-              </AnimatedSection>
+                <AnimatedSection visible={sandboxModeVisible}>
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-sandbox-mode"
+                      className="text-xs font-semibold uppercase text-description-fg"
+                    >
+                      {SANDBOX_UI_LABELS.MODE_FIELD}
+                    </label>
+                    <CustomSelect
+                      id="prop-sandbox-mode"
+                      schemaPath="sandboxMode"
+                      triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
+                      value={sandboxModeSelectionFromValue(
+                        displayedProperties.sandboxMode
+                      )}
+                      onChange={(value) =>
+                        setProperty(
+                          PROMPT_PROPERTIES.SANDBOX_MODE,
+                          sandboxModeValueFromSelection(value)
+                        )
+                      }
+                      options={sandboxModeSelectOptions(
+                        workflowProperties.sandboxMode ??
+                          globalSettings.sandboxMode
+                      )}
+                      disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX_MODE)}
+                    />
+                  </div>
+                </AnimatedSection>
+              </PropertyGroup>
 
               {/* Secrets — workflow grants plus locked inline !NAME references */}
-              <div className="flex flex-col gap-1 mt-2">
+              <div className="flex flex-col gap-1">
                 <SecretGrantsEditor
                   value={displayedProperties.secrets}
                   inheritedValue={resolvedSecrets}
@@ -1406,198 +1411,206 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                 />
               </div>
 
-              {/* Permission Mode sits with the lists it governs. */}
-              <div className="flex flex-col gap-1 mt-2">
-                <label
-                  htmlFor="prop-permission-mode"
-                  className="text-xs font-semibold uppercase text-description-fg"
-                  title="Tool permission mode override for this prompt"
-                >
-                  Tool Permission Mode
-                </label>
-                <CustomSelect
-                  id="prop-permission-mode"
-                  schemaPath="toolPermissions.mode"
-                  triggerAriaLabel="Tool Permission Mode"
-                  value={
-                    displayedProperties.toolPermissions === undefined
-                      ? INHERIT_DEFAULT_OPTION
-                      : displayedProperties.toolPermissions === null
-                        ? PERMISSION_MODES.NONE
-                        : (displayedProperties.toolPermissions.mode ??
-                          PERMISSION_MODES.ALLOW_ALL)
-                  }
-                  onChange={(v) => {
-                    if (v === INHERIT_DEFAULT_OPTION) {
-                      setProperty(
-                        PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-                        undefined
-                      );
-                    } else {
-                      const current =
-                        (displayedProperties.toolPermissions as
-                          ToolPermissionsOverride | undefined) || {};
-                      setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
-                        ...current,
-                        mode: v as ToolPermissionMode,
-                      });
+              {/* Permission Mode sits in one group with the lists it governs. */}
+              <PropertyGroup className="flex-1 flex flex-col min-h-0 gap-2">
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="prop-permission-mode"
+                    className="text-xs font-semibold uppercase text-description-fg"
+                    title="Tool permission mode override for this prompt"
+                  >
+                    Tool Permission Mode
+                  </label>
+                  <CustomSelect
+                    id="prop-permission-mode"
+                    schemaPath="toolPermissions.mode"
+                    triggerAriaLabel="Tool Permission Mode"
+                    value={
+                      displayedProperties.toolPermissions === undefined
+                        ? INHERIT_DEFAULT_OPTION
+                        : displayedProperties.toolPermissions === null
+                          ? PERMISSION_MODES.NONE
+                          : (displayedProperties.toolPermissions.mode ??
+                            PERMISSION_MODES.ALLOW_ALL)
                     }
-                  }}
-                  options={[
-                    {
-                      value: INHERIT_DEFAULT_OPTION,
-                      label: defaultPermissionsLabel,
-                      pseudo: { omit: true },
-                    },
-                    ...toSelectOptions(
-                      PERMISSION_MODE_OPTIONS_META,
-                      "toolPermissions.mode"
-                    ),
-                  ]}
-                  warning={
-                    modeDiagnostics.find(
-                      (diagnostic) =>
-                        diagnostic.severity ===
-                        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
-                    )?.message
-                  }
-                  warningId="prop-permission-mode-diagnostic"
-                  disabled={
+                    onChange={(v) => {
+                      if (v === INHERIT_DEFAULT_OPTION) {
+                        setProperty(
+                          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+                          undefined
+                        );
+                      } else {
+                        const current =
+                          (displayedProperties.toolPermissions as
+                            ToolPermissionsOverride | undefined) || {};
+                        setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
+                          ...current,
+                          mode: v as ToolPermissionMode,
+                        });
+                      }
+                    }}
+                    options={[
+                      {
+                        value: INHERIT_DEFAULT_OPTION,
+                        label: defaultPermissionsLabel,
+                        pseudo: { omit: true },
+                      },
+                      ...toSelectOptions(
+                        PERMISSION_MODE_OPTIONS_META,
+                        "toolPermissions.mode"
+                      ),
+                    ]}
+                    warning={
+                      modeDiagnostics.find(
+                        (diagnostic) =>
+                          diagnostic.severity ===
+                          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                      )?.message
+                    }
+                    warningId="prop-permission-mode-diagnostic"
+                    disabled={
+                      fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
+                      harnessScopedOptionsDisabled
+                    }
+                    triggerTitle={
+                      harnessScopedTooltip ?? bulkEditDisabledReason
+                    }
+                  />
+                </div>
+
+                {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
+                {(() => {
+                  const effectivePermMode = resolvedPermMode;
+                  const isInheriting =
+                    displayedProperties.toolPermissions === undefined;
+                  const allowedDisabled =
+                    isInheriting ||
+                    effectivePermMode !== PERMISSION_MODES.CUSTOM ||
                     fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
-                    harnessScopedOptionsDisabled
-                  }
-                  triggerTitle={harnessScopedTooltip ?? bulkEditDisabledReason}
-                />
-              </div>
+                    harnessScopedOptionsDisabled;
+                  const deniedDisabled =
+                    isInheriting ||
+                    fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
+                    harnessScopedOptionsDisabled ||
+                    effectivePermMode ===
+                      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+                    effectivePermMode === PERMISSION_MODES.NONE;
 
-              {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
-              {(() => {
-                const effectivePermMode = resolvedPermMode;
-                const isInheriting =
-                  displayedProperties.toolPermissions === undefined;
-                const allowedDisabled =
-                  isInheriting ||
-                  effectivePermMode !== PERMISSION_MODES.CUSTOM ||
-                  fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
-                  harnessScopedOptionsDisabled;
-                const deniedDisabled =
-                  isInheriting ||
-                  fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
-                  harnessScopedOptionsDisabled ||
-                  effectivePermMode ===
-                    PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
-                  effectivePermMode === PERMISSION_MODES.NONE;
+                  return (
+                    <div className="flex-1 flex flex-col min-h-0">
+                      <div
+                        className={`flex-1 flex min-h-0 gap-2 ${isNarrow ? "flex-col" : "flex-row"}`}
+                      >
+                        {/* Allowed Tools */}
+                        <div className="flex-1 flex flex-col gap-1 min-h-0">
+                          <label
+                            htmlFor="prop-allowed-tools"
+                            className="text-xs font-semibold uppercase text-description-fg"
+                            title="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
+                          >
+                            Allowed Tools
+                          </label>
+                          <textarea
+                            id="prop-allowed-tools"
+                            value={(
+                              (
+                                displayedProperties.toolPermissions as
+                                  ToolPermissionsOverride | undefined
+                              )?.allowedTools ?? []
+                            ).join("\n")}
+                            onChange={(e) => {
+                              const current =
+                                (displayedProperties.toolPermissions as
+                                  ToolPermissionsOverride | undefined) || {};
+                              setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
+                                ...current,
+                                allowedTools: e.target.value.split("\n"),
+                              });
+                            }}
+                            disabled={allowedDisabled}
+                            title={
+                              harnessScopedTooltip ?? bulkEditDisabledReason
+                            }
+                            aria-describedby={
+                              allowedDiagnostics.length > 0
+                                ? "prop-allowed-tools-diagnostic"
+                                : undefined
+                            }
+                            placeholder={"read\nglob\ngrep"}
+                            className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border resize-none font-mono${
+                              allowedDisabled
+                                ? " opacity-50 cursor-not-allowed"
+                                : ""
+                            }`}
+                          />
+                          <FieldDiagnostic
+                            id="prop-allowed-tools-diagnostic"
+                            diagnostics={allowedDiagnostics.map((diagnostic) =>
+                              toFieldDiagnostic(
+                                diagnostic,
+                                formatCompatibilitySource(diagnostic.sourceTier)
+                              )
+                            )}
+                          />
+                        </div>
 
-                return (
-                  <div className="flex-1 flex flex-col min-h-0 mt-2">
-                    <div
-                      className={`flex-1 flex min-h-0 gap-2 ${isNarrow ? "flex-col" : "flex-row"}`}
-                    >
-                      {/* Allowed Tools */}
-                      <div className="flex-1 flex flex-col gap-1 min-h-0">
-                        <label
-                          htmlFor="prop-allowed-tools"
-                          className="text-xs font-semibold uppercase text-description-fg"
-                          title="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
-                        >
-                          Allowed Tools
-                        </label>
-                        <textarea
-                          id="prop-allowed-tools"
-                          value={(
-                            (
-                              displayedProperties.toolPermissions as
-                                ToolPermissionsOverride | undefined
-                            )?.allowedTools ?? []
-                          ).join("\n")}
-                          onChange={(e) => {
-                            const current =
-                              (displayedProperties.toolPermissions as
-                                ToolPermissionsOverride | undefined) || {};
-                            setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
-                              ...current,
-                              allowedTools: e.target.value.split("\n"),
-                            });
-                          }}
-                          disabled={allowedDisabled}
-                          title={harnessScopedTooltip ?? bulkEditDisabledReason}
-                          aria-describedby={
-                            allowedDiagnostics.length > 0
-                              ? "prop-allowed-tools-diagnostic"
-                              : undefined
-                          }
-                          placeholder={"read\nglob\ngrep"}
-                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border resize-none font-mono${
-                            allowedDisabled
-                              ? " opacity-50 cursor-not-allowed"
-                              : ""
-                          }`}
-                        />
-                        <FieldDiagnostic
-                          id="prop-allowed-tools-diagnostic"
-                          diagnostics={allowedDiagnostics.map((diagnostic) =>
-                            toFieldDiagnostic(
-                              diagnostic,
-                              formatCompatibilitySource(diagnostic.sourceTier)
-                            )
-                          )}
-                        />
-                      </div>
-
-                      {/* Denied Tools */}
-                      <div className="flex-1 flex flex-col gap-1 min-h-0">
-                        <label
-                          htmlFor="prop-denied-tools"
-                          className="text-xs font-semibold uppercase text-description-fg"
-                          title="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
-                        >
-                          Denied Tools
-                        </label>
-                        <textarea
-                          id="prop-denied-tools"
-                          value={(
-                            (
-                              displayedProperties.toolPermissions as
-                                ToolPermissionsOverride | undefined
-                            )?.deniedTools ?? []
-                          ).join("\n")}
-                          onChange={(e) => {
-                            const current =
-                              (displayedProperties.toolPermissions as
-                                ToolPermissionsOverride | undefined) || {};
-                            setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
-                              ...current,
-                              deniedTools: e.target.value.split("\n"),
-                            });
-                          }}
-                          disabled={deniedDisabled}
-                          title={harnessScopedTooltip ?? bulkEditDisabledReason}
-                          aria-describedby={
-                            deniedDiagnostics.length > 0
-                              ? "prop-denied-tools-diagnostic"
-                              : undefined
-                          }
-                          placeholder={"shell(rm:*)\nwrite"}
-                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border resize-none font-mono${
-                            deniedDisabled
-                              ? " opacity-50 cursor-not-allowed"
-                              : ""
-                          }`}
-                        />
-                        <FieldDiagnostic
-                          id="prop-denied-tools-diagnostic"
-                          diagnostics={deniedDiagnostics.map((diagnostic) =>
-                            toFieldDiagnostic(
-                              diagnostic,
-                              formatCompatibilitySource(diagnostic.sourceTier)
-                            )
-                          )}
-                        />
+                        {/* Denied Tools */}
+                        <div className="flex-1 flex flex-col gap-1 min-h-0">
+                          <label
+                            htmlFor="prop-denied-tools"
+                            className="text-xs font-semibold uppercase text-description-fg"
+                            title="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
+                          >
+                            Denied Tools
+                          </label>
+                          <textarea
+                            id="prop-denied-tools"
+                            value={(
+                              (
+                                displayedProperties.toolPermissions as
+                                  ToolPermissionsOverride | undefined
+                              )?.deniedTools ?? []
+                            ).join("\n")}
+                            onChange={(e) => {
+                              const current =
+                                (displayedProperties.toolPermissions as
+                                  ToolPermissionsOverride | undefined) || {};
+                              setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
+                                ...current,
+                                deniedTools: e.target.value.split("\n"),
+                              });
+                            }}
+                            disabled={deniedDisabled}
+                            title={
+                              harnessScopedTooltip ?? bulkEditDisabledReason
+                            }
+                            aria-describedby={
+                              deniedDiagnostics.length > 0
+                                ? "prop-denied-tools-diagnostic"
+                                : undefined
+                            }
+                            placeholder={"shell(rm:*)\nwrite"}
+                            className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border resize-none font-mono${
+                              deniedDisabled
+                                ? " opacity-50 cursor-not-allowed"
+                                : ""
+                            }`}
+                          />
+                          <FieldDiagnostic
+                            id="prop-denied-tools-diagnostic"
+                            diagnostics={deniedDiagnostics.map((diagnostic) =>
+                              toFieldDiagnostic(
+                                diagnostic,
+                                formatCompatibilitySource(diagnostic.sourceTier)
+                              )
+                            )}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
+              </PropertyGroup>
             </div>
           </div>
         )}

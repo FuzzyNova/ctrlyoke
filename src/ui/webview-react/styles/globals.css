@@ -286,6 +286,21 @@
     transparent
   );
 
+  /* ── Property groups (PropertyGroup) ──
+     A bordered, lightly tinted box around a cluster of related property
+     controls. Both colors derive from the theme foreground so the group reads
+     on any sidebar/panel background; panel-border wins where the theme sets
+     one (high-contrast themes set it to their contrast border). */
+  --color-property-group-bg: color-mix(
+    in srgb,
+    var(--vscode-foreground) 4%,
+    transparent
+  );
+  --color-property-group-border: var(
+    --vscode-panel-border,
+    color-mix(in srgb, var(--vscode-foreground) 20%, transparent)
+  );
+
   /* ── Output block border colors (constant, theme independent) ── */
   --color-output-prompt-border: rgb(100, 100, 255);
   --color-output-command-border: rgb(255, 200, 100);

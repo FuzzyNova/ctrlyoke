@@ -17,6 +17,7 @@ import { KeyValueRowsEditor } from "../shared/KeyValueRowsEditor";
 import { ScriptCommandEditor } from "../shared/ScriptCommandEditor";
 import { Button } from "../shared/Button";
 import { Icon } from "../shared/Icon";
+import { PropertyGroup } from "../shared/PropertyGroup";
 import { useLocalValue } from "@hooks/useLocalInput";
 
 type HooksValue = UserHookConfig[] | null | undefined;
@@ -209,7 +210,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
       {modeSelector}
       <div className="space-y-2">
         {hooks.map((hook, index) => (
-          <div key={index} className="grid min-w-0 gap-2">
+          <PropertyGroup key={index} className="grid min-w-0 gap-2">
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
               <div className="flex min-w-0 flex-col gap-1">
                 <label
@@ -317,7 +318,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               entryNoun="environment variable"
               allowSecretReferences
             />
-          </div>
+          </PropertyGroup>
         ))}
       </div>
       <button
