@@ -1874,7 +1874,7 @@ describe("WorkflowSwitcher — loaded state", () => {
     expect(screen.queryByText("Regular Workflow")).not.toBeInTheDocument();
   });
 
-  it("filters by schedule state and posts the inverse enabled value from Scheduled", async () => {
+  it("filters by schedule state and shows a scheduled lineage only in Scheduled", async () => {
     const user = userEvent.setup();
     const schedule = {
       enabled: true,
@@ -1908,17 +1908,17 @@ describe("WorkflowSwitcher — loaded state", () => {
     await user.click(
       within(document.body).getByRole("button", { name: "Scheduled" })
     );
-    await user.click(
+    // One row per lineage: the scheduled one is not repeated in history.
+    expect(
       within(
         screen.getByRole("region", { name: "Scheduled workflows" })
-      ).getByRole("button", { name: "Disable schedule" })
-    );
-    expect(postMessageSpy).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.SET_SCHEDULE,
-      address: expect.objectContaining({ workflowKey: "test-0" }),
-      enabled: false,
-      trigger: schedule.trigger,
-    });
+      ).getByRole("listitem", { name: /Scheduled Workflow/ })
+    ).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("list", { name: "Recent workflows" })
+      ).queryByRole("listitem", { name: /Scheduled Workflow/ })
+    ).not.toBeInTheDocument();
   });
 
   it("lists only schedules that can still fire, and leaves running lineages to the Running section", async () => {
@@ -1990,6 +1990,17 @@ describe("WorkflowSwitcher — loaded state", () => {
       "aria-label",
       expect.stringContaining("Paused")
     );
+    expect(
+      within(screen.getByRole("list", { name: "Recent workflows" })).getByRole(
+        "listitem",
+        { name: /Fired Once/ }
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("list", { name: "Recent workflows" })
+      ).queryByRole("listitem", { name: /Paused Daily|Running Scheduled/ })
+    ).not.toBeInTheDocument();
     // The running lineage keeps its clock on the Running row instead.
     const running = within(
       screen.getByRole("region", { name: "Running workflows" })

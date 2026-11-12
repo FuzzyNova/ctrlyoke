@@ -17,6 +17,7 @@ import type {
   RunDefinitionChange,
   TemplateVariableType,
   TemplateVariableDefaultSource,
+  WorkflowListSection,
 } from "@root/types/DashboardConstants";
 import {
   PICKER_SHORTCUT_BINDINGS,
@@ -558,6 +559,8 @@ interface UiState {
   shownDropdownOptions: Record<string, string[]>;
   // Section collapse states
   stepsCollapsed: boolean;
+  /** Pinned workflow-dropdown sections the user collapsed to their header. */
+  collapsedWorkflowListSections: WorkflowListSection[];
   finalStepFooterExpanded: boolean;
   outputCollapsed: boolean;
   editorCollapsed: boolean;
@@ -960,6 +963,7 @@ interface UiActions {
   setHostCapabilities: (capabilities: DashboardHostCapability[]) => void;
   // Section toggles
   togglePromptsCollapse: () => void;
+  toggleWorkflowListSectionCollapsed: (section: WorkflowListSection) => void;
   toggleFinalStepFooterExpanded: () => void;
   setFinalStepFooterExpanded: (expanded: boolean) => void;
   toggleOutputCollapse: () => void;
@@ -1353,6 +1357,7 @@ const initialState: UiState = {
   workspaceEntrySort: DEFAULT_WORKSPACE_ENTRY_SORT,
   saveLocationSelection: null,
   stepsCollapsed: false,
+  collapsedWorkflowListSections: [],
   finalStepFooterExpanded: false,
   outputCollapsed: false,
   editorCollapsed: false,
@@ -1488,6 +1493,7 @@ function removeNamespaceValue(
 // Fields to persist via vscode.getState()/setState()
 const persistedFields = [
   "stepsCollapsed",
+  "collapsedWorkflowListSections",
   "outputCollapsed",
   "editorCollapsed",
   "settingsCollapsed",
@@ -1525,6 +1531,14 @@ export const useUiStore = create<UiState & UiActions>()(
 
       togglePromptsCollapse: () =>
         set((state) => ({ stepsCollapsed: !state.stepsCollapsed })),
+
+      toggleWorkflowListSectionCollapsed: (section) =>
+        set((state) => ({
+          collapsedWorkflowListSections:
+            state.collapsedWorkflowListSections.includes(section)
+              ? state.collapsedWorkflowListSections.filter((s) => s !== section)
+              : [...state.collapsedWorkflowListSections, section],
+        })),
 
       toggleFinalStepFooterExpanded: () =>
         set((state) => ({
@@ -2904,6 +2918,9 @@ export const useUiStore = create<UiState & UiActions>()(
         void useUiStore.persist.clearStorage();
         set({
           stepsCollapsed: initialState.stepsCollapsed,
+          collapsedWorkflowListSections: [
+            ...initialState.collapsedWorkflowListSections,
+          ],
           outputCollapsed: initialState.outputCollapsed,
           editorCollapsed: initialState.editorCollapsed,
           settingsCollapsed: initialState.settingsCollapsed,

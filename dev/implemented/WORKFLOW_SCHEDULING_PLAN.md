@@ -47,9 +47,15 @@
 
 > **2026-11-11 (list follow-up):** The **Scheduled** section lists only schedules
 > that can still fire (a paused one counts if resuming it could fire) and leaves out
-> running lineages, whose Running row already carries the clock. Scheduled rows'
-> rail is `[clock][pause/play][empty]`; they no longer squeeze favourite and remove
-> into it, which had pushed the rail over the run indicator. A one-shot `at`
+> running lineages, whose Running row already carries the clock. Each lineage has
+> exactly one row: Running, else Scheduled, else history. Scheduled rows use the
+> ordinary `[clock][star][trash]` rail; the section's pause/play toggle was
+> dropped (a fourth button had pushed the rail over the run indicator), and pausing
+> lives in the Schedule view. Scheduled sorts favourites first, then by next run.
+> Both pinned sections collapse from their caption (persisted as
+> `collapsedWorkflowListSections` in `uiStore`); an expanded one is capped at
+> `min(260px, 50%)`, or `min(260px, 30%)` each when both are expanded, so history
+> keeps at least ~40%. A one-shot `at`
 > schedule is deleted from the descriptor after its fire starts, so the lineage
 > stops reading as scheduled in the main list and the Scheduled filter.
 

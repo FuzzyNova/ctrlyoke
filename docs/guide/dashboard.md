@@ -217,11 +217,15 @@ Click the workflow name in the header to open the **Workflows** menu.
 - Below it are your recent workflows. Starred workflows sort to the top. Click
   the star to add or remove a favorite.
 - Search by name, or filter by state, harness or **Favorites only**.
-- **Scheduled** lists workflows whose schedule has a run still to come, ordered
-  by next run. A workflow that is running shows under **Running** instead, with
-  its clock. Use the clock to edit a schedule and the pause/play control to
-  disable or enable it.
+- **Scheduled** lists workflows whose schedule has a run still to come.
+  Starred workflows come first, then the soonest next run. Use the clock to edit
+  or pause a schedule. A paused schedule shows a dimmed clock.
+- Each workflow appears once: under **Running** while it runs, otherwise under
+  **Scheduled** while it has a run to come, otherwise in your recent workflows.
   The filter row also lets you show scheduled or unscheduled workflows.
+- **Running** and **Scheduled** stay pinned above your recent workflows. Click
+  either section's heading to collapse it; the dashboard remembers which
+  sections you collapsed.
 
 Each row shows the workflow's step progress, its token total and estimated
 cost, and its run time. Durations everywhere in the dashboard read as a clock:
@@ -265,7 +269,7 @@ were. Under **Repeat**, choose **Once** (a date and time), **Daily** (a time),
 **Custom** (a cron expression). **Next run** previews the first run, and
 **Schedule** saves it. Opening the view again on a scheduled workflow lets you
 change it, **Pause this schedule**, or **Remove schedule**. The **Scheduled**
-section shows the next run and lets you pause or resume a saved schedule.
+section shows each workflow's next run.
 Scheduled runs start a new workflow run from the beginning. A **Once** schedule
 is removed after its run starts.
 

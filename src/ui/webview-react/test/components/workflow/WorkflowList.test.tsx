@@ -18,6 +18,7 @@ import {
   type WorkflowRowTier,
 } from "@/constants";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { useUiStore } from "@/store/uiStore";
 
 const totalsBase: WorkflowTokenTotals = {
   total: 410_000,
@@ -179,7 +180,10 @@ describe("WorkflowList token totals", () => {
 });
 
 describe("WorkflowList scheduled section", () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    useUiStore.setState({ collapsedWorkflowListSections: [] });
+  });
 
   const makeScheduled = (key: string, nextRunAt: number) => ({
     address: {
@@ -234,26 +238,11 @@ describe("WorkflowList scheduled section", () => {
     );
   });
 
-  it("passes the scheduled lineage to the enable/disable callback", () => {
-    const scheduled = makeScheduled("Toggle me", Date.now() + 100_000);
-    const onToggleSchedule = vi.fn();
-    render(
-      <WorkflowList
-        {...baseProps}
-        scheduledWorkflows={[scheduled]}
-        onToggleSchedule={onToggleSchedule}
-      />
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Disable schedule" }));
-    expect(onToggleSchedule).toHaveBeenCalledWith(scheduled);
-  });
-
-  it("fits the schedule controls in the three-slot rail without favourite or remove", () => {
+  it("gives a scheduled row the same rail as a history row", () => {
     render(
       <WorkflowList
         {...baseProps}
         scheduledWorkflows={[makeScheduled("Rail", Date.now() + 100_000)]}
-        onToggleSchedule={vi.fn()}
         onToggleFavorite={vi.fn()}
         onRemove={vi.fn()}
       />
@@ -264,10 +253,109 @@ describe("WorkflowList scheduled section", () => {
     const buttons = within(row)
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label"));
-    expect(buttons).toContain("Disable schedule");
-    expect(buttons).not.toContain("Add to favorites");
-    expect(buttons).not.toContain("Remove from history");
-    expect(row.textContent).not.toContain("Next run pending");
+    expect(buttons).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^Next run:/),
+        "Add to favorites",
+        "Remove from history",
+      ])
+    );
+    expect(row.textContent).toMatch(/Next run:/);
+  });
+
+  it("sorts favourites first, then by next run", () => {
+    render(
+      <WorkflowList
+        {...baseProps}
+        scheduledWorkflows={[
+          makeScheduled("Soon", Date.now() + 100_000),
+          {
+            ...makeScheduled("Starred", Date.now() + 900_000),
+            isFavorite: true,
+          },
+        ]}
+      />
+    );
+    const rows = within(
+      screen.getByRole("region", { name: "Scheduled workflows" })
+    ).getAllByRole("listitem");
+    expect(rows[0]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("Starred")
+    );
+  });
+
+  it("collapses a pinned section to its caption and remembers it", () => {
+    render(
+      <WorkflowList
+        {...baseProps}
+        scheduledWorkflows={[makeScheduled("Folded", Date.now() + 100_000)]}
+      />
+    );
+    const caption = screen.getByRole("button", { name: /Scheduled \(1\)/ });
+    expect(caption).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(caption);
+    expect(caption).toHaveAttribute("aria-expanded", "false");
+    expect(useUiStore.getState().collapsedWorkflowListSections).toEqual([
+      "scheduled",
+    ]);
+    expect(
+      screen.queryByRole("listitem", { name: /Folded/ })
+    ).not.toBeInTheDocument();
+    fireEvent.click(caption);
+    expect(
+      screen.getByRole("listitem", { name: /Folded/ })
+    ).toBeInTheDocument();
+  });
+
+  it("shares the height cap when both pinned sections are expanded", () => {
+    const running: UnifiedWorkflowRow = {
+      kind: WORKFLOW_ROW_KINDS.RUNNING,
+      key: "running:wf",
+      workflow: {
+        id: "workflow-id",
+        workflowName: "Runner",
+        filePath: "workflow.ctrlyoke.json",
+        executionState: EXECUTION_STATES.RUNNING,
+        currentStep: 1,
+        totalSteps: 2,
+      },
+    };
+    const recent: UnifiedWorkflowRow = {
+      kind: WORKFLOW_ROW_KINDS.RECENT,
+      key: "recent:old",
+      workflow: {
+        ...makeScheduled("Old", 0),
+        schedule: undefined,
+        scheduleNextRunAt: undefined,
+      },
+    };
+    render(
+      <WorkflowList
+        {...baseProps}
+        rows={[running, recent]}
+        scheduledWorkflows={[makeScheduled("Later", Date.now() + 100_000)]}
+      />
+    );
+    const scheduledRegion = screen.getByRole("region", {
+      name: "Scheduled workflows",
+    });
+    expect(scheduledRegion.className).toContain("max-h-[min(260px,30%)]");
+    fireEvent.click(screen.getByRole("button", { name: /Running \(1\)/ }));
+    expect(scheduledRegion.className).toContain("max-h-[min(260px,50%)]");
+  });
+
+  it("does not offer New Workflow beneath scheduled rows when history is empty", () => {
+    render(
+      <WorkflowList
+        {...baseProps}
+        scheduledWorkflows={[makeScheduled("Only", Date.now() + 100_000)]}
+        onNewWorkflow={vi.fn()}
+      />
+    );
+    expect(
+      screen.queryByRole("button", { name: /New Workflow/ })
+    ).not.toBeInTheDocument();
   });
 });
 

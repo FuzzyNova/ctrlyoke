@@ -1364,15 +1364,6 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       vscode,
     ]
   );
-  const handleToggleSchedule = useCallback((workflow: RecentWorkflow) => {
-    if (!workflow.schedule) return;
-    sendMessage(MESSAGE_TYPES.SET_SCHEDULE, {
-      address: workflow.address,
-      enabled: !workflow.schedule.enabled,
-      trigger: workflow.schedule.trigger,
-      ...(workflow.schedule.until ? { until: workflow.schedule.until } : {}),
-    });
-  }, []);
 
   const handleDuplicateWorkflow = useCallback(
     (target: WorkflowContextMenuTarget, opener: HTMLElement | null) => {
@@ -1590,26 +1581,31 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const filteredRunningWorkflows = runningSectionWorkflows.filter(
     workflowMatchesSearch
   );
-  const filteredRecentWorkflows = sortedRecentWorkflows.filter(
-    (recentWorkflow) =>
-      workflowMatchesSearch(recentWorkflow) &&
-      !runningSectionWorkflowKeys.has(recentWorkflow.address.workflowKey)
-  );
-  // Upcoming schedules only: a lineage leaves the section once its schedule
-  // can never fire again (a one-shot that already ran), and while it is
-  // running it lives in the Running section, whose row keeps the clock.
+  // Each lineage has exactly one row, in the first section it belongs to:
+  // Running, then Scheduled, then history. Scheduled holds upcoming schedules
+  // only: a lineage drops back to history once its schedule can never fire
+  // again, and while it runs its Running row carries the clock instead.
   const scheduleNow = Date.now();
-  const scheduledWorkflows = sortedRecentWorkflows.filter(
-    (workflow) =>
-      !runningSectionWorkflowKeys.has(workflow.address.workflowKey) &&
-      upcomingScheduleRunAt(workflow, scheduleNow) !== null &&
-      workflowMatchesSearch(workflow)
-  );
+  const scheduledWorkflows: RecentWorkflow[] = [];
+  const filteredRecentWorkflows: RecentWorkflow[] = [];
+  for (const recentWorkflow of sortedRecentWorkflows) {
+    if (
+      runningSectionWorkflowKeys.has(recentWorkflow.address.workflowKey) ||
+      !workflowMatchesSearch(recentWorkflow)
+    ) {
+      continue;
+    }
+    if (upcomingScheduleRunAt(recentWorkflow, scheduleNow) !== null) {
+      scheduledWorkflows.push(recentWorkflow);
+    } else {
+      filteredRecentWorkflows.push(recentWorkflow);
+    }
+  }
   // One lineage-keyed row per entry, running lineages first — this is the
   // unified navigation model step 0 of the run-navigation plan calls for:
   // running state is a property of a row, not a separate section, and a
   // lineage never appears twice (filteredRecentWorkflows already excludes
-  // whatever is represented by a running row above — and only those, so a
+  // whatever has a running or scheduled row — and only those, so a
   // loaded-but-not-running lineage keeps its recent row rather than vanishing).
   const workflowListRows: UnifiedWorkflowRow[] = [
     ...filteredRunningWorkflows.map((workflow): UnifiedWorkflowRow => ({
@@ -1990,7 +1986,6 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
               onRemove={handleRemoveWorkflow}
               onToggleFavorite={handleToggleFavorite}
               onEditSchedule={handleEditSchedule}
-              onToggleSchedule={handleToggleSchedule}
               onOpenContextMenu={openWorkflowContextMenu}
               onDrillIntoRuns={handleDrillIntoRuns}
               tier={dropdownRowTier}

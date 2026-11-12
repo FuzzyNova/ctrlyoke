@@ -42,6 +42,11 @@ import { isWorkflowActive } from "../../utils/status";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { Icon } from "../shared/Icon";
+import {
+  WORKFLOW_LIST_SECTIONS,
+  type WorkflowListSection,
+} from "@root/types/DashboardConstants";
+import { useUiStore } from "../../store/uiStore";
 
 /**
  * One row of the unified workflow dropdown list: either a lineage executing
@@ -106,7 +111,6 @@ interface WorkflowListProps {
     target: WorkflowContextMenuTarget,
     opener: HTMLElement | null
   ) => void;
-  onToggleSchedule?: (workflow: RecentWorkflow) => void;
   /** Drills into a lineage's run panel without selecting/loading it. Omitted rows render no indicator. */
   onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
   onOpenContextMenu?: (
@@ -151,9 +155,56 @@ interface RecentWorkflowRowProps {
   ) => void;
   /** List-scoped: reserve the indicator's track even on this row when a sibling row is drillable, so time/badge columns stay aligned. */
   showRunIndicatorTrack: boolean;
-  onToggleSchedule?: (workflow: RecentWorkflow) => void;
+  /** Row sits in the Scheduled section: its metadata shows the next run instead of the last activity. */
   scheduled?: boolean;
 }
+
+/**
+ * Height cap for an expanded pinned section while history rows sit beneath
+ * it. Two expanded sections share less each, so history always keeps at
+ * least ~40% of the dropdown. Literal class strings so Tailwind emits them.
+ */
+const PINNED_SECTION_CAP_CLASS = {
+  alone: "shrink-0 max-h-[min(260px,50%)]",
+  shared: "shrink-0 max-h-[min(260px,30%)]",
+} as const;
+
+interface PinnedSectionHeaderProps {
+  section: WorkflowListSection;
+  icon: string;
+  label: string;
+  count: number;
+  collapsed: boolean;
+  listId: string;
+}
+
+/** Caption of a pinned dropdown section; clicking it collapses or expands the section. */
+const PinnedSectionHeader: React.FC<PinnedSectionHeaderProps> = ({
+  section,
+  icon,
+  label,
+  count,
+  collapsed,
+  listId,
+}) => {
+  const toggle = useUiStore((s) => s.toggleWorkflowListSectionCollapsed);
+  return (
+    <button
+      type="button"
+      aria-expanded={!collapsed}
+      aria-controls={listId}
+      title={collapsed ? `Expand ${label}` : `Collapse ${label}`}
+      onClick={() => toggle(section)}
+      className="flex w-full shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-left text-xxs font-semibold uppercase tracking-wider text-description-fg hover:text-foreground"
+    >
+      <Icon name={collapsed ? "chevron-right" : "chevron-down"} />
+      <Icon name={icon} />
+      <span>
+        {label} ({count})
+      </span>
+    </button>
+  );
+};
 
 const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   workflow,
@@ -167,7 +218,6 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   onDrillIntoRuns,
   onOpenContextMenu,
   showRunIndicatorTrack,
-  onToggleSchedule,
   scheduled = false,
 }) => {
   const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
@@ -351,95 +401,54 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           >
             <Icon name="codicon-clock" className="block leading-none" />
           </button>
-          {scheduled ? (
-            <>
-              {workflow.schedule && onToggleSchedule && (
-                <button
-                  type="button"
-                  title={
-                    workflow.schedule.enabled
-                      ? "Disable schedule"
-                      : "Enable schedule"
-                  }
-                  aria-label={
-                    workflow.schedule.enabled
-                      ? "Disable schedule"
-                      : "Enable schedule"
-                  }
-                  aria-pressed={workflow.schedule.enabled}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleSchedule(workflow);
-                  }}
-                  className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg hover:text-foreground`}
-                >
-                  <Icon
-                    name={
-                      workflow.schedule.enabled
-                        ? "codicon-debug-pause"
-                        : "codicon-play"
-                    }
-                    className="block leading-none"
-                  />
-                </button>
-              )}
-              {/* Empty third slot keeps the rail's slots aligned with the
-                  rows around it. Favourite/remove stay on the lineage's row in
-                  the recent list; this section only manages the schedule. */}
-              <span aria-hidden="true" className={ROW_ACTION_BUTTON_CLASS} />
-            </>
-          ) : (
-            <>
-              {onToggleFavorite && (
-                <button
-                  type="button"
-                  title={
-                    workflow.isFavorite
-                      ? "Remove from favorites"
-                      : "Add to favorites"
-                  }
-                  aria-label={
-                    workflow.isFavorite
-                      ? "Remove from favorites"
-                      : "Add to favorites"
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(workflow.address);
-                  }}
-                  className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${
-                    workflow.isFavorite
-                      ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-                      : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-                  }`}
-                >
-                  <Icon
-                    name={
-                      workflow.isFavorite
-                        ? "codicon-star-full"
-                        : "codicon-star-empty"
-                    }
-                    className="block leading-none"
-                  />
-                </button>
-              )}
+          {onToggleFavorite && (
+            <button
+              type="button"
+              title={
+                workflow.isFavorite
+                  ? "Remove from favorites"
+                  : "Add to favorites"
+              }
+              aria-label={
+                workflow.isFavorite
+                  ? "Remove from favorites"
+                  : "Add to favorites"
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(workflow.address);
+              }}
+              className={`${ROW_ACTION_BUTTON_CLASS} transition-colors ${
+                workflow.isFavorite
+                  ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+                  : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+              }`}
+            >
+              <Icon
+                name={
+                  workflow.isFavorite
+                    ? "codicon-star-full"
+                    : "codicon-star-empty"
+                }
+                className="block leading-none"
+              />
+            </button>
+          )}
 
-              {/* Delete button — visible only on row hover */}
-              {onRemove && (
-                <button
-                  type="button"
-                  title="Remove from history"
-                  aria-label="Remove from history"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove(workflow.address);
-                  }}
-                  className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100`}
-                >
-                  <Icon name="trash" className="block leading-none" />
-                </button>
-              )}
-            </>
+          {/* Delete button — visible only on row hover */}
+          {onRemove && (
+            <button
+              type="button"
+              title="Remove from history"
+              aria-label="Remove from history"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(workflow.address);
+              }}
+              className={`${ROW_ACTION_BUTTON_CLASS} text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100`}
+            >
+              <Icon name="trash" className="block leading-none" />
+            </button>
           )}
         </RowActionRail>
       </WorkflowRowTrailing>
@@ -494,7 +503,6 @@ export const WorkflowList = React.forwardRef<
     onRemove,
     onToggleFavorite,
     onEditSchedule,
-    onToggleSchedule,
     onDrillIntoRuns,
     onOpenContextMenu,
     onNewWorkflow,
@@ -513,6 +521,8 @@ export const WorkflowList = React.forwardRef<
   ref
 ) {
   const runningScrollContainerRef = useRef<HTMLDivElement>(null);
+  const scheduledScrollContainerRef = useRef<HTMLDivElement>(null);
+  const collapsedSections = useUiStore((s) => s.collapsedWorkflowListSections);
   const recentScrollContainerRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(
@@ -546,18 +556,38 @@ export const WorkflowList = React.forwardRef<
   const hasRunningRows = runningRows.length > 0;
   const hasRecentRows = recentRows.length > 0;
   const scheduleNow = Date.now();
+  // Favourites first, as in history, then soonest next run.
   const orderedScheduledWorkflows = [...scheduledWorkflows].sort(
     (a, b) =>
+      Number(b.isFavorite ?? false) - Number(a.isFavorite ?? false) ||
       (upcomingScheduleRunAt(a, scheduleNow) ?? Number.MAX_SAFE_INTEGER) -
-      (upcomingScheduleRunAt(b, scheduleNow) ?? Number.MAX_SAFE_INTEGER)
+        (upcomingScheduleRunAt(b, scheduleNow) ?? Number.MAX_SAFE_INTEGER)
   );
   const hasScheduledRows = orderedScheduledWorkflows.length > 0;
+  const runningCollapsed = collapsedSections.includes(
+    WORKFLOW_LIST_SECTIONS.RUNNING
+  );
+  const scheduledCollapsed = collapsedSections.includes(
+    WORKFLOW_LIST_SECTIONS.SCHEDULED
+  );
+  const runningExpanded = hasRunningRows && !runningCollapsed;
+  const scheduledExpanded = hasScheduledRows && !scheduledCollapsed;
+  const pinnedCapClass =
+    runningExpanded && scheduledExpanded
+      ? PINNED_SECTION_CAP_CLASS.shared
+      : PINNED_SECTION_CAP_CLASS.alone;
+  // A collapsed section is just its caption; an expanded one is capped while
+  // history rows sit beneath it, and otherwise takes the free space.
+  const pinnedRegionClass = (expanded: boolean) =>
+    !expanded ? "shrink-0" : hasRecentRows ? pinnedCapClass : "flex-1 min-h-0";
   // List-scoped, not row-scoped, and spanning *both* regions: reserve the
   // indicator track on every row as soon as one row anywhere is drillable, so
   // the state/time columns stay aligned between a pinned running row and the
   // recent rows directly beneath it. A list with no drillable rows renders
   // without the track at all.
-  const hasDrillableRow = rows.some((row) => isDrillableRunNav(rowRunNav(row)));
+  const hasDrillableRow =
+    rows.some((row) => isDrillableRunNav(rowRunNav(row))) ||
+    scheduledWorkflows.some((workflow) => isDrillableRunNav(workflow.runNav));
   const estimatedRowHeight = WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE;
 
   return (
@@ -577,28 +607,35 @@ export const WorkflowList = React.forwardRef<
         filterControls={filterControls}
       />
 
-      {/* Pinned running region — content-sized up to min(260px, 50%) so a
-          handful of running rows cost only their own height while a large
-          count scrolls internally instead of crowding out the recent list.
-          The 50% term resolves because the dropdown is fixed-positioned with
-          a definite height. When the recent region is empty the cap lifts
-          (flex-1) so running rows can use the free space. */}
+      {/* Pinned running and scheduled regions — content-sized up to a cap
+          (PINNED_SECTION_CAP_CLASS) so a handful of rows cost only their own
+          height while a large count scrolls internally instead of crowding
+          out the recent list. The percentage resolves because the dropdown is
+          fixed-positioned with a definite height. When the recent region is
+          empty the cap lifts (flex-1) so pinned rows can use the free space.
+          Either section collapses to its caption. */}
       {hasRunningRows && (
         <div
           role="region"
           aria-label="Running workflows"
-          className={`running-workflows-region flex flex-col border-b border-dropdown-border ${
-            hasRecentRows ? "shrink-0 max-h-[min(260px,50%)]" : "flex-1 min-h-0"
-          }`}
+          className={`running-workflows-region flex flex-col border-b border-dropdown-border ${pinnedRegionClass(
+            runningExpanded
+          )}`}
         >
-          <div className="flex shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-xxs font-semibold uppercase tracking-wider text-description-fg">
-            <Icon name="debug-line-by-line" />
-            <span>Running ({runningRows.length})</span>
-          </div>
+          <PinnedSectionHeader
+            section={WORKFLOW_LIST_SECTIONS.RUNNING}
+            icon="debug-line-by-line"
+            label="Running"
+            count={runningRows.length}
+            collapsed={runningCollapsed}
+            listId="workflow-list-running"
+          />
           <div
+            id="workflow-list-running"
             ref={runningScrollContainerRef}
             role="list"
             aria-label="Running workflows"
+            hidden={runningCollapsed}
             className="running-workflow-items min-h-0 overflow-y-auto overflow-x-clip pb-1"
           >
             <VirtualizedDropdownList
@@ -638,35 +675,50 @@ export const WorkflowList = React.forwardRef<
         <div
           role="region"
           aria-label="Scheduled workflows"
-          className="scheduled-workflows-region flex min-h-0 flex-col border-b border-dropdown-border max-h-[min(260px,50%)] shrink-0"
+          className={`scheduled-workflows-region flex flex-col border-b border-dropdown-border ${pinnedRegionClass(
+            scheduledExpanded
+          )}`}
         >
-          <div className="flex shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-xxs font-semibold uppercase tracking-wider text-description-fg">
-            <Icon name="clock" />
-            <span>Scheduled ({orderedScheduledWorkflows.length})</span>
-          </div>
+          <PinnedSectionHeader
+            section={WORKFLOW_LIST_SECTIONS.SCHEDULED}
+            icon="clock"
+            label="Scheduled"
+            count={orderedScheduledWorkflows.length}
+            collapsed={scheduledCollapsed}
+            listId="workflow-list-scheduled"
+          />
           <div
+            id="workflow-list-scheduled"
+            ref={scheduledScrollContainerRef}
             role="list"
             aria-label="Scheduled workflows"
+            hidden={scheduledCollapsed}
             className="min-h-0 overflow-y-auto overflow-x-clip pb-1"
           >
-            {orderedScheduledWorkflows.map((workflow) => (
-              <RecentWorkflowRow
-                key={`scheduled:${workflow.address.workflowKey}`}
-                workflow={workflow}
-                currentAddress={currentAddress}
-                hasActiveTerminal={recentHasActiveTerminal}
-                tier={tier}
-                onSelect={onSelectRecent}
-                onToggleFavorite={onToggleFavorite}
-                onEditSchedule={onEditSchedule}
-                onRemove={onRemove}
-                onDrillIntoRuns={onDrillIntoRuns}
-                onOpenContextMenu={onOpenContextMenu}
-                showRunIndicatorTrack={hasDrillableRow}
-                onToggleSchedule={onToggleSchedule}
-                scheduled
-              />
-            ))}
+            <VirtualizedDropdownList
+              items={orderedScheduledWorkflows}
+              getItemKey={(workflow) =>
+                `scheduled:${workflow.address.workflowKey}`
+              }
+              scrollContainerRef={scheduledScrollContainerRef}
+              estimatedRowHeight={estimatedRowHeight}
+              renderItem={(workflow) => (
+                <RecentWorkflowRow
+                  workflow={workflow}
+                  currentAddress={currentAddress}
+                  hasActiveTerminal={recentHasActiveTerminal}
+                  tier={tier}
+                  onSelect={onSelectRecent}
+                  onToggleFavorite={onToggleFavorite}
+                  onEditSchedule={onEditSchedule}
+                  onRemove={onRemove}
+                  onDrillIntoRuns={onDrillIntoRuns}
+                  onOpenContextMenu={onOpenContextMenu}
+                  showRunIndicatorTrack={hasDrillableRow}
+                  scheduled
+                />
+              )}
+            />
           </div>
         </div>
       )}
@@ -678,7 +730,9 @@ export const WorkflowList = React.forwardRef<
         role="list"
         aria-label="Recent workflows"
         className={`workflow-menu-items overflow-y-auto overflow-x-clip py-1 ${
-          hasRecentRows || !hasRunningRows ? "flex-1 min-h-0" : "shrink-0"
+          hasRecentRows || (!runningExpanded && !scheduledExpanded)
+            ? "flex-1 min-h-0"
+            : "shrink-0"
         }`}
       >
         {/* With no recent rows: a pending history shows a loading row, even
@@ -720,7 +774,7 @@ export const WorkflowList = React.forwardRef<
             <Icon name="loading" className="codicon-modifier-spin" />
             Loading workflows…
           </div>
-        ) : hasRunningRows ? null : isFiltering ? (
+        ) : hasRunningRows || hasScheduledRows ? null : isFiltering ? (
           <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
             No workflows match your search.
           </div>

@@ -5444,6 +5444,15 @@ export const WORKFLOW_FILE_PICKER_MODES = {
   IMPORT_RUN: "import-run",
 } as const;
 
+/** The workflow dropdown's pinned sections, which the user can collapse. */
+export const WORKFLOW_LIST_SECTIONS = {
+  RUNNING: "running",
+  SCHEDULED: "scheduled",
+} as const;
+
+export type WorkflowListSection =
+  (typeof WORKFLOW_LIST_SECTIONS)[keyof typeof WORKFLOW_LIST_SECTIONS];
+
 /** Row categories used by the unified workflow dropdown list. */
 export const WORKFLOW_ROW_KINDS = {
   RUNNING: "running",
