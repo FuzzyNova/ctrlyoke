@@ -1,3 +1,9 @@
+/**
+ * Expand/collapse duration for in-place sections (AnimatedSection,
+ * CollapsibleRegion) — mirrors `--cy-collapse-duration` in globals.css.
+ */
+export const COLLAPSE_ANIMATION_DURATION_MS = 300;
+
 /** Default panel animation duration — mirrors the fallback in globals.css. */
 export const PANEL_ANIMATION_DURATION_MS = 200;
 

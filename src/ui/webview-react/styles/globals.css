@@ -516,8 +516,10 @@
   --animate-slide-in-right: slide-in-right 0.25s ease-out;
   --animate-slide-out-left: slide-out-left 0.22s ease-in forwards;
   --animate-slide-out-right: slide-out-right 0.22s ease-in forwards;
-  --animate-slide-down-in: slide-down-fade-in 300ms ease-out forwards;
-  --animate-slide-down-out: slide-down-fade-out 300ms ease-in forwards;
+  --animate-slide-down-in: slide-down-fade-in var(--cy-collapse-duration)
+    var(--cy-collapse-ease-open) forwards;
+  --animate-slide-down-out: slide-down-fade-out var(--cy-collapse-duration)
+    var(--cy-collapse-ease-close) forwards;
   --animate-ctx-update: ctx-update 0.4s ease-out;
   --animate-slide-in-sidebar: slide-in-sidebar 0.25s ease-out both;
   --animate-slide-out-sidebar: slide-out-sidebar 0.22s ease-in both;
@@ -580,7 +582,7 @@
     from {
       opacity: 0;
       grid-template-rows: 0fr;
-      transform: translateY(-4px);
+      transform: translateY(var(--cy-collapse-offset));
     }
     to {
       opacity: 1;
@@ -597,7 +599,7 @@
     to {
       opacity: 0;
       grid-template-rows: 0fr;
-      transform: translateY(-4px);
+      transform: translateY(var(--cy-collapse-offset));
     }
   }
   /* Opacity-only fades. Components that sequence on them set the duration
@@ -688,6 +690,15 @@
    CSS Custom Properties — Minimal Set for Non-Tailwind Contexts
    ============================================================================ */
 :root {
+  /* Expand/collapse motion for in-place sections: AnimatedSection (via the
+     slide-down-in/out keyframes), CollapsibleRegion (.cy-collapsible) and
+     toasts. COLLAPSE_ANIMATION_DURATION_MS in utils/panelAnimation.ts mirrors
+     the duration for timers. Opening eases out, closing eases in. */
+  --cy-collapse-duration: 300ms;
+  --cy-collapse-ease-open: ease-out;
+  --cy-collapse-ease-close: ease-in;
+  --cy-collapse-offset: -4px;
+
   /* Spacing — used via arbitrary values in CliOutput, outputStyles, StatusMessage */
   --spacing-xs: 4px;
   --spacing-sm: 6px;
@@ -1528,6 +1539,53 @@ button .cy-lucide-icon {
 .cy-panels-animating [data-panel] {
   transition: flex-grow var(--cy-panel-animation-duration, 200ms)
     var(--cy-panel-animation-easing, ease-in-out);
+}
+
+/* ============================================================================
+   In-place collapsible sections (CollapsibleRegion)
+   ----------------------------------------------------------------------------
+   The transition counterpart of AnimatedSection's slide-down keyframes: the
+   same grid-rows 0fr/1fr height change, fade and small slide, at the same
+   tempo, but its content stays mounted (keeping scroll position) and nothing
+   plays on first render. The single child needs a non-visible overflow so its
+   track can shrink to 0. Used by the workflow dropdown's pinned Running and
+   Scheduled sections and its filter row.
+   ============================================================================ */
+.cy-collapsible {
+  display: grid;
+  grid-template-rows: 1fr;
+  /* A transition takes the timing of the state it moves to. */
+  transition: grid-template-rows var(--cy-collapse-duration)
+    var(--cy-collapse-ease-open);
+}
+.cy-collapsible > * {
+  min-height: 0;
+  transition:
+    opacity var(--cy-collapse-duration) var(--cy-collapse-ease-open),
+    transform var(--cy-collapse-duration) var(--cy-collapse-ease-open);
+}
+.cy-collapsible[data-collapsed="true"] {
+  grid-template-rows: 0fr;
+  transition-timing-function: var(--cy-collapse-ease-close);
+}
+.cy-collapsible[data-collapsed="true"] > * {
+  opacity: 0;
+  transform: translateY(var(--cy-collapse-offset));
+  transition-timing-function: var(--cy-collapse-ease-close);
+}
+/* A region whose height cap changes with its neighbours' state (the pinned
+   sections share a smaller cap while both are expanded) moves at the same
+   tempo. */
+.cy-collapsible-cap {
+  transition: max-height var(--cy-collapse-duration)
+    var(--cy-collapse-ease-open);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cy-collapsible,
+  .cy-collapsible > *,
+  .cy-collapsible-cap {
+    transition: none;
+  }
 }
 
 /* ============================================================================

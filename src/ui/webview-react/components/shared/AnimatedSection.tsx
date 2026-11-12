@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-
-const ANIMATION_DURATION_MS = 300;
+import { COLLAPSE_ANIMATION_DURATION_MS as ANIMATION_DURATION_MS } from "@utils/panelAnimation";
 
 /**
  * AnimatedSection — mounts/unmounts children with a slide-down animation.

@@ -1,5 +1,5 @@
 import React from "react";
-import { ExitButton } from "@components/shared";
+import { CollapsibleRegion, ExitButton } from "@components/shared";
 import { Icon } from "../shared/Icon";
 
 interface WorkflowDropdownHeaderProps {
@@ -89,10 +89,14 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
         </div>
       </div>
 
-      {showFilters && filtersOpen && filterControls && (
-        <div className="mt-2 pt-2 border-t border-dropdown-border normal-case tracking-normal">
-          {filterControls}
-        </div>
+      {showFilters && filterControls && (
+        <CollapsibleRegion collapsed={!filtersOpen}>
+          <div className="overflow-hidden normal-case tracking-normal">
+            <div className="mt-2 pt-2 border-t border-dropdown-border">
+              {filterControls}
+            </div>
+          </div>
+        </CollapsibleRegion>
       )}
     </div>
   );

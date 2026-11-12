@@ -3,7 +3,11 @@ import { formatRelativeTimeVerbose } from "../../utils/time";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { HarnessIcon } from "../shared/HarnessIcon";
-import { ExecutionStateBadge, VirtualizedDropdownList } from "../shared";
+import {
+  CollapsibleRegion,
+  ExecutionStateBadge,
+  VirtualizedDropdownList,
+} from "../shared";
 import {
   WorkflowRowLayout,
   RunIndicatorCell,
@@ -579,7 +583,9 @@ export const WorkflowList = React.forwardRef<
   // A collapsed section is just its caption; an expanded one is capped while
   // history rows sit beneath it, and otherwise takes the free space.
   const pinnedRegionClass = (expanded: boolean) =>
-    !expanded ? "shrink-0" : hasRecentRows ? pinnedCapClass : "flex-1 min-h-0";
+    `cy-collapsible-cap ${
+      !expanded ? "shrink-0" : hasRecentRows ? pinnedCapClass : "flex-1 min-h-0"
+    }`;
   // List-scoped, not row-scoped, and spanning *both* regions: reserve the
   // indicator track on every row as soon as one row anywhere is drillable, so
   // the state/time columns stay aligned between a pinned running row and the
@@ -630,44 +636,50 @@ export const WorkflowList = React.forwardRef<
             collapsed={runningCollapsed}
             listId="workflow-list-running"
           />
-          <div
+          <CollapsibleRegion
             id="workflow-list-running"
-            ref={runningScrollContainerRef}
-            role="list"
-            aria-label="Running workflows"
-            hidden={runningCollapsed}
-            className="running-workflow-items min-h-0 overflow-y-auto overflow-x-clip pb-1"
+            collapsed={runningCollapsed}
+            className="min-h-0 flex-1"
           >
-            <VirtualizedDropdownList
-              items={runningRows}
-              getItemKey={(row) => row.key}
-              scrollContainerRef={runningScrollContainerRef}
-              estimatedRowHeight={estimatedRowHeight}
-              renderItem={(row) => (
-                <RunningWorkflowItem
-                  workflow={row.workflow}
-                  isCurrent={row.workflow.id === activeWorkflowId}
-                  hasActiveTerminal={runningHasActiveTerminal(row.workflow.id)}
-                  tier={tier}
-                  runNav={row.lineage?.runNav}
-                  lineage={row.lineage}
-                  showRunIndicatorTrack={hasDrillableRow}
-                  onDrillIntoRuns={
-                    row.lineage && onDrillIntoRuns
-                      ? () => onDrillIntoRuns(row.lineage!)
-                      : undefined
-                  }
-                  onOpenContextMenu={onOpenContextMenu}
-                  onEditSchedule={onEditSchedule}
-                  onClick={() => onSwitchRunning(row.workflow.id)}
-                  onPause={() => onPauseRunning(row.workflow)}
-                  onCancelPause={() => onCancelPauseRunning(row.workflow)}
-                  onResume={() => onResumeRunning(row.workflow)}
-                  onStop={() => onStopRunning(row.workflow)}
-                />
-              )}
-            />
-          </div>
+            <div
+              ref={runningScrollContainerRef}
+              role="list"
+              aria-label="Running workflows"
+              className="running-workflow-items overflow-y-auto overflow-x-clip pb-1"
+            >
+              <VirtualizedDropdownList
+                items={runningRows}
+                getItemKey={(row) => row.key}
+                scrollContainerRef={runningScrollContainerRef}
+                estimatedRowHeight={estimatedRowHeight}
+                renderItem={(row) => (
+                  <RunningWorkflowItem
+                    workflow={row.workflow}
+                    isCurrent={row.workflow.id === activeWorkflowId}
+                    hasActiveTerminal={runningHasActiveTerminal(
+                      row.workflow.id
+                    )}
+                    tier={tier}
+                    runNav={row.lineage?.runNav}
+                    lineage={row.lineage}
+                    showRunIndicatorTrack={hasDrillableRow}
+                    onDrillIntoRuns={
+                      row.lineage && onDrillIntoRuns
+                        ? () => onDrillIntoRuns(row.lineage!)
+                        : undefined
+                    }
+                    onOpenContextMenu={onOpenContextMenu}
+                    onEditSchedule={onEditSchedule}
+                    onClick={() => onSwitchRunning(row.workflow.id)}
+                    onPause={() => onPauseRunning(row.workflow)}
+                    onCancelPause={() => onCancelPauseRunning(row.workflow)}
+                    onResume={() => onResumeRunning(row.workflow)}
+                    onStop={() => onStopRunning(row.workflow)}
+                  />
+                )}
+              />
+            </div>
+          </CollapsibleRegion>
         </div>
       )}
 
@@ -687,39 +699,43 @@ export const WorkflowList = React.forwardRef<
             collapsed={scheduledCollapsed}
             listId="workflow-list-scheduled"
           />
-          <div
+          <CollapsibleRegion
             id="workflow-list-scheduled"
-            ref={scheduledScrollContainerRef}
-            role="list"
-            aria-label="Scheduled workflows"
-            hidden={scheduledCollapsed}
-            className="min-h-0 overflow-y-auto overflow-x-clip pb-1"
+            collapsed={scheduledCollapsed}
+            className="min-h-0 flex-1"
           >
-            <VirtualizedDropdownList
-              items={orderedScheduledWorkflows}
-              getItemKey={(workflow) =>
-                `scheduled:${workflow.address.workflowKey}`
-              }
-              scrollContainerRef={scheduledScrollContainerRef}
-              estimatedRowHeight={estimatedRowHeight}
-              renderItem={(workflow) => (
-                <RecentWorkflowRow
-                  workflow={workflow}
-                  currentAddress={currentAddress}
-                  hasActiveTerminal={recentHasActiveTerminal}
-                  tier={tier}
-                  onSelect={onSelectRecent}
-                  onToggleFavorite={onToggleFavorite}
-                  onEditSchedule={onEditSchedule}
-                  onRemove={onRemove}
-                  onDrillIntoRuns={onDrillIntoRuns}
-                  onOpenContextMenu={onOpenContextMenu}
-                  showRunIndicatorTrack={hasDrillableRow}
-                  scheduled
-                />
-              )}
-            />
-          </div>
+            <div
+              ref={scheduledScrollContainerRef}
+              role="list"
+              aria-label="Scheduled workflows"
+              className="overflow-y-auto overflow-x-clip pb-1"
+            >
+              <VirtualizedDropdownList
+                items={orderedScheduledWorkflows}
+                getItemKey={(workflow) =>
+                  `scheduled:${workflow.address.workflowKey}`
+                }
+                scrollContainerRef={scheduledScrollContainerRef}
+                estimatedRowHeight={estimatedRowHeight}
+                renderItem={(workflow) => (
+                  <RecentWorkflowRow
+                    workflow={workflow}
+                    currentAddress={currentAddress}
+                    hasActiveTerminal={recentHasActiveTerminal}
+                    tier={tier}
+                    onSelect={onSelectRecent}
+                    onToggleFavorite={onToggleFavorite}
+                    onEditSchedule={onEditSchedule}
+                    onRemove={onRemove}
+                    onDrillIntoRuns={onDrillIntoRuns}
+                    onOpenContextMenu={onOpenContextMenu}
+                    showRunIndicatorTrack={hasDrillableRow}
+                    scheduled
+                  />
+                )}
+              />
+            </div>
+          </CollapsibleRegion>
         </div>
       )}
 

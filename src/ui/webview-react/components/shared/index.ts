@@ -1,5 +1,6 @@
 export { Button } from "./Button";
 export { Icon, type IconProps } from "./Icon";
+export { CollapsibleRegion } from "./CollapsibleRegion";
 export {
   LucideIcon,
   type LucideIconProps,
