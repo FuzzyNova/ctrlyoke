@@ -15,6 +15,7 @@ import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
 import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
+import { useDrawerTransition } from "@hooks/useDrawerTransition";
 import { sendMessage } from "@messaging/sendMessage";
 import {
   MESSAGE_TYPES,
@@ -34,7 +35,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
-import { ScheduleEditor } from "./ScheduleEditor";
+import { SchedulePanel } from "./SchedulePanel";
 import { WORKTREE_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import { RunIdentityBadge } from "./RunIdentityBadge";
 import type { RunPanelRow } from "./RunSummaryRow";
@@ -84,6 +85,7 @@ import {
   ALL_WORKFLOW_SCHEDULE_FILTERS,
   WORKFLOW_SCHEDULE_FILTER_OPTIONS,
   WORKFLOW_SCHEDULE_FILTER_VALUES,
+  WORKFLOW_SCHEDULE_LABELS,
 } from "../../constants";
 import {
   ALL_WORKFLOW_HARNESSES,
@@ -106,10 +108,6 @@ interface WorkflowSwitcherProps {
 const WORKFLOW_ROW_SELECTOR =
   ".running-workflow-item, .workflow-menu-item, .run-panel-row";
 const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
-// Keep the fallback slightly longer than the shared 220ms Tailwind
-// slide-out-right animation so a missed animationend cannot strand the
-// dropdown in its departing run-panel state.
-const RUN_PANEL_EXIT_FALLBACK_MS = 320;
 
 interface PendingDelete {
   address: WorkflowViewAddress;
@@ -383,21 +381,45 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const [dropdownView, setDropdownView] = useState<
     (typeof WORKFLOW_DROPDOWN_VIEWS)[keyof typeof WORKFLOW_DROPDOWN_VIEWS]
   >(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
-  // The run panel remains mounted while returning to the workflow list so its
-  // slide-right exit is visible instead of the two views swapping abruptly.
-  const [isRunPanelLeaving, setIsRunPanelLeaving] = useState(false);
-  // Opening from a workflow-row indicator is a lateral drill-in. The header's
-  // Run N button opens the dropdown directly in this view, so its dropdown
-  // reveal is enough motion by itself.
-  const [shouldAnimateRunPanelEntry, setShouldAnimateRunPanelEntry] =
-    useState(false);
   const [drilledWorkflow, setDrilledWorkflow] = useState<{
     workflowKey: WorkflowKey;
     workflowName: string;
   } | null>(null);
-  const runPanelExitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
+  // The run panel remains mounted while returning to the workflow list so its
+  // slide-right exit is visible instead of the two views swapping abruptly.
+  // Opening from a workflow-row indicator is a lateral drill-in (animated); the
+  // header's Run N button opens the dropdown directly in this view, so its
+  // dropdown reveal is enough motion by itself.
+  const {
+    isLeaving: isRunPanelLeaving,
+    className: runDrawerClassName,
+    enter: enterRunDrawer,
+    leave: leaveRunDrawer,
+    reset: resetRunDrawer,
+    onAnimationEnd: handleRunPanelAnimationEnd,
+  } = useDrawerTransition(() => {
+    setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
+    setDrilledWorkflow(null);
+  });
+  // The schedule panel slides over whichever view is open (the list or the
+  // run panel), so Back returns there without a separate view stack. The
+  // opener regains focus when the panel leaves.
+  const [scheduleTarget, setScheduleTarget] = useState<{
+    target: WorkflowContextMenuTarget;
+    opener: HTMLElement | null;
+  } | null>(null);
+  const {
+    isLeaving: isSchedulePanelLeaving,
+    className: scheduleDrawerClassName,
+    enter: enterScheduleDrawer,
+    leave: leaveScheduleDrawer,
+    reset: resetScheduleDrawer,
+    onAnimationEnd: handleSchedulePanelAnimationEnd,
+  } = useDrawerTransition(() => {
+    const opener = scheduleTarget?.opener;
+    setScheduleTarget(null);
+    if (opener?.isConnected) opener.focus();
+  });
 
   // While a cross-lineage switch is in flight the workflow store still holds
   // the previous workflow's definition. Show the switch target immediately so
@@ -676,26 +698,20 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     }
     setIsDropdownClosing(false);
     setIsDropdownOpen(false);
-    if (runPanelExitTimeoutRef.current) {
-      clearTimeout(runPanelExitTimeoutRef.current);
-      runPanelExitTimeoutRef.current = null;
-    }
-    setIsRunPanelLeaving(false);
-    setShouldAnimateRunPanelEntry(false);
+    resetRunDrawer();
+    resetScheduleDrawer();
     setWorkflowSearch("");
     // Dropdown view state is per-open-session — reset so the next open
     // starts from whichever entry view its own trigger implies.
     setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
     setDrilledWorkflow(null);
-  }, []);
+    setScheduleTarget(null);
+  }, [resetRunDrawer, resetScheduleDrawer]);
 
   useEffect(() => {
     return () => {
       if (closeDropdownTimeoutRef.current) {
         clearTimeout(closeDropdownTimeoutRef.current);
-      }
-      if (runPanelExitTimeoutRef.current) {
-        clearTimeout(runPanelExitTimeoutRef.current);
       }
     };
   }, []);
@@ -921,17 +937,6 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     }
   };
 
-  const finishRunPanelExit = useCallback(() => {
-    if (runPanelExitTimeoutRef.current) {
-      clearTimeout(runPanelExitTimeoutRef.current);
-      runPanelExitTimeoutRef.current = null;
-    }
-    setIsRunPanelLeaving(false);
-    setShouldAnimateRunPanelEntry(false);
-    setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
-    setDrilledWorkflow(null);
-  }, []);
-
   // Back always returns to the workflow list — even entering via the badge.
   // It remains mounted behind the drawer, so its filters and scroll position
   // survive the round trip without a separate restoration step.
@@ -939,24 +944,23 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     if (dropdownView !== WORKFLOW_DROPDOWN_VIEWS.RUNS || isRunPanelLeaving) {
       return;
     }
-    setIsRunPanelLeaving(true);
-    if (runPanelExitTimeoutRef.current) {
-      clearTimeout(runPanelExitTimeoutRef.current);
-    }
-    runPanelExitTimeoutRef.current = setTimeout(
-      finishRunPanelExit,
-      RUN_PANEL_EXIT_FALLBACK_MS
-    );
-  }, [dropdownView, finishRunPanelExit, isRunPanelLeaving]);
+    leaveRunDrawer();
+  }, [dropdownView, isRunPanelLeaving, leaveRunDrawer]);
 
-  const handleRunPanelAnimationEnd = useCallback(
-    (event: React.AnimationEvent<HTMLDivElement>) => {
-      if (event.target === event.currentTarget && isRunPanelLeaving) {
-        finishRunPanelExit();
-      }
-    },
-    [finishRunPanelExit, isRunPanelLeaving]
-  );
+  // Back out of the schedule panel to whichever view it slid over.
+  const handleBackFromSchedule = useCallback(() => {
+    if (!scheduleTarget || isSchedulePanelLeaving) return;
+    leaveScheduleDrawer();
+  }, [scheduleTarget, isSchedulePanelLeaving, leaveScheduleDrawer]);
+
+  // Back from whichever drawer is on top: the schedule panel, then the run panel.
+  const handleBackFromTopDrawer = useCallback(() => {
+    if (scheduleTarget) {
+      handleBackFromSchedule();
+      return;
+    }
+    handleBackToWorkflowList();
+  }, [handleBackFromSchedule, handleBackToWorkflowList, scheduleTarget]);
 
   // Toggle dropdown
   const toggleDropdown = useCallback(() => {
@@ -977,10 +981,11 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
       setIsDropdownClosing(false);
       setIsDropdownOpen(true);
-      setIsRunPanelLeaving(false);
-      setShouldAnimateRunPanelEntry(false);
+      resetRunDrawer();
+      resetScheduleDrawer();
       setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
       setDrilledWorkflow(null);
+      setScheduleTarget(null);
       return;
     }
     if (isDropdownClosing) {
@@ -989,11 +994,11 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       );
       return;
     }
-    // Chevron re-click while the run panel is showing switches back to the
-    // workflow list instead of closing outright — matching the badge's own
+    // Chevron re-click while a drawer (run panel, schedule panel) is showing
+    // backs out of it instead of closing outright — matching the badge's own
     // "switch views, don't close" behavior when the other view is active.
-    if (dropdownView !== WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS) {
-      handleBackToWorkflowList();
+    if (scheduleTarget || dropdownView !== WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS) {
+      handleBackFromTopDrawer();
       return;
     }
     closeDropdown();
@@ -1001,6 +1006,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     isDropdownOpen,
     isDropdownClosing,
     dropdownView,
+    scheduleTarget,
     vscode,
     loadedWorkflows,
     activeWorkflowId,
@@ -1009,7 +1015,9 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     workflowName,
     updateDropdownTop,
     closeDropdown,
-    handleBackToWorkflowList,
+    handleBackFromTopDrawer,
+    resetRunDrawer,
+    resetScheduleDrawer,
   ]);
 
   // Switch to a loaded (running/paused) workflow
@@ -1101,8 +1109,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
         workflowKey: workflow.address.workflowKey,
         workflowName: workflow.workflowName,
       });
-      setIsRunPanelLeaving(false);
-      setShouldAnimateRunPanelEntry(true);
+      enterRunDrawer(true);
       setDropdownView(WORKFLOW_DROPDOWN_VIEWS.RUNS);
       if (workflow.address.workflowKey !== displayedViewAddress?.workflowKey) {
         useRunSummaryCacheStore
@@ -1113,7 +1120,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
           );
       }
     },
-    [displayedViewAddress]
+    [displayedViewAddress, enterRunDrawer]
   );
 
   // The run-identity badge always drills into the *displayed* lineage's own
@@ -1123,6 +1130,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     const alreadyShowingThisPanel =
       isDropdownOpen &&
       !isDropdownClosing &&
+      !scheduleTarget &&
       dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS &&
       drilledWorkflow?.workflowKey === displayedViewAddress.workflowKey;
     if (alreadyShowingThisPanel) {
@@ -1132,8 +1140,9 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     updateDropdownTop();
     setIsDropdownClosing(false);
     setIsDropdownOpen(true);
-    setIsRunPanelLeaving(false);
-    setShouldAnimateRunPanelEntry(false);
+    enterRunDrawer(false);
+    resetScheduleDrawer();
+    setScheduleTarget(null);
     setDrilledWorkflow({
       workflowKey: displayedViewAddress.workflowKey,
       workflowName: displayName,
@@ -1145,22 +1154,26 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     isDropdownClosing,
     dropdownView,
     drilledWorkflow,
+    scheduleTarget,
     closeDropdown,
     updateDropdownTop,
     displayName,
+    enterRunDrawer,
+    resetScheduleDrawer,
   ]);
 
-  // Escape backs out of the drilled-in run panel, using the same slide-right
-  // transition as the visible back button. From the workflow list it still
-  // closes the dropdown and restores focus to the segment that opened it.
+  // Escape backs out of the top drawer (schedule panel, then run panel), using
+  // the same slide-right transition as the visible back button. From the
+  // workflow list it still closes the dropdown and restores focus to the
+  // segment that opened it.
   useEffect(() => {
     if (!isDropdownOpen) {
       return;
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== KEYBOARD_KEYS.ESCAPE) return;
-      if (dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS) {
-        handleBackToWorkflowList();
+      if (scheduleTarget || dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS) {
+        handleBackFromTopDrawer();
         return;
       }
       const opener = dropdownOpenerRef.current;
@@ -1169,7 +1182,13 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [closeDropdown, dropdownView, handleBackToWorkflowList, isDropdownOpen]);
+  }, [
+    closeDropdown,
+    dropdownView,
+    handleBackFromTopDrawer,
+    isDropdownOpen,
+    scheduleTarget,
+  ]);
 
   const handleSelectRunPanelRow = useCallback(
     (address: WorkflowViewAddress) => {
@@ -1307,15 +1326,38 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     [handleDeleteRunPanelRow, handleRemoveWorkflow]
   );
 
-  const [scheduleEditor, setScheduleEditor] = useState<{
-    target: WorkflowContextMenuTarget;
-    anchor: HTMLElement | null;
-  } | null>(null);
+  // Opens the schedule panel over the current view. From the header's context
+  // menu the dropdown is closed, so open it straight into the panel (no
+  // slide, the dropdown reveal is the motion) with the list beneath it.
   const handleEditSchedule = useCallback(
-    (target: WorkflowContextMenuTarget, anchor: HTMLElement | null) => {
-      setScheduleEditor({ target, anchor });
+    (target: WorkflowContextMenuTarget, opener: HTMLElement | null) => {
+      setScheduleTarget({ target, opener });
+      if (isDropdownOpen && !isDropdownClosing) {
+        enterScheduleDrawer(true);
+        return;
+      }
+      if (closeDropdownTimeoutRef.current) {
+        clearTimeout(closeDropdownTimeoutRef.current);
+        closeDropdownTimeoutRef.current = null;
+      }
+      updateDropdownTop();
+      vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
+      vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
+      setIsDropdownClosing(false);
+      setIsDropdownOpen(true);
+      resetRunDrawer();
+      setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
+      setDrilledWorkflow(null);
+      enterScheduleDrawer(false);
     },
-    []
+    [
+      enterScheduleDrawer,
+      isDropdownClosing,
+      isDropdownOpen,
+      resetRunDrawer,
+      updateDropdownTop,
+      vscode,
+    ]
   );
   const handleToggleSchedule = useCallback((workflow: RecentWorkflow) => {
     if (!workflow.schedule) return;
@@ -1583,6 +1625,10 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       workflow,
     })),
   ];
+
+  // The list sits beneath every drawer; it is inert while one covers it.
+  const isWorkflowListCovered =
+    dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS || !!scheduleTarget;
 
   // ── Run panel (drill-in view) derived data ──────────────────────────────
   const isDrilledLineageDisplayed =
@@ -1924,11 +1970,9 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
         <div className="relative flex flex-1 min-h-0 flex-col overflow-clip">
           <div
             className={`isolate flex h-full min-h-0 flex-col ${
-              dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS
-                ? "pointer-events-none"
-                : ""
+              isWorkflowListCovered ? "pointer-events-none" : ""
             }`}
-            aria-hidden={dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS}
+            aria-hidden={isWorkflowListCovered}
           >
             <WorkflowList
               rows={workflowListRows}
@@ -1968,14 +2012,10 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
           </div>
           {dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS && drilledWorkflow ? (
             <div
-              className={`absolute inset-0 flex min-h-0 flex-col bg-dropdown-bg ${
-                isRunPanelLeaving
-                  ? "pointer-events-none animate-slide-out-right"
-                  : shouldAnimateRunPanelEntry
-                    ? "animate-slide-in-right"
-                    : ""
+              className={`absolute inset-0 flex min-h-0 flex-col bg-dropdown-bg ${runDrawerClassName} ${
+                scheduleTarget ? "pointer-events-none" : ""
               }`}
-              aria-hidden={isRunPanelLeaving}
+              aria-hidden={isRunPanelLeaving || !!scheduleTarget}
               onAnimationEnd={handleRunPanelAnimationEnd}
             >
               <RunPanel
@@ -2005,23 +2045,36 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
               />
             </div>
           ) : null}
+          {scheduleTarget ? (
+            <div
+              className={`absolute inset-0 flex min-h-0 flex-col bg-dropdown-bg ${scheduleDrawerClassName}`}
+              aria-hidden={isSchedulePanelLeaving}
+              onAnimationEnd={handleSchedulePanelAnimationEnd}
+            >
+              <SchedulePanel
+                key={scheduleTarget.target.address.workflowKey}
+                address={scheduleTarget.target.address}
+                workflowName={scheduleTarget.target.workflowName}
+                schedule={scheduleTarget.target.schedule}
+                scheduleLastMissedAt={
+                  scheduleTarget.target.scheduleLastMissedAt
+                }
+                scheduleOnOtherHost={scheduleTarget.target.scheduleOnOtherHost}
+                backLabel={
+                  dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS
+                    ? WORKFLOW_SCHEDULE_LABELS.backToRuns
+                    : WORKFLOW_SCHEDULE_LABELS.backToWorkflows
+                }
+                onBack={handleBackFromSchedule}
+                onClose={closeDropdown}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 
       {/* Delete workflow history confirmation modal */}
       {workflowContextMenuPortal}
-      {scheduleEditor && (
-        <ScheduleEditor
-          address={scheduleEditor.target.address}
-          workflowName={scheduleEditor.target.workflowName}
-          schedule={scheduleEditor.target.schedule}
-          scheduleNextRunAt={scheduleEditor.target.scheduleNextRunAt}
-          scheduleLastMissedAt={scheduleEditor.target.scheduleLastMissedAt}
-          scheduleOnOtherHost={scheduleEditor.target.scheduleOnOtherHost}
-          anchor={scheduleEditor.anchor}
-          onClose={() => setScheduleEditor(null)}
-        />
-      )}
       <ConfirmDeleteOperationModal
         isOpen={pendingDelete !== null}
         onCancel={handleRemoveWorkflowCancel}

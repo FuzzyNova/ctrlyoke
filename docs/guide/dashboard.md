@@ -249,17 +249,22 @@ Right-click a workflow or run for:
   copy, `events.jsonl` timeline and manifest). In the browser dashboard the path
   is on the machine running ctrlyoke. See [Run files](/reference/run-files).
 - **Add to Favorites** / **Remove from Favorites**.
-- **Schedule…** / **Edit Schedule…** opens the workflow's schedule editor.
+- **Schedule…** / **Edit Schedule…** opens the workflow's schedule view.
 - **Delete Workflow** / **Delete Run**: moves it to Recently deleted. You can
   restore it from **Settings → General → Run History**.
 
 ### Scheduling workflows
 
 Use the clock on a workflow row, or choose **Schedule…** from its context menu.
-Choose a one-time run, a daily, weekly or monthly schedule, or enter a custom
-cron expression. The **Scheduled** section shows the next run and lets you
-pause or resume a saved schedule. Scheduled runs start a new workflow run from
-the beginning.
+The workflow dropdown switches to a **Schedule** view for that workflow, the
+same way `#N ›` switches to its runs; **Back** (or `Esc`) returns to where you
+were. Under **Repeat**, choose **Once** (a date and time), **Daily** (a time),
+**Weekly** (days and a time), **Monthly** (a day of the month and a time) or
+**Custom** (a cron expression). **Next run** previews the first run, and
+**Schedule** saves it. Opening the view again on a scheduled workflow lets you
+change it, **Pause this schedule**, or **Remove schedule**. The **Scheduled**
+section shows the next run and lets you pause or resume a saved schedule.
+Scheduled runs start a new workflow run from the beginning.
 
 Custom schedules use five numeric cron fields in this order: minute (0–59),
 hour (0–23), day of month (1–31), month (1–12), and day of week (0–7, where

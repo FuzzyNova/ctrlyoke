@@ -1920,6 +1920,129 @@ describe("WorkflowSwitcher — loaded state", () => {
       trigger: schedule.trigger,
     });
   });
+
+  it("opens the schedule panel inside the dropdown and backs out to the list", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowSwitcher />);
+    setRecentWorkflows([
+      {
+        workflowName: "Nightly Build",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
+    await user.click(
+      screen.getByRole("button", { name: "Schedule workflow…" })
+    );
+
+    const panel = screen.getByRole("region", {
+      name: "Schedule Nightly Build",
+    });
+    expect(panel).toBeInTheDocument();
+    expect(panel.closest(".workflow-dropdown-menu")).not.toBeNull();
+    // The list stays mounted beneath the panel but is inert.
+    expect(
+      document.querySelector(".recent-workflows")?.parentElement
+    ).toHaveAttribute("aria-hidden", "true");
+
+    // Interacting with the panel is not a click outside the dropdown.
+    await user.click(within(panel).getByRole("radio", { name: "Daily" }));
+    expect(
+      screen.getByRole("button", { name: /Show workflows/i })
+    ).toHaveAttribute("aria-expanded", "true");
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Back to workflow list" })
+    );
+    act(() => {
+      vi.advanceTimersByTime(321);
+    });
+    expect(
+      screen.queryByRole("region", { name: "Schedule Nightly Build" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Show workflows/i })
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Nightly Build")).toBeInTheDocument();
+  });
+
+  it("saves a schedule from the panel and returns to the list", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowSwitcher />);
+    setRecentWorkflows([
+      {
+        workflowName: "Nightly Build",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
+    await user.click(
+      screen.getByRole("button", { name: "Schedule workflow…" })
+    );
+    const panel = screen.getByRole("region", {
+      name: "Schedule Nightly Build",
+    });
+    await user.click(within(panel).getByRole("radio", { name: "Daily" }));
+    fireEvent.change(within(panel).getByLabelText("Time"), {
+      target: { value: "07:30" },
+    });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.click(within(panel).getByRole("button", { name: "Schedule" }));
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SET_SCHEDULE,
+      address: expect.objectContaining({ workflowKey: "test-0" }),
+      enabled: true,
+      trigger: { cron: "30 7 * * *" },
+    });
+    act(() => {
+      vi.advanceTimersByTime(321);
+    });
+    expect(
+      screen.queryByRole("region", { name: "Schedule Nightly Build" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the dropdown into the schedule panel from the header context menu", async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "test-0" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+    });
+    render(<WorkflowSwitcher />);
+    setRecentWorkflows([
+      {
+        workflowName: "Nightly Build",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+    fireEvent.contextMenu(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Schedule…" }));
+
+    expect(
+      screen.getByRole("button", { name: /Show workflows/i })
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("region", { name: /^Schedule / })
+    ).toBeInTheDocument();
+
+    // Escape backs out of the panel rather than closing the dropdown.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.keyDown(document, { key: "Escape" });
+    act(() => {
+      vi.advanceTimersByTime(321);
+    });
+    expect(
+      screen.queryByRole("region", { name: /^Schedule / })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Show workflows/i })
+    ).toHaveAttribute("aria-expanded", "true");
+  });
 });
 
 describe("WorkflowSwitcher — run navigation panel", () => {

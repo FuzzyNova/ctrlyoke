@@ -281,10 +281,10 @@ export function useWorkflowContextMenu({
             title: target.scheduleNextRunAt
               ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(target.scheduleNextRunAt).toLocaleString()}`
               : undefined,
-            onClick: () => {
-              onCloseDropdown();
-              onEditSchedule(target, opener);
-            },
+            // Opens the schedule panel inside the workflow dropdown, so the
+            // dropdown must stay open (it opens it when the menu came from
+            // the header).
+            onClick: () => onEditSchedule(target, opener),
           },
           {
             label: target.isFavorite

@@ -37,6 +37,14 @@
 > `hostId` on the schedule settles the synced-home double-fire; the
 > unattended-harness guard is an editor annotation in v1, not a runtime fail-fast.
 
+> **2026-11-11 (UX revision):** The anchored `ScheduleEditor` popover was replaced by
+> a **drill-in Schedule view** inside the workflow dropdown (`SchedulePanel.tsx`), built
+> like the run panel. The popover lived outside the dropdown, so clicking it counted as
+> a click outside and closed the workflow list, and the context-menu entry closed the
+> dropdown before opening it. Its always-checked "Enabled" box also read as a setting
+> for a schedule that didn't exist yet. See "Authoring view (as built)" below; the
+> popover text further down is kept as the original design record.
+
 ## TL;DR
 
 - **Substrate decided (per product owner):** a schedule fires **only while a
@@ -206,6 +214,27 @@ and width-locked (`syncWorkflowRowWidthLock` in `WorkflowSwitcher.tsx`), and an
 inline accordion that pushes siblings down fights that layout. A popover keyed to
 the row avoids reflow.
 
+### Authoring view (as built, supersedes the popover above)
+
+- The clock button and the context-menu entry open a **Schedule view** that slides
+  over the dropdown's current view, titled "Schedule <workflow>", with Back and close
+  in a header shared with the run panel (`DropdownDrawerHeader`). Both drawers use one
+  slide-in/slide-out lifecycle hook (`useDrawerTransition`).
+- The view overlays whichever view was open (the list or the run panel), so Back,
+  Escape and the chevron return there with no view stack; the back button names its
+  destination. From the header's context menu the dropdown opens straight into the
+  view with the list beneath it.
+- **Repeat** is a segmented control (Once · Daily · Weekly · Monthly · Custom). Each
+  frequency shows only what its cron needs: Once a datetime, Daily a time, Weekly day
+  buttons and a time, Monthly a day of month and a time, Custom a cron string. There
+  is no "start date" for recurrence, since a cron trigger stores none.
+- A **new** schedule has no enabled/paused control; pressing **Schedule** is the
+  opt-in. A **saved** schedule gets **Pause this schedule**, **Remove schedule** and
+  **Save changes**.
+- Saving is refused (with an inline alert) when Weekly has no day picked or the
+  schedule would never fire (a past one-shot, or an Until behind every occurrence),
+  unless it is being saved paused.
+
 ### Context-menu entry
 
 Add a lineage-scoped item to `useWorkflowContextMenu.tsx`, in the group with
@@ -219,9 +248,8 @@ Add a lineage-scoped item to `useWorkflowContextMenu.tsx`, in the group with
   which the menu already offers on run-panel rows for the same reason.
 - It is never disabled. A running or unstarted lineage can be scheduled, and a
   draft-only lineage fires through `executeDraftAtAddress`.
-- `onClick` closes the dropdown menu and opens the same `ScheduleEditor` popover
-  the row button opens, anchored to the menu's `opener` element. Fall back to the
-  row when the menu opened at pointer coordinates.
+- `onClick` opens the same Schedule view the row button opens, and keeps the
+  workflow dropdown open (it opens it when the menu came from the header).
 - Plumbing: add `schedule?` (or a `hasSchedule`/`nextRunAt` pair) to
   `WorkflowContextMenuTarget`, filled from the `RecentWorkflow` entry by the same
   three builders that fill `isFavorite` today: `RecentWorkflowRow`,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ExitButton } from "@components/shared";
+import { DropdownDrawerHeader } from "./DropdownDrawerHeader";
 import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import { VirtualizedDropdownList } from "../shared";
 import { RunSummaryRow, type RunPanelRow } from "./RunSummaryRow";
@@ -206,22 +206,12 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   return (
     <div className="run-panel flex h-full flex-col">
       {/* Pinned header — outside the scroll container, like the workflow list's search header */}
-      <div className="run-panel-header flex shrink-0 items-center gap-1 border-b border-dropdown-border bg-editor-bg px-2 py-2">
-        <button
-          type="button"
-          onClick={onBack}
-          title="Back to workflow list"
-          aria-label="Back to workflow list"
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-description-fg hover:bg-list-hover-bg hover:text-foreground"
-        >
-          <Icon name="chevron-left" className="text-sm" />
-        </button>
-        <span
-          className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
-          title={workflowName}
-        >
-          {workflowName}
-        </span>
+      <DropdownDrawerHeader
+        title={workflowName}
+        backLabel="Back to workflow list"
+        onBack={onBack}
+        onClose={onClose}
+      >
         <button
           type="button"
           onClick={() =>
@@ -246,14 +236,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
         >
           <Icon name="arrow-down" className="text-sm" />
         </button>
-        {onClose && (
-          <ExitButton
-            onClick={onClose}
-            title="Close workflow menu"
-            aria-label="Close workflow menu"
-          />
-        )}
-      </div>
+      </DropdownDrawerHeader>
 
       {/* Run/draft list */}
       <div
