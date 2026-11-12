@@ -20,6 +20,7 @@ import { isPathWithinDirectory } from "./PathSecurity";
 import { pathsEqual } from "./PathCasing";
 import { ConfigurationUtils } from "./ConfigurationUtils";
 import {
+  CHECKOUT_SLOT_KINDS,
   WORKTREE_IDENTITY_KINDS,
   WORKTREE_MODES,
   NODE_ERROR_CODES,
@@ -79,8 +80,8 @@ export type WorktreeNameIdentity =
   | { kind: typeof WORKTREE_IDENTITY_KINDS.CHECKOUT; name: string };
 
 export type CheckoutSlotResolution =
-  | { kind: "existing"; entry: GitWorktreeEntry }
-  | { kind: "planned"; path: string };
+  | { kind: typeof CHECKOUT_SLOT_KINDS.EXISTING; entry: GitWorktreeEntry }
+  | { kind: typeof CHECKOUT_SLOT_KINDS.PLANNED; path: string };
 
 function expandCheckoutPath(value: string): string {
   const home = os.homedir();
@@ -124,7 +125,7 @@ export async function resolveCheckoutSlot(
       throw new Error(
         `Checkout "${target}" is prunable. Use Repair or Prune in Settings → Worktrees.`
       );
-    if (entry) return { kind: "existing", entry };
+    if (entry) return { kind: CHECKOUT_SLOT_KINDS.EXISTING, entry };
     try {
       await fs.access(target);
       throw new Error(
@@ -133,7 +134,7 @@ export async function resolveCheckoutSlot(
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
-    return { kind: "planned", path: target };
+    return { kind: CHECKOUT_SLOT_KINDS.PLANNED, path: target };
   }
   const identities = [
     value,
@@ -162,10 +163,10 @@ export async function resolveCheckoutSlot(
       throw new Error(
         `Checkout "${matches[0].worktreePath}" is prunable. Use Repair or Prune in Settings → Worktrees.`
       );
-    return { kind: "existing", entry: matches[0] };
+    return { kind: CHECKOUT_SLOT_KINDS.EXISTING, entry: matches[0] };
   }
   return {
-    kind: "planned",
+    kind: CHECKOUT_SLOT_KINDS.PLANNED,
     path: path.join(
       root,
       createWorktreeDirectoryName(value, commonDirectory, {
@@ -435,7 +436,7 @@ export async function previewWorktreePlacement(
           common,
           root
         );
-        if (slot.kind === "planned") {
+        if (slot.kind === CHECKOUT_SLOT_KINDS.PLANNED) {
           const elsewhere = entries.find(
             (entry) => entry.branchName === options.branch
           );

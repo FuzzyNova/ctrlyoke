@@ -277,18 +277,32 @@ function WorktreeSummary({
         </div>
       )}
       {worktree.eligible && worktree.switchBlocker && (
-        <div className="mt-2 text-xs text-error-fg">{worktree.switchBlocker}</div>
-      )}
-      {worktree.eligible && !worktree.switchBlocker && worktree.checkoutCurrentBranch && (
-        <div className="mt-2 text-xs text-description-fg">
-          Will switch from <code className="bg-code-block">{worktree.checkoutCurrentBranch}</code>
+        <div className="mt-2 text-xs text-error-fg">
+          {worktree.switchBlocker}
         </div>
       )}
-      {worktree.eligible && !worktree.switchBlocker && !worktree.checkoutCurrentBranch && worktree.checkout && worktree.plannedDirectory && (
-        <div className="mt-2 text-xs text-description-fg">
-          Will create checkout at <code className="bg-code-block break-all">{worktree.plannedDirectory}</code>
-        </div>
-      )}
+      {worktree.eligible &&
+        !worktree.switchBlocker &&
+        worktree.checkoutCurrentBranch && (
+          <div className="mt-2 text-xs text-description-fg">
+            Will switch from{" "}
+            <code className="bg-code-block">
+              {worktree.checkoutCurrentBranch}
+            </code>
+          </div>
+        )}
+      {worktree.eligible &&
+        !worktree.switchBlocker &&
+        !worktree.checkoutCurrentBranch &&
+        worktree.checkout &&
+        worktree.plannedDirectory && (
+          <div className="mt-2 text-xs text-description-fg">
+            Will create checkout at{" "}
+            <code className="bg-code-block break-all">
+              {worktree.plannedDirectory}
+            </code>
+          </div>
+        )}
     </section>
   );
 }

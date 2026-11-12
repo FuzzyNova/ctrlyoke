@@ -141,12 +141,17 @@ import { Icon } from "../shared/Icon";
 import { findKeyValueRowValueInput } from "../shared/KeyValueRowsEditor";
 import { schemaAriaLabel, schemaFieldTitle } from "@utils/schemaPropertyLabels";
 import { commitWorkflowVars } from "@utils/workflowVars";
-import { toWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
+import {
+  toWorktreeObjectConfig,
+  withWorktreeField,
+} from "@root/utils/WorktreeConfigShape";
+import { checkoutSlotOptions } from "@utils/worktreeStatus";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const WORKFLOW_PANEL_BREAKPOINT = 400;
 const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
-type WorktreeField = "checkout" | "branch" | "base" | "setup" | "keep" | "merge";
+type WorktreeField =
+  "checkout" | "branch" | "base" | "setup" | "keep" | "merge";
 // The sandbox pair has its own controls on the Permissions page; keep this
 // panel's generic property guard scoped to the other execution properties.
 type ExecutionPropertyKey = Exclude<
@@ -429,21 +434,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveModel = getEffectiveModel();
   const effectiveExecutionMode = getEffectiveExecutionMode();
   const effectiveWorktree = getEffectiveWorktree();
-  const worktreeManagement = useSettingsStore((state) => state.worktreeManagement);
-  const checkoutOptions = useMemo(() => {
-    const management = worktreeManagement;
-    if (!management) return [];
-    return management.entries
-      .filter(
-        (entry) =>
-          entry.ownership !== "managed" &&
-          entry.worktreePath !== management.sourceCheckoutRoot
-      )
-      .map((entry) => {
-        const parts = entry.worktreePath.split(/[\\/]/).filter(Boolean);
-        return parts[parts.length - 1] ?? entry.worktreePath;
-      });
-  }, [worktreeManagement]);
+  const worktreeManagement = useSettingsStore(
+    (state) => state.worktreeManagement
+  );
+  const checkoutOptions = useMemo(
+    () => checkoutSlotOptions(worktreeManagement),
+    [worktreeManagement]
+  );
   const effectiveWorktreeMode =
     effectiveWorktree === false ? WORKTREE_MODE_NONE : effectiveWorktree.mode;
   const effectiveWorktreeBranch =
@@ -989,16 +986,19 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 current !== false && current.mode === WORKTREE_MODES.NAMED
                   ? (current.branch ?? "")
                   : "",
-              ...(current !== false && current.mode === WORKTREE_MODES.NAMED && current.checkout?.trim()
+              ...(current !== false &&
+              current.mode === WORKTREE_MODES.NAMED &&
+              current.checkout?.trim()
                 ? { checkout: current.checkout.trim() }
                 : {}),
               base: current !== false ? (current.base ?? "") : "",
               setup: current !== false ? (current.setup ?? "") : "",
             };
-      const next = { ...currentConfig, [field]: value } as WorktreeConfig;
-      if (field === "checkout" && typeof value === "string" && !value.trim()) {
-        delete (next as { checkout?: string }).checkout;
-      }
+      const next = withWorktreeField(
+        currentConfig,
+        field,
+        value
+      ) as WorktreeConfig;
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.WORKTREE, next);
       syncWorkflowPropertiesForUndo();
@@ -1528,7 +1528,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
         : ""
     );
     setWorktreeCheckoutInput(
-      resetWorktreeConfig !== false && resetWorktreeConfig.mode === WORKTREE_MODES.NAMED
+      resetWorktreeConfig !== false &&
+        resetWorktreeConfig.mode === WORKTREE_MODES.NAMED
         ? (resetWorktreeConfig.checkout ?? "")
         : ""
     );

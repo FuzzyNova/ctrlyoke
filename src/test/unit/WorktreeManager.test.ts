@@ -314,6 +314,229 @@ suite("WorktreeManager", function () {
     );
   });
 
+  function currentBranchOf(checkout: string): string {
+    return execFileSync("git", ["-C", checkout, "branch", "--show-current"], {
+      encoding: "utf8",
+    }).trim();
+  }
+
+  async function makeSlot(
+    name: string
+  ): Promise<{ parent: string; repository: string; slotPath: string }> {
+    const { parent, repository } = await makeRepository(name);
+    const slotPath = path.join(parent, "bug-fix");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "old-slot-branch", slotPath],
+      { stdio: "ignore" }
+    );
+    return { parent, repository, slotPath };
+  }
+
+  test("switches a clean checkout slot to an existing branch", async () => {
+    const { parent, repository, slotPath } =
+      await makeSlot("checkout-existing");
+    execFileSync("git", ["-C", repository, "branch", "feature/existing"]);
+    const info = await resolve(
+      manager(parent),
+      repository,
+      "feature/existing",
+      {
+        checkout: "bug-fix",
+      }
+    );
+    assert.strictEqual(info.worktreePath, slotPath);
+    assert.strictEqual(info.origin, "discovered");
+    assert.strictEqual(currentBranchOf(slotPath), "feature/existing");
+    await info.lease.release();
+  });
+
+  test("refuses to switch a checkout slot with only an untracked file", async () => {
+    const { parent, repository, slotPath } =
+      await makeSlot("checkout-untracked");
+    await fs.writeFile(path.join(slotPath, "notes.txt"), "draft\n");
+    await assert.rejects(
+      resolve(manager(parent), repository, "feature/next", {
+        checkout: "bug-fix",
+      }),
+      /has uncommitted changes on branch "old-slot-branch"/
+    );
+    assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+  });
+
+  test("refuses to switch a checkout slot with a merge in progress", async () => {
+    const { parent, repository, slotPath } = await makeSlot("checkout-merge");
+    const gitDir = execFileSync(
+      "git",
+      ["-C", slotPath, "rev-parse", "--absolute-git-dir"],
+      { encoding: "utf8" }
+    ).trim();
+    const head = execFileSync("git", ["-C", slotPath, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    await fs.writeFile(path.join(gitDir, "MERGE_HEAD"), `${head}\n`);
+    await assert.rejects(
+      resolve(manager(parent), repository, "feature/next", {
+        checkout: "bug-fix",
+      }),
+      /in progress/
+    );
+    assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+  });
+
+  test("refuses a branch checked out in a different checkout slot", async () => {
+    const { parent, repository, slotPath } =
+      await makeSlot("checkout-elsewhere");
+    const other = path.join(parent, "feature-slot");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "feature/taken", other],
+      { stdio: "ignore" }
+    );
+    await assert.rejects(
+      resolve(manager(parent), repository, "feature/taken", {
+        checkout: "bug-fix",
+      }),
+      /Branch "feature\/taken" is checked out in .*not in checkout "bug-fix"/
+    );
+    assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+  });
+
+  test("refuses to use a managed run's checkout as a slot", async () => {
+    const { parent, repository } = await makeRepository("checkout-managed");
+    const managed = await ensureManaged(manager(parent), repository);
+    await managed.lease.release();
+    await assert.rejects(
+      resolve(manager(parent), repository, "feature/next", {
+        checkout: managed.worktreePath,
+      }),
+      /managed/
+    );
+    assert.strictEqual(
+      currentBranchOf(managed.worktreePath),
+      managed.branchName
+    );
+  });
+
+  test("a held slot lease leaves the slot branch and run file untouched, and is not leaked", async () => {
+    const { parent, repository, slotPath } = await makeSlot("checkout-lease");
+    const ids = identity();
+    const nativeLease = await ExecutionRootLeaseManager.acquire({
+      mode: "shared-native",
+      stateRoot: repository,
+      executionRoot: slotPath,
+      ...ids,
+      runner: "vscode",
+      instanceId: "native-test",
+    });
+    const updates: string[] = [];
+    try {
+      await assert.rejects(
+        resolve(manager(parent, updates), repository, "feature/next", {
+          checkout: "bug-fix",
+        }),
+        /Execution root is in use/
+      );
+      assert.deepStrictEqual(updates, []);
+      assert.strictEqual(currentBranchOf(slotPath), "old-slot-branch");
+    } finally {
+      await nativeLease.release();
+    }
+    // A refused attempt must not keep the slot locked.
+    const info = await resolve(manager(parent), repository, "feature/next", {
+      checkout: "bug-fix",
+    });
+    assert.strictEqual(currentBranchOf(slotPath), "feature/next");
+    await info.lease.release();
+  });
+
+  test("releases the slot lease when resolution fails after the switch", async () => {
+    const { parent, repository } = await makeRepository("checkout-late-fail");
+    const failingSetup = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: new RecordingWorktreeSetupRunner({
+        success: false,
+        result: "",
+        stdout: "",
+        stderr: "setup failed",
+        exitCode: 1,
+      }),
+    });
+    const first = await resolve(failingSetup, repository, "feature/one", {
+      checkout: "bug-fix",
+      setup: "npm ci",
+    }).catch(() => undefined);
+    await first?.lease.release();
+    const slotPath = path.join(
+      parent,
+      "worktrees",
+      (await fs.readdir(path.join(parent, "worktrees")))[0]!
+    );
+    // The recorded setup failed, so resolving without a setup command fails
+    // after the slot has already been switched and its lease taken.
+    await assert.rejects(
+      resolve(manager(parent), repository, "feature/two", {
+        checkout: "bug-fix",
+      }),
+      /setup is failed/
+    );
+    assert.deepStrictEqual(
+      await ExecutionRootLeaseManager.inspectLeases(slotPath),
+      []
+    );
+  });
+
+  test("creates a missing checkout slot at the slot path, not the branch path", async () => {
+    const { parent, repository } = await makeRepository("checkout-create");
+    const info = await resolve(manager(parent), repository, "feature/fresh", {
+      checkout: "bug-fix",
+    });
+    assert.strictEqual(
+      path.dirname(info.worktreePath),
+      path.join(parent, "worktrees")
+    );
+    assert.match(path.basename(info.worktreePath), /^bug-fix-[0-9a-f]{12}$/);
+    assert.strictEqual(currentBranchOf(info.worktreePath), "feature/fresh");
+    await info.lease.release();
+
+    // The created slot resolves again by its bare name.
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "switch", "-c", "feature/later"],
+      {
+        stdio: "ignore",
+      }
+    );
+    const again = await resolve(manager(parent), repository, "feature/fresh", {
+      checkout: "bug-fix",
+    });
+    assert.strictEqual(again.worktreePath, info.worktreePath);
+    assert.strictEqual(currentBranchOf(info.worktreePath), "feature/fresh");
+    await again.lease.release();
+  });
+
+  test("does not re-run setup after a checkout slot switch", async () => {
+    const { parent, repository } = await makeRepository("checkout-setup");
+    const counter = path.join(parent, "setup-count.txt");
+    const setup = `node -e "require('fs').appendFileSync(${JSON.stringify(
+      JSON.stringify(counter.replace(/\\/g, "/"))
+    ).slice(1, -1)}, 'x')"`;
+    const first = await resolve(manager(parent), repository, "feature/one", {
+      checkout: "bug-fix",
+      setup,
+    });
+    assert.strictEqual(first.setupOutcome, "succeeded");
+    await first.lease.release();
+    const second = await resolve(manager(parent), repository, "feature/two", {
+      checkout: "bug-fix",
+      setup,
+    });
+    assert.strictEqual(second.worktreePath, first.worktreePath);
+    assert.strictEqual(currentBranchOf(second.worktreePath), "feature/two");
+    assert.strictEqual(await fs.readFile(counter, "utf8"), "x");
+    await second.lease.release();
+  });
+
   test("attaches an existing local branch", async () => {
     const first = await makeRepository("attach");
     execFileSync("git", ["-C", first.repository, "branch", "feature/existing"]);

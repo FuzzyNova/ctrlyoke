@@ -5,7 +5,11 @@ import {
 } from "@root/types/DashboardConstants";
 import { pluralize } from "@utils/string";
 import { classifyWorktreeComparison } from "@root/utils/WorktreeComparison";
-import { WORKTREE_COMPARISON_KINDS } from "@root/types/DashboardConstants";
+import {
+  WORKTREE_COMPARISON_KINDS,
+  WORKTREE_MODES,
+} from "@root/types/DashboardConstants";
+import type { WorktreeComparisonKind } from "@root/utils/WorktreeComparison";
 
 type WorkingTreeCounts = NonNullable<WorktreeManagementEntry["workingTree"]>;
 type ChangeCounts = WorkingTreeCounts["staged"];
@@ -25,7 +29,7 @@ export function resolveWorktreeMergeReadiness(
     WorktreeManagementEntry,
     "workingTree" | "sourceComparison" | "upstream"
   >,
-  comparisonKind: "local" | "pr" = "local"
+  comparisonKind: WorktreeComparisonKind = WORKTREE_COMPARISON_KINDS.LOCAL
 ): WorktreeMergeReadiness | undefined {
   const { workingTree, sourceComparison, upstream } = entry;
   if (!workingTree) return undefined;
@@ -36,7 +40,7 @@ export function resolveWorktreeMergeReadiness(
   ) {
     return WORKTREE_MERGE_READINESS.UNCOMMITTED;
   }
-  if (comparisonKind === "pr") {
+  if (comparisonKind === WORKTREE_COMPARISON_KINDS.PR) {
     if (upstream?.gone) return WORKTREE_MERGE_READINESS.UPSTREAM_GONE;
     if (upstream?.ahead === undefined || upstream.behind === undefined)
       return undefined;
@@ -58,11 +62,11 @@ export function describeWorktreeStatus(
     "branchName" | "workingTree" | "sourceComparison" | "upstream"
   >,
   sourceBranch: string | null | undefined,
-  comparisonKind: "local" | "pr" = "local"
+  comparisonKind: WorktreeComparisonKind = WORKTREE_COMPARISON_KINDS.LOCAL
 ): string {
   const parts = [entry.branchName ?? "Detached HEAD"];
   const { sourceComparison, workingTree } = entry;
-  if (comparisonKind === "pr" && entry.upstream) {
+  if (comparisonKind === WORKTREE_COMPARISON_KINDS.PR && entry.upstream) {
     const { ahead, behind, gone, label } = entry.upstream;
     parts.push(
       gone
@@ -113,4 +117,30 @@ export function isPullRequestWorktree(
 /** Remove the deterministic 12-hex suffix used on ctrlyoke worktree directories. */
 export function stripWorktreeDirectoryHashSuffix(name: string): string {
   return name.replace(/-[a-f\d]{12}$/i, "");
+}
+
+/**
+ * Linked worktrees that can serve as a named `checkout` slot, by directory
+ * basename: never the source checkout and never a managed run's checkout.
+ */
+export function checkoutSlotOptions(
+  management:
+    | {
+        sourceCheckoutRoot: string;
+        entries: readonly WorktreeManagementEntry[];
+      }
+    | null
+    | undefined
+): string[] {
+  if (!management) return [];
+  return management.entries
+    .filter(
+      (entry) =>
+        entry.ownership !== WORKTREE_MODES.MANAGED &&
+        entry.worktreePath !== management.sourceCheckoutRoot
+    )
+    .map((entry) => {
+      const parts = entry.worktreePath.split(/[\\/]/).filter(Boolean);
+      return parts[parts.length - 1] ?? entry.worktreePath;
+    });
 }

@@ -2633,8 +2633,9 @@ export class WorkflowInstance
         ConfigurationUtils.getDefaultWorktree(),
         this.platform.getNamedWorkspaceRoots()
       );
-      const recordedWorktree =
-        (this.promptQueue.getWorkflowFile() as WorkingFile)._runtime?.worktree;
+      const recordedWorktree = (
+        this.promptQueue.getWorkflowFile() as WorkingFile
+      )._runtime?.worktree;
       const continueConfig = recordedWorktreeConfigForContinue(
         recordedWorktree,
         currentResolution.config ?? false

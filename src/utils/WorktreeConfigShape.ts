@@ -1,10 +1,15 @@
-import { WORKTREE_MODES } from "../types/DashboardConstants";
+import {
+  CHECKOUT_VALUE_KINDS,
+  WORKTREE_CHECKOUT_FIELD,
+  WORKTREE_MODES,
+} from "../types/DashboardConstants";
 import type {
   WorktreeConfig,
   WorktreeObjectConfig,
 } from "../types/CtrlYokeTypes";
 
-export type CheckoutValueKind = "path" | "name";
+export type CheckoutValueKind =
+  (typeof CHECKOUT_VALUE_KINDS)[keyof typeof CHECKOUT_VALUE_KINDS];
 
 /** Classify checkout values independently of the host platform. */
 export function classifyCheckoutValue(value: string): CheckoutValueKind {
@@ -13,8 +18,8 @@ export function classifyCheckoutValue(value: string): CheckoutValueKind {
     value.startsWith("/") ||
     value.startsWith("\\\\") ||
     /^[A-Za-z]:[\\/]/.test(value)
-    ? "path"
-    : "name";
+    ? CHECKOUT_VALUE_KINDS.PATH
+    : CHECKOUT_VALUE_KINDS.NAME;
 }
 
 /** Convert shorthand worktree selections to the object form used by the UI. */
@@ -45,4 +50,25 @@ export function effectiveWorktreeObjectConfig(
     authored === undefined ? inherited : authored
   );
   return effective === false ? false : { ...effective };
+}
+
+/**
+ * Set one field of an object worktree config. An empty `checkout` removes the
+ * key, because a stored `checkout: ""` is invalid and "empty" means "derive
+ * the checkout from the branch".
+ */
+export function withWorktreeField<T extends object>(
+  config: T,
+  field: string,
+  value: string | boolean
+): T {
+  const next = { ...config, [field]: value } as T & { checkout?: unknown };
+  if (
+    field === WORKTREE_CHECKOUT_FIELD &&
+    typeof value === "string" &&
+    !value.trim()
+  ) {
+    delete next.checkout;
+  }
+  return next;
 }

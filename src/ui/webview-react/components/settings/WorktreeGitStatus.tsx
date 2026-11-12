@@ -1,5 +1,6 @@
 import type { WorktreeManagementEntry } from "@root/types/WebviewMessageTypes";
 import {
+  WORKTREE_COMPARISON_KINDS,
   WORKTREE_MERGE_READINESS,
   type WorktreeMergeReadiness,
 } from "@root/types/DashboardConstants";
@@ -97,12 +98,15 @@ export function WorktreeGitStatus({
   const comparison = isPr ? entry.upstream : sourceComparison;
   const stagedCount = workingTree ? totalChanges(workingTree.staged) : 0;
   const unstagedCount = workingTree ? totalChanges(workingTree.unstaged) : 0;
-  const readiness = resolveWorktreeMergeReadiness(entry, isPr ? "pr" : "local");
+  const readiness = resolveWorktreeMergeReadiness(
+    entry,
+    isPr ? WORKTREE_COMPARISON_KINDS.PR : WORKTREE_COMPARISON_KINDS.LOCAL
+  );
   const readinessDisplay = readiness ? READINESS_DISPLAY[readiness] : undefined;
   const description = describeWorktreeStatus(
     entry,
     sourceCheckoutBranch,
-    isPr ? "pr" : "local"
+    isPr ? WORKTREE_COMPARISON_KINDS.PR : WORKTREE_COMPARISON_KINDS.LOCAL
   );
 
   return (

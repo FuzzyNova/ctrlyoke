@@ -126,9 +126,16 @@ describe("DefaultsHarnessPage execution defaults", () => {
       checkout: "shared-slot",
     };
     render(
-      <DefaultsHarnessPage settings={settings} activeScope={SETTING_SCOPES.USER} onUpdate={onUpdate} onReset={() => {}} />
+      <DefaultsHarnessPage
+        settings={settings}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
     );
-    const checkout = screen.getByLabelText("Checkout, property defaults.worktree.checkout");
+    const checkout = screen.getByLabelText(
+      "Checkout, property defaults.worktree.checkout"
+    );
     expect(checkout).toHaveValue("shared-slot");
     await user.clear(checkout);
     await user.tab();

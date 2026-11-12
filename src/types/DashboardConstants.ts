@@ -2928,6 +2928,21 @@ export type WorktreeIdentityKind =
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
+/** Whether a `checkout` value names a slot by path or by bare name. */
+export const CHECKOUT_VALUE_KINDS = {
+  PATH: "path",
+  NAME: "name",
+} as const;
+
+/** What `resolveCheckoutSlot` found: a registered worktree or a path to create. */
+export const CHECKOUT_SLOT_KINDS = {
+  EXISTING: "existing",
+  PLANNED: "planned",
+} as const;
+
+/** The named-worktree `checkout` field, which is omitted rather than stored empty. */
+export const WORKTREE_CHECKOUT_FIELD = "checkout";
+
 export const WORKTREE_COMPARISON_KINDS = {
   LOCAL: "local",
   PR: "pr",

@@ -5,7 +5,10 @@ import * as path from "path";
 import { execFileSync } from "child_process";
 import { suite, teardown, test } from "mocha";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
-import { WORKTREE_IDENTITY_KINDS } from "../../types/DashboardConstants";
+import {
+  CHECKOUT_SLOT_KINDS,
+  WORKTREE_IDENTITY_KINDS,
+} from "../../types/DashboardConstants";
 import {
   assertWorktreePlacement,
   createWorktreeDirectoryName,
@@ -73,8 +76,8 @@ suite("WorktreeUtils", function () {
         common,
         root
       );
-      assert.strictEqual(result.kind, "existing");
-      if (result.kind === "existing")
+      assert.strictEqual(result.kind, CHECKOUT_SLOT_KINDS.EXISTING);
+      if (result.kind === CHECKOUT_SLOT_KINDS.EXISTING)
         assert.strictEqual(result.entry.worktreePath, candidate);
     }
     await assert.rejects(
@@ -94,7 +97,10 @@ suite("WorktreeUtils", function () {
       common,
       root
     );
-    assert.deepStrictEqual(planned, { kind: "planned", path: checkoutHash });
+    assert.deepStrictEqual(planned, {
+      kind: CHECKOUT_SLOT_KINDS.PLANNED,
+      path: checkoutHash,
+    });
   });
 
   test("rejects unsafe and prunable checkout paths", async () => {

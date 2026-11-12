@@ -1,6 +1,7 @@
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
   WORKTREE_CONFIG_ORIGINS,
+  CHECKOUT_VALUE_KINDS,
   WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import type {
@@ -27,7 +28,10 @@ function normalizeNamedCheckout(
     return config;
   const checkout = config.checkout.trim();
   if (!checkout) throw new Error("Named worktree checkout must not be empty.");
-  if (classifyCheckoutValue(checkout) === "name" && /[\\/]/.test(checkout)) {
+  if (
+    classifyCheckoutValue(checkout) === CHECKOUT_VALUE_KINDS.NAME &&
+    /[\\/]/.test(checkout)
+  ) {
     throw new Error(
       "Named worktree checkout must be an absolute or ~-prefixed path, or a bare name without slash or backslash."
     );

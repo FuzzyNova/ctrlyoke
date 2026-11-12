@@ -766,13 +766,19 @@ describe("WorkflowSwitcher — loaded state", () => {
       .mockReturnValue({ width: 500 } as DOMRect);
     useSettingsStore.setState({
       workflowProperties: {
-        worktree: { mode: WORKTREE_MODES.NAMED, checkout: "shared-slot", branch: "feature/status" },
+        worktree: {
+          mode: WORKTREE_MODES.NAMED,
+          checkout: "shared-slot",
+          branch: "feature/status",
+        },
       },
     });
 
     render(<WorkflowSwitcher />);
 
-    const indicator = screen.getByLabelText("Named worktree: shared-slot → feature/status");
+    const indicator = screen.getByLabelText(
+      "Named worktree: shared-slot → feature/status"
+    );
     expect(indicator).toHaveAttribute(
       "title",
       "Named worktree: shared-slot → feature/status"

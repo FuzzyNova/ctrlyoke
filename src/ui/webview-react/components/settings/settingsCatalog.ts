@@ -5,6 +5,8 @@ import {
   STATUS_LINE_HARNESS_IDS,
   HOOK_EVENT_NAMES,
   HOOK_EVENT_METADATA,
+  WORKTREE_CHECKOUT_FIELD,
+  WORKTREE_MODES,
   WORKTREE_KEEP_HELP_TEXT,
   type HarnessId,
   type StatusLineHarnessId,
@@ -1309,6 +1311,9 @@ export function worktreeSettingDescription(
   mode: keyof typeof WORKTREE_MODE_DESCRIPTIONS,
   field: keyof (typeof WORKTREE_MODE_DESCRIPTIONS)["named"]
 ): string {
-  if (mode === "managed" && field === "checkout") return "";
-  return WORKTREE_MODE_DESCRIPTIONS[mode][field as keyof (typeof WORKTREE_MODE_DESCRIPTIONS)[typeof mode]];
+  if (mode === WORKTREE_MODES.MANAGED && field === WORKTREE_CHECKOUT_FIELD)
+    return "";
+  return WORKTREE_MODE_DESCRIPTIONS[mode][
+    field as keyof (typeof WORKTREE_MODE_DESCRIPTIONS)[typeof mode]
+  ];
 }

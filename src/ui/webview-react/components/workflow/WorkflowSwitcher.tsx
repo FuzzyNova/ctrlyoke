@@ -207,9 +207,10 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       effectiveWorktree.mode;
     const branch =
       "branch" in effectiveWorktree && effectiveWorktree.branch?.trim();
-    const checkout = effectiveWorktree.mode === WORKTREE_MODES.NAMED
-      ? effectiveWorktree.checkout?.trim()
-      : undefined;
+    const checkout =
+      effectiveWorktree.mode === WORKTREE_MODES.NAMED
+        ? effectiveWorktree.checkout?.trim()
+        : undefined;
     return {
       title: `${modeLabel} worktree${checkout ? `: ${checkout} → ${branch || "branch-derived"}` : branch ? `: ${branch}` : ""}`,
     };

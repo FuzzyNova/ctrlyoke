@@ -57,6 +57,7 @@ import {
   WORKTREE_LIFECYCLE_OWNERS,
   WORKTREE_LIFECYCLE_STATES,
   WORKTREE_MODES,
+  CHECKOUT_SLOT_KINDS,
   WORKTREE_COMPARISON_KINDS,
   WORKTREE_IDENTITY_KINDS,
   WORKTREE_RECOVERY_OUTCOMES,
@@ -2316,6 +2317,22 @@ export class WorktreeManager {
   public async resolveNamedWorktree(
     options: ResolveNamedWorktreeOptions
   ): Promise<ActiveWorktreeInfo> {
+    // A checkout-slot switch takes the slot's lease before mutating it. Until
+    // that lease is handed to the normal lease path below, any failure must
+    // release it, or the slot stays locked for the rest of the session.
+    const pending: { slotLease?: ExecutionLeaseHandle } = {};
+    try {
+      return await this.resolveNamedWorktreeWith(options, pending);
+    } catch (error) {
+      await pending.slotLease?.release().catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private async resolveNamedWorktreeWith(
+    options: ResolveNamedWorktreeOptions,
+    pending: { slotLease?: ExecutionLeaseHandle }
+  ): Promise<ActiveWorktreeInfo> {
     const branchName = normalizeBranchName(options.branchName.trim());
     if (!branchName) throw new Error("Named worktree mode requires a branch.");
 
@@ -2358,7 +2375,10 @@ export class WorktreeManager {
         commonDirectory,
         root!
       );
-      slotPath = slot.kind === "existing" ? slot.entry.worktreePath : slot.path;
+      slotPath =
+        slot.kind === CHECKOUT_SLOT_KINDS.EXISTING
+          ? slot.entry.worktreePath
+          : slot.path;
       if (
         initialBranchCheckout &&
         !pathsEqual(initialBranchCheckout.worktreePath, slotPath)
@@ -2371,7 +2391,10 @@ export class WorktreeManager {
           )
         );
       }
-      if (slot.kind === "existing" && slot.entry.branchName !== branchName) {
+      if (
+        slot.kind === CHECKOUT_SLOT_KINDS.EXISTING &&
+        slot.entry.branchName !== branchName
+      ) {
         const executionRoot = path.resolve(
           slotPath,
           path.relative(sourceCheckoutRoot, repositoryInputs.executionRoot)
@@ -2455,6 +2478,7 @@ export class WorktreeManager {
           await slotLease.release();
           throw error;
         }
+        pending.slotLease = slotLease;
       }
     }
     const existingLocalBranchCommit = initialBranchCheckout
@@ -2479,7 +2503,7 @@ export class WorktreeManager {
         !initialEntries.some((entry) =>
           pathsEqual(entry.worktreePath, worktreePath!)
         ));
-    if (needsProvisioning) {
+    if (needsProvisioning && slotPath === undefined) {
       worktreePath = path.join(
         root!,
         createWorktreeDirectoryName(branchName, commonDirectory, {
@@ -2532,6 +2556,18 @@ export class WorktreeManager {
             if (pathsEqual(discovered.worktreePath, sourceCheckoutRoot)) {
               throw new Error(
                 `Named branch "${branchName}" is already checked out in the initiating source checkout.`
+              );
+            }
+            if (
+              options.checkout !== undefined &&
+              !pathsEqual(discovered.worktreePath, worktreePath!)
+            ) {
+              throw new Error(
+                checkoutSwitchBlockers.branchElsewhere(
+                  branchName,
+                  options.checkout,
+                  discovered.worktreePath
+                )
               );
             }
             return { entry: discovered, created: false };
@@ -2678,6 +2714,7 @@ export class WorktreeManager {
 
     let lease: ExecutionLeaseHandle;
     try {
+      pending.slotLease = undefined;
       lease =
         slotLease ??
         (await this.leaseManager.acquire(

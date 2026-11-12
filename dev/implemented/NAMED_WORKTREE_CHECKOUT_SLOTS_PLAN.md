@@ -31,15 +31,19 @@ records anything it found that differs from this plan under the item.
       Deviation: none.
 - [x] 7. Settings → Worktrees UI: upstream bracket, PR readiness labels,
       source drift line, Sync gating, Update from, slot label.
-- Deviation: none.
+      Deviation: none.
 - [x] 8. Docs pass (`docs/workflows/worktrees.md`, `properties-panel.md`),
       CHANGELOG check, plan moved to `dev/implemented/`.
-      Deviation: the landed tests do not explicitly cover refusing an untracked
-      dirty slot, a slot with managed-worktree ownership, a branch checked out
-      in a different slot, or a held lease specifically during a slot switch;
-      those cases remain implementation-level test gaps. The planned docs for
-      the Checkout field were already added to
-      `docs/workflows/properties-panel.md` with item 5.
+      The Checkout field docs landed in `docs/workflows/properties-panel.md`
+      with item 5.
+- [x] Review pass: fixed a missing slot being created at the branch-derived
+      path instead of the slot path, a slot lease leaked when resolution failed
+      after the switch, and a branch appearing in another worktree during the
+      provisioning race being attached instead of refused. Added the guard
+      tests item 8 listed as gaps (untracked file, merge in progress, managed
+      checkout, branch in another slot, held lease, setup not re-run, slot
+      creation path). Single-sourced the new flow-control literals and the
+      duplicated checkout-option and empty-checkout logic in the dashboard.
 
 ## Problem
 

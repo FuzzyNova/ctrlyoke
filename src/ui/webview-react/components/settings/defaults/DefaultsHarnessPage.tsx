@@ -8,7 +8,11 @@ import {
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 import type { WorktreeConfig } from "@root/types/CtrlYokeTypes";
-import { toWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
+import {
+  toWorktreeObjectConfig,
+  withWorktreeField,
+} from "@root/utils/WorktreeConfigShape";
+import { checkoutSlotOptions } from "@utils/worktreeStatus";
 import { useSettingsStore } from "@store/settingsStore";
 import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
 import { CustomSelect } from "../../shared/CustomSelect";
@@ -68,21 +72,13 @@ export function DefaultsHarnessPage({
     value: string | boolean
   ) => {
     if (worktreeConfig === false) return;
-    const next = { ...worktreeConfig, [field]: value };
-    if (field === "checkout" && typeof value === "string" && !value.trim()) {
-      delete (next as { checkout?: string }).checkout;
-    }
+    const next = withWorktreeField(worktreeConfig, field, value);
     onUpdate("defaults.worktree", next);
   };
   const availableAgents = useSettingsStore((s) => s.availableAgents);
   const availableSkills = useSettingsStore((s) => s.availableSkills);
   const worktreeManagement = useSettingsStore((s) => s.worktreeManagement);
-  const checkoutOptions = worktreeManagement?.entries
-    .filter((entry) => entry.ownership !== "managed" && entry.worktreePath !== worktreeManagement.sourceCheckoutRoot)
-    .map((entry) => {
-      const parts = entry.worktreePath.split(/[\\/]/).filter(Boolean);
-      return parts[parts.length - 1] ?? entry.worktreePath;
-    }) ?? [];
+  const checkoutOptions = checkoutSlotOptions(worktreeManagement);
   const rowProps = { sources, onReset, activeScope };
   const agentWarn = agentWarning(wf.agent, availableAgents);
   const skillsWarn = skillsWarning(wf.skills, availableSkills);
@@ -152,20 +148,29 @@ export function DefaultsHarnessPage({
           <>
             <SettingInputRow
               settingKey="defaults.worktree.checkout"
-              {...{ description: worktreeSettingDescription("named", "checkout") }}
+              {...{
+                description: worktreeSettingDescription("named", "checkout"),
+              }}
               id="defaults-worktree-checkout"
               {...rowProps}
             >
               <LocalTextInput
                 id="defaults-worktree-checkout"
-                value={worktreeConfig !== false && worktreeConfig.mode === WORKTREE_MODES.NAMED ? (worktreeConfig.checkout ?? "") : ""}
+                value={
+                  worktreeConfig !== false &&
+                  worktreeConfig.mode === WORKTREE_MODES.NAMED
+                    ? (worktreeConfig.checkout ?? "")
+                    : ""
+                }
                 onCommit={(value) => updateWorktreeField("checkout", value)}
                 list="defaults-worktree-checkout-options"
                 aria-label="Default checkout slot"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7"
               />
               <datalist id="defaults-worktree-checkout-options">
-                {checkoutOptions.map((option) => <option key={option}>{option}</option>)}
+                {checkoutOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
               </datalist>
             </SettingInputRow>
             <SettingInputRow

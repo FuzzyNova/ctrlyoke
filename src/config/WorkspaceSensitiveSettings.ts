@@ -8,6 +8,7 @@ import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import { isToolPermissionConfigNoWiderThan } from "../utils/ToolPermissionUtils";
 import {
+  CHECKOUT_VALUE_KINDS,
   PERMISSION_CAPABILITY_KEYS,
   SANDBOX_MODE_ORDER,
   SETTING_PATHS,
@@ -157,13 +158,18 @@ function hasWorktreeSetupCommand(value: unknown): boolean {
 }
 
 function worktreeCheckoutPath(value: unknown): string | undefined {
-  if (!isPlainObject(value) || !isNonEmptyString(value.checkout)) return undefined;
+  if (!isPlainObject(value) || !isNonEmptyString(value.checkout))
+    return undefined;
   const checkout = (value.checkout as string).trim();
-  return classifyCheckoutValue(checkout) === "path" ? checkout : undefined;
+  return classifyCheckoutValue(checkout) === CHECKOUT_VALUE_KINDS.PATH
+    ? checkout
+    : undefined;
 }
 
 function isSensitiveWorktreeDefault(value: unknown): boolean {
-  return hasWorktreeSetupCommand(value) || worktreeCheckoutPath(value) !== undefined;
+  return (
+    hasWorktreeSetupCommand(value) || worktreeCheckoutPath(value) !== undefined
+  );
 }
 
 /**
@@ -174,8 +180,10 @@ function worktreeSetupCoveredByUser(
   workspaceValue: unknown,
   userValue: unknown
 ): boolean {
-  return worktreeSetupCommand(workspaceValue) === worktreeSetupCommand(userValue) &&
-    worktreeCheckoutPath(workspaceValue) === worktreeCheckoutPath(userValue);
+  return (
+    worktreeSetupCommand(workspaceValue) === worktreeSetupCommand(userValue) &&
+    worktreeCheckoutPath(workspaceValue) === worktreeCheckoutPath(userValue)
+  );
 }
 
 function rankedSettingCoveredByUser(
@@ -208,7 +216,9 @@ function summarizeWorktreeSetup(value: unknown): string {
     worktreeSetupCommand(value)
       ? `setup command ${worktreeSetupCommand(value)}`
       : undefined,
-    worktreeCheckoutPath(value) ? `checkout path ${worktreeCheckoutPath(value)}` : undefined,
+    worktreeCheckoutPath(value)
+      ? `checkout path ${worktreeCheckoutPath(value)}`
+      : undefined,
   ].filter(Boolean);
   return summarizeValue(details.join(", "));
 }

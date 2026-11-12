@@ -266,17 +266,38 @@ describe("DryRunModal", () => {
       plannedDirectory: "/repo/shared-slot",
       plannedDirectoryIsExact: true,
     } as const;
-    openPreview({ kind: "workflow" }, { ...preview, worktree: { ...worktree, checkoutCurrentBranch: "old-branch" } });
+    openPreview(
+      { kind: "workflow" },
+      {
+        ...preview,
+        worktree: { ...worktree, checkoutCurrentBranch: "old-branch" },
+      }
+    );
     const { rerender } = render(<DryRunModal scope={{ kind: "workflow" }} />);
-    expect(screen.getByText(/Will switch from/)).toHaveTextContent("old-branch");
+    expect(screen.getByText(/Will switch from/)).toHaveTextContent(
+      "old-branch"
+    );
 
     openPreview({ kind: "workflow" }, { ...preview, worktree });
     rerender(<DryRunModal scope={{ kind: "workflow" }} />);
-    expect(screen.getByText(/Will create checkout at/)).toHaveTextContent("/repo/shared-slot");
+    expect(screen.getByText(/Will create checkout at/)).toHaveTextContent(
+      "/repo/shared-slot"
+    );
 
-    openPreview({ kind: "workflow" }, { ...preview, worktree: { ...worktree, switchBlocker: "Checkout has uncommitted changes" } });
+    openPreview(
+      { kind: "workflow" },
+      {
+        ...preview,
+        worktree: {
+          ...worktree,
+          switchBlocker: "Checkout has uncommitted changes",
+        },
+      }
+    );
     rerender(<DryRunModal scope={{ kind: "workflow" }} />);
-    expect(screen.getByText("Checkout has uncommitted changes")).toBeInTheDocument();
+    expect(
+      screen.getByText("Checkout has uncommitted changes")
+    ).toBeInTheDocument();
   });
 
   it("renders the workflow overview and wide master rail", () => {
