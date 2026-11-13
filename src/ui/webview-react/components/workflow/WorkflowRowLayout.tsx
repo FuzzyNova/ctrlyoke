@@ -12,6 +12,7 @@ import type {
   WorktreeRunProjection,
 } from "@root/types/CtrlYokeTypes";
 import { Icon } from "../shared/Icon";
+import { upcomingScheduleRunAt } from "@utils/workflowScheduleDisplay";
 
 /**
  * Whether this tier renders the *content* of a row compactly — today the
@@ -210,11 +211,7 @@ export const ScheduleRowActionButton: React.FC<
 > = ({ schedule, scheduleNextRunAt, onOpen }) => (
   <RowActionButton
     icon="codicon-clock"
-    title={
-      scheduleNextRunAt
-        ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(scheduleNextRunAt).toLocaleString()}`
-        : WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
-    }
+    title={scheduleTitle(schedule, scheduleNextRunAt)}
     onClick={onOpen}
     revealOnHover={!schedule}
     toneClassName={
@@ -226,6 +223,22 @@ export const ScheduleRowActionButton: React.FC<
     }
   />
 );
+
+function scheduleTitle(
+  schedule: WorkflowSchedule | undefined,
+  scheduleNextRunAt: number | undefined
+): string {
+  if (!schedule) return WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow;
+  if (!schedule.enabled) return WORKFLOW_SCHEDULE_LABELS.pausedNextRun;
+  if (!schedule.trigger) return WORKFLOW_SCHEDULE_LABELS.noNextRun;
+  const nextRunAt = upcomingScheduleRunAt(
+    { schedule, scheduleNextRunAt },
+    Date.now()
+  );
+  return nextRunAt === null
+    ? WORKFLOW_SCHEDULE_LABELS.noNextRun
+    : `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(nextRunAt).toLocaleString()}`;
+}
 
 /**
  * Class every workflow dropdown row container carries. The container — not

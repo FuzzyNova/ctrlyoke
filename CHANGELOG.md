@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Workflow schedule filters and clock tooltips use the next occurrence that can still fire.
+
 - MCP `edit_step` refuses prompt-only fields when editing a script step.
 - Errored end-condition verdicts show the configured action after retries are exhausted, and parallel CLI tallies count failed members from their terminal step status.
 - Pasting an image at the start of a plain YAML prompt in the workspace viewer keeps the workflow valid.

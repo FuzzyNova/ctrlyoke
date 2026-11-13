@@ -221,6 +221,28 @@ describe("useWorkflowContextMenu", () => {
     ).toBeEnabled();
   });
 
+  it("does not show a stale past next run in the schedule menu title", () => {
+    render(
+      <TestHarness
+        menuTarget={{
+          ...target,
+          schedule: {
+            enabled: true,
+            trigger: { cron: "0 9 * * *" },
+            hostId: "host",
+          },
+          scheduleNextRunAt: Date.now() - 86_400_000,
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    const item = screen.getByRole("menuitem", { name: "Edit Schedule…" });
+    expect(item.getAttribute("title")).not.toContain(
+      new Date(Date.now() - 86_400_000).toLocaleString()
+    );
+    expect(item.getAttribute("title")).toContain("Next run:");
+  });
+
   it("labels an unstarted run as reopened, and disables new run while executing", () => {
     const { unmount } = render(
       <TestHarness menuTarget={{ ...target, isUnstarted: true }} />

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), confirmed with a throwaway Vitest
 - **Area:** `src/ui/webview-react/components/workflow/WorkflowSwitcher.tsx` (`workflowMatchesSearch`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

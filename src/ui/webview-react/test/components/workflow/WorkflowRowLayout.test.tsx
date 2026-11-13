@@ -244,6 +244,19 @@ describe("row action buttons", () => {
     expect(ROW_ACTION_BUTTON_CLASS).toContain("hover:bg-toolbar-hover-bg");
   });
 
+  it("does not show a stale past next run in the clock title", () => {
+    render(
+      <ScheduleRowActionButton
+        schedule={{ enabled: true, trigger: { cron: "0 9 * * *" } } as never}
+        scheduleNextRunAt={Date.now() - 86_400_000}
+        onOpen={vi.fn()}
+      />
+    );
+    const title = screen.getByRole("button").getAttribute("title")!;
+    expect(title).not.toContain(new Date(Date.now() - 86_400_000).toLocaleString());
+    expect(title).toContain("Next run:");
+  });
+
   it("hands the button to onClick as the opener without clicking the row", () => {
     const onClick = vi.fn();
     const onRowClick = vi.fn();

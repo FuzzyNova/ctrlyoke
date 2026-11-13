@@ -23,6 +23,7 @@ import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import type { WorkflowSchedule } from "@root/types/CtrlYokeTypes";
 import { WORKFLOW_SCHEDULE_LABELS } from "@/constants";
+import { upcomingScheduleRunAt } from "@utils/workflowScheduleDisplay";
 
 export interface WorkflowContextMenuTarget {
   address: WorkflowViewAddress;
@@ -278,8 +279,15 @@ export function useWorkflowContextMenu({
               : WORKFLOW_SCHEDULE_LABELS.schedule,
             icon: "codicon-clock",
             disabled: false,
-            title: target.scheduleNextRunAt
-              ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(target.scheduleNextRunAt).toLocaleString()}`
+            title: target.schedule
+              ? !target.schedule.enabled
+                ? WORKFLOW_SCHEDULE_LABELS.pausedNextRun
+                : (() => {
+                    const nextRunAt = upcomingScheduleRunAt(target, Date.now());
+                    return nextRunAt === null
+                      ? WORKFLOW_SCHEDULE_LABELS.noNextRun
+                      : `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(nextRunAt).toLocaleString()}`;
+                  })()
               : undefined,
             // Opens the schedule panel inside the workflow dropdown, so the
             // dropdown must stay open (it opens it when the menu came from

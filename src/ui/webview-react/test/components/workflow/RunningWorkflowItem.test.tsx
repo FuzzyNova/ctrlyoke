@@ -80,7 +80,7 @@ describe("RunningWorkflowItem", () => {
       />
     );
     expect(
-      screen.getByRole("button", { name: "Schedule workflow…" })
+      screen.getByRole("button", { name: /Paused/ })
     ).toHaveClass("opacity-60");
     rerender(<RunningWorkflowItem {...base} />);
     expect(
