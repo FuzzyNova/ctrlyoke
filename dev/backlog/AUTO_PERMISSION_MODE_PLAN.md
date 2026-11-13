@@ -156,6 +156,34 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
   `grep -rn "PERMISSION_MODES\." src`) for one that would treat `auto` as `custom` by falling
   through.
 
+### Corrections from code review (orchestrator, 2026-11-13)
+
+- `ToolPermissionMapperBase` is in `src/core/harness/shared/interfaces/IToolPermissionMapper.ts`,
+  not in its own file. Put the shared "auto unsupported → custom + diagnostic" helper there.
+  Each mapper must call its existing `custom` code path, not copy it.
+- Adding `autoMode` to `PermissionCapabilityDescriptor` affects more than the mappers:
+  `PERMISSION_CAPABILITY_KEYS`, the `permissionFields` list in `CompatibilityAnalyzer.ts`
+  (count it as used only when `mode === "auto"`), `getPermissionFidelityDiagnosticCode`
+  (`CompatibilityTypes.ts`, which needs new diagnostic codes and messages for an auto-mode
+  fallback), the capability registry, and `scripts/generate-compatibility-docs.mjs`. Copilot's
+  "headless only" caveat needs a new `PERMISSION_CAVEAT_CODES` entry.
+- `hasFullPermissions` stays `false` for `auto`. The judge can refuse in-band headless, so the
+  existing headless-permissions warning is still accurate.
+- Codex: `buildCodexSpecificArgs` currently returns `[]` for every headless mode, because
+  `codex exec` has no `-a`. Headless `auto` is the first headless case that emits args, using
+  the `-c` pair.
+- The CLI `--permission-mode` flag (`src/cli/CliRunCommandDefinitions.ts`) takes its choices
+  from `PERMISSION_MODES`, so `auto` is accepted automatically. Check shell completions and
+  `docs/cli/` for hand-written mode lists.
+- **Version gates.** Find the earliest version that accepts each mechanism from the harness's
+  release notes or changelog (`npm view <pkg> versions`, the package's CHANGELOG), or by
+  installing an older version into a scratch directory with `npx`. If that can't be settled
+  cheaply, gate at the version probed above. Too high a gate only falls back to `custom` on
+  older CLIs, which is safe.
+- The `custom` regression case "an allowed command does not allow an unlisted one chained to
+  it" exists today only in the agy suite of `src/test/harness/inline-config.harness.test.ts`.
+  The harness-test step adds `auto` cases next to each harness's existing permission cases.
+
 ## Implementation steps
 
 1. Constants and schema: `PERMISSION_MODES.AUTO`, both schema enums, `schema:update`, and
