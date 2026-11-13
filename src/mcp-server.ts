@@ -68,6 +68,8 @@ import {
   LOGS_DIR,
   QUEUE_POSITION,
   STEP_TYPES,
+  SCRIPT_STEP_COPY_FIELDS,
+  PROMPT_PROPERTIES,
   STEP_STATUS,
   type ExecutionState,
   NODE_ERROR_CODES,
@@ -1659,10 +1661,35 @@ export class CtrlYokeMCPServer {
     );
     const existingStep = workingFile.steps?.[index];
     if (existingStep) {
-      if (existingStep.type === STEP_TYPES.SCRIPT && "prompt" in updates) {
-        throw new Error(
-          "Script steps cannot be edited through MCP with updates.prompt; edit_step only accepts prompt steps."
-        );
+      if (isScriptStep(existingStep)) {
+        const allowedScriptStepFields = new Set<string>([
+          "type",
+          "name",
+          "enabled",
+          "color",
+          "script",
+          "returns",
+          ...SCRIPT_STEP_COPY_FIELDS,
+        ]);
+        const rejectedKeys = [
+          ...new Set([
+            ...Object.keys(updates),
+            ...(clearProperties ?? []),
+          ]),
+        ].filter((key) => !allowedScriptStepFields.has(key));
+        if (rejectedKeys.length > 0) {
+          if (
+            rejectedKeys.length === 1 &&
+            rejectedKeys[0] === PROMPT_PROPERTIES.PROMPT
+          ) {
+            throw new Error(
+              "Script steps cannot be edited through MCP with updates.prompt; edit_step only accepts prompt steps."
+            );
+          }
+          throw new Error(
+            `Script steps cannot be edited through MCP with prompt-only or unsupported fields: ${rejectedKeys.join(", ")}.`
+          );
+        }
       }
       const effectiveStep = mergeWorkflowStepUpdate(
         existingStep,

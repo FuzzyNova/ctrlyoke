@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), confirmed with a throwaway Mocha test in `src/test/unit/McpServer.test.ts`
 - **Area:** `src/mcp-server.ts` (`handleStepEdit`, harness/model validation), `src/core/WorkflowStepSanitizer.ts` (`mergeWorkflowStepUpdate`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

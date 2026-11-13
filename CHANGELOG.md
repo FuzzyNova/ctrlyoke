@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MCP `edit_step` refuses prompt-only fields when editing a script step.
 - Errored end-condition verdicts show the configured action after retries are exhausted, and parallel CLI tallies count failed members from their terminal step status.
 - Pasting an image at the start of a plain YAML prompt in the workspace viewer keeps the workflow valid.
 - Legacy PWA push subscriptions are matched to their project when the hosted dashboard opens, and Push notifications are documented as project-scoped.
