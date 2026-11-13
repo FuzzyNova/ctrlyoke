@@ -2,6 +2,7 @@ import * as fs from "fs";
 import type {
   WorkflowKey,
   WorkflowLineageDescriptor,
+  WorkflowSchedule,
 } from "../../types/CtrlYokeTypes";
 import { WORKFLOW_LOCK_LIVENESS } from "../../types/DashboardConstants";
 import { nextScheduleOccurrence } from "../../utils/WorkflowSchedule";
@@ -112,7 +113,8 @@ export class WorkflowScheduler {
     const now = this.options.now();
     let nextAt = descriptor.scheduleNextRunAt;
     if (nextAt === undefined || nextAt <= now) {
-      nextAt = nextScheduleOccurrence(schedule, now) ?? undefined;
+      nextAt =
+        this.nextOccurrenceFromNow(workflowKey, schedule, now) ?? undefined;
       if (descriptor.scheduleNextRunAt !== nextAt) {
         await this.writeMetadata(workflowKey, (current) => {
           const updated = { ...current };
@@ -133,12 +135,8 @@ export class WorkflowScheduler {
 
   private arm(workflowKey: WorkflowKey, occurrenceAt: number): void {
     if (this.disposed) return;
-    if (occurrenceAt <= this.options.now()) {
-      Log.warn(
-        `[WorkflowScheduler] Refusing to arm past occurrence for ${workflowKey}`
-      );
-      return;
-    }
+    // A past occurrence (one that passed while a fire was starting) wakes at
+    // once; onWake's late path records it as missed and moves on from now.
     // A refresh can re-arm while a wake is awaiting I/O; keep one timer per lineage.
     this.clearTimer(workflowKey);
     const delay = Math.max(
@@ -173,7 +171,9 @@ export class WorkflowScheduler {
         return;
       }
       const late = now - scheduledAt > 60_000;
-      const nextAt = nextScheduleOccurrence(schedule, late ? now : scheduledAt);
+      const nextAt = late
+        ? this.nextOccurrenceFromNow(workflowKey, schedule, now)
+        : nextScheduleOccurrence(schedule, scheduledAt);
       if (late) {
         await this.writeMetadata(workflowKey, (current) => {
           const updated = { ...current, scheduleLastMissedAt: scheduledAt };
@@ -241,6 +241,24 @@ export class WorkflowScheduler {
     }
   }
 
+  /**
+   * The next occurrence strictly after `now`, or null. A past result would be
+   * armed with a zero delay, wake late, recompute from now and loop, so it is
+   * refused here, at the two places that compute from the current time.
+   */
+  private nextOccurrenceFromNow(
+    workflowKey: WorkflowKey,
+    schedule: WorkflowSchedule,
+    now: number
+  ): number | null {
+    const nextAt = nextScheduleOccurrence(schedule, now);
+    if (nextAt === null || nextAt > now) return nextAt;
+    Log.warn(
+      `[WorkflowScheduler] Ignoring past next occurrence for ${workflowKey}`
+    );
+    return null;
+  }
+
   private async writeMetadata(
     workflowKey: WorkflowKey,
     mutate: (descriptor: WorkflowLineageDescriptor) => WorkflowLineageDescriptor
@@ -275,10 +293,16 @@ export class WorkflowScheduler {
   }
 
   private bumpGeneration(workflowKey: WorkflowKey): void {
-    this.generationsByWorkflow.set(workflowKey, this.getGeneration(workflowKey) + 1);
+    this.generationsByWorkflow.set(
+      workflowKey,
+      this.getGeneration(workflowKey) + 1
+    );
   }
 
-  private isCurrentGeneration(workflowKey: WorkflowKey, generation: number): boolean {
+  private isCurrentGeneration(
+    workflowKey: WorkflowKey,
+    generation: number
+  ): boolean {
     return !this.disposed && this.getGeneration(workflowKey) === generation;
   }
 

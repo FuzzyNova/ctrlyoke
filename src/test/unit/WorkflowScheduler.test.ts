@@ -91,7 +91,7 @@ suite("WorkflowScheduler", () => {
       timers,
       getHostId: () => "test-host",
       isLineageRunning: () =>
-        overrides.checkRunning?.() ?? (overrides.running ?? false),
+        overrides.checkRunning?.() ?? overrides.running ?? false,
       fire: async () => {
         fires += 1;
         await overrides.fire?.();
@@ -172,7 +172,11 @@ suite("WorkflowScheduler", () => {
     let resolveFire!: () => void;
     const firePending = new Promise<void>((resolve) => (resolveFire = resolve));
     const original = makeDescriptor({
-      schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+      schedule: {
+        enabled: true,
+        hostId: "test-host",
+        trigger: { cron: "0 9 * * *" },
+      },
     });
     const testCase = setup({ descriptor: original, fire: () => firePending });
     await testCase.scheduler.start();
@@ -183,7 +187,9 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
-      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+      trigger: {
+        at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
+      },
     };
     testCase.setDescriptor(
       makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt })
@@ -196,15 +202,24 @@ suite("WorkflowScheduler", () => {
 
     assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
     assert.strictEqual(testCase.timers.entries.size, 1);
-    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - occurrence);
+    assert.strictEqual(
+      [...testCase.timers.entries.values()][0].delay,
+      newAt - occurrence
+    );
   });
 
   test("keeps a refreshed schedule when the overlap check is pending", async () => {
     let resolveCheck!: (running: boolean) => void;
-    const checkPending = new Promise<boolean>((resolve) => (resolveCheck = resolve));
+    const checkPending = new Promise<boolean>(
+      (resolve) => (resolveCheck = resolve)
+    );
     const testCase = setup({
       descriptor: makeDescriptor({
-        schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+        schedule: {
+          enabled: true,
+          hostId: "test-host",
+          trigger: { cron: "0 9 * * *" },
+        },
       }),
       checkRunning: () => checkPending,
     });
@@ -215,23 +230,36 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
-      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+      trigger: {
+        at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
+      },
     };
-    testCase.setDescriptor(makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt }));
+    testCase.setDescriptor(
+      makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt })
+    );
     await testCase.scheduler.refresh(key);
     resolveCheck(true);
     for (let i = 0; i < 10; i += 1) await Promise.resolve();
     assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
     assert.strictEqual(testCase.timers.entries.size, 1);
-    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - occurrence);
+    assert.strictEqual(
+      [...testCase.timers.entries.values()][0].delay,
+      newAt - occurrence
+    );
   });
 
   test("keeps a refreshed schedule when a scheduled fire fails after refresh", async () => {
     let rejectFire!: (error: Error) => void;
-    const firePending = new Promise<void>((_resolve, reject) => (rejectFire = reject));
+    const firePending = new Promise<void>(
+      (_resolve, reject) => (rejectFire = reject)
+    );
     const testCase = setup({
       descriptor: makeDescriptor({
-        schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+        schedule: {
+          enabled: true,
+          hostId: "test-host",
+          trigger: { cron: "0 9 * * *" },
+        },
       }),
       fire: () => firePending,
     });
@@ -242,24 +270,37 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
-      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+      trigger: {
+        at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
+      },
     };
-    testCase.setDescriptor(makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt }));
+    testCase.setDescriptor(
+      makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt })
+    );
     await testCase.scheduler.refresh(key);
     rejectFire(new Error("fire failed"));
     for (let i = 0; i < 10; i += 1) await Promise.resolve();
     assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
     assert.strictEqual(testCase.timers.entries.size, 1);
-    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - occurrence);
+    assert.strictEqual(
+      [...testCase.timers.entries.values()][0].delay,
+      newAt - occurrence
+    );
   });
 
   test("keeps a refreshed schedule when a late wake metadata write is pending", async () => {
     let releaseMetadata!: () => void;
-    const metadataPending = new Promise<void>((resolve) => (releaseMetadata = resolve));
+    const metadataPending = new Promise<void>(
+      (resolve) => (releaseMetadata = resolve)
+    );
     const testCase = setup({
       beforeMetadata: () => metadataPending,
       descriptor: makeDescriptor({
-        schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+        schedule: {
+          enabled: true,
+          hostId: "test-host",
+          trigger: { cron: "0 9 * * *" },
+        },
       }),
     });
     await testCase.scheduler.start();
@@ -269,15 +310,22 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
-      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+      trigger: {
+        at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
+      },
     };
-    testCase.setDescriptor(makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt }));
+    testCase.setDescriptor(
+      makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt })
+    );
     await testCase.scheduler.refresh(key);
     releaseMetadata();
     for (let i = 0; i < 10; i += 1) await Promise.resolve();
     assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
     assert.strictEqual(testCase.timers.entries.size, 1);
-    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - (occurrence + 61_000));
+    assert.strictEqual(
+      [...testCase.timers.entries.values()][0].delay,
+      newAt - (occurrence + 61_000)
+    );
   });
 
   test("refresh re-arms or disarms; overlapping occurrence is skipped", async () => {
@@ -313,6 +361,36 @@ suite("WorkflowScheduler", () => {
       [...testCase.timers.entries.values()][0].delay,
       24 * 60 * 60 * 1000
     );
+  });
+
+  test("keeps a recurring schedule armed when a fire outlasts the next occurrence", async () => {
+    let setNowDuringFire: ((value: number) => void) | undefined;
+    const testCase = setup({
+      descriptor: makeDescriptor({
+        schedule: {
+          enabled: true,
+          hostId: "test-host",
+          trigger: { cron: "* * * * *" },
+        },
+      }),
+      fire: async () => setNowDuringFire?.(occurrence + 150_000),
+    });
+    setNowDuringFire = testCase.setNow;
+    await testCase.scheduler.start();
+    testCase.setNow(occurrence);
+    await testCase.timers.fireNext();
+    assert.strictEqual(testCase.fires(), 1);
+    assert.strictEqual(testCase.timers.entries.size, 1);
+    // The occurrence that passed during the fire is recorded as missed and the
+    // schedule continues from the current time.
+    await testCase.timers.fireNext();
+    assert.strictEqual(testCase.fires(), 1);
+    assert.strictEqual(
+      testCase.descriptor().scheduleLastMissedAt,
+      occurrence + 60_000
+    );
+    assert.ok(testCase.descriptor().scheduleNextRunAt! > occurrence + 150_000);
+    assert.strictEqual(testCase.timers.entries.size, 1);
   });
 
   test("skips a cached occurrence missed while offline", async () => {
