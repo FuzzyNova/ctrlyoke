@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-12
+
 ### Added
 
 - Named worktrees can keep one long-lived directory with `worktree.directory` and check different branches into it; a clean directory switches to the requested branch and keeps its setup state. A new bare-name directory is created as exactly `<worktree root>/<name>`, with no hash suffix. The dashboard Directory field suggests your existing linked worktrees.
@@ -14,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Tested with the latest harness CLIs.** The compatibility docs' "Tested with" row now lists
+  Copilot CLI 1.0.110, Claude Code 2.1.323, Codex 0.167.2, OpenCode 2.2.7, Qwen Code 0.27.2 and
+  Antigravity 1.5.7.
 - Workspace-scope `defaults.worktree` values with a path-form `directory` now require approval, since they choose where ctrlyoke creates a worktree.
 - A branch-derived named worktree path that now belongs to a different branch reports the occupied path and suggests selecting it with `directory`.
 - PR branches no longer offer two-way **Sync** or appear in **Sync All**, avoiding merging unreviewed PR work into the source checkout.
