@@ -2443,8 +2443,18 @@ export function parseMcpToolCliArgs(
     return value;
   };
 
+  // A repeated option is refused, not resolved last-wins: harness allow rules
+  // permit an exact command prefix (the commit run allows only its own
+  // `--tool submit_commit_message … --commit-output <path> --args`), so a
+  // second `--tool` or `--commit-output` after the allowed prefix must not
+  // redirect the call.
+  const seenOptions = new Set<string>();
   for (let index = 0; index < argv.length; index += 1) {
     const option = argv[index];
+    if (seenOptions.has(option)) {
+      throw new Error(`${option} was given more than once`);
+    }
+    seenOptions.add(option);
     switch (option) {
       case "--tool":
         tool = readValue(index, option);

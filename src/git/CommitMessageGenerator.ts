@@ -20,6 +20,7 @@ import {
   MCP_STARTUP_RETRY_INSTRUCTION,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "../utils/McpToolDefinitions";
+import { buildCommitMessageSkillCommandPrefix } from "../utils/McpToolSkillGenerator";
 import { fenceLiteral } from "../utils/FileReferenceParser";
 import {
   GIT_DIFF_NO_EXT_DIFF_OPTION,
@@ -74,8 +75,6 @@ const BINARY_DETECTION_BYTES = 8 * 1024;
 const COMMIT_MESSAGE_MCP_TOOL = MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME;
 const COMMIT_MESSAGE_ALLOWED_READ_TOOLS = ["read", "grep", "glob"];
 const COMMIT_MESSAGE_MCP_PERMISSION_PATTERN = `mcp__${MCP_SERVER_IDS.CTRLYOKE_COMMIT}__${COMMIT_MESSAGE_MCP_TOOL}`;
-const COMMIT_MESSAGE_SKILL_COMMAND_PATTERN =
-  "shell(node:*--tool*submit_commit_message*)";
 const COMMIT_MESSAGE_DENIED_TOOLS = ["write", "edit", "multiedit"];
 const COMMIT_MESSAGE_LINEAGE_POINTER = ".commit-message-lineage.json";
 const COMMIT_MESSAGE_WORKFLOW_NAME = "commit-message-generation";
@@ -141,10 +140,15 @@ export function getCommitSubmissionChannels(
     : [COMMIT_SUBMISSION_CHANNELS.MCP_TOOL, withoutMcp];
 }
 
-/** The prompt text that tells the model how to submit through `channel`. */
+/**
+ * The prompt text that tells the model how to submit through `channel`.
+ * `skillCommandPrefix` (from {@link buildCommitMessageSkillCommandPrefix}) is
+ * required for the skill-command channel.
+ */
 export function buildCommitSubmitInstruction(
   channel: CommitSubmissionChannel,
-  commitOutputPath: string
+  commitOutputPath: string,
+  skillCommandPrefix?: string
 ): string {
   switch (channel) {
     case COMMIT_SUBMISSION_CHANNELS.MCP_TOOL:
@@ -152,9 +156,14 @@ export function buildCommitSubmitInstruction(
     case COMMIT_SUBMISSION_CHANNELS.FILE:
       return `\n\nSubmit the commit message by writing it, and nothing else, to the file \`${commitOutputPath}\` with your file-writing tool. That is the only file you are allowed to write. Do not output the message as text.`;
     case COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND:
-      // The skill's example already carries this path, but Qwen sometimes
-      // invents its own, and ctrlyoke only reads this one.
-      return `\n\nSubmit the commit message by running the \`${COMMIT_MESSAGE_MCP_TOOL}\` command from the \`${MCP_SKILL_NAMES.COMMIT_MESSAGE}\` skill, with exactly \`--commit-output "${commitOutputPath}"\`. Do not output it as text.`;
+      // The skill's example already carries this command, but Qwen sometimes
+      // invents its own paths, and only this exact prefix is allowed to run.
+      if (!skillCommandPrefix) {
+        throw new Error(
+          "A skill-command submission needs the skill command prefix"
+        );
+      }
+      return `\n\nSubmit the commit message by running the \`${COMMIT_MESSAGE_MCP_TOOL}\` command from the \`${MCP_SKILL_NAMES.COMMIT_MESSAGE}\` skill. Run it exactly as \`${skillCommandPrefix} '<JSON>'\`, where \`<JSON>\` is \`{"message":"<the commit message>"}\`, as a single command with nothing before or after it; any other command is denied. Do not output the message as text.`;
   }
 }
 
@@ -323,7 +332,8 @@ export interface CommitMessageWorkflowHost {
 /** The commit run's tool permissions for one submission channel. */
 function commitToolPermissions(
   channel: CommitSubmissionChannel,
-  commitOutputPath: string | undefined
+  commitOutputPath: string | undefined,
+  skillCommandPrefix: string | undefined
 ): ToolPermissionConfig {
   switch (channel) {
     case COMMIT_SUBMISSION_CHANNELS.MCP_TOOL:
@@ -354,11 +364,19 @@ function commitToolPermissions(
         deniedTools: ["shell"],
       };
     case COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND:
+      if (!skillCommandPrefix) {
+        throw new Error(
+          "A skill-command submission needs the skill command prefix"
+        );
+      }
+      // Only this run's exact command prefix is allowed; the message is the
+      // trailing `--args` value. A wildcard inside the command would also
+      // match `node -e <any code> --tool submit_commit_message`.
       return {
         mode: PERMISSION_MODES.CUSTOM,
         allowedTools: [
           ...COMMIT_MESSAGE_ALLOWED_READ_TOOLS,
-          COMMIT_MESSAGE_SKILL_COMMAND_PATTERN,
+          `${TOOL_PERMISSION_CATEGORIES.SHELL}(${skillCommandPrefix}:*)`,
         ],
         deniedTools: COMMIT_MESSAGE_DENIED_TOOLS,
       };
@@ -370,7 +388,8 @@ export function buildCommitWorkflowOverrides(
   model: string | undefined,
   mcpServerConfig: McpServerConfig | undefined,
   channel: CommitSubmissionChannel = COMMIT_SUBMISSION_CHANNELS.MCP_TOOL,
-  commitOutputPath?: string
+  commitOutputPath?: string,
+  skillCommandPrefix?: string
 ): Partial<PromptFile> {
   return {
     harness,
@@ -392,7 +411,11 @@ export function buildCommitWorkflowOverrides(
         : null,
     additionalArgs: null,
     hooks: null,
-    toolPermissions: commitToolPermissions(channel, commitOutputPath),
+    toolPermissions: commitToolPermissions(
+      channel,
+      commitOutputPath,
+      skillCommandPrefix
+    ),
   };
 }
 
@@ -726,6 +749,13 @@ export class CommitMessageGenerator {
       roots.tempDir,
       `commit-output-${channel}-${Date.now()}.txt`
     );
+    // The same paths go into the skill context below, so the command the
+    // skill documents is exactly the one the run allows.
+    const skillCommandPrefix = buildCommitMessageSkillCommandPrefix({
+      mcpServerPath,
+      workspaceRoot: roots.stateRoot,
+      commitOutputPath,
+    });
 
     // Keep diff content inert for every prompt-reference parser, even when
     // added Markdown contains its own fenced code blocks.
@@ -733,7 +763,11 @@ export class CommitMessageGenerator {
       diff,
       commitPrompt,
       instructionsSection,
-      buildCommitSubmitInstruction(channel, commitOutputPath)
+      buildCommitSubmitInstruction(
+        channel,
+        commitOutputPath,
+        skillCommandPrefix
+      )
     );
 
     const mcpServerConfig: McpServerConfig | undefined =
@@ -804,7 +838,8 @@ export class CommitMessageGenerator {
         model,
         mcpServerConfig,
         channel,
-        commitOutputPath
+        commitOutputPath,
+        skillCommandPrefix
       );
       await instance.loadPromptStringAsRun(
         fullPrompt,

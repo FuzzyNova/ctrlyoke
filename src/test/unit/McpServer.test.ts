@@ -956,6 +956,24 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       () => parseMcpToolCliArgs(["--tool", "post_note", "--unknown", "x"]),
       /Unknown option: --unknown/
     );
+    // An allowed command prefix cannot be redirected by repeating an option
+    // after it.
+    for (const option of ["--tool", "--commit-output"]) {
+      assert.throws(
+        () =>
+          parseMcpToolCliArgs([
+            "--tool",
+            "submit_commit_message",
+            "--commit-output",
+            "commit.txt",
+            "--args",
+            "{}",
+            option,
+            "other",
+          ]),
+        new RegExp(`${option} was given more than once`)
+      );
+    }
   });
 
   test("invokes a tool through the CLI entrypoint", async () => {

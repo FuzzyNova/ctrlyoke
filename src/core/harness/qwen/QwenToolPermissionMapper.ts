@@ -343,6 +343,12 @@ export class QwenToolPermissionMapper
       return qwenToolName;
     }
 
+    // A trailing ":*" is the args separator even when the command itself
+    // holds a colon, as a quoted Windows path (`node "C:\…\x.js" …:*`) does.
+    if (inner.endsWith(":*")) {
+      return `${qwenToolName}(${inner.slice(0, -2)} *)`;
+    }
+
     const colonIdx = inner.indexOf(":");
     if (colonIdx === -1) {
       // No colon: treat entire inner as command name (e.g. shell(npm) → ShellTool(npm *))

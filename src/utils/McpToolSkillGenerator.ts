@@ -94,6 +94,19 @@ interface McpToolExamplePaths {
   executionRoot: string;
 }
 
+/**
+ * Everything in the commit-message skill command before its `--args` value.
+ * The message goes last, so this prefix is fixed for a run and the commit
+ * run can allow exactly it rather than a wildcard over any `node` command.
+ */
+export function buildCommitMessageSkillCommandPrefix(paths: {
+  mcpServerPath: string;
+  workspaceRoot: string;
+  commitOutputPath: string;
+}): string {
+  return `node "${paths.mcpServerPath}" --tool ${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME} --workspace "${paths.workspaceRoot}" --commit-output "${paths.commitOutputPath}" --args`;
+}
+
 function renderCommand(
   tool: McpToolDefinition,
   args: Record<string, unknown>,
@@ -102,7 +115,7 @@ function renderCommand(
 ): string {
   const serializedArgs = JSON.stringify(args);
   if (tool.name === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME) {
-    return `node \"${paths.mcpServerPath}\" --tool ${tool.name} --args '${serializedArgs}' --workspace \"${paths.workspaceRoot}\" --commit-output \"${paths.commitOutputPath}\"`;
+    return `${buildCommitMessageSkillCommandPrefix(paths)} '${serializedArgs}'`;
   }
 
   return (

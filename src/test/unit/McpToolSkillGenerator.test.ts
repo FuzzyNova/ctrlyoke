@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  buildCommitMessageSkillCommandPrefix,
   McpToolSkillGenerator,
   MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES,
 } from "../../utils/McpToolSkillGenerator";
@@ -113,6 +114,18 @@ suite("McpToolSkillGenerator", () => {
       )
     );
     assert.ok(!reference.includes("<"));
+    // The example starts with the exact prefix the commit run allows, and the
+    // message is the trailing --args value.
+    const prefix = buildCommitMessageSkillCommandPrefix({
+      mcpServerPath: "C:/extension/out/mcp-server.js",
+      workspaceRoot: "C:/workspace",
+      commitOutputPath: "C:/workspace/.ctrlyoke/temp/commit-output.txt",
+    });
+    const example = reference
+      .split("\n")
+      .find((line) => line.startsWith("node "));
+    assert.ok(example?.startsWith(`${prefix} '{`), String(example));
+    assert.ok(example?.endsWith("}'"), String(example));
   });
 
   test("keeps placeholders when no run context is provided", () => {

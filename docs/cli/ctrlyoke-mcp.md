@@ -56,4 +56,6 @@ ctrlyoke-mcp --tool workflow_status --args '{}' \
 | `--parallel-group-id <id>` | Parallel group of that step; required with coordination tools inside a group |
 | `--commit-output <path>`   | Destination for `submit_commit_message`                                      |
 
+Each flag may be given once; repeating one is an error.
+
 When `--working-file` is given, coordination calls must address a live step of that run. Participants joined this way expire after `coordination.cliParticipantTtlMinutes`.

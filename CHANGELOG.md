@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - With `worktrees.root` set, a new named worktree whose `directory` is a bare name is created in a folder for its repository, `<worktrees.root>/<repository>-<hash>/<name>`, instead of directly in the shared root. Two repositories can now both use `directory: bug-fix`. Existing worktrees are still found by name where they are. Without `worktrees.root`, nothing changes.
+- `ctrlyoke-mcp --tool` refuses a flag given more than once, instead of using the last one.
 
 ### Fixed
 
+- When Qwen Code commit message generation submits through the commit-message skill, the run may now run only that skill's exact command. Before, its allow rule also matched other `node` commands, such as `node -e "<code>" --tool submit_commit_message`.
 - On Antigravity, a `write(<path>)` or `edit(<path>)` allow rule with a relative path or glob, such as `write(src/**)`, allows writes again, as it did before 0.7.0. Since 0.7.0 it was passed to agy as `write_file(src/**)`, which agy was never shown to honor, so writes could be refused. Only an absolute path limits writes to that path, as 0.7.0's notes describe.
 - On Qwen Code, a `write(<path>)` or `edit(<path>)` allow rule no longer allows every write. Qwen Code can't limit a headless write to one path, so the rule is now skipped with a warning and that write stays denied. Allow `write` or `edit` to allow writes.
 - Workflow schedule filters and clock tooltips use the next occurrence that can still fire.

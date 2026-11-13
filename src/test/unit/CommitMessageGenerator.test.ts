@@ -22,6 +22,7 @@ import {
   MCP_STARTUP_RETRY_INSTRUCTION,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "../../utils/McpToolDefinitions";
+import { buildCommitMessageSkillCommandPrefix } from "../../utils/McpToolSkillGenerator";
 import { parseSecretReferences } from "../../utils/SecretReferenceParser";
 import {
   parseAtReferences,
@@ -96,12 +97,26 @@ suite("CommitMessageGenerator", () => {
     assert.ok(file.includes(`\`${outputPath}\``));
     assert.ok(!file.includes(MCP_STARTUP_RETRY_INSTRUCTION));
 
+    const prefix = buildCommitMessageSkillCommandPrefix({
+      mcpServerPath: "/ext/out/mcp-server.js",
+      workspaceRoot: "/repo",
+      commitOutputPath: outputPath,
+    });
     const skill = buildCommitSubmitInstruction(
       COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND,
-      outputPath
+      outputPath,
+      prefix
     );
     assert.ok(skill.includes(MCP_SKILL_NAMES.COMMIT_MESSAGE));
-    assert.ok(skill.includes(`--commit-output "${outputPath}"`));
+    assert.ok(skill.includes(`\`${prefix} '<JSON>'\``));
+    assert.throws(
+      () =>
+        buildCommitSubmitInstruction(
+          COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND,
+          outputPath
+        ),
+      /skill command prefix/
+    );
   });
 
   test("reads only a non-empty submitted message", async () => {
@@ -444,12 +459,20 @@ suite("CommitMessageGenerator", () => {
     });
   });
 
-  test("uses the commit-message skill on the skill-command channel", () => {
+  test("allows only the exact skill command prefix on the skill-command channel", () => {
+    const outputPath = path.join(os.tmpdir(), "commit-output-skill.txt");
+    const prefix = buildCommitMessageSkillCommandPrefix({
+      mcpServerPath: "/ext/out/mcp-server.js",
+      workspaceRoot: "/repo",
+      commitOutputPath: outputPath,
+    });
     const overrides = buildCommitWorkflowOverrides(
       HARNESS_IDS.CODEX_CLI,
       undefined,
       undefined,
-      COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND
+      COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND,
+      outputPath,
+      prefix
     );
 
     assert.strictEqual(overrides.mcpServers, null);
@@ -460,10 +483,21 @@ suite("CommitMessageGenerator", () => {
         "read",
         "grep",
         "glob",
-        "shell(node:*--tool*submit_commit_message*)",
+        `shell(node "/ext/out/mcp-server.js" --tool submit_commit_message --workspace "/repo" --commit-output "${outputPath}" --args:*)`,
       ],
       deniedTools: ["write", "edit", "multiedit"],
     });
+    assert.throws(
+      () =>
+        buildCommitWorkflowOverrides(
+          HARNESS_IDS.CODEX_CLI,
+          undefined,
+          undefined,
+          COMMIT_SUBMISSION_CHANNELS.SKILL_COMMAND,
+          outputPath
+        ),
+      /skill command prefix/
+    );
   });
 
   test("explicitly disables inherited MCP servers without capture", () => {

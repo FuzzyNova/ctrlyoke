@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-11 while fixing `dev/bugs/implemented/commit-skill-command-blocked-on-copilot-and-antigravity.md`
 - **Area:** `src/git/CommitMessageGenerator.ts` (`COMMIT_MESSAGE_SKILL_COMMAND_PATTERN`)
-- **Severity:** low
+- **Resolution:** fixed in this commit. The skill command puts `--args` last, after a prefix that is fixed for the run (`node "<mcp-server.js>" --tool submit_commit_message --workspace "<ws>" --commit-output "<path>" --args`), and the run allows exactly `shell(<prefix>:*)`. `ctrlyoke-mcp --tool` refuses a repeated option, so nothing after the prefix can redirect the call. Checked against Qwen Code 0.27.2's own `matchesCommandPattern`: the real command matches; `node -e …`, another script and another output path do not. Codex still does not enforce allow patterns; its sandbox is the limit there.
 
 ## Symptom
 

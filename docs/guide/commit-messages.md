@@ -84,7 +84,8 @@ your commit box.
      that file.
    - On Codex and Qwen Code, which can't limit writes to a single file in a
      headless run, the commit-message skill submits it through the
-     [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) command.
+     [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) command. The run may run only that
+     command, with this run's paths, and Qwen Code enforces this.
 3. If neither submits, generation fails with an error and the commit box stays
    empty. The error names the run, so you can open it and see what the harness
    did.

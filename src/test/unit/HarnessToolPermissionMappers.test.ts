@@ -1123,6 +1123,18 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(args.includes("--exclude-tools"));
       });
 
+      test("a quoted Windows path before :* stays part of the command prefix", async () => {
+        const prefix =
+          'node "C:\\ext\\out\\mcp-server.js" --tool submit_commit_message --workspace "C:\\repo" --commit-output "C:\\repo\\out.txt" --args';
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.CUSTOM, [`shell(${prefix}:*)`], [])
+        );
+        assert.deepStrictEqual(argsAfterFlag(args, "--allowed-tools"), [
+          `ShellTool(${prefix} *)`,
+        ]);
+      });
+
       test("a path-scoped write or edit allow is skipped as lossy, not widened to the whole tool", async () => {
         const application = await mapper.prepare(
           cfg(
