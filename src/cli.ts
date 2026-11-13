@@ -26,7 +26,6 @@ import {
   CLI_VALIDATE_TARGET_KINDS,
   CLI_VALIDATE_ERROR_CODES,
   getHarnessDisplayName,
-  STATUS_MESSAGE_SEVERITY,
   STEP_STATUS,
   RUN_DEFINITION_DECISIONS,
 } from "./types/DashboardConstants";
@@ -76,6 +75,7 @@ import {
   TRUST_DECISIONS,
 } from "./types/DashboardConstants";
 import { CliAttemptTally } from "./cli/CliAttemptTally";
+import { settleCliParallelGroupMember } from "./cli/CliParallelGroupTally";
 import {
   CliTerminalFormatter,
   type CliOutputTarget,
@@ -1208,6 +1208,7 @@ async function runCommand(
     const parallelGroups = new Map<string, CliParallelGroupState>();
     const attempts = new CliAttemptTally();
     const renderedFinalStepLabels = new Set<number>();
+    let parallelGroupStateSubscription: { dispose(): void } | undefined;
     let released = false;
 
     const renderFinalStepLabel = (target: OutputExecutionTarget): void => {
@@ -1279,6 +1280,7 @@ async function runCommand(
         return;
       }
       released = true;
+      parallelGroupStateSubscription?.dispose();
       outputGate.write(() => {
         for (const attempt of attempts.retriedGroups()) {
           CliTerminalFormatter.renderAttemptGroupSummary(
@@ -1347,6 +1349,24 @@ async function runCommand(
         renderPromptHeader(data);
       })
     );
+    parallelGroupStateSubscription = instance.promptQueue.onDidChangeState(
+      (queueState) =>
+        outputGate.write(() => {
+          for (const state of parallelGroups.values()) {
+            for (const stepIndex of state.started) {
+              if (
+                settleCliParallelGroupMember(
+                  state,
+                  stepIndex,
+                  queueState.results[stepIndex]?.status
+                )
+              ) {
+                renderParallelGroupProgress(state);
+              }
+            }
+          }
+        })
+    );
     instance.onTargetScriptOutput((data) =>
       outputGate.write(() => {
         renderFinalStepLabel(data.target);
@@ -1386,34 +1406,7 @@ async function runCommand(
     });
     instance.onWorkflowStatusMessage((data) =>
       outputGate.write(() => {
-        if (data.severity === STATUS_MESSAGE_SEVERITY.ERROR) {
-          const state = getParallelGroup(
-            instance.promptQueue
-              .getState()
-              .parallelGroups.find(
-                (group) =>
-                  data.stepIndex >= group.startIndex &&
-                  data.stepIndex <= group.endIndex
-              )?.id
-          );
-          if (state?.started.has(data.stepIndex)) {
-            state.completed.delete(data.stepIndex);
-            state.failed.add(data.stepIndex);
-            renderParallelGroupProgress(state);
-          }
-        }
         CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
-      })
-    );
-    instance.onPromptComplete((data) =>
-      outputGate.write(() => {
-        const state = getParallelGroup(data.parallelGroupId);
-        if (state?.started.has(data.stepIndex)) {
-          if (!state.failed.has(data.stepIndex)) {
-            state.completed.add(data.stepIndex);
-            renderParallelGroupProgress(state);
-          }
-        }
       })
     );
   }

@@ -1,5 +1,6 @@
 import type { WorkflowSchedule } from "@root/types/CtrlYokeTypes";
 import { nextScheduleOccurrence } from "@root/utils/WorkflowSchedule";
+import { WORKFLOW_SCHEDULE_LABELS } from "../constants";
 
 /** The lineage fields the Scheduled section reads. */
 export interface ScheduledLineageFields {
@@ -27,4 +28,25 @@ export function upcomingScheduleRunAt(
     return scheduleNextRunAt;
   }
   return nextScheduleOccurrence({ ...schedule, enabled: true }, now);
+}
+
+/**
+ * The next-run label every schedule surface shows (row text, clock button
+ * title, context menu): "Paused", "Next run: <time>", or "None" once the
+ * schedule can never fire again. `undefined` when there is no schedule.
+ */
+export function upcomingScheduleRunLabel(
+  lineage: ScheduledLineageFields,
+  now: number
+): string | undefined {
+  const { schedule } = lineage;
+  if (!schedule) return undefined;
+  if (!schedule.enabled) return WORKFLOW_SCHEDULE_LABELS.pausedNextRun;
+  // Guards a malformed schedule from an older or hand-edited lineage file.
+  const nextRunAt = schedule.trigger
+    ? upcomingScheduleRunAt(lineage, now)
+    : null;
+  return nextRunAt === null
+    ? WORKFLOW_SCHEDULE_LABELS.noNextRun
+    : `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(nextRunAt).toLocaleString()}`;
 }

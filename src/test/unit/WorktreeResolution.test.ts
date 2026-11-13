@@ -22,6 +22,7 @@ suite("WorktreeResolution", () => {
       branchName: "recorded-branch",
       executionCheckoutRoot: "/repo.worktrees/bug-fix",
       baseCommit: "captured-base",
+      comparisonBaseLabel: "origin/main",
     } as WorkingFileWorktreeRuntime;
     const result = recordedWorktreeConfigForContinue(recorded, {
       mode: WORKTREE_MODES.NAMED,
@@ -33,13 +34,54 @@ suite("WorktreeResolution", () => {
       mode: WORKTREE_MODES.NAMED,
       directory: "/repo.worktrees/bug-fix",
       branch: "recorded-branch",
-      base: "captured-base",
+      base: "origin/main",
       setup: "npm ci",
     });
     assert.strictEqual(
       recordedWorktreeConfigForContinue(recorded, false),
       undefined,
       "a disabled current config still takes the worktree abandonment path"
+    );
+  });
+
+  test("continues a recorded named directory without adding an absent base", () => {
+    const recorded = {
+      mode: WORKTREE_MODES.NAMED,
+      directory: "bug-fix",
+      branchName: "recorded-branch",
+      executionCheckoutRoot: "/repo.worktrees/bug-fix",
+      baseCommit: "captured-base",
+    } as WorkingFileWorktreeRuntime;
+
+    assert.deepStrictEqual(
+      recordedWorktreeConfigForContinue(recorded, {
+        mode: WORKTREE_MODES.NAMED,
+        branch: "new-default-branch",
+      }),
+      {
+        mode: WORKTREE_MODES.NAMED,
+        directory: "/repo.worktrees/bug-fix",
+        branch: "recorded-branch",
+      }
+    );
+  });
+
+  test("continues with the recorded comparison base origin/main", () => {
+    const recorded = {
+      mode: WORKTREE_MODES.NAMED,
+      directory: "bug-fix",
+      branchName: "recorded-branch",
+      executionCheckoutRoot: "/repo.worktrees/bug-fix",
+      baseCommit: "captured-base",
+      comparisonBaseLabel: "origin/main",
+    } as WorkingFileWorktreeRuntime;
+
+    assert.strictEqual(
+      recordedWorktreeConfigForContinue(recorded, {
+        mode: WORKTREE_MODES.NAMED,
+        branch: "new-default-branch",
+      })?.base,
+      "origin/main"
     );
   });
 

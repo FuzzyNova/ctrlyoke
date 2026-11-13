@@ -5,7 +5,7 @@ export type WorktreeComparisonKind =
 
 /** Classify an upstream relative to the source checkout's branch and upstream. */
 export function classifyWorktreeComparison(input: {
-  upstream?: { label: string; gone: boolean };
+  upstream?: { label: string; gone: boolean; resolvable?: boolean };
   sourceBranch: string | null;
   sourceUpstream?: string;
 }): WorktreeComparisonKind {

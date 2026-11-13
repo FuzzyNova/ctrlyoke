@@ -27,6 +27,7 @@ import {
   scmGraphBranchColorClass,
 } from "@utils/scmStatus";
 import { WorktreeGitStatus } from "./WorktreeGitStatus";
+import { slugifyWorktreeName } from "@root/utils/WorktreeNameUtils";
 import {
   isPullRequestWorktree,
   stripWorktreeDirectoryHashSuffix,
@@ -939,11 +940,13 @@ function WorktreeRow({
         sourceCheckoutUpstream={sourceCheckoutUpstream}
         branchColorClass={branchColorClass}
       />
-      {entry.branchName && directoryLabel !== entry.branchName && (
-        <div className="mt-1 text-xs text-description-fg">
-          {directoryLabel} · {entry.branchName}
-        </div>
-      )}
+      {entry.branchName &&
+        directoryLabel !== entry.branchName &&
+        directoryLabel !== slugifyWorktreeName(entry.branchName) && (
+          <div className="mt-1 text-xs text-description-fg">
+            {directoryLabel} · {entry.branchName}
+          </div>
+        )}
       <div className="mt-1 font-mono break-all text-foreground">
         {entry.worktreePath}
       </div>

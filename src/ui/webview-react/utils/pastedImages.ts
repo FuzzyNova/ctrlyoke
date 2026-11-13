@@ -221,9 +221,16 @@ let lastPlaceholderId = 0;
 export function pasteImagesAsReferences(
   view: EditorView,
   images: readonly ClipboardImage[],
-  transport: PastedImageTransport
+  transport: PastedImageTransport,
+  prepareInsertion?: (from: number, to: number) => void
 ): void {
-  for (const image of supportedClipboardImages(images)) {
+  const supportedImages = supportedClipboardImages(images);
+  if (supportedImages.length === 0) return;
+  prepareInsertion?.(
+    view.state.selection.main.from,
+    view.state.selection.main.to
+  );
+  for (const image of supportedImages) {
     const id = ++lastPlaceholderId;
     const { from, to } = view.state.selection.main;
     const end = from + PASTING_IMAGE_PLACEHOLDER.length;

@@ -8,12 +8,16 @@ import {
   vi,
 } from "vitest";
 import { EditorView } from "@codemirror/view";
+import { parseDocument } from "yaml";
+import { getYamlTextSpans } from "@root/completions/WorkflowLocationYaml";
+import { WORKFLOW_LOCATION_ROLES } from "@root/types/DashboardConstants";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { PASTING_IMAGE_PLACEHOLDER } from "@/types/messages";
 import {
   pasteImagesAsReferences,
   pastedImagePlaceholderField,
 } from "@utils/pastedImages";
+import { prepareYamlPromptImageInsertion } from "@utils/workflowYamlImagePaste";
 
 const views: EditorView[] = [];
 
@@ -71,6 +75,52 @@ afterEach(() => {
 });
 
 describe("pasteImagesAsReferences", () => {
+  it("quotes a plain YAML prompt before pasting at its first character", async () => {
+    const transport = { postMessage: vi.fn() };
+    const source = "steps:\n  - prompt: Fix the bug\n";
+    const start = source.indexOf("Fix");
+    const view = createView(source, start);
+    const spans = getYamlTextSpans(source, WORKFLOW_LOCATION_ROLES.PROMPT_TEXT);
+    pasteImagesAsReferences(view, [image], transport, (from, to) =>
+      prepareYamlPromptImageInsertion(view, spans, from, to)
+    );
+    const { seq } = transport.postMessage.mock.calls[0]![0] as { seq: number };
+    reply({ seq, relativePath: ".ctrlyoke/attachments/a.png" });
+    await vi.waitFor(() =>
+      expect(view.state.doc.toString()).toContain(
+        "@.ctrlyoke/attachments/a.png"
+      )
+    );
+    const parsed = parseDocument(view.state.doc.toString());
+    expect(parsed.errors).toHaveLength(0);
+    expect(
+      (parsed.toJS() as { steps: { prompt: string }[] }).steps[0]!.prompt
+    ).toBe("@.ctrlyoke/attachments/a.png Fix the bug");
+  });
+
+  it("leaves mid-scalar and quoted or block YAML prompt pastes unchanged", () => {
+    for (const source of [
+      "prompt: Fix the bug\n",
+      'prompt: "Fix the bug"\n',
+      "prompt: |\n  Fix the bug\n",
+    ]) {
+      const valueStart = source.indexOf("Fix");
+      const view = createView(source, valueStart + 1);
+      const before = view.state.doc.toString();
+      const spans = getYamlTextSpans(
+        source,
+        WORKFLOW_LOCATION_ROLES.PROMPT_TEXT
+      );
+      prepareYamlPromptImageInsertion(
+        view,
+        spans,
+        view.state.selection.main.from,
+        view.state.selection.main.to
+      );
+      expect(view.state.doc.toString()).toBe(before);
+    }
+  });
+
   it("swaps the placeholder for a reference once the image is saved, through later edits", async () => {
     const transport = { postMessage: vi.fn() };
     const view = createView("prompt: see ", 12);

@@ -2252,7 +2252,7 @@ export async function getBranchUpstream(
 export async function getBranchUpstreamStatus(
   repoRoot: string,
   branchName: string
-): Promise<{ label: string; gone: boolean } | undefined> {
+): Promise<{ label: string; gone: boolean; resolvable?: boolean } | undefined> {
   try {
     const { stdout } = await execGit([
       "-C",
@@ -2263,8 +2263,35 @@ export async function getBranchUpstreamStatus(
     ]);
     const [labelText, trackText] = stdout.trimEnd().split("\0");
     const label = labelText?.trim();
-    if (!label) return undefined;
-    return { label, gone: (trackText ?? "").includes("[gone]") };
+    if (label) return { label, gone: (trackText ?? "").includes("[gone]") };
+
+    const configValue = async (key: string): Promise<string | undefined> => {
+      try {
+        const { stdout: value } = await execGit([
+          "-C",
+          repoRoot,
+          "config",
+          "--get",
+          `branch.${branchName}.${key}`,
+        ]);
+        return value.trim() || undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    const [merge, remote] = await Promise.all([
+      configValue("merge"),
+      configValue("remote"),
+    ]);
+    if (!merge) return undefined;
+    const mergeLabel = merge.startsWith("refs/heads/")
+      ? merge.slice("refs/heads/".length)
+      : merge;
+    return {
+      label: remote ? `${remote}/${mergeLabel}` : mergeLabel,
+      gone: false,
+      resolvable: false,
+    };
   } catch {
     return undefined;
   }

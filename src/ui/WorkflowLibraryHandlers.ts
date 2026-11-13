@@ -1392,6 +1392,7 @@ export class WorkflowLibraryHandlers {
         (descriptor) => {
           const updated = { ...descriptor, schedule: validation };
           delete updated.scheduleNextRunAt;
+          delete updated.scheduleLastMissedAt;
           return updated;
         }
       );

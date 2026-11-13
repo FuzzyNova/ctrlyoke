@@ -24,11 +24,11 @@ have **View Output**, which opens ctrlyoke's output channel.
 
 **Browser notifications** has three modes:
 
-| Mode               | What happens                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Never**          | No browser notifications.                                                                                                                              |
-| **Connected Only** | An open browser dashboard shows a system notification. Nothing arrives once every dashboard tab is closed.                                             |
-| **Push**           | ctrlyoke sends a Web Push notification to every subscribed browser or phone, even when the dashboard isn't open. Needs Pro or the remote-access trial. |
+| Mode               | What happens                                                                                                                                                                      |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Never**          | No browser notifications.                                                                                                                                                         |
+| **Connected Only** | An open browser dashboard shows a system notification. Nothing arrives once every dashboard tab is closed.                                                                        |
+| **Push**           | ctrlyoke sends a Web Push notification to browsers and phones subscribed through this project's server, even when the dashboard isn't open. Needs Pro or the remote-access trial. |
 
 To turn them on:
 

@@ -33,6 +33,30 @@ export interface BrowserNotificationStatus {
   staleSubscriptionCount?: number;
 }
 
+/** Claim a legacy subscription for this hosted workspace without prompting. */
+export async function claimPushSubscriptionIfUnowned(): Promise<void> {
+  if (
+    !isStandalone ||
+    typeof navigator === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    typeof window === "undefined" ||
+    !("PushManager" in window) ||
+    !window.isSecureContext
+  ) {
+    return;
+  }
+
+  const registration = await ensureServiceWorkerRegistration();
+  const subscription = await registration.pushManager.getSubscription();
+  if (!subscription) return;
+
+  const storedId = localStorage.getItem(PUSH_SUBSCRIPTION_ID_KEY);
+  const list = await fetchSubscriptionList();
+  if (!list.subscriptions.some((item) => item.id === storedId)) {
+    await registerPushSubscription(subscription);
+  }
+}
+
 interface PushSubscriptionResponse {
   id: string;
 }
@@ -71,17 +95,10 @@ export async function getBrowserNotificationStatus(): Promise<BrowserNotificatio
   }
 
   try {
+    await claimPushSubscriptionIfUnowned();
     const registration = await ensureServiceWorkerRegistration();
     const subscription = await registration.pushManager.getSubscription();
-    let list = await fetchSubscriptionList();
-    // This server pushes only to subscriptions it owns. One this browser holds
-    // that the server doesn't list was registered before ownership existed (or
-    // with another workspace on this origin), so register it here to claim it.
-    const storedId = localStorage.getItem(PUSH_SUBSCRIPTION_ID_KEY);
-    if (subscription && !list.subscriptions.some((s) => s.id === storedId)) {
-      await registerPushSubscription(subscription);
-      list = await fetchSubscriptionList();
-    }
+    const list = await fetchSubscriptionList();
     return {
       ...status,
       subscribed: Boolean(subscription),

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Workflow schedule filters and clock tooltips use the next occurrence that can still fire.
+- MCP `edit_step` refuses prompt-only fields when editing a script step.
+- Errored end-condition verdicts show the configured action after retries are exhausted, and `ctrlyoke run` parallel-group tallies count a member as failed when its end condition fails or errors.
+- Pasting an image at the start of a plain YAML prompt in the workspace viewer keeps the workflow valid.
+- Legacy PWA push subscriptions are matched to their project when the hosted dashboard opens, and Push notifications are documented as project-scoped.
+- Fork PR branches without remote-tracking refs are classified as PR worktrees and cannot be included in two-way Sync.
+- Continuing a named-directory run preserves its recorded comparison base instead of relabeling it with the run-start commit.
+- Bare named-worktree directories and completions no longer match the repository's main checkout.
+- Cron schedules no longer return a past occurrence or spin the scheduler during the repeated fall-back hour.
+- Editing a schedule while its scheduled run is starting no longer lets the old occurrence replace the new timer.
+- Saving a schedule or completing a recurring run clears the previous missed-run note.
 - **Reply to Step** works again when the editor is collapsed. The editor used to expand without the reply's session and settings, because reopening it restored an older saved draft over the reply.
 
 ## [0.7.0] - 2026-11-12

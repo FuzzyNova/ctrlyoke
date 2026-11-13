@@ -177,6 +177,36 @@ describe("WorkflowSwitcher — empty state", () => {
 });
 
 describe("WorkflowSwitcher — loaded state", () => {
+  it("filters an expired schedule as not scheduled", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowSwitcher />);
+    setRecentWorkflows([
+      {
+        workflowName: "Expired schedule",
+        executionState: EXECUTION_STATES.IDLE,
+        schedule: {
+          enabled: true,
+          trigger: { cron: "0 9 * * *" },
+          until: "2020-01-01T00:00",
+        } as never,
+      },
+    ]);
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
+    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    await user.click(document.getElementById("workflow-schedule-filter")!);
+    await user.click(
+      within(document.body).getByRole("button", { name: "Not scheduled" })
+    );
+    expect(screen.queryByText("Expired schedule")).not.toBeInTheDocument();
+    await user.click(
+      within(document.body).getAllByRole("button", { name: "Scheduled" })[1]
+    );
+    await user.click(
+      within(document.body).getByRole("button", { name: "Not scheduled" })
+    );
+    expect(screen.getByText("Expired schedule")).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     useUiStore.setState({
       pendingRunViewSwitch: null,

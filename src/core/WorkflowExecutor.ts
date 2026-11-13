@@ -494,14 +494,9 @@ function getErrorBehaviorDecision(
     errorBehavior.onError === CONDITION_ACTIONS.CONTINUE
       ? CONDITION_ACTIONS.CONTINUE
       : CONDITION_ACTIONS.STOP_WORKFLOW;
-  return {
-    canRetry,
-    action,
-    actionText:
-      action === CONDITION_ACTIONS.STOP_WORKFLOW
-        ? WORKFLOW_EXECUTION_OUTCOMES.STOP
-        : action,
-  };
+  // Name the configured action itself ("stopWorkflow", "continue"), never an
+  // internal outcome such as "stop".
+  return { canRetry, action, actionText: action };
 }
 
 function getAttemptStartReason(
@@ -4007,9 +4002,7 @@ export class WorkflowExecutor {
   }
 
   /**
-   * The verdict detail for an errored script: which error retry comes next,
-   * or what happens once they are spent. The script's output row is the only
-   * place this is shown, so it must reflect the current retry count.
+   * The verdict detail for an errored script, when an error retry is scheduled.
    */
   private errorRetryActionDetail(
     errorBehavior: ErrorBehavior | null | undefined,
@@ -4018,10 +4011,13 @@ export class WorkflowExecutor {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
-    return (result) =>
-      result.errored
-        ? getErrorBehaviorDecision(policy, errorRetryCount).actionText
-        : undefined;
+    return (result) => {
+      if (!result.errored) {
+        return undefined;
+      }
+      const decision = getErrorBehaviorDecision(policy, errorRetryCount);
+      return decision.canRetry ? decision.actionText : undefined;
+    };
   }
 
   private getEvaluationErrorMessage(result: EvaluationResult): string {

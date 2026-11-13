@@ -83,13 +83,13 @@ For `endCondition` or `preCondition`, pass `{ "use": "presetName" }` to attach a
 
 ## Step mutations
 
-- `edit_step` takes a zero-based `index` and an `updates` object. Updatable fields: `prompt`, `name`, `model`, `harness`, `executionMode`, `endCondition`, `preCondition`, `resumeSession`, `sessionId`, `agent`, `enabled`, `color`, `skills`. Condition fields attach named presets as described above. Other fields are rejected. Omitted fields keep their values. `clearProperties` lists updatable fields to remove so they inherit workflow defaults again; the required `prompt` cannot be cleared, and condition fields cannot be cleared. The result may include a `warnings` array for execution constraints. The deprecated `additionalArgs` input remains in the schema for compatibility, but setting or clearing it is rejected: harness arguments can only be set by the workflow author, for security reasons.
+- `edit_step` takes a zero-based `index` and an `updates` object. Updatable fields: `prompt`, `name`, `model`, `harness`, `executionMode`, `endCondition`, `preCondition`, `resumeSession`, `sessionId`, `agent`, `enabled`, `color`, `skills`. Condition fields attach named presets as described above. Other fields are rejected. Script steps accept only fields supported by the script-step schema; prompt-only fields such as `harness`, `endCondition`, and `skills` are refused. Omitted fields keep their values. `clearProperties` lists updatable fields to remove so they inherit workflow defaults again; the required `prompt` cannot be cleared, and condition fields cannot be cleared. The result may include a `warnings` array for execution constraints. The deprecated `additionalArgs` input remains in the schema for compatibility, but setting or clearing it is rejected: harness arguments can only be set by the workflow author, for security reasons.
 - `remove_step` takes the same `index`.
 - `reorder_steps` takes `indices`: only the not-yet-started steps' absolute zero-based indices in the desired execution order. Never include a running or completed step.
 
 Completed and currently running steps cannot be edited, removed, or moved.
 
-Each returns `success`, `operation`, `changed`, the arguments it was given, `newQueueSize`, `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. When the request matched what was already on disk, `changed` is `false` and a `note` says nothing was written.
+Each returns `success`, `operation`, `changed`, the arguments it was given, `newQueueSize`, `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. When the request matched what was already on disk, `changed` is `false` and nothing was written. `reorder_steps` also adds a `note` saying so when the order you asked for is the current order.
 
 ## `list_harnesses`
 

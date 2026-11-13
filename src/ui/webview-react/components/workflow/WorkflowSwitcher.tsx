@@ -1498,6 +1498,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     normalizedWorkflowSearch.length > 0 || filtersActive;
   const workflowDateStartMs = getDateStartMs(workflowDateFilter.from);
   const workflowDateEndMs = getDateEndMs(workflowDateFilter.to);
+  const scheduleNow = Date.now();
   const workflowMatchesSearch = (
     workflow: Pick<
       RecentWorkflow,
@@ -1510,6 +1511,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       | "schedule"
     > & {
       workflowKey?: string;
+      address?: Pick<RecentWorkflow["address"], "workflowKey">;
       filePath?: string;
       workingFilePath?: string;
       completedAt?: number;
@@ -1522,13 +1524,15 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
           recentWorkflow.address.workflowKey === workflow.workflowKey &&
           (recentWorkflow.isFavorite ?? false)
       );
-    const isScheduled = Boolean(
-      workflow.schedule ??
-      sortedRecentWorkflows.find(
-        (recentWorkflow) =>
-          recentWorkflow.address.workflowKey === workflow.workflowKey
-      )?.schedule
+    const workflowKey = workflow.workflowKey ?? workflow.address?.workflowKey;
+    const matchingRecentLineage = sortedRecentWorkflows.find(
+      (recentWorkflow) => recentWorkflow.address.workflowKey === workflowKey
     );
+    // The recent lineage carries the host's next-run time; a row with no
+    // recent entry falls back to its own schedule.
+    const isScheduled =
+      upcomingScheduleRunAt(matchingRecentLineage ?? workflow, scheduleNow) !==
+      null;
 
     if (
       (favoriteWorkflowsOnly && !isFavorite) ||
@@ -1590,7 +1594,6 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   // Running, then Scheduled, then history. Scheduled holds upcoming schedules
   // only: a lineage drops back to history once its schedule can never fire
   // again, and while it runs its Running row carries the clock instead.
-  const scheduleNow = Date.now();
   const scheduledWorkflows: RecentWorkflow[] = [];
   const filteredRecentWorkflows: RecentWorkflow[] = [];
   for (const recentWorkflow of sortedRecentWorkflows) {

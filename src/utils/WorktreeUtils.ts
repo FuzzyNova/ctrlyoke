@@ -27,6 +27,9 @@ import {
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
+import { slugifyWorktreeName } from "./WorktreeNameUtils";
+
+export { slugifyWorktreeName } from "./WorktreeNameUtils";
 
 export interface WorkspaceEligibility {
   eligible: boolean;
@@ -62,15 +65,6 @@ export async function resolveThroughNearestExistingAncestor(
   }
 }
 
-export function slugifyWorktreeName(value: string): string {
-  const ascii = value
-    .normalize("NFKD")
-    .replace(/[^\x00-\x7F]/g, "")
-    .toLowerCase();
-  const slug = ascii.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return (slug || "workflow").slice(0, 40).replace(/-+$/g, "") || "workflow";
-}
-
 export type WorktreeNameIdentity =
   | {
       kind: typeof WORKTREE_IDENTITY_KINDS.MANAGED;
@@ -82,6 +76,14 @@ export type WorktreeNameIdentity =
 export type WorktreeDirectoryResolution =
   | { kind: typeof WORKTREE_DIRECTORY_KINDS.EXISTING; entry: GitWorktreeEntry }
   | { kind: typeof WORKTREE_DIRECTORY_KINDS.PLANNED; path: string };
+
+/** The main checkout is the parent of Git's shared administrative directory. */
+export function isMainWorktree(
+  entry: GitWorktreeEntry,
+  commonDirectory: string
+): boolean {
+  return pathsEqual(entry.worktreePath, path.dirname(commonDirectory));
+}
 
 function expandDirectoryPath(value: string): string {
   const home = os.homedir();
@@ -169,6 +171,7 @@ export async function resolveWorktreeDirectory(
   const matches = entries.filter(
     (entry) =>
       !entry.bare &&
+      !isMainWorktree(entry, commonDirectory) &&
       !pathsEqual(entry.worktreePath, sourceCheckoutRoot) &&
       identities.includes(path.basename(entry.worktreePath))
   );

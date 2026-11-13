@@ -3,7 +3,11 @@ import type {
   WorkflowLocationRole,
   WorkflowObjectKind,
 } from "../types/DashboardConstants";
-import type { WorkflowPath, WorkflowTextRange } from "./WorkflowLocationTypes";
+import type {
+  WorkflowPath,
+  WorkflowTextRange,
+  YamlScalarStyle,
+} from "./WorkflowLocationTypes";
 
 /**
  * Decoding workflow string values while keeping an offset map back to the
@@ -27,6 +31,8 @@ export interface WorkflowTextSpan {
   readonly field?: string;
   readonly objectKind: WorkflowObjectKind;
   readonly role: WorkflowLocationRole;
+  /** YAML scalar style, when this span comes from YAML. */
+  readonly scalarStyle?: YamlScalarStyle;
   /** The raw source span of the value's content (inside quotes, after a block header). */
   readonly sourceRange: WorkflowTextRange;
   /** The value as the loader sees it: unescaped, dedented, folded and chomped. */

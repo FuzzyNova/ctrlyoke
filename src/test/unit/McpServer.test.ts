@@ -2912,6 +2912,21 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         beforePromptEdit
       );
 
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: {
+            endCondition: { use: "committed" },
+            harness: "claude-cli",
+          },
+        }),
+        /Script steps cannot be edited through MCP.*endCondition, harness/u
+      );
+      assert.strictEqual(
+        await fs.readFile(run.runFilePath, "utf8"),
+        beforePromptEdit
+      );
+
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
         index: 2,
         updates: { name: "renamed tests" },

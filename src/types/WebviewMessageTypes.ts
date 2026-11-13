@@ -1859,7 +1859,13 @@ export interface WorktreeManagementEntry {
   workingTree?: GitWorkingTreeCounts;
   /** Commit counts against `WorktreeManagementState.sourceCheckoutBranch`; absent for the source checkout. */
   sourceComparison?: { ahead: number; behind: number };
-  upstream?: { label: string; gone: boolean; ahead?: number; behind?: number };
+  upstream?: {
+    label: string;
+    gone: boolean;
+    ahead?: number;
+    behind?: number;
+    resolvable?: boolean;
+  };
 }
 
 export interface WorktreeManagementState {
