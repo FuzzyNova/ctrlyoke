@@ -1,9 +1,9 @@
 import type { WorkflowSchedule } from "@root/types/CtrlYokeTypes";
-import { nextScheduleOccurrence } from "@root/utils/WorkflowSchedule";
 import {
-  formatScheduleTime,
-  scheduleCalendar,
-} from "@root/utils/ScheduleCalendar";
+  nextScheduleOccurrence,
+  ownerScheduleCalendar,
+} from "@root/utils/WorkflowSchedule";
+import { formatScheduleTime } from "@root/utils/ScheduleCalendar";
 import { WORKFLOW_SCHEDULE_LABELS } from "../constants";
 
 /** The lineage fields the Scheduled section reads. */
@@ -16,12 +16,13 @@ export interface ScheduledLineageFields {
  * When the lineage's schedule will fire next, or `null` once it never will
  * again (a one-shot that already fired, or a recurrence past its `until`).
  *
- * The host's `scheduleNextRunAt` wins while it is still in the future. It is
- * absent for a paused schedule, for one armed on another machine, and briefly
- * after a save, so the time is computed from the trigger in those cases. A
- * paused schedule is evaluated as if enabled: it keeps its place in the
- * Scheduled section while resuming it could still fire. `hostTimeZone`
- * (`uiStore.hostTimeZone`) is the zone that computation runs in.
+ * The owning host's `scheduleNextRunAt` wins while it is still in the
+ * future. It is absent for a paused schedule and briefly after a save, and
+ * goes stale while the owner (possibly another machine sharing a synced state
+ * home) is not running, so the time is computed from the trigger in those
+ * cases, in the owner's recorded zone, else `hostTimeZone`
+ * (`uiStore.hostTimeZone`). A paused schedule is evaluated as if enabled: it
+ * keeps its place in the Scheduled section while resuming it could still fire.
  */
 export function upcomingScheduleRunAt(
   lineage: ScheduledLineageFields,
@@ -36,7 +37,7 @@ export function upcomingScheduleRunAt(
   return nextScheduleOccurrence(
     { ...schedule, enabled: true },
     now,
-    scheduleCalendar(hostTimeZone)
+    ownerScheduleCalendar(schedule, hostTimeZone)
   );
 }
 

@@ -617,6 +617,13 @@ export interface WorkflowSchedule {
   until?: string;
   /** Hostname that owns this schedule, captured when it is saved. */
   hostId: string;
+  /**
+   * The owning host's IANA time zone, recorded when the schedule is saved and
+   * kept current by that host's scheduler. Other machines sharing a synced
+   * state home evaluate the schedule in it; the owner itself always fires in
+   * its own process zone. Absent on schedules saved before ctrlyoke 0.7.2.
+   */
+  timeZone?: string;
 }
 
 /**

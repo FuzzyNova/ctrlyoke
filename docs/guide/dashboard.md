@@ -292,6 +292,8 @@ Missed occurrences are skipped when ctrlyoke is stopped or asleep, and a new
 occurrence is skipped if that workflow is already running. For a schedule
 stored in a synced state home, only the machine that created it (`hostId`) runs
 it; editing the schedule on another machine transfers that responsibility.
+Other machines read a schedule's times in the timezone of the machine that runs
+it.
 If a task must run while ctrlyoke is closed, use an external cron or CI job to
 call `ctrlyoke run <workflow-file>`.
 

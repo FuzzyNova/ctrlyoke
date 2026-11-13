@@ -36,6 +36,40 @@ suite("WorkflowSchedule", () => {
       "object"
     );
     assert.ok(currentScheduleHostId().length > 0);
+    assert.strictEqual(
+      typeof validateWorkflowSchedule({
+        enabled: true,
+        hostId: "h",
+        timeZone: "",
+        trigger: { cron: "* * * * *" },
+      }),
+      "string"
+    );
+  });
+
+  test("checks datetimes in the owner's time zone, not the reader's", () => {
+    const originalTimezone = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      // 02:30 on 8 March 2026 does not exist in New York (spring forward)
+      // but does in London, which moves its clocks three weeks later.
+      const schedule = {
+        enabled: true,
+        hostId: "h",
+        trigger: { at: "2026-03-08T02:30" },
+      };
+      assert.strictEqual(typeof validateWorkflowSchedule(schedule), "string");
+      assert.strictEqual(
+        typeof validateWorkflowSchedule({
+          ...schedule,
+          timeZone: "Europe/London",
+        }),
+        "object"
+      );
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+    }
   });
 
   test("round-trips a valid schedule and drops an invalid one without losing its lineage", async () => {

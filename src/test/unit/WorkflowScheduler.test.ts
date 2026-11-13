@@ -33,6 +33,7 @@ class FakeTimers {
 suite("WorkflowScheduler", () => {
   const key = "sample-workflow" as WorkflowKey;
   const occurrence = new Date(2030, 0, 1, 9, 0, 0).getTime();
+  const HOST_ZONE = "Test/Host_Zone";
   function makeDescriptor(
     overrides: Partial<WorkflowLineageDescriptor> = {}
   ): WorkflowLineageDescriptor {
@@ -48,6 +49,7 @@ suite("WorkflowScheduler", () => {
       schedule: {
         enabled: true,
         hostId: "test-host",
+        timeZone: HOST_ZONE,
         trigger: {
           at: new Date(occurrence).toLocaleString("sv-SE").replace(" ", "T"),
         },
@@ -69,6 +71,7 @@ suite("WorkflowScheduler", () => {
     const timers = new FakeTimers();
     let now = occurrence - 1000;
     let fires = 0;
+    let metadataWrites = 0;
     const repository = {
       listLineageKeys: async () => [key],
       readDescriptor: async () => descriptor,
@@ -80,6 +83,7 @@ suite("WorkflowScheduler", () => {
         ) => WorkflowLineageDescriptor
       ) => {
         await overrides.beforeMetadata?.();
+        metadataWrites += 1;
         descriptor = { ...mutate(descriptor), revision: descriptor.revision };
         return descriptor;
       },
@@ -90,6 +94,7 @@ suite("WorkflowScheduler", () => {
       now: () => now,
       timers,
       getHostId: () => "test-host",
+      getTimeZone: () => HOST_ZONE,
       isLineageRunning: () =>
         overrides.checkRunning?.() ?? overrides.running ?? false,
       fire: async () => {
@@ -102,6 +107,7 @@ suite("WorkflowScheduler", () => {
       timers,
       descriptor: () => descriptor,
       fires: () => fires,
+      metadataWrites: () => metadataWrites,
       setDescriptor: (value: WorkflowLineageDescriptor) => {
         descriptor = value;
       },
@@ -132,6 +138,50 @@ suite("WorkflowScheduler", () => {
     assert.strictEqual(disabled.timers.entries.size, 0);
   });
 
+  test("records this host's time zone on the schedules it owns, paused or not", async () => {
+    for (const enabled of [true, false]) {
+      const legacy = setup({
+        descriptor: makeDescriptor({
+          schedule: {
+            enabled,
+            hostId: "test-host",
+            trigger: { cron: "0 9 * * *" },
+          },
+        }),
+      });
+      await legacy.scheduler.start();
+      assert.strictEqual(legacy.descriptor().schedule?.timeZone, HOST_ZONE);
+      assert.strictEqual(legacy.descriptor().revision, 7);
+    }
+    // A host whose zone changed since the schedule was saved updates it.
+    const moved = setup({
+      descriptor: makeDescriptor({
+        schedule: { ...makeDescriptor().schedule!, timeZone: "Old/Zone" },
+      }),
+    });
+    await moved.scheduler.start();
+    assert.strictEqual(moved.descriptor().schedule?.timeZone, HOST_ZONE);
+    assert.strictEqual(moved.timers.entries.size, 1);
+  });
+
+  test("leaves the time zone of a current or another host's schedule alone", async () => {
+    const current = setup();
+    await current.scheduler.start();
+    assert.strictEqual(current.metadataWrites(), 0);
+    const other = setup({
+      descriptor: makeDescriptor({
+        schedule: {
+          ...makeDescriptor().schedule!,
+          hostId: "other",
+          timeZone: "Other/Zone",
+        },
+      }),
+    });
+    await other.scheduler.start();
+    assert.strictEqual(other.metadataWrites(), 0);
+    assert.strictEqual(other.descriptor().schedule?.timeZone, "Other/Zone");
+  });
+
   test("fires once and updates schedule metadata without changing revision; dispose clears timers", async () => {
     const testCase = setup();
     await testCase.scheduler.start();
@@ -154,6 +204,7 @@ suite("WorkflowScheduler", () => {
         schedule: {
           enabled: true,
           hostId: "test-host",
+          timeZone: HOST_ZONE,
           trigger: { cron: "0 9 * * *" },
         },
         scheduleLastMissedAt: missedAt,
@@ -175,6 +226,7 @@ suite("WorkflowScheduler", () => {
       schedule: {
         enabled: true,
         hostId: "test-host",
+        timeZone: HOST_ZONE,
         trigger: { cron: "0 9 * * *" },
       },
     });
@@ -187,6 +239,7 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
+      timeZone: HOST_ZONE,
       trigger: {
         at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
       },
@@ -218,6 +271,7 @@ suite("WorkflowScheduler", () => {
         schedule: {
           enabled: true,
           hostId: "test-host",
+          timeZone: HOST_ZONE,
           trigger: { cron: "0 9 * * *" },
         },
       }),
@@ -230,6 +284,7 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
+      timeZone: HOST_ZONE,
       trigger: {
         at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
       },
@@ -258,6 +313,7 @@ suite("WorkflowScheduler", () => {
         schedule: {
           enabled: true,
           hostId: "test-host",
+          timeZone: HOST_ZONE,
           trigger: { cron: "0 9 * * *" },
         },
       }),
@@ -270,6 +326,7 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
+      timeZone: HOST_ZONE,
       trigger: {
         at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
       },
@@ -299,6 +356,7 @@ suite("WorkflowScheduler", () => {
         schedule: {
           enabled: true,
           hostId: "test-host",
+          timeZone: HOST_ZONE,
           trigger: { cron: "0 9 * * *" },
         },
       }),
@@ -310,6 +368,7 @@ suite("WorkflowScheduler", () => {
     const newSchedule = {
       enabled: true,
       hostId: "test-host",
+      timeZone: HOST_ZONE,
       trigger: {
         at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T"),
       },
@@ -352,7 +411,12 @@ suite("WorkflowScheduler", () => {
     const date = new Date(future).toLocaleString("sv-SE").replace(" ", "T");
     const testCase = setup({
       descriptor: makeDescriptor({
-        schedule: { enabled: true, hostId: "test-host", trigger: { at: date } },
+        schedule: {
+          enabled: true,
+          hostId: "test-host",
+          timeZone: HOST_ZONE,
+          trigger: { at: date },
+        },
         scheduleNextRunAt: future,
       }),
     });
@@ -370,6 +434,7 @@ suite("WorkflowScheduler", () => {
         schedule: {
           enabled: true,
           hostId: "test-host",
+          timeZone: HOST_ZONE,
           trigger: { cron: "* * * * *" },
         },
       }),
@@ -399,6 +464,7 @@ suite("WorkflowScheduler", () => {
         schedule: {
           enabled: true,
           hostId: "test-host",
+          timeZone: HOST_ZONE,
           trigger: { cron: "* * * * *" },
         },
         scheduleNextRunAt: occurrence - 10_000,

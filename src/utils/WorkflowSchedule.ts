@@ -1,6 +1,22 @@
 import type { WorkflowSchedule } from "../types/CtrlYokeTypes";
 import { nextCronOccurrence, parseCronExpression } from "./CronSchedule";
-import { LOCAL_CALENDAR, type ScheduleCalendar } from "./ScheduleCalendar";
+import {
+  LOCAL_CALENDAR,
+  scheduleCalendar,
+  type ScheduleCalendar,
+} from "./ScheduleCalendar";
+
+/**
+ * The calendar to read `schedule`'s wall-clock times in on a machine that
+ * may not own it: the owner's recorded zone, else `fallbackTimeZone` (the
+ * viewing host's zone; this process's when omitted).
+ */
+export function ownerScheduleCalendar(
+  schedule: Pick<WorkflowSchedule, "timeZone">,
+  fallbackTimeZone?: string
+): ScheduleCalendar {
+  return scheduleCalendar(schedule.timeZone ?? fallbackTimeZone);
+}
 
 /**
  * Parses a wall-clock `YYYY-MM-DDTHH:mm[:ss]` in `calendar`'s zone. A time
@@ -40,11 +56,13 @@ function parseLocalDateTime(
 
 /**
  * Validates an untrusted persisted schedule and returns a typed value or a
- * reason. Datetimes are checked in `calendar`'s zone (see `nextScheduleOccurrence`).
+ * reason. Datetimes are checked in `calendar`'s zone, by default the
+ * schedule's own `timeZone`: a one-shot that exists on its owner's clock
+ * may fall in a DST gap on the machine reading it.
  */
 export function validateWorkflowSchedule(
   value: unknown,
-  calendar: ScheduleCalendar = LOCAL_CALENDAR
+  calendar?: ScheduleCalendar
 ): WorkflowSchedule | string {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return "Schedule must be an object";
@@ -53,6 +71,14 @@ export function validateWorkflowSchedule(
     return "Schedule enabled must be a boolean";
   if (typeof input.hostId !== "string" || !input.hostId.trim())
     return "Schedule hostId must be a non-empty string";
+  if (
+    input.timeZone !== undefined &&
+    (typeof input.timeZone !== "string" || !input.timeZone.trim())
+  )
+    return "Schedule timeZone must be a non-empty string";
+  const zoned =
+    calendar ??
+    ownerScheduleCalendar({ timeZone: input.timeZone as string | undefined });
   if (
     !input.trigger ||
     typeof input.trigger !== "object" ||
@@ -64,7 +90,7 @@ export function validateWorkflowSchedule(
   const hasCron = Object.prototype.hasOwnProperty.call(trigger, "cron");
   if (hasAt === hasCron || Object.keys(trigger).length !== 1)
     return "Schedule trigger must contain exactly one of at or cron";
-  if (hasAt && parseLocalDateTime(trigger.at, calendar) === null)
+  if (hasAt && parseLocalDateTime(trigger.at, zoned) === null)
     return "Schedule at must be a valid local YYYY-MM-DDTHH:mm[:ss] datetime";
   if (hasCron) {
     if (typeof trigger.cron !== "string")
@@ -74,7 +100,7 @@ export function validateWorkflowSchedule(
   }
   if (
     input.until !== undefined &&
-    parseLocalDateTime(input.until, calendar) === null
+    parseLocalDateTime(input.until, zoned) === null
   )
     return "Schedule until must be a valid local YYYY-MM-DDTHH:mm[:ss] datetime";
   if (hasAt && input.until !== undefined)

@@ -37,6 +37,7 @@ import {
   BUNDLE_MANIFEST_VERSION,
 } from "../../utils/WorkflowBundleAnalyzer";
 import { snapshotProperty } from "../helpers/propertySnapshot";
+import { localTimeZone } from "../../utils/ScheduleCalendar";
 
 /** Minimal in-memory vscode.Memento stub for tests that don't exercise persistence. */
 function fakeWorkspaceState(): any {
@@ -342,7 +343,7 @@ suite("WorkflowLibraryHandlers", () => {
     );
   });
 
-  test("setting a schedule persists host identity and refreshes scheduling", async () => {
+  test("setting a schedule persists host identity and time zone and refreshes scheduling", async () => {
     await withWorkspace("ctrlyoke-schedule-set-", async (workspaceRoot) => {
       const repository = new WorkflowLineageRepository();
       const { workflowKey } = await repository.createLineage(
@@ -376,8 +377,10 @@ suite("WorkflowLibraryHandlers", () => {
         cron: "0 9 * * 1",
       });
       assert.ok(descriptor.schedule?.hostId);
+      assert.strictEqual(descriptor.schedule?.timeZone, localTimeZone());
       assert.strictEqual(refreshed, workflowKey);
       assert.strictEqual(messages.at(-1)?.type, MESSAGE_TYPES.RECENT_WORKFLOWS);
+      assert.strictEqual(messages.at(-1)?.hostTimeZone, localTimeZone());
     });
   });
 

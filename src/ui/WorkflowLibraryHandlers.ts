@@ -1389,6 +1389,7 @@ export class WorkflowLibraryHandlers {
     const validation = validateWorkflowSchedule({
       ...input,
       hostId: currentScheduleHostId(),
+      timeZone: localTimeZone(),
     });
     if (typeof validation === "string") {
       this.sendActionFailure(postMessage, "set workflow schedule", validation);

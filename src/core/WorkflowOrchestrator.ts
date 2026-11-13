@@ -99,6 +99,7 @@ import {
   readScheduleDefinitionRevision,
 } from "./orchestration/WorkflowScheduler";
 import { currentScheduleHostId } from "../utils/WorkflowScheduleHost";
+import { localTimeZone } from "../utils/ScheduleCalendar";
 import {
   RecentWorkflowCatalog,
   RecentWorkflowPublisher,
@@ -763,6 +764,7 @@ export class WorkflowOrchestrator {
         now: Date.now,
         timers: { setTimeout, clearTimeout },
         getHostId: currentScheduleHostId,
+        getTimeZone: localTimeZone,
         isLineageRunning: async (workflowKey) =>
           this.getWorkflowSummaries().some(
             (summary) =>

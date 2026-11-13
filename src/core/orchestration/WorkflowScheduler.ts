@@ -27,6 +27,8 @@ export interface WorkflowSchedulerOptions {
   now: () => number;
   timers: WorkflowSchedulerTimerApi;
   getHostId: () => string;
+  /** This host's IANA time zone, recorded on the schedules it owns. */
+  getTimeZone: () => string;
   isLineageRunning: (workflowKey: WorkflowKey) => Promise<boolean> | boolean;
   fire: (workflowKey: WorkflowKey) => Promise<void>;
 }
@@ -106,10 +108,12 @@ export class WorkflowScheduler {
     const schedule = descriptor.schedule;
     if (
       this.disposed ||
-      !schedule?.enabled ||
+      !schedule ||
       schedule.hostId !== this.options.getHostId()
     )
       return;
+    await this.recordOwnerTimeZone(workflowKey, schedule);
+    if (!schedule.enabled) return;
     const now = this.options.now();
     let nextAt = descriptor.scheduleNextRunAt;
     if (nextAt === undefined || nextAt <= now) {
@@ -131,6 +135,27 @@ export class WorkflowScheduler {
     }
     if (nextAt === null || nextAt === undefined) return;
     this.arm(workflowKey, nextAt);
+  }
+
+  /**
+   * Keeps an owned schedule's `timeZone` equal to this host's zone, so other
+   * machines sharing the state home read its times as this host fires them.
+   * Covers schedules saved before the field existed and a host whose zone
+   * changed; runs for paused schedules too, which other machines still list.
+   */
+  private async recordOwnerTimeZone(
+    workflowKey: WorkflowKey,
+    schedule: WorkflowSchedule
+  ): Promise<void> {
+    const timeZone = this.options.getTimeZone();
+    if (schedule.timeZone === timeZone) return;
+    const hostId = this.options.getHostId();
+    await this.writeMetadata(workflowKey, (current) =>
+      current.schedule?.hostId === hostId &&
+      current.schedule.timeZone !== timeZone
+        ? { ...current, schedule: { ...current.schedule, timeZone } }
+        : current
+    );
   }
 
   private arm(workflowKey: WorkflowKey, occurrenceAt: number): void {
