@@ -89,7 +89,7 @@ For `endCondition` or `preCondition`, pass `{ "use": "presetName" }` to attach a
 
 Completed and currently running steps cannot be edited, removed, or moved.
 
-Each returns `success`, `operation`, `changed`, the arguments it was given, `newQueueSize`, `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. When the request matched what was already on disk, `changed` is `false` and a `note` says nothing was written.
+Each returns `success`, `operation`, `changed`, the arguments it was given, `newQueueSize`, `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. When the request matched what was already on disk, `changed` is `false` and nothing was written. `reorder_steps` also adds a `note` saying so when the order you asked for is the current order.
 
 ## `list_harnesses`
 
