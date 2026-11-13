@@ -128,6 +128,12 @@ export class WorkflowScheduler {
 
   private arm(workflowKey: WorkflowKey, occurrenceAt: number): void {
     if (this.disposed) return;
+    if (occurrenceAt <= this.options.now()) {
+      Log.warn(
+        `[WorkflowScheduler] Refusing to arm past occurrence for ${workflowKey}`
+      );
+      return;
+    }
     // A refresh can re-arm while a wake is awaiting I/O; keep one timer per lineage.
     this.clearTimer(workflowKey);
     const delay = Math.max(

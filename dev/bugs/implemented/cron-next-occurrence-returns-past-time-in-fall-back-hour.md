@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli)
 - **Area:** `src/utils/CronSchedule.ts` (`nextCronOccurrence`), `src/core/orchestration/WorkflowScheduler.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

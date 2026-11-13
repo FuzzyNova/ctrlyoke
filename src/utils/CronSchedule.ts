@@ -105,14 +105,18 @@ export function nextCronOccurrence(
   if (!result.ok || !Number.isFinite(afterMs)) return null;
   const cron = result.value;
   const end = afterMs + SEARCH_HORIZON_MS;
-  const cursor = new Date(afterMs);
-  cursor.setSeconds(0, 0);
+  // Truncate in absolute time: local setters choose the earlier copy of an
+  // ambiguous fall-back minute and can move this cursor backwards.
+  const cursor = new Date(Math.floor(afterMs / 60_000) * 60_000);
   // Wall-clock minute-of-day of the previous cursor position on the same date;
   // -1 after a jump to the start of a new day, so a DST gap at midnight is still seen.
   let previousMinuteOfDay = cursor.getHours() * 60 + cursor.getMinutes();
   let previousDay = cursor.getDate();
   // Local-time setters step past a repeated (fall-back) hour, so each wall time is seen once.
+  const truncatedAfter = cursor.getTime();
   cursor.setMinutes(cursor.getMinutes() + 1);
+  while (cursor.getTime() <= afterMs || cursor.getTime() <= truncatedAfter)
+    cursor.setTime(cursor.getTime() + 60_000);
   while (cursor.getTime() <= end) {
     if (cursor.getDate() !== previousDay) previousMinuteOfDay = -1;
     if (!cron.month.has(cursor.getMonth() + 1) || !matchesDay(cron, cursor)) {
@@ -126,19 +130,31 @@ export function nextCronOccurrence(
     if (
       cron.hour.has(cursor.getHours()) &&
       cron.minute.has(cursor.getMinutes())
-    )
-      return cursor.getTime();
+    ) {
+      if (cursor.getTime() > afterMs) return cursor.getTime();
+      // A local-time setter elsewhere in the search can revisit the earlier
+      // copy of an ambiguous minute. Walk absolute minutes until strictly past
+      // the caller's instant, preserving the one-run-per-wall-time behavior.
+      cursor.setTime(cursor.getTime() + 60_000);
+      previousMinuteOfDay = minuteOfDay;
+      previousDay = cursor.getDate();
+      continue;
+    }
     // A forward DST jump skips wall-clock minutes. A cron time inside the gap fires at the transition.
     for (let minute = previousMinuteOfDay + 1; minute < minuteOfDay; minute++) {
       if (
         cron.hour.has(Math.floor(minute / 60)) &&
         cron.minute.has(minute % 60)
-      )
-        return cursor.getTime();
+      ) {
+        if (cursor.getTime() > afterMs) return cursor.getTime();
+      }
     }
     previousMinuteOfDay = minuteOfDay;
     previousDay = cursor.getDate();
+    const previousTimestamp = cursor.getTime();
     cursor.setMinutes(cursor.getMinutes() + 1);
+    while (cursor.getTime() <= afterMs || cursor.getTime() <= previousTimestamp)
+      cursor.setTime(cursor.getTime() + 60_000);
   }
   return null;
 }

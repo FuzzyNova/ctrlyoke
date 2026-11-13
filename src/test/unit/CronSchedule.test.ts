@@ -94,4 +94,19 @@ suite("CronSchedule", () => {
     assert.ok(fall! > fallFirst + 30 * 60_000);
     assert.strictEqual(new Date(fall!).getDate(), 3);
   });
+  test("never returns an occurrence at or before either fall-back copy", () => {
+    const afterTimes = [
+      Date.parse("2026-11-01T05:15:00Z"), // 01:15 EDT
+      Date.parse("2026-11-01T06:15:00Z"), // 01:15 EST
+    ];
+    for (const after of afterTimes) {
+      for (const expression of ["*/5 * * * *", "30 1 * * *", "0 9 * * *"]) {
+        const next = nextCronOccurrence(expression, after);
+        assert.ok(
+          next !== null && next > after,
+          `${expression} after ${new Date(after).toISOString()}`
+        );
+      }
+    }
+  });
 });
