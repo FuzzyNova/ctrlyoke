@@ -494,14 +494,9 @@ function getErrorBehaviorDecision(
     errorBehavior.onError === CONDITION_ACTIONS.CONTINUE
       ? CONDITION_ACTIONS.CONTINUE
       : CONDITION_ACTIONS.STOP_WORKFLOW;
-  return {
-    canRetry,
-    action,
-    actionText:
-      action === CONDITION_ACTIONS.STOP_WORKFLOW
-        ? WORKFLOW_EXECUTION_OUTCOMES.STOP
-        : action,
-  };
+  // Name the configured action itself ("stopWorkflow", "continue"), never an
+  // internal outcome such as "stop".
+  return { canRetry, action, actionText: action };
 }
 
 function getAttemptStartReason(
@@ -4063,7 +4058,7 @@ export class WorkflowExecutor {
       await this.trackStatusMessage(
         context,
         target,
-        `${phase} could not run: ${reason} → ${decision.action}`,
+        `${phase} could not run: ${reason} → ${actionText}`,
         severity
       );
     }

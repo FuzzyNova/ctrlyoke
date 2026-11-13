@@ -591,6 +591,48 @@ suite("WorkflowExecutor condition shell reporting", () => {
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
   });
 
+  test("names the retry or configured action when an end condition could not run", async () => {
+    const run = async (
+      errorBehavior: PromptStep["errorBehavior"]
+    ): Promise<string[]> => {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const context = makeContext(integration);
+      const statusMessages: string[] = [];
+      context.onStatusMessage = (_stepIndex, message) => {
+        statusMessages.push(message);
+      };
+      queue.loadPrompts({
+        steps: [
+          {
+            prompt: "check result",
+            // A missing script never runs, so only a status row reports it.
+            endCondition: { script: "" },
+            errorBehavior,
+          },
+        ],
+      });
+      await makeExecutor(queue).execute(integration, context);
+      return statusMessages.filter((message) =>
+        message.includes("could not run")
+      );
+    };
+
+    const retried = await run({
+      onError: CONDITION_ACTIONS.RETRY,
+      maxRetries: 1,
+    });
+    assert.ok(
+      retried.some((message) => message.endsWith("→ retry 1 of 1")),
+      retried.join("\n")
+    );
+    assert.ok(
+      retried.some((message) => message.endsWith("→ stopWorkflow")),
+      retried.join("\n")
+    );
+    assert.ok(retried.every((message) => !message.endsWith("→ stop")));
+  });
+
   test("shows retry detail only when an end-condition retry will be scheduled", async () => {
     const run = async (
       endCondition: NonNullable<PromptStep["endCondition"]>,
@@ -665,19 +707,27 @@ suite("WorkflowExecutor condition shell reporting", () => {
     assert.ok(
       erroredEvaluation.every((message) => !message.includes("retry "))
     );
-    assert.ok(erroredEvaluation.some((message) => message.includes("→ stopWorkflow")));
+    assert.ok(
+      erroredEvaluation.some((message) => message.includes("→ stopWorkflow"))
+    );
 
     const erroredRetry = await run(
       {
         script: "check-result",
       },
       [
-        { ...shellEvaluationResult(false), errored: true, error: "evaluation failed" },
+        {
+          ...shellEvaluationResult(false),
+          errored: true,
+          error: "evaluation failed",
+        },
         shellEvaluationResult(true),
       ],
       { onError: CONDITION_ACTIONS.RETRY, maxRetries: 2 }
     );
-    assert.ok(erroredRetry.some((message) => message.includes("→ retry 1 of 2")));
+    assert.ok(
+      erroredRetry.some((message) => message.includes("→ retry 1 of 2"))
+    );
 
     const retryBeforeExhaustion = await run(
       {
@@ -2041,7 +2091,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       },
     ]);
     queue.loadPrompts({
-      steps: [{ prompt: "member", endCondition: { script: "check" } }, { prompt: "sibling" }],
+      steps: [
+        { prompt: "member", endCondition: { script: "check" } },
+        { prompt: "sibling" },
+      ],
       parallelGroups: [
         { id: "parallel-error", startIndex: 0, endIndex: 1, failFast: false },
       ],
@@ -2049,7 +2102,12 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     await makeExecutor(queue, evaluator).execute(
       integration,
-      makeParallelContext(new Map([[0, integration], [1, new MockHarnessIntegration(undefined, false)]]))
+      makeParallelContext(
+        new Map([
+          [0, integration],
+          [1, new MockHarnessIntegration(undefined, false)],
+        ])
+      )
     );
 
     assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.FAILED);
