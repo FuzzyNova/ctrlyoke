@@ -17,6 +17,7 @@ import {
   PROMPT_INPUT_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
   STEP_TYPES,
+  type ExecutionMode,
   type HarnessId,
   type HookEvent,
 } from "./DashboardConstants";
@@ -27,6 +28,7 @@ import type {
   ResolvedExecutionTarget,
 } from "./ExecutionPropertyResolver";
 import type {
+  CapabilityDeclaration,
   CompatibilityConsumerTarget,
   CompatibilityDiagnostic,
   EffectiveCapabilityState,
@@ -235,7 +237,11 @@ export function analyzeCompatibility({
       {
         key: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
         used: permissions.mode === PERMISSION_MODES.AUTO,
-        state: effective.autoMode,
+        ...autoModeFieldState(
+          effective.autoMode,
+          declarations?.autoMode,
+          target.resolved.properties.executionMode
+        ),
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
@@ -622,6 +628,30 @@ function createHookDiagnostic(
     ...(getCompatibilityDiagnosticRemediation(code)
       ? { remediation: getCompatibilityDiagnosticRemediation(code) }
       : {}),
+  };
+}
+
+/**
+ * The auto-mode state for one execution mode. Copilot's judge is headless
+ * only, so its declaration overrides interactive to `unsupported`; the mapper
+ * reads the same override at launch, so both report the same fallback.
+ */
+function autoModeFieldState(
+  state: EffectiveCapabilityState,
+  declaration: CapabilityDeclaration | undefined,
+  executionMode: ExecutionMode
+): { state: EffectiveCapabilityState; caveatCode?: CompatibilityCaveatCode } {
+  const override = declaration?.modeOverrides?.[executionMode];
+  if (!override) {
+    return { state, caveatCode: declaration?.caveatCode };
+  }
+  return {
+    state: {
+      ...state,
+      fidelity: override.fidelity,
+      mechanism: override.mechanism,
+    },
+    caveatCode: override.caveatCode ?? declaration?.caveatCode,
   };
 }
 

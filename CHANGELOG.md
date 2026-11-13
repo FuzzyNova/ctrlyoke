@@ -9,11 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The **Auto** permission mode delegates each request to the harness's safety judge while keeping denied tools blocked and treating allowed tools as pre-approvals. Unsupported harnesses fall back to Custom; Copilot Auto is headless only.
+- A new **Auto** permission mode (`toolPermissions.mode: auto`, shown in the picker as **Auto (harness judges each request)**) turns on each harness's own safety judge: Claude Code's auto mode, Copilot's assisted approval, Codex's auto review, Qwen's auto approval mode and Antigravity's auto agent mode. Denied tools stay blocked, and allowed tools are pre-approved without limiting what else runs. OpenCode, interactive Copilot and harness versions too old for their judge run with Custom permissions instead and show a warning. On Codex, Auto can be wider than Custom, because the reviewer may approve escalations out of the sandbox.
 
 ### Changed
 
-- The permission picker offers **Auto (harness judges each request)**. In Auto, both tool lists remain editable: the deny list blocks requests and the allow list pre-approves matching requests without limiting others. Unsupported harnesses show the analyzer's per-harness custom-fallback warning.
 - When the dashboard is open in a browser whose timezone differs from the machine running ctrlyoke, such as a hosted dashboard on a server set to UTC, the Schedule view and the Scheduled section show times in the host's timezone and name it. The Schedule view also says which timezone its times are in.
 
 ### Fixed

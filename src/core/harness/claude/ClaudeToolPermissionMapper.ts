@@ -14,7 +14,6 @@ import {
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
 import { normalizeClaudeMcpServerId } from "../../../utils/ToolPermissionUtils";
-import { versionSatisfies } from "../../../utils/HarnessVersion";
 import * as path from "path";
 import {
   HARNESS_IDS,
@@ -113,21 +112,14 @@ export class ClaudeToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.CLAUDE_CLI,
+      CLAUDE_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
     const isAuto = config.mode === PERMISSION_MODES.AUTO;
-    const supportsAuto =
-      !!context.cliVersion &&
-      versionSatisfies(context.cliVersion, CLAUDE_AUTO_MODE_MIN_VERSION);
-    const fallback =
-      isAuto && !supportsAuto
-        ? this.getAutoModeFallback(config, HARNESS_IDS.CLAUDE_CLI)
-        : undefined;
-    if (fallback) {
-      const application = await this.prepare(fallback.config, context);
-      return {
-        ...application,
-        diagnostics: [fallback.diagnostic, ...application.diagnostics],
-      };
-    }
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }

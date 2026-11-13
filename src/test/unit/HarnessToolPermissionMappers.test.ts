@@ -1314,6 +1314,38 @@ suite("HarnessToolPermissionMappers", () => {
         ]);
       });
 
+      test("auto with empty lists passes no empty list values", async () => {
+        const interactive = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.AUTO, [], []),
+          { cliVersion: "0.27.2", isInteractive: true }
+        );
+        assert.deepStrictEqual(interactive, ["--approval-mode", "auto"]);
+        const headless = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.AUTO, [], []),
+          { cliVersion: "0.27.2", isInteractive: false }
+        );
+        assert.deepStrictEqual(headless, [
+          "--approval-mode",
+          "auto",
+          "--allowed-tools",
+          "ShellTool",
+        ]);
+      });
+
+      test("auto falls back to custom below its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+          { cliVersion: "0.27.1", isInteractive: false }
+        );
+        assert.strictEqual(result.cliArgs[1], "default");
+        assert.strictEqual(
+          result.diagnostics[0].code,
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+        );
+      });
+
       test("custom with no tools → --approval-mode default only", async () => {
         const args = await mapperArgs(
           mapper,

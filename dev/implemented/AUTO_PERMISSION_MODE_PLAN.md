@@ -1,7 +1,7 @@
 # `auto` Tool Permission Mode Plan
 
-**Status:** Proposed 2026-11-12, after the 0.7.0 agy fix
-(`bc60bcbff`, `dev/bugs/implemented/antigravity-auto-mode-runs-unlisted-chained-command.md`).
+**Status:** Implemented 2026-11-13 (proposed 2026-11-12, after the 0.7.0 agy fix
+(`bc60bcbff`, `dev/bugs/implemented/antigravity-auto-mode-runs-unlisted-chained-command.md`)).
 
 ## Goal
 
@@ -201,8 +201,8 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
        description, `schema:update`, and `permissionModeAppliesToolList`. Added `autoMode`
        capability diagnostics and safe custom fallbacks for all harnesses; covered them with unit
        tests and regenerated compatibility docs.
-2. Mappers: add an `auto` branch to each `*ToolPermissionMapper.prepare`, with a shared helper
-   in `ToolPermissionMapperBase` for the "unsupported → custom + diagnostic" fallback.
+2. [x] Mappers: add an `auto` branch to each `*ToolPermissionMapper.prepare`, with a shared helper
+       in `ToolPermissionMapperBase` for the "unsupported → custom + diagnostic" fallback.
    - Version gates come from `PermissionContext.cliVersion`. The agy adapter already passes it;
      do the same in any adapter whose gate needs it.
    - [x] Claude: `>=2.1.170`; tested the first accepting release with `npx` and confirmed
@@ -225,7 +225,7 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
      and `SchemaUiMetadata.ts`.
    - In the drawer or picker, show a per-harness "falls back to custom" hint, reusing the
      compatibility-diagnostic display that `allowedTools` warnings already use.
-4. Unit tests (`src/test/unit/HarnessToolPermissionMappers.test.ts`):
+4. [x] Unit tests (`src/test/unit/HarnessToolPermissionMappers.test.ts`):
    - Exact args per harness, headless and interactive.
    - The agy settings body under `auto` at `1.5.6` (fallback) and `1.5.7`.
    - The Qwen headless bare `ShellTool`.
@@ -252,17 +252,34 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
    `permissions.autoMode` evidence now points at this suite (`INLINE_CONFIG_SUITE_REFERENCE`,
    `OTHER_SUITE_CLAIMS`).
 
-6. Docs:
+6. [x] Docs:
    - Update the permissions guide page: the mode list, the per-harness table, the Codex
      escalation caveat, the Claude model eligibility, and Copilot interactive being
      unsupported.
-   - Add a short "using a harness's auto mode before ctrlyoke 0.8" note with the `none` +
+   - Add a short "using a harness's auto mode on ctrlyoke 0.7.1 or earlier" note with the `none` +
      additionalArgs recipe from the table above.
-7. `CHANGELOG.md` under `## [Unreleased]` → **Added**.
-8. Instruction file: replace the agy 1.5.7 sentence in `harness-adapters.instructions.md` with
-   the general rule. Under every judge the allow list stops limiting and the deny list still
-   applies, so `custom` must pin each harness out of its auto mode, and `auto` is the only
-   mode that may enter it.
+7. [x] `CHANGELOG.md` under `## [Unreleased]` → **Added**.
+8. [x] Instruction file: replace the agy 1.5.7 sentence in `harness-adapters.instructions.md` with
+       the general rule. Under every judge the allow list stops limiting and the deny list still
+       applies, so `custom` must pin each harness out of its auto mode, and `auto` is the only
+       mode that may enter it.
+
+## Review (orchestrator, 2026-11-13)
+
+- The fallback block that each mapper had copied became one base-class helper,
+  `ToolPermissionMapperBase.prepareAutoModeFallback`. It reads the `autoMode` declaration,
+  including its per-execution-mode `modeOverrides`, plus an optional version gate.
+- Copilot's "headless only" support is now an `interactive` `modeOverrides` entry, not
+  `partial` fidelity. The analyzer applies the same override, so an interactive Copilot `auto`
+  step is warned about at authoring time and a headless one no longer gets a wrong fallback
+  warning. The interactive remediation text lives in the caveat message, not in a string
+  hardcoded in the mapper.
+- Qwen `auto` with empty lists no longer passes empty `--allowed-tools`/`--exclude-tools`
+  values. Auto now shares custom's list code, and only the approval mode differs.
+- Open: `dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md`. Copilot's judge
+  refuses commands asked for in ctrlyoke's prompt file. The docs say so, and the claim stays in
+  `KNOWN_BROKEN_CLAIMS`. Also open: `dev/bugs/backlog/qwen-headless-approval-request-hangs.md`,
+  a `custom` bug that existed before this work.
 
 ## Open questions
 

@@ -11,7 +11,6 @@ import {
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
-import { versionSatisfies } from "../../../utils/HarnessVersion";
 import {
   CAPABILITY_VERIFICATION_BASES,
   CAPABILITY_VERIFICATION_KINDS,
@@ -32,15 +31,21 @@ const COPILOT_AUTO_MODE_BUG =
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
-    fidelity: "partial",
-    mechanism: "translated-cli",
+    fidelity: "exact",
+    mechanism: "native",
     verification: {
       kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
       reference: COPILOT_AUTO_MODE_BUG,
       basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
       verifiedVersions: [COPILOT_AUTO_MODE_MIN_VERSION],
     },
-    caveatCode: PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY,
+    modeOverrides: {
+      interactive: {
+        fidelity: "unsupported",
+        mechanism: "none",
+        caveatCode: PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY,
+      },
+    },
   },
   mode: {
     fidelity: "exact",
@@ -140,29 +145,16 @@ export class CopilotToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    // Interactive sessions fall back through the declaration's interactive
+    // override (no per-run flag; the env var refuses interactive starts).
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.COPILOT_CLI,
+      COPILOT_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
     const isAuto = config.mode === PERMISSION_MODES.AUTO;
-    const supportsAuto =
-      !!context.cliVersion &&
-      versionSatisfies(context.cliVersion, COPILOT_AUTO_MODE_MIN_VERSION);
-    const fallback =
-      isAuto && (!supportsAuto || context.isInteractive)
-        ? this.getAutoModeFallback(config, HARNESS_IDS.COPILOT_CLI)
-        : undefined;
-    if (fallback) {
-      const application = await this.prepare(fallback.config, context);
-      return {
-        ...application,
-        diagnostics: [
-          {
-            ...fallback.diagnostic,
-            message: context.isInteractive
-              ? 'Copilot auto permission mode is headless only; use /permissions assisted or set defaultPermissionMode: "assisted" in ~/.copilot/settings.json for interactive sessions'
-              : fallback.diagnostic.message,
-          },
-          ...application.diagnostics,
-        ],
-      };
-    }
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }

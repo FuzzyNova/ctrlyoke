@@ -247,23 +247,20 @@ export class AntigravityToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const supportsAuto =
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      ANTIGRAVITY_AGENT_MODE_SETTING_RANGE
+    );
+    if (fallback) return fallback;
+    // The same gate decides whether `agentMode` may be written at all.
+    const supportsAgentMode =
       !!context.cliVersion &&
       versionSatisfies(
         context.cliVersion,
         ANTIGRAVITY_AGENT_MODE_SETTING_RANGE
       );
-    const fallback =
-      config.mode === PERMISSION_MODES.AUTO && !supportsAuto
-        ? this.getAutoModeFallback(config, HARNESS_IDS.ANTIGRAVITY_CLI)
-        : undefined;
-    if (fallback) {
-      const application = await this.prepare(fallback.config, context);
-      return {
-        ...application,
-        diagnostics: [fallback.diagnostic, ...application.diagnostics],
-      };
-    }
     const cliArgs: string[] = [];
     const diagnostics = this.getToolTranslationDiagnostics(
       config,
@@ -342,7 +339,7 @@ export class AntigravityToolPermissionMapper
         };
         if (config.mode === PERMISSION_MODES.AUTO) {
           settings.agentMode = "auto";
-        } else if (supportsAuto) {
+        } else if (supportsAgentMode) {
           settings.agentMode = ANTIGRAVITY_DEFAULT_AGENT_MODE;
         }
         if (Object.keys(permissions).length) settings.permissions = permissions;

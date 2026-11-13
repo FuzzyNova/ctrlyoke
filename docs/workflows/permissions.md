@@ -61,12 +61,18 @@ For CI, see [Tool permissions on CI](/cli/ci#tool-permissions).
 
 Claude Auto is available on Opus 4.6+, Sonnet 4.6+, Haiku 5.5 and Fable
 models on the Anthropic API; eligibility is stricter on Bedrock, Google's Agent
-Platform and Foundry. Copilot Auto is headless only. Interactive Copilot falls
-back to Custom because its per-run assisted flag is unsupported there; enable
-it in Copilot with `/permissions assisted` (or
-`defaultPermissionMode: "assisted"` in its settings).
+Platform and Foundry. With any other model Claude refuses every request the
+allow list doesn't cover, without reporting an error.
 
-#### Using a harness's Auto mode before ctrlyoke 0.8
+Copilot Auto is headless only. Interactive Copilot falls back to Custom because
+its per-run assisted flag is unsupported there; enable it in Copilot with
+`/permissions assisted` (or `defaultPermissionMode: "assisted"` in its
+settings). Copilot's judge also often refuses commands the step's prompt asks
+for, because ctrlyoke passes the prompt as a file reference and the judge does
+not count the file's contents as your request. Until that is fixed, put
+commands a Copilot Auto step must run in its allow list.
+
+#### Using a harness's Auto mode on ctrlyoke 0.7.1 or earlier
 
 Set `mode: none` and add the harness flag through `additionalArgs`:
 

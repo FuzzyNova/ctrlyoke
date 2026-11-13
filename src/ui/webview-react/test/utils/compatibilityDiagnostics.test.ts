@@ -52,7 +52,10 @@ describe("diagnosticsForPermissions", () => {
 
     expect(diagnosticsForPermissions([diagnostic])).toEqual([diagnostic]);
     expect(
-      diagnosticsForPermissionField([diagnostic], PERMISSION_CAPABILITY_KEYS.MODE)
+      diagnosticsForPermissionField(
+        [diagnostic],
+        PERMISSION_CAPABILITY_KEYS.MODE
+      )
     ).toEqual([diagnostic]);
   });
 });

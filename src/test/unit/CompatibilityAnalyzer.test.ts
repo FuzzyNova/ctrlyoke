@@ -23,6 +23,7 @@ import {
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityCaveatMessage,
+  PERMISSION_CAVEAT_CODES,
   type HarnessCapabilityRegistrySnapshot,
   type InstalledHarnessCapabilities,
 } from "../../types/CompatibilityTypes";
@@ -251,6 +252,60 @@ suite("CompatibilityAnalyzer", () => {
           COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
       )
     );
+  });
+
+  test("applies the autoMode override for the step's execution mode", () => {
+    const base = installed(HARNESS_IDS.COPILOT_CLI, true, "exact", "verified");
+    const capabilities = snapshot({
+      [HARNESS_IDS.COPILOT_CLI]: {
+        ...base,
+        descriptor: {
+          ...base.descriptor,
+          permissions: {
+            ...base.descriptor!.permissions!,
+            autoMode: {
+              ...base.descriptor!.permissions!.autoMode,
+              modeOverrides: {
+                interactive: {
+                  fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+                  mechanism: "none",
+                  caveatCode:
+                    PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const fallbackFor = (executionMode: "interactive" | "headless") => {
+      const workflow = mixedWorkflow({
+        harness: HARNESS_IDS.COPILOT_CLI,
+        executionMode,
+        steps: [{ prompt: "Auto target" }],
+        toolPermissions: { mode: "auto", allowedTools: [], deniedTools: [] },
+      });
+      return analyzeCompatibility({
+        workflow,
+        executionTargets: enumerateCompatibilityTargets(
+          workflow,
+          (prompt, file) =>
+            resolveExecutionProperties(prompt, file, {
+              defaults,
+              hostCanProvidePty: true,
+            })
+        ),
+        capabilities,
+      }).find(
+        (item) =>
+          item.code ===
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+      );
+    };
+    const interactive = fallbackFor("interactive");
+    assert.ok(interactive, "interactive Copilot auto falls back");
+    assert.match(interactive.message, /\/permissions assisted/);
+    assert.strictEqual(fallbackFor("headless"), undefined);
   });
 
   test("diagnoses explicit sandbox requests by harness support", () => {

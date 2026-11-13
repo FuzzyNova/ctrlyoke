@@ -7,7 +7,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
-import { versionSatisfies } from "../../../utils/HarnessVersion";
+
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
@@ -20,7 +20,11 @@ const QWEN_PERMISSION_VERIFICATION = {
   basis: "cli-version",
   verifiedVersions: [">=0.15.5"],
 } as const;
+// The installed release used for the live probe; earlier releases were not
+// established, so older Qwen falls back to custom.
 const QWEN_AUTO_MODE_MIN_VERSION = ">=0.27.2";
+/** Qwen's shell tool name, as an allow/deny specifier. */
+const QWEN_SHELL_TOOL = "ShellTool";
 
 const QWEN_PERMISSION_TOOL_NAMES = {
   DELETE: "delete",
@@ -110,22 +114,15 @@ export class QwenToolPermissionMapper
    */
   async prepare(
     config: ToolPermissionConfig,
-    _context: PermissionContext
+    context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const supportsAuto =
-      !!_context.cliVersion &&
-      versionSatisfies(_context.cliVersion, QWEN_AUTO_MODE_MIN_VERSION);
-    const fallback =
-      config.mode === PERMISSION_MODES.AUTO && !supportsAuto
-        ? this.getAutoModeFallback(config, HARNESS_IDS.QWEN_CLI)
-        : undefined;
-    if (fallback) {
-      const application = await this.prepare(fallback.config, _context);
-      return {
-        ...application,
-        diagnostics: [fallback.diagnostic, ...application.diagnostics],
-      };
-    }
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.QWEN_CLI,
+      QWEN_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }
@@ -166,42 +163,34 @@ export class QwenToolPermissionMapper
           );
         }
       }
-    } else if (config.mode === PERMISSION_MODES.AUTO) {
-      args.push("--approval-mode", "auto");
-      const allowed = this.convertCtrlYokePatternsToQwenTools(
+    } else {
+      // Custom and auto share the allow/deny lists; only the approval mode
+      // differs. Under auto the allow list pre-approves without limiting.
+      const isAuto = config.mode === PERMISSION_MODES.AUTO;
+      args.push("--approval-mode", isAuto ? "auto" : "default");
+      Log.debug(
+        `[QwenToolPermissionMapper] Qwen ${isAuto ? "auto" : "default"} approval mode (${config.mode})`
+      );
+
+      const allowedArgs = this.convertCtrlYokePatternsToQwenTools(
         config.allowedTools,
         () => lossyPatterns.push({ capability: "allowedTools" }),
         { allowList: true }
       );
-      if (_context.isInteractive === false && !allowed.includes("ShellTool")) {
-        allowed.push("ShellTool");
+      // Headless auto, like headless default, drops the shell tool from the
+      // session unless an allow rule names it bare; the judge still engages.
+      if (
+        isAuto &&
+        context.isInteractive === false &&
+        !allowedArgs.includes(QWEN_SHELL_TOOL)
+      ) {
+        allowedArgs.push(QWEN_SHELL_TOOL);
       }
-      args.push("--allowed-tools", allowed.join(","));
-      const denied = this.convertCtrlYokePatternsToQwenTools(
-        config.deniedTools,
-        () => lossyPatterns.push({ capability: "deniedTools" })
-      );
-      args.push("--exclude-tools", denied.join(","));
-    } else {
-      // Custom mode - use default approval with allow/deny lists
-      args.push("--approval-mode", "default");
-      Log.debug(
-        "[QwenToolPermissionMapper] Qwen default approval mode (custom)"
-      );
-
-      // Add allowed tools if specified
-      if (config.allowedTools.length > 0) {
-        const allowedArgs = this.convertCtrlYokePatternsToQwenTools(
-          config.allowedTools,
-          () => lossyPatterns.push({ capability: "allowedTools" }),
-          { allowList: true }
+      if (allowedArgs.length > 0) {
+        args.push("--allowed-tools", allowedArgs.join(","));
+        Log.debug(
+          `[QwenToolPermissionMapper] Qwen allowed tools: ${allowedArgs.join(", ")}`
         );
-        if (allowedArgs.length > 0) {
-          args.push("--allowed-tools", allowedArgs.join(","));
-          Log.debug(
-            `[QwenToolPermissionMapper] Qwen allowed tools: ${allowedArgs.join(", ")}`
-          );
-        }
       }
 
       // Add denied tools if specified (takes precedence over allowed)
@@ -313,7 +302,7 @@ export class QwenToolPermissionMapper
         normalizedToolName === TOOL_PERMISSION_CATEGORIES.BASH ||
         normalizedToolName === "run_shell_command"
       ) {
-        qwenTools.add(this.buildQwenShellSpec("ShellTool", toolArgs));
+        qwenTools.add(this.buildQwenShellSpec(QWEN_SHELL_TOOL, toolArgs));
       } else if (isWrite) {
         qwenTools.add("WriteFile");
       } else if (normalizedToolName === TOOL_PERMISSION_CATEGORIES.READ) {

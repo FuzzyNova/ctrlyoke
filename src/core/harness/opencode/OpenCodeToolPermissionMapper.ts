@@ -158,16 +158,14 @@ export class OpenCodeToolPermissionMapper
   /** Prepare OpenCode's process-local permission policy. */
   async prepare(
     config: ToolPermissionConfig,
-    _context: PermissionContext
+    context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.OPENCODE_CLI);
-    if (fallback) {
-      const application = await this.prepare(fallback.config, _context);
-      return {
-        ...application,
-        diagnostics: [fallback.diagnostic, ...application.diagnostics],
-      };
-    }
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.OPENCODE_CLI
+    );
+    if (fallback) return fallback;
     if (
       config.mode === PERMISSION_MODES.CUSTOM &&
       (config.allowedTools.length > 0 || config.deniedTools.length > 0)

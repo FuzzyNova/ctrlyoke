@@ -344,9 +344,9 @@ export function getCompatibilityCaveatMessage(
     case PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY:
       return "because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns";
     case PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY:
-      return "because Copilot assisted approval is available only in headless sessions";
+      return 'because Copilot assisted approval is available only in headless sessions; for interactive sessions use /permissions assisted, or set defaultPermissionMode: "assisted" in ~/.copilot/settings.json';
     case PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED:
-      return "because ctrlyoke has not enabled the harness's auto permission mechanism yet";
+      return "because this harness has no judged approval mode";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case HOOK_CAVEAT_CODES.NO_NATIVE_EVENT:
@@ -422,7 +422,9 @@ export function getCompatibilityDiagnosticMessage(
         `Permission mode is not supported by the ${harness} harness`
       );
     case COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK:
-      return `Auto permission mode is not supported by ${harness}; ran with custom tool permissions`;
+      return withCaveat(
+        `Auto permission mode is not supported by ${harness}; ran with custom tool permissions`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
       return withCaveat(
         `Permission mode is only partially translated by the ${harness} harness`

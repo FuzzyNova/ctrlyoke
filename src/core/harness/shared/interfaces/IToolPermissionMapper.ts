@@ -1,6 +1,9 @@
 import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  EXECUTION_MODES,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
   permissionModeAppliesToolList,
@@ -8,9 +11,10 @@ import {
 } from "../../../../types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
+  HarnessVersionRange,
   PermissionCapabilityDescriptor,
 } from "../../../../types/CompatibilityTypes";
-
+import { versionSatisfies } from "../../../../utils/HarnessVersion";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
@@ -21,8 +25,6 @@ import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTy
 import type { McpServerConfig } from "../../../../types/CtrlYokeTypes";
 import { isShippedDefaultToolList } from "../../../../types/CtrlYokeSettings";
 import type { PreparedMutation } from "./PreparedMutation";
-
-const EXACT_PERMISSION_FIDELITY = "exact" as const;
 
 export type { PreparedMutation } from "./PreparedMutation";
 
@@ -139,42 +141,63 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
     context: PermissionContext
   ): Promise<ToolPermissionApplication>;
 
-  /** Route the not-yet-implemented auto mode through this mapper's custom path. */
-  protected getAutoModeFallback(
+  /**
+   * Prepare `auto` as `custom` plus a fallback warning when this launch can't
+   * enter the harness's judged mode: the declaration (or its override for the
+   * launch's execution mode) is `unsupported`, or the CLI is older than
+   * `minVersion` or its version is unknown. Returns `undefined` when the mode
+   * isn't `auto` or the harness can run it, so the caller maps it natively.
+   * Never falls back to `allowAll`: `custom` refuses or asks about anything
+   * the allow list doesn't cover.
+   */
+  protected async prepareAutoModeFallback(
     config: ToolPermissionConfig,
-    harnessId: HarnessId
-  ):
-    | { config: ToolPermissionConfig; diagnostic: CompatibilityDiagnostic }
-    | undefined {
+    context: PermissionContext,
+    harnessId: HarnessId,
+    minVersion?: HarnessVersionRange
+  ): Promise<ToolPermissionApplication | undefined> {
     if (config.mode !== PERMISSION_MODES.AUTO) return undefined;
     const declaration = this.capabilities.autoMode;
-    // A runtime gate can require fallback even when the harness supports auto
-    // on newer versions, so this diagnostic is unconditional once requested.
+    const override =
+      declaration.modeOverrides?.[
+        context.isInteractive
+          ? EXECUTION_MODES.INTERACTIVE
+          : EXECUTION_MODES.HEADLESS
+      ];
+    const declaredSupported =
+      (override?.fidelity ?? declaration.fidelity) !==
+      CAPABILITY_FIDELITIES.UNSUPPORTED;
+    const versionSupported =
+      minVersion === undefined ||
+      (!!context.cliVersion &&
+        versionSatisfies(context.cliVersion, minVersion));
+    if (declaredSupported && versionSupported) return undefined;
+
     const code = COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK;
-    return {
-      config: { ...config, mode: PERMISSION_MODES.CUSTOM },
-      diagnostic: {
-        code,
-        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+    const caveatCode = override?.caveatCode ?? declaration.caveatCode;
+    const diagnostic: CompatibilityDiagnostic = {
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      harnessId,
+      capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+      state: {
+        fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+        mechanism: CAPABILITY_MECHANISMS.NONE,
+        verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+      },
+      message: getCompatibilityDiagnosticMessage(code, {
         harnessId,
         capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
-        state: {
-          fidelity:
-            declaration.fidelity === EXACT_PERMISSION_FIDELITY
-              ? "unsupported"
-              : declaration.fidelity,
-          mechanism:
-            declaration.fidelity === EXACT_PERMISSION_FIDELITY
-              ? "none"
-              : declaration.mechanism,
-          verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
-        },
-        message: getCompatibilityDiagnosticMessage(code, {
-          harnessId,
-          capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
-          caveatCode: declaration.caveatCode,
-        }),
-      },
+        caveatCode: declaredSupported ? undefined : caveatCode,
+      }),
+    };
+    const application = await this.prepare(
+      { ...config, mode: PERMISSION_MODES.CUSTOM },
+      context
+    );
+    return {
+      ...application,
+      diagnostics: [diagnostic, ...application.diagnostics],
     };
   }
 

@@ -17,7 +17,6 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtils";
-import { versionSatisfies } from "../../../utils/HarnessVersion";
 
 const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.129.0",
@@ -92,20 +91,13 @@ export class CodexToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const supportsAuto =
-      !!context.cliVersion &&
-      versionSatisfies(context.cliVersion, CODEX_AUTO_MODE_MIN_VERSION);
-    const fallback =
-      config.mode === PERMISSION_MODES.AUTO && !supportsAuto
-        ? this.getAutoModeFallback(config, HARNESS_IDS.CODEX_CLI)
-        : undefined;
-    if (fallback) {
-      const application = await this.prepare(fallback.config, context);
-      return {
-        ...application,
-        diagnostics: [fallback.diagnostic, ...application.diagnostics],
-      };
-    }
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.CODEX_CLI,
+      CODEX_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
     return {
       cliArgs: this.buildCodexSpecificArgs(config, context.isInteractive),
       // CodexHarnessAdapter folds MCP tool denials into the attached servers'
