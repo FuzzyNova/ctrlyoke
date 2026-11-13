@@ -31,6 +31,18 @@ const QWEN_PERMISSION_TOOL_NAMES = {
   QWEN_WEB_FETCH: "WebFetch",
 } as const;
 
+/** ctrlyoke tool names that map to Qwen's `WriteFile`. */
+const QWEN_WRITE_TOOL_ALIASES: ReadonlySet<string> = new Set([
+  TOOL_PERMISSION_CATEGORIES.WRITE,
+  "create",
+]);
+
+/** ctrlyoke tool names that map to Qwen's `Edit`. */
+const QWEN_EDIT_TOOL_ALIASES: ReadonlySet<string> = new Set([
+  TOOL_PERMISSION_CATEGORIES.EDIT,
+  "str_replace",
+]);
+
 const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {
     fidelity: "exact",
@@ -242,15 +254,12 @@ export class QwenToolPermissionMapper
 
       const [toolName, toolArgs] = parsed;
       const normalizedToolName = toolName.toLowerCase();
-      const isFileWrite =
-        normalizedToolName === TOOL_PERMISSION_CATEGORIES.WRITE ||
-        normalizedToolName === "create" ||
-        normalizedToolName === TOOL_PERMISSION_CATEGORIES.EDIT ||
-        normalizedToolName === "str_replace";
+      const isWrite = QWEN_WRITE_TOOL_ALIASES.has(normalizedToolName);
+      const isEdit = QWEN_EDIT_TOOL_ALIASES.has(normalizedToolName);
       const pathTarget = toolArgs.replace(/^\(|\)$/g, "").trim();
 
       if (
-        isFileWrite &&
+        (isWrite || isEdit) &&
         options.allowList &&
         pathTarget &&
         pathTarget !== "*"
@@ -265,17 +274,11 @@ export class QwenToolPermissionMapper
         normalizedToolName === "run_shell_command"
       ) {
         qwenTools.add(this.buildQwenShellSpec("ShellTool", toolArgs));
-      } else if (
-        normalizedToolName === TOOL_PERMISSION_CATEGORIES.WRITE ||
-        normalizedToolName === "create"
-      ) {
+      } else if (isWrite) {
         qwenTools.add("WriteFile");
       } else if (normalizedToolName === TOOL_PERMISSION_CATEGORIES.READ) {
         qwenTools.add("Read");
-      } else if (
-        normalizedToolName === TOOL_PERMISSION_CATEGORIES.EDIT ||
-        normalizedToolName === "str_replace"
-      ) {
+      } else if (isEdit) {
         qwenTools.add("Edit");
       } else if (
         normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.DELETE ||
