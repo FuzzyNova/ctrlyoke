@@ -568,10 +568,11 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     if (config === null) {
       return { cliArgs: [], diagnostics: [] };
     }
-    const application = await this.toolPermissionMapper.prepare(
-      config,
-      context
-    );
+    // The mapper picks version-specific settings keys (agy 1.5.7's agentMode).
+    const application = await this.toolPermissionMapper.prepare(config, {
+      ...context,
+      cliVersion: context.cliVersion ?? (await this.getVersion()),
+    });
     for (const mutation of application.mutations ?? []) {
       if (mutation.path) this.permissionSettingsPaths.add(mutation.path);
     }

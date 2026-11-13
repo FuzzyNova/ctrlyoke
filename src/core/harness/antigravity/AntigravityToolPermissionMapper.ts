@@ -25,6 +25,7 @@ import { normalizeAntigravityMcpServerId } from "../../../utils/ToolPermissionUt
 import { hasCliFlag } from "../../../utils/CliArgParser";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import { escapeRegExp } from "../../../utils/TextUtils";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
 import { getAntigravitySettingsPath } from "../shared/StatuslineManager";
 
 const ANTIGRAVITY_RULE_LIST_KINDS = {
@@ -68,6 +69,17 @@ const READ_ONLY_LIST_TOOLS = new Set([
   "lsp",
 ]);
 const SHELL_ALLOW_TAIL = "(?:[ \\t][^;&|`$()<>\\r\\n]*)?";
+
+/**
+ * agy 1.5.7 starts every session in its `auto` agent mode, which approves any
+ * command it judges safe even when no allow rule matches it (it ran
+ * `echo x && node …` under an `echo`-only allow). `agentMode: ""` selects the
+ * old default mode, where unmatched commands are refused headless and asked
+ * about interactively. Older versions reject unknown settings keys, so the key
+ * is only written from 1.5.7 on.
+ */
+const ANTIGRAVITY_AGENT_MODE_SETTING_RANGE = ">=1.5.7";
+const ANTIGRAVITY_DEFAULT_AGENT_MODE = "";
 
 /** Only a trailing `:*` is the prefix marker; any other colon is command text. */
 const SHELL_PREFIX_MARKER = /^([\s\S]*?)\s*:\s*\*\s*$/;
@@ -296,6 +308,14 @@ export class AntigravityToolPermissionMapper
               ? "always-proceed"
               : "request-review",
         };
+        if (
+          context.cliVersion &&
+          versionSatisfies(
+            context.cliVersion,
+            ANTIGRAVITY_AGENT_MODE_SETTING_RANGE
+          )
+        )
+          settings.agentMode = ANTIGRAVITY_DEFAULT_AGENT_MODE;
         if (Object.keys(permissions).length) settings.permissions = permissions;
         const settingsPath = path.join(
           context.workspaceRoot,

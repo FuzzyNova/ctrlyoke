@@ -533,7 +533,33 @@ suite("HarnessToolPermissionMappers", () => {
         assert.strictEqual(settings.toolPermission, "request-review");
         assert.deepStrictEqual(settings.permissions.allow, ["write_file(*)"]);
         assert.deepStrictEqual(settings.permissions.deny, ["command(*)"]);
+        assert.strictEqual("agentMode" in settings, false);
       });
+
+      // agy 1.5.7 defaults to `auto` mode, which runs unmatched commands;
+      // older versions reject the agentMode key outright.
+      for (const [cliVersion, expected] of [
+        ["1.5.6", undefined],
+        ["1.5.7", ""],
+        ["1.6.0", ""],
+      ] as const) {
+        test(`agy ${cliVersion} ${expected === undefined ? "omits" : "pins"} the default agent mode`, async () => {
+          for (const mode of [
+            PERMISSION_MODES.CUSTOM,
+            PERMISSION_MODES.ALLOW_ALL,
+          ]) {
+            const application = await mapper.prepare(cfg(mode, ["shell"]), {
+              workspaceRoot,
+              environment,
+              cliVersion,
+            });
+            const settings = JSON.parse(
+              application.mutations![0].intendedContent!
+            ) as Record<string, unknown>;
+            assert.strictEqual(settings.agentMode, expected, mode);
+          }
+        });
+      }
 
       test("unions global user rules and omits empty lists", async () => {
         const home = await fs.mkdtemp(

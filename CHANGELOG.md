@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Antigravity 1.5.7, `custom` and `allowAll` tool permissions limit commands again. agy 1.5.7 starts in its new `auto` mode, which runs any command it judges safe even when no allow rule matches it, so a command chained to an allowed one (`echo x && node …` under `shell(echo:*)`) ran. ctrlyoke now starts agy in its default mode.
 - Dashboard file references now use the shared quoting rules, so paths with colons and top-level filenames remain intact.
 - CLI file edit diffs now skip patch metadata, deduplicate structured hunks, and normalize mixed line endings.
 - Undo/redo no longer loses a "No turn started" status.
