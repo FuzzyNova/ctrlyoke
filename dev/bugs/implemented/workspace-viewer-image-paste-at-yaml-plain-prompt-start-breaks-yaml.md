@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli), from code reading; reproduced with the repo's `yaml` parser
 - **Area:** `src/ui/webview-react/utils/pastedImages.ts` (`pasteImagesAsReferences`), `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx` (`canPasteImagesAtSelection`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

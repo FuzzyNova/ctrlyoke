@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pasting an image at the start of a plain YAML prompt in the workspace viewer keeps the workflow valid.
 - Legacy PWA push subscriptions are matched to their project when the hosted dashboard opens, and Push notifications are documented as project-scoped.
 - Fork PR branches without remote-tracking refs are classified as PR worktrees and cannot be included in two-way Sync.
 - Continuing a named-directory run preserves its recorded comparison base instead of relabeling it with the run-start commit.

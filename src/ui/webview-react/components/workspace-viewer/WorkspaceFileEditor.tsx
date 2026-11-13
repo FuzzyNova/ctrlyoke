@@ -90,6 +90,7 @@ import {
   openContextReferenceLink,
 } from "@components/editor/CodeMirrorEditor";
 import type { WorkflowTextSpan } from "@root/completions/WorkflowTextDecoding";
+import { prepareYamlPromptImageInsertion } from "@utils/workflowYamlImagePaste";
 import {
   ATOMIC_REFERENCE_KINDS,
   CODEMIRROR_LANGUAGE_IDS,
@@ -387,7 +388,20 @@ export const WorkspaceFileEditor = forwardRef<
               workflowPromptRangesFieldRef.current
             )
               ? (images) =>
-                  pasteImagesAsReferences(view, images, getVsCodeApi())
+                  pasteImagesAsReferences(
+                    view,
+                    images,
+                    getVsCodeApi(),
+                    (from, to) => {
+                      const field = workflowPromptRangesFieldRef.current;
+                      prepareYamlPromptImageInsertion(
+                        view,
+                        field ? view.state.field(field, false) ?? [] : [],
+                        from,
+                        to
+                      );
+                    }
+                  )
               : undefined,
           });
         },
@@ -871,7 +885,14 @@ function createPromptImagePasteExtension(
       const images = clipboardEventImages(event);
       if (images.length === 0) return false;
       event.preventDefault();
-      pasteImagesAsReferences(view, images, getVsCodeApi());
+      pasteImagesAsReferences(view, images, getVsCodeApi(), (from, to) =>
+        prepareYamlPromptImageInsertion(
+          view,
+          view.state.field(field, false) ?? [],
+          from,
+          to
+        )
+      );
       return true;
     },
   });

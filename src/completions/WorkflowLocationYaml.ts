@@ -682,7 +682,8 @@ export function getYamlTextSpans(
         const isTextField = getTextRole(objectKind, field) === role;
         const pushSpan = (
           { sourceRange, decoded }: ReturnType<typeof decodePlainRange>,
-          parsedValue?: string
+          parsedValue?: string,
+          scalarStyle: YamlScalarStyle = YAML_SCALAR_STYLES.BLOCK
         ) =>
           spans.push(
             createTextSpan(
@@ -693,6 +694,7 @@ export function getYamlTextSpans(
                 objectKind,
                 role,
                 sourceRange,
+                scalarStyle,
               },
               decoded,
               parsedValue
@@ -700,7 +702,7 @@ export function getYamlTextSpans(
           );
         if (isTextField && isScalar(value) && typeof value.value === "string") {
           const decoded = decodeScalar(text, value);
-          if (decoded) pushSpan(decoded, value.value);
+          if (decoded) pushSpan(decoded, value.value, scalarStyleOf(value));
           continue;
         }
         const compactRange = isTextField
