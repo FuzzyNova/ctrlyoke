@@ -110,6 +110,12 @@ function includeEmptyPromptNameClear(
   return [...clearProperties, "name"];
 }
 
+/**
+ * Whether this webview document has already restored the persisted draft.
+ * Module scope, not a ref: it must outlive StepEditor remounts.
+ */
+let persistedDraftRestored = false;
+
 function ignoreBulkEditorChange(_value: string): void {
   // The read-only bulk editor displays an empty document without changing the
   // single-step draft that will be restored when the selection clears.
@@ -403,14 +409,20 @@ export const StepEditor: React.FC<StepEditorProps> = ({
 
   const { affUri, dicUri } = getDictionaryUris();
 
-  // Restore editor state from VS Code persistent storage on mount
+  // Restore the persisted new-step draft once per webview document. The editor
+  // unmounts while collapsed, and by the time it remounts the store already
+  // holds the live draft (e.g. a Reply to Step started from the collapsed
+  // state), which the older persisted copy would otherwise overwrite.
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
-      // Only restore if in new prompt mode (not editing an existing prompt)
-      if (selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      if (
+        !persistedDraftRestored &&
+        selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
+      ) {
         restoreFromVsCodeState(vscode);
       }
+      persistedDraftRestored = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount

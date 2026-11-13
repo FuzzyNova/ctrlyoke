@@ -65,6 +65,7 @@ import {
   FINAL_STEP_PHASES,
   EXECUTION_STATES,
   STEP_STATUS,
+  EDITOR_TARGET_KINDS,
 } from "@/types/messages";
 import {
   HARNESS_IDS,
@@ -129,6 +130,56 @@ describe("StepEditor accessibility names", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Queue$/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Run$/ })).toBeInTheDocument();
+  });
+});
+
+describe("StepEditor persisted draft restore", () => {
+  it("keeps a reply started while collapsed when the editor remounts", () => {
+    const vscodeApi = window.vscodeApi as unknown as {
+      getState: ReturnType<typeof vi.fn>;
+    };
+    const originalGetState = vscodeApi.getState;
+    // The collapsed editor never saved the reply, so the persisted draft is
+    // older than the live store.
+    vscodeApi.getState = vi.fn(() => ({
+      editorState: {
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+        selectedPromptIndex: null,
+        promptText: "",
+        replyContext: null,
+        properties: {},
+      },
+    }));
+    try {
+      const firstMount = render(<StepEditor />);
+      firstMount.unmount(); // collapse
+
+      act(() => {
+        useEditorStore.getState().startReplyToStep({
+          properties: {
+            ...useEditorStore.getState().properties,
+            harness: HARNESS_IDS.CLAUDE_CLI,
+            resumeSession: true,
+            sessionId: "session-final",
+          },
+          sessionId: "session-final",
+          harness: HARNESS_IDS.CLAUDE_CLI,
+          sourceLabel: "Final step",
+        });
+      });
+
+      render(<StepEditor />); // expand
+
+      const state = useEditorStore.getState();
+      expect(state.replyContext).toMatchObject({
+        sessionId: "session-final",
+        sourceLabel: "Final step",
+      });
+      expect(state.properties.sessionId).toBe("session-final");
+      expect(state.properties.resumeSession).toBe(true);
+    } finally {
+      vscodeApi.getState = originalGetState;
+    }
   });
 });
 

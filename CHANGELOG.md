@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Reply to Step** works again when the editor is collapsed. The editor used to expand without the reply's session and settings, because reopening it restored an older saved draft over the reply.
+
 ## [0.7.0] - 2026-11-12
 
 ### Added
