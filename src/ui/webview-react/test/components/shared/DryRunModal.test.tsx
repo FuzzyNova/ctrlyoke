@@ -213,6 +213,8 @@ function makeCapabilitySnapshot(): HarnessCapabilityRegistrySnapshot {
         harnessId,
         permissions: {
           mode: declaration,
+
+          autoMode: declaration,
           allowedTools: declaration,
           deniedTools: declaration,
         },
@@ -220,6 +222,8 @@ function makeCapabilitySnapshot(): HarnessCapabilityRegistrySnapshot {
       effective: {
         permissions: {
           mode: exactState,
+
+          autoMode: exactState,
           allowedTools: exactState,
           deniedTools: exactState,
         },

@@ -135,6 +135,13 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
       color: "text-warning-fg",
     },
   },
+  [PERMISSION_MODES.AUTO]: {
+    value: PERMISSION_MODES.AUTO,
+    label: "Auto",
+    short: "auto",
+    alias: { reason: "Auto delegates permission decisions to the harness." },
+    visual: { codicon: "shield", color: "text-warning-fg" },
+  },
   [PERMISSION_MODES.CUSTOM]: {
     value: PERMISSION_MODES.CUSTOM,
     label: "Custom",

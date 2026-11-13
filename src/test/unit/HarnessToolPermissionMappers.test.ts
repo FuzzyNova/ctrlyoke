@@ -1581,6 +1581,39 @@ suite("HarnessToolPermissionMappers", () => {
       }
     });
 
+    test("auto falls back to each mapper's custom application with one warning", async () => {
+      for (const [name, mapper] of Object.entries(mappers)) {
+        const custom = await mapper.prepare(cfg(PERMISSION_MODES.CUSTOM), {});
+        const automatic = await mapper.prepare(cfg(PERMISSION_MODES.AUTO), {});
+        assert.deepStrictEqual(automatic.cliArgs, custom.cliArgs, name);
+        assert.deepStrictEqual(automatic.mutations, custom.mutations, name);
+        assert.deepStrictEqual(
+          automatic.diagnostics.slice(1),
+          custom.diagnostics,
+          name
+        );
+        assert.strictEqual(
+          automatic.diagnostics.length,
+          custom.diagnostics.length + 1,
+          name
+        );
+        assert.strictEqual(
+          automatic.diagnostics[0].code,
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK,
+          name
+        );
+        assert.match(
+          automatic.diagnostics[0].message,
+          /not supported by .+; ran with custom tool permissions/
+        );
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.AUTO)),
+          false,
+          name
+        );
+      }
+    });
+
     test("all mappers return boolean from hasFullPermissions", async () => {
       for (const [name, mapper] of Object.entries(mappers)) {
         const result = mapper.hasFullPermissions(

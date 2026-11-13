@@ -186,8 +186,10 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
 
 ## Implementation steps
 
-1. Constants and schema: `PERMISSION_MODES.AUTO`, both schema enums, `schema:update`, and
-   `permissionModeAppliesToolList`.
+1. [x] Constants and schema: `PERMISSION_MODES.AUTO`, the workflow schema enum and settings
+       description, `schema:update`, and `permissionModeAppliesToolList`. Added `autoMode`
+       capability diagnostics and safe custom fallbacks for all harnesses; covered them with unit
+       tests and regenerated compatibility docs.
 2. Mappers: add an `auto` branch to each `*ToolPermissionMapper.prepare`, with a shared helper
    in `ToolPermissionMapperBase` for the "unsupported → custom + diagnostic" fallback.
    - Version gates come from `PermissionContext.cliVersion`. The agy adapter already passes it;

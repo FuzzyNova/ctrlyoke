@@ -90,6 +90,7 @@ function installed(
       harnessId,
       permissions: {
         mode: createDeclaration(permissionState),
+        autoMode: createDeclaration(permissionState),
         allowedTools: createDeclaration(permissionState),
         deniedTools: createDeclaration(permissionState),
       },
@@ -102,6 +103,7 @@ function installed(
     effective: {
       permissions: {
         mode: permissionState,
+        autoMode: permissionState,
         allowedTools: permissionState,
         deniedTools: permissionState,
       },

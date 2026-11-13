@@ -6,6 +6,7 @@ import {
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
+  PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
@@ -20,6 +21,12 @@ const COPILOT_PERMISSION_VERIFICATION = capabilitySuiteVerification([
 ]);
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "unsupported",
+    mechanism: "none",
+    verification: COPILOT_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+  },
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -118,6 +125,14 @@ export class CopilotToolPermissionMapper
     config: ToolPermissionConfig,
     _context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.COPILOT_CLI);
+    if (fallback) {
+      const application = await this.prepare(fallback.config, _context);
+      return {
+        ...application,
+        diagnostics: [fallback.diagnostic, ...application.diagnostics],
+      };
+    }
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }

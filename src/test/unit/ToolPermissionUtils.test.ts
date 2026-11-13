@@ -1,6 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  PERMISSION_CAPABILITY_KEYS,
+  PERMISSION_MODES,
+  permissionModeAppliesToolList,
+} from "../../types/DashboardConstants";
 import type { ToolPermissionConfig } from "../../types/ExecutionPropertyTypes";
 import {
   isToolPermissionConfigNoWiderThan,
@@ -16,6 +20,23 @@ function config(
 }
 
 suite("ToolPermissionUtils", () => {
+  test("auto applies allow and deny lists as pre-approval and blocking rules", () => {
+    assert.strictEqual(
+      permissionModeAppliesToolList(
+        PERMISSION_MODES.AUTO,
+        PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+      ),
+      true
+    );
+    assert.strictEqual(
+      permissionModeAppliesToolList(
+        PERMISSION_MODES.AUTO,
+        PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+      ),
+      true
+    );
+  });
+
   test("normalizes Antigravity MCP server ids without changing safe ids", () => {
     assert.strictEqual(
       normalizeAntigravityMcpServerId("opencode.probe server"),
@@ -28,6 +49,47 @@ suite("ToolPermissionUtils", () => {
   });
 
   suite("isToolPermissionConfigNoWiderThan", () => {
+    test("orders auto between custom and allowAll", () => {
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.AUTO),
+          config(PERMISSION_MODES.CUSTOM)
+        ),
+        false
+      );
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.CUSTOM),
+          config(PERMISSION_MODES.AUTO)
+        ),
+        true
+      );
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.AUTO),
+          config(PERMISSION_MODES.ALLOW_ALL)
+        ),
+        true
+      );
+    });
+
+    test("compares pre-approved tools between auto configurations", () => {
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.AUTO, ["write"]),
+          config(PERMISSION_MODES.AUTO, ["write", "shell"])
+        ),
+        true
+      );
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.AUTO, ["shell"]),
+          config(PERMISSION_MODES.AUTO, ["write"])
+        ),
+        false
+      );
+    });
+
     test("orders managed modes custom < allowAll < dangerouslyAllowAll", () => {
       const custom = config(PERMISSION_MODES.CUSTOM);
       const allowAll = config(PERMISSION_MODES.ALLOW_ALL);

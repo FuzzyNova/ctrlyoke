@@ -136,6 +136,41 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
     context: PermissionContext
   ): Promise<ToolPermissionApplication>;
 
+  /** Route the not-yet-implemented auto mode through this mapper's custom path. */
+  protected getAutoModeFallback(
+    config: ToolPermissionConfig,
+    harnessId: HarnessId
+  ):
+    | { config: ToolPermissionConfig; diagnostic: CompatibilityDiagnostic }
+    | undefined {
+    if (config.mode !== PERMISSION_MODES.AUTO) return undefined;
+    const declaration = this.capabilities.autoMode;
+    const code = getPermissionFidelityDiagnosticCode(
+      PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+      declaration.fidelity,
+      declaration.caveatCode
+    )!;
+    return {
+      config: { ...config, mode: PERMISSION_MODES.CUSTOM },
+      diagnostic: {
+        code,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId,
+        capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+        state: {
+          fidelity: declaration.fidelity,
+          mechanism: declaration.mechanism,
+          verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+        },
+        message: getCompatibilityDiagnosticMessage(code, {
+          harnessId,
+          capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+          caveatCode: declaration.caveatCode,
+        }),
+      },
+    };
+  }
+
   /**
    * Produce runtime diagnostics when a configured tool list is not represented
    * by the mapper's declared capability. Version verification remains owned by

@@ -153,8 +153,9 @@ export function foldMcpToolDenialsIntoServers(
 /** Breadth of each managed mode; `none` defers to the harness and has no rank. */
 const PERMISSION_MODE_BREADTH: Partial<Record<PermissionMode, number>> = {
   [PERMISSION_MODES.CUSTOM]: 0,
-  [PERMISSION_MODES.ALLOW_ALL]: 1,
-  [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: 2,
+  [PERMISSION_MODES.AUTO]: 1,
+  [PERMISSION_MODES.ALLOW_ALL]: 2,
+  [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: 3,
 };
 
 /** `null` and mode `none` both pass no flags, leaving the harness's own config. */
@@ -201,12 +202,12 @@ export function isToolPermissionConfigNoWiderThan(
   ).every((pattern) => candidateDenied.has(pattern));
   if (!keepsBaselineDenials) return false;
 
-  // A custom allow-list only widens anything against another custom list;
-  // against allowAll it is already a subset.
-  if (
-    candidateConfig.mode !== PERMISSION_MODES.CUSTOM ||
-    baselineConfig.mode !== PERMISSION_MODES.CUSTOM
-  ) {
+  // A custom allow-list only narrows execution against another custom list.
+  if (!(
+    candidateConfig.mode === baselineConfig.mode &&
+    (candidateConfig.mode === PERMISSION_MODES.CUSTOM ||
+      candidateConfig.mode === PERMISSION_MODES.AUTO)
+  )) {
     return true;
   }
   const baselineAllowed = new Set(baselineConfig.allowedTools);

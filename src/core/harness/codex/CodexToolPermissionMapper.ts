@@ -22,6 +22,12 @@ const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
 ]);
 
 export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "unsupported",
+    mechanism: "none",
+    verification: CODEX_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+  },
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -80,6 +86,14 @@ export class CodexToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.CODEX_CLI);
+    if (fallback) {
+      const application = await this.prepare(fallback.config, context);
+      return {
+        ...application,
+        diagnostics: [fallback.diagnostic, ...application.diagnostics],
+      };
+    }
     return {
       cliArgs: this.buildCodexSpecificArgs(config, context.isInteractive),
       // CodexHarnessAdapter folds MCP tool denials into the attached servers'

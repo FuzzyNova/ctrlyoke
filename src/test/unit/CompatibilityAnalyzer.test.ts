@@ -75,6 +75,7 @@ function installed(
       harnessId,
       permissions: {
         mode: declaration,
+        autoMode: declaration,
         allowedTools: declaration,
         deniedTools: declaration,
       },
@@ -86,6 +87,7 @@ function installed(
     effective: {
       permissions: {
         mode: state,
+        autoMode: state,
         allowedTools: state,
         deniedTools: state,
       },
@@ -184,6 +186,73 @@ function mixedWorkflow(overrides: Partial<PromptFile> = {}): PromptFile {
 }
 
 suite("CompatibilityAnalyzer", () => {
+  test("uses autoMode capability only for auto permissions", () => {
+    const base = installed(HARNESS_IDS.OPENCODE_CLI, true, "exact", "verified");
+    const unsupported = {
+      fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+      mechanism: "none" as const,
+      verification: "verified" as const,
+    };
+    const capabilities = snapshot({
+      [HARNESS_IDS.OPENCODE_CLI]: {
+        ...base,
+        descriptor: {
+          ...base.descriptor,
+          permissions: {
+            ...base.descriptor!.permissions!,
+            autoMode: {
+              fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+              mechanism: "none",
+              verification: {
+                kind: "manual",
+                reference: "test",
+                basis: "cli-version",
+                verifiedVersions: ["1"],
+              },
+            },
+          },
+        },
+        effective: {
+          ...base.effective,
+          permissions: {
+            ...base.effective!.permissions!,
+            autoMode: unsupported,
+          },
+        },
+      },
+    });
+    const diagnostics = analyze(
+      mixedWorkflow({
+        harness: HARNESS_IDS.OPENCODE_CLI,
+        steps: [{ prompt: "Auto target" }],
+        toolPermissions: { mode: "auto", allowedTools: [], deniedTools: [] },
+      }),
+      capabilities
+    );
+    assert.ok(
+      diagnostics.some(
+        (item) =>
+          item.code ===
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+      )
+    );
+    const customDiagnostics = analyze(
+      mixedWorkflow({
+        harness: HARNESS_IDS.OPENCODE_CLI,
+        steps: [{ prompt: "Custom target" }],
+        toolPermissions: { mode: "custom", allowedTools: [], deniedTools: [] },
+      }),
+      capabilities
+    );
+    assert.ok(
+      !customDiagnostics.some(
+        (item) =>
+          item.code ===
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+      )
+    );
+  });
+
   test("diagnoses explicit sandbox requests by harness support", () => {
     const unsupported = [
       HARNESS_IDS.COPILOT_CLI,
@@ -400,6 +469,12 @@ suite("CompatibilityAnalyzer", () => {
           effective: {
             permissions: {
               mode: {
+                fidelity: "exact",
+                mechanism: "native",
+                verification: "verified",
+              },
+
+              autoMode: {
                 fidelity: "exact",
                 mechanism: "native",
                 verification: "verified",
@@ -711,6 +786,12 @@ suite("CompatibilityAnalyzer", () => {
           effective: {
             permissions: {
               mode: {
+                fidelity: "exact",
+                mechanism: "native",
+                verification: "verified",
+              },
+
+              autoMode: {
                 fidelity: "exact",
                 mechanism: "native",
                 verification: "verified",
@@ -1137,6 +1218,12 @@ suite("CompatibilityAnalyzer", () => {
                 mechanism: "native",
                 verification: "unknown",
               },
+
+              autoMode: {
+                fidelity: "exact",
+                mechanism: "native",
+                verification: "unknown",
+              },
               allowedTools: {
                 fidelity: "unsupported",
                 mechanism: "none",
@@ -1206,6 +1293,12 @@ suite("CompatibilityAnalyzer", () => {
           effective: {
             permissions: {
               mode: {
+                fidelity: "exact",
+                mechanism: "native",
+                verification: "verified",
+              },
+
+              autoMode: {
                 fidelity: "exact",
                 mechanism: "native",
                 verification: "verified",

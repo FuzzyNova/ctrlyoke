@@ -2357,6 +2357,7 @@ export const SANDBOX_CAPABILITY_KEYS = {
 
 export const PERMISSION_CAPABILITY_KEYS = {
   MODE: "mode",
+  AUTO_MODE: "autoMode",
   ALLOWED_TOOLS: "allowedTools",
   DENIED_TOOLS: "deniedTools",
 } as const;
@@ -5060,6 +5061,7 @@ export type ExternalExecutionWatchAction =
 export const PERMISSION_MODES = {
   DANGEROUSLY_ALLOW_ALL: "dangerouslyAllowAll",
   ALLOW_ALL: "allowAll",
+  AUTO: "auto",
   CUSTOM: "custom",
   NONE: "none",
 } as const;
@@ -5074,7 +5076,8 @@ export function isPermissionMode(value: unknown): value is PermissionMode {
 /**
  * Whether a permission mode passes the given tool list to the harness.
  * `allowAll` already grants every tool, so only `custom` applies the allow
- * list; the deny list applies in both `allowAll` and `custom`. Diagnostics
+ * list as a limit. In `auto`, the allow list pre-approves tools but does not
+ * limit what runs. The deny list applies in `allowAll`, `custom` and `auto`. Diagnostics
  * about a list the mode ignores would describe a rule that never runs.
  */
 export function permissionModeAppliesToolList(
@@ -5084,8 +5087,10 @@ export function permissionModeAppliesToolList(
     | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
 ): boolean {
   return list === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
-    ? mode === PERMISSION_MODES.CUSTOM
-    : mode === PERMISSION_MODES.ALLOW_ALL || mode === PERMISSION_MODES.CUSTOM;
+    ? mode === PERMISSION_MODES.CUSTOM || mode === PERMISSION_MODES.AUTO
+    : mode === PERMISSION_MODES.ALLOW_ALL ||
+        mode === PERMISSION_MODES.CUSTOM ||
+        mode === PERMISSION_MODES.AUTO;
 }
 
 // ============================================================================

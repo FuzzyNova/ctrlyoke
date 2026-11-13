@@ -25,6 +25,12 @@ const CLAUDE_PERMISSION_VERIFICATION = capabilitySuiteVerification([
 ]);
 
 const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "unsupported",
+    mechanism: "none",
+    verification: CLAUDE_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+  },
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -100,6 +106,14 @@ export class ClaudeToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.CLAUDE_CLI);
+    if (fallback) {
+      const application = await this.prepare(fallback.config, context);
+      return {
+        ...application,
+        diagnostics: [fallback.diagnostic, ...application.diagnostics],
+      };
+    }
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }

@@ -5,7 +5,10 @@ import {
   ToolPermissionConfig,
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
-import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
+import {
+  PERMISSION_CAVEAT_CODES,
+  type PermissionCapabilityDescriptor,
+} from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import {
   HARNESS_IDS,
@@ -44,6 +47,12 @@ const QWEN_EDIT_TOOL_ALIASES: ReadonlySet<string> = new Set([
 ]);
 
 const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "unsupported",
+    mechanism: "none",
+    verification: QWEN_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+  },
   mode: {
     fidelity: "exact",
     mechanism: "translated-cli",
@@ -102,6 +111,14 @@ export class QwenToolPermissionMapper
     config: ToolPermissionConfig,
     _context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.QWEN_CLI);
+    if (fallback) {
+      const application = await this.prepare(fallback.config, _context);
+      return {
+        ...application,
+        diagnostics: [fallback.diagnostic, ...application.diagnostics],
+      };
+    }
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }

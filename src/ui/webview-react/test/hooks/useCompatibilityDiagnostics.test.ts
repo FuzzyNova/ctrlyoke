@@ -39,6 +39,8 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
         harnessId,
         permissions: {
           mode: declaration,
+
+          autoMode: declaration,
           allowedTools: declaration,
           deniedTools: declaration,
         },
@@ -48,6 +50,8 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
       effective: {
         permissions: {
           mode: state,
+
+          autoMode: state,
           allowedTools: state,
           deniedTools: state,
         },
@@ -249,6 +253,12 @@ describe("useCompatibilityDiagnostics", () => {
         mechanism: "native",
         verification: "verified",
       },
+
+      autoMode: {
+        fidelity: "exact",
+        mechanism: "native",
+        verification: "verified",
+      },
       allowedTools: {
         fidelity: "exact",
         mechanism: "native",
@@ -297,6 +307,12 @@ describe("useCompatibilityDiagnostics", () => {
     };
     snapshot.harnesses[HARNESS_IDS.ANTIGRAVITY_CLI].effective!.permissions = {
       mode: {
+        fidelity: "exact",
+        mechanism: "native",
+        verification: "verified",
+      },
+
+      autoMode: {
         fidelity: "exact",
         mechanism: "native",
         verification: "verified",

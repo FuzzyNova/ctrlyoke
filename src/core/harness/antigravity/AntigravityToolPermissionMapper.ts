@@ -138,6 +138,12 @@ const ANTIGRAVITY_PERMISSION_VERIFICATION = capabilitySuiteVerification([
 
 export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor =
   {
+    autoMode: {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
+      caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+    },
     mode: {
       fidelity: "exact",
       mechanism: "translated-cli",
@@ -238,6 +244,17 @@ export class AntigravityToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = this.getAutoModeFallback(
+      config,
+      HARNESS_IDS.ANTIGRAVITY_CLI
+    );
+    if (fallback) {
+      const application = await this.prepare(fallback.config, context);
+      return {
+        ...application,
+        diagnostics: [fallback.diagnostic, ...application.diagnostics],
+      };
+    }
     const cliArgs: string[] = [];
     const diagnostics = this.getToolTranslationDiagnostics(
       config,
