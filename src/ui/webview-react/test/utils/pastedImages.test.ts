@@ -101,7 +101,6 @@ describe("pasteImagesAsReferences", () => {
       "prompt: |\n  Fix the bug\n",
     ]) {
       const valueStart = source.indexOf("Fix");
-      const atStart = source.startsWith("prompt: Fix");
       const view = createView(source, valueStart + 1);
       const before = view.state.doc.toString();
       const spans = getYamlTextSpans(source, WORKFLOW_LOCATION_ROLES.PROMPT_TEXT);
@@ -111,7 +110,7 @@ describe("pasteImagesAsReferences", () => {
         view.state.selection.main.from,
         view.state.selection.main.to
       );
-      if (!atStart) expect(view.state.doc.toString()).toBe(before);
+      expect(view.state.doc.toString()).toBe(before);
     }
   });
 
