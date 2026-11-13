@@ -3319,6 +3319,23 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("refuses two-way sync for a PR branch without a tracking ref", async () => {
+    const { parent, repository } = await makeRepository("sync-pr-unresolved");
+    execFileSync("git", ["-C", repository, "branch", "feature/pr-unresolved"]);
+    execFileSync("git", ["-C", repository, "config", "branch.feature/pr-unresolved.remote", "https://github.com/fork/repo.git"]);
+    execFileSync("git", ["-C", repository, "config", "branch.feature/pr-unresolved.merge", "refs/heads/feature"]);
+    const instance = manager(parent);
+    const info = await resolve(instance, repository, "feature/pr-unresolved");
+    await info.lease.release();
+    await assert.rejects(
+      instance.syncNamedWorktree({
+        sourceCheckoutRoot: repository,
+        worktreePath: info.worktreePath,
+      }),
+      /Cannot sync PR branch.*Use Update from/
+    );
+  });
+
   test("updates a named worktree from source without changing the source branch", async () => {
     const { parent, repository } = await makeRepository("update-from-source");
     const instance = manager(parent);

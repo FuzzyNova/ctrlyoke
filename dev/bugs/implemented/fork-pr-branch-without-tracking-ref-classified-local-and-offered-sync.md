@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), Git behavior reproduced in a scratch repo
 - **Area:** `src/utils/GitUtils.ts` (`getBranchUpstreamStatus`), `src/utils/WorktreeComparison.ts` (`classifyWorktreeComparison`), `src/core/orchestration/WorktreeManager.ts` (`syncNamedWorktree`, worktree listing)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

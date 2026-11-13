@@ -26,6 +26,7 @@ import {
   gitPath,
   getAheadBehind,
   getBranchUpstream,
+  getBranchUpstreamStatus,
   isCommitAncestor,
   getBlobBytes,
   GitBlobTooLargeError,
@@ -46,6 +47,7 @@ import {
   GIT_FAILURE_MESSAGE_MAX_CHARS,
   type GitLocationLookup,
 } from "../../utils/GitUtils";
+import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
 
 suite("GitUtils.countGitWorkingTreeChanges", function () {
   test("splits porcelain entries into posh-git staged, unstaged and conflict counts", () => {
@@ -796,6 +798,27 @@ suite("GitUtils worktree plumbing", function () {
       await isCommitAncestor(workspaceRoot, "base", "feature"),
       true
     );
+  });
+
+  test("classifies configured upstreams without tracking refs as PR branches", async () => {
+    for (const [branch, remote, merge, expected] of [
+      ["pr-url", "https://github.com/fork/repo.git", "refs/heads/feature", "https://github.com/fork/repo.git/feature"],
+      ["pr-ref", "origin", "refs/pull/2/head", "origin/refs/pull/2/head"],
+    ]) {
+      runGit(["branch", branch]);
+      runGit(["config", `branch.${branch}.remote`, remote]);
+      runGit(["config", `branch.${branch}.merge`, merge]);
+      const upstream = await getBranchUpstreamStatus(workspaceRoot, branch);
+      assert.deepStrictEqual(upstream, {
+        label: expected,
+        gone: false,
+        resolvable: false,
+      });
+      assert.strictEqual(
+        classifyWorktreeComparison({ upstream, sourceBranch: "main" }),
+        "pr"
+      );
+    }
   });
 });
 

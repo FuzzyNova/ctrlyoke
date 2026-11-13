@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fork PR branches without remote-tracking refs are classified as PR worktrees and cannot be included in two-way Sync.
 - Continuing a named-directory run preserves its recorded comparison base instead of relabeling it with the run-start commit.
 - Bare named-worktree directories and completions no longer match the repository's main checkout.
 - Cron schedules no longer return a past occurrence or spin the scheduler during the repeated fall-back hour.
