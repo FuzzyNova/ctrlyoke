@@ -71,6 +71,7 @@ export const SCHEMA_FIELD_META = {
 export interface SchemaOptionMeta<V extends string> {
   value: V;
   label: string;
+  description?: string;
   alias?: { reason: string };
   visual?: {
     codicon: string;
@@ -93,6 +94,7 @@ export function toSelectOptions<
   return Object.values(meta).map((option) => ({
     value: option.value,
     label: option.label,
+    ...(option.description ? { description: option.description } : {}),
     ...(option.short ? { short: option.short } : {}),
     ...(option.variant !== undefined &&
     SCHEMA_VARIANT_DESCRIPTIONS[path]?.[option.variant]
@@ -137,8 +139,10 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
   },
   [PERMISSION_MODES.AUTO]: {
     value: PERMISSION_MODES.AUTO,
-    label: "Auto",
+    label: "Auto (harness judges each request)",
     short: "auto",
+    description:
+      "The harness's safety judge approves or blocks each request. The deny list always blocks; the allow list pre-approves tools without limiting what runs.",
     alias: { reason: "Auto delegates permission decisions to the harness." },
     visual: { codicon: "shield", color: "text-warning-fg" },
   },

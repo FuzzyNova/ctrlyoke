@@ -65,6 +65,7 @@ import {
   FieldDiagnostic,
   CompatibilitySummary,
   buildPermissionsDefaultLabel,
+  permissionModeAllowsAllowedTools,
   ErrorBehaviorEditor,
   SecretGrantsEditor,
   ScriptConditionEditor,
@@ -1485,7 +1486,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                     displayedProperties.toolPermissions === undefined;
                   const allowedDisabled =
                     isInheriting ||
-                    effectivePermMode !== PERMISSION_MODES.CUSTOM ||
+                    !permissionModeAllowsAllowedTools(effectivePermMode) ||
                     fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
                     harnessScopedOptionsDisabled;
                   const deniedDisabled =

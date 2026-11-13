@@ -209,7 +209,7 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
      were not established, so the gate stays at the verified release.
    - [x] agy: `>=1.5.7` (reuse `ANTIGRAVITY_AGENT_MODE_SETTING_RANGE`); direct probe on
      installed 1.5.8 ran the unlisted benign chained command and refused the denied `rm`.
-3. UI:
+3. [x] UI:
    - Add an `auto` option and description to `PermissionsQuickPicker.tsx`, `permissionUtils.ts`
      and `SchemaUiMetadata.ts`.
    - In the drawer or picker, show a per-harness "falls back to custom" hint, reusing the

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The permission picker offers **Auto (harness judges each request)**. In Auto, both tool lists remain editable: the deny list blocks requests and the allow list pre-approves matching requests without limiting others. Unsupported harnesses show the analyzer's per-harness custom-fallback warning.
 - When the dashboard is open in a browser whose timezone differs from the machine running ctrlyoke, such as a hosted dashboard on a server set to UTC, the Schedule view and the Scheduled section show times in the host's timezone and name it. The Schedule view also says which timezone its times are in.
 
 ### Fixed
