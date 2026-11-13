@@ -654,7 +654,7 @@ suite("WorktreeManager", function () {
     assert.ok(!localBranchExists(repository, "research"));
   });
 
-  test("does not re-run setup after a named directory switch", async () => {
+  test("runs setup once per run across a named directory switch", async () => {
     const { parent, repository } = await makeRepository("checkout-setup");
     const counter = path.join(parent, "setup-count.txt");
     const setup = `node -e "require('fs').appendFileSync(${JSON.stringify(
@@ -668,12 +668,21 @@ suite("WorktreeManager", function () {
     await first.lease.release();
     const second = await resolve(manager(parent), repository, "feature/two", {
       directory: "bug-fix",
+      runRef: "run-2" as RunRef,
       setup,
     });
     assert.strictEqual(second.worktreePath, first.worktreePath);
     assert.strictEqual(currentBranchOf(second.worktreePath), "feature/two");
-    assert.strictEqual(await fs.readFile(counter, "utf8"), "x");
+    assert.strictEqual(await fs.readFile(counter, "utf8"), "xx");
     await second.lease.release();
+    // Resuming the same run in the switched directory keeps its setup.
+    const resumed = await resolve(manager(parent), repository, "feature/two", {
+      directory: "bug-fix",
+      runRef: "run-2" as RunRef,
+      setup,
+    });
+    assert.strictEqual(await fs.readFile(counter, "utf8"), "xx");
+    await resumed.lease.release();
   });
 
   test("attaches an existing local branch", async () => {
@@ -1451,7 +1460,31 @@ suite("WorktreeManager", function () {
     await retried.lease.release();
   });
 
-  test("does not re-run a recorded succeeded setup", async () => {
+  test("re-runs a succeeded setup at the start of a new run", async () => {
+    const { parent, repository } = await makeRepository("setup-new-run");
+    const instance = manager(parent);
+    const first = await resolve(instance, repository, "feature/new-run", {
+      setup: `node -e "require('fs').writeFileSync('setup-marker.txt', 'first')"`,
+    });
+    await first.lease.release();
+
+    const second = await resolve(instance, repository, "feature/new-run", {
+      runRef: "run-2" as RunRef,
+      setup: `node -e "require('fs').writeFileSync('setup-marker.txt', 'second')"`,
+    });
+    assert.strictEqual(second.origin, "discovered");
+    assert.strictEqual(second.setupOutcome, "succeeded");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(second.worktreePath, "setup-marker.txt"),
+        "utf8"
+      ),
+      "second"
+    );
+    await second.lease.release();
+  });
+
+  test("does not re-run a succeeded setup when the same run resumes", async () => {
     const { parent, repository } = await makeRepository("setup-succeeded");
     const instance = manager(parent);
     const first = await resolve(instance, repository, "feature/succeeded", {

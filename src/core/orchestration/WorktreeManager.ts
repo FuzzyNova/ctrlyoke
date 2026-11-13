@@ -183,6 +183,13 @@ export interface NamedWorktreeSetupRecord {
   schemaVersion: typeof NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION;
   worktreePath: string;
   setupOutcome: NamedWorktreeSetupOutcome;
+  /**
+   * The run this outcome belongs to. Setup runs again for any other run, so
+   * only a resume or continuation of the same run skips a succeeded setup.
+   * Absent in records written before setup ran per run.
+   */
+  workflowKey?: WorkflowKey;
+  runRef?: RunRef;
   updatedAt: number;
 }
 
@@ -463,7 +470,10 @@ export interface ResolveNamedWorktreeOptions {
   instanceId?: string;
   /** Authored/default selection to retain on the execution workspace. */
   worktree?: WorktreeResolution;
-  /** Managed setup is automatically attempted for each newly created or recreated checkout. */
+  /**
+   * Managed setup is automatically attempted for each newly created or
+   * recreated checkout; named setup runs once at the start of every run.
+   */
   setup?: string;
   /** Workflow vars are exported as CTRLYOKE_VAR_* by the shared runner. */
   vars?: Record<string, string>;
@@ -2825,23 +2835,34 @@ export class WorktreeManager {
       throw error;
     }
 
-    // A checkout this call created is unprovisioned by definition, so it must
-    // run setup even when a record survives from a previous checkout at the
-    // same path: named worktree paths are derived deterministically from the
-    // branch, so removing and recreating one reuses the earlier record's key.
+    // A named worktree outlives its runs, and pulls or merges between them
+    // change what setup (typically `npm ci`) installs, so setup runs at the
+    // start of every run. Only a resume or continuation of the run whose setup
+    // already succeeded skips it. A checkout this call created is unprovisioned
+    // by definition, so it runs setup even when a record survives from a
+    // previous checkout at the same path: named worktree paths are derived
+    // deterministically from the branch, so removing and recreating one reuses
+    // the earlier record's key.
+    const setupSucceededForThisRun =
+      namedSetupRecord?.setupOutcome === WORKTREE_SETUP_OUTCOMES.SUCCEEDED &&
+      namedSetupRecord.workflowKey === options.workflowKey &&
+      namedSetupRecord.runRef === options.runRef;
     const shouldRunSetup =
       Boolean(options.setup?.trim()) &&
-      (origin === WORKTREE_ORIGINS.CREATED ||
-        namedSetupRecord?.setupOutcome !== WORKTREE_SETUP_OUTCOMES.SUCCEEDED);
+      (origin === WORKTREE_ORIGINS.CREATED || !setupSucceededForThisRun);
     let setupOutcome: WorktreeInfo["setupOutcome"] = options.setup?.trim()
       ? namedSetupRecord?.setupOutcome
       : undefined;
+    const writeSetupRecord = (outcome: NamedWorktreeSetupOutcome) =>
+      this.writeNamedSetupRecord(namedSetupRecordPath, {
+        worktreePath: executionCheckoutRoot,
+        setupOutcome: outcome,
+        workflowKey: options.workflowKey,
+        runRef: options.runRef,
+      });
     if (shouldRunSetup) {
       setupOutcome = "pending";
-      await this.writeNamedSetupRecord(namedSetupRecordPath, {
-        worktreePath: executionCheckoutRoot,
-        setupOutcome,
-      });
+      await writeSetupRecord(setupOutcome);
       await this.persistRuntime({
         lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
         directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
@@ -2851,10 +2872,7 @@ export class WorktreeManager {
       });
       try {
         setupOutcome = "running";
-        await this.writeNamedSetupRecord(namedSetupRecordPath, {
-          worktreePath: executionCheckoutRoot,
-          setupOutcome,
-        });
+        await writeSetupRecord(setupOutcome);
         await this.persistRuntime({
           lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
           directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
@@ -2871,16 +2889,10 @@ export class WorktreeManager {
           options.reportUnresolvedVariables
         );
         setupOutcome = "succeeded";
-        await this.writeNamedSetupRecord(namedSetupRecordPath, {
-          worktreePath: executionCheckoutRoot,
-          setupOutcome,
-        });
+        await writeSetupRecord(setupOutcome);
       } catch (error) {
         setupOutcome = "failed";
-        await this.writeNamedSetupRecord(namedSetupRecordPath, {
-          worktreePath: executionCheckoutRoot,
-          setupOutcome,
-        });
+        await writeSetupRecord(setupOutcome);
         await this.persistRuntime({
           lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
           directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
@@ -3102,7 +3114,7 @@ export class WorktreeManager {
 
   private async writeNamedSetupRecord(
     recordPath: string,
-    record: Pick<NamedWorktreeSetupRecord, "worktreePath" | "setupOutcome">
+    record: Omit<NamedWorktreeSetupRecord, "schemaVersion" | "updatedAt">
   ): Promise<void> {
     await this.writeRecord(recordPath, {
       schemaVersion: NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION,

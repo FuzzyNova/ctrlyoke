@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A named worktree's `setup` command now runs at the start of every run, not only when ctrlyoke creates the worktree, so a dependency change pulled or merged into the branch since the last run is installed before the first step. Resuming or continuing a run whose setup already succeeded doesn't run it again. Omit `setup` if you don't want it to run. Managed worktrees are unchanged.
 - When the dashboard is open in a browser whose timezone differs from the machine running ctrlyoke, such as a hosted dashboard on a server set to UTC, the Schedule view and the Scheduled section show times in the host's timezone and name it. The Schedule view also says which timezone its times are in.
 
 ### Fixed

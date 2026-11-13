@@ -122,7 +122,7 @@ worktree:
   mode: named
   branch: feature/search-filters
   base: main # used only when the branch doesn't exist yet
-  setup: npm ci # runs only when ctrlyoke creates the worktree
+  setup: npm ci # runs at the start of every run
 steps:
   - prompt: Add a date-range filter to the search page.
 ```
@@ -153,7 +153,7 @@ worktree:
   directory: bug-fix # a directory name, or an absolute/~-prefixed path
   branch: fix-race-condition # branch for this run
   base: origin/main # used only if the branch does not exist yet
-  setup: npm ci # runs once per directory
+  setup: npm ci # runs at the start of every run
 steps:
   - prompt: Fix the race condition and add a regression test.
 ```
@@ -183,17 +183,17 @@ or discards them. After committing (and pushing, if needed), run again. To
 keep work on several branches uncommitted, use a separate directory for each
 branch.
 
-`setup` runs once per directory, not once per branch, and does not run again
-after a branch switch. A continued run uses the branch recorded by that run,
+`setup` runs at the start of every run, whichever branch the directory holds.
+A continued run uses the branch recorded by that run,
 even if the workflow's current defaults have changed. ctrlyoke leaves the
 directory on the selected branch when the run ends; it never switches back or
 pushes. Commit and push the branch yourself when it is ready for review.
 
 ## Setup commands
 
-`setup` runs once, in the new worktree's root, right after ctrlyoke creates it.
-Use it to install dependencies or generate files that are ignored by Git and so
-missing from a fresh checkout:
+`setup` runs in the worktree's root before the first step. Use it to install
+dependencies or generate files that are ignored by Git and so missing from a
+fresh checkout:
 
 ```yaml
 worktree:
@@ -210,8 +210,12 @@ steps:
 - <code v-pre>{{name}}</code> [variables](/workflows/variables) are substituted
   into the command.
 - The `execution.scriptTimeoutSec` setting limits how long it may run.
-- A setup that already succeeded for a worktree is not run again. A managed
-  worktree whose directory is recreated runs it again.
+- A managed worktree runs setup once, right after ctrlyoke creates it, and
+  again whenever its directory is recreated.
+- A named worktree runs setup at the start of every run, so a dependency
+  change pulled or merged into the branch since the last run is installed
+  before the first step. Resuming or continuing a run whose setup already
+  succeeded does not run it again. Omit `setup` if you don't want it to run.
 
 ### When setup fails
 

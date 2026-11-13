@@ -960,7 +960,7 @@ Local Git branch name for the named worktree.
 - **Type:** `string`
 - **Constraints:** at least 1 character(s) · pattern `^(?:~[/\\].*|/.*|[A-Za-z]:[/\\].*|\\\\.*|[^/\\]+)$`
 
-Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch.
+Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch.
 
 ### `worktree.base` {#worktree-named-base}
 
@@ -973,7 +973,7 @@ Optional Git ref resolved to a commit when the worktree is created.
 
 - **Type:** `string`
 
-Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped. With `directory` set, setup runs once per directory, not per branch.
+Optional setup command run in the named worktree at the start of every run, such as `npm ci` to pick up dependency changes since the last run. Resuming or continuing a run whose setup already succeeded does not run it again. Omit it for no setup. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a failed setup blocks the worktree and the next Run re-runs it.
 
 ## Variables {#vars}
 
