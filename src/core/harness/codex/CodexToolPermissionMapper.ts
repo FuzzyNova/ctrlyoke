@@ -8,6 +8,7 @@ import {
 import {
   PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
+  INLINE_CONFIG_SUITE_REFERENCE,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -27,7 +28,10 @@ export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "exact",
     mechanism: "native",
-    verification: capabilitySuiteVerification([CODEX_AUTO_MODE_MIN_VERSION]),
+    verification: capabilitySuiteVerification(
+      [CODEX_AUTO_MODE_MIN_VERSION],
+      INLINE_CONFIG_SUITE_REFERENCE
+    ),
   },
   mode: {
     fidelity: "exact",

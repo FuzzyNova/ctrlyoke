@@ -8,6 +8,7 @@ import {
 import {
   PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
+  INLINE_CONFIG_SUITE_REFERENCE,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
@@ -32,7 +33,10 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "exact",
     mechanism: "native",
-    verification: capabilitySuiteVerification([CLAUDE_AUTO_MODE_MIN_VERSION]),
+    verification: capabilitySuiteVerification(
+      [CLAUDE_AUTO_MODE_MIN_VERSION],
+      INLINE_CONFIG_SUITE_REFERENCE
+    ),
   },
   mode: {
     fidelity: "exact",

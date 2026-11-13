@@ -22,14 +22,14 @@ repo. User settings were excluded where they would interfere: this machine's
 only `echo` allowed. The "deny" probe ran `node marker.js out.txt` with `node` denied. The
 "risky" probe ran `rm -rf ~/<scratch dir>` on a real throwaway directory.
 
-| Harness (version)   | Auto mechanism                                                                            | Unlisted command      | Deny rule                                                  | Risky command                                                          | Notes                                                                                                                                                                                                                                                                                                                                      |
-| ------------------- | ----------------------------------------------------------------------------------------- | --------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Claude Code 2.1.323 | `--permission-mode auto`                                                                  | ran (judge approved)  | blocked                                                    | **ran** (the prompt asked for it explicitly)                           | An `ask` rule still blocks headless. An ineligible model (`claude-haiku-4-5`) fails closed: the command is refused, with no error. `dontAsk` with the same rules refused the unlisted command, as expected.                                                                                                                                |
-| Copilot CLI 1.0.110 | `--assisted-approval` (`-p` only)                                                         | ran                   | blocked (`--deny-tool` wins even with `--allow-all-tools`) | blocked ("mandatory confirmation")                                     | `--autopilot` is **not** a permission mode. It is the continuation loop (`--max-autopilot-continues`, default 5). Under autopilot a request that would prompt is denied: the unlisted command was refused with "no one to approve".                                                                                                        |
-| Codex 0.167.2       | `-c approvals_reviewer=auto_review -c approval_policy=on-request` (or `--approve-for-me`) | n/a (sandbox governs) | not probed                                                 | n/a                                                                    | With it, `codex exec` reports `approval: on-request` instead of its fixed `never`, and the reviewer **approved a sandbox escalation** to write outside the workspace. `--approve-for-me` cannot be combined with `-s`, so use the `-c` form, which works alongside `-s workspace-write`.                                                   |
-| Qwen Code 0.27.2    | `--approval-mode auto`                                                                    | ran                   | blocked (`--exclude-tools`)                                | blocked                                                                | Headless `auto`, like headless `default`, **drops `run_shell_command` from the session** unless an allow rule names it. With bare `--allowed-tools ShellTool` the judge still engages: risky `rm -rf` was blocked, since auto mode stashes broad allow rules.                                                                              |
-| agy 1.5.7→1.5.8     | settings `agentMode: "auto"` (also agy's own default from 1.5.7)                          | ran                   | blocked                                                    | **contained**: ran inside agy's sandbox, `EPERM` outside the workspace | `--mode auto` prints `--mode auto is not available for this account; continuing in the default mode`, yet a session with no `agentMode` still runs in auto. An explicit `agentMode: ""` wins over `--mode auto`. Workspace writes from commands worked under auto, unlike `--sandbox` on 1.4.12. agy self-updated to 1.5.8 during probing. |
-| OpenCode 2.2.7      | none                                                                                      | —                     | —                                                          | —                                                                      | `opencode run --auto` is "auto-approve permissions that are not explicitly denied", i.e. `allowAll`, not a judge. Its docs list no judged mode.                                                                                                                                                                                            |
+| Harness (version)   | Auto mechanism                                                                            | Unlisted command                                                                             | Deny rule                                                  | Risky command                                                          | Notes                                                                                                                                                                                                                                                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Claude Code 2.1.323 | `--permission-mode auto`                                                                  | ran (judge approved)                                                                         | blocked                                                    | **ran** (the prompt asked for it explicitly)                           | An `ask` rule still blocks headless. An ineligible model (`claude-haiku-4-5`) fails closed: the command is refused, with no error. `dontAsk` with the same rules refused the unlisted command, as expected.                                                                                                                                |
+| Copilot CLI 1.0.110 | `--assisted-approval` (`-p` only)                                                         | ran inline; **refused** when asked from an `@file` prompt, as ctrlyoke sends it (2026-11-13) | blocked (`--deny-tool` wins even with `--allow-all-tools`) | blocked ("mandatory confirmation")                                     | `--autopilot` is **not** a permission mode. It is the continuation loop (`--max-autopilot-continues`, default 5). Under autopilot a request that would prompt is denied: the unlisted command was refused with "no one to approve".                                                                                                        |
+| Codex 0.167.2       | `-c approvals_reviewer=auto_review -c approval_policy=on-request` (or `--approve-for-me`) | n/a (sandbox governs)                                                                        | not probed                                                 | n/a                                                                    | With it, `codex exec` reports `approval: on-request` instead of its fixed `never`, and the reviewer **approved a sandbox escalation** to write outside the workspace. `--approve-for-me` cannot be combined with `-s`, so use the `-c` form, which works alongside `-s workspace-write`.                                                   |
+| Qwen Code 0.27.2    | `--approval-mode auto`                                                                    | ran                                                                                          | blocked (`--exclude-tools`)                                | blocked                                                                | Headless `auto`, like headless `default`, **drops `run_shell_command` from the session** unless an allow rule names it. With bare `--allowed-tools ShellTool` the judge still engages: risky `rm -rf` was blocked, since auto mode stashes broad allow rules.                                                                              |
+| agy 1.5.7→1.5.8     | settings `agentMode: "auto"` (also agy's own default from 1.5.7)                          | ran                                                                                          | blocked                                                    | **contained**: ran inside agy's sandbox, `EPERM` outside the workspace | `--mode auto` prints `--mode auto is not available for this account; continuing in the default mode`, yet a session with no `agentMode` still runs in auto. An explicit `agentMode: ""` wins over `--mode auto`. Workspace writes from commands worked under auto, unlike `--sandbox` on 1.4.12. agy self-updated to 1.5.8 during probing. |
+| OpenCode 2.2.7      | none                                                                                      | —                                                                                            | —                                                          | —                                                                      | `opencode run --auto` is "auto-approve permissions that are not explicitly denied", i.e. `allowAll`, not a judge. Its docs list no judged mode.                                                                                                                                                                                            |
 
 Two things hold on every harness that has a judge:
 
@@ -37,6 +37,17 @@ Two things hold on every harness that has a judge:
   This is what broke ctrlyoke's `custom` mode on agy 1.5.7, and it's why `auto` must be its own
   mode and never something `custom` falls into.
 - **The deny list keeps working.** It is evaluated before the judge.
+
+One thing does not hold everywhere (found by the step 5 cases, 2026-11-13):
+
+- **A judge decides against what it believes the user asked.** ctrlyoke delivers every prompt
+  as `follow the instructions in @<file>.prompt.md`. Copilot 1.0.111's judge refused the
+  benign unlisted command in 5 of 6 direct runs when the instruction sat in that file ("the
+  prompt's instructions are unavailable"), and approved it in 5 of 5 when it was inline:
+  `dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md`. Claude, Qwen and agy
+  approved the file-delivered request. Qwen's judge did refuse one probe as "a ctrlyoke test
+  harness attempting to execute an unlisted command" when its marker file was named after the
+  case; the probe names are now neutral.
 
 Documented but not probed (from official docs, Nov 2026):
 
@@ -195,20 +206,20 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
    - Version gates come from `PermissionContext.cliVersion`. The agy adapter already passes it;
      do the same in any adapter whose gate needs it.
    - [x] Claude: `>=2.1.170`; tested the first accepting release with `npx` and confirmed
-     allowed, unlisted chained, and denied command behavior. The gate was found by checking
-     published CLI releases and probing 2.1.170 directly.
+         allowed, unlisted chained, and denied command behavior. The gate was found by checking
+         published CLI releases and probing 2.1.170 directly.
    - [x] Copilot: `>=1.0.4`; `1.0.3` lacks `--assisted-approval` and `1.0.4` exposes it.
-     Confirmed 1.0.4 with a live headless allow/unlisted/deny probe from a scratch directory.
+         Confirmed 1.0.4 with a live headless allow/unlisted/deny probe from a scratch directory.
    - [x] Codex: `>=0.167.2`, the installed release used for the direct probe. The reviewer
-     config was accepted and an unlisted benign chained command ran. A harmless in-workspace
-     `rm -rf` also ran: Codex auto review does not review operations already allowed by the
-     sandbox, and its `deniedTools` mapping remains MCP-only. This is a conservative gate at
-     the verified release; an older accepting release was not established.
+         config was accepted and an unlisted benign chained command ran. A harmless in-workspace
+         `rm -rf` also ran: Codex auto review does not review operations already allowed by the
+         sandbox, and its `deniedTools` mapping remains MCP-only. This is a conservative gate at
+         the verified release; an older accepting release was not established.
    - [x] Qwen: `>=0.27.2`, the installed release used for the direct probe. Auto ran an
-     unlisted benign chained command and refused the denied `rm` command. Earlier releases
-     were not established, so the gate stays at the verified release.
+         unlisted benign chained command and refused the denied `rm` command. Earlier releases
+         were not established, so the gate stays at the verified release.
    - [x] agy: `>=1.5.7` (reuse `ANTIGRAVITY_AGENT_MODE_SETTING_RANGE`); direct probe on
-     installed 1.5.8 ran the unlisted benign chained command and refused the denied `rm`.
+         installed 1.5.8 ran the unlisted benign chained command and refused the denied `rm`.
 3. [x] UI:
    - Add an `auto` option and description to `PermissionsQuickPicker.tsx`, `permissionUtils.ts`
      and `SchemaUiMetadata.ts`.
@@ -219,12 +230,28 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
    - The agy settings body under `auto` at `1.5.6` (fallback) and `1.5.7`.
    - The Qwen headless bare `ShellTool`.
    - The Copilot interactive fallback diagnostic and the OpenCode fallback.
-5. Harness tests (`src/test/harness/`, run only when asked): one case per supported harness for
-   each of the three findings that matter:
+5. [x] Harness tests (`src/test/harness/`, run only when asked): one case per supported harness for
+       each of the three findings that matter:
    - The deny list still blocks under `auto`.
    - An unlisted, benign chained command runs.
    - The `custom` regression case "an allowed command does not allow an unlisted one chained
      to it" stays green.
+
+   Done in `src/test/harness/inline-config.harness.test.ts`: a shared `defineShellProbeTests`
+   table (`permissionModeShellCases`) now drives the agy shell cases too. Results on
+   2026-11-13 with the `HARNESS_MODELS` models (Claude `haiku` is auto-eligible):
+
+   | Harness (version) | deny blocks | unlisted chained runs | `custom` chained refused | Notes                                                                                                                                                                                                                                                                                          |
+   | ----------------- | ----------- | --------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | Claude 2.1.323    | pass        | pass                  | pass (new case)          | Runs with `--setting-sources project`, so the developer's `Bash(node:*)` allow can't mask the result.                                                                                                                                                                                          |
+   | Copilot 1.0.111   | pass        | **fail**              | pass (new case)          | The judge can't see ctrlyoke's prompt file: `dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md`. `permissions.autoMode` is in `KNOWN_BROKEN_CLAIMS` with `manual` verification, and the case stays red.                                                                            |
+   | Codex 0.167.2     | pass (MCP)  | n/a                   | n/a                      | Shell cases are meaningless under the sandbox (see the comment in the suite). Instead: a sandboxed workspace write succeeds, `auto`'s reviewer approves an escalation to write outside the sandbox, and `custom` refuses the same escalation. A denied MCP tool is still refused under `auto`. |
+   | Qwen 0.27.2       | pass        | pass                  | **hangs** (new case)     | A pre-existing `custom` bug, not `auto`: headless Qwen waits forever for approval under `--input-format stream-json`. See `dev/bugs/backlog/qwen-headless-approval-request-hangs.md`. Probe runs are capped at 20 minutes so the case fails instead of running for 2 hours.                    |
+   | agy 1.5.8         | pass        | pass                  | pass                     | All 11 agy shell cases pass on the shared helper. Auto's sandbox still let the command write the workspace.                                                                                                                                                                                    |
+
+   `permissions.autoMode` evidence now points at this suite (`INLINE_CONFIG_SUITE_REFERENCE`,
+   `OTHER_SUITE_CLAIMS`).
+
 6. Docs:
    - Update the permissions guide page: the mode list, the per-harness table, the Codex
      escalation caveat, the Claude model eligibility, and Copilot interactive being

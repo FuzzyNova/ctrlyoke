@@ -7,9 +7,10 @@
  * `verification` to name a harness test unless it is listed below.
  */
 
-import type {
-  CapabilityDeclaration,
-  HarnessCapabilityFacts,
+import {
+  INLINE_CONFIG_SUITE_REFERENCE,
+  type CapabilityDeclaration,
+  type HarnessCapabilityFacts,
 } from "../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
@@ -74,6 +75,9 @@ export const UNPROVEN_CLAIMS: Partial<
  */
 export const OTHER_SUITE_CLAIMS: Readonly<Record<CapabilityPath, string>> = {
   "sandbox.terminal": "src/test/harness/sandbox.harness.test.ts",
+  // Deny still blocks and an unlisted chained command runs under the judge;
+  // Codex's cases prove the reviewer-approved sandbox escalation instead.
+  "permissions.autoMode": INLINE_CONFIG_SUITE_REFERENCE,
 };
 
 /**
@@ -87,5 +91,9 @@ export const KNOWN_BROKEN_CLAIMS: Partial<
   "opencode-cli": {
     "mcp.perServerToolFiltering":
       "dev/bugs/backlog/opencode-mcp-tool-deny-rules-never-match.md",
+  },
+  "copilot-cli": {
+    "permissions.autoMode":
+      "dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md",
   },
 };

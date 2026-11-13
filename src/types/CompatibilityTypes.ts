@@ -115,13 +115,24 @@ export interface CapabilityDeclaration {
 const CAPABILITY_SUITE_REFERENCE =
   "src/test/harness/capabilities.harness.test.ts";
 
-/** Evidence for a claim the capability suite proves. */
+/**
+ * The live suite that proves per-harness permission and inline-config
+ * behaviour, including the `auto` permission mode.
+ */
+export const INLINE_CONFIG_SUITE_REFERENCE =
+  "src/test/harness/inline-config.harness.test.ts";
+
+/**
+ * Evidence for a claim a live harness suite proves: the capability suite
+ * unless `reference` names a sibling suite.
+ */
 export function capabilitySuiteVerification(
-  verifiedVersions: readonly HarnessVersionRange[]
+  verifiedVersions: readonly HarnessVersionRange[],
+  reference: string = CAPABILITY_SUITE_REFERENCE
 ): CapabilityVerification {
   return {
     kind: CAPABILITY_VERIFICATION_KINDS.BEHAVIORAL_TEST,
-    reference: CAPABILITY_SUITE_REFERENCE,
+    reference,
     basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
     verifiedVersions,
   };

@@ -13,6 +13,8 @@ import {
 import { Log } from "../../../utils/Log";
 import { versionSatisfies } from "../../../utils/HarnessVersion";
 import {
+  CAPABILITY_VERIFICATION_BASES,
+  CAPABILITY_VERIFICATION_KINDS,
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
@@ -23,12 +25,21 @@ const COPILOT_PERMISSION_VERIFICATION = capabilitySuiteVerification([
 // The published 1.0.3 binary lacks the flag; 1.0.4 first exposes it, and its
 // live headless allow/unlisted/deny probe passed from a scratch directory.
 const COPILOT_AUTO_MODE_MIN_VERSION = ">=1.0.4";
+// Manual, not the live suite: the judge refuses what ctrlyoke's prompt file
+// asks for, so the suite's unlisted-command case stays red until it is fixed.
+const COPILOT_AUTO_MODE_BUG =
+  "dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md";
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "partial",
     mechanism: "translated-cli",
-    verification: capabilitySuiteVerification([COPILOT_AUTO_MODE_MIN_VERSION]),
+    verification: {
+      kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
+      reference: COPILOT_AUTO_MODE_BUG,
+      basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
+      verifiedVersions: [COPILOT_AUTO_MODE_MIN_VERSION],
+    },
     caveatCode: PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY,
   },
   mode: {

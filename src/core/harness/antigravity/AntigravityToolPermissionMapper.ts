@@ -13,6 +13,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
+  INLINE_CONFIG_SUITE_REFERENCE,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -141,9 +142,10 @@ export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor
     autoMode: {
       fidelity: "exact",
       mechanism: "native",
-      verification: capabilitySuiteVerification([
-        ANTIGRAVITY_AGENT_MODE_SETTING_RANGE,
-      ]),
+      verification: capabilitySuiteVerification(
+        [ANTIGRAVITY_AGENT_MODE_SETTING_RANGE],
+        INLINE_CONFIG_SUITE_REFERENCE
+      ),
     },
     mode: {
       fidelity: "exact",

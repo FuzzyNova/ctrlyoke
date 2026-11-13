@@ -25,6 +25,7 @@ import type {
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
+  type HarnessId,
 } from "../../types/DashboardConstants";
 import { normalizeAntigravityMcpServerId } from "../../utils/ToolPermissionUtils";
 import {
@@ -57,6 +58,8 @@ import {
 } from "./helpers/harnessRunner";
 
 const OPENCODE = "opencode-cli" as const;
+const CLAUDE = "claude-cli" as const;
+const COPILOT = "copilot-cli" as const;
 const CODEX = "codex-cli" as const;
 const QWEN = "qwen-cli" as const;
 const ANTIGRAVITY = "antigravity-cli" as const;
@@ -382,28 +385,46 @@ function qwenPermissionWorkflow(
   };
 }
 
-/** Printed by `MARKER_SCRIPT`; never appears in a prompt or command line. */
-const AGY_PROBE_RAN = "AGY_PROBE_EXECUTED";
+/**
+ * Printed by `MARKER_SCRIPT`; never appears in a prompt, a command line, or
+ * the script's own source, which joins it at runtime. A model that reads the
+ * script before running it (Claude does) must not make a refused command look
+ * as if it ran.
+ */
+const SHELL_PROBE_RAN_PARTS = ["SHELL", "PROBE", "EXECUTED"];
+const SHELL_PROBE_RAN = SHELL_PROBE_RAN_PARTS.join("_");
 
 /**
- * Source for a script that prints `AGY_PROBE_RAN`, then tries to write the
+ * Source for a script that prints `SHELL_PROBE_RAN`, then tries to write the
  * file named by argv[2]. Antigravity's translated shell allow rule refuses
  * parentheses, quotes and `$` in a command line, so the probe command must be
  * a plain `node <script> <file>` rather than an inline `node -e "…"`.
  *
  * The printed token proves the command was permitted to start; the marker file
- * proves it ran unsandboxed. ctrlyoke used to add `--sandbox` in `custom`, and
- * on Windows (agy 1.4.12) agy ran even a rule-allowed command inside it, where
- * the write failed with `EPERM`.
+ * proves it could write the workspace. ctrlyoke used to add `--sandbox` to agy
+ * in `custom`, and on Windows (agy 1.4.12) agy ran even a rule-allowed command
+ * inside it, where the write failed with `EPERM`.
  */
 const MARKER_SCRIPT = `"use strict";
-process.stdout.write(${JSON.stringify(AGY_PROBE_RAN)} + "\\n");
+process.stdout.write(${JSON.stringify(SHELL_PROBE_RAN_PARTS)}.join("_") + "\\n");
 try {
   require("fs").writeFileSync(process.argv[2], "permission-allowed");
 } catch (error) {
   process.stdout.write("marker write failed: " + error.code + "\\n");
 }
 `;
+
+/** File name of `MARKER_SCRIPT` in each case's workspace. */
+const MARKER_SCRIPT_NAME = "write-notes.js";
+
+/**
+ * Wall-clock limit for one shell-probe run. A probe is one trivial command and
+ * normally finishes in seconds, so this only bounds a harness that waits for
+ * an approval nobody can give (Qwen headless `custom`:
+ * dev/bugs/backlog/qwen-headless-approval-request-hangs.md) instead of letting
+ * it run to the suite's 2-hour limit. It leaves room for transient retries.
+ */
+const SHELL_PROBE_TIMEOUT_MS = 20 * 60_000;
 
 /**
  * Every Antigravity shell case also denies `write`, so a model that falls
@@ -412,25 +433,99 @@ try {
  */
 const ANTIGRAVITY_NO_WRITE_FALLBACK = ["write"];
 
-interface AntigravityProbeResult {
+/** The command line(s) a shell probe asks for, given the script and marker. */
+type ProbeCommand = (script: string, marker: string) => string[];
+
+const plainCommand: ProbeCommand = (script, marker) => [
+  `node ${script} ${marker}`,
+];
+/** `echo` first, so an `echo`-only allow rule matches the line's start. */
+const chainedCommand: ProbeCommand = (script, marker) => [
+  `echo starting && node ${script} ${marker}`,
+];
+const twoLineCommand: ProbeCommand = (script, marker) => [
+  "echo starting",
+  `node ${script} ${marker}`,
+];
+
+interface ShellProbeCase {
+  name: string;
+  permissions: ToolPermissionsOverride;
+  command: ProbeCommand;
+  shouldCreate: boolean;
+}
+
+/**
+ * The `auto` permission-mode findings of
+ * dev/backlog/AUTO_PERMISSION_MODE_PLAN.md, plus the `custom` regression the
+ * agy 1.5.7 auto default broke. Under every harness's judge the deny list
+ * still blocks while the allow list only pre-approves, so an unlisted, benign
+ * command chained to an allowed one runs in `auto` but never in `custom`.
+ * `extraDenied` is appended to every case's deny list.
+ */
+function permissionModeShellCases(
+  extraDenied: readonly string[] = []
+): ShellProbeCase[] {
+  return [
+    {
+      name: "auto still refuses a denied command",
+      permissions: {
+        mode: "auto",
+        allowedTools: [],
+        deniedTools: ["shell(node:*)", ...extraDenied],
+      },
+      command: plainCommand,
+      shouldCreate: false,
+    },
+    {
+      name: "auto runs an unlisted benign command chained to an allowed one",
+      permissions: {
+        mode: "auto",
+        allowedTools: ["shell(echo:*)"],
+        deniedTools: [...extraDenied],
+      },
+      command: chainedCommand,
+      shouldCreate: true,
+    },
+    {
+      name: "an allowed command does not allow an unlisted one chained to it",
+      permissions: {
+        mode: "custom",
+        allowedTools: ["shell(echo:*)"],
+        deniedTools: [...extraDenied],
+      },
+      command: chainedCommand,
+      shouldCreate: false,
+    },
+  ];
+}
+
+interface ToolProbeResult {
   result: ReturnType<typeof runWorkflowFile>;
   /** Recorded non-text CLI events, serialized, as proof of an attempt. */
   toolEvents: string;
 }
 
 /**
- * Runs an Antigravity workflow with isolated run state, so the case can read
- * back the tool events agy reported. A deny case asserts on these: a missing
- * marker only proves a denial if the model actually tried the call.
+ * Runs a workflow with isolated run state, so the case can read back the tool
+ * events the harness reported. A deny case asserts on these: a missing marker
+ * only proves a denial if the model actually tried the call.
  */
-function runAntigravityProbe(
+function runToolProbe(
   workflow: PromptFile,
   tmpDir: string,
-  label: string
-): AntigravityProbeResult {
+  label: string,
+  timeoutMs?: number
+): ToolProbeResult {
   const restore = isolateRunState(tmpDir);
   try {
-    const result = runWorkflowFile(workflow, tmpDir, label);
+    const result = runWorkflowFile(
+      workflow,
+      tmpDir,
+      label,
+      undefined,
+      timeoutMs
+    );
     const toolEvents = findRunFiles(runsRootFor(tmpDir), "events.jsonl")
       .flatMap(readRecordedCliEvents)
       .filter((event) => event.type !== CLI_EVENT_TYPES.TEXT)
@@ -442,20 +537,30 @@ function runAntigravityProbe(
   }
 }
 
-function antigravityShellWorkflow(
+/** The shell tool's name in a probe prompt; agy's model knows it by name. */
+const SHELL_TOOL_PHRASE: Partial<Record<HarnessId, string>> = {
+  [ANTIGRAVITY]: "the run_command tool",
+};
+
+function shellProbeWorkflow(
+  harness: HarnessId,
   name: string,
   permissions: ToolPermissionsOverride,
-  commandLines: readonly string[]
+  commandLines: readonly string[],
+  fields: Partial<PromptFile> = {}
 ): PromptFile {
   return {
-    harness: ANTIGRAVITY,
-    model: HARNESS_MODELS[ANTIGRAVITY],
+    harness,
+    model: HARNESS_MODELS[harness],
+    ...fields,
     toolPermissions: permissions,
     steps: [
       {
         name,
         prompt: [
-          "Call the run_command tool exactly once, with exactly this command line" +
+          // Codex reads its prompt file with the shell, then took "exactly
+          // once" as used up and never ran the probe.
+          `Call ${SHELL_TOOL_PHRASE[harness] ?? "your shell tool"} exactly once (reading these instructions does not count), with exactly this command line` +
             (commandLines.length > 1
               ? ` (${commandLines.length} lines; keep the line breaks):`
               : ":"),
@@ -468,6 +573,67 @@ function antigravityShellWorkflow(
       },
     ],
   };
+}
+
+/**
+ * Register one test per `cases` entry for `harness`: run its command through
+ * `MARKER_SCRIPT` and assert the command was attempted, then ran or was
+ * refused as the case expects. `fields` are added to every workflow.
+ */
+function defineShellProbeTests(
+  harness: HarnessId,
+  cases: readonly ShellProbeCase[],
+  getTmpDir: () => string,
+  fields: Partial<PromptFile> = {}
+): void {
+  cases.forEach((shellCase, index) => {
+    test(`${harness}: ${shellCase.name}`, function () {
+      const tmpDir = getTmpDir();
+      const markerScript = path.join(tmpDir, MARKER_SCRIPT_NAME);
+      // Neutral names: the judges see the command line and the prompt file's
+      // name, and Qwen's refused a command whose marker was named after the
+      // case ("…-unlisted-benign-command…") as a test-harness exploit.
+      const slug = `${harness}-step-${index + 1}`;
+      const markerName = `${slug}-notes.txt`;
+      const markerPath = path.join(tmpDir, markerName);
+      const { result, toolEvents } = runToolProbe(
+        shellProbeWorkflow(
+          harness,
+          slug,
+          shellCase.permissions,
+          shellCase.command(
+            normalizedPath(markerScript),
+            normalizedPath(markerPath)
+          ),
+          fields
+        ),
+        tmpDir,
+        slug,
+        SHELL_PROBE_TIMEOUT_MS
+      );
+      const label = `${harness} (${shellCase.name})`;
+      if (logAndMaybeSkip(label, result)) return;
+      assertSuccessfulRun(label, result);
+      assert.ok(
+        toolEvents.includes(markerName),
+        `${harness} never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+      );
+      assert.strictEqual(
+        toolEvents.includes(SHELL_PROBE_RAN),
+        shellCase.shouldCreate,
+        `command ${shellCase.shouldCreate ? "was refused" : "ran"}\ntool events: ${toolEvents}`
+      );
+      // An allowed command must be able to write the workspace. For agy this
+      // also guards against `custom` regaining --sandbox; agy's `auto` runs
+      // commands in its own sandbox, which still lets them write the
+      // workspace (1.5.8).
+      assert.strictEqual(
+        fs.existsSync(markerPath),
+        shellCase.shouldCreate,
+        `marker ${shellCase.shouldCreate ? "missing" : "created"}\ntool events: ${toolEvents}`
+      );
+    });
+  });
 }
 
 function antigravityMcpWorkflow(
@@ -574,12 +740,31 @@ suite("Inline harness configuration regression tests", function () {
     mcpServerScript = path.join(tmpDir, "mcp-probe.js");
     fs.writeFileSync(recorderScript, buildHookRecorderScript());
     fs.writeFileSync(mcpServerScript, buildMcpProbeServerScript());
+    fs.writeFileSync(path.join(tmpDir, MARKER_SCRIPT_NAME), MARKER_SCRIPT);
   });
 
   teardown(function () {
     removeTempDir(tmpDir, (dir) =>
       console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
     );
+  });
+
+  suite(CLAUDE, function () {
+    // `--setting-sources project` keeps the developer's ~/.claude/settings.json
+    // out of the run: a `Bash(node:*)` allow rule there would run the chained
+    // command in `custom` too, and hide whether the judge approved it in
+    // `auto`. ctrlyoke's own per-run `--settings` file still loads. The
+    // `haiku` test model is eligible for auto mode (an ineligible model, such
+    // as claude-haiku-4-5, refuses every unlisted command with no error).
+    defineShellProbeTests(CLAUDE, permissionModeShellCases(), () => tmpDir, {
+      additionalArgs: "--setting-sources project",
+    });
+  });
+
+  // Headless only: Copilot has no per-run flag for interactive assisted
+  // approval, so ctrlyoke runs interactive `auto` as `custom`.
+  suite(COPILOT, function () {
+    defineShellProbeTests(COPILOT, permissionModeShellCases(), () => tmpDir);
   });
 
   suite(OPENCODE, function () {
@@ -1122,9 +1307,138 @@ suite("Inline harness configuration regression tests", function () {
       assert.ok(fs.existsSync(markerPath));
       assert.ok(hasRecordedEvent(outputPath, "preToolUse"));
     });
+
+    // Codex has no shell allow/deny rules: its sandbox decides what a command
+    // may do, and its `deniedTools` mapping is MCP-only. So the chained-command
+    // cases other harnesses run prove nothing here (headless `custom` runs any
+    // command inside the sandbox, and an in-workspace write never reaches the
+    // reviewer). What `auto` changes is the escalation path: headless `custom`
+    // (`codex exec`, approval `never`) has none, while `auto` lets the
+    // reviewer approve a request to run outside the sandbox. These cases run
+    // headless with `sandbox: true` (workspace-write).
+    test(`${CODEX}: auto lets a sandboxed command write the workspace`, function () {
+      const markerName = "codex-auto-workspace.txt";
+      const markerPath = path.join(tmpDir, markerName);
+      const { result, toolEvents } = runToolProbe(
+        shellProbeWorkflow(
+          CODEX,
+          "codex-auto-workspace",
+          { mode: "auto", allowedTools: [], deniedTools: [] },
+          plainCommand(
+            normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+            normalizedPath(markerPath)
+          ),
+          { sandbox: true }
+        ),
+        tmpDir,
+        "codex-auto-workspace"
+      );
+      if (logAndMaybeSkip(`${CODEX} (auto workspace write)`, result)) return;
+      assertSuccessfulRun(`${CODEX} (auto workspace write)`, result);
+      assert.ok(
+        fs.existsSync(markerPath),
+        `the workspace write failed under auto\ntool events: ${toolEvents}`
+      );
+    });
+
+    for (const escalationCase of [
+      { mode: "auto", reviewed: true },
+      { mode: "custom", reviewed: false },
+    ] as const) {
+      test(`${CODEX}: ${escalationCase.reviewed ? "auto's reviewer approves" : "custom refuses"} an escalation to write outside the sandbox`, function () {
+        const outsidePath = path.join(
+          os.tmpdir(),
+          `${path.basename(tmpDir)}-codex-${escalationCase.mode}-escalation.txt`
+        );
+        const label = `codex-${escalationCase.mode}-escalation`;
+        try {
+          const { result, toolEvents } = runToolProbe(
+            {
+              harness: CODEX,
+              model: HARNESS_MODELS[CODEX],
+              sandbox: true,
+              toolPermissions: {
+                mode: escalationCase.mode,
+                allowedTools: [],
+                deniedTools: [],
+              },
+              steps: [
+                {
+                  name: label,
+                  // Ask for escalation up front: a model that first hits the
+                  // sandbox and then reads "do not retry" never asks at all.
+                  prompt: `Run exactly one shell command, with escalated permissions (request approval to run it outside the sandbox, because it writes a scratch file outside the workspace): node ${normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME))} ${normalizedPath(outsidePath)}. Do not run it inside the sandbox first. If approval is refused, stop and do not create the file another way.`,
+                },
+              ],
+            },
+            tmpDir,
+            label
+          );
+          if (logAndMaybeSkip(`${CODEX} (${label})`, result)) return;
+          assertSuccessfulRun(`${CODEX} (${label})`, result);
+          assert.ok(
+            toolEvents.includes(path.basename(outsidePath)),
+            `codex never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+          );
+          assert.strictEqual(
+            fs.existsSync(outsidePath),
+            escalationCase.reviewed,
+            `outside write ${escalationCase.reviewed ? "missing" : "created"}\ntool events: ${toolEvents}`
+          );
+        } finally {
+          fs.rmSync(outsidePath, { force: true });
+        }
+      });
+    }
+
+    test(`${CODEX}: auto still refuses a denied MCP tool`, function () {
+      const markerPath = path.join(tmpDir, "codex-auto-mcp.calls");
+      const server = makeUserMcpServer(
+        "codex-probe",
+        "open_probe,blocked_probe",
+        normalizedPath(mcpServerScript),
+        normalizedPath(markerPath)
+      );
+      const result = runWorkflowFile(
+        {
+          harness: CODEX,
+          model: HARNESS_MODELS[CODEX],
+          toolPermissions: {
+            mode: "auto",
+            allowedTools: [],
+            deniedTools: ["mcp__codex-probe__blocked_probe"],
+          },
+          mcpServers: [server],
+          steps: [
+            {
+              name: "codex-auto-mcp-deny",
+              prompt: [
+                "Call the MCP tool open_probe from the codex-probe server once.",
+                "Then call the MCP tool blocked_probe from the codex-probe server once.",
+                MCP_STARTUP_RETRY_INSTRUCTION,
+                "If a tool is unavailable or refused, skip it. Do not use any other tool. Then reply DONE.",
+              ].join(" "),
+            },
+          ],
+        },
+        tmpDir,
+        "codex-auto-mcp-deny"
+      );
+      if (logAndMaybeSkip(`${CODEX} (auto MCP deny)`, result)) return;
+      assertSuccessfulRun(`${CODEX} (auto MCP deny)`, result);
+      const calls = fs.existsSync(markerPath)
+        ? fs.readFileSync(markerPath, "utf8").split(/\r?\n/).filter(Boolean)
+        : [];
+      assert.ok(calls.includes("open_probe"), `calls: ${calls}`);
+      assert.ok(!calls.includes("blocked_probe"), `calls: ${calls}`);
+    });
   });
 
   suite(QWEN, function () {
+    // Headless `auto` also passes a bare `ShellTool` allow, or Qwen drops its
+    // shell tool from the session; the judge still reviews each command.
+    defineShellProbeTests(QWEN, permissionModeShellCases(), () => tmpDir);
+
     for (const permissionCase of [
       {
         name: "allow proceeds",
@@ -1443,156 +1757,100 @@ suite("Inline harness configuration regression tests", function () {
   // rule against the raw, unsplit command line, so the chain and multi-line
   // cases prove the generated allow/deny regexes, not just agy's matching.
   suite(ANTIGRAVITY, function () {
-    let markerScript: string;
-
-    setup(function () {
-      markerScript = path.join(tmpDir, "agy-marker.js");
-      fs.writeFileSync(markerScript, MARKER_SCRIPT);
-    });
-
-    const plain = (script: string, marker: string) => [
-      `node ${script} ${marker}`,
-    ];
-    const chained = (script: string, marker: string) => [
-      `echo agy-chain && node ${script} ${marker}`,
-    ];
-    const twoLines = (script: string, marker: string) => [
-      "echo agy-first-line",
-      `node ${script} ${marker}`,
-    ];
-
-    for (const shellCase of [
-      {
-        name: "allow proceeds",
-        permissions: {
-          mode: "custom",
-          allowedTools: ["shell(node:*)"],
-          deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
-        } satisfies ToolPermissionsOverride,
-        command: plain,
-        shouldCreate: true,
-      },
-      {
-        name: "deny blocks a command a broad allow would run",
-        permissions: {
-          mode: "custom",
-          allowedTools: ["shell"],
-          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
-        } satisfies ToolPermissionsOverride,
-        command: plain,
-        shouldCreate: false,
-      },
-      {
-        name: "deny wins over allow",
-        permissions: {
-          mode: "custom",
-          allowedTools: ["shell(node:*)"],
-          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
-        } satisfies ToolPermissionsOverride,
-        command: plain,
-        shouldCreate: false,
-      },
-      {
-        name: "deny blocks a denied command chained after echo",
-        permissions: {
-          mode: "custom",
-          allowedTools: ["shell"],
-          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
-        } satisfies ToolPermissionsOverride,
-        command: chained,
-        shouldCreate: false,
-      },
-      {
-        name: "deny blocks a denied command on the second line",
-        permissions: {
-          mode: "custom",
-          allowedTools: ["shell"],
-          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
-        } satisfies ToolPermissionsOverride,
-        command: twoLines,
-        shouldCreate: false,
-      },
-      {
-        name: "an allowed command does not allow an unlisted one chained to it",
-        permissions: {
-          mode: "custom",
-          allowedTools: ["shell(echo:*)"],
-          deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
-        } satisfies ToolPermissionsOverride,
-        command: chained,
-        shouldCreate: false,
-      },
-      {
-        name: "allowAll runs a shell command without asking",
-        permissions: {
-          mode: "allowAll",
-          deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
-        } satisfies ToolPermissionsOverride,
-        command: plain,
-        shouldCreate: true,
-      },
-      {
-        name: "allowAll still refuses a denied command",
-        permissions: {
-          mode: "allowAll",
-          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
-        } satisfies ToolPermissionsOverride,
-        command: plain,
-        shouldCreate: false,
-      },
-    ]) {
-      test(`${ANTIGRAVITY}: ${shellCase.name}`, function () {
-        const slug = shellCase.name.replace(/[^a-z]+/gi, "-").toLowerCase();
-        const markerName = `agy-${slug}.txt`;
-        const markerPath = path.join(tmpDir, markerName);
-        const { result, toolEvents } = runAntigravityProbe(
-          antigravityShellWorkflow(
-            `agy-${slug}`,
-            shellCase.permissions,
-            shellCase.command(
-              normalizedPath(markerScript),
-              normalizedPath(markerPath)
-            )
-          ),
-          tmpDir,
-          `agy-${slug}`
-        );
-        if (logAndMaybeSkip(`${ANTIGRAVITY} (${shellCase.name})`, result))
-          return;
-        assertSuccessfulRun(`${ANTIGRAVITY} (${shellCase.name})`, result);
-        assert.ok(
-          toolEvents.includes(markerName),
-          `agy never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
-        );
-        assert.strictEqual(
-          toolEvents.includes(AGY_PROBE_RAN),
-          shellCase.shouldCreate,
-          `command ${shellCase.shouldCreate ? "was refused" : "ran"}\ntool events: ${toolEvents}`
-        );
-        // No mode sandboxes the command, so an allowed one can write the
-        // workspace; this also guards against `custom` regaining --sandbox.
-        assert.strictEqual(
-          fs.existsSync(markerPath),
-          shellCase.shouldCreate,
-          `marker ${shellCase.shouldCreate ? "missing" : "created"}\ntool events: ${toolEvents}`
-        );
-      });
-    }
+    defineShellProbeTests(
+      ANTIGRAVITY,
+      [
+        {
+          name: "allow proceeds",
+          permissions: {
+            mode: "custom",
+            allowedTools: ["shell(node:*)"],
+            deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
+          },
+          command: plainCommand,
+          shouldCreate: true,
+        },
+        {
+          name: "deny blocks a command a broad allow would run",
+          permissions: {
+            mode: "custom",
+            allowedTools: ["shell"],
+            deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+          },
+          command: plainCommand,
+          shouldCreate: false,
+        },
+        {
+          name: "deny wins over allow",
+          permissions: {
+            mode: "custom",
+            allowedTools: ["shell(node:*)"],
+            deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+          },
+          command: plainCommand,
+          shouldCreate: false,
+        },
+        {
+          name: "deny blocks a denied command chained after echo",
+          permissions: {
+            mode: "custom",
+            allowedTools: ["shell"],
+            deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+          },
+          command: chainedCommand,
+          shouldCreate: false,
+        },
+        {
+          name: "deny blocks a denied command on the second line",
+          permissions: {
+            mode: "custom",
+            allowedTools: ["shell"],
+            deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+          },
+          command: twoLineCommand,
+          shouldCreate: false,
+        },
+        {
+          name: "allowAll runs a shell command without asking",
+          permissions: {
+            mode: "allowAll",
+            deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
+          },
+          command: plainCommand,
+          shouldCreate: true,
+        },
+        {
+          name: "allowAll still refuses a denied command",
+          permissions: {
+            mode: "allowAll",
+            deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+          },
+          command: plainCommand,
+          shouldCreate: false,
+        },
+        ...permissionModeShellCases(ANTIGRAVITY_NO_WRITE_FALLBACK),
+      ],
+      () => tmpDir
+    );
 
     test(`${ANTIGRAVITY}: deny survives a conflicting user settings.json allow`, async function () {
       const markerName = "agy-user-conflict.txt";
       const markerPath = path.join(tmpDir, markerName);
       const userSettings = { permissions: { allow: ["command(*)"] } };
       await withIsolatedAntigravityHome(userSettings, (settingsPath) => {
-        const { result, toolEvents } = runAntigravityProbe(
-          antigravityShellWorkflow(
+        const { result, toolEvents } = runToolProbe(
+          shellProbeWorkflow(
+            ANTIGRAVITY,
             "agy-user-conflict",
             {
               mode: "custom",
               allowedTools: [],
               deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
             },
-            plain(normalizedPath(markerScript), normalizedPath(markerPath))
+            plainCommand(
+              normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+              normalizedPath(markerPath)
+            )
           ),
           tmpDir,
           "agy-user-conflict"
@@ -1604,7 +1862,7 @@ suite("Inline harness configuration regression tests", function () {
           `agy never attempted the command\nstdout: ${result.stdout}`
         );
         assert.ok(
-          !toolEvents.includes(AGY_PROBE_RAN) && !fs.existsSync(markerPath),
+          !toolEvents.includes(SHELL_PROBE_RAN) && !fs.existsSync(markerPath),
           `the user's allow overrode the workflow deny\ntool events: ${toolEvents}`
         );
         const after = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as {
@@ -1626,7 +1884,7 @@ suite("Inline harness configuration regression tests", function () {
       test(`${ANTIGRAVITY}: calls an MCP tool allowed by a ${allowCase.name} pattern`, function () {
         const markerPath = path.join(tmpDir, "agy-allowed-mcp.calls");
         const slug = `agy-mcp-${allowCase.name.replace(/ /g, "-")}`;
-        const { result, toolEvents } = runAntigravityProbe(
+        const { result, toolEvents } = runToolProbe(
           antigravityMcpWorkflow(
             slug,
             {
@@ -1656,7 +1914,7 @@ suite("Inline harness configuration regression tests", function () {
 
     test(`${ANTIGRAVITY}: calls an allowed tool on a dotted MCP server id`, function () {
       const markerPath = path.join(tmpDir, "agy-dotted-allowed.calls");
-      const { result, toolEvents } = runAntigravityProbe(
+      const { result, toolEvents } = runToolProbe(
         antigravityMcpWorkflow(
           "agy-dotted-allowed",
           {
@@ -1695,7 +1953,7 @@ suite("Inline harness configuration regression tests", function () {
         normalizedPath(markerPath)
       );
       server.deniedTools = ["blocked_probe"];
-      const { result, toolEvents } = runAntigravityProbe(
+      const { result, toolEvents } = runToolProbe(
         antigravityMcpWorkflow(
           "agy-dotted-denied",
           {
