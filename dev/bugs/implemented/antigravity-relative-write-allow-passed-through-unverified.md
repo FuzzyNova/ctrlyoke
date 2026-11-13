@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), from code reading; not reproduced against agy
 - **Area:** `src/core/harness/antigravity/AntigravityToolPermissionMapper.ts` (`convertToAntigravityRules`)
-- **Severity:** low (confidence: medium; needs an agy probe)
+- **Resolution:** fixed in this commit without an agy probe. Only an absolute target is kept; a relative path or glob falls back to `write_file(*)`, the behavior before 0.7.0. A future probe could restore pass-through if agy turns out to honor relative or glob targets.
 
 ## Symptom
 

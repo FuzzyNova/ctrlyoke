@@ -349,6 +349,16 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
+      test("an allowed relative or glob write target falls back to every write", () => {
+        assert.deepStrictEqual(
+          mapper.convertToAntigravityRules(
+            ["write(src/**)", "edit(out.txt)", "write(*)"],
+            "allow"
+          ),
+          { rules: ["write_file(*)"], lossy: [] }
+        );
+      });
+
       test("reports unsupported tools as lossy and deduplicates rules", () => {
         assert.deepStrictEqual(
           mapper.convertToAntigravityRules(

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Antigravity, a `write(<path>)` or `edit(<path>)` allow rule with a relative path or glob, such as `write(src/**)`, allows writes again, as it did before 0.7.0. Since 0.7.0 it was passed to agy as `write_file(src/**)`, which agy was never shown to honor, so writes could be refused. Only an absolute path limits writes to that path, as 0.7.0's notes describe.
 - Workflow schedule filters and clock tooltips use the next occurrence that can still fire.
 - MCP `edit_step` refuses prompt-only fields when editing a script step.
 - Errored end-condition verdicts show the configured action after retries are exhausted, and `ctrlyoke run` parallel-group tallies count a member as failed when its end condition fails or errors.

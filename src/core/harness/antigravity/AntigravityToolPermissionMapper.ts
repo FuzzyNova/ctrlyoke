@@ -203,14 +203,15 @@ export class AntigravityToolPermissionMapper
         }
       } else if (FILE_READ_TOOLS.has(tool)) rules.add("read_file(*)");
       else if (FILE_WRITE_TOOLS.has(tool)) {
-        // agy honors a path target on an allow rule (`write_file(<abs>)`
-        // writes exactly that file, probed on 1.5.6). A deny keeps the
-        // whole-tool form, which over-denies rather than under-denies.
+        // agy honors an absolute path target on an allow rule
+        // (`write_file(<abs>)` writes exactly that file, probed on 1.5.6).
+        // Relative paths and globs were never probed, so they keep the
+        // whole-tool form, as the Claude and OpenCode mappers do. A deny
+        // always keeps it, which over-denies rather than under-denies.
         const target = args.replace(/^\(|\)$/g, "").trim();
         rules.add(
           listKind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW &&
-            target &&
-            target !== "*"
+            (path.isAbsolute(target) || path.win32.isAbsolute(target))
             ? `write_file(${target.replace(/\\/g, "/")})`
             : "write_file(*)"
         );
