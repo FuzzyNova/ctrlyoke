@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-13
+
 ### Changed
 
 - With `worktrees.root` set, a new named worktree whose `directory` is a bare name is created in a folder for its repository, `<worktrees.root>/<repository>-<hash>/<name>`, instead of directly in the shared root. Two repositories can now both use `directory: bug-fix`. Existing worktrees are still found by name where they are. Without `worktrees.root`, nothing changes.
