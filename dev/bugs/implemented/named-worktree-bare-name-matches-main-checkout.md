@@ -2,13 +2,13 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), reproduced with bundled `resolveWorktreeDirectory` against a temp repo
 - **Area:** `src/utils/WorktreeUtils.ts` (`resolveWorktreeDirectory`), `src/core/orchestration/WorktreeManager.ts` (`listWorktreeDirectories`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
 `docs/workflows/worktrees.md` ("A bare name … reuses the registered linked worktree…"), the
 checkout-slots plan, and `listWorktreeDirectories`' doc comment all say a bare name matches
-a *linked* worktree. The bare-name filter only excludes `bare` entries and the source
+a _linked_ worktree. The bare-name filter only excludes `bare` entries and the source
 checkout, though. When ctrlyoke runs from a linked worktree, the repository's **main**
 checkout is a valid match whenever its folder name equals the bare name. The dashboard
 offers it as a completion too.
@@ -30,7 +30,7 @@ without asking.
 Nothing excludes the main worktree, which is the first entry of `git worktree list`. See
 the match filter at #selection:src/utils/WorktreeUtils.ts:168-173 and the completion
 filter in `listWorktreeDirectories` (#selection:src/core/orchestration/WorktreeManager.ts:692-700),
-which excludes only `repositoryRoot`, the *current* checkout's top level.
+which excludes only `repositoryRoot`, the _current_ checkout's top level.
 
 ## Suggested Fix
 

@@ -83,6 +83,14 @@ export type WorktreeDirectoryResolution =
   | { kind: typeof WORKTREE_DIRECTORY_KINDS.EXISTING; entry: GitWorktreeEntry }
   | { kind: typeof WORKTREE_DIRECTORY_KINDS.PLANNED; path: string };
 
+/** The main checkout is the parent of Git's shared administrative directory. */
+export function isMainWorktree(
+  entry: GitWorktreeEntry,
+  commonDirectory: string
+): boolean {
+  return pathsEqual(entry.worktreePath, path.dirname(commonDirectory));
+}
+
 function expandDirectoryPath(value: string): string {
   const home = os.homedir();
   if (value === "~") return path.resolve(home);
@@ -169,6 +177,7 @@ export async function resolveWorktreeDirectory(
   const matches = entries.filter(
     (entry) =>
       !entry.bare &&
+      !isMainWorktree(entry, commonDirectory) &&
       !pathsEqual(entry.worktreePath, sourceCheckoutRoot) &&
       identities.includes(path.basename(entry.worktreePath))
   );

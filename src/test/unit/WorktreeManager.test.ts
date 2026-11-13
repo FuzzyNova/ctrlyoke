@@ -459,7 +459,8 @@ suite("WorktreeManager", function () {
   });
 
   test("lists linked worktrees as named directories, never the source or a managed checkout", async () => {
-    const { parent, repository } = await makeNamedDirectory("checkout-list");
+    const { parent, repository, namedDirectoryPath } =
+      await makeNamedDirectory("checkout-list");
     const managed = await ensureManaged(manager(parent), repository);
     await managed.lease.release();
     const detached = path.join(parent, "detached-dir");
@@ -484,6 +485,19 @@ suite("WorktreeManager", function () {
         { name: "bug-fix", branchName: "old-dir-branch", detached: false },
         { name: "detached-dir", branchName: undefined, detached: true },
       ]
+    );
+    const fromLinkedCheckout =
+      await manager(parent).listWorktreeDirectories(namedDirectoryPath);
+    assert.deepStrictEqual(
+      fromLinkedCheckout.map(({ name }) => name),
+      ["detached-dir"]
+    );
+    assert.ok(
+      fromLinkedCheckout.every(
+        ({ worktreePath }) =>
+          path.basename(worktreePath) !== path.basename(repository)
+      ),
+      "the main checkout is not offered when the source is a linked worktree"
     );
   });
 

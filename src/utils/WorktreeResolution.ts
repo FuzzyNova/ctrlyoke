@@ -128,7 +128,9 @@ export function recordedWorktreeConfigForContinue(
     mode: WORKTREE_MODES.NAMED,
     directory: recorded.executionCheckoutRoot,
     branch: recorded.branchName,
-    base: recorded.baseCommit,
+    ...(recorded.comparisonBaseLabel
+      ? { base: recorded.comparisonBaseLabel }
+      : {}),
     ...(current.setup ? { setup: current.setup } : {}),
   };
 }

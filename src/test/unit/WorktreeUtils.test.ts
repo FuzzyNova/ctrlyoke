@@ -19,6 +19,7 @@ import {
   slugifyWorktreeName,
   validateWorktreeBranchName,
 } from "../../utils/WorktreeUtils";
+import { listWorktrees, gitCommonDir } from "../../utils/GitUtils";
 import type { GitWorktreeEntry } from "../../utils/GitUtils";
 
 suite("WorktreeUtils", function () {
@@ -100,6 +101,48 @@ suite("WorktreeUtils", function () {
         new RegExp(`Directory "${invalid.replace(/\./g, "\\.")}"`)
       );
     }
+  });
+
+  test("bare names do not match the main checkout from a linked worktree", async () => {
+    const parent = await makeDirectory("main-checkout-match");
+    const main = path.join(parent, "main-checkout");
+    const linked = path.join(parent, "linked-checkout");
+    const root = path.join(parent, "worktrees");
+    await fs.mkdir(root);
+    execFileSync("git", ["init", "-b", "main", main], { stdio: "ignore" });
+    execFileSync("git", [
+      "-C",
+      main,
+      "config",
+      "user.email",
+      "test@example.com",
+    ]);
+    execFileSync("git", ["-C", main, "config", "user.name", "Test"]);
+    await fs.writeFile(path.join(main, "README.md"), "main\n");
+    execFileSync("git", ["-C", main, "add", "README.md"]);
+    execFileSync("git", ["-C", main, "commit", "-m", "initial"], {
+      stdio: "ignore",
+    });
+    execFileSync(
+      "git",
+      ["-C", main, "worktree", "add", "-b", "feature", linked],
+      { stdio: "ignore" }
+    );
+
+    const common = await gitCommonDir(linked);
+    assert.ok(common);
+    const result = await resolveWorktreeDirectory(
+      linked,
+      path.basename(main),
+      await listWorktrees(linked),
+      common!,
+      root
+    );
+
+    assert.deepStrictEqual(result, {
+      kind: WORKTREE_DIRECTORY_KINDS.PLANNED,
+      path: path.join(root, path.basename(main)),
+    });
   });
 
   test("rejects unsafe and prunable directory paths", async () => {

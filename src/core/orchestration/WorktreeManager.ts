@@ -45,6 +45,7 @@ import {
   resolveWorktreeRoot as resolveConfiguredRoot,
   withWorktreeMutationLock,
   resolveWorktreeDirectory,
+  isMainWorktree,
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
@@ -693,6 +694,7 @@ export class WorktreeManager {
       .filter(
         (entry) =>
           !entry.bare &&
+          !isMainWorktree(entry, commonDirectory) &&
           !entry.prunable &&
           entry.prunableReason === undefined &&
           !pathsEqual(entry.worktreePath, repositoryRoot) &&
