@@ -194,10 +194,16 @@ describe("WorkflowSwitcher — loaded state", () => {
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(screen.getByRole("button", { name: "Filter workflows" }));
     await user.click(document.getElementById("workflow-schedule-filter")!);
-    await user.click(within(document.body).getByRole("button", { name: "Not scheduled" }));
+    await user.click(
+      within(document.body).getByRole("button", { name: "Not scheduled" })
+    );
     expect(screen.queryByText("Expired schedule")).not.toBeInTheDocument();
-    await user.click(within(document.body).getAllByRole("button", { name: "Scheduled" })[1]);
-    await user.click(within(document.body).getByRole("button", { name: "Not scheduled" }));
+    await user.click(
+      within(document.body).getAllByRole("button", { name: "Scheduled" })[1]
+    );
+    await user.click(
+      within(document.body).getByRole("button", { name: "Not scheduled" })
+    );
     expect(screen.getByText("Expired schedule")).toBeInTheDocument();
   });
 

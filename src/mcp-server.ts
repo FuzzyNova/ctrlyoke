@@ -1663,19 +1663,16 @@ export class CtrlYokeMCPServer {
     if (existingStep) {
       if (isScriptStep(existingStep)) {
         const allowedScriptStepFields = new Set<string>([
-          "type",
-          "name",
-          "enabled",
-          "color",
-          "script",
+          PROMPT_PROPERTIES.STEP_TYPE,
+          PROMPT_PROPERTIES.NAME,
+          PROMPT_PROPERTIES.ENABLED,
+          PROMPT_PROPERTIES.COLOR,
+          PROMPT_PROPERTIES.SCRIPT,
           "returns",
           ...SCRIPT_STEP_COPY_FIELDS,
         ]);
         const rejectedKeys = [
-          ...new Set([
-            ...Object.keys(updates),
-            ...(clearProperties ?? []),
-          ]),
+          ...new Set([...Object.keys(updates), ...(clearProperties ?? [])]),
         ].filter((key) => !allowedScriptStepFields.has(key));
         if (rejectedKeys.length > 0) {
           if (

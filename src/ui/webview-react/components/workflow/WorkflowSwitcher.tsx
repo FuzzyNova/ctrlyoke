@@ -1526,12 +1526,13 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       );
     const workflowKey = workflow.workflowKey ?? workflow.address?.workflowKey;
     const matchingRecentLineage = sortedRecentWorkflows.find(
-      (recentWorkflow) =>
-        recentWorkflow.address.workflowKey === workflowKey
+      (recentWorkflow) => recentWorkflow.address.workflowKey === workflowKey
     );
+    // The recent lineage carries the host's next-run time; a row with no
+    // recent entry falls back to its own schedule.
     const isScheduled =
-      matchingRecentLineage !== undefined &&
-      upcomingScheduleRunAt(matchingRecentLineage, scheduleNow) !== null;
+      upcomingScheduleRunAt(matchingRecentLineage ?? workflow, scheduleNow) !==
+      null;
 
     if (
       (favoriteWorkflowsOnly && !isFavorite) ||

@@ -15,7 +15,8 @@ export function settleCliParallelGroupMember(
   if (!state.started.has(stepIndex)) return false;
 
   if (status === STEP_STATUS.FAILED) {
-    const changed = !state.failed.has(stepIndex) || state.completed.has(stepIndex);
+    const changed =
+      !state.failed.has(stepIndex) || state.completed.has(stepIndex);
     state.completed.delete(stepIndex);
     state.failed.add(stepIndex);
     return changed;
@@ -30,7 +31,8 @@ export function settleCliParallelGroupMember(
     return false;
   }
 
-  const changed = !state.completed.has(stepIndex) || state.failed.has(stepIndex);
+  const changed =
+    !state.completed.has(stepIndex) || state.failed.has(stepIndex);
   state.failed.delete(stepIndex);
   state.completed.add(stepIndex);
   return changed;

@@ -38,7 +38,10 @@ import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { ExecutionState } from "../../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
-import { upcomingScheduleRunAt } from "@utils/workflowScheduleDisplay";
+import {
+  upcomingScheduleRunAt,
+  upcomingScheduleRunLabel,
+} from "@utils/workflowScheduleDisplay";
 import { isWorkflowActive } from "../../utils/status";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
@@ -213,15 +216,9 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
     typeof workflow.totalSteps === "number" && workflow.totalSteps > 0;
-  const upcomingRunAt = scheduled
-    ? upcomingScheduleRunAt(workflow, Date.now())
-    : null;
   const timeAgo = scheduled
-    ? !workflow.schedule?.enabled
-      ? WORKFLOW_SCHEDULE_LABELS.pausedNextRun
-      : upcomingRunAt !== null
-        ? `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(upcomingRunAt).toLocaleString()}`
-        : WORKFLOW_SCHEDULE_LABELS.noNextRun
+    ? (upcomingScheduleRunLabel(workflow, Date.now()) ??
+      WORKFLOW_SCHEDULE_LABELS.pausedNextRun)
     : formatRelativeTimeVerbose(workflow.lastModifiedAt || workflow.startedAt);
   const accessibleName = composeRowAccessibleName([
     workflow.workflowName,

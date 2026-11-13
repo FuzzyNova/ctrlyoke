@@ -12,7 +12,7 @@ import type {
   WorktreeRunProjection,
 } from "@root/types/CtrlYokeTypes";
 import { Icon } from "../shared/Icon";
-import { upcomingScheduleRunAt } from "@utils/workflowScheduleDisplay";
+import { upcomingScheduleRunLabel } from "@utils/workflowScheduleDisplay";
 
 /**
  * Whether this tier renders the *content* of a row compactly — today the
@@ -228,16 +228,10 @@ function scheduleTitle(
   schedule: WorkflowSchedule | undefined,
   scheduleNextRunAt: number | undefined
 ): string {
-  if (!schedule) return WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow;
-  if (!schedule.enabled) return WORKFLOW_SCHEDULE_LABELS.pausedNextRun;
-  if (!schedule.trigger) return WORKFLOW_SCHEDULE_LABELS.noNextRun;
-  const nextRunAt = upcomingScheduleRunAt(
-    { schedule, scheduleNextRunAt },
-    Date.now()
+  return (
+    upcomingScheduleRunLabel({ schedule, scheduleNextRunAt }, Date.now()) ??
+    WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
   );
-  return nextRunAt === null
-    ? WORKFLOW_SCHEDULE_LABELS.noNextRun
-    : `${WORKFLOW_SCHEDULE_LABELS.nextRun}: ${new Date(nextRunAt).toLocaleString()}`;
 }
 
 /**

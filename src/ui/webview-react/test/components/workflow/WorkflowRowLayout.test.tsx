@@ -253,7 +253,9 @@ describe("row action buttons", () => {
       />
     );
     const title = screen.getByRole("button").getAttribute("title")!;
-    expect(title).not.toContain(new Date(Date.now() - 86_400_000).toLocaleString());
+    expect(title).not.toContain(
+      new Date(Date.now() - 86_400_000).toLocaleString()
+    );
     expect(title).toContain("Next run:");
   });
 
