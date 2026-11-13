@@ -26,16 +26,21 @@ steps:
 
 ## Permission modes
 
-| Mode                  | Dashboard label              | What the harness may do                                                                                                |
-| --------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `dangerouslyAllowAll` | Dangerously Allow All (yolo) | Everything, with no approvals and no deny list. Each harness's own "skip all permissions" flag.                        |
-| `allowAll`            | Allow All                    | Everything except the **Denied Tools** list. This is the default.                                                      |
-| `custom`              | Custom                       | The **Allowed Tools** list, minus the **Denied Tools** list. Anything else is left to the harness to ask about.        |
-| `none`                | None                         | ctrlyoke passes no permission flags at all. The harness uses its own configuration, such as `~/.claude/settings.json`. |
+| Mode                  | Dashboard label                    | What the harness may do                                                                                                                                |
+| --------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dangerouslyAllowAll` | Dangerously Allow All (yolo)       | Everything, with no approvals and no deny list. Each harness's own "skip all permissions" flag.                                                        |
+| `allowAll`            | Allow All                          | Everything except the **Denied Tools** list. This is the default.                                                                                      |
+| `auto`                | Auto (harness judges each request) | The harness's safety judge approves or blocks each request. Denied tools stay blocked; allowed tools are pre-approved but do not limit other requests. |
+| `custom`              | Custom                             | The **Allowed Tools** list, minus the **Denied Tools** list. Anything else is left to the harness to ask about.                                        |
+| `none`                | None                               | ctrlyoke passes no permission flags at all. The harness uses its own configuration, such as `~/.claude/settings.json`.                                 |
 
 `none` does not deny anything. It hands the decision back to the harness, so
 use it when you already manage permissions in the harness itself. Setting
 `toolPermissions: null` behaves the same as `mode: none`.
+
+Modes in safety order: `dangerouslyAllowAll`, `allowAll`, `auto`, `custom`,
+`none`. Codex Auto can be wider than Custom: its reviewer may approve an
+escalation out of the sandbox, while headless Custom has no escalation path.
 
 In the dashboard, set the mode on the **Permissions** tab of the
 [workflow properties panel](/workflows/properties-panel#permissions), or from the
@@ -48,11 +53,33 @@ Permissions quick picker in the prompt editor's footer.
 A [headless](/reference/settings#defaults-executionmode) step has no terminal, so an approval
 prompt can never be answered. With `custom` mode, a tool that is not on the
 allow list is refused and the step may not make progress. ctrlyoke warns once
-when a headless step starts with a mode other than `allowAll` or
+when a headless step starts with a mode other than `allowAll`, `auto`, or
 `dangerouslyAllowAll` (on Antigravity, other than `dangerouslyAllowAll`). Turn the warning off with
 [`ui.showHeadlessPermissionWarning`](/reference/settings#ui-showheadlesspermissionwarning).
 
 For CI, see [Tool permissions on CI](/cli/ci#tool-permissions).
+
+Claude Auto is available on Opus 4.6+, Sonnet 4.6+, Haiku 5.5 and Fable
+models on the Anthropic API; eligibility is stricter on Bedrock, Google's Agent
+Platform and Foundry. Copilot Auto is headless only. Interactive Copilot falls
+back to Custom because its per-run assisted flag is unsupported there; enable
+it in Copilot with `/permissions assisted` (or
+`defaultPermissionMode: "assisted"` in its settings).
+
+#### Using a harness's Auto mode before ctrlyoke 0.8
+
+Set `mode: none` and add the harness flag through `additionalArgs`:
+
+| Harness     | `additionalArgs` recipe                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| Claude      | `--permission-mode auto`                                                                 |
+| Copilot     | `--assisted-approval` (headless only)                                                    |
+| Codex       | `-c approvals_reviewer=auto_review`; headless also needs `-c approval_policy=on-request` |
+| Qwen        | `--approval-mode auto --allowed-tools ShellTool` (headless)                              |
+| Antigravity | No flag needed on 1.5.7+; it starts in Auto by default                                   |
+
+This bypasses ctrlyoke's deny list, including denied MCP tools, so use the
+first-class `auto` mode after upgrading.
 
 ## Tool patterns
 
@@ -255,12 +282,13 @@ The `ctrlyoke` CLI can override the workflow level for one run with
 
 Each mode reads only some of the lists, whatever harness runs the step:
 
-| Mode                  | Allowed Tools | Denied Tools |
-| --------------------- | ------------- | ------------ |
-| `dangerouslyAllowAll` | ignored       | ignored      |
-| `allowAll`            | ignored       | applied      |
-| `custom`              | applied       | applied      |
-| `none`                | ignored       | ignored      |
+| Mode                  | Allowed Tools                | Denied Tools |
+| --------------------- | ---------------------------- | ------------ |
+| `dangerouslyAllowAll` | ignored                      | ignored      |
+| `allowAll`            | ignored                      | applied      |
+| `auto`                | pre-approval; does not limit | applied      |
+| `custom`              | applied                      | applied      |
+| `none`                | ignored                      | ignored      |
 
 A list the mode ignores is not passed to the harness and never produces a
 compatibility warning. Not every harness can enforce every individual pattern.
@@ -278,14 +306,14 @@ attaches, which it receives as that server's `disabled_tools`. It can't enforce
 an entry for a server configured only in Codex's own `config.toml`, a wildcard
 tool name, or a shell pattern.
 
-| Harness                                   | `dangerouslyAllowAll`                            | `allowAll`                                                                     | `custom`                                                                                                                           |
-| ----------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                         | `--allow-all-tools` plus `--deny-tool`                                         | `--allow-tool` plus `--deny-tool`                                                                                                  |
-| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`                 | `--permission-mode bypassPermissions --tools default` plus `--disallowedTools` | Headless: `--permission-mode dontAsk`; interactive: `--permission-mode default`; both use `--allowedTools` and `--disallowedTools` |
-| [Codex](/harnesses/codex-cli)             | `-a never`                                       | `-a on-request` plus MCP `disabled_tools`                                      | `-a on-request` plus MCP `disabled_tools`; allow list ignored                                                                      |
-| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults)    | allow everything, plus the deny list                                           | ask for everything, allow the allow list, deny the deny list                                                                       |
-| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                             | `--approval-mode auto-edit` plus `--exclude-tools`                             | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                                             |
-| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions` (lists ignored) | `--settings` with `always-proceed` and the deny list                           | `--settings` with allow and deny lists; allowed command rules match the whole command line                                         |
+| Harness                                   | `dangerouslyAllowAll`                   | `allowAll`                          | `auto`                                                                                  | `custom`                                                    |
+| ----------------------------------------- | --------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                | `--allow-all-tools` plus deny rules | Headless: `--assisted-approval` plus allow/deny rules; interactive falls back to Custom | allow/deny rules                                            |
+| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`        | `bypassPermissions` plus deny rules | `--permission-mode auto` plus allow/deny rules; eligible models only                    | Headless `dontAsk`; interactive `default`; allow/deny rules |
+| [Codex](/harnesses/codex-cli)             | `-a never`                              | `-a on-request` plus MCP deny rules | auto reviewer plus `on-request`; may approve sandbox escalation                         | `-a on-request` plus MCP deny rules; allow list ignored     |
+| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode defaults) | allow everything plus deny rules    | Unsupported; falls back to Custom                                                       | ask, allow list, deny list                                  |
+| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                    | `auto-edit` plus deny rules         | `--approval-mode auto` plus allow/deny rules                                            | `default` plus allow/deny rules                             |
+| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`        | `always-proceed` plus deny rules    | settings `agentMode: auto` plus allow/deny rules                                        | settings allow/deny rules                                   |
 
 Antigravity command allow rules match the entire raw command line. A command
 chain containing an allowed command plus anything else is not allowed piecemeal.

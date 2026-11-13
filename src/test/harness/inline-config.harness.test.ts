@@ -457,7 +457,7 @@ interface ShellProbeCase {
 
 /**
  * The `auto` permission-mode findings of
- * dev/backlog/AUTO_PERMISSION_MODE_PLAN.md, plus the `custom` regression the
+ * dev/implemented/AUTO_PERMISSION_MODE_PLAN.md, plus the `custom` regression the
  * agy 1.5.7 auto default broke. Under every harness's judge the deny list
  * still blocks while the allow list only pre-approves, so an unlisted, benign
  * command chained to an allowed one runs in `auto` but never in `custom`.

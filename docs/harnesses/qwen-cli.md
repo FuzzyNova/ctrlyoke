@@ -95,6 +95,8 @@ The permission `mode` maps to Qwen Code flags:
 
 - `dangerouslyAllowAll` → `-y`. The deny list is ignored.
 - `allowAll` → `--approval-mode auto-edit`, plus `--exclude-tools` with the deny list
+- `auto` → `--approval-mode auto`, plus `--allowed-tools` and `--exclude-tools`. Headless runs
+  also include bare `ShellTool` so the judge can review shell calls.
 - `custom` → `--approval-mode default`, plus `--allowed-tools` with the allow list and
   `--exclude-tools` with the deny list
 - `none` → no permission flags (Qwen Code's own settings)

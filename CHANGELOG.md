@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The **Auto** permission mode delegates each request to the harness's safety judge while keeping denied tools blocked and treating allowed tools as pre-approvals. Unsupported harnesses fall back to Custom; Copilot Auto is headless only.
+
 ### Changed
 
 - The permission picker offers **Auto (harness judges each request)**. In Auto, both tool lists remain editable: the deny list blocks requests and the allow list pre-approves matching requests without limiting others. Unsupported harnesses show the analyzer's per-harness custom-fallback warning.

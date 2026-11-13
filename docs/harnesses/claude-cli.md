@@ -123,6 +123,9 @@ The permission `mode` maps to Claude Code flags:
 
 - `dangerouslyAllowAll` → `--dangerously-skip-permissions`. The deny list is ignored.
 - `allowAll` → `--permission-mode bypassPermissions --tools default`, plus `--disallowedTools`
+- `auto` → `--permission-mode auto`, plus `--allowedTools` and `--disallowedTools`. Auto is
+  available on Opus 4.6+, Sonnet 4.6+, Haiku 5.5 and Fable models on the Anthropic API; eligibility
+  is stricter on Bedrock, Google's Agent Platform and Foundry.
   with the deny list
 - `custom` → `--allowedTools` with the allow list and `--disallowedTools` with the deny list. In
   headless runs ctrlyoke also passes `--permission-mode dontAsk`, which denies any tool that isn't
