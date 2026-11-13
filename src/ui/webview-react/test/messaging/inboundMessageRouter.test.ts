@@ -1135,6 +1135,26 @@ describe("STARTUP_COMPLETE", () => {
     });
   });
 
+  it("keeps the host's time zone from the recent-workflows list", () => {
+    useUiStore.setState({ hostTimeZone: undefined });
+    renderHook(() => useInboundMessageRouter());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECENT_WORKFLOWS, {
+        workflows: [],
+        seq: 1,
+        hostTimeZone: "America/New_York",
+      });
+    });
+    expect(useUiStore.getState().hostTimeZone).toBe("America/New_York");
+
+    // A list from an older host that sends no zone keeps the known one.
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECENT_WORKFLOWS, { workflows: [], seq: 2 });
+    });
+    expect(useUiStore.getState().hostTimeZone).toBe("America/New_York");
+  });
+
   it("applies a pushed recent-workflow row", () => {
     useUiStore.getState().setRecentWorkflows([], 100);
     renderHook(() => useInboundMessageRouter());

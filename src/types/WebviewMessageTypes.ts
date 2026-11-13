@@ -1289,6 +1289,11 @@ export interface RecentWorkflowsMessage {
   type: typeof MESSAGE_TYPES.RECENT_WORKFLOWS;
   workflows: RecentWorkflowEntry[];
   /**
+   * The host's IANA time zone. Schedule times are the host's wall clock, so a
+   * dashboard in a browser on another machine previews and shows them in it.
+   */
+  hostTimeZone?: string;
+  /**
    * `nextRecentWorkflowsSequence()` taken before the scan read anything. A
    * `RECENT_WORKFLOW_UPDATED` with a higher sequence is newer than this list's
    * row for that lineage, however late the list arrives.

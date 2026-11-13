@@ -7,6 +7,14 @@ import {
   nextScheduleOccurrence,
   validateWorkflowSchedule,
 } from "@root/utils/WorkflowSchedule";
+import {
+  formatScheduleTime,
+  LOCAL_CALENDAR,
+  scheduleCalendar,
+  type CalendarDate,
+  type ScheduleCalendar,
+} from "@root/utils/ScheduleCalendar";
+import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { sendMessage } from "@messaging/sendMessage";
 import { Button } from "@components/shared";
@@ -30,9 +38,9 @@ const FREQUENCY_OPTIONS: ReadonlyArray<readonly [Frequency, string]> = [
 ];
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const localDateTimeValue = (date: Date) =>
+const localDateTimeValue = (date: CalendarDate) =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-const localTimeValue = (date: Date) =>
+const localTimeValue = (date: CalendarDate) =>
   `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
 /** Everything the pickers edit. A cron trigger stores no start date, so recurring pickers edit a time, not a datetime. */
@@ -61,9 +69,15 @@ function cronFor(picker: PickerState): string {
   }
 }
 
-/** Maps a stored schedule back onto the friendliest picker that reproduces it exactly. */
-function pickerFor(schedule?: WorkflowSchedule): PickerState {
-  const soon = new Date(Date.now() + 60 * 60_000);
+/**
+ * Maps a stored schedule back onto the friendliest picker that reproduces it
+ * exactly. Defaults are the next whole hour on the host's wall clock.
+ */
+function pickerFor(
+  calendar: ScheduleCalendar,
+  schedule?: WorkflowSchedule
+): PickerState {
+  const soon = calendar.fromEpoch(Date.now() + 60 * 60_000);
   soon.setMinutes(0, 0, 0);
   const defaults: PickerState = {
     frequency: FREQUENCY.once,
@@ -75,11 +89,11 @@ function pickerFor(schedule?: WorkflowSchedule): PickerState {
   };
   if (!schedule) return defaults;
   if ("at" in schedule.trigger) {
-    const at = new Date(schedule.trigger.at);
     return {
       ...defaults,
       onceAt: schedule.trigger.at.slice(0, 16),
-      time: localTimeValue(at),
+      // The HH:mm of YYYY-MM-DDTHH:mm, so it is the host's wall clock as typed.
+      time: schedule.trigger.at.slice(11, 16),
     };
   }
   const cron = schedule.trigger.cron;
@@ -154,7 +168,13 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
 }) => {
   const idPrefix = useId();
   const fieldId = (name: string) => `${idPrefix}-${name}`;
-  const initial = useMemo(() => pickerFor(schedule), [schedule]);
+  // Schedule times are the host's wall clock, whatever zone this browser is in.
+  const hostTimeZone = useUiStore((s) => s.hostTimeZone);
+  const calendar = scheduleCalendar(hostTimeZone);
+  const initial = useMemo(
+    () => pickerFor(calendar, schedule),
+    [calendar, schedule]
+  );
   const [picker, setPicker] = useState<PickerState>(initial);
   const [until, setUntil] = useState(schedule?.until?.slice(0, 16) ?? "");
   // A new schedule is always created active: pressing Schedule is the opt-in.
@@ -184,13 +204,13 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
   const shapeError =
     frequency === FREQUENCY.weekly && picker.weekdays.length === 0
       ? LABELS.noWeekdays
-      : validateWorkflowSchedule(previewSchedule);
+      : validateWorkflowSchedule(previewSchedule, calendar);
   // A cron trigger stores no start date, so the backend fires the first
   // occurrence after now. Preview exactly that.
   const next =
     typeof shapeError === "string"
       ? null
-      : nextScheduleOccurrence(previewSchedule, now);
+      : nextScheduleOccurrence(previewSchedule, now, calendar);
   // A one-shot in the past (or an Until already behind every occurrence)
   // saves fine but never fires, so refuse it unless the schedule is paused.
   const validationError =
@@ -392,8 +412,13 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
             ? LABELS.pausedNextRun
             : next === null
               ? LABELS.noNextRun
-              : new Date(next).toLocaleString()}
+              : formatScheduleTime(next, hostTimeZone)}
         </p>
+        {calendar !== LOCAL_CALENDAR && (
+          <p className="text-description-fg">
+            {LABELS.hostTimeZoneNote} {hostTimeZone}.
+          </p>
+        )}
         {hasError && (
           <p role="alert" className="text-error-fg">
             {validationError}

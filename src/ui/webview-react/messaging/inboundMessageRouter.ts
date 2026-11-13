@@ -1778,6 +1778,7 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.RECENT_WORKFLOWS] = (message) => {
     const uiStore = useUiStore.getState();
     uiStore.setRecentWorkflows(message.workflows || [], message.seq);
+    if (message.hostTimeZone) uiStore.setHostTimeZone(message.hostTimeZone);
   };
 
   // RECENT_WORKFLOW_UPDATED - one lineage's row, pushed when it changes

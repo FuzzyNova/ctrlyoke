@@ -829,6 +829,11 @@ interface UiState {
   /** `seq` of the last full list applied; older lists and rows are dropped. */
   recentWorkflowsListSeq: number;
   /**
+   * The host's IANA time zone, from `RECENT_WORKFLOWS`. Schedule times are
+   * the host's wall clock; undefined until the first list arrives.
+   */
+  hostTimeZone: string | undefined;
+  /**
    * `seq` of each row pushed since that list, by workflow key. A full list
    * that began scanning before a row was pushed must not overwrite that row.
    */
@@ -1140,6 +1145,7 @@ interface UiActions {
   setRecentWorkflows: (workflows: RecentWorkflow[], seq?: number) => void;
   /** Applies one pushed row (`RECENT_WORKFLOW_UPDATED`) unless something newer already landed. */
   upsertRecentWorkflow: (workflow: RecentWorkflow, seq: number) => void;
+  setHostTimeZone: (timeZone: string | undefined) => void;
   /**
    * Patches the recent-workflow entry sharing this summary's lineage
    * (execution state, step count, token totals, worktree) in place. Recent
@@ -1408,6 +1414,7 @@ const initialState: UiState = {
   recentWorkflows: [],
   recentWorkflowsLoaded: false,
   recentWorkflowsListSeq: 0,
+  hostTimeZone: undefined,
   recentWorkflowRowSeqs: {},
   recentWorkflowsDropdownOpen: false,
   loadedWorkflows: [],
@@ -2057,6 +2064,8 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
       // RECENT WORKFLOWS
       // ============================================================================
+
+      setHostTimeZone: (timeZone) => set({ hostTimeZone: timeZone }),
 
       setRecentWorkflows: (workflows, seq) =>
         set((state) => {

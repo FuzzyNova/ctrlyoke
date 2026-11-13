@@ -279,7 +279,11 @@ export function useWorkflowContextMenu({
               : WORKFLOW_SCHEDULE_LABELS.schedule,
             icon: "codicon-clock",
             disabled: false,
-            title: upcomingScheduleRunLabel(target, Date.now()),
+            title: upcomingScheduleRunLabel(
+              target,
+              Date.now(),
+              useUiStore.getState().hostTimeZone
+            ),
             // Opens the schedule panel inside the workflow dropdown, so the
             // dropdown must stay open (it opens it when the menu came from
             // the header).

@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowSchedule } from "@root/types/CtrlYokeTypes";
+import { localTimeZone } from "@root/utils/ScheduleCalendar";
+import { useUiStore } from "@store/uiStore";
 
 const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 vi.mock("@messaging/sendMessage", () => ({ sendMessage }));
@@ -25,6 +27,75 @@ describe("SchedulePanel", () => {
   afterEach(() => {
     cleanup();
     sendMessage.mockClear();
+    vi.useRealTimers();
+    useUiStore.setState({ hostTimeZone: undefined });
+  });
+
+  describe("when the host is in another time zone", () => {
+    // UTC+14, so its wall clock differs from any test machine's but its own.
+    const HOST_ZONE = "Pacific/Kiritimati";
+    // 02:00 on 2 December in the host's zone.
+    const NOW = Date.parse("2026-12-01T12:00:00Z");
+    const hostZoneDiffers = localTimeZone() !== HOST_ZONE;
+
+    function useHostZone() {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(NOW);
+      useUiStore.setState({ hostTimeZone: HOST_ZONE });
+    }
+
+    it.runIf(hostZoneDiffers)(
+      "defaults a once time to the host's next whole hour and names the zone",
+      () => {
+        useHostZone();
+        renderPanel();
+        expect(screen.getByLabelText("Date and time")).toHaveValue(
+          "2026-12-02T03:00"
+        );
+        expect(
+          screen.getByText(`Times are in the host's timezone, ${HOST_ZONE}.`)
+        ).toBeInTheDocument();
+      }
+    );
+
+    it.runIf(hostZoneDiffers)(
+      "refuses a once time already past on the host's clock",
+      () => {
+        useHostZone();
+        renderPanel();
+        fireEvent.change(screen.getByLabelText("Date and time"), {
+          target: { value: "2026-12-02T01:00" },
+        });
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "This schedule has no future runs."
+        );
+        fireEvent.change(screen.getByLabelText("Date and time"), {
+          target: { value: "2026-12-02T09:00" },
+        });
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      }
+    );
+
+    it.runIf(hostZoneDiffers)(
+      "previews a cron run at the host's wall-clock time",
+      () => {
+        useHostZone();
+        renderPanel({
+          enabled: true,
+          trigger: { cron: "0 9 * * *" },
+          hostId: "host",
+        });
+        const expected = new Date(
+          Date.parse("2026-12-01T19:00:00Z")
+        ).toLocaleString(undefined, {
+          timeZone: HOST_ZONE,
+          timeZoneName: "short",
+        });
+        expect(screen.getByText(/^Next run:/).closest("p")).toHaveTextContent(
+          expected
+        );
+      }
+    );
   });
 
   it("titles the view with the workflow name and backs out", () => {

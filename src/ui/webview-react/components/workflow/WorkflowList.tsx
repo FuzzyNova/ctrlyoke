@@ -213,11 +213,12 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   scheduled = false,
 }) => {
   const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
+  const hostTimeZone = useUiStore((s) => s.hostTimeZone);
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
     typeof workflow.totalSteps === "number" && workflow.totalSteps > 0;
   const timeAgo = scheduled
-    ? (upcomingScheduleRunLabel(workflow, Date.now()) ??
+    ? (upcomingScheduleRunLabel(workflow, Date.now(), hostTimeZone) ??
       WORKFLOW_SCHEDULE_LABELS.pausedNextRun)
     : formatRelativeTimeVerbose(workflow.lastModifiedAt || workflow.startedAt);
   const accessibleName = composeRowAccessibleName([
@@ -471,6 +472,7 @@ export const WorkflowList = React.forwardRef<
   const runningScrollContainerRef = useRef<HTMLDivElement>(null);
   const scheduledScrollContainerRef = useRef<HTMLDivElement>(null);
   const collapsedSections = useUiStore((s) => s.collapsedWorkflowListSections);
+  const hostTimeZone = useUiStore((s) => s.hostTimeZone);
   const recentScrollContainerRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(
@@ -504,12 +506,14 @@ export const WorkflowList = React.forwardRef<
   const hasRunningRows = runningRows.length > 0;
   const hasRecentRows = recentRows.length > 0;
   const scheduleNow = Date.now();
+  const nextRunAt = (workflow: RecentWorkflow) =>
+    upcomingScheduleRunAt(workflow, scheduleNow, hostTimeZone) ??
+    Number.MAX_SAFE_INTEGER;
   // Favourites first, as in history, then soonest next run.
   const orderedScheduledWorkflows = [...scheduledWorkflows].sort(
     (a, b) =>
       Number(b.isFavorite ?? false) - Number(a.isFavorite ?? false) ||
-      (upcomingScheduleRunAt(a, scheduleNow) ?? Number.MAX_SAFE_INTEGER) -
-        (upcomingScheduleRunAt(b, scheduleNow) ?? Number.MAX_SAFE_INTEGER)
+      nextRunAt(a) - nextRunAt(b)
   );
   const hasScheduledRows = orderedScheduledWorkflows.length > 0;
   const runningCollapsed = collapsedSections.includes(

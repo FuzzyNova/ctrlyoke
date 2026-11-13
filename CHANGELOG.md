@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- When the dashboard is open in a browser whose timezone differs from the machine running ctrlyoke, such as a hosted dashboard on a server set to UTC, the Schedule view and the Scheduled section show times in the host's timezone and name it. The Schedule view also says which timezone its times are in.
+
+### Fixed
+
+- The Schedule view's **Next run** preview, its default **Once** time and its check for a schedule with no future runs use the host's timezone instead of the browser's. Before, a hosted dashboard in another timezone previewed a different time than the one that ran, and could refuse a valid one-shot time or accept one already past.
+
 ## [0.7.1] - 2026-11-13
 
 ### Changed

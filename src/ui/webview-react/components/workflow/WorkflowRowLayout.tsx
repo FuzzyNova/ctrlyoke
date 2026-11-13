@@ -13,6 +13,7 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import { Icon } from "../shared/Icon";
 import { upcomingScheduleRunLabel } from "@utils/workflowScheduleDisplay";
+import { useUiStore } from "@store/uiStore";
 
 /**
  * Whether this tier renders the *content* of a row compactly — today the
@@ -208,31 +209,30 @@ interface ScheduleRowActionButtonProps {
  */
 export const ScheduleRowActionButton: React.FC<
   ScheduleRowActionButtonProps
-> = ({ schedule, scheduleNextRunAt, onOpen }) => (
-  <RowActionButton
-    icon="codicon-clock"
-    title={scheduleTitle(schedule, scheduleNextRunAt)}
-    onClick={onOpen}
-    revealOnHover={!schedule}
-    toneClassName={
-      schedule?.enabled
-        ? "text-focus-fg"
-        : schedule
-          ? "text-description-fg opacity-60"
-          : "text-description-fg hover:text-foreground"
-    }
-  />
-);
-
-function scheduleTitle(
-  schedule: WorkflowSchedule | undefined,
-  scheduleNextRunAt: number | undefined
-): string {
+> = ({ schedule, scheduleNextRunAt, onOpen }) => {
+  const hostTimeZone = useUiStore((s) => s.hostTimeZone);
   return (
-    upcomingScheduleRunLabel({ schedule, scheduleNextRunAt }, Date.now()) ??
-    WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
+    <RowActionButton
+      icon="codicon-clock"
+      title={
+        upcomingScheduleRunLabel(
+          { schedule, scheduleNextRunAt },
+          Date.now(),
+          hostTimeZone
+        ) ?? WORKFLOW_SCHEDULE_LABELS.scheduleWorkflow
+      }
+      onClick={onOpen}
+      revealOnHover={!schedule}
+      toneClassName={
+        schedule?.enabled
+          ? "text-focus-fg"
+          : schedule
+            ? "text-description-fg opacity-60"
+            : "text-description-fg hover:text-foreground"
+      }
+    />
   );
-}
+};
 
 /**
  * Class every workflow dropdown row container carries. The container — not

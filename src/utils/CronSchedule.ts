@@ -1,3 +1,9 @@
+import {
+  LOCAL_CALENDAR,
+  type CalendarDate,
+  type ScheduleCalendar,
+} from "./ScheduleCalendar";
+
 /** A parsed five-field cron expression, with each field represented as allowed values. */
 export interface ParsedCronExpression {
   minute: ReadonlySet<number>;
@@ -89,17 +95,22 @@ export function parseCronExpression(expression: string): CronParseResult {
 }
 
 const SEARCH_HORIZON_MS = 5 * 366 * 24 * 60 * 60 * 1000;
-function matchesDay(cron: ParsedCronExpression, date: Date): boolean {
+function matchesDay(cron: ParsedCronExpression, date: CalendarDate): boolean {
   const dom = cron.dayOfMonth.has(date.getDate());
   const dow = cron.dayOfWeek.has(date.getDay());
   if (cron.dayOfMonthRestricted && cron.dayOfWeekRestricted) return dom || dow;
   return dom && dow;
 }
 
-/** Returns the next matching local wall-clock minute after `afterMs`, within five years. */
+/**
+ * Returns the next matching wall-clock minute after `afterMs`, within five
+ * years. Wall-clock time is `calendar`'s zone: the process's local zone by
+ * default, or the host's zone when a dashboard previews it from elsewhere.
+ */
 export function nextCronOccurrence(
   expression: string,
-  afterMs: number
+  afterMs: number,
+  calendar: ScheduleCalendar = LOCAL_CALENDAR
 ): number | null {
   const result = parseCronExpression(expression);
   if (!result.ok || !Number.isFinite(afterMs)) return null;
@@ -107,7 +118,7 @@ export function nextCronOccurrence(
   const end = afterMs + SEARCH_HORIZON_MS;
   // Truncate in absolute time: local setters choose the earlier copy of an
   // ambiguous fall-back minute and can move this cursor backwards.
-  const cursor = new Date(Math.floor(afterMs / 60_000) * 60_000);
+  const cursor = calendar.fromEpoch(Math.floor(afterMs / 60_000) * 60_000);
   // Wall-clock minute-of-day of the previous cursor position on the same date;
   // -1 after a jump to the start of a new day, so a DST gap at midnight is still seen.
   let previousMinuteOfDay = cursor.getHours() * 60 + cursor.getMinutes();

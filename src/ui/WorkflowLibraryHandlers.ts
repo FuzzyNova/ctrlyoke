@@ -57,6 +57,7 @@ import type {
 } from "../types/CtrlYokeTypes";
 import { validateWorkflowSchedule } from "../utils/WorkflowSchedule";
 import { currentScheduleHostId } from "../utils/WorkflowScheduleHost";
+import { localTimeZone } from "../utils/ScheduleCalendar";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
@@ -1320,13 +1321,21 @@ export class WorkflowLibraryHandlers {
             fresh: !joinInFlight,
           })
         : { workflows: [], seq: nextRecentWorkflowsSequence() };
-      pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, ...list });
+      pm({
+        type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+        ...list,
+        hostTimeZone: localTimeZone(),
+      });
     } catch (error) {
       Log.error(
         "[WorkflowLibraryHandlers] Failed to get recent workflows:",
         error
       );
-      pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, workflows: [] });
+      pm({
+        type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+        workflows: [],
+        hostTimeZone: localTimeZone(),
+      });
     }
   }
 

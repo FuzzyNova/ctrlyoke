@@ -1499,6 +1499,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const workflowDateStartMs = getDateStartMs(workflowDateFilter.from);
   const workflowDateEndMs = getDateEndMs(workflowDateFilter.to);
   const scheduleNow = Date.now();
+  const hostTimeZone = useUiStore((s) => s.hostTimeZone);
   const workflowMatchesSearch = (
     workflow: Pick<
       RecentWorkflow,
@@ -1531,8 +1532,11 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     // The recent lineage carries the host's next-run time; a row with no
     // recent entry falls back to its own schedule.
     const isScheduled =
-      upcomingScheduleRunAt(matchingRecentLineage ?? workflow, scheduleNow) !==
-      null;
+      upcomingScheduleRunAt(
+        matchingRecentLineage ?? workflow,
+        scheduleNow,
+        hostTimeZone
+      ) !== null;
 
     if (
       (favoriteWorkflowsOnly && !isFavorite) ||
@@ -1603,7 +1607,9 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
     ) {
       continue;
     }
-    if (upcomingScheduleRunAt(recentWorkflow, scheduleNow) !== null) {
+    if (
+      upcomingScheduleRunAt(recentWorkflow, scheduleNow, hostTimeZone) !== null
+    ) {
       scheduledWorkflows.push(recentWorkflow);
     } else {
       filteredRecentWorkflows.push(recentWorkflow);
