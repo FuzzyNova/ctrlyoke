@@ -166,7 +166,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     npmPackage: "@anthropic-ai/claude-code",
     versionPolicy: {
       minimum: "2.1.94",
-      testedWith: "2.1.322",
+      testedWith: "2.1.323",
       updateCommand: "claude update",
     },
     shouldStreamHeadlessOutput: true,

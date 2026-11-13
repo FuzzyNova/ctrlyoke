@@ -224,7 +224,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       // 0.15.5 added `--mcp-config`, which every MCP-using step passes; hooks
       // have been on by default since 0.14.0.
       minimum: "0.15.5",
-      testedWith: "0.27.1",
+      testedWith: "0.27.2",
       updateCommand: "npm install -g @qwen-code/qwen-code@latest",
     },
     shouldStreamHeadlessOutput: true,
