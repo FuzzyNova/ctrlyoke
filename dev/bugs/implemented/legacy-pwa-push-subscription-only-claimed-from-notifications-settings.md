@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), from code reading (every caller traced)
 - **Area:** `src/ui/webview-react/utils/browserNotifications.ts` (`getBrowserNotificationStatus`), `src/server/WebPushService.ts` (`isDeliverable`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

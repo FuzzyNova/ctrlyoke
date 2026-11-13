@@ -27,7 +27,10 @@ import { useMobileLayout } from "@hooks/useMobileLayout";
 import { useIosVisualViewportRootStyle } from "@hooks/useIosVisualViewportRootStyle";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { clearNotificationBadgeCount } from "@utils/browserNotifications";
+import {
+  claimPushSubscriptionIfUnowned,
+  clearNotificationBadgeCount,
+} from "@utils/browserNotifications";
 import { centerPanelMountDefaults } from "@utils/panelSync";
 import {
   animateEditorHeightPx,
@@ -453,6 +456,13 @@ function App() {
   useFontSizeSync();
 
   // Clear the PWA home screen badge when the user returns to the app.
+  useEffect(() => {
+    if (!isStandalone) return;
+    // Claim legacy subscriptions on dashboard load without prompting. The
+    // settings view remains responsible for reporting any registration errors.
+    void claimPushSubscriptionIfUnowned().catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!isStandalone) return;
     const clearBadge = () => {
