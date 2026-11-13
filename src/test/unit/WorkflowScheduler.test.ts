@@ -26,8 +26,7 @@ class FakeTimers {
     if (!first) throw new Error("No timer is armed");
     this.entries.delete(first[0]);
     first[1].callback();
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
   }
 }
 
@@ -61,6 +60,9 @@ suite("WorkflowScheduler", () => {
     overrides: {
       descriptor?: WorkflowLineageDescriptor;
       running?: boolean;
+      fire?: () => Promise<void>;
+      checkRunning?: () => Promise<boolean>;
+      beforeMetadata?: () => Promise<void>;
     } = {}
   ) {
     let descriptor = overrides.descriptor ?? makeDescriptor();
@@ -77,6 +79,7 @@ suite("WorkflowScheduler", () => {
           current: WorkflowLineageDescriptor
         ) => WorkflowLineageDescriptor
       ) => {
+        await overrides.beforeMetadata?.();
         descriptor = { ...mutate(descriptor), revision: descriptor.revision };
         return descriptor;
       },
@@ -87,9 +90,11 @@ suite("WorkflowScheduler", () => {
       now: () => now,
       timers,
       getHostId: () => "test-host",
-      isLineageRunning: () => overrides.running ?? false,
+      isLineageRunning: () =>
+        overrides.checkRunning?.() ?? (overrides.running ?? false),
       fire: async () => {
         fires += 1;
+        await overrides.fire?.();
       },
     });
     return {
@@ -143,6 +148,7 @@ suite("WorkflowScheduler", () => {
   });
 
   test("keeps a recurring schedule after it fires", async () => {
+    const missedAt = occurrence - 10_000;
     const testCase = setup({
       descriptor: makeDescriptor({
         schedule: {
@@ -150,6 +156,7 @@ suite("WorkflowScheduler", () => {
           hostId: "test-host",
           trigger: { cron: "0 9 * * *" },
         },
+        scheduleLastMissedAt: missedAt,
       }),
     });
     await testCase.scheduler.start();
@@ -158,6 +165,119 @@ suite("WorkflowScheduler", () => {
     assert.strictEqual(testCase.fires(), 1);
     assert.ok(testCase.descriptor().schedule);
     assert.ok(testCase.descriptor().scheduleNextRunAt! > occurrence);
+    assert.strictEqual(testCase.descriptor().scheduleLastMissedAt, undefined);
+  });
+
+  test("keeps a refreshed schedule when a scheduled fire is pending", async () => {
+    let resolveFire!: () => void;
+    const firePending = new Promise<void>((resolve) => (resolveFire = resolve));
+    const original = makeDescriptor({
+      schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+    });
+    const testCase = setup({ descriptor: original, fire: () => firePending });
+    await testCase.scheduler.start();
+    testCase.setNow(occurrence);
+    await testCase.timers.fireNext();
+
+    const newAt = occurrence + 8 * 60 * 60 * 1000;
+    const newSchedule = {
+      enabled: true,
+      hostId: "test-host",
+      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+    };
+    testCase.setDescriptor(
+      makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt })
+    );
+    await testCase.scheduler.refresh(key);
+    resolveFire();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
+    assert.strictEqual(testCase.timers.entries.size, 1);
+    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - occurrence);
+  });
+
+  test("keeps a refreshed schedule when the overlap check is pending", async () => {
+    let resolveCheck!: (running: boolean) => void;
+    const checkPending = new Promise<boolean>((resolve) => (resolveCheck = resolve));
+    const testCase = setup({
+      descriptor: makeDescriptor({
+        schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+      }),
+      checkRunning: () => checkPending,
+    });
+    await testCase.scheduler.start();
+    testCase.setNow(occurrence);
+    await testCase.timers.fireNext();
+    const newAt = occurrence + 8 * 60 * 60 * 1000;
+    const newSchedule = {
+      enabled: true,
+      hostId: "test-host",
+      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+    };
+    testCase.setDescriptor(makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt }));
+    await testCase.scheduler.refresh(key);
+    resolveCheck(true);
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
+    assert.strictEqual(testCase.timers.entries.size, 1);
+    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - occurrence);
+  });
+
+  test("keeps a refreshed schedule when a scheduled fire fails after refresh", async () => {
+    let rejectFire!: (error: Error) => void;
+    const firePending = new Promise<void>((_resolve, reject) => (rejectFire = reject));
+    const testCase = setup({
+      descriptor: makeDescriptor({
+        schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+      }),
+      fire: () => firePending,
+    });
+    await testCase.scheduler.start();
+    testCase.setNow(occurrence);
+    await testCase.timers.fireNext();
+    const newAt = occurrence + 8 * 60 * 60 * 1000;
+    const newSchedule = {
+      enabled: true,
+      hostId: "test-host",
+      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+    };
+    testCase.setDescriptor(makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt }));
+    await testCase.scheduler.refresh(key);
+    rejectFire(new Error("fire failed"));
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
+    assert.strictEqual(testCase.timers.entries.size, 1);
+    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - occurrence);
+  });
+
+  test("keeps a refreshed schedule when a late wake metadata write is pending", async () => {
+    let releaseMetadata!: () => void;
+    const metadataPending = new Promise<void>((resolve) => (releaseMetadata = resolve));
+    const testCase = setup({
+      beforeMetadata: () => metadataPending,
+      descriptor: makeDescriptor({
+        schedule: { enabled: true, hostId: "test-host", trigger: { cron: "0 9 * * *" } },
+      }),
+    });
+    await testCase.scheduler.start();
+    testCase.setNow(occurrence + 61_000);
+    await testCase.timers.fireNext();
+    const newAt = occurrence + 8 * 60 * 60 * 1000;
+    const newSchedule = {
+      enabled: true,
+      hostId: "test-host",
+      trigger: { at: new Date(newAt).toLocaleString("sv-SE").replace(" ", "T") },
+    };
+    testCase.setDescriptor(makeDescriptor({ schedule: newSchedule, scheduleNextRunAt: newAt }));
+    await testCase.scheduler.refresh(key);
+    releaseMetadata();
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    assert.strictEqual(testCase.descriptor().scheduleNextRunAt, newAt);
+    assert.strictEqual(testCase.timers.entries.size, 1);
+    assert.strictEqual([...testCase.timers.entries.values()][0].delay, newAt - (occurrence + 61_000));
   });
 
   test("refresh re-arms or disarms; overlapping occurrence is skipped", async () => {

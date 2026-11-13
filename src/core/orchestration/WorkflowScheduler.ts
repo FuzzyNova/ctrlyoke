@@ -36,6 +36,7 @@ export class WorkflowScheduler {
     WorkflowKey,
     ReturnType<typeof setTimeout>
   >();
+  private readonly generationsByWorkflow = new Map<WorkflowKey, number>();
   private disposed = false;
 
   constructor(private readonly options: WorkflowSchedulerOptions) {}
@@ -70,6 +71,7 @@ export class WorkflowScheduler {
   }
 
   async refresh(workflowKey: WorkflowKey): Promise<void> {
+    this.bumpGeneration(workflowKey);
     this.clearTimer(workflowKey);
     try {
       const descriptor = await this.options.lineageRepository.readDescriptor(
@@ -87,6 +89,8 @@ export class WorkflowScheduler {
 
   dispose(): void {
     this.disposed = true;
+    for (const workflowKey of this.generationsByWorkflow.keys())
+      this.bumpGeneration(workflowKey);
     for (const timer of this.timersByWorkflow.values())
       this.options.timers.clearTimeout(timer);
     this.timersByWorkflow.clear();
@@ -96,6 +100,7 @@ export class WorkflowScheduler {
     workflowKey: WorkflowKey,
     descriptor: WorkflowLineageDescriptor
   ): Promise<void> {
+    this.bumpGeneration(workflowKey);
     this.clearTimer(workflowKey);
     const schedule = descriptor.schedule;
     if (
@@ -152,11 +157,13 @@ export class WorkflowScheduler {
     scheduledAt: number
   ): Promise<void> {
     if (this.disposed) return;
+    const generation = this.getGeneration(workflowKey);
     try {
       const descriptor = await this.options.lineageRepository.readDescriptor(
         this.options.workspaceRoot,
         workflowKey
       );
+      if (!this.isCurrentGeneration(workflowKey, generation)) return;
       const schedule = descriptor.schedule;
       if (!schedule?.enabled || schedule.hostId !== this.options.getHostId())
         return;
@@ -170,14 +177,18 @@ export class WorkflowScheduler {
       if (late) {
         await this.writeMetadata(workflowKey, (current) => {
           const updated = { ...current, scheduleLastMissedAt: scheduledAt };
-          if (nextAt === null) delete updated.scheduleNextRunAt;
-          else updated.scheduleNextRunAt = nextAt;
+          if (this.isCurrentGeneration(workflowKey, generation)) {
+            if (nextAt === null) delete updated.scheduleNextRunAt;
+            else updated.scheduleNextRunAt = nextAt;
+          }
           return updated;
         });
+        if (!this.isCurrentGeneration(workflowKey, generation)) return;
         if (nextAt !== null) this.arm(workflowKey, nextAt);
         return;
       }
       const overlap = await this.options.isLineageRunning(workflowKey);
+      if (!this.isCurrentGeneration(workflowKey, generation)) return;
       if (overlap)
         Log.info(
           `[WorkflowScheduler] Skipping scheduled occurrence for ${workflowKey}; lineage is already running`
@@ -187,8 +198,11 @@ export class WorkflowScheduler {
           await this.options.fire(workflowKey);
           await this.writeMetadata(workflowKey, (current) => {
             const updated = { ...current, scheduleLastRunAt: scheduledAt };
-            if (nextAt === null) delete updated.scheduleNextRunAt;
-            else updated.scheduleNextRunAt = nextAt;
+            delete updated.scheduleLastMissedAt;
+            if (this.isCurrentGeneration(workflowKey, generation)) {
+              if (nextAt === null) delete updated.scheduleNextRunAt;
+              else updated.scheduleNextRunAt = nextAt;
+            }
             // A one-shot is used up once it has run: drop it so the lineage
             // no longer reads as scheduled. Only the same one-shot, in case
             // the user saved a new schedule while the fire was starting.
@@ -199,19 +213,24 @@ export class WorkflowScheduler {
               current.schedule.trigger.at === schedule.trigger.at
             ) {
               delete updated.schedule;
-              delete updated.scheduleLastMissedAt;
             }
             return updated;
           });
+          if (!this.isCurrentGeneration(workflowKey, generation)) return;
         } catch (error) {
           Log.error(
             `[WorkflowScheduler] Scheduled fire failed for ${workflowKey}:`,
             error
           );
-          await this.writeNextMetadata(workflowKey, nextAt);
+          if (!this.isCurrentGeneration(workflowKey, generation)) return;
+          await this.writeNextMetadata(workflowKey, nextAt, generation);
+          if (!this.isCurrentGeneration(workflowKey, generation)) return;
         }
       }
-      if (overlap) await this.writeNextMetadata(workflowKey, nextAt);
+      if (overlap) {
+        await this.writeNextMetadata(workflowKey, nextAt, generation);
+        if (!this.isCurrentGeneration(workflowKey, generation)) return;
+      }
       if (nextAt !== null) this.arm(workflowKey, nextAt);
     } catch (error) {
       Log.error(
@@ -235,14 +254,32 @@ export class WorkflowScheduler {
 
   private writeNextMetadata(
     workflowKey: WorkflowKey,
-    nextAt: number | null
+    nextAt: number | null,
+    generation?: number
   ): Promise<void> {
     return this.writeMetadata(workflowKey, (current) => {
+      if (
+        generation !== undefined &&
+        !this.isCurrentGeneration(workflowKey, generation)
+      )
+        return current;
       const updated = { ...current };
       if (nextAt === null) delete updated.scheduleNextRunAt;
       else updated.scheduleNextRunAt = nextAt;
       return updated;
     });
+  }
+
+  private getGeneration(workflowKey: WorkflowKey): number {
+    return this.generationsByWorkflow.get(workflowKey) ?? 0;
+  }
+
+  private bumpGeneration(workflowKey: WorkflowKey): void {
+    this.generationsByWorkflow.set(workflowKey, this.getGeneration(workflowKey) + 1);
+  }
+
+  private isCurrentGeneration(workflowKey: WorkflowKey, generation: number): boolean {
+    return !this.disposed && this.getGeneration(workflowKey) === generation;
   }
 
   private clearTimer(workflowKey: WorkflowKey): void {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), reproduced with a bundled `WorkflowScheduler` and fake timers
 - **Area:** `src/core/orchestration/WorkflowScheduler.ts` (`onWake`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Cron schedules no longer return a past occurrence or spin the scheduler during the repeated fall-back hour.
+- Editing a schedule while its scheduled run is starting no longer lets the old occurrence replace the new timer.
+- Saving a schedule or completing a recurring run clears the previous missed-run note.
 
 ## [0.7.0] - 2026-11-12
 

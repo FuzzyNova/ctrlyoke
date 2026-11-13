@@ -430,15 +430,28 @@ suite("WorkflowLibraryHandlers", () => {
         messages.at(-1)?.type,
         MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
       );
+      await handlers.handleSetSchedule(address, {
+        enabled: true,
+        trigger: { cron: "0 17 * * *" },
+      });
+      let descriptor = await repository.readDescriptor(workspaceRoot, workflowKey);
+      assert.strictEqual(descriptor.scheduleLastMissedAt, undefined);
+      assert.strictEqual(descriptor.scheduleNextRunAt, undefined);
+
+      await repository.updateDescriptor(workspaceRoot, workflowKey, (current) => ({
+        ...current,
+        scheduleNextRunAt: 123,
+        scheduleLastMissedAt: 456,
+      }));
       await handlers.handleClearSchedule(address);
-      const descriptor = await repository.readDescriptor(
+      descriptor = await repository.readDescriptor(
         workspaceRoot,
         workflowKey
       );
       assert.strictEqual(descriptor.schedule, undefined);
       assert.strictEqual(descriptor.scheduleNextRunAt, undefined);
       assert.strictEqual(descriptor.scheduleLastMissedAt, undefined);
-      assert.strictEqual(refreshed, 1);
+      assert.strictEqual(refreshed, 2);
     });
   });
 
