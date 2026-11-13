@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), from code reading
 - **Area:** `src/cli.ts` (parallel-group progress: `onWorkflowStatusMessage`, `onPromptComplete`), `src/core/WorkflowExecutor.ts` (`handleEvaluationError`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

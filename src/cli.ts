@@ -26,7 +26,6 @@ import {
   CLI_VALIDATE_TARGET_KINDS,
   CLI_VALIDATE_ERROR_CODES,
   getHarnessDisplayName,
-  STATUS_MESSAGE_SEVERITY,
   STEP_STATUS,
   RUN_DEFINITION_DECISIONS,
 } from "./types/DashboardConstants";
@@ -1386,22 +1385,6 @@ async function runCommand(
     });
     instance.onWorkflowStatusMessage((data) =>
       outputGate.write(() => {
-        if (data.severity === STATUS_MESSAGE_SEVERITY.ERROR) {
-          const state = getParallelGroup(
-            instance.promptQueue
-              .getState()
-              .parallelGroups.find(
-                (group) =>
-                  data.stepIndex >= group.startIndex &&
-                  data.stepIndex <= group.endIndex
-              )?.id
-          );
-          if (state?.started.has(data.stepIndex)) {
-            state.completed.delete(data.stepIndex);
-            state.failed.add(data.stepIndex);
-            renderParallelGroupProgress(state);
-          }
-        }
         CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
       })
     );
@@ -1409,8 +1392,16 @@ async function runCommand(
       outputGate.write(() => {
         const state = getParallelGroup(data.parallelGroupId);
         if (state?.started.has(data.stepIndex)) {
-          if (!state.failed.has(data.stepIndex)) {
+          const stepStatus = instance.promptQueue
+            .getState()
+            .results[data.stepIndex]?.status;
+          if (stepStatus === STEP_STATUS.FAILED) {
+            state.completed.delete(data.stepIndex);
+            state.failed.add(data.stepIndex);
+            renderParallelGroupProgress(state);
+          } else {
             state.completed.add(data.stepIndex);
+            state.failed.delete(data.stepIndex);
             renderParallelGroupProgress(state);
           }
         }

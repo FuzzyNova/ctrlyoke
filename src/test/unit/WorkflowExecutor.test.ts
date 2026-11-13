@@ -594,7 +594,8 @@ suite("WorkflowExecutor condition shell reporting", () => {
   test("shows retry detail only when an end-condition retry will be scheduled", async () => {
     const run = async (
       endCondition: NonNullable<PromptStep["endCondition"]>,
-      results: EvaluationResult[]
+      results: EvaluationResult[],
+      errorBehavior?: PromptStep["errorBehavior"]
     ): Promise<string[]> => {
       const queue = new PromptQueue();
       const integration = new MockHarnessIntegration(undefined, false);
@@ -619,7 +620,9 @@ suite("WorkflowExecutor condition shell reporting", () => {
           );
         }
       };
-      queue.loadPrompts({ steps: [{ prompt: "check result", endCondition }] });
+      queue.loadPrompts({
+        steps: [{ prompt: "check result", endCondition, errorBehavior }],
+      });
       await makeExecutor(queue, evaluator).execute(integration, context);
       return verdicts;
     };
@@ -662,6 +665,19 @@ suite("WorkflowExecutor condition shell reporting", () => {
     assert.ok(
       erroredEvaluation.every((message) => !message.includes("retry "))
     );
+    assert.ok(erroredEvaluation.some((message) => message.includes("→ stopWorkflow")));
+
+    const erroredRetry = await run(
+      {
+        script: "check-result",
+      },
+      [
+        { ...shellEvaluationResult(false), errored: true, error: "evaluation failed" },
+        shellEvaluationResult(true),
+      ],
+      { onError: CONDITION_ACTIONS.RETRY, maxRetries: 2 }
+    );
+    assert.ok(erroredRetry.some((message) => message.includes("→ retry 1 of 2")));
 
     const retryBeforeExhaustion = await run(
       {
@@ -2012,6 +2028,31 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.getState().results.map((result) => result.status),
       [STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED]
     );
+  });
+
+  test("marks an errored end condition as a failed parallel member", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      {
+        ...shellEvaluationResult(false),
+        errored: true,
+        error: "condition timed out",
+      },
+    ]);
+    queue.loadPrompts({
+      steps: [{ prompt: "member", endCondition: { script: "check" } }, { prompt: "sibling" }],
+      parallelGroups: [
+        { id: "parallel-error", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeParallelContext(new Map([[0, integration], [1, new MockHarnessIntegration(undefined, false)]]))
+    );
+
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.FAILED);
   });
 
   test("never broadcasts a progress boundary inside a running parallel group", async () => {
