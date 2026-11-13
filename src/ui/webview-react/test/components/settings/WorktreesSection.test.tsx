@@ -630,6 +630,17 @@ describe("WorktreesSection", () => {
       staleManagedRecords: [],
       entries: [
         {
+          worktreePath: "C:/repo.worktrees/feature-login-0123456789ab",
+          headCommit: "def",
+          branchName: "feature/login",
+          ownership: "user",
+          branchState: "present",
+          inUse: false,
+          leaseOwners: [],
+          stale: true,
+          branchCleanupEligible: false,
+        },
+        {
           worktreePath: "C:/repo.worktrees/bug-fix-0123456789ab",
           headCommit: "abc",
           branchName: "fix-race-condition",
@@ -663,10 +674,9 @@ describe("WorktreesSection", () => {
       />
     );
 
-    expect(screen.getByTestId("worktree-git-status")).toHaveTextContent(
-      "↓2 ↑1"
-    );
-    expect(screen.getByTestId("worktree-git-status")).toHaveAttribute(
+    const prWorktreeStatus = screen.getAllByTestId("worktree-git-status")[1];
+    expect(prWorktreeStatus).toHaveTextContent("↓2 ↑1");
+    expect(prWorktreeStatus).toHaveAttribute(
       "title",
       expect.stringContaining("upstream origin/fix-race-condition")
     );
@@ -674,6 +684,9 @@ describe("WorktreesSection", () => {
     expect(
       screen.getByText("bug-fix · fix-race-condition")
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText("feature-login · feature/login")
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Update from main" })
     ).toBeInTheDocument();

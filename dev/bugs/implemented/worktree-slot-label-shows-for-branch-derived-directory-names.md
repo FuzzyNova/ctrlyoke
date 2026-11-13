@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), from code reading
 - **Area:** `src/ui/webview-react/components/settings/WorktreesSection.tsx`, `src/ui/webview-react/utils/worktreeStatus.ts` (`stripWorktreeDirectoryHashSuffix`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

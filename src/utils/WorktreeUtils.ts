@@ -27,6 +27,9 @@ import {
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
+import { slugifyWorktreeName } from "./WorktreeNameUtils";
+
+export { slugifyWorktreeName } from "./WorktreeNameUtils";
 
 export interface WorkspaceEligibility {
   eligible: boolean;
@@ -60,15 +63,6 @@ export async function resolveThroughNearestExistingAncestor(
       current = parent;
     }
   }
-}
-
-export function slugifyWorktreeName(value: string): string {
-  const ascii = value
-    .normalize("NFKD")
-    .replace(/[^\x00-\x7F]/g, "")
-    .toLowerCase();
-  const slug = ascii.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return (slug || "workflow").slice(0, 40).replace(/-+$/g, "") || "workflow";
 }
 
 export type WorktreeNameIdentity =
