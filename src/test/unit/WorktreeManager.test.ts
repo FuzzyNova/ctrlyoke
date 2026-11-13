@@ -3322,8 +3322,20 @@ suite("WorktreeManager", function () {
   test("refuses two-way sync for a PR branch without a tracking ref", async () => {
     const { parent, repository } = await makeRepository("sync-pr-unresolved");
     execFileSync("git", ["-C", repository, "branch", "feature/pr-unresolved"]);
-    execFileSync("git", ["-C", repository, "config", "branch.feature/pr-unresolved.remote", "https://github.com/fork/repo.git"]);
-    execFileSync("git", ["-C", repository, "config", "branch.feature/pr-unresolved.merge", "refs/heads/feature"]);
+    execFileSync("git", [
+      "-C",
+      repository,
+      "config",
+      "branch.feature/pr-unresolved.remote",
+      "https://github.com/fork/repo.git",
+    ]);
+    execFileSync("git", [
+      "-C",
+      repository,
+      "config",
+      "branch.feature/pr-unresolved.merge",
+      "refs/heads/feature",
+    ]);
     const instance = manager(parent);
     const info = await resolve(instance, repository, "feature/pr-unresolved");
     await info.lease.release();

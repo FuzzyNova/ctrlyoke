@@ -86,12 +86,16 @@ describe("pasteImagesAsReferences", () => {
     );
     const { seq } = transport.postMessage.mock.calls[0]![0] as { seq: number };
     reply({ seq, relativePath: ".ctrlyoke/attachments/a.png" });
-    await vi.waitFor(() => expect(view.state.doc.toString()).toContain("@.ctrlyoke/attachments/a.png"));
+    await vi.waitFor(() =>
+      expect(view.state.doc.toString()).toContain(
+        "@.ctrlyoke/attachments/a.png"
+      )
+    );
     const parsed = parseDocument(view.state.doc.toString());
     expect(parsed.errors).toHaveLength(0);
-    expect((parsed.toJS() as { steps: { prompt: string }[] }).steps[0]!.prompt).toBe(
-      "@.ctrlyoke/attachments/a.png Fix the bug"
-    );
+    expect(
+      (parsed.toJS() as { steps: { prompt: string }[] }).steps[0]!.prompt
+    ).toBe("@.ctrlyoke/attachments/a.png Fix the bug");
   });
 
   it("leaves mid-scalar and quoted or block YAML prompt pastes unchanged", () => {
@@ -103,7 +107,10 @@ describe("pasteImagesAsReferences", () => {
       const valueStart = source.indexOf("Fix");
       const view = createView(source, valueStart + 1);
       const before = view.state.doc.toString();
-      const spans = getYamlTextSpans(source, WORKFLOW_LOCATION_ROLES.PROMPT_TEXT);
+      const spans = getYamlTextSpans(
+        source,
+        WORKFLOW_LOCATION_ROLES.PROMPT_TEXT
+      );
       prepareYamlPromptImageInsertion(
         view,
         spans,

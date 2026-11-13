@@ -19,7 +19,7 @@ user's own branch (e.g. `main`).
 1. In a repo, create a branch configured the way `gh pr checkout` configures a fork PR:
    - `git config branch.pr-1.remote https://github.com/fork/repo.git`
    - `git config branch.pr-1.merge refs/heads/feature`
-   or, for a PR fetched through the base repo:
+     or, for a PR fetched through the base repo:
    - `git config branch.pr-2.remote origin`
    - `git config branch.pr-2.merge refs/pull/2/head`
 2. `git for-each-ref --format='[%(upstream)][%(upstream:short)][%(upstream:track)]' refs/heads/pr-1 refs/heads/pr-2`

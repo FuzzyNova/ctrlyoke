@@ -396,7 +396,7 @@ export const WorkspaceFileEditor = forwardRef<
                       const field = workflowPromptRangesFieldRef.current;
                       prepareYamlPromptImageInsertion(
                         view,
-                        field ? view.state.field(field, false) ?? [] : [],
+                        field ? (view.state.field(field, false) ?? []) : [],
                         from,
                         to
                       );

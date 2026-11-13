@@ -1978,7 +1978,8 @@ export class WorktreeManager {
                 branchName
               ).catch(() => undefined);
               if (!configured) return undefined;
-              if (configured.gone || configured.resolvable === false) return configured;
+              if (configured.gone || configured.resolvable === false)
+                return configured;
               const counts = await getAheadBehind(
                 sourceRoot,
                 configured.label,

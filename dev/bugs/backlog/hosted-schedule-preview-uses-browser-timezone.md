@@ -9,7 +9,7 @@
 `docs/guide/dashboard.md` says schedule times use the local timezone of the machine running
 ctrlyoke. The Schedule view computes its **Next run** preview, its "never runs" check and its
 default Once value with `nextScheduleOccurrence`/`parseLocalDateTime`, which run in the
-*browser's* zone. Take a host in New York and a hosted-dashboard browser in Los Angeles:
+_browser's_ zone. Take a host in New York and a hosted-dashboard browser in Los Angeles:
 
 - the preview for Once 09:00 says 9:00 AM;
 - the host fires at 09:00 New York time, which is 06:00 in Los Angeles;

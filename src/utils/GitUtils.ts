@@ -2268,7 +2268,11 @@ export async function getBranchUpstreamStatus(
     const configValue = async (key: string): Promise<string | undefined> => {
       try {
         const { stdout: value } = await execGit([
-          "-C", repoRoot, "config", "--get", `branch.${branchName}.${key}`,
+          "-C",
+          repoRoot,
+          "config",
+          "--get",
+          `branch.${branchName}.${key}`,
         ]);
         return value.trim() || undefined;
       } catch {

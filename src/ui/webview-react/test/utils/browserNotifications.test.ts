@@ -33,9 +33,8 @@ describe("claimPushSubscriptionIfUnowned", () => {
       .mockResolvedValueOnce(Response.json({ id: "claimed-id" }));
     localStorage.setItem("ctrlyoke-push-subscription-id", "legacy-id");
 
-    const { claimPushSubscriptionIfUnowned } = await import(
-      "@utils/browserNotifications"
-    );
+    const { claimPushSubscriptionIfUnowned } =
+      await import("@utils/browserNotifications");
     await claimPushSubscriptionIfUnowned();
 
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -54,9 +53,8 @@ describe("claimPushSubscriptionIfUnowned", () => {
     );
     localStorage.setItem("ctrlyoke-push-subscription-id", "saved-id");
 
-    const { claimPushSubscriptionIfUnowned } = await import(
-      "@utils/browserNotifications"
-    );
+    const { claimPushSubscriptionIfUnowned } =
+      await import("@utils/browserNotifications");
     await claimPushSubscriptionIfUnowned();
 
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -64,9 +62,8 @@ describe("claimPushSubscriptionIfUnowned", () => {
 
   it("does nothing outside standalone mode", async () => {
     window.__ctrlyokeStandalone = false;
-    const { claimPushSubscriptionIfUnowned } = await import(
-      "@utils/browserNotifications"
-    );
+    const { claimPushSubscriptionIfUnowned } =
+      await import("@utils/browserNotifications");
     await claimPushSubscriptionIfUnowned();
     expect(fetch).not.toHaveBeenCalled();
     expect(getSubscription).not.toHaveBeenCalled();

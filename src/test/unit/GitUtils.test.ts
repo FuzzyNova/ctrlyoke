@@ -802,7 +802,12 @@ suite("GitUtils worktree plumbing", function () {
 
   test("classifies configured upstreams without tracking refs as PR branches", async () => {
     for (const [branch, remote, merge, expected] of [
-      ["pr-url", "https://github.com/fork/repo.git", "refs/heads/feature", "https://github.com/fork/repo.git/feature"],
+      [
+        "pr-url",
+        "https://github.com/fork/repo.git",
+        "refs/heads/feature",
+        "https://github.com/fork/repo.git/feature",
+      ],
       ["pr-ref", "origin", "refs/pull/2/head", "origin/refs/pull/2/head"],
     ]) {
       runGit(["branch", branch]);

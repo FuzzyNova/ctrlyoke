@@ -13,7 +13,7 @@ stale wake resumes:
 
 - it writes `scheduleNextRunAt` = Jan 2 09:00, the old schedule's next time;
 - `arm()` clears the fresh 17:00 timer, because one timer per lineage means the last caller wins;
-- at Jan 2 09:00 `onWake` re-reads the *new* schedule, sees `now >= scheduledAt`, and fires
+- at Jan 2 09:00 `onWake` re-reads the _new_ schedule, sees `now >= scheduledAt`, and fires
   at a time the new schedule doesn't contain.
 
 Jan 1 17:00 never runs. The overlap path, the fire-failure path and the late path have the

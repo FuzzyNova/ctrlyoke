@@ -7,7 +7,7 @@
 ## Symptom
 
 The checkout-slots plan (`dev/implemented/NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md`, item 3
-"Slot label") adds a `<directory> · <branch>` line so a *slot* that holds different work
+"Slot label") adds a `<directory> · <branch>` line so a _slot_ that holds different work
 (`bug-fix · fix-race-condition`) is readable at a glance. In practice the line appears
 on nearly every row whose directory ctrlyoke named itself:
 

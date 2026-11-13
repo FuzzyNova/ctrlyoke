@@ -7,14 +7,14 @@
 ## Symptom
 
 When `afterMs` falls in the second (standard-time) copy of the repeated hour on a
-fall-back day, `nextCronOccurrence` returns a time up to an hour *before* `afterMs`.
+fall-back day, `nextCronOccurrence` returns a time up to an hour _before_ `afterMs`.
 For example, with `TZ=America/New_York` and `afterMs` = 2026-11-01 01:15 EST
 (`2026-11-01T06:15:00Z`):
 
-| Expression      | Returned                         |
-| --------------- | -------------------------------- |
-| `*/5 * * * *`   | `2026-11-01T05:20:00Z` (01:20 EDT, 55 min in the past) |
-| `30 1 * * *`    | `2026-11-01T05:30:00Z` (01:30 EDT, 45 min in the past) |
+| Expression    | Returned                                               |
+| ------------- | ------------------------------------------------------ |
+| `*/5 * * * *` | `2026-11-01T05:20:00Z` (01:20 EDT, 55 min in the past) |
+| `30 1 * * *`  | `2026-11-01T05:30:00Z` (01:30 EDT, 45 min in the past) |
 
 The function's contract is "the next matching minute after `afterMs`".
 
@@ -39,7 +39,7 @@ hour, and the schedule never fires during that hour.
 
 `nextCronOccurrence` normalizes the cursor with `cursor.setSeconds(0, 0)`
 (#selection:src/utils/CronSchedule.ts:108-115). Local-time setters re-resolve the local
-wall time, and ECMAScript resolves an ambiguous local time to the *earlier* instant (the
+wall time, and ECMAScript resolves an ambiguous local time to the _earlier_ instant (the
 daylight-time copy). So a cursor at 01:15 EST becomes 01:15 EDT, an hour earlier, before
 the search starts. Later steps (`setMinutes(+1)`) then walk forward from the EDT copy and
 return the first match there, which is before `afterMs`.
