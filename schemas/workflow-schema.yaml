@@ -677,16 +677,21 @@ $defs:
         examples:
           - claude-fable-5
           - claude-fable-5.1
+          - claude-fable-5.2
           - claude-haiku-4.5
           - claude-haiku-5.5
-          - claude-opus-4-6-thinking
           - claude-opus-4.8
           - claude-opus-4.8-fast
           - claude-opus-5
+          - claude-opus-5-5-high
+          - claude-opus-5-5-low
+          - claude-opus-5-5-medium
           - claude-opus-5.5
-          - claude-sonnet-4-6
           - claude-sonnet-4.6
           - claude-sonnet-5
+          - claude-sonnet-5-5-high
+          - claude-sonnet-5-5-low
+          - claude-sonnet-5-5-medium
           - claude-sonnet-5.5
           - fable
           - gemini-3.8-flash
@@ -694,6 +699,15 @@ $defs:
           - gemini-3.8-flash-low
           - gemini-3.8-flash-medium
           - gemini-4-argon
+          - gemini-4-argon-high
+          - gemini-4-argon-low
+          - gemini-4-argon-medium
+          - gemini-4-carbon
+          - gemini-4-hydrogen-high
+          - gemini-4-hydrogen-low
+          - gemini-4-hydrogen-medium
+          - gemini-4-hydrogen-xhigh
+          - gemini-pro-orchestrator-g1-pro
           - gpt-5.3-codex
           - gpt-5.6-luna
           - gpt-5.6-sol

@@ -30,6 +30,7 @@
 export const COPILOT_CLI_MODEL_IDS = [
   "claude-sonnet-5.5",
   "claude-sonnet-5",
+  "claude-fable-5.2",
   "claude-fable-5.1",
   "claude-fable-5",
   "claude-opus-5.5",
@@ -49,6 +50,7 @@ export const COPILOT_CLI_MODEL_IDS = [
   "gpt-5.6-luna",
   "gpt-5.3-codex",
   "mai-code-1.1-flash",
+  "gemini-4-carbon",
   "gemini-4-argon",
   "gemini-3.8-flash",
   "grok-4.7",
@@ -67,6 +69,7 @@ export const COPILOT_CLI_MODEL_IDS = [
 export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
   "claude-sonnet-5.5": "Claude Sonnet 5.5",
   "claude-sonnet-5": "Claude Sonnet 5",
+  "claude-fable-5.2": "Claude Fable 5.2",
   "claude-fable-5.1": "Claude Fable 5.1",
   "claude-fable-5": "Claude Fable 5",
   "claude-opus-5.5": "Claude Opus 5.5",
@@ -86,6 +89,7 @@ export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
   "gpt-5.6-luna": "GPT 5.6 Luna",
   "gpt-5.3-codex": "GPT 5.3 Codex",
   "mai-code-1.1-flash": "Mai Code 1.1 Flash",
+  "gemini-4-carbon": "Gemini 4 Carbon",
   "gemini-4-argon": "Gemini 4 Argon",
   "gemini-3.8-flash": "Gemini 3.8 Flash",
   "grok-4.7": "Grok 4.7",
@@ -369,11 +373,23 @@ export function getQwenContextWindowSize(_modelId: string): number {
  * Command: npm run sync-models:discover
  */
 export const ANTIGRAVITY_CLI_MODELS = [
+  "gemini-4-argon-medium",
+  "gemini-4-argon-high",
+  "gemini-4-argon-low",
+  "gemini-4-hydrogen-high",
+  "gemini-4-hydrogen-xhigh",
+  "gemini-4-hydrogen-medium",
+  "gemini-4-hydrogen-low",
+  "gemini-pro-orchestrator-g1-pro",
   "gemini-3.8-flash-high",
   "gemini-3.8-flash-medium",
   "gemini-3.8-flash-low",
-  "claude-sonnet-4-6",
-  "claude-opus-4-6-thinking",
+  "claude-opus-5-5-low",
+  "claude-opus-5-5-medium",
+  "claude-opus-5-5-high",
+  "claude-sonnet-5-5-low",
+  "claude-sonnet-5-5-medium",
+  "claude-sonnet-5-5-high",
   "gpt-oss-120b-medium",
 ] as const;
 
@@ -384,11 +400,23 @@ export const ANTIGRAVITY_CLI_MODELS = [
  * `-thinking` ID suffix — that asymmetry is agy's, not ours.
  */
 export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
+  "gemini-4-argon-medium": "Gemini 4 Argon (Medium)",
+  "gemini-4-argon-high": "Gemini 4 Argon (High)",
+  "gemini-4-argon-low": "Gemini 4 Argon (Low)",
+  "gemini-4-hydrogen-high": "Gemini 4 Hydrogen (High)",
+  "gemini-4-hydrogen-xhigh": "Gemini 4 Hydrogen (XHigh)",
+  "gemini-4-hydrogen-medium": "Gemini 4 Hydrogen (Medium)",
+  "gemini-4-hydrogen-low": "Gemini 4 Hydrogen (Low)",
+  "gemini-pro-orchestrator-g1-pro": "Orchestrator (Argon)",
   "gemini-3.8-flash-high": "Gemini 3.8 Flash (High)",
   "gemini-3.8-flash-medium": "Gemini 3.8 Flash (Medium)",
   "gemini-3.8-flash-low": "Gemini 3.8 Flash (Low)",
-  "claude-sonnet-4-6": "Claude Sonnet 4.6 (Thinking)",
-  "claude-opus-4-6-thinking": "Claude Opus 4.6 (Thinking)",
+  "claude-opus-5-5-low": "Claude Opus 5.5 (Low)",
+  "claude-opus-5-5-medium": "Claude Opus 5.5 (Medium)",
+  "claude-opus-5-5-high": "Claude Opus 5.5 (High)",
+  "claude-sonnet-5-5-low": "Claude Sonnet 5.5 (Low)",
+  "claude-sonnet-5-5-medium": "Claude Sonnet 5.5 (Medium)",
+  "claude-sonnet-5-5-high": "Claude Sonnet 5.5 (High)",
   "gpt-oss-120b-medium": "GPT-OSS 120B (Medium)",
 };
 

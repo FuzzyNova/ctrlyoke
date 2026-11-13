@@ -64,7 +64,7 @@ The **Model** picker lists the models that `agy models` reports, with agy's own 
 adds a model. If the command fails, ctrlyoke uses its built-in list instead.
 
 Workflow files and settings use the ID `agy models` prints, such as `gemini-3.8-flash-low` or
-`claude-sonnet-4-6`, not the label. The effort tier is part of the ID (`-low`, `-medium`, `-high`).
+`claude-sonnet-5-5-medium`, not the label. The effort tier is part of the ID (`-low`, `-medium`, `-high`).
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
 [`defaults.models["antigravity-cli"]`](/reference/settings#defaults-models), which is `none` out
 of the box: no `--model` flag is passed, so agy uses its own default model. agy's default can be a

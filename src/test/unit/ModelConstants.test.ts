@@ -349,7 +349,7 @@ suite("ModelConstants", () => {
     });
 
     test("ANTIGRAVITY_CLI_MODELS uses agy model IDs, not display labels", () => {
-      assert.ok(ANTIGRAVITY_CLI_MODELS.includes("claude-sonnet-4-6"));
+      assert.ok(ANTIGRAVITY_CLI_MODELS.includes("claude-sonnet-5-5-medium"));
       assert.ok(ANTIGRAVITY_CLI_MODELS.includes("gemini-3.8-flash-medium"));
       assert.ok(
         ANTIGRAVITY_CLI_MODELS.every((m) => !m.includes(" ")),
