@@ -457,7 +457,9 @@ async function discoverFromCli() {
 
   // Parse the `model` section to extract choices
   const modelSectionMatch = stdout.match(
-    /`model`[^`]+?((?:\s+-\s+"[^"]+"\r?\n)+)/i
+    // The description line itself can contain backticks (1.0.110 added
+    // "Refer to `copilot help providers`"), so skip to its end of line.
+    /`model`:[^\n]*\r?\n((?:[ \t]+-[ \t]+"[^"]+"\r?\n)+)/i
   );
 
   if (!modelSectionMatch) {
