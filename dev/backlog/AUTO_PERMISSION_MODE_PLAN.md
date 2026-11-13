@@ -199,6 +199,16 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
      published CLI releases and probing 2.1.170 directly.
    - [x] Copilot: `>=1.0.4`; `1.0.3` lacks `--assisted-approval` and `1.0.4` exposes it.
      Confirmed 1.0.4 with a live headless allow/unlisted/deny probe from a scratch directory.
+   - [x] Codex: `>=0.167.2`, the installed release used for the direct probe. The reviewer
+     config was accepted and an unlisted benign chained command ran. A harmless in-workspace
+     `rm -rf` also ran: Codex auto review does not review operations already allowed by the
+     sandbox, and its `deniedTools` mapping remains MCP-only. This is a conservative gate at
+     the verified release; an older accepting release was not established.
+   - [x] Qwen: `>=0.27.2`, the installed release used for the direct probe. Auto ran an
+     unlisted benign chained command and refused the denied `rm` command. Earlier releases
+     were not established, so the gate stays at the verified release.
+   - [x] agy: `>=1.5.7` (reuse `ANTIGRAVITY_AGENT_MODE_SETTING_RANGE`); direct probe on
+     installed 1.5.8 ran the unlisted benign chained command and refused the denied `rm`.
 3. UI:
    - Add an `auto` option and description to `PermissionsQuickPicker.tsx`, `permissionUtils.ts`
      and `SchemaUiMetadata.ts`.

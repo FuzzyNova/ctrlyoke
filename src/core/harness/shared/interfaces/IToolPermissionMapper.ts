@@ -10,6 +10,7 @@ import type {
   CompatibilityDiagnostic,
   PermissionCapabilityDescriptor,
 } from "../../../../types/CompatibilityTypes";
+
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
@@ -20,6 +21,8 @@ import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTy
 import type { McpServerConfig } from "../../../../types/CtrlYokeTypes";
 import { isShippedDefaultToolList } from "../../../../types/CtrlYokeSettings";
 import type { PreparedMutation } from "./PreparedMutation";
+
+const EXACT_PERMISSION_FIDELITY = "exact" as const;
 
 export type { PreparedMutation } from "./PreparedMutation";
 
@@ -157,11 +160,13 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
         capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
         state: {
           fidelity:
-            declaration.fidelity === "exact"
+            declaration.fidelity === EXACT_PERMISSION_FIDELITY
               ? "unsupported"
               : declaration.fidelity,
           mechanism:
-            declaration.fidelity === "exact" ? "none" : declaration.mechanism,
+            declaration.fidelity === EXACT_PERMISSION_FIDELITY
+              ? "none"
+              : declaration.mechanism,
           verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
         },
         message: getCompatibilityDiagnosticMessage(code, {

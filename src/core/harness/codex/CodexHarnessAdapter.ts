@@ -51,6 +51,7 @@ import {
   HOOK_EVENT_NAMES,
   MCP_SERVER_IDS,
   MCP_TRANSPORTS,
+  PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
@@ -720,7 +721,11 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       // none mode — skip permission flags entirely
       return { cliArgs: [], diagnostics: [] };
     }
-    return this.toolPermissionMapper.prepare(config, context);
+    const permissionContext =
+      config.mode === PERMISSION_MODES.AUTO && !context.cliVersion
+        ? { ...context, cliVersion: await this.getVersion() }
+        : context;
+    return this.toolPermissionMapper.prepare(config, permissionContext);
   }
 
   /**

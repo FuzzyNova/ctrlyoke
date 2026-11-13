@@ -5,11 +5,9 @@ import {
   ToolPermissionConfig,
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
-import {
-  PERMISSION_CAVEAT_CODES,
-  type PermissionCapabilityDescriptor,
-} from "../../../types/CompatibilityTypes";
+import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
@@ -22,6 +20,7 @@ const QWEN_PERMISSION_VERIFICATION = {
   basis: "cli-version",
   verifiedVersions: [">=0.15.5"],
 } as const;
+const QWEN_AUTO_MODE_MIN_VERSION = ">=0.27.2";
 
 const QWEN_PERMISSION_TOOL_NAMES = {
   DELETE: "delete",
@@ -48,10 +47,12 @@ const QWEN_EDIT_TOOL_ALIASES: ReadonlySet<string> = new Set([
 
 const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
-    fidelity: "unsupported",
-    mechanism: "none",
-    verification: QWEN_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+    fidelity: "exact",
+    mechanism: "native",
+    verification: {
+      ...QWEN_PERMISSION_VERIFICATION,
+      verifiedVersions: [QWEN_AUTO_MODE_MIN_VERSION],
+    },
   },
   mode: {
     fidelity: "exact",
@@ -111,7 +112,13 @@ export class QwenToolPermissionMapper
     config: ToolPermissionConfig,
     _context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.QWEN_CLI);
+    const supportsAuto =
+      !!_context.cliVersion &&
+      versionSatisfies(_context.cliVersion, QWEN_AUTO_MODE_MIN_VERSION);
+    const fallback =
+      config.mode === PERMISSION_MODES.AUTO && !supportsAuto
+        ? this.getAutoModeFallback(config, HARNESS_IDS.QWEN_CLI)
+        : undefined;
     if (fallback) {
       const application = await this.prepare(fallback.config, _context);
       return {
@@ -159,6 +166,22 @@ export class QwenToolPermissionMapper
           );
         }
       }
+    } else if (config.mode === PERMISSION_MODES.AUTO) {
+      args.push("--approval-mode", "auto");
+      const allowed = this.convertCtrlYokePatternsToQwenTools(
+        config.allowedTools,
+        () => lossyPatterns.push({ capability: "allowedTools" }),
+        { allowList: true }
+      );
+      if (_context.isInteractive === false && !allowed.includes("ShellTool")) {
+        allowed.push("ShellTool");
+      }
+      args.push("--allowed-tools", allowed.join(","));
+      const denied = this.convertCtrlYokePatternsToQwenTools(
+        config.deniedTools,
+        () => lossyPatterns.push({ capability: "deniedTools" })
+      );
+      args.push("--exclude-tools", denied.join(","));
     } else {
       // Custom mode - use default approval with allow/deny lists
       args.push("--approval-mode", "default");

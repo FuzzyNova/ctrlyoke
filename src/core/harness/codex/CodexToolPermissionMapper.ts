@@ -16,17 +16,18 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtils";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
 
 const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.129.0",
 ]);
+const CODEX_AUTO_MODE_MIN_VERSION = ">=0.167.2";
 
 export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
-    fidelity: "unsupported",
-    mechanism: "none",
-    verification: CODEX_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+    fidelity: "exact",
+    mechanism: "native",
+    verification: capabilitySuiteVerification([CODEX_AUTO_MODE_MIN_VERSION]),
   },
   mode: {
     fidelity: "exact",
@@ -66,6 +67,7 @@ export const CODEX_FOLD_EXCLUDED_SERVER_IDS: ReadonlySet<string> = new Set([
  * | allowAll            | `-a on-request` | nothing                 |
  * | dangerouslyAllowAll | `-a never`      | nothing                 |
  * | custom              | `-a on-request` | nothing                 |
+ * | auto                | `-a on-request` + reviewer | reviewer config |
  * | none / null         | nothing         | nothing                 |
  *
  * `codex exec` has no `-a` flag and never asks for approval, so headless
@@ -86,7 +88,13 @@ export class CodexToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.CODEX_CLI);
+    const supportsAuto =
+      !!context.cliVersion &&
+      versionSatisfies(context.cliVersion, CODEX_AUTO_MODE_MIN_VERSION);
+    const fallback =
+      config.mode === PERMISSION_MODES.AUTO && !supportsAuto
+        ? this.getAutoModeFallback(config, HARNESS_IDS.CODEX_CLI)
+        : undefined;
     if (fallback) {
       const application = await this.prepare(fallback.config, context);
       return {
@@ -122,6 +130,16 @@ export class CodexToolPermissionMapper
     config: ToolPermissionConfig,
     isInteractive?: boolean
   ): string[] {
+    if (config.mode === PERMISSION_MODES.AUTO) {
+      return isInteractive === false
+        ? [
+            "-c",
+            "approvals_reviewer=auto_review",
+            "-c",
+            "approval_policy=on-request",
+          ]
+        : ["-a", "on-request", "-c", "approvals_reviewer=auto_review"];
+    }
     if (isInteractive === false) return [];
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
