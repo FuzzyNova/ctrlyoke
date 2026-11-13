@@ -75,6 +75,7 @@ import {
   TRUST_DECISIONS,
 } from "./types/DashboardConstants";
 import { CliAttemptTally } from "./cli/CliAttemptTally";
+import { settleCliParallelGroupMember } from "./cli/CliParallelGroupTally";
 import {
   CliTerminalFormatter,
   type CliOutputTarget,
@@ -1207,6 +1208,7 @@ async function runCommand(
     const parallelGroups = new Map<string, CliParallelGroupState>();
     const attempts = new CliAttemptTally();
     const renderedFinalStepLabels = new Set<number>();
+    let parallelGroupStateSubscription: { dispose(): void } | undefined;
     let released = false;
 
     const renderFinalStepLabel = (target: OutputExecutionTarget): void => {
@@ -1278,6 +1280,7 @@ async function runCommand(
         return;
       }
       released = true;
+      parallelGroupStateSubscription?.dispose();
       outputGate.write(() => {
         for (const attempt of attempts.retriedGroups()) {
           CliTerminalFormatter.renderAttemptGroupSummary(
@@ -1346,6 +1349,24 @@ async function runCommand(
         renderPromptHeader(data);
       })
     );
+    parallelGroupStateSubscription = instance.promptQueue.onDidChangeState(
+      (queueState) =>
+        outputGate.write(() => {
+          for (const state of parallelGroups.values()) {
+            for (const stepIndex of state.started) {
+              if (
+                settleCliParallelGroupMember(
+                  state,
+                  stepIndex,
+                  queueState.results[stepIndex]?.status
+                )
+              ) {
+                renderParallelGroupProgress(state);
+              }
+            }
+          }
+        })
+    );
     instance.onTargetScriptOutput((data) =>
       outputGate.write(() => {
         renderFinalStepLabel(data.target);
@@ -1386,25 +1407,6 @@ async function runCommand(
     instance.onWorkflowStatusMessage((data) =>
       outputGate.write(() => {
         CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
-      })
-    );
-    instance.onPromptComplete((data) =>
-      outputGate.write(() => {
-        const state = getParallelGroup(data.parallelGroupId);
-        if (state?.started.has(data.stepIndex)) {
-          const stepStatus = instance.promptQueue
-            .getState()
-            .results[data.stepIndex]?.status;
-          if (stepStatus === STEP_STATUS.FAILED) {
-            state.completed.delete(data.stepIndex);
-            state.failed.add(data.stepIndex);
-            renderParallelGroupProgress(state);
-          } else {
-            state.completed.add(data.stepIndex);
-            state.failed.delete(data.stepIndex);
-            renderParallelGroupProgress(state);
-          }
-        }
       })
     );
   }
