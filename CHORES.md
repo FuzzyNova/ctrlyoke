@@ -431,9 +431,14 @@ the `!.env.example` exception.
 **Each refresh**:
 
 ```bash
-vercel env pull .env.local          # writes VERCEL_OIDC_TOKEN; it expires after ~12 hours
+npm run vercel:env-pull             # writes VERCEL_OIDC_TOKEN; it expires after ~12 hours
 npm run sync-skills-snapshot        # or: npm run chores -- --task sync-skills-snapshot
 ```
+
+`vercel:env-pull` runs `vercel env pull .env.local` and then undoes the `.env*` line Vercel
+appends to `.gitignore` on every pull (see the one-time setup above for why it must not stay). If
+the pull changed `.gitignore` in any other way, it leaves the file alone and warns. Run it instead
+of a bare `vercel env pull`.
 
 The script reads `VERCEL_OIDC_TOKEN` from the environment or from `.env.local` (not `.env`).
 An account API token is **not** an OIDC token: skills.sh answers 401 to it. If the script reports

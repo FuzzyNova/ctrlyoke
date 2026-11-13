@@ -12,7 +12,7 @@
  * dev/implemented/SKILLS_REGISTRY_PLAN.md.
  *
  * Token: `VERCEL_OIDC_TOKEN` from the environment, else from `.env.local`
- * (written by `vercel link` + `vercel env pull`; gitignored by `.env.*`).
+ * (written by `vercel link` + `npm run vercel:env-pull`; gitignored by `.env.*`).
  *
  * The output keeps the `/api/search` response shape, so the extension
  * validates it with the same parser as a live search.
@@ -57,7 +57,7 @@ async function main() {
   const token = readToken();
   if (!token) {
     throw new Error(
-      `${TOKEN_ENV} is not set. Run \`vercel link\` and \`vercel env pull\` in the repository root first (the token lasts ~12 hours).`
+      `${TOKEN_ENV} is not set. Run \`vercel link\` once, then \`npm run vercel:env-pull\` in the repository root (the token lasts ~12 hours).`
     );
   }
 

@@ -367,7 +367,7 @@ async function syncModelPricing() {
 /**
  * Task: Snapshot the skills.sh leaderboard shown before a skills search
  *
- * Needs a Vercel OIDC token (`vercel link` + `vercel env pull`), so it is
+ * Needs a Vercel OIDC token (`vercel link` + `npm run vercel:env-pull`), so it is
  * not part of `all`.
  */
 async function syncSkillsSnapshot() {
