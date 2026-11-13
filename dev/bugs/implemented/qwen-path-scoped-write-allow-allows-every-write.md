@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-11 while probing single-file write rules for commit message generation (Qwen Code 0.27.1)
 - **Area:** `src/core/harness/qwen/QwenToolPermissionMapper.ts` (`convertCtrlYokePatternsToQwenTools`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit. A path-scoped `write`/`edit` allow is skipped and reported as a lossy translation, so the write stays denied; a path-scoped deny still denies the whole tool.
 
 ## Symptom
 

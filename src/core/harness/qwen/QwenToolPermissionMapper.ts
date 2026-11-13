@@ -141,7 +141,8 @@ export class QwenToolPermissionMapper
       if (config.allowedTools.length > 0) {
         const allowedArgs = this.convertCtrlYokePatternsToQwenTools(
           config.allowedTools,
-          () => lossyPatterns.push({ capability: "allowedTools" })
+          () => lossyPatterns.push({ capability: "allowedTools" }),
+          { allowList: true }
         );
         if (allowedArgs.length > 0) {
           args.push("--allowed-tools", allowedArgs.join(","));
@@ -211,12 +212,21 @@ export class QwenToolPermissionMapper
    * make such a rule actually take effect. File deletion on Qwen goes through
    * ShellTool(rm ...) and must be governed by a shell(rm:*) rule instead.
    *
+   * A path-scoped `write(<path>)`/`edit(<path>)` allow is skipped as lossy,
+   * not widened to the whole tool. Qwen understands path rules, but headless
+   * `--approval-mode default` unregisters `write_file` unless it is allowed by
+   * bare name, so no specifier both keeps the tool and limits it to the path
+   * (probed on Qwen Code 0.27.1). The write stays denied, which is the safe
+   * direction. A path-scoped deny still denies the whole tool.
+   *
    * @param patterns ctrlyoke tool patterns
+   * @param options.allowList true when `patterns` is an allow list
    * @returns Qwen tool specifiers array (deduplicated)
    */
   private convertCtrlYokePatternsToQwenTools(
     patterns: string[],
-    onLossyPattern?: () => void
+    onLossyPattern?: () => void,
+    options: { allowList?: boolean } = {}
   ): string[] {
     const qwenTools = new Set<string>();
 
@@ -232,8 +242,24 @@ export class QwenToolPermissionMapper
 
       const [toolName, toolArgs] = parsed;
       const normalizedToolName = toolName.toLowerCase();
+      const isFileWrite =
+        normalizedToolName === TOOL_PERMISSION_CATEGORIES.WRITE ||
+        normalizedToolName === "create" ||
+        normalizedToolName === TOOL_PERMISSION_CATEGORIES.EDIT ||
+        normalizedToolName === "str_replace";
+      const pathTarget = toolArgs.replace(/^\(|\)$/g, "").trim();
 
       if (
+        isFileWrite &&
+        options.allowList &&
+        pathTarget &&
+        pathTarget !== "*"
+      ) {
+        Log.warn(
+          `[QwenPermissionMapper] Qwen cannot limit a write to a path headless; allow pattern "${pattern}" was skipped, so the write stays denied.`
+        );
+        onLossyPattern?.();
+      } else if (
         normalizedToolName === TOOL_PERMISSION_CATEGORIES.SHELL ||
         normalizedToolName === TOOL_PERMISSION_CATEGORIES.BASH ||
         normalizedToolName === "run_shell_command"

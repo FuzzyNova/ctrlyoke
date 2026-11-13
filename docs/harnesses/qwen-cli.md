@@ -117,7 +117,9 @@ A shell pattern without `:*` gets a trailing `*` too, as the `git status` row sh
 Code it also covers the command with extra arguments. The default deny list therefore reaches Qwen as
 `--exclude-tools ShellTool(rm *),ShellTool(del *),…`. Qwen Code has no file-delete tool, so
 `delete` and `remove` patterns are skipped with a warning; use `shell(rm:*)` to control deleting
-files instead. See [Permissions](/workflows/permissions) for the modes, the pattern syntax and
+files instead. Qwen Code cannot limit a headless write to one path, so an allowed
+`write(<path>)` or `edit(<path>)` is skipped with a warning and that write stays denied; a denied
+one denies every write. See [Permissions](/workflows/permissions) for the modes, the pattern syntax and
 [the default lists](/workflows/permissions#the-default-lists).
 
 ## Notes

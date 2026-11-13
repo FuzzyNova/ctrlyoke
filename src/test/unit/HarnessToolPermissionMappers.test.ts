@@ -1123,6 +1123,46 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(args.includes("--exclude-tools"));
       });
 
+      test("a path-scoped write or edit allow is skipped as lossy, not widened to the whole tool", async () => {
+        const application = await mapper.prepare(
+          cfg(
+            PERMISSION_MODES.CUSTOM,
+            ["write(/repo/out.txt)", "edit(src/**)", "shell(git:*)"],
+            []
+          ),
+          {}
+        );
+        assert.deepStrictEqual(
+          argsAfterFlag(application.cliArgs, "--allowed-tools"),
+          ["ShellTool(git *)"]
+        );
+        assert.ok(
+          application.diagnostics.some(
+            ({ code, capability }) =>
+              code ===
+                COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY &&
+              capability === "allowedTools"
+          ),
+          "the skipped path rule is reported"
+        );
+
+        const wildcard = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.CUSTOM, ["write(*)", "edit"], [])
+        );
+        assert.deepStrictEqual(argsAfterFlag(wildcard, "--allowed-tools"), [
+          "WriteFile,Edit",
+        ]);
+
+        const deny = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.CUSTOM, [], ["write(/repo/out.txt)"])
+        );
+        assert.deepStrictEqual(argsAfterFlag(deny, "--exclude-tools"), [
+          "WriteFile",
+        ]);
+      });
+
       test("tool conversion: edit → Edit", async () => {
         const args = await mapperArgs(
           mapper,
