@@ -15,15 +15,20 @@ import { summarizeStatusError } from "../../core/orchestration/ScriptExecutionRe
 import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
+  gitCommonDir,
   listWorktrees,
   switchBranch,
   setGitTimeoutOverridesForTests,
 } from "../../utils/GitUtils";
 import {
+  bareNameDirectoryRoot,
   previewWorktreePlacement,
   createWorktreeDirectoryName,
 } from "../../utils/WorktreeUtils";
-import { WORKTREE_IDENTITY_KINDS } from "../../types/DashboardConstants";
+import {
+  WORKTREE_IDENTITY_KINDS,
+  WORKTREE_ROOT_TIERS,
+} from "../../types/DashboardConstants";
 import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
@@ -570,14 +575,38 @@ suite("WorktreeManager", function () {
     );
   });
 
-  test("creates a missing named directory at exactly <root>/<name>, not the branch path", async () => {
+  /** Where a new bare-name directory lands under the explicit root {@link manager} configures. */
+  async function bareNamePath(
+    parent: string,
+    repository: string,
+    name: string
+  ): Promise<string> {
+    const common = await gitCommonDir(repository);
+    assert.ok(common);
+    return path.join(
+      bareNameDirectoryRoot(
+        {
+          root: path.join(parent, "worktrees"),
+          tier: WORKTREE_ROOT_TIERS.EXPLICIT,
+        },
+        common!
+      ),
+      name
+    );
+  }
+
+  test("creates a missing named directory at <root>/<repository>-<hash>/<name>, not the branch path", async () => {
     const { parent, repository } = await makeRepository("directory-create");
     const info = await resolve(manager(parent), repository, "feature/fresh", {
       directory: "bug-fix",
     });
     assert.strictEqual(
       info.worktreePath,
-      path.join(parent, "worktrees", "bug-fix")
+      await bareNamePath(parent, repository, "bug-fix")
+    );
+    assert.match(
+      path.relative(path.join(parent, "worktrees"), info.worktreePath),
+      new RegExp(`^repository-[0-9a-f]{12}\\${path.sep}bug-fix$`)
     );
     assert.strictEqual(currentBranchOf(info.worktreePath), "feature/fresh");
     await info.lease.release();
@@ -605,16 +634,16 @@ suite("WorktreeManager", function () {
     });
     assert.strictEqual(
       info.worktreePath,
-      path.join(parent, "worktrees", "research")
+      await bareNamePath(parent, repository, "research")
     );
     assert.strictEqual(currentBranchOf(info.worktreePath), "research");
     assert.ok(localBranchExists(repository, "research"));
     await info.lease.release();
   });
 
-  test("refuses to adopt an unregistered folder at <root>/<name>", async () => {
+  test("refuses to adopt an unregistered folder at the planned bare-name path", async () => {
     const { parent, repository } = await makeRepository("directory-occupied");
-    const occupied = path.join(parent, "worktrees", "research");
+    const occupied = await bareNamePath(parent, repository, "research");
     await fs.mkdir(occupied, { recursive: true });
     await assert.rejects(
       resolve(manager(parent), repository, "research", {

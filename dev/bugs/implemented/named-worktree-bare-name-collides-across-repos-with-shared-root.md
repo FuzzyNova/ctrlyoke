@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-12 by the bug-hunt workflow's final step (claude-cli subagent), reproduced with bundled `resolveWorktreeDirectory` against two temp repos
 - **Area:** `src/utils/WorktreeUtils.ts` (`resolveWorktreeDirectory`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit. Only an explicit `worktrees.root` scopes bare names by repository (`<root>/<repository>-<hash>/<name>`); the `<repository>.worktrees` sibling default and the central fallback are already per-repository and unchanged.
 
 ## Symptom
 

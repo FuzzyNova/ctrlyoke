@@ -164,9 +164,12 @@ exactly `bug-fix`, wherever it is, or the directory ctrlyoke already derived
 for a branch named `bug-fix` (`bug-fix-<hash>`), so a worktree you created by
 hand or an older one can be reused without moving it. If more than one
 matches, give its path. With no match, ctrlyoke creates the worktree at
-exactly `<worktree root>/bug-fix`, with no hash suffix. So
-`directory: research` with `branch: research` creates a `research` branch in a
-`research` directory you can keep. An absolute or `~`-prefixed path selects a
+`<worktree root>/bug-fix`, with no hash suffix. So `directory: research` with
+`branch: research` creates a `research` branch in a `research` directory you
+can keep. If you set [`worktrees.root`](#where-worktrees-and-history-live),
+every repository shares it, so a new bare-name directory goes in a folder for
+its repository instead, `<worktrees.root>/<repository>-<hash>/bug-fix`, and two
+repositories can both use `directory: bug-fix`. An absolute or `~`-prefixed path selects a
 registered worktree, or a new location that ctrlyoke creates. A relative path
 containing separators is rejected. An existing folder that is not a linked
 worktree of this repository is never adopted.

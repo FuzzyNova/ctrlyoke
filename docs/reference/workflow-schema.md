@@ -960,7 +960,7 @@ Local Git branch name for the named worktree.
 - **Type:** `string`
 - **Constraints:** at least 1 character(s) · pattern `^(?:~[/\\].*|/.*|[A-Za-z]:[/\\].*|\\\\.*|[^/\\]+)$`
 
-Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as exactly `<worktree root>/<name>`, with no hash suffix. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch.
+Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch.
 
 ### `worktree.base` {#worktree-named-base}
 

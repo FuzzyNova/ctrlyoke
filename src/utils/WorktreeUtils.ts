@@ -24,7 +24,9 @@ import {
   WORKTREE_DIRECTORY_KINDS,
   WORKTREE_IDENTITY_KINDS,
   WORKTREE_MODES,
+  WORKTREE_ROOT_TIERS,
   NODE_ERROR_CODES,
+  type WorktreeRootTier,
 } from "../types/DashboardConstants";
 import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 import { slugifyWorktreeName } from "./WorktreeNameUtils";
@@ -126,14 +128,17 @@ async function assertUnregisteredPathIsFree(target: string): Promise<void> {
  * names the directory itself. A bare name matches a registered linked
  * worktree whose directory is exactly that name, or the branch-derived
  * `<slug>-<hash>` directory ctrlyoke creates for a branch of that name; with
- * no match, the new directory is exactly `<root>/<name>`, with no hash.
+ * no match, the new directory is `<root>/<name>`, with no hash. An explicit
+ * `worktrees.root` is shared by every repository, so there the new directory
+ * is `<root>/<repository>-<hash>/<name>` instead, and two repositories using
+ * the same bare name never collide.
  */
 export async function resolveWorktreeDirectory(
   sourceCheckoutRoot: string,
   directory: string,
   entries: readonly GitWorktreeEntry[],
   commonDirectory: string,
-  root: string
+  root: WorktreeRootResolution
 ): Promise<WorktreeDirectoryResolution> {
   const value = directory.trim();
   if (!value) throw new Error("Directory must not be empty.");
@@ -185,9 +190,43 @@ export async function resolveWorktreeDirectory(
       throw prunableDirectoryError(matches[0].worktreePath);
     return { kind: WORKTREE_DIRECTORY_KINDS.EXISTING, entry: matches[0] };
   }
-  const target = path.join(root, value);
+  const target = path.join(bareNameDirectoryRoot(root, commonDirectory), value);
   await assertUnregisteredPathIsFree(target);
   return { kind: WORKTREE_DIRECTORY_KINDS.PLANNED, path: target };
+}
+
+/**
+ * The folder a new bare-name worktree directory is created in. The sibling
+ * and fallback roots already belong to one repository; an explicit
+ * `worktrees.root` is shared, so it gets a `<repository>-<hash>` subfolder.
+ */
+export function bareNameDirectoryRoot(
+  root: WorktreeRootResolution,
+  commonDirectory: string
+): string {
+  return root.tier === WORKTREE_ROOT_TIERS.EXPLICIT
+    ? path.join(
+        root.root,
+        createRepositoryIdentity(
+          mainCheckoutName(commonDirectory),
+          commonDirectory
+        )
+      )
+    : root.root;
+}
+
+/**
+ * The main checkout's folder name, read from the shared Git directory so it
+ * is the same from every linked worktree of the repository. A bare
+ * repository (`name.git`) has no main checkout and uses its own name.
+ */
+function mainCheckoutName(commonDirectory: string): string {
+  const base = path.basename(commonDirectory);
+  return (
+    (base === ".git"
+      ? path.basename(path.dirname(commonDirectory))
+      : base.replace(/\.git$/i, "")) || "repository"
+  );
 }
 
 export const worktreeDirectoryBlockers = {
@@ -265,7 +304,7 @@ export interface WorktreeRootResolutionOptions {
 
 export interface WorktreeRootResolution {
   root: string;
-  tier: "explicit" | "sibling" | "fallback";
+  tier: WorktreeRootTier;
 }
 
 function expandExplicitRoot(value: string, homeDirectory: string): string {
@@ -331,7 +370,7 @@ export async function resolveWorktreeRoot(
       worktreeRoot: root,
       discoveredWorktrees: options.discoveredWorktrees,
     });
-    return { root: path.resolve(root), tier: "explicit" };
+    return { root: path.resolve(root), tier: WORKTREE_ROOT_TIERS.EXPLICIT };
   }
 
   const repositoryName =
@@ -347,7 +386,7 @@ export async function resolveWorktreeRoot(
       worktreeRoot: sibling,
       discoveredWorktrees: options.discoveredWorktrees,
     });
-    return { root: path.resolve(sibling), tier: "sibling" };
+    return { root: path.resolve(sibling), tier: WORKTREE_ROOT_TIERS.SIBLING };
   } catch (error) {
     if (!isFilesystemFailure(error)) throw error;
   }
@@ -365,7 +404,7 @@ export async function resolveWorktreeRoot(
     worktreeRoot: fallback,
     discoveredWorktrees: options.discoveredWorktrees,
   });
-  return { root: path.resolve(fallback), tier: "fallback" };
+  return { root: path.resolve(fallback), tier: WORKTREE_ROOT_TIERS.FALLBACK };
 }
 
 export interface WorktreePlacementPreview {
@@ -434,12 +473,18 @@ export async function previewWorktreePlacement(
             "Cannot resolve the repository's Git common directory to preview the worktree directory.",
         };
       const explicitRoot = ConfigurationUtils.getWorktreeRoot()?.trim();
-      const root = explicitRoot
-        ? expandExplicitRoot(explicitRoot, os.homedir())
-        : path.join(
-            path.dirname(repositoryRoot),
-            `${path.basename(repositoryRoot)}.worktrees`
-          );
+      const root: WorktreeRootResolution = explicitRoot
+        ? {
+            root: expandExplicitRoot(explicitRoot, os.homedir()),
+            tier: WORKTREE_ROOT_TIERS.EXPLICIT,
+          }
+        : {
+            root: path.join(
+              path.dirname(repositoryRoot),
+              `${path.basename(repositoryRoot)}.worktrees`
+            ),
+            tier: WORKTREE_ROOT_TIERS.SIBLING,
+          };
       try {
         const resolvedDirectory = await resolveWorktreeDirectory(
           repositoryRoot,

@@ -2941,6 +2941,20 @@ export const WORKTREE_DIRECTORY_KINDS = {
   PLANNED: "planned",
 } as const;
 
+/**
+ * Where a worktree root came from: the user's `worktrees.root` setting, the
+ * `<repository>.worktrees` sibling default, or the per-repository central
+ * fallback. Only an explicit root is shared by every repository.
+ */
+export const WORKTREE_ROOT_TIERS = {
+  EXPLICIT: "explicit",
+  SIBLING: "sibling",
+  FALLBACK: "fallback",
+} as const;
+
+export type WorktreeRootTier =
+  (typeof WORKTREE_ROOT_TIERS)[keyof typeof WORKTREE_ROOT_TIERS];
+
 /** The named-worktree `directory` field, which is omitted rather than stored empty. */
 export const WORKTREE_DIRECTORY_FIELD = "directory";
 

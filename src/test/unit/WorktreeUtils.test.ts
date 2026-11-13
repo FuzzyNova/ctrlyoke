@@ -8,6 +8,7 @@ import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolv
 import {
   WORKTREE_DIRECTORY_KINDS,
   WORKTREE_IDENTITY_KINDS,
+  WORKTREE_ROOT_TIERS,
 } from "../../types/DashboardConstants";
 import {
   assertWorktreePlacement,
@@ -18,6 +19,7 @@ import {
   resolveWorktreeRoot,
   slugifyWorktreeName,
   validateWorktreeBranchName,
+  type WorktreeRootResolution,
 } from "../../utils/WorktreeUtils";
 import { listWorktrees, gitCommonDir } from "../../utils/GitUtils";
 import type { GitWorktreeEntry } from "../../utils/GitUtils";
@@ -39,6 +41,78 @@ suite("WorktreeUtils", function () {
     temporaryDirectories.push(directory);
     return directory;
   }
+
+  const siblingRoot = (root: string): WorktreeRootResolution => ({
+    root,
+    tier: WORKTREE_ROOT_TIERS.SIBLING,
+  });
+  const explicitRoot = (root: string): WorktreeRootResolution => ({
+    root,
+    tier: WORKTREE_ROOT_TIERS.EXPLICIT,
+  });
+
+  test("an explicit root scopes new bare-name directories by repository", async () => {
+    const parent = await makeDirectory("explicit-bare-name");
+    const root = path.join(parent, "worktrees");
+    await fs.mkdir(root);
+    const repoA = path.join(parent, "repo-a");
+    const repoB = path.join(parent, "repo-b");
+    const commonA = path.join(repoA, ".git");
+    const commonB = path.join(repoB, ".git");
+    const plannedPath = async (source: string, common: string) => {
+      const result = await resolveWorktreeDirectory(
+        source,
+        "bug-fix",
+        [],
+        common,
+        explicitRoot(root)
+      );
+      assert.strictEqual(result.kind, WORKTREE_DIRECTORY_KINDS.PLANNED);
+      return result.kind === WORKTREE_DIRECTORY_KINDS.PLANNED
+        ? result.path
+        : "";
+    };
+
+    const pathA = await plannedPath(repoA, commonA);
+    const pathB = await plannedPath(repoB, commonB);
+    assert.match(
+      path.relative(root, pathA),
+      new RegExp(`^repo-a-[0-9a-f]{12}\\${path.sep}bug-fix$`)
+    );
+    assert.match(
+      path.relative(root, pathB),
+      new RegExp(`^repo-b-[0-9a-f]{12}\\${path.sep}bug-fix$`)
+    );
+    // Another repository's directory at the old unscoped location no longer blocks this one.
+    await fs.mkdir(path.join(root, "bug-fix"));
+    assert.strictEqual(await plannedPath(repoB, commonB), pathB);
+    // A linked worktree of repo A plans the same directory as its main checkout.
+    assert.strictEqual(
+      await plannedPath(path.join(parent, "repo-a-linked"), commonA),
+      pathA
+    );
+
+    // A worktree this repository already registered at `<root>/bug-fix` is still found.
+    const legacy = path.join(root, "bug-fix");
+    const existing = await resolveWorktreeDirectory(
+      repoA,
+      "bug-fix",
+      [
+        {
+          worktreePath: legacy,
+          headCommit: "abc",
+          branchName: "bug-fix",
+          detached: false,
+          bare: false,
+        },
+      ],
+      commonA,
+      explicitRoot(root)
+    );
+    assert.strictEqual(existing.kind, WORKTREE_DIRECTORY_KINDS.EXISTING);
+    if (existing.kind === WORKTREE_DIRECTORY_KINDS.EXISTING)
+      assert.strictEqual(existing.entry.worktreePath, legacy);
+  });
 
   test("resolves named directory aliases, ambiguity, and planned paths", async () => {
     const parent = await makeDirectory("named-directories");
@@ -68,7 +142,7 @@ suite("WorktreeUtils", function () {
         "bug-fix",
         [entry(candidate)],
         common,
-        root
+        siblingRoot(root)
       );
       assert.strictEqual(result.kind, WORKTREE_DIRECTORY_KINDS.EXISTING);
       if (result.kind === WORKTREE_DIRECTORY_KINDS.EXISTING)
@@ -80,7 +154,7 @@ suite("WorktreeUtils", function () {
         "bug-fix",
         [entry(exact), entry(namedHash)],
         common,
-        root
+        siblingRoot(root)
       ),
       /matches multiple registered worktrees/
     );
@@ -89,7 +163,7 @@ suite("WorktreeUtils", function () {
       "bug-fix",
       [],
       common,
-      root
+      siblingRoot(root)
     );
     assert.deepStrictEqual(planned, {
       kind: WORKTREE_DIRECTORY_KINDS.PLANNED,
@@ -97,7 +171,13 @@ suite("WorktreeUtils", function () {
     });
     for (const invalid of [".", "..", "a:b", "trailing."]) {
       await assert.rejects(
-        resolveWorktreeDirectory(source, invalid, [], common, root),
+        resolveWorktreeDirectory(
+          source,
+          invalid,
+          [],
+          common,
+          siblingRoot(root)
+        ),
         new RegExp(`Directory "${invalid.replace(/\./g, "\\.")}"`)
       );
     }
@@ -136,7 +216,7 @@ suite("WorktreeUtils", function () {
       path.basename(main),
       await listWorktrees(linked),
       common!,
-      root
+      siblingRoot(root)
     );
 
     assert.deepStrictEqual(result, {
@@ -155,11 +235,17 @@ suite("WorktreeUtils", function () {
     await fs.mkdir(root);
     await fs.mkdir(existing);
     await assert.rejects(
-      resolveWorktreeDirectory(source, existing, [], common, root),
+      resolveWorktreeDirectory(source, existing, [], common, siblingRoot(root)),
       /not a registered worktree/
     );
     await assert.rejects(
-      resolveWorktreeDirectory(source, "relative/path", [], common, root),
+      resolveWorktreeDirectory(
+        source,
+        "relative/path",
+        [],
+        common,
+        siblingRoot(root)
+      ),
       /absolute path/
     );
     await assert.rejects(
@@ -177,7 +263,7 @@ suite("WorktreeUtils", function () {
           },
         ],
         common,
-        root
+        siblingRoot(root)
       ),
       /Repair or Prune/
     );

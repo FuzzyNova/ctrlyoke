@@ -259,7 +259,7 @@
       "properties": {
         "root": {
           "type": "string",
-          "description": "Absolute or ~-prefixed directory where ctrlyoke creates worktrees.",
+          "description": "Absolute or ~-prefixed directory where ctrlyoke creates worktrees. Every repository shares it, so a new bare-name `directory` goes in a `<repository>-<hash>` folder inside it.",
           "default": ""
         }
       }

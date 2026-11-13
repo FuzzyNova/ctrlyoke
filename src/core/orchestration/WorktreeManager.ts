@@ -46,6 +46,7 @@ import {
   withWorktreeMutationLock,
   resolveWorktreeDirectory,
   isMainWorktree,
+  type WorktreeRootResolution,
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
@@ -612,15 +613,21 @@ export class WorktreeManager {
 
   /** {@link resolveWorktreeRoot} for a caller that already holds the repository root. */
   private async resolveWorktreeRootFor(sourceRoot: string): Promise<string> {
+    return (await this.resolveWorktreeRootResolutionFor(sourceRoot)).root;
+  }
+
+  /** {@link resolveWorktreeRootFor}, keeping which tier the root came from. */
+  private async resolveWorktreeRootResolutionFor(
+    sourceRoot: string
+  ): Promise<WorktreeRootResolution> {
     const worktrees = await listGitWorktrees(sourceRoot);
-    const result = await resolveConfiguredRoot({
+    return resolveConfiguredRoot({
       sourceCheckoutRoot: sourceRoot,
       explicitRoot:
         this.options.worktreeRoot ?? ConfigurationUtils.getWorktreeRoot(),
       homeDirectory: this.options.homeDirectory,
       discoveredWorktrees: worktrees,
     });
-    return result.root;
   }
 
   /**
@@ -2411,7 +2418,7 @@ export class WorktreeManager {
     const root =
       initialBranchCheckout && !options.directory
         ? undefined
-        : await this.resolveWorktreeRootFor(sourceCheckoutRoot);
+        : await this.resolveWorktreeRootResolutionFor(sourceCheckoutRoot);
     let namedDirectoryPath: string | undefined;
     let previousBranch: string | undefined;
     let directoryLease: ExecutionLeaseHandle | undefined;
@@ -2559,7 +2566,7 @@ export class WorktreeManager {
         ));
     if (needsProvisioning && namedDirectoryPath === undefined) {
       worktreePath = path.join(
-        root!,
+        root!.root,
         createWorktreeDirectoryName(branchName, commonDirectory, {
           kind: WORKTREE_IDENTITY_KINDS.NAMED,
           branchRef: branchName,

@@ -477,7 +477,7 @@ Fields:
 Fields:
 
 - `branch` · `string` · required — Local Git branch name for the named worktree.
-- `directory` · `string` — Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as exactly `<worktree root>/<name>`, with no hash suffix. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch.
+- `directory` · `string` — Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch. Setup runs once per directory, not once per branch.
 - `base` · `string` — Optional Git ref resolved to a commit when the worktree is created.
 - `setup` · `string` — Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped. With `directory` set, setup runs once per directory, not per branch.
 
@@ -490,7 +490,7 @@ User-only worktree checkout placement configuration.
 - **Type:** `string`
 - **Default:** `""`
 
-Absolute or ~-prefixed directory where ctrlyoke creates worktrees.
+Absolute or ~-prefixed directory where ctrlyoke creates worktrees. Every repository shares it, so a new bare-name `directory` goes in a `<repository>-<hash>` folder inside it.
 
 ## `coordination` {#coordination}
 
