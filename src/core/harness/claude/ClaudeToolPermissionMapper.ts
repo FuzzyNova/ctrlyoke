@@ -13,6 +13,7 @@ import {
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
 import { normalizeClaudeMcpServerId } from "../../../utils/ToolPermissionUtils";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
 import * as path from "path";
 import {
   HARNESS_IDS,
@@ -23,13 +24,15 @@ import {
 const CLAUDE_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=2.1.17",
 ]);
+// `npx @anthropic-ai/claude-code@2.1.170` accepted `--permission-mode auto`
+// and passed live allow/unlisted/deny probes; this is the first tested release.
+const CLAUDE_AUTO_MODE_MIN_VERSION = ">=2.1.170";
 
 const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
-    fidelity: "unsupported",
-    mechanism: "none",
-    verification: CLAUDE_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+    fidelity: "exact",
+    mechanism: "native",
+    verification: capabilitySuiteVerification([CLAUDE_AUTO_MODE_MIN_VERSION]),
   },
   mode: {
     fidelity: "exact",
@@ -106,7 +109,14 @@ export class ClaudeToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.CLAUDE_CLI);
+    const isAuto = config.mode === PERMISSION_MODES.AUTO;
+    const supportsAuto =
+      !!context.cliVersion &&
+      versionSatisfies(context.cliVersion, CLAUDE_AUTO_MODE_MIN_VERSION);
+    const fallback =
+      isAuto && !supportsAuto
+        ? this.getAutoModeFallback(config, HARNESS_IDS.CLAUDE_CLI)
+        : undefined;
     if (fallback) {
       const application = await this.prepare(fallback.config, context);
       return {
@@ -132,7 +142,7 @@ export class ClaudeToolPermissionMapper
         // bypassPermissions or acceptEdits would never ask.
         args = [
           "--permission-mode",
-          context.isInteractive ? "default" : "dontAsk",
+          isAuto ? "auto" : context.isInteractive ? "default" : "dontAsk",
         ];
         const convertedAllowTools = this.convertUnique(
           config.allowedTools,

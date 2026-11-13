@@ -11,6 +11,7 @@ import {
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
@@ -19,13 +20,16 @@ import {
 const COPILOT_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.0.384",
 ]);
+// The published 1.0.3 binary lacks the flag; 1.0.4 first exposes it, and its
+// live headless allow/unlisted/deny probe passed from a scratch directory.
+const COPILOT_AUTO_MODE_MIN_VERSION = ">=1.0.4";
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
-    fidelity: "unsupported",
-    mechanism: "none",
-    verification: COPILOT_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+    fidelity: "partial",
+    mechanism: "translated-cli",
+    verification: capabilitySuiteVerification([COPILOT_AUTO_MODE_MIN_VERSION]),
+    caveatCode: PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY,
   },
   mode: {
     fidelity: "exact",
@@ -123,14 +127,29 @@ export class CopilotToolPermissionMapper
    */
   async prepare(
     config: ToolPermissionConfig,
-    _context: PermissionContext
+    context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    const fallback = this.getAutoModeFallback(config, HARNESS_IDS.COPILOT_CLI);
+    const isAuto = config.mode === PERMISSION_MODES.AUTO;
+    const supportsAuto =
+      !!context.cliVersion &&
+      versionSatisfies(context.cliVersion, COPILOT_AUTO_MODE_MIN_VERSION);
+    const fallback =
+      isAuto && (!supportsAuto || context.isInteractive)
+        ? this.getAutoModeFallback(config, HARNESS_IDS.COPILOT_CLI)
+        : undefined;
     if (fallback) {
-      const application = await this.prepare(fallback.config, _context);
+      const application = await this.prepare(fallback.config, context);
       return {
         ...application,
-        diagnostics: [fallback.diagnostic, ...application.diagnostics],
+        diagnostics: [
+          {
+            ...fallback.diagnostic,
+            message: context.isInteractive
+              ? 'Copilot auto permission mode is headless only; use /permissions assisted or set defaultPermissionMode: "assisted" in ~/.copilot/settings.json for interactive sessions'
+              : fallback.diagnostic.message,
+          },
+          ...application.diagnostics,
+        ],
       };
     }
     if (config.mode === PERMISSION_MODES.NONE) {
@@ -138,6 +157,8 @@ export class CopilotToolPermissionMapper
     }
     const args: string[] = [];
     const filteredTools: string[] = [];
+
+    if (isAuto) args.push("--assisted-approval");
 
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       args.push("--yolo");

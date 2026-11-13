@@ -145,11 +145,9 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
     | undefined {
     if (config.mode !== PERMISSION_MODES.AUTO) return undefined;
     const declaration = this.capabilities.autoMode;
-    const code = getPermissionFidelityDiagnosticCode(
-      PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
-      declaration.fidelity,
-      declaration.caveatCode
-    )!;
+    // A runtime gate can require fallback even when the harness supports auto
+    // on newer versions, so this diagnostic is unconditional once requested.
+    const code = COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK;
     return {
       config: { ...config, mode: PERMISSION_MODES.CUSTOM },
       diagnostic: {
@@ -158,8 +156,12 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
         harnessId,
         capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
         state: {
-          fidelity: declaration.fidelity,
-          mechanism: declaration.mechanism,
+          fidelity:
+            declaration.fidelity === "exact"
+              ? "unsupported"
+              : declaration.fidelity,
+          mechanism:
+            declaration.fidelity === "exact" ? "none" : declaration.mechanism,
           verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
         },
         message: getCompatibilityDiagnosticMessage(code, {

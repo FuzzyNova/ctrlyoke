@@ -712,7 +712,10 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     if (config === null) {
       return { cliArgs: [], diagnostics: [] };
     }
-    return this.toolPermissionMapper.prepare(config, context);
+    return this.toolPermissionMapper.prepare(config, {
+      ...context,
+      cliVersion: context.cliVersion ?? (await this.getVersion()),
+    });
   }
 
   /**

@@ -194,6 +194,11 @@ Adding an enum value is a **no-bump** change ("Changing the schemas" in `CONTRIB
    in `ToolPermissionMapperBase` for the "unsupported → custom + diagnostic" fallback.
    - Version gates come from `PermissionContext.cliVersion`. The agy adapter already passes it;
      do the same in any adapter whose gate needs it.
+   - [x] Claude: `>=2.1.170`; tested the first accepting release with `npx` and confirmed
+     allowed, unlisted chained, and denied command behavior. The gate was found by checking
+     published CLI releases and probing 2.1.170 directly.
+   - [x] Copilot: `>=1.0.4`; `1.0.3` lacks `--assisted-approval` and `1.0.4` exposes it.
+     Confirmed 1.0.4 with a live headless allow/unlisted/deny probe from a scratch directory.
 3. UI:
    - Add an `auto` option and description to `PermissionsQuickPicker.tsx`, `permissionUtils.ts`
      and `SchemaUiMetadata.ts`.

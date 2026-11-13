@@ -134,6 +134,53 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, []);
       });
 
+      test("auto uses assisted approval with allow and deny rules at its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write", "shell"], ["shell(git push)"]),
+          { cliVersion: "1.0.4" }
+        );
+        assert.deepStrictEqual(result.cliArgs, [
+          "--assisted-approval",
+          "--allow-tool",
+          "write",
+          "shell",
+          "--deny-tool",
+          "shell(git push)",
+        ]);
+        assert.ok(
+          result.diagnostics.every(
+            (diagnostic) =>
+              diagnostic.code !==
+              COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          )
+        );
+      });
+
+      test("auto falls back below its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+          { cliVersion: "1.0.3" }
+        );
+        assert.ok(!result.cliArgs.includes("--assisted-approval"));
+        assert.strictEqual(
+          result.diagnostics[0].code,
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+        );
+      });
+
+      test("interactive auto falls back with Copilot's settings guidance", async () => {
+        const result = await mapper.prepare(cfg(PERMISSION_MODES.AUTO), {
+          cliVersion: "1.0.111",
+          isInteractive: true,
+        });
+        assert.deepStrictEqual(result.cliArgs, []);
+        assert.match(result.diagnostics[0].message, /\/permissions assisted/);
+        assert.match(
+          result.diagnostics[0].message,
+          /defaultPermissionMode: "assisted"/
+        );
+      });
+
       test("custom mode filters out read-only tools (grep, read, read_file, list_files, search_files)", async () => {
         const readOnlyTools = [
           "grep",
@@ -753,6 +800,71 @@ suite("HarnessToolPermissionMappers", () => {
           "--tools",
           "default",
         ]);
+      });
+
+      test("auto maps both lists through the harness judge at its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(
+            PERMISSION_MODES.AUTO,
+            ["shell(git:*)", "write"],
+            ["shell(git push)"]
+          ),
+          { cliVersion: "2.1.170", isInteractive: false }
+        );
+        assert.deepStrictEqual(result.cliArgs, [
+          "--permission-mode",
+          "auto",
+          "--allowedTools",
+          "Bash(git:*)",
+          "Write",
+          "--disallowedTools",
+          "Bash(git push)",
+        ]);
+        assert.ok(
+          result.diagnostics.every(
+            (diagnostic) =>
+              diagnostic.code !==
+              COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          )
+        );
+      });
+
+      test("auto uses the same native mode in interactive sessions", async () => {
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+          { cliVersion: "2.1.323", isInteractive: true }
+        );
+        assert.deepStrictEqual(args, [
+          "--permission-mode",
+          "auto",
+          "--allowedTools",
+          "Write",
+          "--disallowedTools",
+          "Bash",
+        ]);
+      });
+
+      test("auto falls back below the minimum version and for unknown versions", async () => {
+        for (const context of [{ cliVersion: "2.1.169" }, {}]) {
+          const result = await mapper.prepare(
+            cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+            context
+          );
+          assert.deepStrictEqual(
+            result.cliArgs,
+            (
+              await mapper.prepare(
+                cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+                context
+              )
+            ).cliArgs
+          );
+          assert.strictEqual(
+            result.diagnostics[0].code,
+            COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          );
+        }
       });
 
       test("allowAll with denied tools appends --disallowedTools", async () => {
