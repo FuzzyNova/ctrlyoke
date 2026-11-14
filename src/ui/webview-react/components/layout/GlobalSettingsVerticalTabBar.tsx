@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useScrollOverflowEdges } from "@hooks/useScrollOverflowEdges";
 import { Icon } from "../shared/Icon";
 import { LucideIcon } from "../shared/LucideIcon";
@@ -48,15 +48,6 @@ function ScrollChevron({ direction, onScroll }: ScrollChevronProps) {
   );
 }
 
-/** Icon box in the icon-only rail: 6px larger than the default 16px glyph. */
-const RAIL_ICON_PX = 22;
-
-interface RailTooltip {
-  label: string;
-  top: number;
-  left: number;
-}
-
 export function GlobalSettingsVerticalTabBar({
   tabs,
   activeTab,
@@ -64,25 +55,6 @@ export function GlobalSettingsVerticalTabBar({
   iconOnly = false,
 }: Props) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const railRef = useRef<HTMLDivElement | null>(null);
-  // Absolutely positioned against the rail (not the scroller, whose overflow
-  // would clip it). Not `fixed`: the settings drawer is transformed, which
-  // makes `fixed` resolve against the drawer and offsets the tooltip. Native
-  // `title` tooltips are unreliable in the webview and absent on touch.
-  const [tooltip, setTooltip] = useState<RailTooltip | null>(null);
-  const showTooltip = (element: HTMLElement, label: string) => {
-    if (!iconOnly) return;
-    const rail = railRef.current;
-    if (!rail) return;
-    const rect = element.getBoundingClientRect();
-    const railRect = rail.getBoundingClientRect();
-    setTooltip({
-      label,
-      top: rect.top - railRect.top + rect.height / 2,
-      left: rect.right - railRect.left + 6,
-    });
-  };
-  const hideTooltip = () => setTooltip(null);
   const [edgesRef, { canScrollUp, canScrollDown }] = useScrollOverflowEdges();
   const mergedScrollerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -128,18 +100,8 @@ export function GlobalSettingsVerticalTabBar({
   // chevrons stand in for it as the "more tabs this way" cue.
   return (
     <div
-      ref={railRef}
       className={`relative flex flex-col min-h-0 border-r border-panel-border bg-sidebar-bg shrink-0 ${iconOnly ? "w-12" : "w-44"}`}
     >
-      {iconOnly && tooltip && (
-        <div
-          role="tooltip"
-          className="absolute z-popover -translate-y-1/2 whitespace-nowrap rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-foreground shadow-lg pointer-events-none"
-          style={{ top: tooltip.top, left: tooltip.left }}
-        >
-          {tooltip.label}
-        </div>
-      )}
       {canScrollUp && <ScrollChevron direction={-1} onScroll={scrollByPage} />}
       <div
         ref={mergedScrollerRef}
@@ -152,20 +114,10 @@ export function GlobalSettingsVerticalTabBar({
               key={tab.id}
               data-tab-id={tab.id}
               onClick={() => onTabChange(tab.id)}
-              onMouseEnter={(e) => showTooltip(e.currentTarget, tab.label)}
-              onMouseLeave={hideTooltip}
-              onFocus={(e) => {
-                if (e.currentTarget.matches(":focus-visible")) {
-                  showTooltip(e.currentTarget, tab.label);
-                }
-              }}
-              onBlur={hideTooltip}
               title={
-                iconOnly
-                  ? undefined
-                  : tab.matchCount === undefined
-                    ? tab.label
-                    : `${tab.label}, ${tab.matchCount} matches`
+                tab.matchCount === undefined
+                  ? tab.label
+                  : `${tab.label}, ${tab.matchCount} matches`
               }
               aria-label={
                 tab.matchCount === undefined
@@ -186,13 +138,10 @@ export function GlobalSettingsVerticalTabBar({
                 {typeof tab.icon === "string" ? (
                   <Icon
                     name={tab.icon}
-                    className={iconOnly ? "text-[22px]!" : "text-base"}
+                    className={iconOnly ? "codicon-lg" : "text-base"}
                   />
                 ) : (
-                  <LucideIcon
-                    icon={tab.icon}
-                    size={iconOnly ? RAIL_ICON_PX : "md"}
-                  />
+                  <LucideIcon icon={tab.icon} size={iconOnly ? "lg" : "md"} />
                 )}
                 {iconOnly && tab.matchCount !== undefined ? (
                   <span className="absolute -right-2 -top-2 flex min-w-4 h-4 items-center justify-center rounded-full bg-badge-bg px-1 text-[9px] leading-none text-badge-fg">
