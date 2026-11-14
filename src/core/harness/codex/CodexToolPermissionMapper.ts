@@ -8,6 +8,7 @@ import {
 import {
   PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
+  INLINE_CONFIG_SUITE_REFERENCE,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -20,8 +21,17 @@ import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtil
 const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.129.0",
 ]);
+const CODEX_AUTO_MODE_MIN_VERSION = ">=0.167.2";
 
 export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: capabilitySuiteVerification(
+      [CODEX_AUTO_MODE_MIN_VERSION],
+      INLINE_CONFIG_SUITE_REFERENCE
+    ),
+  },
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -60,6 +70,7 @@ export const CODEX_FOLD_EXCLUDED_SERVER_IDS: ReadonlySet<string> = new Set([
  * | allowAll            | `-a on-request` | nothing                 |
  * | dangerouslyAllowAll | `-a never`      | nothing                 |
  * | custom              | `-a on-request` | nothing                 |
+ * | auto                | `-a on-request` + reviewer | reviewer config |
  * | none / null         | nothing         | nothing                 |
  *
  * `codex exec` has no `-a` flag and never asks for approval, so headless
@@ -80,6 +91,13 @@ export class CodexToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.CODEX_CLI,
+      CODEX_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
     return {
       cliArgs: this.buildCodexSpecificArgs(config, context.isInteractive),
       // CodexHarnessAdapter folds MCP tool denials into the attached servers'
@@ -108,6 +126,16 @@ export class CodexToolPermissionMapper
     config: ToolPermissionConfig,
     isInteractive?: boolean
   ): string[] {
+    if (config.mode === PERMISSION_MODES.AUTO) {
+      return isInteractive === false
+        ? [
+            "-c",
+            "approvals_reviewer=auto_review",
+            "-c",
+            "approval_policy=on-request",
+          ]
+        : ["-a", "on-request", "-c", "approvals_reviewer=auto_review"];
+    }
     if (isInteractive === false) return [];
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:

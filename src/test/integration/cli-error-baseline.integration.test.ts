@@ -18,7 +18,7 @@ suite("CLI error contract baseline", () => {
       {
         args: ["run", "--permission-mode", "invalid", "--prompt", "x"],
         stderr:
-          "error: option '--permission-mode <mode>' argument 'invalid' is invalid. --permission-mode must be one of: dangerouslyAllowAll, allowAll, custom, none\n",
+          "error: option '--permission-mode <mode>' argument 'invalid' is invalid. --permission-mode must be one of: dangerouslyAllowAll, allowAll, auto, custom, none\n",
       },
       {
         args: ["run", "--var", "invalid", "--prompt", "x"],

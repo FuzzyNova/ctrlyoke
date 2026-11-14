@@ -1,6 +1,9 @@
 import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  EXECUTION_MODES,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
   permissionModeAppliesToolList,
@@ -8,8 +11,10 @@ import {
 } from "../../../../types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
+  HarnessVersionRange,
   PermissionCapabilityDescriptor,
 } from "../../../../types/CompatibilityTypes";
+import { versionSatisfies } from "../../../../utils/HarnessVersion";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
@@ -135,6 +140,66 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication>;
+
+  /**
+   * Prepare `auto` as `custom` plus a fallback warning when this launch can't
+   * enter the harness's judged mode: the declaration (or its override for the
+   * launch's execution mode) is `unsupported`, or the CLI is older than
+   * `minVersion` or its version is unknown. Returns `undefined` when the mode
+   * isn't `auto` or the harness can run it, so the caller maps it natively.
+   * Never falls back to `allowAll`: `custom` refuses or asks about anything
+   * the allow list doesn't cover.
+   */
+  protected async prepareAutoModeFallback(
+    config: ToolPermissionConfig,
+    context: PermissionContext,
+    harnessId: HarnessId,
+    minVersion?: HarnessVersionRange
+  ): Promise<ToolPermissionApplication | undefined> {
+    if (config.mode !== PERMISSION_MODES.AUTO) return undefined;
+    const declaration = this.capabilities.autoMode;
+    const override =
+      declaration.modeOverrides?.[
+        context.isInteractive
+          ? EXECUTION_MODES.INTERACTIVE
+          : EXECUTION_MODES.HEADLESS
+      ];
+    const declaredSupported =
+      (override?.fidelity ?? declaration.fidelity) !==
+      CAPABILITY_FIDELITIES.UNSUPPORTED;
+    const versionSupported =
+      minVersion === undefined ||
+      (!!context.cliVersion &&
+        versionSatisfies(context.cliVersion, minVersion));
+    if (declaredSupported && versionSupported) return undefined;
+
+    const code = COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK;
+    const caveatCode = override?.caveatCode ?? declaration.caveatCode;
+    const diagnostic: CompatibilityDiagnostic = {
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      harnessId,
+      capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+      state: {
+        fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+        mechanism: CAPABILITY_MECHANISMS.NONE,
+        verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+      },
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId,
+        capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+        caveatCode: declaredSupported ? undefined : caveatCode,
+      }),
+    };
+    const application = await this.prepare(
+      { ...config, mode: PERMISSION_MODES.CUSTOM },
+      context
+    );
+    return {
+      ...application,
+      diagnostics: [diagnostic, ...application.diagnostics],
+    };
+  }
 
   /**
    * Produce runtime diagnostics when a configured tool list is not represented

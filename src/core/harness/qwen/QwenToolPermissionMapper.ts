@@ -7,6 +7,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
+
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
@@ -19,6 +20,11 @@ const QWEN_PERMISSION_VERIFICATION = {
   basis: "cli-version",
   verifiedVersions: [">=0.15.5"],
 } as const;
+// The installed release used for the live probe; earlier releases were not
+// established, so older Qwen falls back to custom.
+const QWEN_AUTO_MODE_MIN_VERSION = ">=0.27.2";
+/** Qwen's shell tool name, as an allow/deny specifier. */
+const QWEN_SHELL_TOOL = "ShellTool";
 
 const QWEN_PERMISSION_TOOL_NAMES = {
   DELETE: "delete",
@@ -44,6 +50,14 @@ const QWEN_EDIT_TOOL_ALIASES: ReadonlySet<string> = new Set([
 ]);
 
 const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: {
+      ...QWEN_PERMISSION_VERIFICATION,
+      verifiedVersions: [QWEN_AUTO_MODE_MIN_VERSION],
+    },
+  },
   mode: {
     fidelity: "exact",
     mechanism: "translated-cli",
@@ -100,8 +114,15 @@ export class QwenToolPermissionMapper
    */
   async prepare(
     config: ToolPermissionConfig,
-    _context: PermissionContext
+    context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.QWEN_CLI,
+      QWEN_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }
@@ -143,25 +164,33 @@ export class QwenToolPermissionMapper
         }
       }
     } else {
-      // Custom mode - use default approval with allow/deny lists
-      args.push("--approval-mode", "default");
+      // Custom and auto share the allow/deny lists; only the approval mode
+      // differs. Under auto the allow list pre-approves without limiting.
+      const isAuto = config.mode === PERMISSION_MODES.AUTO;
+      args.push("--approval-mode", isAuto ? "auto" : "default");
       Log.debug(
-        "[QwenToolPermissionMapper] Qwen default approval mode (custom)"
+        `[QwenToolPermissionMapper] Qwen ${isAuto ? "auto" : "default"} approval mode (${config.mode})`
       );
 
-      // Add allowed tools if specified
-      if (config.allowedTools.length > 0) {
-        const allowedArgs = this.convertCtrlYokePatternsToQwenTools(
-          config.allowedTools,
-          () => lossyPatterns.push({ capability: "allowedTools" }),
-          { allowList: true }
+      const allowedArgs = this.convertCtrlYokePatternsToQwenTools(
+        config.allowedTools,
+        () => lossyPatterns.push({ capability: "allowedTools" }),
+        { allowList: true }
+      );
+      // Headless auto, like headless default, drops the shell tool from the
+      // session unless an allow rule names it bare; the judge still engages.
+      if (
+        isAuto &&
+        context.isInteractive === false &&
+        !allowedArgs.includes(QWEN_SHELL_TOOL)
+      ) {
+        allowedArgs.push(QWEN_SHELL_TOOL);
+      }
+      if (allowedArgs.length > 0) {
+        args.push("--allowed-tools", allowedArgs.join(","));
+        Log.debug(
+          `[QwenToolPermissionMapper] Qwen allowed tools: ${allowedArgs.join(", ")}`
         );
-        if (allowedArgs.length > 0) {
-          args.push("--allowed-tools", allowedArgs.join(","));
-          Log.debug(
-            `[QwenToolPermissionMapper] Qwen allowed tools: ${allowedArgs.join(", ")}`
-          );
-        }
       }
 
       // Add denied tools if specified (takes precedence over allowed)
@@ -273,7 +302,7 @@ export class QwenToolPermissionMapper
         normalizedToolName === TOOL_PERMISSION_CATEGORIES.BASH ||
         normalizedToolName === "run_shell_command"
       ) {
-        qwenTools.add(this.buildQwenShellSpec("ShellTool", toolArgs));
+        qwenTools.add(this.buildQwenShellSpec(QWEN_SHELL_TOOL, toolArgs));
       } else if (isWrite) {
         qwenTools.add("WriteFile");
       } else if (normalizedToolName === TOOL_PERMISSION_CATEGORIES.READ) {

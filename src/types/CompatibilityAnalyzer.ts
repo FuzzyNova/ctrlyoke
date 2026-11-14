@@ -17,6 +17,7 @@ import {
   PROMPT_INPUT_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
   STEP_TYPES,
+  type ExecutionMode,
   type HarnessId,
   type HookEvent,
 } from "./DashboardConstants";
@@ -27,6 +28,7 @@ import type {
   ResolvedExecutionTarget,
 } from "./ExecutionPropertyResolver";
 import type {
+  CapabilityDeclaration,
   CompatibilityConsumerTarget,
   CompatibilityDiagnostic,
   EffectiveCapabilityState,
@@ -218,7 +220,7 @@ export function analyzeCompatibility({
     const sourceTier = target.resolved.sources.toolPermissions;
     const declarations = installed.descriptor.permissions;
     const permissionFields: Array<{
-      key: "mode" | "allowedTools" | "deniedTools";
+      key: "mode" | "autoMode" | "allowedTools" | "deniedTools";
       used: boolean;
       state: EffectiveCapabilityState;
       caveatCode?: CompatibilityCaveatCode;
@@ -231,6 +233,15 @@ export function analyzeCompatibility({
         used: true,
         state: effective.mode,
         caveatCode: declarations?.mode.caveatCode,
+      },
+      {
+        key: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+        used: permissions.mode === PERMISSION_MODES.AUTO,
+        ...autoModeFieldState(
+          effective.autoMode,
+          declarations?.autoMode,
+          target.resolved.properties.executionMode
+        ),
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
@@ -620,8 +631,32 @@ function createHookDiagnostic(
   };
 }
 
+/**
+ * The auto-mode state for one execution mode. Copilot's judge is headless
+ * only, so its declaration overrides interactive to `unsupported`; the mapper
+ * reads the same override at launch, so both report the same fallback.
+ */
+function autoModeFieldState(
+  state: EffectiveCapabilityState,
+  declaration: CapabilityDeclaration | undefined,
+  executionMode: ExecutionMode
+): { state: EffectiveCapabilityState; caveatCode?: CompatibilityCaveatCode } {
+  const override = declaration?.modeOverrides?.[executionMode];
+  if (!override) {
+    return { state, caveatCode: declaration?.caveatCode };
+  }
+  return {
+    state: {
+      ...state,
+      fidelity: override.fidelity,
+      mechanism: override.mechanism,
+    },
+    caveatCode: override.caveatCode ?? declaration?.caveatCode,
+  };
+}
+
 function diagnosticsForPermissionField(
-  key: "mode" | "allowedTools" | "deniedTools",
+  key: "mode" | "autoMode" | "allowedTools" | "deniedTools",
   state: EffectiveCapabilityState,
   harnessId: HarnessId,
   target: CompatibilityExecutionTarget,
@@ -671,6 +706,7 @@ function diagnosticsForPermissionField(
   // "unverified" diagnostic on top would incorrectly suggest we merely haven't
   // checked, when we deliberately know this harness has no equivalent.
   if (
+    key !== PERMISSION_CAPABILITY_KEYS.AUTO_MODE &&
     state.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED &&
     state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
   ) {
@@ -722,7 +758,7 @@ function createDiagnostic(
   target: CompatibilityExecutionTarget,
   state: EffectiveCapabilityState,
   sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"],
-  permissionKey?: "mode" | "allowedTools" | "deniedTools",
+  permissionKey?: "mode" | "autoMode" | "allowedTools" | "deniedTools",
   caveatCode?: CompatibilityCaveatCode,
   propertyPointer?: string
 ): CompatibilityDiagnostic {

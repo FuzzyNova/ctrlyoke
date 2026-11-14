@@ -6,7 +6,10 @@ import {
   ToolPermissionMapperBase,
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
-import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
+import {
+  PERMISSION_CAVEAT_CODES,
+  type PermissionCapabilityDescriptor,
+} from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import {
   HARNESS_IDS,
@@ -33,6 +36,12 @@ const OPENCODE_PERMISSION_VERIFICATION = {
 } as const;
 
 const OPENCODE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "unsupported",
+    mechanism: "none",
+    verification: OPENCODE_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED,
+  },
   mode: {
     fidelity: "exact",
     mechanism: "translated-cli",
@@ -149,8 +158,14 @@ export class OpenCodeToolPermissionMapper
   /** Prepare OpenCode's process-local permission policy. */
   async prepare(
     config: ToolPermissionConfig,
-    _context: PermissionContext
+    context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.OPENCODE_CLI
+    );
+    if (fallback) return fallback;
     if (
       config.mode === PERMISSION_MODES.CUSTOM &&
       (config.allowedTools.length > 0 || config.deniedTools.length > 0)
@@ -184,6 +199,9 @@ export class OpenCodeToolPermissionMapper
     externalDirectories: readonly string[] = [],
     workspaceRoot?: string
   ): OpenCodePermissionPolicy | undefined {
+    if (config?.mode === PERMISSION_MODES.AUTO) {
+      config = { ...config, mode: PERMISSION_MODES.CUSTOM };
+    }
     const emittedTopLevelKeys = new Set<string>();
     const emittedToolKeys = new Map<string, string>();
     const emittedNestedKeys = new Map<string, Map<string, string>>();

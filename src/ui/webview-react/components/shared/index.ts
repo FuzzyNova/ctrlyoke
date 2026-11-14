@@ -25,6 +25,7 @@ export {
 } from "./LabelActionLink";
 export { ExecutionStateBadge } from "./ExecutionStateBadge";
 export { CustomSelect, type SelectOption } from "./CustomSelect";
+export { permissionModeAllowsAllowedTools } from "./permissionUtils";
 export {
   getAgentDisplayName,
   toAgentSelectOption,

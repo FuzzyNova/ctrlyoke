@@ -90,6 +90,9 @@ The permission `mode` maps to Copilot flags:
 
 - `dangerouslyAllowAll` → `--yolo`. The deny list is ignored.
 - `allowAll` → `--allow-all-tools`, plus `--deny-tool` with the deny list
+- `auto` → headless only: `--assisted-approval`, plus allow and deny rules. Interactive runs
+  fall back to `custom`; enable Copilot's assisted mode with `/permissions assisted` or
+  `defaultPermissionMode: "assisted"` in Copilot settings.
 - `custom` → `--allow-tool` with the allow list, plus `--deny-tool` with the deny list
 - `none` → no permission flags (Copilot's own configuration)
 

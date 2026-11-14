@@ -224,7 +224,7 @@ suite("HarnessCapabilityRegistry", () => {
     ]);
   });
 
-  test("requires all three permission leaves for every HarnessId", async () => {
+  test("requires every permission capability leaf for every HarnessId", async () => {
     const snapshot = await makeRegistry().getSnapshot();
 
     assert.deepStrictEqual(
@@ -236,6 +236,7 @@ suite("HarnessCapabilityRegistry", () => {
       assert.ok(permissions);
       assert.deepStrictEqual(Object.keys(permissions).sort(), [
         "allowedTools",
+        "autoMode",
         "deniedTools",
         "mode",
       ]);

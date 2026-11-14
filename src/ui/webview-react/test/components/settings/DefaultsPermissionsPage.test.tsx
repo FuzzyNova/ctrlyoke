@@ -19,6 +19,11 @@ import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 function createSnapshot(): HarnessCapabilityRegistrySnapshot {
   const supported: EffectivePermissionCapabilityState = {
     mode: { fidelity: "exact", mechanism: "native", verification: "verified" },
+    autoMode: {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "verified",
+    },
     allowedTools: {
       fidelity: "exact",
       mechanism: "translated-cli",
@@ -32,6 +37,11 @@ function createSnapshot(): HarnessCapabilityRegistrySnapshot {
   };
   const unsupported: EffectivePermissionCapabilityState = {
     mode: { fidelity: "exact", mechanism: "native", verification: "verified" },
+    autoMode: {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "verified",
+    },
     allowedTools: {
       fidelity: "unsupported",
       mechanism: "none",
@@ -55,6 +65,8 @@ function createSnapshot(): HarnessCapabilityRegistrySnapshot {
         harnessId,
         permissions: {
           mode: supportedDeclaration,
+
+          autoMode: supportedDeclaration,
           allowedTools: supportedDeclaration,
           deniedTools: supportedDeclaration,
         },

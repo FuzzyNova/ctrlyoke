@@ -87,6 +87,7 @@ with a warning in the log. If your default is `none`, no model flag is passed.
 - The workflow surface is the same as the other CLI harnesses.
 - In a headless step, ctrlyoke attaches the prompt files it writes for the step (the prompt, agent instructions, skills, prior-step context, attachment excerpts) with `opencode run --file`. OpenCode puts their contents into the first message, so the model starts working without reading them first. Workspace files the prompt references with `@` are not attached; the model reads them itself, as before. An interactive step has no attachment option, so the model reads the prompt files there too.
 - Tool permissions (`mode`, `allowedTools`, `deniedTools`), MCP servers, and ctrlyoke's completion plugin are delivered per process through `OPENCODE_CONFIG_CONTENT`; ctrlyoke does not write a workspace `opencode.json`. OpenCode's own categories are coarser than tool patterns (for example, `write` and `edit` both map to OpenCode's `edit` permission). See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
+- OpenCode has no judged Auto permission mode. Selecting `auto` falls back to `custom` with a compatibility diagnostic.
 - Approved trusted external roots and your other workspace folders are granted to OpenCode as `external_directory` allow rules, OpenCode's equivalent of `--add-dir`, in every permission mode. For other folders, see [Folders outside the workspace](#outside-the-workspace).
 - ctrlyoke works with OpenCode 1 and OpenCode 2. OpenCode 2 normally connects every `opencode` command to one shared background service; ctrlyoke instead starts each run with its own private server (`--standalone`), so that run's permissions, MCP servers and completion plugin don't reach your other OpenCode sessions. Its sessions are still saved where OpenCode keeps all sessions, so they appear in your other OpenCode clients afterwards. If you pass `--server` in `additionalArgs`, ctrlyoke uses that server instead, and the run's per-process settings are not applied there.
 - To follow an interactive OpenCode 2 step, and to check a session before resuming it, ctrlyoke runs `opencode session export`. That command reads the session through OpenCode's shared background service, and starts the service if it isn't running. The service keeps running after the step ends. Check it with `opencode service status` and stop it with `opencode service stop`.
@@ -108,6 +109,7 @@ other workspace folders. For any other folder, the
 | Mode                             | Other folders outside the workspace                    |
 | -------------------------------- | ------------------------------------------------------ |
 | `allowAll`                       | Allowed                                                |
+| `auto`                           | Unsupported; falls back to `custom`                    |
 | `custom`                         | OpenCode asks, so a headless step can't use them       |
 | `none` and `dangerouslyAllowAll` | OpenCode's own setting, which differs between versions |
 

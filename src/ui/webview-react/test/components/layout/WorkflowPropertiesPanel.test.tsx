@@ -238,6 +238,20 @@ describe("WorkflowPropertiesPanel permissions", () => {
     expect(screen.getByLabelText("Denied Tools")).not.toBeDisabled();
   });
 
+  it("keeps both permission lists editable in auto mode", () => {
+    useSettingsStore.getState().updateWorkflowProperty("toolPermissions", {
+      mode: PERMISSION_MODES.AUTO,
+      allowedTools: ["shell(git:*)"],
+      deniedTools: ["shell(rm:*)"],
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+
+    expect(screen.getByLabelText("Allowed Tools")).not.toBeDisabled();
+    expect(screen.getByLabelText("Denied Tools")).not.toBeDisabled();
+  });
+
   it("reflects effective secret grants and shows the active summary", () => {
     useSecretRegistryStore.getState().setEntries("workspace", [
       {

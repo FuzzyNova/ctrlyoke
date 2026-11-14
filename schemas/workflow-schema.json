@@ -2072,8 +2072,14 @@
           "properties": {
             "mode": {
               "type": "string",
-              "enum": ["dangerouslyAllowAll", "allowAll", "custom", "none"],
-              "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config)."
+              "enum": [
+                "dangerouslyAllowAll",
+                "allowAll",
+                "auto",
+                "custom",
+                "none"
+              ],
+              "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config)."
             },
             "allowedTools": {
               "type": "array",

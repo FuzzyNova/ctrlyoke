@@ -54,8 +54,8 @@ test("compatibility documentation covers the current registry without uniform fe
     .filter((line) => line.startsWith("| "));
   assert.equal(
     matrixRows.length,
-    21,
-    "fifteen capability rows, five domain rows, plus the header and divider"
+    22,
+    "sixteen capability rows, five domain rows, plus the header and divider"
   );
   assert.equal(
     matrixRows[0].split(" | ").length,

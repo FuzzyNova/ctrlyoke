@@ -28,8 +28,11 @@ export type PermissionField =
   | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
   | typeof PERMISSION_CAPABILITY_KEYS.MODE;
 
-const PERMISSION_FIELDS: readonly PermissionField[] = [
+const PERMISSION_FIELDS: readonly (
+  PermissionField | typeof PERMISSION_CAPABILITY_KEYS.AUTO_MODE
+)[] = [
   PERMISSION_CAPABILITY_KEYS.MODE,
+  PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
   PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
   PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
 ];
@@ -46,7 +49,12 @@ export function diagnosticsForPermissionField(
   diagnostics: readonly CompatibilityDiagnostic[],
   field: PermissionField
 ): CompatibilityDiagnostic[] {
-  return diagnostics.filter((diagnostic) => diagnostic.capability === field);
+  return diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.capability === field ||
+      (field === PERMISSION_CAPABILITY_KEYS.MODE &&
+        diagnostic.capability === PERMISSION_CAPABILITY_KEYS.AUTO_MODE)
+  );
 }
 
 export function diagnosticsForHookEvents(

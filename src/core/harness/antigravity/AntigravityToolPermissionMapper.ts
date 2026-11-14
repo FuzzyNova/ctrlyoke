@@ -13,6 +13,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
+  INLINE_CONFIG_SUITE_REFERENCE,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -138,6 +139,14 @@ const ANTIGRAVITY_PERMISSION_VERIFICATION = capabilitySuiteVerification([
 
 export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor =
   {
+    autoMode: {
+      fidelity: "exact",
+      mechanism: "native",
+      verification: capabilitySuiteVerification(
+        [ANTIGRAVITY_AGENT_MODE_SETTING_RANGE],
+        INLINE_CONFIG_SUITE_REFERENCE
+      ),
+    },
     mode: {
       fidelity: "exact",
       mechanism: "translated-cli",
@@ -238,6 +247,20 @@ export class AntigravityToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      ANTIGRAVITY_AGENT_MODE_SETTING_RANGE
+    );
+    if (fallback) return fallback;
+    // The same gate decides whether `agentMode` may be written at all.
+    const supportsAgentMode =
+      !!context.cliVersion &&
+      versionSatisfies(
+        context.cliVersion,
+        ANTIGRAVITY_AGENT_MODE_SETTING_RANGE
+      );
     const cliArgs: string[] = [];
     const diagnostics = this.getToolTranslationDiagnostics(
       config,
@@ -249,6 +272,7 @@ export class AntigravityToolPermissionMapper
         break;
       case PERMISSION_MODES.ALLOW_ALL:
       case PERMISSION_MODES.CUSTOM:
+      case PERMISSION_MODES.AUTO:
         // No --sandbox: containment is not an approval-mode concern (see
         // dev/implemented/HARNESS_SANDBOX_PLAN.md), and under agy's sandbox even a
         // rule-allowed command could not write the workspace.
@@ -270,7 +294,8 @@ export class AntigravityToolPermissionMapper
         }
         if (!context.workspaceRoot) break;
         const translatedAllow =
-          config.mode === PERMISSION_MODES.CUSTOM
+          config.mode === PERMISSION_MODES.CUSTOM ||
+          config.mode === PERMISSION_MODES.AUTO
             ? this.convertToAntigravityRules(
                 config.allowedTools ?? [],
                 ANTIGRAVITY_RULE_LIST_KINDS.ALLOW
@@ -294,7 +319,10 @@ export class AntigravityToolPermissionMapper
         );
         const userRules = await this.readUserRules(context.environment);
         const permissions: { allow?: string[]; deny?: string[] } = {};
-        if (config.mode === PERMISSION_MODES.CUSTOM) {
+        if (
+          config.mode === PERMISSION_MODES.CUSTOM ||
+          config.mode === PERMISSION_MODES.AUTO
+        ) {
           const allow = uniqueRules([
             ...userRules.allow,
             ...translatedAllow.rules,
@@ -309,14 +337,11 @@ export class AntigravityToolPermissionMapper
               ? "always-proceed"
               : "request-review",
         };
-        if (
-          context.cliVersion &&
-          versionSatisfies(
-            context.cliVersion,
-            ANTIGRAVITY_AGENT_MODE_SETTING_RANGE
-          )
-        )
+        if (config.mode === PERMISSION_MODES.AUTO) {
+          settings.agentMode = "auto";
+        } else if (supportsAgentMode) {
           settings.agentMode = ANTIGRAVITY_DEFAULT_AGENT_MODE;
+        }
         if (Object.keys(permissions).length) settings.permissions = permissions;
         const settingsPath = path.join(
           context.workspaceRoot,

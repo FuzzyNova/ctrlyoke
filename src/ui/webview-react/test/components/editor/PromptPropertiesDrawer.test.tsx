@@ -415,6 +415,19 @@ describe("PromptPropertiesDrawer sandbox", () => {
     ).toBeTruthy();
   });
 
+  it("keeps both permission lists active in auto mode", () => {
+    useEditorStore.setState((state) => ({
+      properties: {
+        ...state.properties,
+        toolPermissions: { mode: PERMISSION_MODES.AUTO },
+      },
+    }));
+    renderPermissionsDrawer();
+
+    expect(screen.getByLabelText("Allowed Tools")).not.toBeDisabled();
+    expect(screen.getByLabelText("Denied Tools")).not.toBeDisabled();
+  });
+
   it("writes the sandbox mode and names the mode Inherit resolves to", () => {
     useEditorStore.setState((state) => ({
       properties: { ...state.properties, sandbox: true },

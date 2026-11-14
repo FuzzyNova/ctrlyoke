@@ -546,17 +546,13 @@ suite("Schema UI metadata", () => {
             limitTable,
             `unlimited is outside the limit allowlist: ${paths.join(", ")}`
           );
-        // An aliased row documents why its label differs, which covers a
-        // value whose meaning differs by field (errorBehavior's "retry").
-        if ("alias" in row && row.alias) {
-          continue;
-        }
-        const prior = labelsByValue.get(row.value);
+        const labelKey = `${paths.join("|")}:${row.value}`;
+        const prior = labelsByValue.get(labelKey);
         assert.ok(
           prior === undefined || prior === row.label,
-          `${row.value} has labels ${prior} and ${row.label}`
+          `${row.value} at ${paths.join(", ")} has labels ${prior} and ${row.label}`
         );
-        labelsByValue.set(row.value, row.label);
+        labelsByValue.set(labelKey, row.label);
       }
     }
   });

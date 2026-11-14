@@ -6,11 +6,14 @@ import {
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
+  PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import {
+  CAPABILITY_VERIFICATION_BASES,
+  CAPABILITY_VERIFICATION_KINDS,
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
@@ -18,8 +21,32 @@ import {
 const COPILOT_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.0.384",
 ]);
+// The published 1.0.3 binary lacks the flag; 1.0.4 first exposes it, and its
+// live headless allow/unlisted/deny probe passed from a scratch directory.
+const COPILOT_AUTO_MODE_MIN_VERSION = ">=1.0.4";
+// Manual, not the live suite: the judge refuses what ctrlyoke's prompt file
+// asks for, so the suite's unlisted-command case stays red until it is fixed.
+const COPILOT_AUTO_MODE_BUG =
+  "dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md";
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: {
+      kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
+      reference: COPILOT_AUTO_MODE_BUG,
+      basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
+      verifiedVersions: [COPILOT_AUTO_MODE_MIN_VERSION],
+    },
+    modeOverrides: {
+      interactive: {
+        fidelity: "unsupported",
+        mechanism: "none",
+        caveatCode: PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY,
+      },
+    },
+  },
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -116,13 +143,25 @@ export class CopilotToolPermissionMapper
    */
   async prepare(
     config: ToolPermissionConfig,
-    _context: PermissionContext
+    context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    // Interactive sessions fall back through the declaration's interactive
+    // override (no per-run flag; the env var refuses interactive starts).
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.COPILOT_CLI,
+      COPILOT_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
+    const isAuto = config.mode === PERMISSION_MODES.AUTO;
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }
     const args: string[] = [];
     const filteredTools: string[] = [];
+
+    if (isAuto) args.push("--assisted-approval");
 
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       args.push("--yolo");

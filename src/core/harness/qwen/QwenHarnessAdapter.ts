@@ -24,6 +24,7 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
+  PERMISSION_MODES,
   STATUS_LINE_HARNESS_IDS,
   TEMP_FILE_CATEGORIES,
   type TempFileCategory,
@@ -737,7 +738,11 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     if (config === null) {
       return { cliArgs: [], diagnostics: [] };
     }
-    return this.toolPermissionMapper.prepare(config, context);
+    const permissionContext =
+      config.mode === PERMISSION_MODES.AUTO && !context.cliVersion
+        ? { ...context, cliVersion: await this.getVersion() }
+        : context;
+    return this.toolPermissionMapper.prepare(config, permissionContext);
   }
 
   private buildUserHooksSection(

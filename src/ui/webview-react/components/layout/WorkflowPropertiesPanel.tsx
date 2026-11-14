@@ -30,6 +30,7 @@ import { useIsViewingDeletedWorkflow } from "../../hooks/useIsViewingDeletedWork
 import { useIsSystemGeneratedWorkflow } from "../../hooks/useIsSystemGeneratedWorkflow";
 import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
+import { permissionModeAllowsAllowedTools } from "../shared/permissionUtils";
 import { usePickerShortcutRequest } from "../../hooks/usePickerShortcutRequest";
 import {
   MESSAGE_TYPES,
@@ -2769,7 +2770,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                             deniedTools: deniedToolsInput,
                           })
                         }
-                        disabled={permMode !== PERMISSION_MODES.CUSTOM}
+                        disabled={!permissionModeAllowsAllowedTools(permMode)}
                         aria-describedby={
                           allowedFieldDiagnostics.length > 0
                             ? "settings-allowed-tools-diagnostic"
@@ -2778,7 +2779,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         placeholder={"read\nglob\ngrep"}
                         fontSize="0.75rem"
                         className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono${
-                          permMode !== PERMISSION_MODES.CUSTOM
+                          !permissionModeAllowsAllowedTools(permMode)
                             ? " opacity-50 cursor-not-allowed"
                             : ""
                         }`}

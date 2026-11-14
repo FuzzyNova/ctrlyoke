@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `errorBehavior.onError: retryPhase` (**Retry Failed Phase** in the dashboard) retries only the phase of a step that hit an internal error. An end condition that couldn't run is run again on its own, without another AI call, and a prompt whose harness failed is sent again without re-running the pre-condition. `onError: retry` still re-runs the whole step.
+- A new **Auto** permission mode (`toolPermissions.mode: auto`, shown in the picker as **Auto (harness judges each request)**) turns on each harness's own safety judge: Claude Code's auto mode, Copilot's assisted approval, Codex's auto review, Qwen's auto approval mode and Antigravity's auto agent mode. Denied tools stay blocked, and allowed tools are pre-approved without limiting what else runs. OpenCode, interactive Copilot and harness versions too old for their judge run with Custom permissions instead and show a warning. On Codex, Auto can be wider than Custom, because the reviewer may approve escalations out of the sandbox.
 
 ### Changed
 

@@ -28,6 +28,7 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   /** Installed but older than `versionPolicy.minimum`: it still runs. */
   HARNESS_BELOW_MINIMUM: "compatibility.harness.belowMinimum",
   PERMISSION_MODE_UNSUPPORTED: "compatibility.permissions.mode.unsupported",
+  AUTO_PERMISSION_MODE_FALLBACK: "compatibility.permissions.autoMode.fallback",
   PERMISSION_MODE_PARTIAL: "compatibility.permissions.mode.partial",
   PERMISSION_MODE_UNVERIFIED: "compatibility.permissions.mode.unverified",
   ALLOWED_TOOLS_NOT_ENFORCED:
@@ -114,13 +115,24 @@ export interface CapabilityDeclaration {
 const CAPABILITY_SUITE_REFERENCE =
   "src/test/harness/capabilities.harness.test.ts";
 
-/** Evidence for a claim the capability suite proves. */
+/**
+ * The live suite that proves per-harness permission and inline-config
+ * behaviour, including the `auto` permission mode.
+ */
+export const INLINE_CONFIG_SUITE_REFERENCE =
+  "src/test/harness/inline-config.harness.test.ts";
+
+/**
+ * Evidence for a claim a live harness suite proves: the capability suite
+ * unless `reference` names a sibling suite.
+ */
 export function capabilitySuiteVerification(
-  verifiedVersions: readonly HarnessVersionRange[]
+  verifiedVersions: readonly HarnessVersionRange[],
+  reference: string = CAPABILITY_SUITE_REFERENCE
 ): CapabilityVerification {
   return {
     kind: CAPABILITY_VERIFICATION_KINDS.BEHAVIORAL_TEST,
-    reference: CAPABILITY_SUITE_REFERENCE,
+    reference,
     basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
     verifiedVersions,
   };
@@ -140,6 +152,7 @@ export interface EffectiveCapabilityState {
 
 export interface PermissionCapabilityDescriptor {
   mode: CapabilityDeclaration;
+  autoMode: CapabilityDeclaration;
   allowedTools: CapabilityDeclaration;
   deniedTools: CapabilityDeclaration;
 }
@@ -259,6 +272,8 @@ export const PERMISSION_CAVEAT_CODES = {
   ANTIGRAVITY_RULE_TRANSLATION: "permissions.antigravityRuleTranslation",
   CLAUDE_PREAPPROVED_SETTINGS: "permissions.claudePreapprovedSettings",
   MCP_TOOL_DENIALS_ONLY: "permissions.mcpToolDenialsOnly",
+  COPILOT_AUTO_MODE_HEADLESS_ONLY: "permissions.copilotAutoModeHeadlessOnly",
+  AUTO_MODE_NOT_ENABLED: "permissions.autoModeNotEnabled",
 } as const;
 
 export const MCP_CAVEAT_CODES = {
@@ -328,6 +343,10 @@ export function getCompatibilityCaveatMessage(
       return "Claude's own settings allow rules can add to this list in headless mode";
     case PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY:
       return "because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns";
+    case PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY:
+      return 'because Copilot assisted approval is available only in headless sessions; for interactive sessions use /permissions assisted, or set defaultPermissionMode: "assisted" in ~/.copilot/settings.json';
+    case PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED:
+      return "because this harness has no judged approval mode";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case HOOK_CAVEAT_CODES.NO_NATIVE_EVENT:
@@ -401,6 +420,10 @@ export function getCompatibilityDiagnosticMessage(
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
       return withCaveat(
         `Permission mode is not supported by the ${harness} harness`
+      );
+    case COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK:
+      return withCaveat(
+        `Auto permission mode is not supported by ${harness}; ran with custom tool permissions`
       );
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
       return withCaveat(
@@ -486,6 +509,8 @@ export function getCompatibilityDiagnosticRemediation(
       return "Update the harness CLI. ctrlyoke still runs it, but features it relies on may be missing.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
       return "Choose a supported permission mode for this harness or select another harness.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK:
+      return "Use custom permission mode or a harness with auto permission mode support.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
       return "Use a harness with exact permission-mode support when the distinction matters.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED:
@@ -581,6 +606,8 @@ export function getPermissionFidelityDiagnosticCode(
       return partial
         ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
         : COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED;
+    case PERMISSION_CAPABILITY_KEYS.AUTO_MODE:
+      return COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK;
     case PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS:
       return advisory
         ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT

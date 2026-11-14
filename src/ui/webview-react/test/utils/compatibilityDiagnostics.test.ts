@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   diagnosticsForPermissions,
+  diagnosticsForPermissionField,
   sandboxSupportDiagnostic,
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
@@ -42,6 +43,20 @@ describe("diagnosticsForPermissions", () => {
     expect(diagnosticsForPermissions(diagnostics)).toEqual(
       diagnostics.slice(0, permissionCapabilities.length)
     );
+  });
+
+  it("shows auto-mode fallback diagnostics with the permission mode field", () => {
+    const diagnostic = {
+      capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+    } as CompatibilityDiagnostic;
+
+    expect(diagnosticsForPermissions([diagnostic])).toEqual([diagnostic]);
+    expect(
+      diagnosticsForPermissionField(
+        [diagnostic],
+        PERMISSION_CAPABILITY_KEYS.MODE
+      )
+    ).toEqual([diagnostic]);
   });
 });
 

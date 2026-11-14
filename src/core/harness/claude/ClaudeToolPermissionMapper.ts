@@ -8,6 +8,7 @@ import {
 import {
   PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
+  INLINE_CONFIG_SUITE_REFERENCE,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
@@ -23,8 +24,19 @@ import {
 const CLAUDE_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=2.1.17",
 ]);
+// `npx @anthropic-ai/claude-code@2.1.170` accepted `--permission-mode auto`
+// and passed live allow/unlisted/deny probes; this is the first tested release.
+const CLAUDE_AUTO_MODE_MIN_VERSION = ">=2.1.170";
 
 const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  autoMode: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: capabilitySuiteVerification(
+      [CLAUDE_AUTO_MODE_MIN_VERSION],
+      INLINE_CONFIG_SUITE_REFERENCE
+    ),
+  },
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -100,6 +112,14 @@ export class ClaudeToolPermissionMapper
     config: ToolPermissionConfig,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const fallback = await this.prepareAutoModeFallback(
+      config,
+      context,
+      HARNESS_IDS.CLAUDE_CLI,
+      CLAUDE_AUTO_MODE_MIN_VERSION
+    );
+    if (fallback) return fallback;
+    const isAuto = config.mode === PERMISSION_MODES.AUTO;
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }
@@ -118,7 +138,7 @@ export class ClaudeToolPermissionMapper
         // bypassPermissions or acceptEdits would never ask.
         args = [
           "--permission-mode",
-          context.isInteractive ? "default" : "dontAsk",
+          isAuto ? "auto" : context.isInteractive ? "default" : "dontAsk",
         ];
         const convertedAllowTools = this.convertUnique(
           config.allowedTools,

@@ -134,6 +134,53 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, []);
       });
 
+      test("auto uses assisted approval with allow and deny rules at its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write", "shell"], ["shell(git push)"]),
+          { cliVersion: "1.0.4" }
+        );
+        assert.deepStrictEqual(result.cliArgs, [
+          "--assisted-approval",
+          "--allow-tool",
+          "write",
+          "shell",
+          "--deny-tool",
+          "shell(git push)",
+        ]);
+        assert.ok(
+          result.diagnostics.every(
+            (diagnostic) =>
+              diagnostic.code !==
+              COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          )
+        );
+      });
+
+      test("auto falls back below its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+          { cliVersion: "1.0.3" }
+        );
+        assert.ok(!result.cliArgs.includes("--assisted-approval"));
+        assert.strictEqual(
+          result.diagnostics[0].code,
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+        );
+      });
+
+      test("interactive auto falls back with Copilot's settings guidance", async () => {
+        const result = await mapper.prepare(cfg(PERMISSION_MODES.AUTO), {
+          cliVersion: "1.0.111",
+          isInteractive: true,
+        });
+        assert.deepStrictEqual(result.cliArgs, []);
+        assert.match(result.diagnostics[0].message, /\/permissions assisted/);
+        assert.match(
+          result.diagnostics[0].message,
+          /defaultPermissionMode: "assisted"/
+        );
+      });
+
       test("custom mode filters out read-only tools (grep, read, read_file, list_files, search_files)", async () => {
         const readOnlyTools = [
           "grep",
@@ -571,6 +618,49 @@ suite("HarnessToolPermissionMappers", () => {
         });
       }
 
+      test("auto writes review settings and translated allow/deny rules on agy 1.5.7+", async () => {
+        const application = await mapper.prepare(
+          cfg(
+            PERMISSION_MODES.AUTO,
+            ["write", "shell(echo:*)"],
+            ["shell(rm:*)"]
+          ),
+          { workspaceRoot, environment, cliVersion: "1.5.7" }
+        );
+        const settings = JSON.parse(
+          application.mutations![0].intendedContent!
+        ) as Record<string, any>;
+        assert.strictEqual(settings.toolPermission, "request-review");
+        assert.strictEqual(settings.agentMode, "auto");
+        assert.deepStrictEqual(settings.permissions.allow, [
+          "write_file(*)",
+          "command(regex:echo(?:[ \\t][^;&|`$()<>\\r\\n]*)?)",
+        ]);
+        assert.deepStrictEqual(settings.permissions.deny, [
+          "command(regex:(?is)(?:.*[^\\w.-])?rm(?:[^\\w.-].*)?)",
+        ]);
+        assert.deepStrictEqual(application.cliArgs.slice(0, 1), ["--settings"]);
+        assert.ok(!application.cliArgs.includes("--mode"));
+      });
+
+      test("auto falls back on agy 1.5.6 and unknown versions", async () => {
+        for (const cliVersion of ["1.5.6", undefined]) {
+          const application = await mapper.prepare(
+            cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+            { workspaceRoot, environment, cliVersion }
+          );
+          const settings = JSON.parse(
+            application.mutations![0].intendedContent!
+          ) as Record<string, unknown>;
+          assert.strictEqual(settings.toolPermission, "request-review");
+          assert.strictEqual("agentMode" in settings, false);
+          assert.strictEqual(
+            application.diagnostics[0].code,
+            COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          );
+        }
+      });
+
       test("unions global user rules and omits empty lists", async () => {
         const home = await fs.mkdtemp(
           path.join(os.tmpdir(), "agy-user-rules-")
@@ -753,6 +843,71 @@ suite("HarnessToolPermissionMappers", () => {
           "--tools",
           "default",
         ]);
+      });
+
+      test("auto maps both lists through the harness judge at its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(
+            PERMISSION_MODES.AUTO,
+            ["shell(git:*)", "write"],
+            ["shell(git push)"]
+          ),
+          { cliVersion: "2.1.170", isInteractive: false }
+        );
+        assert.deepStrictEqual(result.cliArgs, [
+          "--permission-mode",
+          "auto",
+          "--allowedTools",
+          "Bash(git:*)",
+          "Write",
+          "--disallowedTools",
+          "Bash(git push)",
+        ]);
+        assert.ok(
+          result.diagnostics.every(
+            (diagnostic) =>
+              diagnostic.code !==
+              COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          )
+        );
+      });
+
+      test("auto uses the same native mode in interactive sessions", async () => {
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+          { cliVersion: "2.1.323", isInteractive: true }
+        );
+        assert.deepStrictEqual(args, [
+          "--permission-mode",
+          "auto",
+          "--allowedTools",
+          "Write",
+          "--disallowedTools",
+          "Bash",
+        ]);
+      });
+
+      test("auto falls back below the minimum version and for unknown versions", async () => {
+        for (const context of [{ cliVersion: "2.1.169" }, {}]) {
+          const result = await mapper.prepare(
+            cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+            context
+          );
+          assert.deepStrictEqual(
+            result.cliArgs,
+            (
+              await mapper.prepare(
+                cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+                context
+              )
+            ).cliArgs
+          );
+          assert.strictEqual(
+            result.diagnostics[0].code,
+            COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          );
+        }
       });
 
       test("allowAll with denied tools appends --disallowedTools", async () => {
@@ -1018,6 +1173,50 @@ suite("HarnessToolPermissionMappers", () => {
         });
       }
 
+      test("auto configures Codex review in headless and interactive modes", async () => {
+        const automatic = cfg(PERMISSION_MODES.AUTO);
+        const expectedHeadless = [
+          "-c",
+          "approvals_reviewer=auto_review",
+          "-c",
+          "approval_policy=on-request",
+        ];
+        const expectedInteractive = [
+          "-a",
+          "on-request",
+          "-c",
+          "approvals_reviewer=auto_review",
+        ];
+        assert.deepStrictEqual(
+          await mapperArgs(mapper, automatic, {
+            cliVersion: "0.167.2",
+            isInteractive: false,
+          }),
+          expectedHeadless
+        );
+        assert.deepStrictEqual(
+          await mapperArgs(mapper, automatic, {
+            cliVersion: "0.167.2",
+            isInteractive: true,
+          }),
+          expectedInteractive
+        );
+      });
+
+      test("auto falls back with unknown or older Codex versions", async () => {
+        for (const cliVersion of ["0.128.0", undefined]) {
+          const result = await mapper.prepare(cfg(PERMISSION_MODES.AUTO), {
+            cliVersion,
+            isInteractive: false,
+          });
+          assert.deepStrictEqual(result.cliArgs, []);
+          assert.strictEqual(
+            result.diagnostics[0].code,
+            COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+          );
+        }
+      });
+
       test("custom denying a write-capable tool no longer clamps the sandbox", async () => {
         const args = await mapperArgs(
           mapper,
@@ -1078,6 +1277,73 @@ suite("HarnessToolPermissionMappers", () => {
       test("allowAll → --approval-mode auto-edit", async () => {
         const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.ALLOW_ALL));
         assert.deepStrictEqual(args, ["--approval-mode", "auto-edit"]);
+      });
+
+      test("auto includes both lists and registers ShellTool headlessly once", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell(rm:*)"]),
+          { cliVersion: "0.27.2", isInteractive: false }
+        );
+        assert.deepStrictEqual(result.cliArgs, [
+          "--approval-mode",
+          "auto",
+          "--allowed-tools",
+          "WriteFile,ShellTool",
+          "--exclude-tools",
+          "ShellTool(rm *)",
+        ]);
+        assert.strictEqual(
+          result.cliArgs.filter((argument) => argument === "--approval-mode")
+            .length,
+          1
+        );
+      });
+
+      test("auto keeps interactive tool lists without adding bare ShellTool", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+          { cliVersion: "0.27.2", isInteractive: true }
+        );
+        assert.deepStrictEqual(result.cliArgs, [
+          "--approval-mode",
+          "auto",
+          "--allowed-tools",
+          "WriteFile",
+          "--exclude-tools",
+          "ShellTool",
+        ]);
+      });
+
+      test("auto with empty lists passes no empty list values", async () => {
+        const interactive = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.AUTO, [], []),
+          { cliVersion: "0.27.2", isInteractive: true }
+        );
+        assert.deepStrictEqual(interactive, ["--approval-mode", "auto"]);
+        const headless = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.AUTO, [], []),
+          { cliVersion: "0.27.2", isInteractive: false }
+        );
+        assert.deepStrictEqual(headless, [
+          "--approval-mode",
+          "auto",
+          "--allowed-tools",
+          "ShellTool",
+        ]);
+      });
+
+      test("auto falls back to custom below its version gate", async () => {
+        const result = await mapper.prepare(
+          cfg(PERMISSION_MODES.AUTO, ["write"], ["shell"]),
+          { cliVersion: "0.27.1", isInteractive: false }
+        );
+        assert.strictEqual(result.cliArgs[1], "default");
+        assert.strictEqual(
+          result.diagnostics[0].code,
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+        );
       });
 
       test("custom with no tools → --approval-mode default only", async () => {
@@ -1577,6 +1843,39 @@ suite("HarnessToolPermissionMappers", () => {
           ),
           [],
           `${name}: none mode should emit no flags`
+        );
+      }
+    });
+
+    test("auto falls back to each mapper's custom application with one warning", async () => {
+      for (const [name, mapper] of Object.entries(mappers)) {
+        const custom = await mapper.prepare(cfg(PERMISSION_MODES.CUSTOM), {});
+        const automatic = await mapper.prepare(cfg(PERMISSION_MODES.AUTO), {});
+        assert.deepStrictEqual(automatic.cliArgs, custom.cliArgs, name);
+        assert.deepStrictEqual(automatic.mutations, custom.mutations, name);
+        assert.deepStrictEqual(
+          automatic.diagnostics.slice(1),
+          custom.diagnostics,
+          name
+        );
+        assert.strictEqual(
+          automatic.diagnostics.length,
+          custom.diagnostics.length + 1,
+          name
+        );
+        assert.strictEqual(
+          automatic.diagnostics[0].code,
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK,
+          name
+        );
+        assert.match(
+          automatic.diagnostics[0].message,
+          /not supported by .+; ran with custom tool permissions/
+        );
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.AUTO)),
+          false,
+          name
         );
       }
     });

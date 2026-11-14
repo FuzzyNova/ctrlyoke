@@ -56,6 +56,7 @@ function installed(
       harnessId,
       permissions: {
         mode: declaration,
+        autoMode: declaration,
         allowedTools: declaration,
         deniedTools: declaration,
       },
@@ -63,6 +64,7 @@ function installed(
     effective: {
       permissions: {
         mode: state,
+        autoMode: state,
         allowedTools: state,
         deniedTools: state,
       },
