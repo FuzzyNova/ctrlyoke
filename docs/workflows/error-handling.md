@@ -36,7 +36,15 @@ steps:
 | `stopWorkflow` | Stop Workflow      | The step is marked failed and the workflow stops. This is the default.                                                 |
 | `retry`        | Retry Step         | The whole step runs again from its pre-condition, in a fresh harness session, up to `maxRetries` times. Then it stops. |
 | `retryPhase`   | Retry Failed Phase | Only the phase that errored runs again, up to `maxRetries` times. Then it stops.                                       |
-| `continue`     | Continue           | The step is marked failed with a warning, and the workflow moves on to the next step.                                  |
+| `continue`     | Continue           | A warning is recorded and the step carries on. See below for what that means for each phase.                           |
+
+With `continue`, what happens next depends on the phase that errored:
+
+- **Pre-condition**: the step runs as if the gate had passed, so the prompt is
+  sent.
+- **End condition**: the response is accepted and the step is marked completed.
+- **Prompt / harness** or **script step**: the step is marked failed, and the
+  workflow moves on to the next step.
 
 `maxRetries` and `retryDelaySec` only matter with `retry` and `retryPhase`.
 Each retry is a new attempt of the same step, waiting `retryDelaySec` first,
