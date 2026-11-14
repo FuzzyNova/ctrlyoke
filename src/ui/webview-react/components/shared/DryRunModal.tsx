@@ -246,6 +246,14 @@ function WorktreeSummary({
     ...(worktree.base
       ? ([["Base", worktree.base]] as [string, React.ReactNode][])
       : []),
+    ...(worktree.setupCommand
+      ? ([
+          [
+            "Setup command",
+            <code className="break-all">{worktree.setupCommand}</code>,
+          ],
+        ] as [string, React.ReactNode][])
+      : []),
     [
       "Working directory",
       worktree.plannedDirectory ? (

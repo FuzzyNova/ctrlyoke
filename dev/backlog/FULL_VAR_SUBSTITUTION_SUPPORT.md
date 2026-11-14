@@ -22,8 +22,11 @@ Each step ticks its own item, notes any deviation under it, and commits.
       existing call sites moved over; fence masking limited to prompt text.
 - [ ] 2. Engine gaps 1–4 (Dry Run grants, preflight additionalArgs, advisory
       with empty `vars`, preset param values left literal).
-- [ ] 3. Gaps 5–6: CLI help, schema descriptions and docs table driven by the
+- [x] 3. Gaps 5–6: CLI help, schema descriptions and docs table driven by the
       policy table; Dry Run shows worktree setup.
+      Note: `VarSubstitutionPolicy.ts` exists, but the prerequisite
+      `substituteWorkflowView` API was absent in this checkout; this item uses
+      the existing policy and substitution API without adding the missing API.
 - [ ] 4. Run-start phase in startup/continue; `worktree.branch`/`base`/
       `directory` substituted; workspace-trust predicate; worktrees docs.
 - [ ] 5. Dispatch `text` fields (step `name`, `expected`, `shell`, `agent`,

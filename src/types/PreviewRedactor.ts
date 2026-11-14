@@ -283,5 +283,17 @@ export function redactExecutionPreview(
   return {
     ...preview,
     steps: preview.steps.map((step) => redactStep(step, exactSecrets)),
+    ...(preview.worktree?.setupCommand
+      ? {
+          worktree: {
+            ...preview.worktree,
+            setupCommand: redactPreviewText(
+              preview.worktree.setupCommand,
+              [],
+              exactSecrets
+            ).text,
+          },
+        }
+      : {}),
   };
 }

@@ -70,7 +70,7 @@ Properties authored only at the workflow root.
 
 - **Type:** `string`
 
-Optional workflow display name shown in the dashboard heading, recent workflows and history. If omitted, the file name without its extension is used. Renaming the workflow in the dashboard does not edit this file; the next Save writes the current name back here. In a single-step file (a root `prompt` or `script`), `name` labels that step instead.
+Optional workflow display name shown in the dashboard heading, recent workflows and history. If omitted, the file name without its extension is used. Renaming the workflow in the dashboard does not edit this file; the next Save writes the current name back here. In a single-step file (a root `prompt` or `script`), `name` labels that step instead. Not substituted: This structural field or identity value stays as authored.
 
 ### `steps` {#workflow-file-steps}
 
@@ -102,19 +102,19 @@ Run the workflow in the working checkout or in a Git worktree. When omitted, the
 
 - **Type:** [Variables](#vars)
 
-Default values for <code v-pre>{{varName}}</code> substitutions.
+Default values for <code v-pre>{{varName}}</code> substitutions. Not substituted: Variables are not recursively expanded.
 
 ### `conditions` {#workflow-file-conditions}
 
 - **Type:** map of [Condition presets](#condition-presets)
 
-Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `"$BUG_FILE"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`.
+Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `"$BUG_FILE"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`. Not substituted: Preset definitions and parameter names are author-only contracts.
 
 ### `trustedExternalRoots` {#workflow-file-trustedexternalroots}
 
 - **Type:** `string[]` or `null`
 
-Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. These roots bound where terminal commands can write only while `sandbox` resolves to true (they become the sandbox's extra writable roots, none under `sandboxMode: read-only`); with the sandbox off or None they limit the directories given to ctrlyoke and the harness's file tools, not what a shell command can reach.
+Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. These roots bound where terminal commands can write only while `sandbox` resolves to true (they become the sandbox's extra writable roots, none under `sandboxMode: read-only`); with the sandbox off or None they limit the directories given to ctrlyoke and the harness's file tools, not what a shell command can reach. Not substituted: Approval is keyed to the authored value.
 
 Accepted forms:
 
@@ -125,7 +125,7 @@ Accepted forms:
 
 - **Type:** [Template metadata](#template-metadata)
 
-Marks the file as a reusable template and describes its placeholders. Removed when the template is instantiated.
+Marks the file as a reusable template and describes its placeholders. Removed when the template is instantiated. Not substituted: This structural field or identity value stays as authored.
 
 ## Execution properties {#execution-properties}
 
@@ -176,7 +176,7 @@ Whether this step continues an earlier step's conversation instead of starting a
 - **Type:** array of (`string` or `{ id: "ctrlyoke", deniedTools? }` or [MCP server entry](#mcp-server-entry)) or `null`
 - **Settings default:** [`defaults.mcpServers`](/reference/settings#defaults-mcpservers)
 
-MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include "ctrlyoke" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:&lt;server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.
+MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include "ctrlyoke" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:&lt;server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.
 
 Accepted forms:
 
@@ -217,7 +217,7 @@ Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ct
 - **Type:** `string[]` or `null`
 - **Settings default:** [`defaults.secrets`](/reference/settings#defaults-secrets)
 
-Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants.
+Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.
 
 ### `endCondition` {#execution-properties-endcondition}
 
@@ -274,7 +274,7 @@ Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke cont
 - **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`
 - **Settings default:** [`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions)
 
-Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'.
+Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.
 
 Accepted forms:
 
@@ -285,7 +285,7 @@ Accepted forms:
 
 - **Type:** `"dangerouslyAllowAll" | "allowAll" | "auto" | "custom" | "none"`
 
-Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).
+Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.
 
 ### `toolPermissions.allowedTools` {#execution-properties-toolpermissions-allowedtools}
 
@@ -304,14 +304,14 @@ Tool patterns to deny (takes precedence over allow list). Currently supported by
 - **Type:** `boolean` or `null`
 - **Settings default:** [`defaults.sandbox`](/reference/settings#defaults-sandbox)
 
-Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply.
+Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.
 
 ### `sandboxMode` {#execution-properties-sandboxmode}
 
 - **Type:** `"workspace-write" | "read-only"`
 - **Settings default:** [`defaults.sandboxMode`](/reference/settings#defaults-sandboxmode)
 
-How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting.
+How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.
 
 ### `errorBehavior` {#execution-properties-errorbehavior}
 
@@ -330,14 +330,14 @@ Also includes every field from [Execution properties](#execution-properties).
 
 - **Type:** `"prompt"`
 
-Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible).
+Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.
 
 ### `name` {#prompt-step-name}
 
 - **Type:** `string`
 - **Constraints:** at most 100 characters
 
-Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text.
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.
 
 ### `enabled` {#prompt-step-enabled}
 
@@ -350,7 +350,7 @@ Whether this step executes. When omitted, the step is enabled. Set to false to k
 - **Type:** `string`
 - **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
 
-Optional authored identity colour for this step.
+Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
 ### `prompt` {#prompt-step-prompt}
 
@@ -363,7 +363,7 @@ The prompt text to send to the AI. Can be either: (1) Final-form prompt text wit
 
 - **Type:** [Step runtime](/reference/run-files#step-runtime)
 
-Per-prompt runtime execution metadata (optional, added automatically during execution)
+Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.
 
 ## Script step {#script-step}
 
@@ -374,14 +374,14 @@ A workflow step that runs a shell script/command with no AI interaction.
 - **Type:** `"script"`
 - **Required:** yes
 
-Step type discriminator. Required, and must be "script", for script steps.
+Step type discriminator. Required, and must be "script", for script steps. Not substituted: This structural field or identity value stays as authored.
 
 ### `name` {#script-step-name}
 
 - **Type:** `string`
 - **Constraints:** at most 100 characters
 
-Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text.
+Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored.
 
 ### `enabled` {#script-step-enabled}
 
@@ -394,7 +394,7 @@ Whether this step executes. When omitted, the step is enabled. Set to false to k
 - **Type:** `string`
 - **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
 
-Optional authored identity colour for this step.
+Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
 ### `executionMode` {#script-step-executionmode}
 
@@ -443,7 +443,7 @@ Internal-error policy for this script step when it cannot run or evaluation brea
 
 - **Type:** `string[]` or `null`
 
-Secret environment-variable names granted to this script step. Use null to explicitly disable an inherited grant array.
+Secret environment-variable names granted to this script step. Use null to explicitly disable an inherited grant array. Not substituted: Secret grant approval is keyed to authored grant names.
 
 ### `onPass` {#script-step-onpass}
 
@@ -463,7 +463,7 @@ What to do when the script fails or returns is not matched. 'continue': log a wa
 
 - **Type:** [Step runtime](/reference/run-files#step-runtime)
 
-Per-step runtime execution metadata (optional, added automatically during execution)
+Per-step runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.
 
 ### `operator` {#script-step-operator}
 
@@ -512,14 +512,14 @@ member can do through the `ctrlyoke` MCP server.
 - **Required:** yes
 - **Constraints:** at least 2 item(s)
 
-The prompt or script steps that run concurrently. Groups cannot be nested.
+The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.
 
 ### `failFast` {#parallel-group-failfast}
 
 - **Type:** `boolean`
 - **Default:** `true`
 
-Stop the remaining members as soon as one member fails. Default: true.
+Stop the remaining members as soon as one member fails. Default: true. Not substituted: This structural field or identity value stays as authored.
 
 ## Pre-condition {#pre-condition}
 
@@ -796,7 +796,7 @@ Action when the condition fails. Valid actions depend on whether the preset is u
 
 - **Type:** `string[]`
 
-Environment-variable names whose values MCP agents may supply when attaching this preset.
+Environment-variable names whose values MCP agents may supply when attaching this preset. Not substituted: Parameter names are an author-only contract with condition presets.
 
 ## Shared script fields {#script-fields}
 
@@ -890,13 +890,13 @@ The optional YAML frontmatter block at the top of a `.prompt.md` file. ctrlyoke 
 - **Type:** `integer`
 - **Constraints:** minimum 1
 
-Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version.
+Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version. Not substituted: This structural field or identity value stays as authored.
 
 ### `name` {#prompt-file-frontmatter-name}
 
 - **Type:** `string`
 
-Workflow display name used when the file runs on its own (cut to 100 characters). If omitted, the file name without `.prompt.md` is used. It is display metadata only and is never sent to the harness.
+Workflow display name used when the file runs on its own (cut to 100 characters). If omitted, the file name without `.prompt.md` is used. It is display metadata only and is never sent to the harness. Not substituted: This structural field or identity value stays as authored.
 
 ### `description` {#prompt-file-frontmatter-description}
 
@@ -924,13 +924,13 @@ Accepted forms:
 
 - **Type:** `boolean`
 
-Merge the managed branch into the captured source checkout after the run.
+Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.
 
 ### `worktree.keep` {#worktree-managed-keep}
 
 - **Type:** `boolean`
 
-Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node\_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run.
+Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node\_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.
 
 ### `worktree.base` {#worktree-managed-base}
 
@@ -977,7 +977,7 @@ Optional setup command run in the named worktree at the start of every run, such
 
 ## Variables {#vars}
 
-Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
+Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted fields (all at dispatch unless noted): prompt.prompt, steps[].prompt, steps[].model, steps[].additionalArgs, hooks[].command, hooks[].env.\*, preCondition.script, preCondition.env.\*, endCondition.script, endCondition.env.\*, endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.\*, worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode because reviewed permission posture must match; mcpServers because entries launch programs and carry authored secret grants; conditions and condition params because preset definitions and parameter names are author-only contracts; vars because variables are not recursively expanded. Structural fields and identity (including type, parallel, failFast, worktree mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are not substituted. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
 
 - **Type:** map of `string`
 
@@ -1114,7 +1114,7 @@ Authoring metadata for a reusable workflow template. Removed when the template i
 
 - **Type:** `string`
 
-Display name shown in the template picker.
+Display name shown in the template picker. Not substituted: This structural field or identity value stays as authored.
 
 ### `description` {#template-metadata-description}
 
@@ -1136,7 +1136,7 @@ One entry in `_templateMeta.variables`.
 
 - **Type:** `"text" | "file" | "directory" | "select" | "harness" | "model"`
 
-Control used to collect this variable in the template dialog. A `model` variable shows the models of the harness variable named by `harness`, beside that harness picker.
+Control used to collect this variable in the template dialog. A `model` variable shows the models of the harness variable named by `harness`, beside that harness picker. Not substituted: This structural field or identity value stays as authored.
 
 ### `harness` {#template-variable-harness}
 

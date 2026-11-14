@@ -267,6 +267,7 @@ describe("DryRunModal", () => {
       origin: WORKTREE_CONFIG_ORIGINS.AUTHORED,
       branch: "feature",
       directory: "shared-dir",
+      setupCommand: "npm ci -- web",
       plannedDirectory: "/repo/shared-dir",
       plannedDirectoryIsExact: true,
     } as const;
@@ -278,6 +279,7 @@ describe("DryRunModal", () => {
       }
     );
     const { rerender } = render(<DryRunModal scope={{ kind: "workflow" }} />);
+    expect(screen.getByText("npm ci -- web")).toBeInTheDocument();
     expect(screen.getByText(/Will switch from/)).toHaveTextContent(
       "old-branch"
     );

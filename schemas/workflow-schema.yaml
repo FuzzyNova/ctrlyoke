@@ -12,7 +12,8 @@ properties:
   _templateMeta:
     description: >-
       Marks the file as a reusable template and describes its placeholders. Removed when the
-      template is instantiated.
+      template is instantiated. Not substituted: This structural field or identity value stays as
+      authored.
     $ref: '#/$defs/templateMetadata'
     title: Template Meta
 allOf:
@@ -86,7 +87,8 @@ oneOf:
         minimum: 1
         description: >-
           Workflow definition format version. Absent means format 1. ctrlyoke stamps this field when
-          it writes workflow files; older ctrlyoke versions refuse to open a newer format.
+          it writes workflow files; older ctrlyoke versions refuse to open a newer format. Not
+          substituted: This structural field or identity value stays as authored.
         title: Schema Version
       _templateMeta:
         $ref: '#/properties/_templateMeta'
@@ -103,7 +105,8 @@ oneOf:
               history. If omitted, the file name without its extension is used. Renaming the
               workflow in the dashboard does not edit this file; the next Save writes the current
               name back here. In a single-step file (a root `prompt` or `script`), `name` labels
-              that step instead.
+              that step instead. Not substituted: This structural field or identity value stays as
+              authored.
             title: Name
           steps:
             description: >-
@@ -160,6 +163,7 @@ oneOf:
         description: >-
           Workflow definition format version. Absent means format 1. Run files use this root field
           for the workflow definition and `_runtime.schemaVersion` independently for run metadata.
+          Not substituted: This structural field or identity value stays as authored.
         title: Schema Version
       _templateMeta:
         $ref: '#/properties/_templateMeta'
@@ -197,7 +201,9 @@ $defs:
     properties:
       name:
         type: string
-        description: Display name shown in the template picker.
+        description: >-
+          Display name shown in the template picker. Not substituted: This structural field or
+          identity value stays as authored.
         title: Name
       description:
         type: string
@@ -226,7 +232,8 @@ $defs:
           - model
         description: >-
           Control used to collect this variable in the template dialog. A `model` variable shows the
-          models of the harness variable named by `harness`, beside that harness picker.
+          models of the harness variable named by `harness`, beside that harness picker. Not
+          substituted: This structural field or identity value stays as authored.
         title: Type
       harness:
         type: string
@@ -292,14 +299,16 @@ $defs:
         minimum: 1
         description: >-
           Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to
-          load a file with a newer version.
+          load a file with a newer version. Not substituted: This structural field or identity value
+          stays as authored.
         title: Schema Version
       name:
         type: string
         description: >-
           Workflow display name used when the file runs on its own (cut to 100 characters). If
           omitted, the file name without `.prompt.md` is used. It is display metadata only and is
-          never sent to the harness.
+          never sent to the harness. Not substituted: This structural field or identity value stays
+          as authored.
         title: Name
       description:
         type: string
@@ -333,7 +342,9 @@ $defs:
             title: Mode
           merge:
             type: boolean
-            description: Merge the managed branch into the captured source checkout after the run.
+            description: >-
+              Merge the managed branch into the captured source checkout after the run. Not
+              substituted: This structural field or identity value stays as authored.
             title: Merge
           keep:
             type: boolean
@@ -342,7 +353,7 @@ $defs:
               appending a follow-up prompt recreates the directory from the branch; ignored files
               such as node_modules are gone and the setup command runs again, so a long setup pays
               that cost on every append. Removing the directory also ends filesystem undo for that
-              run.
+              run. Not substituted: This structural field or identity value stays as authored.
             title: Keep
           base:
             type: string
@@ -412,12 +423,21 @@ $defs:
     type: object
     description: >-
       Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags
-      override these at runtime. Substituted into: prompt text, model, additionalArgs, hook
-      command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt,
-      script-step script/env, and worktree setup commands. Every script and condition process also
-      receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}}
-      usage. A value containing `${secret:` causes the step to fail before execution so vars cannot
-      manufacture managed-secret references.
+      override these at runtime. Substituted fields (all at dispatch unless noted): prompt.prompt,
+      steps[].prompt, steps[].model, steps[].additionalArgs, hooks[].command, hooks[].env.*,
+      preCondition.script, preCondition.env.*, endCondition.script, endCondition.env.*,
+      endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.*,
+      worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets
+      because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode
+      because reviewed permission posture must match; mcpServers because entries launch programs and
+      carry authored secret grants; conditions and condition params because preset definitions and
+      parameter names are author-only contracts; vars because variables are not recursively
+      expanded. Structural fields and identity (including type, parallel, failFast, worktree
+      mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are
+      not substituted. Every script and condition process also receives each var as a
+      CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage. A value containing
+      `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret
+      references.
     additionalProperties:
       type: string
     propertyNames:
@@ -440,7 +460,9 @@ $defs:
         $ref: '#/$defs/worktreeConfig'
         title: Worktree
       vars:
-        description: Default values for `{{varName}}` substitutions.
+        description: >-
+          Default values for `{{varName}}` substitutions. Not substituted: Variables are not
+          recursively expanded.
         $ref: '#/$defs/varsConfig'
         title: Vars
       conditions:
@@ -450,7 +472,8 @@ $defs:
           script; MCP agents can choose a preset but can never supply or override its scripts.
           Preset scripts that use declared params must quote each value (for example, `"$BUG_FILE"`)
           because values are passed through environment variables. A param name may not collide with
-          a key in that preset's own `env`.
+          a key in that preset's own `env`. Not substituted: Preset definitions and parameter names
+          are author-only contracts.
         propertyNames:
           pattern: ^[A-Za-z][A-Za-z0-9_-]*$
         additionalProperties:
@@ -490,7 +513,8 @@ $defs:
           broader scope. These roots bound where terminal commands can write only while `sandbox`
           resolves to true (they become the sandbox's extra writable roots, none under `sandboxMode:
           read-only`); with the sandbox off or None they limit the directories given to ctrlyoke and
-          the harness's file tools, not what a shell command can reach.
+          the harness's file tools, not what a shell command can reach. Not substituted: Approval is
+          keyed to the authored value.
         title: Trusted External Roots
   singleStepRoot:
     oneOf:
@@ -507,7 +531,9 @@ $defs:
           schemaVersion:
             type: integer
             minimum: 1
-            description: Workflow definition format version. Absent means format 1.
+            description: >-
+              Workflow definition format version. Absent means format 1. Not substituted: This
+              structural field or identity value stays as authored.
             title: Schema Version
           _templateMeta:
             $ref: '#/properties/_templateMeta'
@@ -526,7 +552,9 @@ $defs:
           schemaVersion:
             type: integer
             minimum: 1
-            description: Workflow definition format version. Absent means format 1.
+            description: >-
+              Workflow definition format version. Absent means format 1. Not substituted: This
+              structural field or identity value stays as authored.
             title: Schema Version
           _templateMeta:
             $ref: '#/properties/_templateMeta'
@@ -543,7 +571,9 @@ $defs:
       schemaVersion:
         type: integer
         minimum: 1
-        description: Workflow definition format version. Absent means format 1.
+        description: >-
+          Workflow definition format version. Absent means format 1. Not substituted: This
+          structural field or identity value stays as authored.
         title: Schema Version
       type:
         $ref: '#/$defs/scriptStep/properties/type'
@@ -780,7 +810,8 @@ $defs:
           against ctrlyoke's managed MCP registry. Include "ctrlyoke" to let the harness append
           steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the
           prompt to force-attach a managed server; an inline reference wins over null, which
-          otherwise explicitly disables inherited servers.
+          otherwise explicitly disables inherited servers. Not substituted: Entries launch programs
+          and carry authored secret grants.
         title: MCP Servers
       hooks:
         oneOf:
@@ -828,7 +859,8 @@ $defs:
         description: >-
           Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets
           replace workflow-level secrets (no merging). Use null to explicitly disable an inherited
-          grant array; inline !NAME references in prompt text remain authoritative grants.
+          grant array; inline !NAME references in prompt text remain authoritative grants. Not
+          substituted: Secret grant approval is keyed to authored grant names.
         $ref: '#/$defs/secrets'
         title: Secrets
       endCondition:
@@ -897,7 +929,7 @@ $defs:
           Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the
           `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and
           rely entirely on the harness's own local configuration; null behaves the same as mode
-          'none'.
+          'none'. Not substituted: Permission posture must match the reviewed value.
         $ref: '#/$defs/toolPermissions'
         title: Tool Permissions
       sandbox:
@@ -918,7 +950,8 @@ $defs:
           harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot
           CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step
           fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a
-          warning and the harness's own settings apply.
+          warning and the harness's own settings apply. Not substituted: Permission posture must
+          match the reviewed value.
         title: Sandbox
       sandboxMode:
         type: string
@@ -932,7 +965,8 @@ $defs:
           (which also covers its file edits), and Claude Code denies Bash writes to the workspace
           roots, while its built-in Write and Edit tools still follow tool permissions. Has no
           effect unless `sandbox` resolves to `true`. Resolves step → workflow → the
-          `defaults.sandboxMode` setting.
+          `defaults.sandboxMode` setting. Not substituted: Permission posture must match the
+          reviewed value.
         title: Sandbox Mode
       errorBehavior:
         description: >-
@@ -974,7 +1008,9 @@ $defs:
       to the same harness session. Members may use the built-in ctrlyoke MCP server.
     properties:
       parallel:
-        description: The prompt or script steps that run concurrently. Groups cannot be nested.
+        description: >-
+          The prompt or script steps that run concurrently. Groups cannot be nested. Not
+          substituted: This structural field or identity value stays as authored.
         type: array
         items:
           allOf:
@@ -986,7 +1022,9 @@ $defs:
         minItems: 2
         title: Parallel
       failFast:
-        description: 'Stop the remaining members as soon as one member fails. Default: true.'
+        description: >-
+          Stop the remaining members as soon as one member fails. Default: true. Not substituted:
+          This structural field or identity value stays as authored.
         type: boolean
         default: true
         title: Fail Fast
@@ -1028,13 +1066,15 @@ $defs:
             const: prompt
             description: >-
               Optional step type discriminator. When omitted, the step is treated as an AI prompt
-              (backwards compatible).
+              (backwards compatible). Not substituted: This structural field or identity value stays
+              as authored.
             title: Type
           name:
             type: string
             description: >-
               Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the
-              dashboard shows a truncated preview of the prompt text.
+              dashboard shows a truncated preview of the prompt text. Not substituted: This
+              structural field or identity value stays as authored.
             maxLength: 100
             title: Name
           enabled:
@@ -1046,7 +1086,9 @@ $defs:
           color:
             type: string
             pattern: ^#[0-9a-fA-F]{6}$
-            description: Optional authored identity colour for this step.
+            description: >-
+              Optional authored identity colour for this step. Not substituted: This structural
+              field or identity value stays as authored.
             title: Color
           prompt:
             type: string
@@ -1062,7 +1104,10 @@ $defs:
             title: Prompt
           _runtime:
             $ref: '#/$defs/promptRuntimeMetadata'
-            description: Per-prompt runtime execution metadata (optional, added automatically during execution)
+            description: >-
+              Per-prompt runtime execution metadata (optional, added automatically during
+              execution). Not substituted: This structural field or identity value stays as
+              authored.
             title: Runtime
         required:
           - prompt
@@ -1075,14 +1120,17 @@ $defs:
     description: A workflow step that runs a shell script/command with no AI interaction.
     properties:
       type:
-        description: Step type discriminator. Required, and must be "script", for script steps.
+        description: >-
+          Step type discriminator. Required, and must be "script", for script steps. Not
+          substituted: This structural field or identity value stays as authored.
         type: string
         const: script
         title: Type
       name:
         description: >-
           Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows
-          the script text.
+          the script text. Not substituted: This structural field or identity value stays as
+          authored.
         type: string
         maxLength: 100
         title: Name
@@ -1095,7 +1143,9 @@ $defs:
       color:
         type: string
         pattern: ^#[0-9a-fA-F]{6}$
-        description: Optional authored identity colour for this step.
+        description: >-
+          Optional authored identity colour for this step. Not substituted: This structural field or
+          identity value stays as authored.
         title: Color
       executionMode:
         type: string
@@ -1140,7 +1190,8 @@ $defs:
           - type: 'null'
         description: >-
           Secret environment-variable names granted to this script step. Use null to explicitly
-          disable an inherited grant array.
+          disable an inherited grant array. Not substituted: Secret grant approval is keyed to
+          authored grant names.
         title: Secrets
       onPass:
         type: string
@@ -1164,7 +1215,9 @@ $defs:
         title: On Fail
       _runtime:
         $ref: '#/$defs/promptRuntimeMetadata'
-        description: Per-step runtime execution metadata (optional, added automatically during execution)
+        description: >-
+          Per-step runtime execution metadata (optional, added automatically during execution). Not
+          substituted: This structural field or identity value stays as authored.
         title: Runtime
       operator:
         $ref: '#/$defs/scriptProperties/properties/operator'
@@ -1350,7 +1403,9 @@ $defs:
         title: On Fail
       params:
         type: array
-        description: Environment-variable names whose values MCP agents may supply when attaching this preset.
+        description: >-
+          Environment-variable names whose values MCP agents may supply when attaching this preset.
+          Not substituted: Parameter names are an author-only contract with condition presets.
         items:
           type: string
           pattern: ^[A-Za-z_][A-Za-z0-9_]*$
@@ -1655,7 +1710,8 @@ $defs:
         description: >-
           Run-file format version for _runtime metadata and run bookkeeping, stamped on every write.
           It is independent of the root schemaVersion, which versions the workflow definition
-          format. A file written by a newer ctrlyoke is refused rather than overwritten.
+          format. A file written by a newer ctrlyoke is refused rather than overwritten. Not
+          substituted: This structural field or identity value stays as authored.
         title: Schema Version
       lastActivityAt:
         type: number
@@ -2355,7 +2411,7 @@ $defs:
               escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission
               flags at all — it does not deny tools; the harness applies whatever permissions are
               configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI
-              config).
+              config). Not substituted: This structural field or identity value stays as authored.
             title: Mode
           allowedTools:
             type: array

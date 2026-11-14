@@ -42,20 +42,33 @@ drawer.
 
 ## Where <code v-pre>{{name}}</code> is substituted {#where-substituted}
 
-ctrlyoke replaces <code v-pre>{{name}}</code> just before each step runs, in
-these fields only:
+The policy table below is the complete set of fields where ctrlyoke replaces
+<code v-pre>{{name}}</code>. Dispatch fields resolve just before a step or
+attempt runs; worktree setup resolves when the worktree is prepared.
 
-| Where                                   | Fields                                                   |
-| --------------------------------------- | -------------------------------------------------------- |
-| Prompt steps                            | prompt text, `model`, `additionalArgs`                   |
-| [Script steps](/workflows/script-steps) | `script`, `env` values                                   |
-| Pre-conditions                          | `script`, `env` values                                   |
-| End conditions                          | `script`, `env` values, `retryPrompt`, `passRetryPrompt` |
-| Hooks                                   | `command`, `env` values                                  |
-| [Worktrees](/workflows/worktrees)       | the `setup` command                                      |
+| Phase    | Fields                                                                                                                                                                                                                                                                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dispatch | `prompt.prompt`, `steps[].prompt`, `steps[].model`, `steps[].additionalArgs`, `hooks[].command`, `hooks[].env.*`, `preCondition.script`, `preCondition.env.*`, `endCondition.script`, `endCondition.env.*`, `endCondition.retryPrompt`, `endCondition.passRetryPrompt`, `scriptStep.script`, `scriptStep.env.*`, `worktree.setup`, `defaults.worktree.setup` |
 
-Anything else, such as a step's `name`, `harness` or `agent`, is used as
-written.
+### Not substituted
+
+These values stay as authored so runtime behavior cannot drift from what was
+approved or reviewed:
+
+- `trustedExternalRoots` and `secrets`: approval is keyed to authored roots
+  and secret grant names.
+- `toolPermissions`, `sandbox`, and `sandboxMode`: permission posture must
+  match the reviewed value.
+- `mcpServers`: entries launch programs and carry authored secret grants.
+- `conditions` and condition `params`: preset definitions and parameter names
+  are author-only contracts; agent-supplied parameter values stay literal.
+- `vars`: variables are not recursively expanded.
+- Structural and identity fields, including `type`, `parallel`, `failFast`,
+  worktree `mode`/`merge`/`keep`, workflow and step names, map keys, `color`,
+  schema metadata, runtime metadata, and bookkeeping fields, do not accept
+  substitution.
+
+The corresponding CLI help and schema description use the same field list.
 
 ### Placeholders that are left alone
 

@@ -283,7 +283,7 @@ export class ExecutionPreviewService {
     const {
       dto: worktreePreview,
       executionWorkspace: worktreeExecutionWorkspace,
-    } = await this.buildWorktreePreview(preparedWorkflow);
+    } = await this.buildWorktreePreview(preparedWorkflow, variables);
     const preflightMembers = new Map<number, ParallelGroupPreflightMember>();
     const parallelDiagnostics = new Map<number, CompatibilityDiagnostic[]>();
     const parallelGroupPreflights: ParallelGroupPreflightPreview[] = [];
@@ -920,7 +920,10 @@ export class ExecutionPreviewService {
    * (always true for named mode; never for managed mode, whose directory
    * depends on a `RunRef` a dry run never allocates).
    */
-  private async buildWorktreePreview(workflow: PromptFile): Promise<{
+  private async buildWorktreePreview(
+    workflow: PromptFile,
+    variables: Record<string, string>
+  ): Promise<{
     dto?: WorktreeExecutionPreview;
     executionWorkspace?: ExecutionWorkspace;
   }> {
@@ -932,6 +935,9 @@ export class ExecutionPreviewService {
       return {};
     }
     const { mode, base } = selection.config;
+    const setupCommand = selection.config.setup
+      ? VarSubstitutor.substitute(selection.config.setup, variables, false)
+      : undefined;
     const branch =
       "branch" in selection.config ? selection.config.branch : undefined;
     const directory =
@@ -947,6 +953,7 @@ export class ExecutionPreviewService {
           origin: selection.origin,
           branch,
           base,
+          ...(setupCommand ? { setupCommand } : {}),
           eligible: false,
           eligibilityReason:
             eligibility.reason ??
@@ -993,6 +1000,7 @@ export class ExecutionPreviewService {
         origin: selection.origin,
         branch,
         base,
+        ...(setupCommand ? { setupCommand } : {}),
         eligible: true,
         plannedDirectory: placement.directory,
         plannedDirectoryIsExact: placement.isExact,

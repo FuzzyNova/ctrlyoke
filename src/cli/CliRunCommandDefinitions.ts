@@ -16,9 +16,14 @@ import {
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import { FORCE_ALL_KEYWORD, ForceableFlag } from "./CliPropertyOverrides";
 import { parseStrictInteger } from "./CliIntegerParsing";
+import { VAR_SUBSTITUTION_POLICY } from "../utils/VarSubstitutionPolicy";
 
 const WORKFLOW_PROPERTY_SCOPE_DESCRIPTION =
   " (workflow level; add `--force <flag>` to apply to every step)";
+
+const VARIABLE_SUBSTITUTION_FIELDS = Object.keys(VAR_SUBSTITUTION_POLICY).join(
+  ", "
+);
 
 function workflowPropertyDescription(
   description: string,
@@ -145,7 +150,7 @@ export function registerRunCommand(
       )
       .option(
         "--var <assignment>",
-        "Variable substitution: key=value (repeatable). Replaces {{key}} in prompt text, model, hooks, and endCondition.",
+        `Variable substitution: key=value (repeatable). Replaces {{key}} in ${VARIABLE_SUBSTITUTION_FIELDS}.`,
         collectVar,
         {} as Record<string, string>
       )

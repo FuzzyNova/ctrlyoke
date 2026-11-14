@@ -95,6 +95,24 @@ suite("PreviewRedactor", () => {
     assert.strictEqual(redacted.steps[0].parallelGroupId, "group");
   });
 
+  test("redacts exact secrets from the worktree setup preview", () => {
+    const preview = createPreview("not used");
+    preview.worktree = {
+      mode: "managed",
+      origin: "authored",
+      eligible: true,
+      plannedDirectoryIsExact: false,
+      setupCommand: "npm ci --token=secret-value",
+    };
+
+    const redacted = redactExecutionPreview(preview, ["secret-value"]);
+
+    assert.strictEqual(
+      redacted.worktree?.setupCommand,
+      `npm ci --token=${REDACTION_MARKER}`
+    );
+  });
+
   test("masks private key blocks", () => {
     const result = redactedVariable(
       "-----BEGIN PRIVATE KEY-----\nsecret-material\n-----END PRIVATE KEY-----"

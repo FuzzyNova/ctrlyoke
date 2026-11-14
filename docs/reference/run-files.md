@@ -84,7 +84,7 @@ Workflow-level runtime execution state for working files (optional, added automa
 
 - **Type:** `number`
 
-Run-file format version for \_runtime metadata and run bookkeeping, stamped on every write. It is independent of the root schemaVersion, which versions the workflow definition format. A file written by a newer ctrlyoke is refused rather than overwritten.
+Run-file format version for \_runtime metadata and run bookkeeping, stamped on every write. It is independent of the root schemaVersion, which versions the workflow definition format. A file written by a newer ctrlyoke is refused rather than overwritten. Not substituted: This structural field or identity value stays as authored.
 
 ### `lastActivityAt` {#workflow-runtime-lastactivityat}
 

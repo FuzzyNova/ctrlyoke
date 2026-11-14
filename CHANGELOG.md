@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `--var` help, workflow schema and variables guide now list the fields supported by variable substitution. Dry Run shows the resolved worktree setup command.
 - Variable placeholders in script, environment, hook command and worktree setup text now substitute even inside fenced code blocks; prompt text remains protected inside fences.
 
 - A nonexistent or non-directory `--cwd` now fails with a usage error instead of returning empty results.

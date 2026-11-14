@@ -45,11 +45,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "schemaVersion": {
         "valueKind": "number",
-        "description": "Workflow definition format version. Absent means format 1. ctrlyoke stamps this field when it writes workflow files; older ctrlyoke versions refuse to open a newer format."
+        "description": "Workflow definition format version. Absent means format 1. ctrlyoke stamps this field when it writes workflow files; older ctrlyoke versions refuse to open a newer format. Not substituted: This structural field or identity value stays as authored."
       },
       "_templateMeta": {
         "valueKind": "object",
-        "description": "Marks the file as a reusable template and describes its placeholders. Removed when the template is instantiated."
+        "description": "Marks the file as a reusable template and describes its placeholders. Removed when the template is instantiated. Not substituted: This structural field or identity value stays as authored."
       },
       "harness": {
         "valueKind": "string",
@@ -93,7 +93,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers."
+        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants."
       },
       "hooks": {
         "valueKind": "oneOf",
@@ -125,7 +125,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants."
+        "description": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names."
       },
       "endCondition": {
         "valueKind": "oneOf",
@@ -182,7 +182,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "object",
           "null"
         ],
-        "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'."
+        "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value."
       },
       "sandbox": {
         "valueKind": "oneOf",
@@ -190,7 +190,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "boolean",
           "null"
         ],
-        "description": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply."
+        "description": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value."
       },
       "sandboxMode": {
         "valueKind": "string",
@@ -198,7 +198,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "workspace-write",
           "read-only"
         ],
-        "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting."
+        "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value."
       },
       "errorBehavior": {
         "valueKind": "oneOf",
@@ -214,11 +214,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "prompt",
           "script"
         ],
-        "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible)."
+        "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
       },
       "name": {
         "valueKind": "string",
-        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text."
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
       },
       "enabled": {
         "valueKind": "boolean",
@@ -226,7 +226,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "color": {
         "valueKind": "string",
-        "description": "Optional authored identity colour for this step."
+        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
       },
       "prompt": {
         "valueKind": "string",
@@ -254,11 +254,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "vars": {
         "valueKind": "object",
-        "description": "Default values for `{{varName}}` substitutions."
+        "description": "Default values for `{{varName}}` substitutions. Not substituted: Variables are not recursively expanded."
       },
       "conditions": {
         "valueKind": "object",
-        "description": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`."
+        "description": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`. Not substituted: Preset definitions and parameter names are author-only contracts."
       },
       "trustedExternalRoots": {
         "valueKind": "oneOf",
@@ -266,7 +266,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. These roots bound where terminal commands can write only while `sandbox` resolves to true (they become the sandbox's extra writable roots, none under `sandboxMode: read-only`); with the sandbox off or None they limit the directories given to ctrlyoke and the harness's file tools, not what a shell command can reach."
+        "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. These roots bound where terminal commands can write only while `sandbox` resolves to true (they become the sandbox's extra writable roots, none under `sandboxMode: read-only`); with the sandbox off or None they limit the directories given to ctrlyoke and the harness's file tools, not what a shell command can reach. Not substituted: Approval is keyed to the authored value."
       },
       "script": {
         "valueKind": "string",
@@ -397,7 +397,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers."
+        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants."
       },
       "hooks": {
         "valueKind": "oneOf",
@@ -429,7 +429,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants."
+        "description": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names."
       },
       "endCondition": {
         "valueKind": "oneOf",
@@ -486,7 +486,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "object",
           "null"
         ],
-        "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'."
+        "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value."
       },
       "sandbox": {
         "valueKind": "oneOf",
@@ -494,7 +494,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "boolean",
           "null"
         ],
-        "description": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply."
+        "description": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value."
       },
       "sandboxMode": {
         "valueKind": "string",
@@ -502,7 +502,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "workspace-write",
           "read-only"
         ],
-        "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting."
+        "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value."
       },
       "errorBehavior": {
         "valueKind": "oneOf",
@@ -517,11 +517,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "enum": [
           "prompt"
         ],
-        "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible)."
+        "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
       },
       "name": {
         "valueKind": "string",
-        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text."
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
       },
       "enabled": {
         "valueKind": "boolean",
@@ -529,7 +529,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "color": {
         "valueKind": "string",
-        "description": "Optional authored identity colour for this step."
+        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
       },
       "prompt": {
         "valueKind": "string",
@@ -550,11 +550,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "enum": [
           "script"
         ],
-        "description": "Step type discriminator. Required, and must be \"script\", for script steps."
+        "description": "Step type discriminator. Required, and must be \"script\", for script steps. Not substituted: This structural field or identity value stays as authored."
       },
       "name": {
         "valueKind": "string",
-        "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text."
+        "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored."
       },
       "enabled": {
         "valueKind": "boolean",
@@ -562,7 +562,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "color": {
         "valueKind": "string",
-        "description": "Optional authored identity colour for this step."
+        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
       },
       "executionMode": {
         "valueKind": "string",
@@ -611,7 +611,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "Secret environment-variable names granted to this script step. Use null to explicitly disable an inherited grant array."
+        "description": "Secret environment-variable names granted to this script step. Use null to explicitly disable an inherited grant array. Not substituted: Secret grant approval is keyed to authored grant names."
       },
       "onPass": {
         "valueKind": "string",
@@ -672,12 +672,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
     "properties": {
       "parallel": {
         "valueKind": "array",
-        "description": "The prompt or script steps that run concurrently. Groups cannot be nested."
+        "description": "The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored."
       },
       "failFast": {
         "valueKind": "boolean",
         "default": true,
-        "description": "Stop the remaining members as soon as one member fails. Default: true."
+        "description": "Stop the remaining members as soon as one member fails. Default: true. Not substituted: This structural field or identity value stays as authored."
       }
     },
     "forbiddenKeys": []
@@ -874,7 +874,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "custom",
           "none"
         ],
-        "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config)."
+        "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored."
       },
       "allowedTools": {
         "valueKind": "array",
@@ -952,11 +952,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "merge": {
         "valueKind": "boolean",
-        "description": "Merge the managed branch into the captured source checkout after the run."
+        "description": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored."
       },
       "keep": {
         "valueKind": "boolean",
-        "description": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run."
+        "description": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored."
       },
       "base": {
         "valueKind": "string",
@@ -981,7 +981,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
     "properties": {
       "name": {
         "valueKind": "string",
-        "description": "Display name shown in the template picker."
+        "description": "Display name shown in the template picker. Not substituted: This structural field or identity value stays as authored."
       },
       "description": {
         "valueKind": "string",
@@ -998,11 +998,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
     "properties": {
       "schemaVersion": {
         "valueKind": "number",
-        "description": "Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version."
+        "description": "Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version. Not substituted: This structural field or identity value stays as authored."
       },
       "name": {
         "valueKind": "string",
-        "description": "Workflow display name used when the file runs on its own (cut to 100 characters). If omitted, the file name without `.prompt.md` is used. It is display metadata only and is never sent to the harness."
+        "description": "Workflow display name used when the file runs on its own (cut to 100 characters). If omitted, the file name without `.prompt.md` is used. It is display metadata only and is never sent to the harness. Not substituted: This structural field or identity value stays as authored."
       },
       "description": {
         "valueKind": "string",

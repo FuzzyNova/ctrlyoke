@@ -1476,9 +1476,13 @@ suite("ExecutionPreviewService", () => {
       { name: "root", fsPath: workspaceRoot },
     ]).build({
       workflow: {
-        worktree: true,
+        worktree: {
+          mode: WORKTREE_MODES.MANAGED,
+          setup: "npm ci -- {{package}}",
+        },
         steps: [{ prompt: "wants a managed worktree" }],
       },
+      variables: { package: "web" },
     });
 
     assert.ok(preview.worktree);
@@ -1486,6 +1490,7 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(preview.worktree.eligible, true);
     assert.strictEqual(preview.worktree.plannedDirectory, undefined);
     assert.ok(preview.worktree.plannedDirectoryNotice);
+    assert.strictEqual(preview.worktree.setupCommand, "npm ci -- web");
     // Managed mode can't know its real directory before a run allocates an
     // ID, so the command preview keeps showing the ordinary workspace root.
     assert.ok(pathsEqual(preview.steps[0].command!.cwd, workspaceRoot));

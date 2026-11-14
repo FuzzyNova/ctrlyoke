@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Command } from "commander";
 import { registerRunCommand } from "../../cli/CliRunCommandDefinitions";
+import { VAR_SUBSTITUTION_POLICY } from "../../utils/VarSubstitutionPolicy";
 
 suite("CLI run command definitions", () => {
   test("every execution setting in run help exists in the settings schema", () => {
@@ -41,6 +42,19 @@ suite("CLI run command definitions", () => {
         Object.prototype.hasOwnProperty.call(executionProperties, propertyName),
         `${settingName} from run help must exist in schemas/settings-schema.json`
       );
+    }
+  });
+
+  test("--var help names every field in the substitution policy", () => {
+    const program = new Command();
+    registerRunCommand(program, async () => {});
+    const runCommand = program.commands.find(
+      (command) => command.name() === "run"
+    );
+    assert.ok(runCommand);
+    const help = runCommand.helpInformation();
+    for (const field of Object.keys(VAR_SUBSTITUTION_POLICY)) {
+      assert.ok(help.includes(field), `--var help omits ${field}`);
     }
   });
 });

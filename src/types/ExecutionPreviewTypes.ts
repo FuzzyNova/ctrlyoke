@@ -60,6 +60,8 @@ export interface WorktreeExecutionPreview {
   directoryCurrentBranch?: string;
   switchBlocker?: string;
   base?: string;
+  /** Setup command after variable substitution, as it will be executed. */
+  setupCommand?: string;
   eligible: boolean;
   eligibilityReason?: string;
   /** The directory the run is expected to execute in, when knowable without

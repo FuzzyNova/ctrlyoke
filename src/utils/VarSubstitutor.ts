@@ -18,15 +18,8 @@ import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
  *   1. CLI `--var key=value` flags (merged into PromptFile.vars before execution)
  *   2. Workflow-level `vars:` defaults in the YAML/JSON file
  *
- * Substitution is applied to:
- *   - Prompt text (`prompt.prompt`)
- *   - Resolved model
- *   - Resolved additionalArgs
- *   - Hook commands and hook `env` values (`resolvedProperties.hooks[]`)
- *   - preCondition `script` and `env` (shared with endCondition/scriptStep via
- *     `applyToScriptProperties`)
- *   - endCondition `script`, `env`, `retryPrompt`, `passRetryPrompt`
- *   - Script-step `script` and `env` (`applyToScriptStep`)
+ * The supported field set, phase, and substitution behavior are defined by
+ * `VAR_SUBSTITUTION_POLICY` in `VarSubstitutionPolicy.ts`.
  *
  * This is a distinct mechanism from the `CTRLYOKE_VAR_<KEY>` environment
  * variables `ScriptProcessRunner` injects into every script/condition
