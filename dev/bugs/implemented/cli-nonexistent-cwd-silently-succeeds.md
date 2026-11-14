@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli)
 - **Area:** `src/cli.ts`, `src/cli/HistoryCommandDefinitions.ts`, `src/cli/CliWorkspaceBootstrap.ts` (`bootstrapCliWorkspace`), every command that takes `-d, --cwd <path>`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

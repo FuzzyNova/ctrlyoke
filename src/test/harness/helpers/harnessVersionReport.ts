@@ -28,6 +28,27 @@ const CLI_PATH = path.resolve(__dirname, "../../../cli.js");
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
 const REPORT_DIR = path.join(REPO_ROOT, ".ctrlyoke", "logs", "test-runs");
 
+// The harness suite runs live CLIs, which otherwise register every temporary
+// workspace in the developer's normal ~/.ctrlyoke project registry.
+const isolatedStateHome =
+  process.env.CTRLYOKE_HOME === undefined
+    ? fs.mkdtempSync(path.join(os.tmpdir(), "cy-harness-state-"))
+    : undefined;
+if (isolatedStateHome) {
+  process.env.CTRLYOKE_HOME = isolatedStateHome;
+  process.once("exit", () => {
+    fs.rmSync(isolatedStateHome, { recursive: true, force: true });
+  });
+}
+
+function cleanupIsolatedStateHome(): void {
+  if (!isolatedStateHome) return;
+  if (process.env.CTRLYOKE_HOME === isolatedStateHome) {
+    delete process.env.CTRLYOKE_HOME;
+  }
+  fs.rmSync(isolatedStateHome, { recursive: true, force: true });
+}
+
 /** Set by `scripts/test-harness-minimum.mjs` for a run against the minimums. */
 const HARNESS_VERSION_MODE_ENV = "CTRLYOKE_HARNESS_VERSION_MODE";
 
@@ -159,7 +180,10 @@ export const mochaHooks = {
   },
 
   afterAll(): void {
-    if (!report) return;
+    if (!report) {
+      cleanupIsolatedStateHome();
+      return;
+    }
     const file = writeReport({
       ...report,
       completedAt: new Date().toISOString(),
@@ -173,5 +197,6 @@ export const mochaHooks = {
       );
     }
     console.log(`  Written to ${file}\n`);
+    cleanupIsolatedStateHome();
   },
 };

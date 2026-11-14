@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli)
 - **Area:** `src/test/harness/` (`commit-permissions.harness.test.ts`, `inline-config.harness.test.ts`, `conditions.harness.test.ts`, workflow and MCP harness suites), `src/test/harness/helpers/harnessRunner.ts` (`isolateRunState`)
-- **Severity:** low (developer machines only)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

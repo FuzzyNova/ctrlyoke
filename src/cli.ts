@@ -4,7 +4,7 @@ ensureMinFsThreadpoolSize(64);
 import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";
-import { access, readFile } from "fs/promises";
+import { access, readFile, stat } from "fs/promises";
 
 import { NodePlatformAdapter } from "./platform/NodePlatformAdapter";
 import {
@@ -327,6 +327,26 @@ program.hook("preAction", () =>
     (message) => console.error(chalk.yellow(message))
   )
 );
+
+program.hook("preAction", async (_thisCommand, actionCommand) => {
+  const options = actionCommand.optsWithGlobals() as {
+    cwd?: string;
+    json?: boolean;
+  };
+  if (options.cwd === undefined) return;
+
+  let isDirectory = false;
+  try {
+    isDirectory = (await stat(path.resolve(options.cwd))).isDirectory();
+  } catch {
+    // Treat missing paths and inaccessible paths alike as invalid workspaces.
+  }
+  if (!isDirectory) {
+    reportCliError(new CliUsageError(`--cwd ${options.cwd} is not a directory`), {
+      json: options.json,
+    });
+  }
+});
 
 registerRunCommand(program, runCommand);
 registerServerCommand(program);

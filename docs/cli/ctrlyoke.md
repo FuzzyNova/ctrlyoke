@@ -48,7 +48,8 @@ where this copy is installed (see [`ctrlyoke about`](#ctrlyoke-about)).
 The CLI treats its working directory (or `--cwd`) as the workspace root: it
 reads `<cwd>/.ctrlyoke/settings.json` on top of `~/.ctrlyoke/settings.json` and
 records run history for that directory. Run it from the directory that holds
-your `.ctrlyoke/` folder, or pass `--cwd`.
+your `.ctrlyoke/` folder, or pass `--cwd`. A supplied `--cwd` must already
+exist and be a directory.
 
 Commands with a scalar `--workflow` option accept either a lineage key or an
 exact workflow name (case-insensitive). Exact keys take precedence. If a name
