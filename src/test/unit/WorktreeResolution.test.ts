@@ -12,6 +12,7 @@ import {
   resolveWorktreeForWorkspace,
   resolveWorktreeSelection,
   recordedWorktreeConfigForContinue,
+  resolveWorktreeForStart,
 } from "../../utils/WorktreeResolution";
 
 suite("WorktreeResolution", () => {
@@ -42,6 +43,40 @@ suite("WorktreeResolution", () => {
       undefined,
       "a disabled current config still takes the worktree abandonment path"
     );
+  });
+
+  test("applies the recorded worktree only to continuation starts", async () => {
+    const recorded = {
+      mode: WORKTREE_MODES.NAMED,
+      directory: "bug-fix",
+      branchName: "recorded-branch",
+      executionCheckoutRoot: "/repo.worktrees/bug-fix",
+    } as WorkingFileWorktreeRuntime;
+    const current = {
+      mode: WORKTREE_MODES.NAMED,
+      directory: "research",
+      branch: "new-default-branch",
+    };
+    const continuation = await resolveWorktreeForStart(
+      undefined,
+      current,
+      [{ name: "repo", fsPath: process.cwd() }],
+      recorded,
+      true
+    );
+    const fresh = await resolveWorktreeForStart(
+      undefined,
+      current,
+      [{ name: "repo", fsPath: process.cwd() }],
+      recorded,
+      false
+    );
+    assert.deepStrictEqual(continuation.config, {
+      mode: WORKTREE_MODES.NAMED,
+      directory: "/repo.worktrees/bug-fix",
+      branch: "recorded-branch",
+    });
+    assert.deepStrictEqual(fresh.config, current);
   });
 
   test("continues a recorded named directory without adding an absent base", () => {

@@ -122,8 +122,7 @@ import {
 import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
 import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import {
-  recordedWorktreeConfigForContinue,
-  resolveWorktreeForWorkspace,
+  resolveWorktreeForStart,
   type WorkspaceWorktreeResolution,
 } from "../utils/WorktreeResolution";
 import { isCli } from "../utils/RuntimeMode";
@@ -2628,25 +2627,13 @@ export class WorkflowInstance
       ) {
         this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
       }
-      const currentResolution = await resolveWorktreeForWorkspace(
+      this.worktreeResolution = await resolveWorktreeForStart(
         this.promptQueue.getWorkflowFile().worktree,
         ConfigurationUtils.getDefaultWorktree(),
-        this.platform.getNamedWorkspaceRoots()
+        this.platform.getNamedWorkspaceRoots(),
+        (this.promptQueue.getWorkflowFile() as WorkingFile)._runtime?.worktree,
+        true
       );
-      const recordedWorktree = (
-        this.promptQueue.getWorkflowFile() as WorkingFile
-      )._runtime?.worktree;
-      const continueConfig = recordedWorktreeConfigForContinue(
-        recordedWorktree,
-        currentResolution.config ?? false
-      );
-      this.worktreeResolution = continueConfig
-        ? await resolveWorktreeForWorkspace(
-            continueConfig,
-            false,
-            this.platform.getNamedWorkspaceRoots()
-          )
-        : currentResolution;
       await this.prepareExecutionWorktree(resolvedHistoryFilePath);
       // Same contract as WorkflowStartupPipeline.stopRequestedSinceStart.
       if (this.workflowRuntime.stopRequestCount !== stopRequestBaseline) {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing 228023d10
 - **Area:** `src/core/orchestration/WorkflowStartupPipeline.ts` (`resolveWorktree`), `src/core/WorkflowInstance.ts` (`resume`, `resumeAfterSetup`), `src/utils/WorktreeResolution.ts` (`recordedWorktreeConfigForContinue`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

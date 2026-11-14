@@ -13,6 +13,7 @@ import type {
   PromptStep,
   QueueState,
   RunRef,
+  WorkingFile,
   WorkflowKey,
 } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
@@ -36,7 +37,7 @@ import {
 } from "../../utils/OutputTargetKeys";
 import type { DefinitionRevisionContext } from "./OutputHistoryManager";
 import type { WorkspaceWorktreeResolution } from "../../utils/WorktreeResolution";
-import { resolveWorktreeForWorkspace } from "../../utils/WorktreeResolution";
+import { resolveWorktreeForStart } from "../../utils/WorktreeResolution";
 import { preflightWorkflowSecrets } from "../../utils/SecretResolver";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
@@ -359,7 +360,11 @@ export class WorkflowStartupPipeline {
       // before anything is written.
       requireWorkspaceRoot(this.port.platform);
       await this.preflightSecrets();
-      await this.resolveWorktree();
+      await this.resolveWorktree(
+        continueFromCurrent ||
+          classification.isAppendContinuation ||
+          classification.isIdleContinuation
+      );
       if (!(await this.preflightCompatibility())) {
         return;
       }
@@ -641,11 +646,14 @@ export class WorkflowStartupPipeline {
     );
   }
 
-  async resolveWorktree(): Promise<void> {
-    const resolution = await resolveWorktreeForWorkspace(
-      this.port.queue.getWorkflowFile().worktree,
+  async resolveWorktree(isContinuation: boolean = false): Promise<void> {
+    const workflow = this.port.queue.getWorkflowFile();
+    const resolution = await resolveWorktreeForStart(
+      workflow.worktree,
       ConfigurationUtils.getDefaultWorktree(),
-      this.port.platform.getNamedWorkspaceRoots()
+      this.port.platform.getNamedWorkspaceRoots(),
+      (workflow as WorkingFile)._runtime?.worktree,
+      isContinuation
     );
     this.port.worktree.setResolution(resolution);
     this.worktreeNotice = resolution.notice;

@@ -134,3 +134,26 @@ export function recordedWorktreeConfigForContinue(
     ...(current.setup ? { setup: current.setup } : {}),
   };
 }
+
+/** Resolve current settings, preserving the run's named worktree on continuation. */
+export async function resolveWorktreeForStart(
+  authored: WorktreeConfig | undefined,
+  defaultValue: WorktreeDefaultConfig,
+  namedRoots: readonly ResolverWorkspaceFolder[],
+  recorded: WorkingFileWorktreeRuntime | undefined,
+  isContinuation: boolean
+): Promise<WorkspaceWorktreeResolution> {
+  const current = await resolveWorktreeForWorkspace(
+    authored,
+    defaultValue,
+    namedRoots
+  );
+  if (!isContinuation || !current.config) return current;
+  const recordedConfig = recordedWorktreeConfigForContinue(
+    recorded,
+    current.config
+  );
+  return recordedConfig
+    ? resolveWorktreeForWorkspace(recordedConfig, false, namedRoots)
+    : current;
+}
