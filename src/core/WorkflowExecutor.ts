@@ -4083,7 +4083,8 @@ export class WorkflowExecutor {
     attemptIndex: number,
     errorRetryCount: number,
     completeAttemptOnContinue: boolean = false,
-    scriptOutputShown: boolean = true
+    scriptOutputShown: boolean = true,
+    preserveCompletedAttemptForPhaseRetry: boolean = false
   ): Promise<PhaseDisposition> {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -4111,14 +4112,21 @@ export class WorkflowExecutor {
     if (canRetry) {
       const nextAttemptIndex = attemptIndex + 1;
       const runtime = this.getRuntime();
-      runtime.failAttempt(target, attemptIndex, reason);
-      await this.recordAttemptTerminal(
-        context,
-        target,
-        attemptIndex,
-        TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
-        reason
-      );
+      if (
+        !(
+          preserveCompletedAttemptForPhaseRetry &&
+          isPhaseRetryPolicy(policy)
+        )
+      ) {
+        runtime.failAttempt(target, attemptIndex, reason);
+        await this.recordAttemptTerminal(
+          context,
+          target,
+          attemptIndex,
+          TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+          reason
+        );
+      }
       runtime.scheduleErrorRetry(target, nextAttemptIndex);
       const retryDelayMs = ConfigurationUtils.secondsToMs(policy.retryDelaySec);
       if ((retryDelayMs ?? 0) > 0) {
@@ -4460,6 +4468,8 @@ export class WorkflowExecutor {
         errorBehavior,
         attemptIndex,
         errorRetryCount,
+        true,
+        true,
         true
       );
     }
@@ -4523,6 +4533,8 @@ export class WorkflowExecutor {
         errorBehavior,
         result.errorAttemptIndex ?? attemptIndex,
         errorRetryCount,
+        true,
+        true,
         true
       );
     }

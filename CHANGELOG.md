@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A prompt step that recovers from an end-condition error through `onError: retryPhase` keeps its completed AI attempt in run output instead of reporting it as failed.
 - `ctrlyoke run --json` now reports end-condition actions and resolved comparison details.
 - Settings `defaults.secrets` now appears in secret approval and check flows, grants script steps consistently, and is included in run export redaction.
 - CLI coordination tools now work from a running workflow final step in skill mode, without assigning it a queue-step or parallel-group position.

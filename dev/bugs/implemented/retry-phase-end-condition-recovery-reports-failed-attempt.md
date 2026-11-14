@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing a1f660730
 - **Area:** `src/core/WorkflowExecutor.ts` (`handleEvaluationError`, the `retryPhase` end-condition loop in the prompt-step path), `src/core/orchestration/RunOutputResolver.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
