@@ -42,6 +42,15 @@ import {
  * are reported by the execution layer as an advisory diagnostic. This keeps
  * workflows that document ctrlyoke syntax runnable.
  */
+export class VarSubstitutionValidationError extends Error {
+  readonly code = "VAR_SUBSTITUTION_VALIDATION_FAILURE";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "VarSubstitutionValidationError";
+  }
+}
+
 export class VarSubstitutor {
   private static readonly SECRET_REFERENCE_PREFIX = "${secret:";
 
@@ -67,7 +76,7 @@ export class VarSubstitutor {
         );
         if (!/^\{\{\w+\}\}$/.test(value) || placeholders.length !== 1) {
           if (/\{\{\w+\}\}/.test(value))
-            throw new Error(
+            throw new VarSubstitutionValidationError(
               `${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`
             );
           return value;
@@ -173,7 +182,7 @@ export class VarSubstitutor {
       if (unresolved.length) {
         const placeholder = unresolved[0]!;
         const name = placeholder.slice(2, -2);
-        throw new Error(
+        throw new VarSubstitutionValidationError(
           `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
         );
       }
@@ -193,13 +202,13 @@ export class VarSubstitutor {
       if (typeof value !== "string" || !/\{\{\w+\}\}/.test(value)) return value;
       const matches = findVariablePlaceholders(value, false);
       if (!/^\{\{\w+\}\}$/.test(value) || matches.length !== 1) {
-        throw new Error(
+        throw new VarSubstitutionValidationError(
           `${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`
         );
       }
       const name = matches[0]!.name;
       if (!isVariableDefined(vars, name))
-        throw new Error(
+        throw new VarSubstitutionValidationError(
           `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
         );
       const raw = vars[name]!;
@@ -211,7 +220,7 @@ export class VarSubstitutor {
         converted = raw === BOOLEAN_STRING_VALUES.TRUE;
       else if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(raw)) converted = Number(raw);
       if (!validateSubstitutedValue(schemaPointer, converted)) {
-        throw new Error(
+        throw new VarSubstitutionValidationError(
           `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", expected a valid schema value.`
         );
       }
@@ -399,7 +408,7 @@ export class VarSubstitutor {
               run as string
             )
           ) {
-            throw new Error(
+            throw new VarSubstitutionValidationError(
               `${this.VALIDATION_FAILURE}: ${path}.priorContext.run: variable "run" is "${run}", expected an integer or run reference.`
             );
           }
