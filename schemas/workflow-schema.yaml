@@ -429,25 +429,26 @@ $defs:
     type: object
     description: >-
       Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags
-      override these at runtime. Substituted fields (all at dispatch unless noted): worktree.branch,
-      worktree.base, worktree.directory, harness, steps[].harness, steps[].enabled, maxSteps,
-      defaults.worktree.branch, defaults.worktree.base, defaults.worktree.directory (run start);
-      prompt.prompt, steps[].prompt, steps[].model, steps[].additionalArgs, steps[].name,
-      steps[].expected, steps[].shell, steps[].agent, steps[].skills[], steps[].sessionId,
-      steps[].priorContext.workflow, steps[].priorContext.run, hooks[].command, hooks[].env.*,
-      preCondition.script, preCondition.env.*, endCondition.script, endCondition.env.*,
-      endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.*,
-      worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets
-      because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode
-      because reviewed permission posture must match; mcpServers because entries launch programs and
-      carry authored secret grants; conditions and condition params because preset definitions and
-      parameter names are author-only contracts; vars because variables are not recursively
-      expanded. Structural fields and identity (including type, parallel, failFast, worktree
-      mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are
-      not substituted. Every script and condition process also receives each var as a
-      CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage. A value containing
-      `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret
-      references.
+      override these at runtime. Substituted fields (all at dispatch unless noted): ADVISORY,
+      DISPATCH, ERROR, defaults.worktree.base, defaults.worktree.branch,
+      defaults.worktree.directory, defaults.worktree.setup, endCondition.env.*,
+      endCondition.passRetryPrompt, endCondition.retryPrompt, endCondition.script, harness,
+      hooks[].command, hooks[].env.*, maxSteps, preCondition.env.*, preCondition.script,
+      prompt.prompt, scriptStep.env.*, scriptStep.script, steps[].additionalArgs, steps[].agent,
+      steps[].compareSource, steps[].enabled, steps[].endCondition.compareSource,
+      steps[].endCondition.ignoreCase, steps[].endCondition.maxRetries, steps[].endCondition.onFail,
+      steps[].endCondition.onPass, steps[].endCondition.operator, steps[].endCondition.timeoutSec,
+      steps[].errorBehavior.maxRetries, steps[].errorBehavior.onError,
+      steps[].errorBehavior.retryDelaySec, steps[].executionMode, steps[].expected, steps[].harness,
+      steps[].ignoreCase, steps[].model, steps[].name, steps[].onFail, steps[].onPass,
+      steps[].operator, steps[].preCondition.compareSource, steps[].preCondition.ignoreCase,
+      steps[].preCondition.onFail, steps[].preCondition.onPass, steps[].preCondition.operator,
+      steps[].preCondition.timeoutSec, steps[].priorContext.run, steps[].priorContext.workflow,
+      steps[].priorContextDetail, steps[].prompt, steps[].resumeSession, steps[].sessionId,
+      steps[].shell, steps[].skills[], steps[].timeoutSec, worktree.base, worktree.branch,
+      worktree.directory, worktree.setup. Values are validated against the field schema after
+      substitution. Excluded fields include approval and permission settings, MCP server
+      definitions, condition preset contracts, vars themselves, and structural or identity fields.
     additionalProperties:
       type: string
     propertyNames:
@@ -782,14 +783,21 @@ $defs:
           - sonnet
         title: Model
       executionMode:
-        type: string
-        enum:
-          - interactive
-          - headless
+        oneOf:
+          - type: string
+            enum:
+              - interactive
+              - headless
+            description: >-
+              Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the
+              background with output in the Output panel. Pre/end-condition scripts always run
+              headless. Omitting this field inherits the workflow/global default.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background
           with output in the Output panel. Pre/end-condition scripts always run headless. Omitting
-          this field inherits the workflow/global default.
+          this field inherits the workflow/global default. A whole-value {{name}} placeholder is
+          coerced and validated before dispatch.
         title: Execution Mode
       agent:
         description: >-
@@ -804,7 +812,18 @@ $defs:
         $ref: '#/$defs/agent'
         title: Agent
       resumeSession:
-        type: boolean
+        oneOf:
+          - type: boolean
+            description: >-
+              Whether this step continues an earlier step's conversation instead of starting a new
+              session. When omitted, a step inherits the workflow's value and a workflow inherits
+              the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming
+              step continues the most recent earlier step on the same harness, skipping steps that
+              ran on other harnesses; the first step always starts a new session. Set false where
+              each step must start fresh, such as orchestrated loops whose steps are self-contained.
+              Retries continue in the same session by default; set
+              endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           Whether this step continues an earlier step's conversation instead of starting a new
           session. When omitted, a step inherits the workflow's value and a workflow inherits the
@@ -813,7 +832,8 @@ $defs:
           other harnesses; the first step always starts a new session. Set false where each step
           must start fresh, such as orchestrated loops whose steps are self-contained. Retries
           continue in the same session by default; set endCondition.resumeSessionOnRetry=false to
-          start a fresh session for each retry.
+          start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and
+          validated before dispatch.
         title: Resume Session
       mcpServers:
         oneOf:
@@ -921,16 +941,24 @@ $defs:
         $ref: '#/$defs/priorContext'
         title: Prior Context
       priorContextDetail:
-        type: string
-        enum:
-          - full
-          - summary
-        default: full
+        oneOf:
+          - type: string
+            enum:
+              - full
+              - summary
+            default: full
+            description: >-
+              How much prior output to include. 'full' includes the complete bounded transcript;
+              'summary' includes the authored prompt head, changed files, and text tail. Resolves
+              prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3)
+              select summary for that reference.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           How much prior output to include. 'full' includes the complete bounded transcript;
           'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt
           → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select
-          summary for that reference.
+          summary for that reference. A whole-value {{name}} placeholder is coerced and validated
+          before dispatch.
         title: Prior Context Detail
       additionalArgs:
         oneOf:
@@ -1182,15 +1210,22 @@ $defs:
           identity value stays as authored.
         title: Color
       executionMode:
-        type: string
-        enum:
-          - interactive
-          - headless
+        oneOf:
+          - type: string
+            enum:
+              - interactive
+              - headless
+            description: >-
+              Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the
+              background with output in the Output panel. Pre/end-condition scripts always run
+              headless. Omitting this field inherits the workflow's executionMode, then the
+              defaults.executionMode setting.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the
           background with output in the Output panel. Pre/end-condition scripts always run headless.
           Omitting this field inherits the workflow's executionMode, then the defaults.executionMode
-          setting.
+          setting. A whole-value {{name}} placeholder is coerced and validated before dispatch.
         title: Execution Mode
       script:
         $ref: '#/$defs/scriptProperties/properties/script'
@@ -1199,10 +1234,24 @@ $defs:
         $ref: '#/$defs/scriptProperties/properties/env'
         title: Env
       compareSource:
-        $ref: '#/$defs/scriptProperties/properties/compareSource'
+        oneOf:
+          - $ref: '#/$defs/scriptProperties/properties/compareSource'
+          - $ref: '#/$defs/varPlaceholder'
+        description: >-
+          Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the
+          trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit
+          requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced
+          and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated
+          before dispatch.
         title: Compare Source
       timeoutSec:
-        $ref: '#/$defs/scriptProperties/properties/timeoutSec'
+        oneOf:
+          - $ref: '#/$defs/scriptProperties/properties/timeoutSec'
+          - $ref: '#/$defs/varPlaceholder'
+        description: >-
+          Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A
+          whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value
+          {{name}} placeholder is coerced and validated before dispatch.
         title: Timeout Sec
       shell:
         $ref: '#/$defs/scriptProperties/properties/shell'
@@ -1228,24 +1277,36 @@ $defs:
           authored grant names.
         title: Secrets
       onPass:
-        type: string
-        enum:
-          - continue
-          - stopWorkflow
-        default: continue
+        oneOf:
+          - type: string
+            enum:
+              - continue
+              - stopWorkflow
+            default: continue
+            description: >-
+              What to do when the script passes (exit 0 / returns matches). 'continue': advance the
+              queue (default). 'stopWorkflow': halt execution immediately.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when the script passes (exit 0 / returns matches). 'continue': advance the
-          queue (default). 'stopWorkflow': halt execution immediately.
+          queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}}
+          placeholder is coerced and validated before dispatch.
         title: On Pass
       onFail:
-        type: string
-        enum:
-          - continue
-          - stopWorkflow
-        default: stopWorkflow
+        oneOf:
+          - type: string
+            enum:
+              - continue
+              - stopWorkflow
+            default: stopWorkflow
+            description: >-
+              What to do when the script fails or returns is not matched. 'continue': log a warning
+              and advance the queue. 'stopWorkflow': halt execution (default).
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when the script fails or returns is not matched. 'continue': log a warning and
-          advance the queue. 'stopWorkflow': halt execution (default).
+          advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}}
+          placeholder is coerced and validated before dispatch.
         title: On Fail
       _runtime:
         $ref: '#/$defs/promptRuntimeMetadata'
@@ -1254,13 +1315,32 @@ $defs:
           substituted: This structural field or identity value stays as authored.
         title: Runtime
       operator:
-        $ref: '#/$defs/scriptProperties/properties/operator'
+        oneOf:
+          - $ref: '#/$defs/scriptProperties/properties/operator'
+          - $ref: '#/$defs/varPlaceholder'
+        description: >-
+          How the compare source is compared against `expected`. Default: 'eq' (whole-value literal
+          match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains'
+          are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a
+          number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to
+          require a full match. Every `matches` comparison runs in a worker bounded by
+          `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`.
+          'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`;
+          `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}}
+          placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder
+          is coerced and validated before dispatch.
         title: Operator
       expected:
         $ref: '#/$defs/scriptProperties/properties/expected'
         title: Expected
       ignoreCase:
-        $ref: '#/$defs/scriptProperties/properties/ignoreCase'
+        oneOf:
+          - $ref: '#/$defs/scriptProperties/properties/ignoreCase'
+          - $ref: '#/$defs/varPlaceholder'
+        description: >-
+          Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default:
+          false. A whole-value {{name}} placeholder is coerced and validated before dispatch. A
+          whole-value {{name}} placeholder is coerced and validated before dispatch.
         title: Ignore Case
       returns:
         $ref: '#/$defs/scriptProperties/properties/returns'
@@ -1306,14 +1386,21 @@ $defs:
         title: Ignore Case
       maxRetries:
         oneOf:
-          - $ref: '#/$defs/unlimitedValue'
-          - type: integer
-            minimum: 0
-            maximum: 100
+          - oneOf:
+              - $ref: '#/$defs/unlimitedValue'
+              - type: integer
+                minimum: 0
+                maximum: 100
+            description: >-
+              Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default,
+              or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is
+              omitted, one retry is allowed.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or
           1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted,
-          one retry is allowed.
+          one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before
+          dispatch.
         title: Max Retries
       retryPrompt:
         type: string
@@ -1338,32 +1425,50 @@ $defs:
           session for context continuity). Set to false to start a fresh session for each retry.
         title: Resume Session On Retry
       onPass:
-        type: string
-        enum:
-          - continue
-          - retry
-          - stopWorkflow
-        default: continue
+        oneOf:
+          - type: string
+            enum:
+              - continue
+              - retry
+              - stopWorkflow
+            default: continue
+            description: >-
+              What to do when the end condition passes. 'continue': advance to the next step
+              (default). 'retry': re-run the step's prompt while the condition keeps passing, up to
+              maxRetries; exhausting the retries advances to the next step. A failure during the
+              loop is handled by onFail. 'stopWorkflow': halt execution immediately.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when the end condition passes. 'continue': advance to the next step (default).
           'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries;
           exhausting the retries advances to the next step. A failure during the loop is handled by
-          onFail. 'stopWorkflow': halt execution immediately.
+          onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is
+          coerced and validated before dispatch.
         title: On Pass
       onFail:
-        type: string
-        enum:
-          - continue
-          - retry
-          - stopWorkflow
-        default: stopWorkflow
+        oneOf:
+          - type: string
+            enum:
+              - continue
+              - retry
+              - stopWorkflow
+            default: stopWorkflow
+            description: >-
+              What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries
+              times); if retryPrompt is omitted, a fallback prompt includes the expected and actual
+              values and script output. When maxRetries is omitted, one retry is allowed.
+              'continue': advance to the next step even if validation fails. 'stopWorkflow': halt
+              execution (default). A retryPrompt alone does not enable retries; set maxRetries above
+              0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries
           times); if retryPrompt is omitted, a fallback prompt includes the expected and actual
           values and script output. When maxRetries is omitted, one retry is allowed. 'continue':
           advance to the next step even if validation fails. 'stopWorkflow': halt execution
           (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the
-          condition or in defaults.endCondition.maxRetries, or use onFail: retry.
+          condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value
+          {{name}} placeholder is coerced and validated before dispatch.
         title: On Fail
     required:
       - script
@@ -1467,15 +1572,22 @@ $defs:
           ${secret:NAME} values.
         title: Env
       compareSource:
-        type: string
-        enum:
-          - stdout
-          - stderr
-          - exitCode
+        oneOf:
+          - type: string
+            enum:
+              - stdout
+              - stderr
+              - exitCode
+            description: >-
+              Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the
+              trimmed text; 'exitCode' compares the numeric exit code. There is no implicit
+              clean-exit requirement layered onto a text comparison.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the
           trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit
-          requirement layered onto a text comparison.
+          requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced
+          and validated before dispatch.
         title: Compare Source
       returns:
         not: {}
@@ -1484,9 +1596,14 @@ $defs:
           Omit it entirely to pass on exit code 0.
         title: Returns
       timeoutSec:
-        type: number
-        exclusiveMinimum: 0
-        description: Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
+        oneOf:
+          - type: number
+            exclusiveMinimum: 0
+            description: Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
+          - $ref: '#/$defs/varPlaceholder'
+        description: >-
+          Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A
+          whole-value {{name}} placeholder is coerced and validated before dispatch.
         title: Timeout Sec
       shell:
         type: string
@@ -1506,19 +1623,31 @@ $defs:
           - cmd
         title: Shell
       operator:
-        type: string
-        enum:
-          - eq
-          - ne
-          - contains
-          - notContains
-          - gte
-          - gt
-          - lte
-          - lt
-          - matches
-          - isEmpty
-          - isNotEmpty
+        oneOf:
+          - type: string
+            enum:
+              - eq
+              - ne
+              - contains
+              - notContains
+              - gte
+              - gt
+              - lte
+              - lt
+              - matches
+              - isEmpty
+              - isNotEmpty
+            description: >-
+              How the compare source is compared against `expected`. Default: 'eq' (whole-value
+              literal match on trimmed text; numeric when compareSource is exitCode).
+              'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and
+              fail when either side is not a number. 'matches' treats `expected` as an unanchored
+              regular expression — add ^ and $ to require a full match. Every `matches` comparison
+              runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation
+              error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word
+              tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse
+              errors.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           How the compare source is compared against `expected`. Default: 'eq' (whole-value literal
           match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains'
@@ -1527,7 +1656,8 @@ $defs:
           require a full match. Every `matches` comparison runs in a worker bounded by
           `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`.
           'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`;
-          `operator: >=` and `operator: !=` are YAML parse errors.
+          `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}}
+          placeholder is coerced and validated before dispatch.
         title: Operator
       expected:
         type:
@@ -1542,10 +1672,15 @@ $defs:
           resolves at dispatch; unresolved placeholders fail before execution.
         title: Expected
       ignoreCase:
-        type: boolean
+        oneOf:
+          - type: boolean
+            description: >-
+              Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default:
+              false.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default:
-          false.
+          false. A whole-value {{name}} placeholder is coerced and validated before dispatch.
         title: Ignore Case
     required:
       - script
@@ -1585,28 +1720,42 @@ $defs:
         $ref: '#/$defs/scriptProperties/properties/ignoreCase'
         title: Ignore Case
       onPass:
-        type: string
-        enum:
-          - continue
-          - skipPrompt
-          - stopWorkflow
-        default: continue
+        oneOf:
+          - type: string
+            enum:
+              - continue
+              - skipPrompt
+              - stopWorkflow
+            default: continue
+            description: >-
+              What to do when the pre-condition check passes (script exits 0 / returns matches).
+              'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the
+              queue. 'stopWorkflow': halt execution.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when the pre-condition check passes (script exits 0 / returns matches).
           'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the
-          queue. 'stopWorkflow': halt execution.
+          queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and
+          validated before dispatch.
         title: On Pass
       onFail:
-        type: string
-        enum:
-          - continue
-          - skipPrompt
-          - stopWorkflow
-        default: skipPrompt
+        oneOf:
+          - type: string
+            enum:
+              - continue
+              - skipPrompt
+              - stopWorkflow
+            default: skipPrompt
+            description: >-
+              What to do when the pre-condition check fails. 'continue': run the prompt anyway
+              (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue
+              (default). 'stopWorkflow': halt execution.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when the pre-condition check fails. 'continue': run the prompt anyway
           (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue
-          (default). 'stopWorkflow': halt execution.
+          (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced
+          and validated before dispatch.
         title: On Fail
     required:
       - script
@@ -1620,12 +1769,23 @@ $defs:
       recovery gesture.
     properties:
       onError:
-        type: string
-        enum:
-          - stopWorkflow
-          - retry
-          - retryPhase
-          - continue
+        oneOf:
+          - type: string
+            enum:
+              - stopWorkflow
+              - retry
+              - retryPhase
+              - continue
+            description: >-
+              What to do when a step phase cannot run or otherwise encounters an internal error.
+              'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the
+              whole step from its pre-condition, starting a fresh harness session. 'retryPhase':
+              re-run only the phase that errored — an errored end-condition re-runs just its script
+              against the existing response without another AI call, and a failed prompt is re-sent
+              in a fresh harness session without re-running the pre-condition; for pre-conditions
+              and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not
+              errored and record a warning. Each phase keeps its own retry count.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when a step phase cannot run or otherwise encounters an internal error.
           'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole
@@ -1634,19 +1794,30 @@ $defs:
           existing response without another AI call, and a failed prompt is re-sent in a fresh
           harness session without re-running the pre-condition; for pre-conditions and script steps
           it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a
-          warning. Each phase keeps its own retry count.
+          warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is
+          coerced and validated before dispatch.
         title: On Error
       maxRetries:
-        type: integer
-        minimum: 1
+        oneOf:
+          - type: integer
+            minimum: 1
+            description: >-
+              Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is
+              allowed.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
           Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is
-          allowed.
+          allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.
         title: Max Retries
       retryDelaySec:
-        type: number
-        exclusiveMinimum: 0
-        description: Delay before retrying, in seconds.
+        oneOf:
+          - type: number
+            exclusiveMinimum: 0
+            description: Delay before retrying, in seconds.
+          - $ref: '#/$defs/varPlaceholder'
+        description: >-
+          Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and
+          validated before dispatch.
         title: Retry Delay Sec
     required:
       - onError

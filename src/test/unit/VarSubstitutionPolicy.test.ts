@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { VAR_SUBSTITUTION_POLICY } from "../../utils/VarSubstitutionPolicy";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
+import type { WorkflowStep } from "../../types/CtrlYokeTypes";
 import {
   VAR_SUBSTITUTION_PHASES,
   VAR_SUBSTITUTION_KINDS,
@@ -47,6 +48,36 @@ suite("VarSubstitutionPolicy documentation", () => {
       workflow: "tasks",
       run: 12,
     });
+  });
+
+  test("coerces and validates dispatch value fields", () => {
+    const resolved = VarSubstitutor.substituteWorkflowView(
+      {
+        type: "script" as const,
+        script: "echo hi",
+        executionMode: "{{mode}}",
+        timeoutSec: "{{timeout}}",
+        ignoreCase: "{{case}}",
+        endCondition: {
+          script: "echo ok",
+          maxRetries: "{{retries}}",
+        },
+      } as unknown as WorkflowStep,
+      { mode: "headless", timeout: "30", case: "true", retries: "2" },
+      "dispatch"
+    ) as WorkflowStep & Record<string, any>;
+    assert.strictEqual(resolved.executionMode, "headless");
+    assert.strictEqual(resolved.timeoutSec, 30);
+    assert.strictEqual(resolved.ignoreCase, true);
+    assert.strictEqual(resolved.endCondition?.maxRetries, 2);
+    assert.throws(
+      () => VarSubstitutor.substituteWorkflowView(
+        { type: "script", script: "echo hi", timeoutSec: "{{timeout}}" } as unknown as WorkflowStep,
+        { timeout: "soon" },
+        "dispatch"
+      ),
+      /timeoutSec.*timeout.*soon/
+    );
   });
 
   test("keeps numeric expected and session references numeric", () => {
@@ -113,12 +144,17 @@ suite("VarSubstitutionPolicy documentation", () => {
       .filter(([, entry]) => entry.kind === VAR_SUBSTITUTION_KINDS.VALUE)
       .map(([field]) => field)
       .sort();
-    assert.deepStrictEqual(valueFields, [
-      "harness",
-      "maxSteps",
-      "steps[].enabled",
-      "steps[].harness",
-    ]);
+    assert.deepStrictEqual(
+      valueFields,
+      Object.keys(VAR_SUBSTITUTION_POLICY)
+        .filter(
+          (field) =>
+            VAR_SUBSTITUTION_POLICY[
+              field as keyof typeof VAR_SUBSTITUTION_POLICY
+            ].kind === VAR_SUBSTITUTION_KINDS.VALUE
+        )
+        .sort()
+    );
     const hasPlaceholder = (field: unknown): boolean => {
       const oneOf = (field as { oneOf?: unknown } | undefined)?.oneOf;
       return Array.isArray(oneOf) &&
@@ -129,6 +165,16 @@ suite("VarSubstitutionPolicy documentation", () => {
     assert.ok(hasPlaceholder(schema.$defs.promptStep.allOf[1].properties.enabled));
     assert.ok(hasPlaceholder(schema.$defs.scriptStep.properties.enabled));
     assert.ok(!hasPlaceholder(schema.$defs.executionProperties.properties.sandboxMode));
+    for (const [definition, names] of [
+      ["executionProperties", ["executionMode", "resumeSession", "priorContextDetail"]],
+      ["scriptProperties", ["compareSource", "timeoutSec", "operator", "ignoreCase"]],
+      ["scriptStep", ["onPass", "onFail"]],
+      ["errorBehavior", ["onError", "maxRetries", "retryDelaySec"]],
+      ["endCondition", ["maxRetries", "onPass", "onFail"]],
+      ["preCondition", ["onPass", "onFail"]],
+    ] as const) {
+      for (const name of names) assert.ok(hasPlaceholder(schema.$defs[definition].properties[name]), `${definition}.${name} lacks placeholder support`);
+    }
   });
 
   test("variables docs name every substituted policy field", () => {

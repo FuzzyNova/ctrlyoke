@@ -134,6 +134,26 @@ suite("CLI dry-run process", () => {
     );
   });
 
+  test("rejects an invalid substituted timeout before dry-run preview", async function () {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-dry-run-var-invalid-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "invalid.ctrlyoke.json");
+    await fs.writeFile(workflow, JSON.stringify({ vars: { timeout: "soon" }, steps: [{ type: "script", script: "echo hi", timeoutSec: "{{timeout}}" }] }), "utf8");
+    const result = await runCli(["run", workflow, "--dry-run", "--var", "timeout=soon", "--cwd", root], root);
+    assert.strictEqual(result.code, 2, result.stderr);
+    assert.match(result.stderr, /timeoutSec/);
+  });
+
+  test("warns on stderr for an unused --var without failing dry-run", async function () {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-dry-run-var-unused-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "unused.ctrlyoke.json");
+    await fs.writeFile(workflow, JSON.stringify({ steps: [{ type: "script", script: "echo hi" }] }), "utf8");
+    const result = await runCli(["run", workflow, "--dry-run", "--var", "spare=value", "--cwd", root], root);
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.match(result.stderr, /spare.*unused/);
+  });
+
   test("reports authored step limit violations in dry-run output and JSON", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(

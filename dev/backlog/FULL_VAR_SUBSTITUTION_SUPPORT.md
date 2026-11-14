@@ -39,6 +39,11 @@ Each step ticks its own item, notes any deviation under it, and commits.
       run-start `value` fields (`harness`, `enabled`, `maxSteps`).
 - [ ] 7. Dispatch `value` fields, errorBehavior fallback, CLI `--dry-run`
       exit 2 and unused-`--var` warning.
+      Partial: schema support, policy entries, dispatch coercion/validation,
+      dry-run exit 2 and unused-variable warning are implemented and verified.
+      Deviation: validation failures still take the executor's generic failed
+      step path; inherited errorBehavior fallback/retry routing and its runtime
+      test remain to be completed.
 - [ ] 8. Dashboard and editor: dropdown warnings, placeholder chips,
       CodeMirror/diagnostics from the policy table, Dry Run substituted values
       and blockers.

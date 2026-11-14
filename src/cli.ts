@@ -226,6 +226,7 @@ import {
   getWorkflowSecretGrants,
 } from "./utils/SecretResolver";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
+import { VarSubstitutor } from "./utils/VarSubstitutor";
 import { confirmYesNo } from "./cli/CliConfirm";
 import {
   trustExternalRootsCommand as reviewExternalRootsCommand,
@@ -1585,6 +1586,7 @@ async function runCommand(
       if (Object.keys(config.vars).length > 0) {
         const workflowFile = instance.promptQueue.getWorkflowFile();
         mergeCliVarsIntoWorkflow(workflowFile, config.vars);
+        warnUnusedCliVariables(workflowFile, config.vars);
         instance.promptQueue.updateWorkflowProperty("vars", workflowFile.vars);
         await instance.promptQueue.updateWorkingFile(true);
       }
@@ -1814,6 +1816,16 @@ function handleSecretCommand(
     });
 }
 
+function warnUnusedCliVariables(workflow: PromptFile, vars: Record<string, string>): void {
+  if (Object.keys(vars).length === 0) return;
+  const authored = JSON.stringify(workflow);
+  for (const name of Object.keys(vars)) {
+    if (!authored.includes(`{{${name}}}`)) {
+      console.error(`Warning: --var ${name}=... is unused; no workflow field references {{${name}}}.`);
+    }
+  }
+}
+
 function mergeCliVarsIntoWorkflow(
   workflow: PromptFile,
   vars: Record<string, string>
@@ -1983,6 +1995,9 @@ async function dryRunCommand(
     }
 
     mergeCliVarsIntoWorkflow(workflow, config.vars);
+    warnUnusedCliVariables(workflow, config.vars);
+    const runStartView = VarSubstitutor.substituteWorkflowView(workflow, workflow.vars ?? {}, "run-start");
+    Object.assign(workflow, runStartView);
     await exitUnlessTrustDecided(
       secretGrantsTrustRequest(workflow, workingDir, resolvedFile)
     );

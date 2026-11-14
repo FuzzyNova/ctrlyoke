@@ -49,9 +49,9 @@ attempt runs; worktree setup resolves when the worktree is prepared.
 | Phase     | Fields                                                                                                                                                                                                                                                                                                                                                       |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Run start | `worktree.branch`, `worktree.base`, `worktree.directory`, `harness`, `steps[].harness`, `steps[].enabled`, `maxSteps`, `defaults.worktree.branch`, `defaults.worktree.base`, `defaults.worktree.directory`                                                                                                                                                                                                                |
-| Dispatch  | `prompt.prompt`, `steps[].prompt`, `steps[].model`, `steps[].additionalArgs`, `steps[].name`, `steps[].expected`, `steps[].shell`, `steps[].agent`, `steps[].skills[]`, `steps[].sessionId`, `steps[].priorContext.workflow`, `steps[].priorContext.run`, `hooks[].command`, `hooks[].env.*`, `preCondition.script`, `preCondition.env.*`, `endCondition.script`, `endCondition.env.*`, `endCondition.retryPrompt`, `endCondition.passRetryPrompt`, `scriptStep.script`, `scriptStep.env.*`, `worktree.setup`, `defaults.worktree.setup` |
+| Dispatch  | `defaults.worktree.base`, `defaults.worktree.branch`, `defaults.worktree.directory`, `defaults.worktree.setup`, `endCondition.env.*`, `endCondition.passRetryPrompt`, `endCondition.retryPrompt`, `endCondition.script`, `harness`, `hooks[].command`, `hooks[].env.*`, `maxSteps`, `preCondition.env.*`, `preCondition.script`, `prompt.prompt`, `scriptStep.env.*`, `scriptStep.script`, `steps[].additionalArgs`, `steps[].agent`, `steps[].compareSource`, `steps[].enabled`, `steps[].endCondition.compareSource`, `steps[].endCondition.ignoreCase`, `steps[].endCondition.maxRetries`, `steps[].endCondition.onFail`, `steps[].endCondition.onPass`, `steps[].endCondition.operator`, `steps[].endCondition.timeoutSec`, `steps[].errorBehavior.maxRetries`, `steps[].errorBehavior.onError`, `steps[].errorBehavior.retryDelaySec`, `steps[].executionMode`, `steps[].expected`, `steps[].harness`, `steps[].ignoreCase`, `steps[].model`, `steps[].name`, `steps[].onFail`, `steps[].onPass`, `steps[].operator`, `steps[].preCondition.compareSource`, `steps[].preCondition.ignoreCase`, `steps[].preCondition.onFail`, `steps[].preCondition.onPass`, `steps[].preCondition.operator`, `steps[].preCondition.timeoutSec`, `steps[].priorContext.run`, `steps[].priorContext.workflow`, `steps[].priorContextDetail`, `steps[].prompt`, `steps[].resumeSession`, `steps[].sessionId`, `steps[].shell`, `steps[].skills[]`, `steps[].timeoutSec`, `worktree.base`, `worktree.branch`, `worktree.directory`, `worktree.setup` |
 
-A `value` field must contain one whole-value placeholder; ctrlyoke coerces its string to the field type and validates it against the workflow schema before run-start side effects. Dispatch text fields resolve for each attempt. `expected` is substituted only
+A `value` field must contain one whole-value placeholder; ctrlyoke coerces its string to the field type and validates it against the workflow schema before the run-start side effects or step dispatch. Invalid dispatch values fail before the step starts an external process. Dispatch text fields resolve for each attempt. `expected` is substituted only
 when authored as text; numeric values stay numeric. `sessionId` is substituted
 only in its string form; numeric step references stay numeric. `priorContext.run`
 must resolve to a run number or stable run reference. Unresolved placeholders
@@ -92,7 +92,8 @@ The corresponding CLI help and schema description use the same field list.
   so authors deliberately put variables inside them.
 
 The prompt editor highlights exactly the placeholders that will be substituted,
-so what you see there matches what runs.
+so what you see there matches what runs. The CLI warns on stderr when a `--var`
+name appears in no workflow field; this warning does not fail the run.
 
 ### Variables can't create secret references
 
@@ -155,3 +156,4 @@ through untouched and become variables of the generated workflow.
 - [`vars` in the workflow schema](/reference/workflow-schema#workflow-file-vars)
 - [Script steps](/workflows/script-steps): how scripts run and receive their environment.
 - [Secrets](/workflows/secrets): passing credentials without putting them in variables.
+

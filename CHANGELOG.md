@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dispatch `value` fields—including execution mode, timeouts, comparison rules, condition actions and error policies—accept whole-value variables and validate against their original schema before execution. `--dry-run` reports invalid substituted values with exit code 2, and unused `--var` values warn on stderr.
 - Run-start `harness`, step `enabled`, and `maxSteps` values can use whole-value workflow variables; substituted values are coerced and checked against their original schema rules before startup.
 - Dispatch text fields for step labels, expected values, shells, agents, skills, string session IDs and prior-context workflow/run selectors now accept workflow variables.
 - Named worktree `branch`, `base` and `directory` fields accept `{{var}}` values from workflow variables or `--var`; unresolved placeholders fail before Git changes.

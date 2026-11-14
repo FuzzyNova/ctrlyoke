@@ -73,7 +73,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "interactive",
           "headless"
         ],
-        "description": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default."
+        "description": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "agent": {
         "valueKind": "oneOf",
@@ -84,8 +84,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "resumeSession": {
-        "valueKind": "boolean",
-        "description": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "mcpServers": {
         "valueKind": "oneOf",
@@ -166,7 +170,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "summary"
         ],
         "default": "full",
-        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference."
+        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "additionalArgs": {
         "valueKind": "oneOf",
@@ -291,11 +295,15 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stderr",
           "exitCode"
         ],
-        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
+        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "timeoutSec": {
-        "valueKind": "number",
-        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
+        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "shell": {
         "valueKind": "string",
@@ -308,7 +316,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "continue",
-        "description": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately."
+        "description": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "onFail": {
         "valueKind": "string",
@@ -317,7 +325,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "stopWorkflow",
-        "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default)."
+        "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "operator": {
         "valueKind": "string",
@@ -334,7 +342,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "isEmpty",
           "isNotEmpty"
         ],
-        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors."
+        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "expected": {
         "valueKind": "oneOf",
@@ -345,8 +353,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
-        "valueKind": "boolean",
-        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "steps": {
         "valueKind": "array",
@@ -385,7 +397,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "interactive",
           "headless"
         ],
-        "description": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default."
+        "description": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "agent": {
         "valueKind": "oneOf",
@@ -396,8 +408,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "resumeSession": {
-        "valueKind": "boolean",
-        "description": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "mcpServers": {
         "valueKind": "oneOf",
@@ -478,7 +494,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "summary"
         ],
         "default": "full",
-        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference."
+        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "additionalArgs": {
         "valueKind": "oneOf",
@@ -586,7 +602,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "interactive",
           "headless"
         ],
-        "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow's executionMode, then the defaults.executionMode setting."
+        "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow's executionMode, then the defaults.executionMode setting. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "script": {
         "valueKind": "string",
@@ -603,11 +619,15 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stderr",
           "exitCode"
         ],
-        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
+        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "timeoutSec": {
-        "valueKind": "number",
-        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
+        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "shell": {
         "valueKind": "string",
@@ -636,7 +656,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "continue",
-        "description": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately."
+        "description": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "onFail": {
         "valueKind": "string",
@@ -645,7 +665,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "stopWorkflow",
-        "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default)."
+        "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "operator": {
         "valueKind": "string",
@@ -662,7 +682,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "isEmpty",
           "isNotEmpty"
         ],
-        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors."
+        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "expected": {
         "valueKind": "oneOf",
@@ -673,8 +693,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
-        "valueKind": "boolean",
-        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       }
     },
     "forbiddenKeys": [
@@ -715,11 +739,15 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stderr",
           "exitCode"
         ],
-        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
+        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "timeoutSec": {
-        "valueKind": "number",
-        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
+        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "shell": {
         "valueKind": "string",
@@ -740,7 +768,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "isEmpty",
           "isNotEmpty"
         ],
-        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors."
+        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "expected": {
         "valueKind": "oneOf",
@@ -751,15 +779,23 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
-        "valueKind": "boolean",
-        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "maxRetries": {
-        "valueKind": "number",
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
         "enum": [
           -1
         ],
-        "description": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed."
+        "description": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "retryPrompt": {
         "valueKind": "string",
@@ -781,7 +817,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "continue",
-        "description": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately."
+        "description": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "onFail": {
         "valueKind": "string",
@@ -791,7 +827,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "stopWorkflow",
-        "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry."
+        "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       }
     },
     "forbiddenKeys": [
@@ -815,11 +851,15 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stderr",
           "exitCode"
         ],
-        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
+        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "timeoutSec": {
-        "valueKind": "number",
-        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
+        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "shell": {
         "valueKind": "string",
@@ -840,7 +880,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "isEmpty",
           "isNotEmpty"
         ],
-        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors."
+        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "expected": {
         "valueKind": "oneOf",
@@ -851,8 +891,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
-        "valueKind": "boolean",
-        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "onPass": {
         "valueKind": "string",
@@ -862,7 +906,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "continue",
-        "description": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution."
+        "description": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "onFail": {
         "valueKind": "string",
@@ -872,7 +916,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stopWorkflow"
         ],
         "default": "skipPrompt",
-        "description": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution."
+        "description": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       }
     },
     "forbiddenKeys": [
@@ -913,15 +957,23 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "retryPhase",
           "continue"
         ],
-        "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count."
+        "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "maxRetries": {
-        "valueKind": "number",
-        "description": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
+        "description": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "retryDelaySec": {
-        "valueKind": "number",
-        "description": "Delay before retrying, in seconds."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
+        "description": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       }
     },
     "forbiddenKeys": []

@@ -119,6 +119,62 @@ export class VarSubstitutor {
         ].fencedCodeProtected
       );
     };
+    const dispatchValue = (value: unknown, schemaPointer: string, fieldPath: string): unknown => {
+      if (typeof value !== "string" || !/\{\{\w+\}\}/.test(value)) return value;
+      const matches = findVariablePlaceholders(value, false);
+      if (!/^\{\{\w+\}\}$/.test(value) || matches.length !== 1) {
+        throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`);
+      }
+      const name = matches[0]!.name;
+      if (!isVariableDefined(vars, name)) throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`);
+      const raw = vars[name]!;
+      let converted: unknown = raw;
+      if (raw === "true" || raw === "false") converted = raw === "true";
+      else if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(raw)) converted = Number(raw);
+      if (!PromptFileParser.validateSubstitutedValue(schemaPointer, converted)) {
+        throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", which fails the field's schema validation.`);
+      }
+      return converted;
+    };
+    const dispatchProperties = (object: Record<string, unknown>, prefix: string, path: string): void => {
+      const mappings: Array<[string, string, string]> = [
+        ["executionMode", "executionProperties/properties/executionMode", "executionMode"],
+        ["resumeSession", "executionProperties/properties/resumeSession", "resumeSession"],
+        ["priorContextDetail", "executionProperties/properties/priorContextDetail", "priorContextDetail"],
+        ["timeoutSec", "scriptProperties/properties/timeoutSec", "timeoutSec"],
+        ["compareSource", "scriptProperties/properties/compareSource", "compareSource"],
+        ["operator", "scriptProperties/properties/operator", "operator"],
+        ["ignoreCase", "scriptProperties/properties/ignoreCase", "ignoreCase"],
+        ["onPass", "scriptStep/properties/onPass", "onPass"],
+        ["onFail", "scriptStep/properties/onFail", "onFail"],
+      ];
+      for (const [key, pointer, name] of mappings) {
+        const policy = `${prefix}.${name}`;
+        if (!(policy in VAR_SUBSTITUTION_POLICY)) continue;
+        object[key] = dispatchValue(object[key], `/$defs/${pointer}`, `${path}.${name}`);
+      }
+      const behavior = object.errorBehavior;
+      if (behavior && typeof behavior === "object" && !Array.isArray(behavior)) {
+        const copy = { ...(behavior as Record<string, unknown>) };
+        for (const key of ["onError", "maxRetries", "retryDelaySec"] as const) {
+          const pointer = `/$defs/errorBehavior/properties/${key}`;
+          copy[key] = dispatchValue(copy[key], pointer, `${path}.errorBehavior.${key}`);
+        }
+        object.errorBehavior = copy;
+      }
+      for (const key of ["preCondition", "endCondition"] as const) {
+        const condition = object[key];
+        if (!condition || typeof condition !== "object" || Array.isArray(condition)) continue;
+        const copy = { ...(condition as Record<string, unknown>) };
+        dispatchProperties(copy, `steps[].${key}`, `${path}.${key}`);
+        for (const field of ["onPass", "onFail", ...(key === "endCondition" ? ["maxRetries"] : [])]) {
+          const pointer = key === "endCondition" && field === "maxRetries" ? "/$defs/endCondition/properties/maxRetries/oneOf/0" : `/$defs/${key}/properties/${field}`;
+          copy[field] = dispatchValue(copy[field], pointer, `${path}.${key}.${field}`);
+        }
+        object[key] = copy;
+      }
+    };
+
     const substituteStep = (
       step: WorkflowStep,
       index: number
@@ -140,15 +196,10 @@ export class VarSubstitutor {
             ]
           : []),
       ];
-      if (
-        Object.keys(vars).length === 0 &&
-        !supportedValues.some(
-          (value) => typeof value === "string" && /\{\{\w+\}\}/.test(value)
-        )
-      )
-        return step;
+      if (!supportedValues.some((value) => typeof value === "string" && /\{\{\w+\}\}/.test(value)) && Object.keys(vars).length === 0 && !JSON.stringify(step).includes("{{")) return step;
       const result = { ...step } as WorkflowStep & Record<string, unknown>;
       const path = `steps[${index}]`;
+      dispatchProperties(result, "steps[]", path);
       if (typeof result.name === "string")
         result.name = substituteField(
           result.name,
