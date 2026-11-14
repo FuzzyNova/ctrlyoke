@@ -2739,6 +2739,7 @@ export class WorkflowExecutor {
           : prompt;
 
       if (resolvedEndCondition) {
+        const responseAttemptIndex = attemptIndex;
         const evaluateEnd = () =>
           this.evaluateEndCondition(
             promptForEval,
@@ -2755,7 +2756,8 @@ export class WorkflowExecutor {
             endConditionErrorRetryCount,
             vars && Object.keys(vars).length > 0 ? vars : undefined,
             resolvedProperties.errorBehavior,
-            resolvedProperties.secrets
+            resolvedProperties.secrets,
+            responseAttemptIndex
           );
         let endDisposition = await evaluateEnd();
 
@@ -4084,7 +4086,7 @@ export class WorkflowExecutor {
     errorRetryCount: number,
     completeAttemptOnContinue: boolean = false,
     scriptOutputShown: boolean = true,
-    preserveCompletedAttemptForPhaseRetry: boolean = false
+    responseAttemptIndex?: number
   ): Promise<PhaseDisposition> {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -4112,12 +4114,10 @@ export class WorkflowExecutor {
     if (canRetry) {
       const nextAttemptIndex = attemptIndex + 1;
       const runtime = this.getRuntime();
-      if (
-        !(
-          preserveCompletedAttemptForPhaseRetry &&
-          isPhaseRetryPolicy(policy)
-        )
-      ) {
+      // An end-condition `retryPhase` re-runs only the script against the
+      // response already produced, so that AI attempt keeps its `completed`
+      // terminal unless the phase retries are exhausted (below).
+      if (!(responseAttemptIndex !== undefined && isPhaseRetryPolicy(policy))) {
         runtime.failAttempt(target, attemptIndex, reason);
         await this.recordAttemptTerminal(
           context,
@@ -4155,6 +4155,22 @@ export class WorkflowExecutor {
       `${phase}: ${reason}`,
       result.timeout ? FAILURE_KINDS.TIMEOUT : undefined
     );
+    // Condition attempts are invisible to the run projection, so the failure
+    // must also land on the AI attempt whose response the phase retries
+    // validated, as it does with `maxRetries: 0` or `onError: retry`.
+    if (
+      responseAttemptIndex !== undefined &&
+      responseAttemptIndex !== attemptIndex &&
+      isPhaseRetryPolicy(policy)
+    ) {
+      await this.recordAttemptTerminal(
+        context,
+        target,
+        responseAttemptIndex,
+        TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+        `${phase}: ${reason}`
+      );
+    }
     return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP, actionText };
   }
 
@@ -4320,7 +4336,8 @@ export class WorkflowExecutor {
     errorRetryCount: number,
     vars?: Record<string, string>,
     errorBehavior?: ErrorBehavior,
-    secretNames: readonly string[] = []
+    secretNames: readonly string[] = [],
+    responseAttemptIndex: number = attemptIndex
   ): Promise<PhaseDisposition> {
     Log.trace(
       `[WorkflowExecutor] Evaluating end condition for ${this.describeExecutionTarget(target)}...`
@@ -4470,7 +4487,7 @@ export class WorkflowExecutor {
         errorRetryCount,
         true,
         true,
-        true
+        responseAttemptIndex
       );
     }
 
@@ -4535,7 +4552,7 @@ export class WorkflowExecutor {
         errorRetryCount,
         true,
         true,
-        true
+        responseAttemptIndex
       );
     }
 

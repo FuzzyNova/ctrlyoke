@@ -1250,9 +1250,13 @@ suite("WorkflowExecutor condition shell reporting", () => {
       const queue = new PromptQueue();
       const integration = new MockHarnessIntegration(undefined, false);
       const terminals: string[] = [];
+      const responseTerminals: string[] = [];
       const manager = new Proxy(
         { recordAttemptTerminal: async (...args: unknown[]) => {
           terminals.push(args[4] as string);
+          if (args[3] === 0) {
+            responseTerminals.push(args[4] as string);
+          }
         } },
         { get: (target, property) => Reflect.get(target, property) ?? (async () => undefined) }
       );
@@ -1265,7 +1269,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
       context.historyFilePath = "history.json";
       context.outputHistoryManager = manager as any;
       await makeExecutor(queue, new RecordingShellEvaluator(new MockPlatform(), results)).execute(integration, context);
-      return { queue, integration, terminals };
+      return { queue, integration, terminals, responseTerminals };
     };
 
     const exhausted = await run("retryPhase", [
@@ -1274,6 +1278,13 @@ suite("WorkflowExecutor condition shell reporting", () => {
     ]);
     assert.strictEqual(exhausted.queue.getState().results[0].status, STEP_STATUS.FAILED);
     assert.ok(exhausted.terminals.includes(TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED));
+    // The run projection skips condition attempts, so the AI attempt that
+    // produced the response must carry the failure, as it does with
+    // `maxRetries: 0` or `onError: retry`.
+    assert.strictEqual(
+      exhausted.responseTerminals.at(-1),
+      TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED
+    );
 
     const retried = await run("retry", [
       makeEvaluationResult({ errored: true, error: "temporary failure" }),
