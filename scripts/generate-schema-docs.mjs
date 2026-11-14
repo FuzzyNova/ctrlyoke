@@ -69,6 +69,7 @@ const RUN_FILES_PAGE = "run-files";
  * fields are documented through the sections that reference them.
  */
 const STRUCTURAL_WORKFLOW_DEFINITIONS = new Set([
+  "varPlaceholder",
   "agent",
   "errorBehaviorDefault",
   "endConditionDefault",

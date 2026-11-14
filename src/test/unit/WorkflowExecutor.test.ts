@@ -4701,9 +4701,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       steps: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
       finalStep: {
         prompt: "final-gate",
-        harness: HARNESS_IDS.CODEX_CLI,
+        harness: "{{harness}}" as any,
         model: "gpt-5.4-mini",
       },
+      vars: { harness: HARNESS_IDS.CODEX_CLI },
     });
 
     await executor.execute(integration, makeContext(integration));

@@ -366,6 +366,11 @@ export class WorkflowStartupPipeline {
         ConfigurationUtils.getDefaultWorktree(),
         authoredWorkflow.vars ?? {}
       );
+      runStart.workflow = VarSubstitutor.substituteWorkflowView(
+        runStart.workflow,
+        authoredWorkflow.vars ?? {},
+        "run-start"
+      );
       await this.preflightSecrets();
       await this.resolveWorktree(
         continueFromCurrent ||
@@ -377,7 +382,7 @@ export class WorkflowStartupPipeline {
       if (!(await this.preflightCompatibility(runStart.workflow))) {
         return;
       }
-      if (!(await this.ensureHarnessReadiness(modeOverride, fileName))) {
+      if (!(await this.ensureHarnessReadiness(modeOverride, fileName, runStart.workflow))) {
         return;
       }
 
@@ -677,7 +682,7 @@ export class WorkflowStartupPipeline {
     this.compatibilityDiagnostics =
       await this.port.analyzeWorkflowCompatibility({
         ...workflow,
-        steps: this.port.queue.getState().steps,
+        steps: workflow.steps ?? this.port.queue.getState().steps,
       });
     const compatibilityErrors = this.compatibilityDiagnostics.filter(
       (diagnostic) =>
@@ -701,12 +706,13 @@ export class WorkflowStartupPipeline {
 
   async ensureHarnessReadiness(
     modeOverride: HarnessId | undefined,
-    fileName: string
+    fileName: string,
+    workflow = this.port.execution.currentPromptFile()?.promptFile
   ): Promise<boolean> {
     const currentPromptFile = this.port.execution.currentPromptFile();
     const preflightHarness = SettingsPropertyResolver.resolveHarnessValue(
       modeOverride,
-      currentPromptFile?.promptFile?.harness
+      workflow?.harness ?? currentPromptFile?.promptFile?.harness
     );
     const detectedIntegration =
       this.port.getDetectorIntegration(preflightHarness);

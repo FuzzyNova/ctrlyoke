@@ -2241,9 +2241,15 @@ export class WorkflowExecutor {
     preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
     const workflowView = this.promptQueue.getWorkflowFile();
+    const variables = { ...(preflightMember?.variables ?? workflowView.vars ?? {}) };
+    const runStartStep = VarSubstitutor.substituteWorkflowView(
+      { steps: [step] } as PromptFile,
+      variables,
+      "run-start"
+    ).steps?.[0] ?? step;
     step = VarSubstitutor.substituteWorkflowView(
-      step,
-      { ...(preflightMember?.variables ?? workflowView.vars ?? {}) },
+      runStartStep,
+      variables,
       "dispatch",
       target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1
     );
@@ -2301,7 +2307,16 @@ export class WorkflowExecutor {
       context.registerActiveTarget?.(target, attemptIndex);
 
       // Evaluate pre-condition gate before running the AI prompt.
-      const workflowFileForPre = this.promptQueue.getWorkflowFile();
+      const authoredWorkflowForPre = this.promptQueue.getWorkflowFile();
+      const resolvedRootProperties = VarSubstitutor.substituteWorkflowView(
+        { harness: authoredWorkflowForPre.harness } as PromptFile,
+        { ...(preflightMember?.variables ?? workflowView.vars ?? {}) },
+        "run-start"
+      );
+      const workflowFileForPre = {
+        ...authoredWorkflowForPre,
+        harness: resolvedRootProperties.harness,
+      };
       let preResolvedProperties =
         preflightMember?.resolvedProperties ??
         SettingsPropertyResolver.resolve(prompt, workflowFileForPre, {

@@ -87,9 +87,14 @@ A step that always runs after all queued prompts complete. Can be an AI prompt o
 
 ### `maxSteps` {#workflow-file-maxsteps}
 
-- **Type:** `-1` or `integer`
+- **Type:** `-1` or `integer` or `string`
 
-Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.
+Maximum number of entries in the run steps array. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated at run start.
+
+Accepted forms:
+
+- `-1` or `integer` — Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
 
 ### `worktree` {#workflow-file-worktree}
 
@@ -133,10 +138,16 @@ Shared execution configuration properties used across workflow-level defaults, p
 
 ### `harness` {#execution-properties-harness}
 
-- **Type:** [Harness IDs](#harness-ids) or [Template placeholder](#template-placeholder)
+- **Type:** [Harness IDs](#harness-ids) or [Template placeholder](#template-placeholder) or `string`
 - **Settings default:** [`defaults.harness`](/reference/settings#defaults-harness)
 
 Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.
+
+Accepted forms:
+
+- [Harness IDs](#harness-ids)
+- [Template placeholder](#template-placeholder)
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
 
 ### `model` {#execution-properties-model}
 
@@ -341,9 +352,14 @@ Optional human-readable display label shown in the ctrlyoke dashboard. If omitte
 
 ### `enabled` {#prompt-step-enabled}
 
-- **Type:** `boolean`
+- **Type:** `boolean` or `string`
 
-Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
+
+Accepted forms:
+
+- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
 
 ### `color` {#prompt-step-color}
 
@@ -385,9 +401,14 @@ Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboar
 
 ### `enabled` {#script-step-enabled}
 
-- **Type:** `boolean`
+- **Type:** `boolean` or `string`
 
-Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
+
+Accepted forms:
+
+- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
 
 ### `color` {#script-step-color}
 
@@ -977,7 +998,7 @@ Optional setup command run in the named worktree at the start of every run, such
 
 ## Variables {#vars}
 
-Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted fields (all at dispatch unless noted): worktree.branch, worktree.base, worktree.directory, defaults.worktree.branch, defaults.worktree.base, defaults.worktree.directory (run start); prompt.prompt, steps[].prompt, steps[].model, steps[].additionalArgs, steps[].name, steps[].expected, steps[].shell, steps[].agent, steps[].skills[], steps[].sessionId, steps[].priorContext.workflow, steps[].priorContext.run, hooks[].command, hooks[].env.\*, preCondition.script, preCondition.env.\*, endCondition.script, endCondition.env.\*, endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.\*, worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode because reviewed permission posture must match; mcpServers because entries launch programs and carry authored secret grants; conditions and condition params because preset definitions and parameter names are author-only contracts; vars because variables are not recursively expanded. Structural fields and identity (including type, parallel, failFast, worktree mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are not substituted. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
+Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted fields (all at dispatch unless noted): worktree.branch, worktree.base, worktree.directory, harness, steps[].harness, steps[].enabled, maxSteps, defaults.worktree.branch, defaults.worktree.base, defaults.worktree.directory (run start); prompt.prompt, steps[].prompt, steps[].model, steps[].additionalArgs, steps[].name, steps[].expected, steps[].shell, steps[].agent, steps[].skills[], steps[].sessionId, steps[].priorContext.workflow, steps[].priorContext.run, hooks[].command, hooks[].env.\*, preCondition.script, preCondition.env.\*, endCondition.script, endCondition.env.\*, endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.\*, worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode because reviewed permission posture must match; mcpServers because entries launch programs and carry authored secret grants; conditions and condition params because preset definitions and parameter names are author-only contracts; vars because variables are not recursively expanded. Structural fields and identity (including type, parallel, failFast, worktree mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are not substituted. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
 
 - **Type:** map of `string`
 

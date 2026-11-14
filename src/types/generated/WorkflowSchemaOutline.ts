@@ -221,8 +221,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
       },
       "enabled": {
-        "valueKind": "boolean",
-        "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
       },
       "color": {
         "valueKind": "string",
@@ -233,11 +237,15 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
       },
       "maxSteps": {
-        "valueKind": "number",
+        "valueKind": "oneOf",
+        "alternatives": [
+          "number",
+          "string"
+        ],
         "enum": [
           -1
         ],
-        "description": "Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited."
+        "description": "Maximum number of entries in the run steps array. A whole-value {{name}} placeholder is coerced and validated at run start."
       },
       "worktree": {
         "valueKind": "oneOf",
@@ -524,8 +532,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
       },
       "enabled": {
-        "valueKind": "boolean",
-        "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
       },
       "color": {
         "valueKind": "string",
@@ -557,8 +569,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "enabled": {
-        "valueKind": "boolean",
-        "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
       },
       "color": {
         "valueKind": "string",

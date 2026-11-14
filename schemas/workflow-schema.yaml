@@ -24,7 +24,9 @@ allOf:
     then:
       properties:
         harness:
-          $ref: '#/$defs/harnessId'
+          oneOf:
+            - $ref: '#/$defs/harnessId'
+            - $ref: '#/$defs/varPlaceholder'
           title: Harness
         steps:
           type: array
@@ -32,7 +34,9 @@ allOf:
             type: object
             properties:
               harness:
-                $ref: '#/$defs/harnessId'
+                oneOf:
+                  - $ref: '#/$defs/harnessId'
+                  - $ref: '#/$defs/varPlaceholder'
                 title: Harness
               _runtime:
                 type: object
@@ -62,7 +66,9 @@ allOf:
           type: object
           properties:
             harness:
-              $ref: '#/$defs/harnessId'
+              oneOf:
+                - $ref: '#/$defs/harnessId'
+                - $ref: '#/$defs/varPlaceholder'
               title: Harness
             _runtime:
               type: object
@@ -424,23 +430,24 @@ $defs:
     description: >-
       Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags
       override these at runtime. Substituted fields (all at dispatch unless noted): worktree.branch,
-      worktree.base, worktree.directory, defaults.worktree.branch, defaults.worktree.base,
-      defaults.worktree.directory (run start); prompt.prompt, steps[].prompt, steps[].model,
-      steps[].additionalArgs, steps[].name, steps[].expected, steps[].shell, steps[].agent,
-      steps[].skills[], steps[].sessionId, steps[].priorContext.workflow, steps[].priorContext.run,
-      hooks[].command, hooks[].env.*, preCondition.script, preCondition.env.*, endCondition.script,
-      endCondition.env.*, endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script,
-      scriptStep.env.*, worktree.setup, and defaults.worktree.setup. Not substituted:
-      trustedExternalRoots and secrets because approval is keyed to authored values;
-      toolPermissions, sandbox, and sandboxMode because reviewed permission posture must match;
-      mcpServers because entries launch programs and carry authored secret grants; conditions and
-      condition params because preset definitions and parameter names are author-only contracts;
-      vars because variables are not recursively expanded. Structural fields and identity (including
-      type, parallel, failFast, worktree mode/merge/keep, names, map keys, color, schema metadata,
-      runtime and bookkeeping fields) are not substituted. Every script and condition process also
-      receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}}
-      usage. A value containing `${secret:` causes the step to fail before execution so vars cannot
-      manufacture managed-secret references.
+      worktree.base, worktree.directory, harness, steps[].harness, steps[].enabled, maxSteps,
+      defaults.worktree.branch, defaults.worktree.base, defaults.worktree.directory (run start);
+      prompt.prompt, steps[].prompt, steps[].model, steps[].additionalArgs, steps[].name,
+      steps[].expected, steps[].shell, steps[].agent, steps[].skills[], steps[].sessionId,
+      steps[].priorContext.workflow, steps[].priorContext.run, hooks[].command, hooks[].env.*,
+      preCondition.script, preCondition.env.*, endCondition.script, endCondition.env.*,
+      endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.*,
+      worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets
+      because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode
+      because reviewed permission posture must match; mcpServers because entries launch programs and
+      carry authored secret grants; conditions and condition params because preset definitions and
+      parameter names are author-only contracts; vars because variables are not recursively
+      expanded. Structural fields and identity (including type, parallel, failFast, worktree
+      mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are
+      not substituted. Every script and condition process also receives each var as a
+      CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage. A value containing
+      `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret
+      references.
     additionalProperties:
       type: string
     propertyNames:
@@ -450,11 +457,16 @@ $defs:
     description: Properties authored only at the workflow root.
     properties:
       maxSteps:
-        $ref: '#/$defs/maxStepsValue'
+        oneOf:
+          - $ref: '#/$defs/maxStepsValue'
+            description: >-
+              Maximum number of entries in the run's `steps` array, regardless of who queued them,
+              including parallel members and disabled steps. `finalStep` iterations and retries are
+              not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
-          Maximum number of entries in the run's `steps` array, regardless of who queued them,
-          including parallel members and disabled steps. `finalStep` iterations and retries are not
-          counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.
+          Maximum number of entries in the run steps array. A whole-value {{name}} placeholder is
+          coerced and validated at run start.
         title: Max Steps
       worktree:
         description: >-
@@ -698,6 +710,7 @@ $defs:
         oneOf:
           - $ref: '#/$defs/harnessId'
           - $ref: '#/$defs/templatePlaceholder'
+          - $ref: '#/$defs/varPlaceholder'
         title: Harness
       model:
         type: string
@@ -1088,10 +1101,15 @@ $defs:
             maxLength: 100
             title: Name
           enabled:
-            type: boolean
+            oneOf:
+              - type: boolean
+                description: >-
+                  Whether this step executes. When omitted, the step is enabled. Set to false to
+                  keep the step in the workflow but skip execution.
+              - $ref: '#/$defs/varPlaceholder'
             description: >-
-              Whether this step executes. When omitted, the step is enabled. Set to false to keep
-              the step in the workflow but skip execution.
+              Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean
+              and validated at run start.
             title: Enabled
           color:
             type: string
@@ -1146,10 +1164,15 @@ $defs:
         maxLength: 100
         title: Name
       enabled:
-        type: boolean
+        oneOf:
+          - type: boolean
+            description: >-
+              Whether this step executes. When omitted, the step is enabled. Set to false to keep
+              the step in the workflow but skip execution.
+          - $ref: '#/$defs/varPlaceholder'
         description: >-
-          Whether this step executes. When omitted, the step is enabled. Set to false to keep the
-          step in the workflow but skip execution.
+          Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and
+          validated at run start.
         title: Enabled
       color:
         type: string
@@ -2559,3 +2582,9 @@ $defs:
     oneOf:
       - $ref: '#/$defs/errorBehavior'
       - type: 'null'
+  varPlaceholder:
+    type: string
+    pattern: ^\{\{\w+\}\}$
+    description: >-
+      A whole-value workflow variable placeholder. See
+      https://ctrlyoke.dev/workflows/variables#where-substituted.

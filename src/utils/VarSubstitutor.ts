@@ -16,6 +16,7 @@ import {
   isVariableDefined,
 } from "./VariablePlaceholders";
 import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
+import { PromptFileParser } from "../core/PromptFileParser";
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.
@@ -50,7 +51,52 @@ export class VarSubstitutor {
     phase: "dispatch" | "run-start",
     stepIndex = 0
   ): T {
-    if (phase !== "dispatch") return view;
+    if (phase === "run-start") {
+      const resolve = (value: unknown, policyPath: string, fieldPath: string): unknown => {
+        if (typeof value !== "string") return value;
+        const placeholders = findVariablePlaceholders(value).filter((p) => !p.inFence);
+        if (!/^\{\{\w+\}\}$/.test(value) || placeholders.length !== 1) {
+          if (/\{\{\w+\}\}/.test(value)) throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`);
+          return value;
+        }
+        const name = placeholders[0]!.name;
+        if (!isVariableDefined(vars, name)) throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`);
+        const raw = vars[name]!;
+        let valueToCheck: unknown = raw;
+        if (raw === String(true) || raw === String(false)) valueToCheck = raw === String(true);
+        else if (/^-?\d+$/.test(raw)) valueToCheck = Number(raw);
+        const pointerByPath: Record<string, string> = {
+          harness: "/$defs/harnessId",
+          "steps[].harness": "/$defs/harnessId",
+          "steps[].enabled": "/$defs/promptStep/allOf/1/properties/enabled/oneOf/0",
+          maxSteps: "/$defs/maxStepsValue",
+        };
+        if (!PromptFileParser.validateSubstitutedValue(pointerByPath[policyPath]!, valueToCheck)) {
+          const expected = policyPath.includes("harness") ? "a supported harness" : policyPath.includes("enabled") ? "a boolean" : "a number greater than 0 or -1";
+          throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", expected ${expected}.`);
+        }
+        return valueToCheck;
+      };
+      const workflow = view as PromptFile;
+        const cloneStep = (step: WorkflowStep, index: number): WorkflowStep => {
+          const fields = step as WorkflowStep & Record<string, unknown>;
+          if (
+            !(typeof fields.harness === "string" && /\{\{\w+\}\}/.test(fields.harness)) &&
+            !(typeof fields.enabled === "string" && /\{\{\w+\}\}/.test(fields.enabled))
+          ) return step;
+          const result = { ...step } as WorkflowStep & Record<string, unknown>;
+          if (typeof result.harness === "string") result.harness = resolve(result.harness, "steps[].harness", `steps[${index}].harness`) as PromptFile["harness"];
+          if (typeof result.enabled === "string") result.enabled = resolve(result.enabled, "steps[].enabled", `steps[${index}].enabled`) as boolean;
+          return result;
+        };
+        const result = { ...workflow, steps: workflow.steps?.map(cloneStep), finalStep: workflow.finalStep ? cloneStep(workflow.finalStep, -1) : workflow.finalStep } as PromptFile & Record<string, unknown>;
+        if (typeof result.harness === "string") result.harness = resolve(result.harness, "harness", "harness") as PromptFile["harness"];
+        if (typeof result.maxSteps === "string") result.maxSteps = resolve(result.maxSteps, "maxSteps", "maxSteps") as number;
+        if (typeof (result as Record<string, unknown>).enabled === "string") {
+          (result as Record<string, unknown>).enabled = resolve((result as Record<string, unknown>).enabled, "steps[].enabled", "enabled");
+        }
+      return result as unknown as T;
+    }
     const substituteField = (
       value: unknown,
       policyPath: string,

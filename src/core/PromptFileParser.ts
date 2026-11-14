@@ -88,11 +88,13 @@ type ParallelValidationProperties = Pick<
 
 interface CompiledWorkflowSchema {
   schema: unknown;
+  ajv: Ajv;
   strictValidator: ValidateFunction;
   relaxedValidator: ValidateFunction;
 }
 
 const compiledWorkflowSchemas = new Map<string, CompiledWorkflowSchema>();
+let activeCompiledWorkflowSchema: CompiledWorkflowSchema | undefined;
 
 export interface WorkflowTextValidationIssue {
   instancePath: string;
@@ -197,6 +199,7 @@ export class PromptFileParser {
         addFormats(ajv);
         compiled = {
           schema,
+          ajv,
           strictValidator: ajv.compile(schema),
           relaxedValidator: ajv.compile(
             PromptFileParser.createRelaxedSchema(schema)
@@ -207,6 +210,7 @@ export class PromptFileParser {
       }
 
       this.promptSchema = compiled.schema;
+      activeCompiledWorkflowSchema = compiled;
       this.strictValidator = compiled.strictValidator;
       this.relaxedValidator = compiled.relaxedValidator;
     } catch (error) {
@@ -218,6 +222,15 @@ export class PromptFileParser {
         error
       );
     }
+  }
+
+  /** Validate a substituted value against the authored field's original schema. */
+  static validateSubstitutedValue(pointer: string, value: unknown): boolean {
+    if (!activeCompiledWorkflowSchema) new PromptFileParser();
+    const compiled = activeCompiledWorkflowSchema;
+    if (!compiled) return false;
+    const validator = compiled.ajv.compile({ $ref: `${(compiled.schema as { $id: string }).$id}#${pointer}` });
+    return validator(value) as boolean;
   }
 
   /**

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Run-start `harness`, step `enabled`, and `maxSteps` values can use whole-value workflow variables; substituted values are coerced and checked against their original schema rules before startup.
 - Dispatch text fields for step labels, expected values, shells, agents, skills, string session IDs and prior-context workflow/run selectors now accept workflow variables.
 - Named worktree `branch`, `base` and `directory` fields accept `{{var}}` values from workflow variables or `--var`; unresolved placeholders fail before Git changes.
 - `errorBehavior.onError: retryPhase` (**Retry Failed Phase** in the dashboard) retries only the phase of a step that hit an internal error. An end condition that couldn't run is run again on its own, without another AI call, and a prompt whose harness failed is sent again without re-running the pre-condition. `onError: retry` still re-runs the whole step.

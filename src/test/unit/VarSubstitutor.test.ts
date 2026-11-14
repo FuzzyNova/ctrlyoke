@@ -2,8 +2,31 @@ import * as assert from "assert";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
+import { PromptFileParser } from "../../core/PromptFileParser";
 
 suite("VarSubstitutor Tests", () => {
+  test("coerces and validates whole run-start value placeholders", () => {
+    new PromptFileParser();
+    assert.strictEqual(PromptFileParser.validateSubstitutedValue("/$defs/harnessId", "codex-cli"), true);
+    const source = { harness: "{{h}}", maxSteps: "{{n}}", vars: { h: "claude-cli", n: "30" }, steps: [{ prompt: "x", enabled: "{{e}}" }] } as any;
+    const result = VarSubstitutor.substituteWorkflowView(source, { h: "claude-cli", n: "30", e: "false" }, "run-start");
+    assert.strictEqual(result.harness, "claude-cli");
+    assert.strictEqual(result.maxSteps, 30);
+    assert.strictEqual((result.steps![0] as any).enabled, false);
+    const stepHarness = VarSubstitutor.substituteWorkflowView({ steps: [{ prompt: "x", harness: "{{h}}" }] } as any, { h: "codex-cli" }, "run-start");
+    assert.strictEqual((stepHarness.steps![0] as any).harness, "codex-cli");
+    const finalHarness = VarSubstitutor.substituteWorkflowView({ finalStep: { prompt: "x", harness: "{{h}}" }, vars: { h: "codex-cli" } } as any, { h: "codex-cli" }, "run-start");
+    assert.strictEqual((finalHarness.finalStep as any).harness, "codex-cli");
+    const full = VarSubstitutor.substituteWorkflowView({ steps: [{ prompt: "q" }], finalStep: { prompt: "x", harness: "{{h}}" }, vars: { h: "codex-cli" } } as any, { h: "codex-cli" }, "run-start");
+    assert.strictEqual((full.finalStep as any).harness, "codex-cli");
+    assert.notStrictEqual(result, source);
+  });
+
+  test("rejects invalid typed values and partial value placeholders", () => {
+    new PromptFileParser();
+    assert.throws(() => VarSubstitutor.substituteWorkflowView({ maxSteps: "{{n}}" } as any, { n: "soon" }, "run-start"), /maxSteps.*soon.*number greater than 0/);
+    assert.throws(() => VarSubstitutor.substituteWorkflowView({ maxSteps: "prefix {{n}}" } as any, { n: "30" }, "run-start"), /whole-value placeholder/);
+  });
   test("substitutes run-start worktree values on a copy and rejects unresolved values", () => {
     const workflow = {
       worktree: {

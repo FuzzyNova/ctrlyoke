@@ -105,6 +105,32 @@ suite("VarSubstitutionPolicy documentation", () => {
     }
   });
 
+  test("value policy entries match run-start schema placeholder fields", () => {
+    const schema = JSON.parse(
+      fs.readFileSync(repoPath("schemas", "workflow-schema.json"), "utf8")
+    ) as any;
+    const valueFields = Object.entries(VAR_SUBSTITUTION_POLICY)
+      .filter(([, entry]) => entry.kind === VAR_SUBSTITUTION_KINDS.VALUE)
+      .map(([field]) => field)
+      .sort();
+    assert.deepStrictEqual(valueFields, [
+      "harness",
+      "maxSteps",
+      "steps[].enabled",
+      "steps[].harness",
+    ]);
+    const hasPlaceholder = (field: unknown): boolean => {
+      const oneOf = (field as { oneOf?: unknown } | undefined)?.oneOf;
+      return Array.isArray(oneOf) &&
+        oneOf.some((choice: { $ref?: string }) => choice.$ref === "#/$defs/varPlaceholder");
+    };
+    assert.ok(hasPlaceholder(schema.$defs.executionProperties.properties.harness));
+    assert.ok(hasPlaceholder(schema.$defs.workflowOnlyProperties.properties.maxSteps));
+    assert.ok(hasPlaceholder(schema.$defs.promptStep.allOf[1].properties.enabled));
+    assert.ok(hasPlaceholder(schema.$defs.scriptStep.properties.enabled));
+    assert.ok(!hasPlaceholder(schema.$defs.executionProperties.properties.sandboxMode));
+  });
+
   test("variables docs name every substituted policy field", () => {
     const docs = fs.readFileSync(
       repoPath("docs", "workflows", "variables.md"),

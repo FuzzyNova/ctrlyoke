@@ -35,7 +35,7 @@ Each step ticks its own item, notes any deviation under it, and commits.
       `skills[]`, `sessionId`, `priorContext.*`).
       Note: dispatch views are copied before execution and preflight; error
       policy routing and execution-layer validation coverage remain incomplete.
-- [ ] 6. Schema `varPlaceholder`, coercion and post-substitution validation;
+- [x] 6. Schema `varPlaceholder`, coercion and post-substitution validation;
       run-start `value` fields (`harness`, `enabled`, `maxSteps`).
 - [ ] 7. Dispatch `value` fields, errorBehavior fallback, CLI `--dry-run`
       exit 2 and unused-`--var` warning.

@@ -53,6 +53,10 @@ export const VAR_SUBSTITUTION_POLICY = {
     fencedCodeProtected: false,
     unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
   },
+  harness: { phase: VAR_SUBSTITUTION_PHASES.RUN_START, kind: VAR_SUBSTITUTION_KINDS.VALUE, fencedCodeProtected: false, unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR },
+  "steps[].harness": { phase: VAR_SUBSTITUTION_PHASES.RUN_START, kind: VAR_SUBSTITUTION_KINDS.VALUE, fencedCodeProtected: false, unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR },
+  "steps[].enabled": { phase: VAR_SUBSTITUTION_PHASES.RUN_START, kind: VAR_SUBSTITUTION_KINDS.VALUE, fencedCodeProtected: false, unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR },
+  maxSteps: { phase: VAR_SUBSTITUTION_PHASES.RUN_START, kind: VAR_SUBSTITUTION_KINDS.VALUE, fencedCodeProtected: false, unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR },
   "prompt.prompt": {
     phase: VAR_SUBSTITUTION_PHASES.DISPATCH,
     kind: VAR_SUBSTITUTION_KINDS.TEXT,

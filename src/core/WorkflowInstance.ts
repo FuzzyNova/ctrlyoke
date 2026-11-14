@@ -2618,6 +2618,17 @@ export class WorkflowInstance
     targetRunIndices: Map<string, number> | undefined
   ): Promise<void> {
     try {
+      const authoredWorkflow = this.promptQueue.getWorkflowFile();
+      const runStart = VarSubstitutor.applyToRunStartWorktree(
+        authoredWorkflow,
+        ConfigurationUtils.getDefaultWorktree(),
+        authoredWorkflow.vars ?? {}
+      );
+      const resolvedRunStartWorkflow = VarSubstitutor.substituteWorkflowView(
+        runStart.workflow,
+        authoredWorkflow.vars ?? {},
+        "run-start"
+      );
       await this.ensureRunnerLock(workingFilePath);
       const state = this.promptQueue.getState();
       const lockWorkspaceRoot = this.getStateRoot();
@@ -2625,20 +2636,12 @@ export class WorkflowInstance
         this.runnerLockCoordinator.ownsLock() &&
         state.workflowKey &&
         lockWorkspaceRoot
-      ) {
-        this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
-      }
-      const authoredWorkflow = this.promptQueue.getWorkflowFile();
-      const runStart = VarSubstitutor.applyToRunStartWorktree(
-        authoredWorkflow,
-        ConfigurationUtils.getDefaultWorktree(),
-        authoredWorkflow.vars ?? {}
-      );
+      ) this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
       const recorded = (authoredWorkflow as WorkingFile)._runtime?.worktree;
       const continueWorkflow =
         recorded?.mode === WORKTREE_MODES.NAMED
           ? {
-              ...runStart.workflow,
+              ...resolvedRunStartWorkflow,
               worktree: {
                 mode: WORKTREE_MODES.NAMED,
                 branch: recorded.branchName,
@@ -2647,7 +2650,7 @@ export class WorkflowInstance
                   : {}),
               },
             }
-          : runStart.workflow;
+          : resolvedRunStartWorkflow;
       this.worktreeResolution = await resolveWorktreeForStart(
         continueWorkflow.worktree,
         runStart.defaultWorktree,
