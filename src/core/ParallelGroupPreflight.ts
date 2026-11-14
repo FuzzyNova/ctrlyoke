@@ -28,6 +28,7 @@ import {
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import { RunStartView } from "../utils/RunStartView";
 import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
 import {
   PASSTHROUGH_PROMPT_FILE_RESOLVER,
@@ -77,6 +78,11 @@ export interface ParallelGroupPreflightResult {
 
 export interface ParallelGroupPreflightOptions {
   readonly workflow: PromptFile;
+  /**
+   * The run's run-start resolution. Omitted outside a run (a preview), where
+   * one is resolved from `workflow`.
+   */
+  readonly runStartView?: RunStartView;
   readonly group: ParallelGroupDefinition;
   readonly defaults: ExecutionPropertyDefaults;
   readonly hostCanProvidePty: boolean;
@@ -168,20 +174,22 @@ export async function preflightParallelGroupMember(
     hostCanProvidePty,
     supportsConcurrentInteractiveSessions,
   } = options;
-  const variables = Object.freeze({ ...(workflow.vars ?? {}) });
+  const runStartView = options.runStartView ?? RunStartView.resolve(workflow);
+  const variables = runStartView.vars;
   const issues: ParallelGroupPreflightIssue[] = [];
 
   const step = VarSubstitutor.substituteStepView(
-    options.step,
-    { ...variables },
+    runStartView.resolveStep(options.step, options.stepIndex),
+    variables,
     "dispatch",
     options.stepIndex
   );
   const prompt = promptProjection(step);
-  const resolvedTarget = resolveExecutionProperties(prompt, workflow, {
-    defaults: options.defaults,
-    hostCanProvidePty,
-  });
+  const resolvedTarget = resolveExecutionProperties(
+    prompt,
+    runStartView.applyToWorkflow(workflow),
+    { defaults: options.defaults, hostCanProvidePty }
+  );
   let resolvedProperties = VarSubstitutor.applyToResolvedProperties(
     resolvedTarget.properties,
     variables
@@ -367,6 +375,9 @@ export async function preflightParallelGroupMember(
 export async function preflightParallelGroup(
   options: ParallelGroupPreflightOptions
 ): Promise<ParallelGroupPreflightResult> {
+  // One view for every member, so each member sees the same run-start values.
+  const runStartView =
+    options.runStartView ?? RunStartView.resolve(options.workflow);
   const effectiveWidth = getEffectiveParallelGroupWidth(
     options.configuredWidth,
     options.fanOutEnabled
@@ -378,7 +389,10 @@ export async function preflightParallelGroup(
     stepIndex <= options.group.endIndex;
     stepIndex += 1
   ) {
-    const step = options.workflow.steps?.[stepIndex];
+    const authoredStep = options.workflow.steps?.[stepIndex];
+    const step = authoredStep
+      ? runStartView.resolveStep(authoredStep, stepIndex)
+      : undefined;
     if (
       !step ||
       step.enabled === false ||
@@ -389,6 +403,7 @@ export async function preflightParallelGroup(
     }
     const memberResult = await preflightParallelGroupMember({
       ...options,
+      runStartView,
       step,
       stepIndex,
       reservedMembers: members,

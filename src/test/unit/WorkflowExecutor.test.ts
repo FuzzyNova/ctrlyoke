@@ -29,6 +29,7 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   CLI_EVENT_TYPES,
+  EXECUTION_MODES,
   HARNESS_IDS,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_STATES,
@@ -76,6 +77,14 @@ import {
 } from "../../utils/WorkspaceSnapshotService";
 import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
+import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
+import { RunStartView } from "../../utils/RunStartView";
+import { VarSubstitutionValidationError } from "../../utils/VarSubstitutor";
+import {
+  VAR_SUBSTITUTION_KINDS,
+  VAR_SUBSTITUTION_POLICY,
+  VAR_SUBSTITUTION_VIEWS,
+} from "../../utils/VarSubstitutionPolicy";
 
 interface Deferred {
   readonly promise: Promise<void>;
@@ -6086,5 +6095,318 @@ suite("WorkflowExecutor workspace snapshot capture", () => {
     await execution;
 
     assert.strictEqual(snapshotService.receivedSignal?.aborted, true);
+  });
+});
+
+suite("WorkflowExecutor variable substitution of inherited fields", () => {
+  const PASSING_EVALUATION = {
+    passed: true,
+    actual: "0",
+    errored: false,
+    stdout: "0",
+    stderr: "",
+    result: "0",
+    duration: 1,
+  } as const;
+
+  /** Run `workflow` and return the properties each prompt dispatched with. */
+  async function runCapturingProperties(
+    workflow: Parameters<PromptQueue["loadPrompts"]>[0],
+    overlay?: Parameters<typeof configService.setCliOverlay>[0]
+  ): Promise<{ queue: PromptQueue; dispatched: ResolvedProperties[] }> {
+    const queue = new PromptQueue();
+    queue.loadPrompts(workflow);
+    const integration = new MockHarnessIntegration(undefined, false);
+    const context = makeContext(integration);
+    const dispatched: ResolvedProperties[] = [];
+    context.getIntegrationForPrompt = (_prompt, properties) => {
+      dispatched.push(properties);
+      return integration;
+    };
+    if (overlay) configService.setCliOverlay(overlay);
+    try {
+      await makeExecutor(
+        queue,
+        new FixedEvaluationEvaluator(new MockPlatform(), PASSING_EVALUATION)
+      ).execute(integration, context);
+    } finally {
+      if (overlay) configService.setCliOverlay({});
+    }
+    return { queue, dispatched };
+  }
+
+  test("workflow-level executionMode placeholder dispatches the typed value", async () => {
+    const { queue, dispatched } = await runCapturingProperties({
+      executionMode: "{{mode}}" as never,
+      vars: { mode: EXECUTION_MODES.HEADLESS },
+      steps: [{ prompt: "one" }],
+    });
+    assert.strictEqual(dispatched[0]?.executionMode, EXECUTION_MODES.HEADLESS);
+    assert.strictEqual(
+      queue.getState().steps[0]?._runtime?.executionMode,
+      EXECUTION_MODES.HEADLESS
+    );
+    assert.strictEqual(queue.getWorkflowFile().executionMode, "{{mode}}");
+  });
+
+  test("workflow-level errorBehavior.maxRetries placeholder is coerced to a number", async () => {
+    const { dispatched } = await runCapturingProperties({
+      errorBehavior: { onError: "retry", maxRetries: "{{n}}" as never },
+      vars: { n: "2" },
+      steps: [{ prompt: "one" }],
+    });
+    assert.deepStrictEqual(dispatched[0]?.errorBehavior, {
+      onError: "retry",
+      maxRetries: 2,
+    });
+  });
+
+  test("workflow-level endCondition.onFail placeholder reaches the dispatched step", async () => {
+    const { queue, dispatched } = await runCapturingProperties({
+      endCondition: {
+        script: "node -e 0",
+        onFail: "{{f}}" as never,
+      },
+      vars: { f: "continue" },
+      steps: [{ prompt: "one" }],
+    });
+    assert.strictEqual(dispatched[0]?.endCondition?.onFail, "continue");
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("a settings defaults placeholder is substituted with the workflow's vars", async () => {
+    const { dispatched } = await runCapturingProperties(
+      {
+        vars: { mode: EXECUTION_MODES.HEADLESS },
+        steps: [{ prompt: "one" }],
+      },
+      { defaults: { executionMode: "{{mode}}" as never } }
+    );
+    assert.strictEqual(dispatched[0]?.executionMode, EXECUTION_MODES.HEADLESS);
+  });
+
+  test("a workflow-level value placeholder with an invalid value fails before dispatch", async () => {
+    await assert.rejects(
+      runCapturingProperties({
+        executionMode: "{{mode}}" as never,
+        vars: { mode: "sideways" },
+        steps: [{ prompt: "one" }],
+      }),
+      (error: Error) =>
+        error instanceof RecordedTargetFailureError &&
+        error.cause instanceof VarSubstitutionValidationError &&
+        error.message ===
+          'executionMode: variable "mode" is "sideways", expected one of "interactive", "headless".'
+    );
+  });
+
+  test("_runtime never records a placeholder for any policy value field", async () => {
+    const vars = {
+      h: HARNESS_IDS.CLAUDE_CLI,
+      max: "20",
+      on: "true",
+      mode: EXECUTION_MODES.HEADLESS,
+      resume: "false",
+      detail: "summary",
+      onError: "stopWorkflow",
+      n: "1",
+      delay: "1",
+      timeout: "30",
+      src: "exitCode",
+      op: "eq",
+      icase: "false",
+      prePass: "continue",
+      preFail: "skipPrompt",
+      endPass: "continue",
+      endFail: "stopWorkflow",
+      scriptPass: "continue",
+      scriptFail: "stopWorkflow",
+    };
+    const condition = {
+      script: "node -e 0",
+      timeoutSec: "{{timeout}}",
+      compareSource: "{{src}}",
+      operator: "{{op}}",
+      ignoreCase: "{{icase}}",
+    };
+    const errorBehavior = {
+      onError: "{{onError}}",
+      maxRetries: "{{n}}",
+      retryDelaySec: "{{delay}}",
+    };
+    const promptStep = {
+      prompt: "one",
+      harness: "{{h}}",
+      enabled: "{{on}}",
+      executionMode: "{{mode}}",
+      timeoutSec: "{{timeout}}",
+      errorBehavior,
+    };
+    const scriptStep = {
+      type: "script",
+      script: "node -e 0",
+      enabled: "{{on}}",
+      executionMode: "{{mode}}",
+      timeoutSec: "{{timeout}}",
+      compareSource: "{{src}}",
+      operator: "{{op}}",
+      ignoreCase: "{{icase}}",
+      onPass: "{{scriptPass}}",
+      onFail: "{{scriptFail}}",
+      errorBehavior,
+    };
+    const workflow = {
+      harness: "{{h}}",
+      maxSteps: "{{max}}",
+      executionMode: "{{mode}}",
+      resumeSession: "{{resume}}",
+      priorContextDetail: "{{detail}}",
+      errorBehavior,
+      preCondition: {
+        ...condition,
+        onPass: "{{prePass}}",
+        onFail: "{{preFail}}",
+      },
+      endCondition: {
+        ...condition,
+        maxRetries: "{{n}}",
+        onPass: "{{endPass}}",
+        onFail: "{{endFail}}",
+      },
+      vars,
+      steps: [promptStep, scriptStep],
+      finalStep: { prompt: "final", harness: "{{h}}" },
+    };
+
+    // Every value entry of the policy table has a placeholder in the fixture,
+    // so a value field added later is covered here too.
+    const readPath = (node: unknown, path: readonly string[]): unknown =>
+      path.reduce<unknown>(
+        (value, key) =>
+          value && typeof value === "object"
+            ? (value as Record<string, unknown>)[key]
+            : undefined,
+        node
+      );
+    const holders: Record<string, readonly unknown[]> = {
+      [VAR_SUBSTITUTION_VIEWS.WORKFLOW]: [workflow],
+      [VAR_SUBSTITUTION_VIEWS.RESOLVED_PROPERTIES]: [workflow],
+      [VAR_SUBSTITUTION_VIEWS.STEP]: [promptStep, scriptStep],
+    };
+    for (const [field, entry] of Object.entries(VAR_SUBSTITUTION_POLICY)) {
+      if (entry.kind !== VAR_SUBSTITUTION_KINDS.VALUE) continue;
+      assert.ok(
+        (holders[entry.view] ?? []).some((holder) =>
+          /^\{\{\w+\}\}$/.test(String(readPath(holder, entry.path)))
+        ),
+        `fixture has no placeholder for ${field}`
+      );
+    }
+
+    const { queue, dispatched } = await runCapturingProperties(
+      workflow as unknown as Parameters<PromptQueue["loadPrompts"]>[0]
+    );
+
+    assert.strictEqual(dispatched.length, 2, "prompt step and finalStep ran");
+    assert.strictEqual(dispatched[0]?.harness, HARNESS_IDS.CLAUDE_CLI);
+    assert.strictEqual(dispatched[0]?.resumeSession, false);
+    assert.strictEqual(dispatched[0]?.priorContextDetail, "summary");
+    assert.strictEqual(dispatched[0]?.endCondition?.maxRetries, 1);
+    assert.strictEqual(dispatched[0]?.preCondition?.ignoreCase, false);
+    const state = queue.getState();
+    assert.strictEqual(state.results[1]?.status, STEP_STATUS.COMPLETED);
+    const runtimes = [
+      ...state.steps.map((step) => step._runtime),
+      queue.getWorkflowFile().finalStep?._runtime,
+      queue.getFinalStepRuntime(),
+    ];
+    assert.strictEqual(
+      state.steps[0]?._runtime?.harness,
+      HARNESS_IDS.CLAUDE_CLI
+    );
+    assert.strictEqual(
+      state.steps[1]?._runtime?.executionMode,
+      EXECUTION_MODES.HEADLESS
+    );
+    for (const runtime of runtimes)
+      assert.ok(
+        !JSON.stringify(runtime ?? {}).includes("{{"),
+        `_runtime records a placeholder: ${JSON.stringify(runtime)}`
+      );
+    // The authored definition keeps its placeholders.
+    assert.strictEqual(queue.getWorkflowFile().harness, "{{h}}");
+    assert.strictEqual(queue.getState().steps[0]?.enabled, "{{on}}");
+  });
+});
+
+suite("WorkflowExecutor run-start view", () => {
+  test("consumes the supplied run-start view instead of re-resolving run-start fields", async () => {
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      harness: "{{h}}" as never,
+      vars: { h: HARNESS_IDS.CLAUDE_CLI },
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const context = makeContext(integration);
+    // Built from other vars, as a continue with changed --var values does.
+    context.runStartView = RunStartView.resolve(
+      queue.getWorkflowFile(),
+      undefined,
+      {
+        h: HARNESS_IDS.CODEX_CLI,
+      }
+    );
+    const harnesses: string[] = [];
+    context.getIntegrationForPrompt = (_prompt, properties) => {
+      harnesses.push(properties.harness);
+      return integration;
+    };
+
+    await makeExecutor(queue).execute(integration, context);
+
+    assert.deepStrictEqual(harnesses, [
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.CODEX_CLI,
+    ]);
+    assert.strictEqual(queue.getWorkflowFile().harness, "{{h}}");
+  });
+
+  test("a re-run with changed vars re-resolves; the definition keeps its placeholder", async () => {
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      vars: { h: HARNESS_IDS.CLAUDE_CLI },
+      steps: [{ prompt: "one", harness: "{{h}}" as never }],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const run = async (): Promise<string | undefined> => {
+      const context = makeContext(integration);
+      context.runStartView = RunStartView.resolve(queue.getWorkflowFile());
+      let harness: string | undefined;
+      context.getIntegrationForPrompt = (_prompt, properties) => {
+        harness = properties.harness;
+        return integration;
+      };
+      await makeExecutor(queue).execute(integration, context);
+      return harness;
+    };
+
+    assert.strictEqual(await run(), HARNESS_IDS.CLAUDE_CLI);
+    assert.strictEqual(
+      (queue.getState().steps[0] as PromptStep).harness,
+      "{{h}}"
+    );
+
+    await queue.restart();
+    queue.getWorkflowFile().vars = { h: HARNESS_IDS.CODEX_CLI };
+    assert.strictEqual(await run(), HARNESS_IDS.CODEX_CLI);
+    assert.strictEqual(
+      (queue.getState().steps[0] as PromptStep).harness,
+      "{{h}}"
+    );
+    assert.strictEqual(
+      queue.getState().steps[0]?._runtime?.harness,
+      HARNESS_IDS.CODEX_CLI
+    );
   });
 });

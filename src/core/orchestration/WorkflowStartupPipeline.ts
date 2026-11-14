@@ -44,6 +44,7 @@ import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import { Log } from "../../utils/Log";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
+import { RunStartView } from "../../utils/RunStartView";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { ExecutionLeaseConflictError } from "./ExecutionRootLeaseManager";
 import { RecordedTargetFailureError } from "../RecordedTargetFailureError";
@@ -140,6 +141,8 @@ export interface WorkflowStartupExecutionPort {
   readonly closeRetainedTerminalsForFreshRun: () => Promise<void>;
   readonly syncCurrentPromptFileFromQueue: (filePath?: string) => void;
   readonly setExecutionRunRef: (runRef: RunRef | undefined) => void;
+  /** Hand the run-start view to the execution about to start. */
+  readonly setRunStartView?: (view: RunStartView) => void;
   readonly clearOutputBuffers: () => void;
   readonly prepareExecutionWorktree: (historyFilePath: string) => Promise<void>;
   readonly createIntegrationForMode: (
@@ -273,6 +276,7 @@ export class WorkflowStartupPipeline {
   private worktreeNotice: string | undefined;
   private missingSecretNames: string[] = [];
   private compatibilityDiagnostics: CompatibilityDiagnostic[] = [];
+  private runStartView: RunStartView | undefined;
   private readonly lineageRepository = new WorkflowLineageRepository();
   /**
    * Stop-request count when this startup began. One pipeline serves exactly
@@ -360,17 +364,13 @@ export class WorkflowStartupPipeline {
       // A window with no folder open has nowhere to keep run state; refuse
       // before anything is written.
       requireWorkspaceRoot(this.port.platform);
-      const authoredWorkflow = this.port.queue.getWorkflowFile();
-      const runStart = VarSubstitutor.applyToRunStartWorktree(
-        authoredWorkflow,
-        ConfigurationUtils.getDefaultWorktree(),
-        authoredWorkflow.vars ?? {}
+      // Resolved once, before any preflight or side effect; the executor and
+      // parallel preflight consume this view instead of re-resolving.
+      const runStart = RunStartView.resolve(
+        this.port.queue.getWorkflowFile(),
+        ConfigurationUtils.getDefaultWorktree()
       );
-      runStart.workflow = VarSubstitutor.substituteWorkflowView(
-        runStart.workflow,
-        authoredWorkflow.vars ?? {},
-        "run-start"
-      );
+      this.runStartView = runStart;
       await this.preflightSecrets();
       await this.resolveWorktree(
         continueFromCurrent ||
@@ -382,7 +382,13 @@ export class WorkflowStartupPipeline {
       if (!(await this.preflightCompatibility(runStart.workflow))) {
         return;
       }
-      if (!(await this.ensureHarnessReadiness(modeOverride, fileName, runStart.workflow))) {
+      if (
+        !(await this.ensureHarnessReadiness(
+          modeOverride,
+          fileName,
+          runStart.workflow
+        ))
+      ) {
         return;
       }
 
@@ -836,11 +842,7 @@ export class WorkflowStartupPipeline {
     const totalSteps = currentQueueState.steps.length;
     const currentStep = currentQueueState.steps[currentQueueState.currentIndex];
     const executionMode = currentStep
-      ? SettingsPropertyResolver.resolveExecutionMode(
-          currentStep,
-          this.port.queue.getWorkflowFile(),
-          { hostCanProvidePty: this.port.hostCanProvidePty }
-        )
+      ? this.resolveAnnouncedExecutionMode(currentStep)
       : undefined;
     let workingFilePath = currentQueueState.workingFilePath ?? "";
     const workflowKey = currentQueueState.workflowKey;
@@ -922,6 +924,38 @@ export class WorkflowStartupPipeline {
       isIdleContinuation: classification.isIdleContinuation,
       prevSettledStepCount: classification.prevSettledStepCount,
     };
+  }
+
+  /**
+   * The first step's execution mode for the start announcement, substituted
+   * the way dispatch substitutes it. A value that fails its policy is not
+   * announced; dispatch reports the failure.
+   */
+  private resolveAnnouncedExecutionMode(
+    step: QueueState["steps"][number]
+  ): ExecutionMode | undefined {
+    const workflow = this.port.queue.getWorkflowFile();
+    const vars = this.runStartView?.vars ?? workflow.vars ?? {};
+    const stepIndex = this.port.queue.getState().currentIndex;
+    try {
+      return VarSubstitutor.applyToResolvedProperties(
+        {
+          executionMode: SettingsPropertyResolver.resolveExecutionMode(
+            VarSubstitutor.substituteStepView(
+              step,
+              vars,
+              "dispatch",
+              stepIndex
+            ),
+            workflow,
+            { hostCanProvidePty: this.port.hostCanProvidePty }
+          ),
+        },
+        vars
+      ).executionMode;
+    } catch {
+      return undefined;
+    }
   }
 
   async prepareWorktreeAndDispatch(
@@ -1101,6 +1135,8 @@ export class WorkflowStartupPipeline {
     Log.debug(
       `[WorkflowInstance] [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${this.historyFilePath}" (empty=${!this.historyFilePath})`
     );
+    if (this.runStartView)
+      this.port.execution.setRunStartView?.(this.runStartView);
     await this.port.execution.startWorkflowExecution(
       integration,
       this.historyFilePath,

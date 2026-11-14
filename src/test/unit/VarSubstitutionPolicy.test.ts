@@ -7,11 +7,16 @@ import {
 } from "../../utils/VarSubstitutor";
 import { validateWorkflowSchemaValue } from "../../utils/WorkflowSchemaValidation";
 import type {
+  PromptFile,
   PromptStep,
   ScriptStep,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
+import {
+  SettingsPropertyResolver,
+  type ResolvedProperties,
+} from "../../utils/SettingsPropertyResolver";
+import { configService } from "../../config/CtrlYokeConfigService";
 import {
   VAR_SUBSTITUTION_EXCLUDED_FIELDS,
   VAR_SUBSTITUTION_POLICY,
@@ -73,18 +78,13 @@ suite("VarSubstitutionPolicy documentation", () => {
         executionMode: "{{mode}}",
         timeoutSec: "{{timeout}}",
         ignoreCase: "{{case}}",
-        endCondition: {
-          script: "echo ok",
-          maxRetries: "{{retries}}",
-        },
       } as unknown as WorkflowStep,
-      { mode: "headless", timeout: "30", case: "true", retries: "2" },
+      { mode: "headless", timeout: "30", case: "true" },
       "dispatch"
     ) as WorkflowStep & Record<string, any>;
     assert.strictEqual(resolved.executionMode, "headless");
     assert.strictEqual(resolved.timeoutSec, 30);
     assert.strictEqual(resolved.ignoreCase, true);
-    assert.strictEqual(resolved.endCondition?.maxRetries, 2);
     assert.throws(
       () =>
         VarSubstitutor.substituteStepView(
@@ -102,6 +102,49 @@ suite("VarSubstitutionPolicy documentation", () => {
         error.message ===
           'steps[2].timeoutSec: variable "timeout" is "soon", expected a number greater than 0.'
     );
+  });
+
+  test("inherited execution properties are substituted from any level", () => {
+    const vars = { mode: "headless", n: "2", f: "continue", resume: "false" };
+    const workflow = {
+      executionMode: "{{mode}}",
+      errorBehavior: { onError: "retry", maxRetries: "{{n}}" },
+      endCondition: { script: "echo ok", onFail: "{{f}}" },
+      steps: [],
+    } as unknown as PromptFile;
+    const fromWorkflow = VarSubstitutor.applyToResolvedProperties(
+      SettingsPropertyResolver.resolve({ prompt: "x" }, workflow),
+      vars
+    );
+    assert.strictEqual(fromWorkflow.executionMode, "headless");
+    assert.deepStrictEqual(fromWorkflow.errorBehavior, {
+      onError: "retry",
+      maxRetries: 2,
+    });
+    assert.strictEqual(fromWorkflow.endCondition?.onFail, "continue");
+    assert.strictEqual(workflow.executionMode, "{{mode}}");
+
+    const fromStep = VarSubstitutor.applyToResolvedProperties(
+      SettingsPropertyResolver.resolve(
+        { prompt: "x", resumeSession: "{{resume}}" } as unknown as PromptStep,
+        { steps: [] }
+      ),
+      vars
+    );
+    assert.strictEqual(fromStep.resumeSession, false);
+
+    configService.setCliOverlay({
+      defaults: { executionMode: "{{mode}}" as never },
+    });
+    try {
+      const fromDefaults = VarSubstitutor.applyToResolvedProperties(
+        SettingsPropertyResolver.resolve({ prompt: "x" }, { steps: [] }),
+        vars
+      );
+      assert.strictEqual(fromDefaults.executionMode, "headless");
+    } finally {
+      configService.setCliOverlay({});
+    }
   });
 
   test("keeps numeric expected and session references numeric", () => {

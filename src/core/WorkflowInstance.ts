@@ -121,7 +121,11 @@ import {
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
 import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
-import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
+import {
+  SettingsPropertyResolver,
+  type ResolvedExecutionTarget,
+} from "../utils/SettingsPropertyResolver";
+import { RunStartView } from "../utils/RunStartView";
 import {
   resolveWorktreeForStart,
   type WorkspaceWorktreeResolution,
@@ -368,6 +372,11 @@ export class WorkflowInstance
   private executionLease: ExecutionLeaseHandle | undefined;
   /** The RunRef this instance is currently executing, if any. Distinct from any client's viewed run. */
   private executionRunRef: RunRef | undefined;
+  /**
+   * The run-start view startup or continue resolved for the execution about
+   * to start; handed to the executor and cleared when that execution settles.
+   */
+  private runStartView: RunStartView | undefined;
   private executionSettledPromise: Promise<void> = Promise.resolve();
   private resolveExecutionSettled: (() => void) | undefined;
   /**
@@ -858,9 +867,12 @@ export class WorkflowInstance
     const targets = enumerateCompatibilityTargets(
       workflowForAnalysis,
       (prompt, resolvedWorkflow) =>
-        SettingsPropertyResolver.resolveTarget(prompt, resolvedWorkflow, {
-          hostCanProvidePty: this.hostCanProvidePty,
-        })
+        this.substituteCompatibilityTarget(
+          SettingsPropertyResolver.resolveTarget(prompt, resolvedWorkflow, {
+            hostCanProvidePty: this.hostCanProvidePty,
+          }),
+          workflow.vars ?? {}
+        )
     );
     return analyzeCompatibility({
       workflow: workflowForAnalysis,
@@ -870,6 +882,28 @@ export class WorkflowInstance
         workspaceRoot: this.workspaceFolderPath,
       },
     });
+  }
+
+  /**
+   * Analyze the values a step will run with: the dispatch policy walk of its
+   * resolved properties, as the executor does. A value that fails its policy
+   * is left as authored here; dispatch reports the failure.
+   */
+  private substituteCompatibilityTarget(
+    target: ResolvedExecutionTarget,
+    vars: Readonly<Record<string, string>>
+  ): ResolvedExecutionTarget {
+    try {
+      return {
+        ...target,
+        properties: VarSubstitutor.applyToResolvedProperties(
+          target.properties,
+          vars
+        ),
+      };
+    } catch {
+      return target;
+    }
   }
 
   private async analyzePromptCompatibility(
@@ -1871,6 +1905,9 @@ export class WorkflowInstance
         setExecutionRunRef: (runRef) => {
           this.executionRunRef = runRef;
         },
+        setRunStartView: (view) => {
+          this.runStartView = view;
+        },
         clearOutputBuffers: () => this.clearOutputBuffers(),
         prepareExecutionWorktree: (historyFilePath) =>
           this.prepareExecutionWorktree(historyFilePath),
@@ -2181,6 +2218,9 @@ export class WorkflowInstance
       releaseConflictingAiSession: (aiSessionId, requester) =>
         this.releaseConflictingAiSession(aiSessionId, requester),
       outputHistoryManager: this.outputHistoryManager,
+      get runStartView() {
+        return instance.runStartView;
+      },
       ...this.createWorkflowStartupOutputContext(),
       getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
       getSecretRedactor: () => this.activeRunRedactor,
@@ -2617,18 +2657,17 @@ export class WorkflowInstance
     workingFilePath: string | undefined,
     targetRunIndices: Map<string, number> | undefined
   ): Promise<void> {
+    let runStart: RunStartView;
     try {
       const authoredWorkflow = this.promptQueue.getWorkflowFile();
-      const runStart = VarSubstitutor.applyToRunStartWorktree(
+      // Continue re-resolves from the run file's vars, which a continue with
+      // changed `--var` values has already rewritten; the definition keeps
+      // its placeholders.
+      runStart = RunStartView.resolve(
         authoredWorkflow,
-        ConfigurationUtils.getDefaultWorktree(),
-        authoredWorkflow.vars ?? {}
+        ConfigurationUtils.getDefaultWorktree()
       );
-      const resolvedRunStartWorkflow = VarSubstitutor.substituteWorkflowView(
-        runStart.workflow,
-        authoredWorkflow.vars ?? {},
-        "run-start"
-      );
+      const resolvedRunStartWorkflow = runStart.workflow;
       await this.ensureRunnerLock(workingFilePath);
       const state = this.promptQueue.getState();
       const lockWorkspaceRoot = this.getStateRoot();
@@ -2636,7 +2675,8 @@ export class WorkflowInstance
         this.runnerLockCoordinator.ownsLock() &&
         state.workflowKey &&
         lockWorkspaceRoot
-      ) this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
+      )
+        this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
       const recorded = (authoredWorkflow as WorkingFile)._runtime?.worktree;
       const continueWorkflow =
         recorded?.mode === WORKTREE_MODES.NAMED
@@ -2653,7 +2693,7 @@ export class WorkflowInstance
           : resolvedRunStartWorkflow;
       this.worktreeResolution = await resolveWorktreeForStart(
         continueWorkflow.worktree,
-        runStart.defaultWorktree,
+        runStart.defaultWorktree ?? ConfigurationUtils.getDefaultWorktree(),
         this.platform.getNamedWorkspaceRoots(),
         (this.promptQueue.getWorkflowFile() as WorkingFile)._runtime?.worktree,
         true
@@ -2701,6 +2741,7 @@ export class WorkflowInstance
     }
 
     Log.info("[WorkflowInstance] Resuming workflow from paused position");
+    this.runStartView = runStart;
     await this.startWorkflowExecution(
       undefined,
       resolvedHistoryFilePath,
@@ -5025,6 +5066,7 @@ export class WorkflowInstance
     historyFilePath: string;
     workingFilePath: string | undefined;
   }): Promise<void> {
+    this.runStartView = undefined;
     const paused =
       this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
       this.workflowRuntime.status === EXECUTION_STATES.PAUSING;

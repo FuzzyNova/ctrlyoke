@@ -128,6 +128,14 @@ function valueField(
   };
 }
 
+/** A dispatch `value` field of the resolved execution properties. */
+function resolvedValue(
+  path: readonly string[],
+  schema: string
+): VarSubstitutionValueEntry {
+  return valueField(DISPATCH, VIEW.RESOLVED_PROPERTIES, path, schema);
+}
+
 const PROMPT_TEXT_OPTIONS = { fencedCodeProtected: true } as const;
 const LITERAL_ENV_OPTIONS = {
   fencedCodeProtected: false,
@@ -232,29 +240,11 @@ export const VAR_SUBSTITUTION_POLICY = {
     ["executionMode"],
     EXECUTION_PROPERTY("executionMode")
   ),
-  "steps[].resumeSession": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["resumeSession"],
-    EXECUTION_PROPERTY("resumeSession")
-  ),
-  "steps[].priorContextDetail": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["priorContextDetail"],
-    EXECUTION_PROPERTY("priorContextDetail")
-  ),
   "steps[].timeoutSec": valueField(
     DISPATCH,
     VIEW.STEP,
     ["timeoutSec"],
     SCRIPT_PROPERTY("timeoutSec")
-  ),
-  "steps[].endCondition.maxRetries": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["endCondition", "maxRetries"],
-    "/$defs/endCondition/properties/maxRetries/oneOf/0"
   ),
   "steps[].compareSource": valueField(
     DISPATCH,
@@ -273,30 +263,6 @@ export const VAR_SUBSTITUTION_POLICY = {
     VIEW.STEP,
     ["ignoreCase"],
     SCRIPT_PROPERTY("ignoreCase")
-  ),
-  "steps[].preCondition.onPass": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["preCondition", "onPass"],
-    "/$defs/preCondition/properties/onPass/oneOf/0"
-  ),
-  "steps[].preCondition.onFail": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["preCondition", "onFail"],
-    "/$defs/preCondition/properties/onFail/oneOf/0"
-  ),
-  "steps[].endCondition.onPass": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["endCondition", "onPass"],
-    "/$defs/endCondition/properties/onPass/oneOf/0"
-  ),
-  "steps[].endCondition.onFail": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["endCondition", "onFail"],
-    "/$defs/endCondition/properties/onFail/oneOf/0"
   ),
   "steps[].onPass": valueField(
     DISPATCH,
@@ -328,59 +294,90 @@ export const VAR_SUBSTITUTION_POLICY = {
     ["errorBehavior", "retryDelaySec"],
     "/$defs/errorBehavior/properties/retryDelaySec/oneOf/0"
   ),
-  "steps[].preCondition.timeoutSec": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["preCondition", "timeoutSec"],
-    SCRIPT_PROPERTY("timeoutSec")
-  ),
-  "steps[].preCondition.compareSource": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["preCondition", "compareSource"],
-    SCRIPT_PROPERTY("compareSource")
-  ),
-  "steps[].preCondition.operator": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["preCondition", "operator"],
-    SCRIPT_PROPERTY("operator")
-  ),
-  "steps[].preCondition.ignoreCase": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["preCondition", "ignoreCase"],
-    SCRIPT_PROPERTY("ignoreCase")
-  ),
-  "steps[].endCondition.timeoutSec": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["endCondition", "timeoutSec"],
-    SCRIPT_PROPERTY("timeoutSec")
-  ),
-  "steps[].endCondition.compareSource": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["endCondition", "compareSource"],
-    SCRIPT_PROPERTY("compareSource")
-  ),
-  "steps[].endCondition.operator": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["endCondition", "operator"],
-    SCRIPT_PROPERTY("operator")
-  ),
-  "steps[].endCondition.ignoreCase": valueField(
-    DISPATCH,
-    VIEW.STEP,
-    ["endCondition", "ignoreCase"],
-    SCRIPT_PROPERTY("ignoreCase")
-  ),
   "steps[].additionalArgs": textField(
     DISPATCH,
     ADVISORY,
     VIEW.RESOLVED_PROPERTIES,
     ["additionalArgs"]
+  ),
+  // Inherited execution properties. These walk the resolved properties, so
+  // one entry covers a value authored on the step, the finalStep, the
+  // workflow root or the settings `defaults`.
+  executionMode: resolvedValue(
+    ["executionMode"],
+    EXECUTION_PROPERTY("executionMode")
+  ),
+  resumeSession: resolvedValue(
+    ["resumeSession"],
+    EXECUTION_PROPERTY("resumeSession")
+  ),
+  priorContextDetail: resolvedValue(
+    ["priorContextDetail"],
+    EXECUTION_PROPERTY("priorContextDetail")
+  ),
+  "errorBehavior.onError": resolvedValue(
+    ["errorBehavior", "onError"],
+    "/$defs/errorBehavior/properties/onError/oneOf/0"
+  ),
+  "errorBehavior.maxRetries": resolvedValue(
+    ["errorBehavior", "maxRetries"],
+    "/$defs/errorBehavior/properties/maxRetries/oneOf/0"
+  ),
+  "errorBehavior.retryDelaySec": resolvedValue(
+    ["errorBehavior", "retryDelaySec"],
+    "/$defs/errorBehavior/properties/retryDelaySec/oneOf/0"
+  ),
+  "preCondition.onPass": resolvedValue(
+    ["preCondition", "onPass"],
+    "/$defs/preCondition/properties/onPass/oneOf/0"
+  ),
+  "preCondition.onFail": resolvedValue(
+    ["preCondition", "onFail"],
+    "/$defs/preCondition/properties/onFail/oneOf/0"
+  ),
+  "preCondition.timeoutSec": resolvedValue(
+    ["preCondition", "timeoutSec"],
+    SCRIPT_PROPERTY("timeoutSec")
+  ),
+  "preCondition.compareSource": resolvedValue(
+    ["preCondition", "compareSource"],
+    SCRIPT_PROPERTY("compareSource")
+  ),
+  "preCondition.operator": resolvedValue(
+    ["preCondition", "operator"],
+    SCRIPT_PROPERTY("operator")
+  ),
+  "preCondition.ignoreCase": resolvedValue(
+    ["preCondition", "ignoreCase"],
+    SCRIPT_PROPERTY("ignoreCase")
+  ),
+  "endCondition.maxRetries": resolvedValue(
+    ["endCondition", "maxRetries"],
+    "/$defs/endCondition/properties/maxRetries/oneOf/0"
+  ),
+  "endCondition.onPass": resolvedValue(
+    ["endCondition", "onPass"],
+    "/$defs/endCondition/properties/onPass/oneOf/0"
+  ),
+  "endCondition.onFail": resolvedValue(
+    ["endCondition", "onFail"],
+    "/$defs/endCondition/properties/onFail/oneOf/0"
+  ),
+  "endCondition.timeoutSec": resolvedValue(
+    ["endCondition", "timeoutSec"],
+    SCRIPT_PROPERTY("timeoutSec")
+  ),
+  "endCondition.compareSource": resolvedValue(
+    ["endCondition", "compareSource"],
+    SCRIPT_PROPERTY("compareSource")
+  ),
+  "endCondition.operator": resolvedValue(
+    ["endCondition", "operator"],
+    SCRIPT_PROPERTY("operator")
+  ),
+  "endCondition.ignoreCase": resolvedValue(
+    ["endCondition", "ignoreCase"],
+    SCRIPT_PROPERTY("ignoreCase")
   ),
   "hooks[].command": textField(DISPATCH, ADVISORY, VIEW.RESOLVED_PROPERTIES, [
     "hooks",

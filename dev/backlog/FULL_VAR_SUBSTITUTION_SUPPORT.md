@@ -1,6 +1,6 @@
 # Full Variable Substitution Support
 
-**Status:** In progress (items 1–7 complete; item 8 partially implemented 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
+**Status:** In progress (items 1–6 complete; items 7–8 partially implemented 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
 the slots plan's `worktree.checkout` field shipped as `directory`, and this plan
 now uses that name.
 **Priority:** P2
@@ -32,6 +32,24 @@ Each step ticks its own item, notes any deviation under it, and commits.
       `WorkflowSchemaValidation.ts` owns the compiled schema and Ajv instance
       for both the parser and the substitutor. The duplicate `prompt.prompt`
       key was folded into `steps[].prompt`.
+      Inherited execution properties (`executionMode`, `resumeSession`,
+      `priorContextDetail`, `errorBehavior.*`, `preCondition.*`,
+      `endCondition.*`) are `value` entries of the resolved-properties view,
+      unprefixed in the table: `SettingsPropertyResolver` merges step,
+      `finalStep`, workflow root and settings `defaults`, so walking the
+      result covers all four with one path (the executor's
+      `resolveDispatchProperties`, parallel preflight, Dry Run and the
+      compatibility preflight all walk it). The prompt-only `steps[]` copies of
+      those entries were removed; the step view keeps only fields read off the
+      step itself (`executionMode`, `errorBehavior.*` and the script-step
+      root fields), and a script step walks its inherited
+      `executionMode`/`errorBehavior` through the same resolved-properties
+      entries. The settings schema's `defaults.executionMode` and
+      `defaults.resumeSession` are still plain enums/booleans, so an editor
+      flags a placeholder there although the runtime substitutes it; widen
+      them (with the settings UI's option lookup) if that is wanted. Settings
+      `defaults.errorBehavior`/`endCondition`/`preCondition` only seed new
+      workflows, and are substituted as workflow-level values.
 - [x] 2. Engine gaps 1–4 (Dry Run grants, preflight additionalArgs, advisory
       with empty `vars`, preset param values left literal).
       Note: MCP supplied env keys are recorded on the attached condition so literal provenance survives run-file persistence and resume.
@@ -42,9 +60,19 @@ Each step ticks its own item, notes any deviation under it, and commits.
       definition coverage still outstanding.
 - [x] 4. Run-start phase in startup/continue; `worktree.branch`/`base`/
       `directory` substituted; workspace-trust predicate; worktrees docs.
-      Note: startup and continue invoke the run-start view and retain authored
-      definitions, but the executor still recomputes run-start fields during
-      dispatch and attempts.
+      Note: run-start is single-sourced in `RunStartView`
+      (`src/utils/RunStartView.ts`). Startup (`WorkflowStartupPipeline`) and
+      continue (`WorkflowInstance.resumeAfterSetup`) resolve it once before
+      preflight and hand it to the executor through
+      `WorkflowExecutionContext.runStartView`; the executor and
+      `ParallelGroupPreflight` only consume it (root `harness`/`maxSteps`
+      through `applyToWorkflow`, step `harness`/`enabled` through
+      `resolveStep`) and dispatch with its vars snapshot. Steps edited or
+      appended mid-run resolve against the live definition, memoized by
+      authored value. The definition and run file keep their placeholders, so
+      a continue with changed vars builds a new view. Paths that start the
+      executor without one (ephemeral prompts, tests) get a view built once
+      by `execute()`.
 - [x] 5. Dispatch `text` fields (step `name`, `expected`, `shell`, `agent`,
       `skills[]`, `sessionId`, `priorContext.*`).
       Note: dispatch views are copied before execution and preflight; error

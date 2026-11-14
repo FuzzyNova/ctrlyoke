@@ -429,26 +429,29 @@ $defs:
     type: object
     description: >-
       Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags
-      override these at runtime. Substituted fields (all at dispatch unless noted): ADVISORY,
-      DISPATCH, ERROR, defaults.worktree.base, defaults.worktree.branch,
-      defaults.worktree.directory, defaults.worktree.setup, endCondition.env.*,
-      endCondition.passRetryPrompt, endCondition.retryPrompt, endCondition.script, harness,
-      hooks[].command, hooks[].env.*, maxSteps, preCondition.env.*, preCondition.script,
-      scriptStep.env.*, scriptStep.script, steps[].additionalArgs, steps[].agent,
-      steps[].compareSource, steps[].enabled, steps[].endCondition.compareSource,
-      steps[].endCondition.ignoreCase, steps[].endCondition.maxRetries, steps[].endCondition.onFail,
-      steps[].endCondition.onPass, steps[].endCondition.operator, steps[].endCondition.timeoutSec,
+      override these at runtime. Substituted at run start: defaults.worktree.base,
+      defaults.worktree.branch, defaults.worktree.directory, harness, maxSteps, steps[].enabled,
+      steps[].harness, worktree.base, worktree.branch, worktree.directory. Substituted at dispatch:
+      defaults.worktree.setup, endCondition.compareSource, endCondition.env.*,
+      endCondition.ignoreCase, endCondition.maxRetries, endCondition.onFail, endCondition.onPass,
+      endCondition.operator, endCondition.passRetryPrompt, endCondition.retryPrompt,
+      endCondition.script, endCondition.timeoutSec, errorBehavior.maxRetries, errorBehavior.onError,
+      errorBehavior.retryDelaySec, executionMode, hooks[].command, hooks[].env.*,
+      preCondition.compareSource, preCondition.env.*, preCondition.ignoreCase, preCondition.onFail,
+      preCondition.onPass, preCondition.operator, preCondition.script, preCondition.timeoutSec,
+      priorContextDetail, resumeSession, scriptStep.env.*, scriptStep.script,
+      steps[].additionalArgs, steps[].agent, steps[].compareSource,
       steps[].errorBehavior.maxRetries, steps[].errorBehavior.onError,
-      steps[].errorBehavior.retryDelaySec, steps[].executionMode, steps[].expected, steps[].harness,
+      steps[].errorBehavior.retryDelaySec, steps[].executionMode, steps[].expected,
       steps[].ignoreCase, steps[].model, steps[].name, steps[].onFail, steps[].onPass,
-      steps[].operator, steps[].preCondition.compareSource, steps[].preCondition.ignoreCase,
-      steps[].preCondition.onFail, steps[].preCondition.onPass, steps[].preCondition.operator,
-      steps[].preCondition.timeoutSec, steps[].priorContext.run, steps[].priorContext.workflow,
-      steps[].priorContextDetail, steps[].prompt, steps[].resumeSession, steps[].sessionId,
-      steps[].shell, steps[].skills[], steps[].timeoutSec, worktree.base, worktree.branch,
-      worktree.directory, worktree.setup. Values are validated against the field schema after
-      substitution. Excluded fields include approval and permission settings, MCP server
-      definitions, condition preset contracts, vars themselves, and structural or identity fields.
+      steps[].operator, steps[].priorContext.run, steps[].priorContext.workflow, steps[].prompt,
+      steps[].sessionId, steps[].shell, steps[].skills[], steps[].timeoutSec, worktree.setup. Fields
+      without a steps[] prefix (executionMode, errorBehavior.*, preCondition.*, endCondition.* and
+      the rest) are substituted in the effective value, so they cover a placeholder authored on a
+      step, the finalStep, the workflow root or a settings default. Values are validated against the
+      field schema after substitution. Excluded fields include approval and permission settings, MCP
+      server definitions, condition preset contracts, vars themselves, and structural or identity
+      fields.
     additionalProperties:
       type: string
     propertyNames:

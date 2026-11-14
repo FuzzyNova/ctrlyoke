@@ -105,6 +105,7 @@ import {
 } from "../utils/GuardrailStopMessages";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import { RunStartView } from "../utils/RunStartView";
 import {
   findSecretInterpolationsInPrompt,
   buildSecretProcessEnvironment,
@@ -207,6 +208,12 @@ export interface TargetStreamingChunkData extends TargetStreamingOutput {
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
   executionWorkspace: ExecutionWorkspace;
+  /**
+   * The run-start resolution startup/continue built before preflight. The
+   * executor consumes it instead of running the run-start phase itself; when
+   * a caller supplies none, `execute()` builds one from the live definition.
+   */
+  runStartView?: RunStartView;
   /** Whether this host can provide a PTY for interactive execution. */
   hostCanProvidePty?: boolean;
   /** The workflow session ID was supplied by a host-level run option. */
@@ -533,6 +540,8 @@ function getAttemptStartReason(
  */
 export class WorkflowExecutor {
   private readonly waitingResponseTargets = new Set<string>();
+  /** Run-start view built by `execute()` when the context supplies none. */
+  private fallbackRunStartView: RunStartView | undefined;
   private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly targetRunStopReasons = new Map<string, WorkflowStopReason>();
   private readonly noTurnStartedTargets = new Set<string>();
@@ -694,6 +703,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext
   ): Promise<void> {
     this.clearResponseWaitState();
+    this.fallbackRunStartView = undefined;
 
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (runtime.startExecution()) {
@@ -710,7 +720,7 @@ export class WorkflowExecutor {
 
     if (
       await this.checkStepLimit(
-        this.promptQueue.getWorkflowFile().maxSteps,
+        this.getRunStartWorkflow(context).maxSteps,
         this.promptQueue.getState().steps.length
       )
     ) {
@@ -929,7 +939,7 @@ export class WorkflowExecutor {
         const queueSizeAfter = this.promptQueue.getState().steps.length;
         if (queueSizeAfter > queueSizeBefore) {
           const hitQueueSizeLimit = await this.checkStepLimit(
-            this.promptQueue.getWorkflowFile().maxSteps,
+            this.getRunStartWorkflow(context).maxSteps,
             queueSizeAfter
           );
           if (hitQueueSizeLimit) {
@@ -1037,6 +1047,7 @@ export class WorkflowExecutor {
     const workflow = this.promptQueue.getWorkflowFile();
     return {
       workflow,
+      runStartView: this.getRunStartView(context),
       group,
       defaults: SettingsPropertyResolver.createContext({
         hostCanProvidePty: context.hostCanProvidePty,
@@ -2234,25 +2245,58 @@ export class WorkflowExecutor {
     };
   }
 
+  /** The run-start view this run resolves with (see `RunStartView`). */
+  private getRunStartView(context: WorkflowExecutionContext): RunStartView {
+    if (context.runStartView) return context.runStartView;
+    this.fallbackRunStartView ??= RunStartView.resolve(
+      this.promptQueue.getWorkflowFile()
+    );
+    return this.fallbackRunStartView;
+  }
+
+  /** The live definition with this run's resolved run-start root fields. */
+  private getRunStartWorkflow(context: WorkflowExecutionContext): PromptFile {
+    return this.getRunStartView(context).applyToWorkflow(
+      this.promptQueue.getWorkflowFile()
+    );
+  }
+
+  /**
+   * Resolve `prompt`'s execution properties for dispatch: step, workflow
+   * and settings precedence over the run-start-resolved definition, then one
+   * policy walk of the result. Resolved properties already merge every level,
+   * so a placeholder authored on the step, the workflow root or a settings
+   * default is substituted by the same walk.
+   */
+  private resolveDispatchProperties(
+    prompt: PromptStep,
+    context: WorkflowExecutionContext,
+    vars: Readonly<Record<string, string>> = this.getRunStartView(context).vars
+  ): ResolvedProperties {
+    return VarSubstitutor.applyToResolvedProperties(
+      SettingsPropertyResolver.resolve(
+        prompt,
+        this.getRunStartWorkflow(context),
+        { hostCanProvidePty: context.hostCanProvidePty }
+      ),
+      vars
+    );
+  }
+
   private async executeTargetContract(
     target: ExecutionTarget,
     step: WorkflowStep,
     context: WorkflowExecutionContext,
     preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
-    const workflowView = this.promptQueue.getWorkflowFile();
+    const runStartView = this.getRunStartView(context);
     const variables = {
-      ...(preflightMember?.variables ?? workflowView.vars ?? {}),
+      ...(preflightMember?.variables ?? runStartView.vars),
     };
     const viewIndex =
       target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1;
     step = VarSubstitutor.substituteStepView(
-      VarSubstitutor.substituteStepView(
-        step,
-        variables,
-        "run-start",
-        viewIndex
-      ),
+      runStartView.resolveStep(step, viewIndex),
       variables,
       "dispatch",
       viewIndex
@@ -2311,30 +2355,10 @@ export class WorkflowExecutor {
       context.registerActiveTarget?.(target, attemptIndex);
 
       // Evaluate pre-condition gate before running the AI prompt.
-      const authoredWorkflowForPre = this.promptQueue.getWorkflowFile();
-      const resolvedRootProperties = VarSubstitutor.substituteWorkflowView(
-        { harness: authoredWorkflowForPre.harness } as PromptFile,
-        { ...(preflightMember?.variables ?? workflowView.vars ?? {}) },
-        "run-start"
-      );
-      const workflowFileForPre = {
-        ...authoredWorkflowForPre,
-        harness: resolvedRootProperties.harness,
-      };
-      let preResolvedProperties =
+      const preVars = variables;
+      const preResolvedProperties =
         preflightMember?.resolvedProperties ??
-        SettingsPropertyResolver.resolve(prompt, workflowFileForPre, {
-          hostCanProvidePty: context.hostCanProvidePty,
-        });
-      const preVars = preflightMember
-        ? { ...preflightMember.variables }
-        : workflowFileForPre.vars;
-      if (!preflightMember && preVars && Object.keys(preVars).length > 0) {
-        preResolvedProperties = VarSubstitutor.applyToResolvedProperties(
-          preResolvedProperties,
-          preVars
-        );
-      }
+        this.resolveDispatchProperties(prompt, context, preVars);
       const resolvedPreCondition = preResolvedProperties.preCondition;
       this.reportUnresolvedVariables(
         [
@@ -2347,7 +2371,7 @@ export class WorkflowExecutor {
             resolvedPreCondition?.env
           ),
         ],
-        preVars ?? {},
+        preVars,
         preResolvedProperties.harness,
         context,
         target,
@@ -2395,7 +2419,7 @@ export class WorkflowExecutor {
           timeoutMs:
             ConfigurationUtils.secondsToMs(resolvedPreCondition.timeoutSec) ??
             ConfigurationUtils.getScriptTimeoutMs(),
-          vars: workflowFileForPre.vars,
+          vars: preVars,
           secretNames: resolvedPreSecretNames,
           actionForErrored: this.getErrorConditionAction(
             preErrorBehavior,
@@ -2481,23 +2505,11 @@ export class WorkflowExecutor {
         }
       }
 
-      const workflowFile = this.promptQueue.getWorkflowFile();
+      const workflowFile = this.getRunStartWorkflow(context);
+      const vars = variables;
       let resolvedProperties =
         preflightMember?.resolvedProperties ??
-        SettingsPropertyResolver.resolve(prompt, workflowFile, {
-          hostCanProvidePty: context.hostCanProvidePty,
-        });
-
-      // Apply {{var}} substitution when the workflow has vars defined.
-      const vars = preflightMember
-        ? { ...preflightMember.variables }
-        : workflowFile.vars;
-      if (!preflightMember && vars && Object.keys(vars).length > 0) {
-        resolvedProperties = VarSubstitutor.applyToResolvedProperties(
-          resolvedProperties,
-          vars
-        );
-      }
+        this.resolveDispatchProperties(prompt, context, vars);
 
       // Substitute first, then resolve a standalone prompt-file reference into
       // a local copy. The queue and working file retain the authored path so
@@ -2951,22 +2963,36 @@ export class WorkflowExecutor {
     target: ExecutionTarget
   ): Promise<boolean> {
     const runtime = this.getRuntime();
-    const scriptVars = this.promptQueue.getWorkflowFile().vars;
-    const effectiveStep =
-      scriptVars && Object.keys(scriptVars).length > 0
-        ? VarSubstitutor.applyToScriptStep(step, scriptVars)
-        : step;
+    const scriptVars = this.getRunStartView(context).vars;
+    const scriptWorkflow = this.getRunStartWorkflow(context);
+    const effectiveStep = VarSubstitutor.applyToScriptStep(step, scriptVars);
+    // A script step inherits only these two from the workflow; they walk the
+    // same resolved-properties entries as a prompt step's.
+    const inherited = VarSubstitutor.applyToResolvedProperties(
+      {
+        executionMode: SettingsPropertyResolver.resolveExecutionMode(
+          step,
+          scriptWorkflow,
+          { hostCanProvidePty: context.hostCanProvidePty }
+        ),
+        errorBehavior:
+          step.errorBehavior === null
+            ? undefined
+            : (step.errorBehavior ?? scriptWorkflow.errorBehavior ?? undefined),
+      },
+      scriptVars
+    );
     const stepLabel = step.name ?? effectiveStep.script.split(/\s+/)[0];
     const resolvedScriptHarness = SettingsPropertyResolver.resolveHarnessValue(
       undefined,
-      this.promptQueue.getWorkflowFile().harness
+      scriptWorkflow.harness
     );
     this.reportUnresolvedVariables(
       [
         { field: "script-step.script", value: effectiveStep.script },
         ...this.getEnvironmentFields("script-step.env", effectiveStep.env),
       ],
-      scriptVars ?? {},
+      scriptVars,
       resolvedScriptHarness,
       context,
       target,
@@ -3019,12 +3045,7 @@ export class WorkflowExecutor {
       const timestampMs = Date.now();
 
       // ─── Interactive mode: run inside a PTY so the user can provide input ────
-      const resolvedExecutionMode =
-        SettingsPropertyResolver.resolveExecutionMode(
-          step,
-          this.promptQueue.getWorkflowFile(),
-          { hostCanProvidePty: context.hostCanProvidePty }
-        );
+      const resolvedExecutionMode = inherited.executionMode;
       await this.promptQueue.persistRuntimeMetadata(
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? stepIndex
@@ -3106,7 +3127,7 @@ export class WorkflowExecutor {
           return this.endConditionEvaluator.evaluateCondition(
             resolvedProperties,
             context.executionWorkspace.executionRoot,
-            this.promptQueue.getWorkflowFile().vars,
+            scriptVars,
             onOutput,
             secretNames,
             context.getScriptProcessRunner?.(target),
@@ -3138,11 +3159,7 @@ export class WorkflowExecutor {
         };
       };
 
-      const errorBehavior =
-        step.errorBehavior === null
-          ? undefined
-          : (step.errorBehavior ??
-            this.promptQueue.getWorkflowFile().errorBehavior);
+      const errorBehavior = inherited.errorBehavior;
       const report = await this.scriptExecutionReporter.report({
         context,
         source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
@@ -3157,7 +3174,7 @@ export class WorkflowExecutor {
         onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
         onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
         timeoutMs: timeout,
-        vars: this.promptQueue.getWorkflowFile().vars,
+        vars: scriptVars,
         secretNames,
         evaluate: evaluation,
         actionForErrored: this.getErrorConditionAction(
@@ -4927,19 +4944,13 @@ export class WorkflowExecutor {
       promptSource: RetryPromptSource
     ): Promise<{ attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
-      const workflowFile = this.promptQueue.getWorkflowFile();
-      let resolvedProperties = SettingsPropertyResolver.resolve(
+      const workflowFile = this.getRunStartWorkflow(context);
+      const retryVars = this.getRunStartView(context).vars;
+      let resolvedProperties = this.resolveDispatchProperties(
         retryPromptStep,
-        workflowFile,
-        { hostCanProvidePty: context.hostCanProvidePty }
+        context,
+        retryVars
       );
-      const retryVars = workflowFile.vars ?? {};
-      if (Object.keys(retryVars).length > 0) {
-        resolvedProperties = VarSubstitutor.applyToResolvedProperties(
-          resolvedProperties,
-          retryVars
-        );
-      }
       const effectiveRetryPrompt: PromptStep = {
         ...retryPromptStep,
         prompt:
@@ -5434,21 +5445,21 @@ export class WorkflowExecutor {
       return "next target: script";
     }
 
-    let resolvedProperties = SettingsPropertyResolver.resolve(
-      nextStep,
-      workflowFile,
-      {
-        hostCanProvidePty: context.hostCanProvidePty,
-      }
-    );
-    const vars = workflowFile.vars;
-    if (vars && Object.keys(vars).length > 0) {
-      resolvedProperties = VarSubstitutor.applyToResolvedProperties(
-        resolvedProperties,
-        vars
+    // `harness` is a run-start field, so the run-start view alone resolves
+    // it; an invalid value fails at dispatch, not in this log line.
+    try {
+      const { harness } = SettingsPropertyResolver.resolve(
+        this.getRunStartView(context).resolveStep(
+          nextStep,
+          nextQueueStep ? state.steps.indexOf(nextQueueStep) : -1
+        ),
+        this.getRunStartWorkflow(context),
+        { hostCanProvidePty: context.hostCanProvidePty }
       );
+      return `next harness: ${harness}`;
+    } catch (error) {
+      return `next harness: unresolved (${getErrorMessage(error)})`;
     }
-    return `next harness: ${resolvedProperties.harness}`;
   }
 
   private logWorkflowCompletion(

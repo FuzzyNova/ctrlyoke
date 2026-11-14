@@ -96,7 +96,7 @@ export class VarSubstitutor {
     phase: VarSubstitutionPhase
   ): T {
     const result = {
-      ...this.walkView(workflow, VAR_SUBSTITUTION_VIEWS.WORKFLOW, phase, vars),
+      ...this.substituteWorkflowRootView(workflow, vars, phase),
     };
     if (Array.isArray(workflow.steps))
       result.steps = workflow.steps.map((step, index) =>
@@ -129,6 +129,23 @@ export class VarSubstitutor {
       phase,
       vars,
       stepIndex === FINAL_STEP_INDEX ? "finalStep" : `steps[${stepIndex}]`
+    );
+  }
+
+  /**
+   * Substitute only the workflow root's `phase` fields (`harness`,
+   * `maxSteps`), leaving `steps` and `finalStep` as they are.
+   */
+  static substituteWorkflowRootView<T extends PromptFile>(
+    workflow: T,
+    vars: Readonly<Record<string, string>>,
+    phase: VarSubstitutionPhase
+  ): T {
+    return this.walkView(
+      workflow,
+      VAR_SUBSTITUTION_VIEWS.WORKFLOW,
+      phase,
+      vars
     );
   }
 
@@ -262,13 +279,17 @@ export class VarSubstitutor {
 
   /**
    * Apply var substitution to the resolved-properties view: `model`,
-   * `additionalArgs`, hook commands/env, preCondition and endCondition.
-   * Returns the input when nothing changes, otherwise a copy.
+   * `additionalArgs`, hooks, conditions, `executionMode`, `errorBehavior`
+   * and the other inherited execution properties. Resolved properties merge
+   * the step, the workflow root and the settings defaults, so this one walk
+   * covers a placeholder from any of them. A partial view (a script step's
+   * `executionMode`/`errorBehavior`) walks the same entries. Returns the
+   * input when nothing changes, otherwise a copy.
    */
-  static applyToResolvedProperties(
-    props: ResolvedProperties,
+  static applyToResolvedProperties<T extends Partial<ResolvedProperties>>(
+    props: T,
     vars: Readonly<Record<string, string>>
-  ): ResolvedProperties {
+  ): T {
     return this.walkView(
       props,
       VAR_SUBSTITUTION_VIEWS.RESOLVED_PROPERTIES,
