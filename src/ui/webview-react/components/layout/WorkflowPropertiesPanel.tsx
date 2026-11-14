@@ -1993,82 +1993,78 @@ const WorkflowPropertiesPanelInner: React.FC<{
               </FormField>
 
               {/* Row 4: Execution Mode */}
-              <DrawerRow narrow={isNarrow}>
+              <FormField
+                label="Execution Mode"
+                schemaPath="executionMode"
+                htmlFor="settings-execution-mode"
+                description={EXECUTION_MODE_HELP_TEXT}
+                setAsDefaultButton={
+                  <SetAsDefaultButton
+                    property={PROMPT_PROPERTIES.EXECUTION_MODE}
+                    show={isDifferentFromGlobal(
+                      PROMPT_PROPERTIES.EXECUTION_MODE
+                    )}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        PROMPT_PROPERTIES.EXECUTION_MODE,
+                        workflowProperties.executionMode
+                      )
+                    }
+                  />
+                }
+              >
+                <WorkflowVariableValue
+                  value={workflowProperties.executionMode}
+                  vars={workflowVars}
+                  onClear={() =>
+                    postWorkflowPropertiesUpdate({ executionMode: undefined })
+                  }
+                >
+                  <CustomSelect
+                    id="settings-execution-mode"
+                    schemaPath="executionMode"
+                    triggerAriaLabel="Execution Mode"
+                    value={effectiveExecutionMode}
+                    onChange={handleExecutionModeChange}
+                    options={toSelectOptions(
+                      EXECUTION_MODE_OPTIONS_META,
+                      "executionMode"
+                    )}
+                  />
+                </WorkflowVariableValue>
+              </FormField>
+
+              {/* Worktree group: the mode selector and the fields it reveals */}
+              <PropertyGroup>
                 <FormField
-                  label="Execution Mode"
-                  schemaPath="executionMode"
-                  htmlFor="settings-execution-mode"
-                  description={EXECUTION_MODE_HELP_TEXT}
+                  label="Worktree"
+                  schemaPath="worktree"
+                  htmlFor="settings-worktree-mode"
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.EXECUTION_MODE}
-                      show={isDifferentFromGlobal(
-                        PROMPT_PROPERTIES.EXECUTION_MODE
-                      )}
+                      property={PROMPT_PROPERTIES.WORKTREE}
+                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.WORKTREE)}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          PROMPT_PROPERTIES.EXECUTION_MODE,
-                          workflowProperties.executionMode
+                          PROMPT_PROPERTIES.WORKTREE,
+                          workflowProperties.worktree
                         )
                       }
                     />
                   }
                 >
-                  <WorkflowVariableValue
-                    value={workflowProperties.executionMode}
-                    vars={workflowVars}
-                    onClear={() =>
-                      postWorkflowPropertiesUpdate({ executionMode: undefined })
-                    }
-                  >
-                    <CustomSelect
-                      id="settings-execution-mode"
-                      schemaPath="executionMode"
-                      triggerAriaLabel="Execution Mode"
-                      value={effectiveExecutionMode}
-                      onChange={handleExecutionModeChange}
-                      options={toSelectOptions(
-                        EXECUTION_MODE_OPTIONS_META,
-                        "executionMode"
-                      )}
-                    />
-                  </WorkflowVariableValue>
-                </FormField>
-              </DrawerRow>
-
-              {/* Worktree group: the mode selector and the fields it reveals */}
-              <PropertyGroup>
-                <DrawerRow narrow={isNarrow}>
-                  <FormField
-                    label="Worktree"
+                  <CustomSelect
+                    id="settings-worktree-mode"
                     schemaPath="worktree"
-                    htmlFor="settings-worktree-mode"
-                    setAsDefaultButton={
-                      <SetAsDefaultButton
-                        property={PROMPT_PROPERTIES.WORKTREE}
-                        show={isDifferentFromGlobal(PROMPT_PROPERTIES.WORKTREE)}
-                        onSetDefault={() =>
-                          handleSetAsDefault(
-                            PROMPT_PROPERTIES.WORKTREE,
-                            workflowProperties.worktree
-                          )
-                        }
-                      />
-                    }
-                  >
-                    <CustomSelect
-                      id="settings-worktree-mode"
-                      schemaPath="worktree"
-                      triggerAriaLabel="Worktree"
-                      value={worktreeMode}
-                      onChange={handleWorktreeModeChange}
-                      options={toSelectOptions(
-                        WORKTREE_SELECTION_OPTIONS_META,
-                        "worktree"
-                      )}
-                    />
-                  </FormField>
-                </DrawerRow>
+                    triggerAriaLabel="Worktree"
+                    value={worktreeMode}
+                    onChange={handleWorktreeModeChange}
+                    options={toSelectOptions(
+                      WORKTREE_SELECTION_OPTIONS_META,
+                      "worktree"
+                    )}
+                  />
+                </FormField>
 
                 <AnimatedSection visible={worktreeMode !== WORKTREE_MODE_NONE}>
                   <div className="space-y-2">
