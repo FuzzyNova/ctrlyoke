@@ -163,7 +163,7 @@ export function ctrlYokeToolFamilies(
   };
 }
 
-function select<T>(
+export function selectExecutionProperty<T>(
   promptValue: T | undefined,
   workflowValue: T | undefined,
   defaultValue: T
@@ -182,7 +182,7 @@ function resolveAgent(
   workflow: PromptFile,
   defaults: ExecutionPropertyDefaults
 ): { value: string | undefined; source: ResolutionSource } {
-  const selected = select(prompt.agent, workflow.agent, defaults.agent);
+  const selected = selectExecutionProperty(prompt.agent, workflow.agent, defaults.agent);
   return { value: selected.value || undefined, source: selected.source };
 }
 
@@ -191,7 +191,7 @@ function resolveSkills(
   workflow: PromptFile,
   defaults: ExecutionPropertyDefaults
 ): { value: string[] | undefined; source: ResolutionSource } {
-  const selected = select(prompt.skills, workflow.skills, defaults.skills);
+  const selected = selectExecutionProperty(prompt.skills, workflow.skills, defaults.skills);
   return {
     value:
       Array.isArray(selected.value) && selected.value.length > 0
@@ -206,7 +206,7 @@ function resolveSecrets(
   workflow: PromptFile,
   defaults: ExecutionPropertyDefaults
 ): { value: string[] | undefined; source: ResolutionSource } {
-  const selected = select(prompt.secrets, workflow.secrets, defaults.secrets);
+  const selected = selectExecutionProperty(prompt.secrets, workflow.secrets, defaults.secrets);
   return {
     value:
       Array.isArray(selected.value) && selected.value.length > 0
@@ -303,7 +303,7 @@ export function resolveNullable<T>(
   workflowValue: T | null | undefined,
   defaultValue: T | null | undefined
 ): { value: T | undefined; source: ResolutionSource } {
-  const selected = select(promptValue, workflowValue, defaultValue);
+  const selected = selectExecutionProperty(promptValue, workflowValue, defaultValue);
   return { value: selected.value ?? undefined, source: selected.source };
 }
 
@@ -395,7 +395,7 @@ function resolveToolPermissions(
   workflow: PromptFile,
   defaults: ExecutionPropertyDefaults
 ): { value: ToolPermissionConfig | null; source: ResolutionSource } {
-  const selected = select(
+  const selected = selectExecutionProperty(
     prompt.toolPermissions,
     workflow.toolPermissions,
     defaults.toolPermissions
@@ -425,17 +425,17 @@ export function resolveExecutionProperties(
   context: ExecutionResolutionContext
 ): ResolvedExecutionTarget {
   const { defaults } = context;
-  const harness = select(prompt.harness, workflow.harness, defaults.harness);
+  const harness = selectExecutionProperty(prompt.harness, workflow.harness, defaults.harness);
   const inheritsHarnessScoped = inheritsWorkflowHarnessScopedValues(
     harness.value,
     workflow.harness ?? defaults.harness
   );
-  const model = select(
+  const model = selectExecutionProperty(
     prompt.model,
     inheritsHarnessScoped ? workflow.model : undefined,
     defaults.modelsByHarness[harness.value] ?? ""
   );
-  const executionMode = select(
+  const executionMode = selectExecutionProperty(
     prompt.executionMode,
     workflow.executionMode,
     defaults.executionMode
@@ -443,12 +443,12 @@ export function resolveExecutionProperties(
   const agent = resolveAgent(prompt, workflow, defaults);
   const skills = resolveSkills(prompt, workflow, defaults);
   const secrets = resolveSecrets(prompt, workflow, defaults);
-  const resumeSession = select(
+  const resumeSession = selectExecutionProperty(
     prompt.resumeSession,
     workflow.resumeSession,
     defaults.resumeSession
   );
-  const mcpServers = select(
+  const mcpServers = selectExecutionProperty(
     prompt.mcpServers,
     workflow.mcpServers,
     defaults.mcpServers ?? []
@@ -485,12 +485,12 @@ export function resolveExecutionProperties(
     workflow.preCondition,
     defaults.preCondition
   );
-  const priorContext = select(
+  const priorContext = selectExecutionProperty(
     prompt.priorContext,
     workflow.priorContext,
     defaults.priorContext
   );
-  const priorContextDetail = select(
+  const priorContextDetail = selectExecutionProperty(
     prompt.priorContextDetail,
     workflow.priorContextDetail,
     PRIOR_CONTEXT_DETAILS.FULL
@@ -508,8 +508,8 @@ export function resolveExecutionProperties(
     workflow.errorBehavior,
     defaults.errorBehavior
   );
-  const sandbox = select(prompt.sandbox, workflow.sandbox, defaults.sandbox);
-  const sandboxMode = select(
+  const sandbox = selectExecutionProperty(prompt.sandbox, workflow.sandbox, defaults.sandbox);
+  const sandboxMode = selectExecutionProperty(
     prompt.sandboxMode,
     workflow.sandboxMode,
     defaults.sandboxMode ?? DEFAULT_SANDBOX_MODE

@@ -1,6 +1,7 @@
 import { INTERACTIVE_TERMINAL_MODES } from "../../types/DashboardConstants";
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import { configService } from "../../config/CtrlYokeConfigService";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import type { SecretStore } from "../../platform/SecretStore";
@@ -614,6 +615,26 @@ suite("SecretResolver", () => {
   });
 
   suite("getDeclaredSecretGrants", () => {
+    test("inherits settings defaults unless step or workflow clears them", () => {
+      configService.setCliOverlay({ defaults: { secrets: ["DEFAULT_TOKEN"] } });
+      try {
+        const inherited: PromptFile = { steps: [{ prompt: "inherited" }] };
+        assert.deepStrictEqual(
+          getDeclaredSecretGrants(inherited.steps![0], inherited),
+          ["DEFAULT_TOKEN"]
+        );
+        const cleared: PromptFile = {
+          steps: [{ prompt: "cleared", secrets: null }],
+        };
+        assert.deepStrictEqual(
+          getDeclaredSecretGrants(cleared.steps![0], cleared),
+          []
+        );
+      } finally {
+        configService.setCliOverlay({});
+      }
+    });
+
     test("inherits the workflow array when the step declares nothing", () => {
       const workflow: PromptFile = {
         secrets: ["WORKFLOW_TOKEN"],

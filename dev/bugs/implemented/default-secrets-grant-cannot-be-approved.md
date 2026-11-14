@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli)
 - **Area:** `src/utils/SecretResolver.ts` (`getDeclaredSecretGrants`), `src/types/ExecutionPropertyResolver.ts` (`resolveSecrets`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

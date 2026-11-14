@@ -140,7 +140,7 @@
         },
         "secrets": {
           "$ref": "../v1/workflow.json#/$defs/secrets",
-          "description": "Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions.",
+          "description": "Default secret environment-variable names inherited by workflows that set no secrets of their own. Values are resolved by the execution host and never stored in workflow definitions.",
           "default": []
         },
         "executionMode": {

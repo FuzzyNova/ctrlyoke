@@ -3303,6 +3303,28 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("script steps receive settings-default secret grants", async () => {
+    const secretName = "CTRLYOKE_TEST_DEFAULT_SCRIPT_SECRET";
+    const previousValue = process.env[secretName];
+    process.env[secretName] = "script-secret-value";
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      steps: [{ type: "script", script: `node -e "process.exit(0)"` }],
+    });
+    configService.setCliOverlay({ defaults: { secrets: [secretName] } });
+    try {
+      await makeExecutor(queue).execute(
+        new MockHarnessIntegration(undefined, false),
+        makeContext(new MockHarnessIntegration(undefined, false))
+      );
+      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, [secretName]);
+    } finally {
+      configService.setCliOverlay({});
+      if (previousValue === undefined) delete process.env[secretName];
+      else process.env[secretName] = previousValue;
+    }
+  });
+
   test("an unapproved grant with no value takes the missing-secret path instead of the trust check", async () => {
     const promptText = "Use !UNAPPROVED_MISSING_TEST_SECRET for auth";
     const untrusted = { getDecision: () => undefined };

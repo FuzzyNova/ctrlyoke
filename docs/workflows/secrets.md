@@ -122,7 +122,7 @@ steps:
 - A script step receives each granted secret as an environment variable of the
   same name.
 - The [`defaults.secrets`](/reference/settings#defaults-secrets) setting sets
-  the list for new workflows.
+  the list a workflow inherits when it sets no `secrets` of its own.
 
 In the dashboard, the list is **Secrets** on the
 [workflow properties panel](/workflows/properties-panel).

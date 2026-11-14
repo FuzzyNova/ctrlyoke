@@ -22,6 +22,8 @@ import {
 } from "../config/SecretGrantsTrustStore";
 import { getEffectiveSecretGrants } from "./SecretReferenceParser";
 import { TRUST_DECISIONS } from "../types/DashboardConstants";
+import { selectExecutionProperty } from "../types/ExecutionPropertyResolver";
+import { ConfigurationUtils } from "./ConfigurationUtils";
 
 const SECRET_INTERPOLATION_PATTERN = /\$\{secret:([^}]+)\}/g;
 
@@ -392,7 +394,11 @@ export function getDeclaredSecretGrants(
   // rather than falling back to it. `??` would treat that `null` as "absent"
   // and re-inherit the workflow grants, injecting a secret the step opted out
   // of. Inline `!NAME` references still grant — that asymmetry is deliberate.
-  const declared = step.secrets !== undefined ? step.secrets : workflow.secrets;
+  const { value: declared } = selectExecutionProperty(
+    step.secrets,
+    workflow.secrets,
+    ConfigurationUtils.getDefaultSecrets()
+  );
   return getEffectiveSecretGrants(
     step,
     declared ?? [],

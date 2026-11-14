@@ -241,7 +241,7 @@ Default portable ctrlyoke workflow skill attachments for new workflows. Native h
 - **Default:** `[]`
 - **Workflow field:** [`secrets`](/reference/workflow-schema#execution-properties-secrets) — a workflow or step value overrides this default
 
-Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions.
+Default secret environment-variable names inherited by workflows that set no secrets of their own. Values are resolved by the execution host and never stored in workflow definitions.
 
 ### `defaults.executionMode` {#defaults-executionmode}
 

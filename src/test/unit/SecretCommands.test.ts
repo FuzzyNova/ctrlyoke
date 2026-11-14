@@ -400,6 +400,25 @@ suite("Secret command JSON output", () => {
 });
 
 suite("Secret command handlers", () => {
+  test("secret check reports settings-default grants as pending approval", async () => {
+    configService.setCliOverlay({ defaults: { secrets: ["DEFAULT_PENDING_TOKEN"] } });
+    try {
+      const io = new TestIo();
+      const result = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        workflowDependencies(new InMemorySecretStore(), {
+          steps: [{ prompt: "deploy" }],
+        }),
+        io
+      );
+      assert.strictEqual(result, 2);
+      assert.match(io.errors.join("\n"), /DEFAULT_PENDING_TOKEN.*not been approved/);
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
   test("reads set values from stdin and stores them in the requested scope", async () => {
     const store = new InMemorySecretStore();
     const io = new TestIo();
