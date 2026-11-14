@@ -1,6 +1,8 @@
 # Full Variable Substitution Support
 
-**Status:** Not started. Written 2026-11-12 against `0e5bd6ea0`.
+**Status:** In progress (staged 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
+the slots plan's `worktree.checkout` field shipped as `directory`, and this plan
+now uses that name.
 **Priority:** P2
 **Related:**
 [NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md](../implemented/NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md)
@@ -11,6 +13,28 @@ var` needs the substituted field set from one source),
 from; this plan is only about where they go),
 [SCRIPT_GENERATED_STEPS_PLAN.md](SCRIPT_GENERATED_STEPS_PLAN.md) (`{{item}}`
 filled at generation time).
+
+## Progress
+
+Each step ticks its own item, notes any deviation under it, and commits.
+
+- [ ] 1. Policy table (`VarSubstitutionPolicy.ts`) and `substituteWorkflowView`;
+      existing call sites moved over; fence masking limited to prompt text.
+- [ ] 2. Engine gaps 1–4 (Dry Run grants, preflight additionalArgs, advisory
+      with empty `vars`, preset param values left literal).
+- [ ] 3. Gaps 5–6: CLI help, schema descriptions and docs table driven by the
+      policy table; Dry Run shows worktree setup.
+- [ ] 4. Run-start phase in startup/continue; `worktree.branch`/`base`/
+      `directory` substituted; workspace-trust predicate; worktrees docs.
+- [ ] 5. Dispatch `text` fields (step `name`, `expected`, `shell`, `agent`,
+      `skills[]`, `sessionId`, `priorContext.*`).
+- [ ] 6. Schema `varPlaceholder`, coercion and post-substitution validation;
+      run-start `value` fields (`harness`, `enabled`, `maxSteps`).
+- [ ] 7. Dispatch `value` fields, errorBehavior fallback, CLI `--dry-run`
+      exit 2 and unused-`--var` warning.
+- [ ] 8. Dashboard and editor: dropdown warnings, placeholder chips,
+      CodeMirror/diagnostics from the policy table, Dry Run substituted values
+      and blockers.
 
 ## Problem
 
@@ -55,7 +79,7 @@ value differ from the value that runs.
   values. The dashboard has no run-time variable input. MCP agents cannot set
   vars.
 - **Validation runs on the authored text.** The startup pipeline
-  (`WorkflowStartupPipeline`) checks secret grants, worktree mode/branch and
+  (`src/core/orchestration/WorkflowStartupPipeline.ts`) checks secret grants, worktree mode/branch and
   harness compatibility before any substitution. So does continue
   (`WorkflowInstance` around line 2630). The JSON schema rejects `{{x}}` in
   every enum, number and boolean field.
@@ -90,7 +114,7 @@ scripts. A variable is therefore not untrusted input. The risk is different:
 
 - **Approval drift.** Several trust gates fingerprint the authored value. These
   are the external-root approval for `trustedExternalRoots`, secret grant
-  approvals, and workspace-settings trust (`WorkspaceSensitiveSettings.ts`). If
+  approvals, and workspace-settings trust (`src/config/WorkspaceSensitiveSettings.ts`). If
   the gate approves `{{root}}` and the run substitutes `/`, approval means
   nothing.
 - **Review drift.** The properties panel, Dry Run and the run view show
@@ -140,16 +164,16 @@ worktree `setup`.
 
 **Add as `text`:**
 
-| Field                                       | Phase     | Notes                                                                                                                              |
-| ------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| step `name`                                 | dispatch  | The run view renders it from the run file's `vars`. The authored text stays in the definition.                                     |
-| `worktree.branch`, `.base`, `.checkout`     | run-start | Substituted before `normalizeDefault`/`validateBranchName`. Continue reuses the recorded branch and checkout (see the slots plan). |
-| `expected`                                  | dispatch  | A string result is compared as text. A number stays a number.                                                                      |
-| `shell`                                     | dispatch  | The workflow already chooses programs through `script`.                                                                            |
-| `agent`                                     | dispatch  | Resolved by name after substitution, the same as today.                                                                            |
-| `skills[]` entries                          | dispatch  | Each name is substituted separately.                                                                                               |
-| `sessionId` (string form)                   | dispatch  | Lets a workflow resume a session passed in with `--var`. The person running already controls this.                                 |
-| `priorContext.workflow`, `priorContext.run` | dispatch  | `run` must resolve to an integer or a run reference after substitution.                                                            |
+| Field                                       | Phase     | Notes                                                                                                                               |
+| ------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| step `name`                                 | dispatch  | The run view renders it from the run file's `vars`. The authored text stays in the definition.                                      |
+| `worktree.branch`, `.base`, `.directory`    | run-start | Substituted before `normalizeDefault`/`validateBranchName`. Continue reuses the recorded branch and directory (see the slots plan). |
+| `expected`                                  | dispatch  | A string result is compared as text. A number stays a number.                                                                       |
+| `shell`                                     | dispatch  | The workflow already chooses programs through `script`.                                                                             |
+| `agent`                                     | dispatch  | Resolved by name after substitution, the same as today.                                                                             |
+| `skills[]` entries                          | dispatch  | Each name is substituted separately.                                                                                                |
+| `sessionId` (string form)                   | dispatch  | Lets a workflow resume a session passed in with `--var`. The person running already controls this.                                  |
+| `priorContext.workflow`, `priorContext.run` | dispatch  | `run` must resolve to an integer or a run reference after substitution.                                                             |
 
 **Add as `value`** (schema accepts a `{{name}}` string as well as the typed
 value; the result is validated against the original type):
@@ -245,7 +269,7 @@ greater than 0.` A run-start field fails the run start. A dispatch field fails
   `VARIABLE_UNDEFINED` diagnostic (`PromptDiagnosticRules.ts`) cover every
   table field. They read the policy table instead of a hard-coded list.
 - Dry Run shows substituted values next to each field it already lists, the
-  worktree branch, base, checkout and setup (gap 6), and validation failures
+  worktree branch, base, directory and setup (gap 6), and validation failures
   as blockers.
 - Out of scope: a dashboard "Run with variables…" dialog. It would feed the
   same merge as `--var` and is worth its own small plan.
@@ -264,7 +288,7 @@ greater than 0.` A run-start field fails the run start. A dispatch field fails
 - Settings schema: `defaults.*` values `$ref` the same definitions, so they
   accept placeholders too and are substituted with the running workflow's
   vars, as `defaults.worktree.setup` already is. The workspace-trust predicate
-  for `defaults.worktree` counts a `checkout` that contains a placeholder as
+  for `defaults.worktree` counts a `directory` that contains a placeholder as
   sensitive, because it cannot be proven to be a bare name (see the slots
   plan's trust section).
 - Run files: no new fields, so no format bump. `_runtime` keeps recording
@@ -282,7 +306,7 @@ greater than 0.` A run-start field fails the run start. A dispatch field fails
 
 1. Policy table and `substituteWorkflowView`, moving the existing call sites
    over with no behavior change, plus gaps 1–6.
-2. `text` fields, including `worktree.branch`/`base`/`checkout`, which unblocks
+2. `text` fields, including `worktree.branch`/`base`/`directory`, which unblocks
    the slots workflow.
 3. `value` fields, the schema `varPlaceholder`, post-substitution validation
    and the dashboard chips.
