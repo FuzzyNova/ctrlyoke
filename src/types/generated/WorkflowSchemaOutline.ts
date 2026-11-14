@@ -81,7 +81,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "null"
         ],
-        "description": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow."
+        "description": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "resumeSession": {
         "valueKind": "boolean",
@@ -109,7 +109,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "number"
         ],
-        "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
+        "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "skills": {
         "valueKind": "oneOf",
@@ -117,7 +117,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach."
+        "description": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "secrets": {
         "valueKind": "oneOf",
@@ -157,7 +157,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "finalStepAll",
           "finalStepPrevious"
         ],
-        "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation)."
+        "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "priorContextDetail": {
         "valueKind": "string",
@@ -291,7 +291,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "shell": {
         "valueKind": "string",
-        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted."
+        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "onPass": {
         "valueKind": "string",
@@ -334,7 +334,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "number"
         ],
-        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow."
+        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
         "valueKind": "boolean",
@@ -385,7 +385,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "null"
         ],
-        "description": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow."
+        "description": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "resumeSession": {
         "valueKind": "boolean",
@@ -413,7 +413,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "number"
         ],
-        "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
+        "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "skills": {
         "valueKind": "oneOf",
@@ -421,7 +421,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach."
+        "description": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "secrets": {
         "valueKind": "oneOf",
@@ -461,7 +461,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "finalStepAll",
           "finalStepPrevious"
         ],
-        "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation)."
+        "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "priorContextDetail": {
         "valueKind": "string",
@@ -554,7 +554,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "name": {
         "valueKind": "string",
-        "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored."
+        "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "enabled": {
         "valueKind": "boolean",
@@ -595,7 +595,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "shell": {
         "valueKind": "string",
-        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted."
+        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "errorBehavior": {
         "valueKind": "oneOf",
@@ -654,7 +654,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "number"
         ],
-        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow."
+        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
         "valueKind": "boolean",
@@ -707,7 +707,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "shell": {
         "valueKind": "string",
-        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted."
+        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "operator": {
         "valueKind": "string",
@@ -732,7 +732,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "number"
         ],
-        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow."
+        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
         "valueKind": "boolean",
@@ -807,7 +807,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "shell": {
         "valueKind": "string",
-        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted."
+        "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "operator": {
         "valueKind": "string",
@@ -832,7 +832,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string",
           "number"
         ],
-        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow."
+        "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "ignoreCase": {
         "valueKind": "boolean",

@@ -501,7 +501,12 @@ export class ExecutionPreviewService {
     worktreePreview: WorktreeExecutionPreview | undefined,
     worktreeExecutionWorkspace: ExecutionWorkspace | undefined
   ): Promise<StepExecutionPreview> {
-    const step = target.step;
+    const step = VarSubstitutor.substituteWorkflowView(
+      target.step,
+      { ...variables },
+      "dispatch",
+      target.stepIndex
+    );
     const promptStep = isScriptStep(step) ? this.scriptAsPrompt(step) : step;
     const targetResolution =
       resolvedTarget ??

@@ -49,7 +49,14 @@ attempt runs; worktree setup resolves when the worktree is prepared.
 | Phase     | Fields                                                                                                                                                                                                                                                                                                                                                       |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Run start | `worktree.branch`, `worktree.base`, `worktree.directory`, `defaults.worktree.branch`, `defaults.worktree.base`, `defaults.worktree.directory`                                                                                                                                                                                                                |
-| Dispatch  | `prompt.prompt`, `steps[].prompt`, `steps[].model`, `steps[].additionalArgs`, `hooks[].command`, `hooks[].env.*`, `preCondition.script`, `preCondition.env.*`, `endCondition.script`, `endCondition.env.*`, `endCondition.retryPrompt`, `endCondition.passRetryPrompt`, `scriptStep.script`, `scriptStep.env.*`, `worktree.setup`, `defaults.worktree.setup` |
+| Dispatch  | `prompt.prompt`, `steps[].prompt`, `steps[].model`, `steps[].additionalArgs`, `steps[].name`, `steps[].expected`, `steps[].shell`, `steps[].agent`, `steps[].skills[]`, `steps[].sessionId`, `steps[].priorContext.workflow`, `steps[].priorContext.run`, `hooks[].command`, `hooks[].env.*`, `preCondition.script`, `preCondition.env.*`, `endCondition.script`, `endCondition.env.*`, `endCondition.retryPrompt`, `endCondition.passRetryPrompt`, `scriptStep.script`, `scriptStep.env.*`, `worktree.setup`, `defaults.worktree.setup` |
+
+Dispatch text fields resolve for each attempt. `expected` is substituted only
+when authored as text; numeric values stay numeric. `sessionId` is substituted
+only in its string form; numeric step references stay numeric. `priorContext.run`
+must resolve to a run number or stable run reference. Unresolved placeholders
+fail before the step starts an external process. Execution labels use the
+resolved name; the saved definition keeps its authored placeholder.
 
 ### Not substituted
 
@@ -65,7 +72,7 @@ approved or reviewed:
   are author-only contracts; agent-supplied parameter values stay literal.
 - `vars`: variables are not recursively expanded.
 - Structural and identity fields, including `type`, `parallel`, `failFast`,
-  worktree `mode`/`merge`/`keep`, workflow and step names, map keys, `color`,
+  worktree `mode`/`merge`/`keep`, workflow names, map keys, `color`,
   schema metadata, runtime metadata, and bookkeeping fields, do not accept
   substitution.
 
@@ -78,8 +85,8 @@ The corresponding CLI help and schema description use the same field list.
   and the field it was found in. The step still runs, so a workflow that talks
   about <code v-pre>{{name}}</code> syntax in a prompt keeps working.
 - **Fenced code blocks.** Nothing inside a fenced code block (` ``` `) in prompt
-  text is substituted. Use a fence when a prompt needs to show the literal
-  syntax.
+  text is substituted. Script and environment text is substituted inside
+  fences too. Use a fence in a prompt when it needs to show literal syntax.
 - **Inline code is not protected.** <code v-pre>`{{module}}`</code> in single
   backticks _is_ substituted. Scripts use backticks for command substitution,
   so authors deliberately put variables inside them.

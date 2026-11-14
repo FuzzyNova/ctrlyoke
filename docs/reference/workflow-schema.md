@@ -156,7 +156,7 @@ Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the 
 - **Type:** `string` or `""` or `null`
 - **Settings default:** [`defaults.agent`](/reference/settings#defaults-agent)
 
-Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in &lt;agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow.
+Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in &lt;agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 Accepted forms:
 
@@ -203,14 +203,14 @@ Accepted forms:
 
 - **Type:** `string` or `integer`
 
-Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value "finalStep" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution.
+Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value "finalStep" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `skills` {#execution-properties-skills}
 
 - **Type:** `string[]` or `null`
 - **Settings default:** [`defaults.skills`](/reference/settings#defaults-skills)
 
-Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach.
+Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `secrets` {#execution-properties-secrets}
 
@@ -238,7 +238,7 @@ Script gate that runs before the prompt. Determines whether to run the prompt, s
 - **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or `{ previous }` or [Run source](#run-source)
 - **Settings default:** [`defaults.priorContext`](/reference/settings#defaults-priorcontext)
 
-Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation).
+Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 Accepted forms:
 
@@ -381,7 +381,7 @@ Step type discriminator. Required, and must be "script", for script steps. Not s
 - **Type:** `string`
 - **Constraints:** at most 100 characters
 
-Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored.
+Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `enabled` {#script-step-enabled}
 
@@ -431,7 +431,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 
 - **Type:** `string`
 
-Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `errorBehavior` {#script-step-errorbehavior}
 
@@ -475,7 +475,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 
 - **Type:** `string` or `number`
 
-Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `ignoreCase` {#script-step-ignorecase}
 
@@ -562,7 +562,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 
 - **Type:** `string`
 
-Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `operator` {#pre-condition-operator}
 
@@ -574,7 +574,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 
 - **Type:** `string` or `number`
 
-Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `ignoreCase` {#pre-condition-ignorecase}
 
@@ -637,7 +637,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 
 - **Type:** `string`
 
-Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `operator` {#end-condition-operator}
 
@@ -649,7 +649,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 
 - **Type:** `string` or `number`
 
-Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `ignoreCase` {#end-condition-ignorecase}
 
@@ -736,7 +736,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 
 - **Type:** `string`
 
-Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `operator` {#condition-presets-operator}
 
@@ -748,7 +748,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 
 - **Type:** `string` or `number`
 
-Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `ignoreCase` {#condition-presets-ignorecase}
 
@@ -837,7 +837,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 
 - **Type:** `string`
 
-Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `operator` {#script-fields-operator}
 
@@ -849,7 +849,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 
 - **Type:** `string` or `number`
 
-Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `ignoreCase` {#script-fields-ignorecase}
 
@@ -977,7 +977,7 @@ Optional setup command run in the named worktree at the start of every run, such
 
 ## Variables {#vars}
 
-Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted fields (all at dispatch unless noted): worktree.branch, worktree.base, worktree.directory, defaults.worktree.branch, defaults.worktree.base, defaults.worktree.directory (run start); prompt.prompt, steps[].prompt, steps[].model, steps[].additionalArgs, hooks[].command, hooks[].env.\*, preCondition.script, preCondition.env.\*, endCondition.script, endCondition.env.\*, endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.\*, worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode because reviewed permission posture must match; mcpServers because entries launch programs and carry authored secret grants; conditions and condition params because preset definitions and parameter names are author-only contracts; vars because variables are not recursively expanded. Structural fields and identity (including type, parallel, failFast, worktree mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are not substituted. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
+Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted fields (all at dispatch unless noted): worktree.branch, worktree.base, worktree.directory, defaults.worktree.branch, defaults.worktree.base, defaults.worktree.directory (run start); prompt.prompt, steps[].prompt, steps[].model, steps[].additionalArgs, steps[].name, steps[].expected, steps[].shell, steps[].agent, steps[].skills[], steps[].sessionId, steps[].priorContext.workflow, steps[].priorContext.run, hooks[].command, hooks[].env.\*, preCondition.script, preCondition.env.\*, endCondition.script, endCondition.env.\*, endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.\*, worktree.setup, and defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets because approval is keyed to authored values; toolPermissions, sandbox, and sandboxMode because reviewed permission posture must match; mcpServers because entries launch programs and carry authored secret grants; conditions and condition params because preset definitions and parameter names are author-only contracts; vars because variables are not recursively expanded. Structural fields and identity (including type, parallel, failFast, worktree mode/merge/keep, names, map keys, color, schema metadata, runtime and bookkeeping fields) are not substituted. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
 
 - **Type:** map of `string`
 
@@ -1093,12 +1093,12 @@ The workflow to import from, in this workspace: its workflow key (Copy Workflow 
 
 - **Type:** `integer` or `string`
 
-Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it.
+Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.
 
 Accepted forms:
 
 - `integer` — The run's number, as shown in the run list.
-- `string` matching `^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$` — The run's stable run reference.
+- `string` matching `^(run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z|\{\{\w+\}\})$` — The run's stable run reference. May also be one whole <code v-pre>{{name}}</code> placeholder, validated after substitution.
 
 ## Harness IDs {#harness-ids}
 

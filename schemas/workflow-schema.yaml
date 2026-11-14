@@ -426,19 +426,21 @@ $defs:
       override these at runtime. Substituted fields (all at dispatch unless noted): worktree.branch,
       worktree.base, worktree.directory, defaults.worktree.branch, defaults.worktree.base,
       defaults.worktree.directory (run start); prompt.prompt, steps[].prompt, steps[].model,
-      steps[].additionalArgs, hooks[].command, hooks[].env.*, preCondition.script,
-      preCondition.env.*, endCondition.script, endCondition.env.*, endCondition.retryPrompt,
-      endCondition.passRetryPrompt, scriptStep.script, scriptStep.env.*, worktree.setup, and
-      defaults.worktree.setup. Not substituted: trustedExternalRoots and secrets because approval is
-      keyed to authored values; toolPermissions, sandbox, and sandboxMode because reviewed
-      permission posture must match; mcpServers because entries launch programs and carry authored
-      secret grants; conditions and condition params because preset definitions and parameter names
-      are author-only contracts; vars because variables are not recursively expanded. Structural
-      fields and identity (including type, parallel, failFast, worktree mode/merge/keep, names, map
-      keys, color, schema metadata, runtime and bookkeeping fields) are not substituted. Every
-      script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment
-      variable regardless of {{varName}} usage. A value containing `${secret:` causes the step to
-      fail before execution so vars cannot manufacture managed-secret references.
+      steps[].additionalArgs, steps[].name, steps[].expected, steps[].shell, steps[].agent,
+      steps[].skills[], steps[].sessionId, steps[].priorContext.workflow, steps[].priorContext.run,
+      hooks[].command, hooks[].env.*, preCondition.script, preCondition.env.*, endCondition.script,
+      endCondition.env.*, endCondition.retryPrompt, endCondition.passRetryPrompt, scriptStep.script,
+      scriptStep.env.*, worktree.setup, and defaults.worktree.setup. Not substituted:
+      trustedExternalRoots and secrets because approval is keyed to authored values;
+      toolPermissions, sandbox, and sandboxMode because reviewed permission posture must match;
+      mcpServers because entries launch programs and carry authored secret grants; conditions and
+      condition params because preset definitions and parameter names are author-only contracts;
+      vars because variables are not recursively expanded. Structural fields and identity (including
+      type, parallel, failFast, worktree mode/merge/keep, names, map keys, color, schema metadata,
+      runtime and bookkeeping fields) are not substituted. Every script and condition process also
+      receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}}
+      usage. A value containing `${secret:` causes the step to fail before execution so vars cannot
+      manufacture managed-secret references.
     additionalProperties:
       type: string
     propertyNames:
@@ -673,12 +675,15 @@ $defs:
             minimum: 1
             description: The run's number, as shown in the run list.
           - type: string
-            pattern: ^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$
-            description: The run's stable run reference.
+            pattern: ^(run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z|\{\{\w+\}\})$
+            description: >-
+              The run's stable run reference. May also be one whole {{name}} placeholder, validated
+              after substitution.
         description: >-
           Which run of the workflow to import: its number, or its run reference. Omit it to use the
           workflow's latest completed run, which moves on as new runs complete. A run named here
-          cannot be deleted while a workflow references it.
+          cannot be deleted while a workflow references it. A string placeholder resolves at
+          dispatch and must become an integer or stable run reference.
         title: Run
   executionProperties:
     type: object
@@ -781,7 +786,8 @@ $defs:
           so it works the same on every harness. Native harness agent discovery is managed
           separately in the Agents & Skills settings page and does not determine workflow agent
           support. On a step, null (None in the step properties) disables the agent inherited from
-          the workflow.
+          the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch;
+          unresolved placeholders fail before execution.
         $ref: '#/$defs/agent'
         title: Agent
       resumeSession:
@@ -841,7 +847,8 @@ $defs:
           — works on any prompt, not just the final step itself; on first pass when no final step
           session exists yet, a new session starts). When omitted and resumeSession=true,
           automatically resumes previous prompt's session. Working file runtime metadata stores the
-          actual session ID used during execution.
+          actual session ID used during execution. Variable substitution: step text accepts {{name}}
+          and resolves at dispatch; unresolved placeholders fail before execution.
         title: Session ID
       skills:
         description: >-
@@ -853,7 +860,8 @@ $defs:
           behavior varies by harness; native discovery does not determine workflow skills support.
           Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in
           the step properties) disables inherited workflow skills; skills declared by the selected
-          agent still attach.
+          agent still attach. Variable substitution: step text accepts {{name}} and resolves at
+          dispatch; unresolved placeholders fail before execution.
         $ref: '#/$defs/skills'
         title: Skills
       secrets:
@@ -895,7 +903,8 @@ $defs:
           timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is
           omitted, the workflow's latest completed run is used. Addresses never contain local paths.
           When omitted, no context is injected. Note: combining with resumeSession:true may
-          duplicate context (accepted limitation).
+          duplicate context (accepted limitation). Variable substitution: step text accepts {{name}}
+          and resolves at dispatch; unresolved placeholders fail before execution.
         $ref: '#/$defs/priorContext'
         title: Prior Context
       priorContextDetail:
@@ -1131,7 +1140,8 @@ $defs:
         description: >-
           Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows
           the script text. Not substituted: This structural field or identity value stays as
-          authored.
+          authored. Variable substitution: step text accepts {{name}} and resolves at dispatch;
+          unresolved placeholders fail before execution.
         type: string
         maxLength: 100
         title: Name
@@ -1461,7 +1471,9 @@ $defs:
           Pin the shell that runs this script's inline text. Used only when `script` is inline text
           rather than a path to a script file with a known extension. Free-form executable name or
           path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for
-          this one script; falls back to it, then platform auto-detect, when omitted.
+          this one script; falls back to it, then platform auto-detect, when omitted. Variable
+          substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders
+          fail before execution.
         examples:
           - pwsh
           - powershell
@@ -1503,7 +1515,8 @@ $defs:
           there is no boolean form, and 'true'/'false' are not accepted as exit-code values.
           Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores
           that comparison and still falls back to exit code 0; the dashboard flags this as a warning
-          rather than refusing the workflow.
+          rather than refusing the workflow. Variable substitution: step text accepts {{name}} and
+          resolves at dispatch; unresolved placeholders fail before execution.
         title: Expected
       ignoreCase:
         type: boolean

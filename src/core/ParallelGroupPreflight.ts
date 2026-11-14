@@ -171,7 +171,12 @@ export async function preflightParallelGroupMember(
   const variables = Object.freeze({ ...(workflow.vars ?? {}) });
   const issues: ParallelGroupPreflightIssue[] = [];
 
-  const step = options.step;
+  const step = VarSubstitutor.substituteWorkflowView(
+    options.step,
+    { ...variables },
+    "dispatch",
+    options.stepIndex
+  );
   const prompt = promptProjection(step);
   const resolvedTarget = resolveExecutionProperties(prompt, workflow, {
     defaults: options.defaults,

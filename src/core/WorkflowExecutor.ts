@@ -2240,6 +2240,13 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
+    const workflowView = this.promptQueue.getWorkflowFile();
+    step = VarSubstitutor.substituteWorkflowView(
+      step,
+      { ...(preflightMember?.variables ?? workflowView.vars ?? {}) },
+      "dispatch",
+      target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1
+    );
     const state = this.promptQueue.getState();
     const runtime = this.getRuntime();
     const currentStatus = runtime.status;

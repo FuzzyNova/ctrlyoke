@@ -31,8 +31,10 @@ Each step ticks its own item, notes any deviation under it, and commits.
       `directory` substituted; workspace-trust predicate; worktrees docs.
       Note: this checkout lacked `substituteWorkflowView`; a dedicated shared
       worktree run-start helper was added to preserve authored definitions.
-- [ ] 5. Dispatch `text` fields (step `name`, `expected`, `shell`, `agent`,
+- [x] 5. Dispatch `text` fields (step `name`, `expected`, `shell`, `agent`,
       `skills[]`, `sessionId`, `priorContext.*`).
+      Note: dispatch views are copied before execution and preflight; error
+      policy routing and execution-layer validation coverage remain incomplete.
 - [ ] 6. Schema `varPlaceholder`, coercion and post-substitution validation;
       run-start `value` fields (`harness`, `enabled`, `maxSteps`).
 - [ ] 7. Dispatch `value` fields, errorBehavior fallback, CLI `--dry-run`

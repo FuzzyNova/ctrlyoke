@@ -7,6 +7,7 @@ import type {
 } from "../types/CtrlYokeTypes";
 import type {
   PromptFile,
+  WorkflowStep,
   WorktreeConfig,
   WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
@@ -38,6 +39,154 @@ import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
  */
 export class VarSubstitutor {
   private static readonly SECRET_REFERENCE_PREFIX = "${secret:";
+
+  /** Substitution failures that must be handled through the step error policy. */
+  static readonly VALIDATION_FAILURE = "VAR_SUBSTITUTION_VALIDATION_FAILURE";
+
+  /** Build the just-in-time dispatch view without changing the authored definition. */
+  static substituteWorkflowView<T extends PromptFile | WorkflowStep>(
+    view: T,
+    vars: Record<string, string>,
+    phase: "dispatch" | "run-start",
+    stepIndex = 0
+  ): T {
+    if (phase !== "dispatch") return view;
+    const substituteField = (
+      value: unknown,
+      policyPath: string,
+      fieldPath: string
+    ): unknown => {
+      if (typeof value !== "string") return value;
+      const unresolved = this.findUnresolvedVariables(value, vars);
+      if (unresolved.length) {
+        const placeholder = unresolved[0]!;
+        const name = placeholder.slice(2, -2);
+        throw new Error(
+          `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
+        );
+      }
+      return this.substitute(
+        value,
+        vars,
+        VAR_SUBSTITUTION_POLICY[
+          policyPath as keyof typeof VAR_SUBSTITUTION_POLICY
+        ].fencedCodeProtected
+      );
+    };
+    const substituteStep = (
+      step: WorkflowStep,
+      index: number
+    ): WorkflowStep => {
+      const fields = step as WorkflowStep & Record<string, unknown>;
+      const supportedValues = [
+        fields.name,
+        fields.expected,
+        fields.shell,
+        fields.agent,
+        ...(Array.isArray(fields.skills) ? fields.skills : []),
+        typeof fields.sessionId === "string" ? fields.sessionId : undefined,
+        ...(fields.priorContext &&
+        typeof fields.priorContext === "object" &&
+        !Array.isArray(fields.priorContext)
+          ? [
+              (fields.priorContext as Record<string, unknown>).workflow,
+              (fields.priorContext as Record<string, unknown>).run,
+            ]
+          : []),
+      ];
+      if (
+        Object.keys(vars).length === 0 &&
+        !supportedValues.some(
+          (value) => typeof value === "string" && /\{\{\w+\}\}/.test(value)
+        )
+      )
+        return step;
+      const result = { ...step } as WorkflowStep & Record<string, unknown>;
+      const path = `steps[${index}]`;
+      if (typeof result.name === "string")
+        result.name = substituteField(
+          result.name,
+          "steps[].name",
+          `${path}.name`
+        ) as string;
+      if (typeof result.expected === "string")
+        result.expected = substituteField(
+          result.expected,
+          "steps[].expected",
+          `${path}.expected`
+        ) as string;
+      if (typeof result.shell === "string")
+        result.shell = substituteField(
+          result.shell,
+          "steps[].shell",
+          `${path}.shell`
+        ) as string;
+      if (typeof result.agent === "string")
+        result.agent = substituteField(
+          result.agent,
+          "steps[].agent",
+          `${path}.agent`
+        ) as string;
+      if (Array.isArray(result.skills))
+        result.skills = result.skills.map(
+          (skill, skillIndex) =>
+            substituteField(
+              skill,
+              "steps[].skills[]",
+              `${path}.skills[${skillIndex}]`
+            ) as string
+        );
+      if (typeof result.sessionId === "string")
+        result.sessionId = substituteField(
+          result.sessionId,
+          "steps[].sessionId",
+          `${path}.sessionId`
+        ) as string;
+      const prior = result["priorContext"];
+      if (prior && typeof prior === "object" && !Array.isArray(prior)) {
+        const priorCopy = { ...prior } as Record<string, unknown>;
+        if (typeof priorCopy.workflow === "string")
+          priorCopy.workflow = substituteField(
+            priorCopy.workflow,
+            "steps[].priorContext.workflow",
+            `${path}.priorContext.workflow`
+          );
+        if (typeof priorCopy.run === "string") {
+          const run = substituteField(
+            priorCopy.run,
+            "steps[].priorContext.run",
+            `${path}.priorContext.run`
+          );
+          if (
+            !/^[1-9]\d*$/.test(run as string) &&
+            !/^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/.test(
+              run as string
+            )
+          ) {
+            throw new Error(
+              `${this.VALIDATION_FAILURE}: ${path}.priorContext.run: variable "run" is "${run}", expected an integer or run reference.`
+            );
+          }
+          priorCopy.run = /^[1-9]\d*$/.test(run as string) ? Number(run) : run;
+        }
+        result["priorContext"] = priorCopy;
+      }
+      return result;
+    };
+    if ("steps" in view) {
+      const workflow = view as PromptFile;
+      return {
+        ...workflow,
+        steps: workflow.steps?.map((step, index) =>
+          substituteStep(step, index)
+        ),
+        finalStep: workflow.finalStep
+          ? (substituteStep(workflow.finalStep, -1) as PromptFile["finalStep"])
+          : workflow.finalStep,
+      } as T;
+    }
+    return substituteStep(view as WorkflowStep, stepIndex) as T;
+  }
 
   /** Resolve worktree selectors before preflight; the authored workflow stays untouched. */
   static applyToRunStartWorktree<T extends PromptFile>(
