@@ -11,6 +11,12 @@ import {
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  asAuthoredValue,
+  isWorkflowVariablePlaceholder,
+  parseNumberOrVariable,
+} from "@utils/wholeValueVariables";
+import { WorkflowVariableValue } from "./WorkflowVariableValue";
 
 const DEFAULT_ERROR_BEHAVIOR: ErrorBehavior = {
   onError: ERROR_BEHAVIOR_ACTIONS.STOP_WORKFLOW,
@@ -43,6 +49,11 @@ interface ErrorBehaviorEditorProps {
   disabled?: boolean;
   idPrefix?: string;
   schemaPath?: string;
+  /**
+   * Clears an `onError` authored as a `{{name}}` placeholder. Defaults to the
+   * built-in stop action; an inheriting caller removes the override instead.
+   */
+  onClearVariable?: () => void;
 }
 
 export function ErrorBehaviorEditor({
@@ -51,6 +62,7 @@ export function ErrorBehaviorEditor({
   disabled = false,
   idPrefix = "error-behavior",
   schemaPath = "errorBehavior",
+  onClearVariable,
 }: ErrorBehaviorEditorProps) {
   const resolvedValue = useMemo(() => normalizeErrorBehavior(value), [value]);
   const [maxRetriesInput, setMaxRetriesInput] = useState(
@@ -70,7 +82,10 @@ export function ErrorBehaviorEditor({
     setRetryDelayInput(String(resolvedValue.retryDelaySec ?? ""));
   }, [resolvedValue.retryDelaySec]);
 
-  const isRetry = isErrorBehaviorRetry(resolvedValue.onError);
+  // A placeholder action may resolve to a retry, so its budget stays editable.
+  const isRetry =
+    isWorkflowVariablePlaceholder(resolvedValue.onError) ||
+    isErrorBehaviorRetry(resolvedValue.onError);
 
   return (
     <div className="space-y-3">
@@ -86,24 +101,31 @@ export function ErrorBehaviorEditor({
         >
           On Error
         </label>
-        <CustomSelect
-          id={`${idPrefix}-on-error`}
+        <WorkflowVariableValue
           value={resolvedValue.onError}
-          onChange={(nextValue) =>
-            onChange(
-              applyActionDefaults(
-                resolvedValue,
-                nextValue as ErrorBehavior["onError"]
-              )
-            )
-          }
-          options={toSelectOptions(
-            ERROR_BEHAVIOR_ACTION_OPTIONS_META,
-            `${schemaPath}.onError`
-          )}
+          label="On Error"
+          onClear={onClearVariable ?? (() => onChange(DEFAULT_ERROR_BEHAVIOR))}
           disabled={disabled}
-          schemaPath={`${schemaPath}.onError`}
-        />
+        >
+          <CustomSelect
+            id={`${idPrefix}-on-error`}
+            value={resolvedValue.onError}
+            onChange={(nextValue) =>
+              onChange(
+                applyActionDefaults(
+                  resolvedValue,
+                  nextValue as ErrorBehavior["onError"]
+                )
+              )
+            }
+            options={toSelectOptions(
+              ERROR_BEHAVIOR_ACTION_OPTIONS_META,
+              `${schemaPath}.onError`
+            )}
+            disabled={disabled}
+            schemaPath={`${schemaPath}.onError`}
+          />
+        </WorkflowVariableValue>
       </div>
 
       {isRetry && (
@@ -123,21 +145,24 @@ export function ErrorBehaviorEditor({
                 `${schemaPath}.maxRetries`
               )}
               title={schemaTitle(`${schemaPath}.maxRetries`)}
-              type="number"
-              min={DEFAULT_ERROR_BEHAVIOR_RETRIES}
-              step={1}
+              type="text"
               inputMode="numeric"
               value={maxRetriesInput}
               onChange={(event) => setMaxRetriesInput(event.target.value)}
               onBlur={() => {
-                const parsed = parseInt(maxRetriesInput, 10);
-                const nextValue = Number.isNaN(parsed)
-                  ? DEFAULT_ERROR_BEHAVIOR_RETRIES
-                  : Math.max(DEFAULT_ERROR_BEHAVIOR_RETRIES, parsed);
+                const nextValue = parseNumberOrVariable(
+                  maxRetriesInput,
+                  (raw) => {
+                    const parsed = parseInt(raw, 10);
+                    return Number.isNaN(parsed)
+                      ? DEFAULT_ERROR_BEHAVIOR_RETRIES
+                      : Math.max(DEFAULT_ERROR_BEHAVIOR_RETRIES, parsed);
+                  }
+                );
                 setMaxRetriesInput(String(nextValue));
                 onChange({
                   ...resolvedValue,
-                  maxRetries: nextValue,
+                  maxRetries: asAuthoredValue<number>(nextValue),
                 });
               }}
               disabled={disabled}
@@ -160,16 +185,20 @@ export function ErrorBehaviorEditor({
                 `${schemaPath}.retryDelaySec`
               )}
               title={schemaTitle(`${schemaPath}.retryDelaySec`)}
-              type="number"
-              min={0.001}
-              step="any"
+              type="text"
               inputMode="decimal"
               value={retryDelayInput}
               onChange={(event) => setRetryDelayInput(event.target.value)}
               onBlur={() => {
-                const parsed = parseFloat(retryDelayInput);
-                const nextValue =
-                  Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+                const nextValue = parseNumberOrVariable(
+                  retryDelayInput,
+                  (raw) => {
+                    const parsed = parseFloat(raw);
+                    return Number.isFinite(parsed) && parsed > 0
+                      ? parsed
+                      : undefined;
+                  }
+                );
                 setRetryDelayInput(
                   nextValue === undefined ? "" : String(nextValue)
                 );
@@ -179,7 +208,9 @@ export function ErrorBehaviorEditor({
                   ...withoutRetryDelay,
                   maxRetries:
                     resolvedValue.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES,
-                  ...(nextValue !== undefined && { retryDelaySec: nextValue }),
+                  ...(nextValue !== undefined && {
+                    retryDelaySec: asAuthoredValue<number>(nextValue),
+                  }),
                 });
               }}
               disabled={disabled}

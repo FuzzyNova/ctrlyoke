@@ -10,6 +10,7 @@ import {
   type UiPlatform,
 } from "@root/types/DashboardConstants";
 import { isShellAvailableOnPlatform } from "@root/utils/ShellCatalog";
+import { isWorkflowVariablePlaceholder } from "./wholeValueVariables";
 
 function isKnownName(
   value: string,
@@ -18,10 +19,7 @@ function isKnownName(
   return options.some((option) => option.name === value);
 }
 
-/** Whole-value workflow variables are resolved when the workflow runs. */
-export function isWorkflowVariablePlaceholder(value: string): boolean {
-  return /^\{\{\w+\}\}$/.test(value);
-}
+export { isWorkflowVariablePlaceholder } from "./wholeValueVariables";
 
 /** Returns a warning when an explicit model is unavailable for its harness. */
 export function modelWarning(

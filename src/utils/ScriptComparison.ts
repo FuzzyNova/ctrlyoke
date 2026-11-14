@@ -252,6 +252,18 @@ export function compareScriptOutputInline(
 }
 
 /**
+ * Lower-cased display label of a source or operator. An authored `{{name}}`
+ * placeholder (resolved only when the step runs) has no label and is shown
+ * as written.
+ */
+function comparisonLabel(
+  options: Readonly<Record<string, { label: string } | undefined>>,
+  value: string
+): string {
+  return options[value]?.label.toLowerCase() ?? value;
+}
+
+/**
  * One human sentence for a configured comparison. Single-sourced so the drawer
  * hint, the execution preview, and the CLI/dashboard verdicts phrase a condition
  * identically instead of drifting apart.
@@ -267,10 +279,10 @@ export function describeComparison(config: ScriptComparisonConfig): string {
   const sourceLabel =
     compareSource === COMPARE_SOURCES.EXIT_CODE
       ? "the exit code"
-      : `${COMPARE_SOURCE_OPTIONS_META[compareSource].label.toLowerCase()}`;
+      : comparisonLabel(COMPARE_SOURCE_OPTIONS_META, compareSource);
 
   if (operatorTakesNoValue(operator)) {
-    return `Passes when ${sourceLabel} ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()}.`;
+    return `Passes when ${sourceLabel} ${comparisonLabel(SCRIPT_OPERATOR_OPTIONS_META, operator)}.`;
   }
 
   const caseNote =
@@ -281,10 +293,10 @@ export function describeComparison(config: ScriptComparisonConfig): string {
   }
 
   if (operatorIsNumeric(operator)) {
-    return `Passes when ${sourceLabel} is ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()} ${expected}. Both sides must be numeric, or the check fails.`;
+    return `Passes when ${sourceLabel} is ${comparisonLabel(SCRIPT_OPERATOR_OPTIONS_META, operator)} ${expected}. Both sides must be numeric, or the check fails.`;
   }
 
-  return `Passes when ${sourceLabel} ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()} "${expected}"${caseNote}.`;
+  return `Passes when ${sourceLabel} ${comparisonLabel(SCRIPT_OPERATOR_OPTIONS_META, operator)} "${expected}"${caseNote}.`;
 }
 
 /**
@@ -331,7 +343,7 @@ export function formatComparisonSubject(
   const { compareSource, operator } = resolveScriptComparison(config);
   const source =
     compareSource === COMPARE_SOURCES.EXIT_CODE ? "exit code" : compareSource;
-  return `${source} ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()}`;
+  return `${source} ${comparisonLabel(SCRIPT_OPERATOR_OPTIONS_META, operator)}`;
 }
 
 /** Compact `stdout contains 0 failing` form for verdict rows. */

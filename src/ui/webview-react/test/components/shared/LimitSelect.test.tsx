@@ -116,4 +116,31 @@ describe("LimitSelect", () => {
 
     expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
   });
+
+  it("shows an authored placeholder in Custom and accepts a typed one when the field allows it", () => {
+    const onChange = vi.fn();
+    render(
+      <LimitSelect
+        id="test-limit"
+        label="Test limit"
+        path="test.limit"
+        value={"{{limit}}" as unknown as number}
+        onChange={onChange}
+        customFallback={100}
+        acceptsVariable
+      />
+    );
+
+    const input = screen.getByRole("textbox", {
+      name: "Test limit Custom, property test.limit",
+    });
+    expect(input).toHaveValue("{{limit}}");
+    fireEvent.change(input, { target: { value: "{{other}}" } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith("{{other}}");
+
+    fireEvent.change(input, { target: { value: "7" } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith(7);
+  });
 });

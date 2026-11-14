@@ -99,12 +99,33 @@ Each step ticks its own item, notes any deviation under it, and commits.
 - [ ] 8. Dashboard and editor: dropdown warnings, placeholder chips,
       CodeMirror/diagnostics from the policy table, Dry Run substituted values
       and blockers.
-      Partial: dropdown validation ignores whole-value placeholders; the
-      properties panel has shared chips for harness, model and execution mode;
-      step names resolve from workflow vars; variable lint/highlighting and
-      named-worktree preview values consult the substitution policy. Remaining:
-      chips for the other enum editors, broader policy-driven editor/diagnostic
-      coverage, Dry Run substituted-field display/blockers, and component tests.
+      Partial: dropdown validation ignores whole-value placeholders; step
+      names resolve from workflow vars; variable lint/highlighting and
+      named-worktree preview values consult the substitution policy.
+      Done: the shared `WorkflowVariableValue` chip
+      (`components/shared/WorkflowVariableValue.tsx`) sits on every
+      enum/boolean editor of a `kind: value` field, inside the shared editors
+      so step and workflow level both get it (`ScriptConditionEditor`:
+      compare source, operator, ignore case, onPass/onFail, script-step
+      execution mode; `ErrorBehaviorEditor` onError; `PriorContextSelect`
+      detail; the drawer's harness/execution mode/resume session; the panel's
+      existing six; the editor header's step `enabled`). Number inputs
+      (timeout, error-behavior retries/delay, `LimitSelect` with
+      `acceptsVariable` for `endCondition.maxRetries` and `maxSteps`) are text
+      inputs that keep a typed `{{n}}`; `wholeValueVariables.ts` holds the
+      helpers, and the editor store carries an authored `enabled` placeholder
+      through a save (`stepEnabledPatch`). Dry Run: `ExecutionPreviewService`
+      resolves `RunStartView` itself, records substituted fields
+      (`substitutions` on the workflow and each step, from
+      `VarSubstitutionDiff.ts`) and turns a `VarSubstitutionValidationError`
+      into `substitutionBlockers` (a run-start one yields no step previews; a
+      blocked step is left out); the modal shows `value ← authored` next to
+      the fields it lists plus a blocker banner, and `PreviewRedactor` covers
+      the new strings. The CLI `--dry-run` still exits 2 on a blocker.
+      Deviation: the Set-as-default buttons are not hidden for a placeholder
+      value, so promoting one writes it into settings, whose schema does not
+      accept it for `maxSteps`/`executionMode`/`resumeSession`.
+      Remaining: broader policy-driven CodeMirror/diagnostic coverage.
 
 ## Problem
 

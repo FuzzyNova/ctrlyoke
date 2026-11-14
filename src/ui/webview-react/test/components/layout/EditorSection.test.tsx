@@ -454,4 +454,34 @@ describe("EditorSection", () => {
     expect(useEditorStore.getState().properties.sessionId).toBe("");
     expect(screen.queryByRole("status", { name: /Replying to/ })).toBeNull();
   });
+
+  it("shows an enabled placeholder as a chip and keeps it on save until cleared", () => {
+    useSettingsStore.setState({
+      workflowProperties: { vars: { runLint: "false" } },
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Lint", enabled: "{{runLint}}" as unknown as boolean }],
+    });
+    useEditorStore
+      .getState()
+      .enterEditMode(0, useWorkflowStore.getState().steps[0]);
+
+    render(<EditorSection />);
+
+    const chip = screen.getByRole("group", {
+      name: "Enabled uses variable {{runLint}}",
+    });
+    expect(chip).toHaveTextContent("{{runLint}}→false");
+    expect(screen.queryByRole("button", { name: /able step$/ })).toBeNull();
+    expect(useEditorStore.getState().getPromptProperties().enabled).toBe(
+      "{{runLint}}"
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear {{runLint}} from Enabled" })
+    );
+    expect(useEditorStore.getState().stepEnabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Disable step" })).toBeVisible();
+  });
 });

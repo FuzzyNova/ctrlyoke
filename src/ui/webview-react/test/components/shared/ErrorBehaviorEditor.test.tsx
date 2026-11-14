@@ -9,7 +9,7 @@ describe("ErrorBehaviorEditor", () => {
       <ErrorBehaviorEditor value={{ onError: "retry" }} onChange={vi.fn()} />
     );
 
-    expect(screen.getByLabelText("Max Retries")).toHaveValue(1);
+    expect(screen.getByLabelText("Max Retries")).toHaveValue("1");
   });
 
   it("switches to retry mode and exposes retry controls", async () => {
@@ -149,5 +149,47 @@ describe("ErrorBehaviorEditor", () => {
       maxRetries: 2,
       retryDelaySec: 1.5,
     });
+  });
+
+  it("shows an onError placeholder as a chip whose Clear uses the caller's reset", () => {
+    const onChange = vi.fn();
+    const onClearVariable = vi.fn();
+    render(
+      <ErrorBehaviorEditor
+        value={{ onError: "{{onError}}" as never, maxRetries: 2 }}
+        onChange={onChange}
+        onClearVariable={onClearVariable}
+        idPrefix="test-error"
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear {{onError}} from On Error" })
+    );
+    expect(onClearVariable).toHaveBeenCalledOnce();
+    expect(onChange).not.toHaveBeenCalled();
+    // The action may resolve to a retry, so its budget stays editable.
+    expect(screen.getByLabelText("Max Retries")).toHaveValue("2");
+  });
+
+  it("accepts a typed {{name}} in Max Retries without coercing it", () => {
+    const onChange = vi.fn();
+    render(
+      <ErrorBehaviorEditor
+        value={{ onError: "retry", maxRetries: 2 }}
+        onChange={onChange}
+        idPrefix="test-error"
+      />
+    );
+
+    const maxRetries = screen.getByLabelText("Max Retries");
+    fireEvent.change(maxRetries, { target: { value: "{{retries}}" } });
+    fireEvent.blur(maxRetries);
+
+    expect(onChange).toHaveBeenCalledWith({
+      onError: "retry",
+      maxRetries: "{{retries}}",
+    });
+    expect(maxRetries).toHaveValue("{{retries}}");
   });
 });

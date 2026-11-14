@@ -226,7 +226,10 @@ import {
   getWorkflowSecretGrants,
 } from "./utils/SecretResolver";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
-import { VarSubstitutor } from "./utils/VarSubstitutor";
+import {
+  VarSubstitutionValidationError,
+  VarSubstitutor,
+} from "./utils/VarSubstitutor";
 import { confirmYesNo } from "./cli/CliConfirm";
 import {
   trustExternalRootsCommand as reviewExternalRootsCommand,
@@ -2082,6 +2085,13 @@ async function dryRunCommand(
       for (const integration of integrations.values()) {
         integration.dispose();
       }
+    }
+
+    // A substitution the run would reject is invalid input, like a bad
+    // `--var`: report it with the usage exit code before anything is shown.
+    const substitutionBlocker = preview.substitutionBlockers?.[0];
+    if (substitutionBlocker) {
+      throw new VarSubstitutionValidationError(substitutionBlocker.message);
     }
 
     const output = buildCliPreviewJsonResult(preview);

@@ -66,6 +66,12 @@ import { notifyUser } from "@utils/notifyUser";
 import { detectPlatform } from "@utils/platform";
 import { shellWarning } from "@utils/dropdownValidation";
 import { KeyValueRowsEditor } from "./KeyValueRowsEditor";
+import { WorkflowVariableValue } from "./WorkflowVariableValue";
+import {
+  asAuthoredValue,
+  isWorkflowVariablePlaceholder,
+  parseNumberOrVariable,
+} from "@utils/wholeValueVariables";
 import {
   buildShellOptions,
   customShellPathPlaceholder,
@@ -339,13 +345,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       update({ timeoutSec: undefined });
       return;
     }
-    const parsed = parseFloat(timeoutInput);
-    if (isNaN(parsed)) {
+    const parsed = parseNumberOrVariable(timeoutInput, parseFloat);
+    if (typeof parsed === "number" && isNaN(parsed)) {
       setTimeoutInput(v.timeoutSec !== undefined ? String(v.timeoutSec) : "");
       return;
     }
     setTimeoutInput(String(parsed));
-    update({ timeoutSec: parsed });
+    update({ timeoutSec: asAuthoredValue<number>(parsed) });
   };
 
   const commitShell = () => {
@@ -403,7 +409,12 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     DEFAULT_COMPARE_SOURCE) as CompareSource;
   const operator = (v.operator ?? DEFAULT_SCRIPT_OPERATOR) as ScriptOperator;
   const showExpected = !operatorTakesNoValue(operator);
-  const showIgnoreCase = operatorUsesCase(operator);
+  // A placeholder operator is resolved at run time, so the case toggle stays
+  // available; so does an authored ignoreCase placeholder.
+  const showIgnoreCase =
+    isWorkflowVariablePlaceholder(operator) ||
+    isWorkflowVariablePlaceholder(v.ignoreCase) ||
+    operatorUsesCase(operator);
 
   /**
    * Switching to an operator that ignores case (or ignores `expected`) clears
@@ -549,26 +560,46 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         <div
           className={`flex gap-2 ${narrow ? "flex-col" : "flex-row items-start"}`}
         >
-          <CustomSelect
-            id={`${idPrefix}-compare-source`}
-            value={compareSource}
-            onChange={(val) => update({ compareSource: val as CompareSource })}
-            options={compareSourceOptions}
-            disabled={disabled}
-            triggerAriaLabel="Compare source"
-            schemaPath={compareSourcePath}
-            className={narrow ? "w-full" : "flex-1 min-w-0"}
-          />
-          <CustomSelect
-            id={`${idPrefix}-operator`}
-            value={operator}
-            onChange={handleOperatorChange}
-            options={operatorOptions}
-            disabled={disabled}
-            triggerAriaLabel="Comparison operator"
-            schemaPath={operatorPath}
-            className={narrow ? "w-full" : "flex-1 min-w-0"}
-          />
+          <div className={narrow ? "w-full" : "flex-1 min-w-0"}>
+            <WorkflowVariableValue
+              value={v.compareSource}
+              label="Compare source"
+              onClear={() => update({ compareSource: undefined })}
+              disabled={disabled}
+            >
+              <CustomSelect
+                id={`${idPrefix}-compare-source`}
+                value={compareSource}
+                onChange={(val) =>
+                  update({ compareSource: val as CompareSource })
+                }
+                options={compareSourceOptions}
+                disabled={disabled}
+                triggerAriaLabel="Compare source"
+                schemaPath={compareSourcePath}
+                className="w-full"
+              />
+            </WorkflowVariableValue>
+          </div>
+          <div className={narrow ? "w-full" : "flex-1 min-w-0"}>
+            <WorkflowVariableValue
+              value={v.operator}
+              label="Comparison operator"
+              onClear={() => update({ operator: undefined })}
+              disabled={disabled}
+            >
+              <CustomSelect
+                id={`${idPrefix}-operator`}
+                value={operator}
+                onChange={handleOperatorChange}
+                options={operatorOptions}
+                disabled={disabled}
+                triggerAriaLabel="Comparison operator"
+                schemaPath={operatorPath}
+                className="w-full"
+              />
+            </WorkflowVariableValue>
+          </div>
           {showExpected && (
             <input
               type="text"
@@ -610,32 +641,41 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           diagnostics={comparisonDiagnostics}
         />
         {showIgnoreCase && (
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id={`${idPrefix}-ignore-case`}
-              aria-label={schemaAriaLabel(
-                "Ignore case",
-                `${schemaPath}.ignoreCase`
-              )}
-              title={schemaTitle(
-                `${schemaPath}.ignoreCase`,
-                undefined,
-                "Compare text without regard to letter case. Does not apply to numeric, regex, or emptiness operators."
-              )}
-              checked={v.ignoreCase ?? false}
-              onChange={(e) =>
-                update({ ignoreCase: e.target.checked ? true : undefined })
-              }
+          <div className="pt-1">
+            <WorkflowVariableValue
+              value={v.ignoreCase}
+              label="Ignore case"
+              onClear={() => update({ ignoreCase: undefined })}
               disabled={disabled}
-              className="w-4 h-4 accent-focus-border cursor-pointer"
-            />
-            <label
-              htmlFor={`${idPrefix}-ignore-case`}
-              className="text-xs font-medium text-foreground cursor-pointer"
             >
-              Ignore case
-            </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id={`${idPrefix}-ignore-case`}
+                  aria-label={schemaAriaLabel(
+                    "Ignore case",
+                    `${schemaPath}.ignoreCase`
+                  )}
+                  title={schemaTitle(
+                    `${schemaPath}.ignoreCase`,
+                    undefined,
+                    "Compare text without regard to letter case. Does not apply to numeric, regex, or emptiness operators."
+                  )}
+                  checked={v.ignoreCase ?? false}
+                  onChange={(e) =>
+                    update({ ignoreCase: e.target.checked ? true : undefined })
+                  }
+                  disabled={disabled}
+                  className="w-4 h-4 accent-focus-border cursor-pointer"
+                />
+                <label
+                  htmlFor={`${idPrefix}-ignore-case`}
+                  className="text-xs font-medium text-foreground cursor-pointer"
+                >
+                  Ignore case
+                </label>
+              </div>
+            </WorkflowVariableValue>
           </div>
         )}
       </div>
@@ -650,14 +690,21 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           >
             On Pass
           </label>
-          <CustomSelect
-            id={`${idPrefix}-on-pass`}
-            value={v.onPass ?? CONDITION_ACTIONS.CONTINUE}
-            onChange={(val) => update({ onPass: val })}
-            options={actionOptionsFor("onPass")}
+          <WorkflowVariableValue
+            value={v.onPass}
+            label="On Pass"
+            onClear={() => update({ onPass: undefined })}
             disabled={disabled}
-            schemaPath={`${schemaPath}.onPass`}
-          />
+          >
+            <CustomSelect
+              id={`${idPrefix}-on-pass`}
+              value={v.onPass ?? CONDITION_ACTIONS.CONTINUE}
+              onChange={(val) => update({ onPass: val })}
+              options={actionOptionsFor("onPass")}
+              disabled={disabled}
+              schemaPath={`${schemaPath}.onPass`}
+            />
+          </WorkflowVariableValue>
         </div>
         <div className="flex flex-col gap-1">
           <label
@@ -667,19 +714,26 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           >
             On Fail
           </label>
-          <CustomSelect
-            id={`${idPrefix}-on-fail`}
-            value={
-              v.onFail ??
-              (variant === PROMPT_PROPERTIES.PRE_CONDITION
-                ? CONDITION_ACTIONS.SKIP_PROMPT
-                : CONDITION_ACTIONS.STOP_WORKFLOW)
-            }
-            onChange={(val) => update({ onFail: val })}
-            options={actionOptionsFor("onFail")}
+          <WorkflowVariableValue
+            value={v.onFail}
+            label="On Fail"
+            onClear={() => update({ onFail: undefined })}
             disabled={disabled}
-            schemaPath={`${schemaPath}.onFail`}
-          />
+          >
+            <CustomSelect
+              id={`${idPrefix}-on-fail`}
+              value={
+                v.onFail ??
+                (variant === PROMPT_PROPERTIES.PRE_CONDITION
+                  ? CONDITION_ACTIONS.SKIP_PROMPT
+                  : CONDITION_ACTIONS.STOP_WORKFLOW)
+              }
+              onChange={(val) => update({ onFail: val })}
+              options={actionOptionsFor("onFail")}
+              disabled={disabled}
+              schemaPath={`${schemaPath}.onFail`}
+            />
+          </WorkflowVariableValue>
         </div>
       </DrawerRow>
 
@@ -693,8 +747,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           >
             Timeout (s)
           </label>
+          {/* Text, not number: the field also accepts a typed {{name}}. */}
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             id={`${idPrefix}-timeout`}
             aria-label={schemaAriaLabel(
               "Timeout (s)",
@@ -704,8 +760,6 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             value={timeoutInput}
             onChange={(e) => setTimeoutInput(e.target.value)}
             onBlur={commitTimeout}
-            min={0.001}
-            step="any"
             placeholder="Default (from settings)"
             disabled={disabled}
             className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border disabled:opacity-50"
@@ -786,6 +840,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               path={`${schemaPath}.maxRetries`}
               value={v.maxRetries}
               onChange={(maxRetries) => update({ maxRetries })}
+              acceptsVariable
               mode={LIMIT_SELECTION_VALUES.UNLIMITED}
               min={0}
               max={100}
@@ -823,32 +878,39 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             >
               Execution Mode
             </label>
-            <CustomSelect
-              id={`${idPrefix}-execution-mode`}
-              value={v.executionMode ?? INHERIT_DEFAULT_OPTION}
-              onChange={(val) =>
-                update({
-                  executionMode:
-                    val === INHERIT_DEFAULT_OPTION
-                      ? undefined
-                      : (val as ExecutionMode),
-                })
-              }
-              options={[
-                {
-                  value: INHERIT_DEFAULT_OPTION,
-                  label: defaultExecutionModeLabel,
-                  pseudo: { writes: "omit executionMode" },
-                },
-                ...toSelectOptions(
-                  EXECUTION_MODE_OPTIONS_META,
-                  `${schemaPath}.executionMode`
-                ),
-              ]}
+            <WorkflowVariableValue
+              value={v.executionMode}
+              label="Execution Mode"
+              onClear={() => update({ executionMode: undefined })}
               disabled={disabled}
-              schemaPath={`${schemaPath}.executionMode`}
-              triggerAriaLabel="Execution Mode"
-            />
+            >
+              <CustomSelect
+                id={`${idPrefix}-execution-mode`}
+                value={v.executionMode ?? INHERIT_DEFAULT_OPTION}
+                onChange={(val) =>
+                  update({
+                    executionMode:
+                      val === INHERIT_DEFAULT_OPTION
+                        ? undefined
+                        : (val as ExecutionMode),
+                  })
+                }
+                options={[
+                  {
+                    value: INHERIT_DEFAULT_OPTION,
+                    label: defaultExecutionModeLabel,
+                    pseudo: { writes: "omit executionMode" },
+                  },
+                  ...toSelectOptions(
+                    EXECUTION_MODE_OPTIONS_META,
+                    `${schemaPath}.executionMode`
+                  ),
+                ]}
+                disabled={disabled}
+                schemaPath={`${schemaPath}.executionMode`}
+                triggerAriaLabel="Execution Mode"
+              />
+            </WorkflowVariableValue>
           </div>
         </DrawerRow>
       ) : null}

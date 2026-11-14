@@ -27,6 +27,7 @@ import {
   EXECUTION_MODES,
   HEADLESS_PROMPT_DELIVERIES,
   WORKTREE_MODES,
+  WORKTREE_CONFIG_ORIGINS,
   SHELL_KINDS,
   type HarnessId,
   type PreviewPermissionAction,
@@ -44,6 +45,7 @@ import type {
   PromptStep,
   ScriptStep,
   WorkflowStep,
+  WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
 import type {
   ExecutionPreviewScope,
@@ -70,7 +72,9 @@ import {
   type ParallelGroupPreflightPreview,
   type RetryPreview,
   type StepExecutionPreview,
+  type SubstitutedFieldPreview,
   type VariableResolutionPreview,
+  type VariableSubstitutionBlockerPreview,
   type WorkflowExecutionPreview,
   type WorkflowPreviewSummary,
   type WorkspaceMutationPreview,
@@ -84,7 +88,16 @@ import {
   redactExecutionPreview,
   redactPreviewText,
 } from "../types/PreviewRedactor";
-import { VarSubstitutor } from "../utils/VarSubstitutor";
+import {
+  VarSubstitutionValidationError,
+  VarSubstitutor,
+} from "../utils/VarSubstitutor";
+import { VAR_SUBSTITUTION_PHASES } from "../utils/VarSubstitutionPolicy";
+import { RunStartView } from "../utils/RunStartView";
+import {
+  diffSubstitutedFields,
+  mergeSubstitutedFields,
+} from "../utils/VarSubstitutionDiff";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SessionValidator } from "../utils/SessionValidator";
@@ -210,6 +223,8 @@ interface PreviewStepTarget {
 }
 
 const DEFAULT_SCOPE: ExecutionPreviewScope = { kind: PREVIEW_SCOPES.WORKFLOW };
+/** `stepIndex` that labels a step view as the workflow's `finalStep`. */
+const FINAL_STEP_VIEW_INDEX = -1;
 
 /**
  * Assemble the complete, side-effect-free execution snapshot.
@@ -249,7 +264,21 @@ export class ExecutionPreviewService {
       ...(request.workflow.vars ?? {}),
       ...(request.variables ?? {}),
     };
-    const workflow = request.workflow;
+    const authoredWorkflow = request.workflow;
+    // Run-start fields resolve once, before anything else, as a run does. A
+    // failure there blocks the whole run start, so nothing else is planned.
+    let runStart: RunStartView;
+    try {
+      runStart = RunStartView.resolve(
+        authoredWorkflow,
+        ConfigurationUtils.getDefaultWorktree(),
+        variables
+      );
+    } catch (error) {
+      if (!(error instanceof VarSubstitutionValidationError)) throw error;
+      return this.buildBlockedPreview(request, scope, error);
+    }
+    const workflow = runStart.workflow;
     const semanticSourceDefinitionPath =
       "executionSourceDefinitionPath" in request
         ? request.executionSourceDefinitionPath
@@ -276,14 +305,24 @@ export class ExecutionPreviewService {
       vars: variables,
       ...(preparedFinalStep ? { finalStep: preparedFinalStep } : {}),
     };
-    const targets = this.selectTargets(preparedWorkflow, scope);
+    const allTargets = this.selectTargets(preparedWorkflow, scope);
+    const blockers = new Map<number, VariableSubstitutionBlockerPreview>();
+    const blockStep = (stepIndex: number, error: unknown) => {
+      if (!(error instanceof VarSubstitutionValidationError)) throw error;
+      if (!blockers.has(stepIndex))
+        blockers.set(stepIndex, { stepIndex, message: error.message });
+    };
     const managedMcpServers = await new McpRegistryFileManager(
       this.options.workspaceRoot
     ).readAll();
     const {
       dto: worktreePreview,
       executionWorkspace: worktreeExecutionWorkspace,
-    } = await this.buildWorktreePreview(preparedWorkflow, variables);
+    } = await this.buildWorktreePreview(
+      preparedWorkflow,
+      runStart.defaultWorktree ?? ConfigurationUtils.getDefaultWorktree(),
+      variables
+    );
     const preflightMembers = new Map<number, ParallelGroupPreflightMember>();
     const parallelDiagnostics = new Map<number, CompatibilityDiagnostic[]>();
     const parallelGroupPreflights: ParallelGroupPreflightPreview[] = [];
@@ -296,6 +335,7 @@ export class ExecutionPreviewService {
         supportsConcurrentInteractiveSessions:
           this.options.supportsConcurrentInteractiveSessions ?? true,
         configuredWidth: this.options.dynamicQueueConfig?.maxParallelSteps ?? 6,
+        runStartView: runStart,
         normalizeProperties: async (properties, step, effectivePromptText) =>
           isScriptStep(step)
             ? properties
@@ -325,6 +365,10 @@ export class ExecutionPreviewService {
         executableMemberCount: result.executableMemberCount,
       });
       for (const member of result.members) {
+        if (member.varSubstitutionError) {
+          blockStep(member.stepIndex, member.varSubstitutionError);
+          continue;
+        }
         preflightMembers.set(member.stepIndex, member);
       }
       for (const issue of result.issues) {
@@ -369,18 +413,35 @@ export class ExecutionPreviewService {
       number,
       readonly CompatibilityDiagnostic[]
     >();
+    // Dispatch fields are validated before compatibility analysis, which then
+    // sees the substituted values a run would dispatch with.
+    for (const target of allTargets) {
+      if (blockers.has(target.stepIndex)) continue;
+      try {
+        const step = this.substituteDispatchStep(target, variables);
+        VarSubstitutor.applyToResolvedProperties(
+          this.resolveTarget(step, preparedWorkflow).properties,
+          variables
+        );
+      } catch (error) {
+        blockStep(target.stepIndex, error);
+      }
+    }
+    const targets = allTargets.filter(
+      (target) => !blockers.has(target.stepIndex)
+    );
     for (const target of targets) {
       if (isScriptStep(target.step)) {
         continue;
       }
       const resolution =
         preflightMembers.get(target.stepIndex)?.resolvedTarget ??
-        resolveExecutionProperties(target.step, preparedWorkflow, {
-          defaults: this.options.defaults,
-          hostCanProvidePty: this.options.hostCanProvidePty,
-        });
+        this.resolveTarget(target.step, preparedWorkflow);
       const normalized = await McpServerNormalizer.applyWithDiagnostics(
-        resolution.properties,
+        VarSubstitutor.applyToResolvedProperties(
+          resolution.properties,
+          variables
+        ),
         managedMcpServers,
         target.step.prompt
       );
@@ -422,7 +483,8 @@ export class ExecutionPreviewService {
           parallelDiagnostics.get(target.stepIndex) ?? [],
           preflightMembers.get(target.stepIndex),
           worktreePreview,
-          worktreeExecutionWorkspace
+          worktreeExecutionWorkspace,
+          this.authoredStep(authoredWorkflow, target)
         )
       );
     }
@@ -435,13 +497,7 @@ export class ExecutionPreviewService {
       ...steps.flatMap((step) => step.diagnostics),
     ];
     const workflowSummary: WorkflowPreviewSummary = {
-      name:
-        request.workflowName?.trim() ||
-        this.getWorkflowName(workflow) ||
-        (request.sourcePath
-          ? extractWorkflowName(request.sourcePath)
-          : undefined) ||
-        "Unnamed workflow",
+      name: this.resolveWorkflowName(request),
       stepCount:
         scope.kind === PREVIEW_SCOPES.WORKFLOW
           ? countWorkflowExecutionSteps(workflow)
@@ -476,6 +532,11 @@ export class ExecutionPreviewService {
     for (const step of steps) {
       step.resolvedProperties.limits = limits;
     }
+    const substitutions = this.workflowSubstitutions(
+      authoredWorkflow,
+      runStart,
+      worktreePreview
+    );
     return {
       workflow: workflowSummary,
       steps,
@@ -483,7 +544,117 @@ export class ExecutionPreviewService {
       parallelGroups: [...(preparedWorkflow.parallelGroups ?? [])],
       parallelGroupPreflights,
       ...(worktreePreview ? { worktree: worktreePreview } : {}),
+      ...(substitutions.length > 0 ? { substitutions } : {}),
+      ...(blockers.size > 0
+        ? {
+            substitutionBlockers: [...blockers.values()].sort(
+              (left, right) => (left.stepIndex ?? 0) - (right.stepIndex ?? 0)
+            ),
+          }
+        : {}),
     };
+  }
+
+  /**
+   * The preview of a workflow whose run-start substitution fails: no step is
+   * planned, because a run would stop before any of them.
+   */
+  private buildBlockedPreview(
+    request: ExecutionPreviewRequest,
+    scope: ExecutionPreviewScope,
+    error: VarSubstitutionValidationError
+  ): WorkflowExecutionPreview {
+    const workflow = request.workflow;
+    return {
+      workflow: {
+        name: this.resolveWorkflowName(request),
+        stepCount:
+          scope.kind === PREVIEW_SCOPES.WORKFLOW
+            ? countWorkflowExecutionSteps(workflow)
+            : 0,
+        ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
+        ...(request.definitionRevision !== undefined
+          ? { definitionRevision: String(request.definitionRevision) }
+          : {}),
+        harnessIds: [],
+        totalByteCount: 0,
+        totalTokenEstimate: 0,
+        workspaceMutationCount: 0,
+      },
+      steps: [],
+      diagnostics: [],
+      parallelGroups: [...(workflow.parallelGroups ?? [])],
+      parallelGroupPreflights: [],
+      substitutionBlockers: [{ message: error.message }],
+    };
+  }
+
+  /** Workflow-root and worktree fields the run resolves from placeholders. */
+  private workflowSubstitutions(
+    authored: PromptFile,
+    runStart: RunStartView,
+    worktree: WorktreeExecutionPreview | undefined
+  ): SubstitutedFieldPreview[] {
+    const authoredDefault = ConfigurationUtils.getDefaultWorktree();
+    const selection = resolveWorktreeSelection(
+      authored.worktree,
+      authoredDefault
+    );
+    const fromDefault = selection.origin !== WORKTREE_CONFIG_ORIGINS.AUTHORED;
+    const worktreePrefix = fromDefault ? "defaults.worktree" : "worktree";
+    const setup = selection.config?.setup;
+    return mergeSubstitutedFields(
+      diffSubstitutedFields(authored, runStart.workflow, {
+        skipKeys: ["steps", "finalStep", "vars"],
+      }),
+      fromDefault
+        ? diffSubstitutedFields(authoredDefault, runStart.defaultWorktree, {
+            prefix: worktreePrefix,
+          })
+        : [],
+      setup !== undefined && worktree?.setupCommand !== undefined
+        ? diffSubstitutedFields(setup, worktree.setupCommand, {
+            prefix: `${worktreePrefix}.setup`,
+          })
+        : []
+    );
+  }
+
+  /** The step as authored, before run-start and dispatch substitution. */
+  private authoredStep(
+    workflow: PromptFile,
+    target: PreviewStepTarget
+  ): WorkflowStep | undefined {
+    return target.isFinalStep
+      ? workflow.finalStep
+      : workflow.steps?.[target.stepIndex];
+  }
+
+  /** `target`'s step with its dispatch step-view fields substituted. */
+  private substituteDispatchStep(
+    target: PreviewStepTarget,
+    variables: Readonly<Record<string, string>>
+  ): WorkflowStep {
+    return VarSubstitutor.substituteStepView(
+      target.step,
+      variables,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
+      target.isFinalStep ? FINAL_STEP_VIEW_INDEX : target.stepIndex
+    );
+  }
+
+  private resolveTarget(
+    step: WorkflowStep,
+    workflow: PromptFile
+  ): ResolvedExecutionTarget {
+    return resolveExecutionProperties(
+      isScriptStep(step) ? this.scriptAsPrompt(step) : step,
+      workflow,
+      {
+        defaults: this.options.defaults,
+        hostCanProvidePty: this.options.hostCanProvidePty,
+      }
+    );
   }
 
   private async buildStepPreview(
@@ -499,29 +670,33 @@ export class ExecutionPreviewService {
     parallelDiagnostics: readonly CompatibilityDiagnostic[],
     preflightMember: ParallelGroupPreflightMember | undefined,
     worktreePreview: WorktreeExecutionPreview | undefined,
-    worktreeExecutionWorkspace: ExecutionWorkspace | undefined
+    worktreeExecutionWorkspace: ExecutionWorkspace | undefined,
+    authoredStep: WorkflowStep | undefined
   ): Promise<StepExecutionPreview> {
-    const step = VarSubstitutor.substituteStepView(
-      target.step,
-      { ...variables },
-      "dispatch",
-      target.stepIndex
-    );
+    const step = this.substituteDispatchStep(target, variables);
     const promptStep = isScriptStep(step) ? this.scriptAsPrompt(step) : step;
     const targetResolution =
-      resolvedTarget ??
-      resolveExecutionProperties(promptStep, workflow, {
-        defaults: this.options.defaults,
-        hostCanProvidePty: this.options.hostCanProvidePty,
-      });
+      resolvedTarget ?? this.resolveTarget(step, workflow);
+    const substitutedProperties = VarSubstitutor.applyToResolvedProperties(
+      targetResolution.properties,
+      variables
+    );
     const properties = await McpServerNormalizer.apply(
-      VarSubstitutor.applyToResolvedProperties(
-        targetResolution.properties,
-        variables
-      ),
+      substitutedProperties,
       managedMcpServers,
       promptStep.prompt
     );
+    // Prompt text is shown, substituted, in the prompt sections.
+    const substitutions = mergeSubstitutedFields(
+      diffSubstitutedFields(authoredStep, step, { skipKeys: ["prompt"] }),
+      diffSubstitutedFields(
+        this.resolveTarget(authoredStep ?? step, workflow).properties,
+        substitutedProperties,
+        { skipKeys: ["prompt"] }
+      )
+    );
+    const substitutionFields =
+      substitutions.length > 0 ? { substitutions } : {};
     const secretNames = getEffectiveSecretGrants(
       target.step,
       properties.secrets,
@@ -600,6 +775,7 @@ export class ExecutionPreviewService {
         variables: variablesPreview,
         conditions: conditionPreview,
         diagnostics,
+        ...substitutionFields,
       };
     }
 
@@ -724,6 +900,7 @@ export class ExecutionPreviewService {
         ...diagnostics,
         ...imageCompatibilityDiagnostics,
       ]),
+      ...substitutionFields,
     };
   }
 
@@ -927,32 +1104,34 @@ export class ExecutionPreviewService {
    */
   private async buildWorktreePreview(
     workflow: PromptFile,
+    defaultWorktree: WorktreeDefaultConfig,
     variables: Record<string, string>
   ): Promise<{
     dto?: WorktreeExecutionPreview;
     executionWorkspace?: ExecutionWorkspace;
   }> {
+    // `workflow` and `defaultWorktree` come from the run-start view, so the
+    // branch, base and directory are already substituted; setup is a
+    // dispatch field and is substituted here, as `WorktreeManager` does.
     const selection = resolveWorktreeSelection(
       workflow.worktree,
-      ConfigurationUtils.getDefaultWorktree()
+      defaultWorktree
     );
     if (!selection.config) {
       return {};
     }
     const { mode } = selection.config;
-    const base = selection.config.base
-      ? VarSubstitutor.substitute(selection.config.base, variables, false)
-      : undefined;
+    const base = selection.config.base || undefined;
     const setupCommand = selection.config.setup
       ? VarSubstitutor.substitute(selection.config.setup, variables, false)
       : undefined;
     const branch =
       "branch" in selection.config && selection.config.branch
-        ? VarSubstitutor.substitute(selection.config.branch, variables, false)
+        ? selection.config.branch
         : undefined;
     const directory =
       "directory" in selection.config && selection.config.directory
-        ? VarSubstitutor.substitute(selection.config.directory, variables, false)
+        ? selection.config.directory
         : undefined;
     const workspaceRoot = this.options.workspaceRoot;
     const eligibility = await evaluateWorkspaceEligibility(
@@ -1493,6 +1672,17 @@ export class ExecutionPreviewService {
       default:
         return PREVIEW_PROPERTY_SOURCES.GLOBAL_DEFAULT;
     }
+  }
+
+  private resolveWorkflowName(request: ExecutionPreviewRequest): string {
+    return (
+      request.workflowName?.trim() ||
+      this.getWorkflowName(request.workflow) ||
+      (request.sourcePath
+        ? extractWorkflowName(request.sourcePath)
+        : undefined) ||
+      "Unnamed workflow"
+    );
   }
 
   private getWorkflowName(workflow: PromptFile): string | undefined {

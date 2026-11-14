@@ -1123,4 +1123,130 @@ describe("DryRunModal", () => {
       expect.objectContaining({ scope: { kind: "workflow" } })
     );
   });
+
+  it("shows substituted workflow and worktree values next to their fields", () => {
+    openPreview(
+      { kind: "workflow" },
+      {
+        ...preview,
+        worktree: {
+          mode: WORKTREE_MODES.NAMED,
+          eligible: true,
+          origin: WORKTREE_CONFIG_ORIGINS.AUTHORED,
+          branch: "fix/1234",
+          base: "main",
+          setupCommand: "npm ci -- web",
+          plannedDirectory: "/repo/fix",
+          plannedDirectoryIsExact: false,
+        },
+        substitutions: [
+          { path: "maxSteps", authored: "{{limit}}", value: "5" },
+          {
+            path: "worktree.branch",
+            authored: "fix/{{issue}}",
+            value: "fix/1234",
+          },
+          {
+            path: "worktree.setup",
+            authored: "npm ci -- {{pkg}}",
+            value: "npm ci -- web",
+          },
+        ],
+      }
+    );
+
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    expect(screen.getByText("Branch").nextElementSibling).toHaveTextContent(
+      "fix/1234← fix/{{issue}}"
+    );
+    expect(
+      screen.getByText("Setup command").nextElementSibling
+    ).toHaveTextContent("npm ci -- web← npm ci -- {{pkg}}");
+    expect(screen.getByText("Base").nextElementSibling).toHaveTextContent(
+      /^main$/
+    );
+    expect(screen.getByText("Substituted workflow fields")).toBeInTheDocument();
+    expect(screen.getByText("maxSteps").nextElementSibling).toHaveTextContent(
+      "{{limit}} → becomes 5"
+    );
+  });
+
+  it("shows a step's substituted values in its summary", () => {
+    openPreview(
+      { kind: "step", stepIndex: 0 },
+      {
+        ...preview,
+        steps: [
+          {
+            ...preview.steps[0],
+            resolvedProperties: {
+              ...preview.steps[0].resolvedProperties,
+              model: "opus",
+            },
+            substitutions: [
+              { path: "model", authored: "{{model}}", value: "opus" },
+              { path: "timeoutSec", authored: "{{timeout}}", value: "30" },
+            ],
+          },
+        ],
+      }
+    );
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    expect(screen.getByText("Model").nextElementSibling).toHaveTextContent(
+      "opus← {{model}}"
+    );
+    expect(screen.getByText("Substituted fields")).toBeInTheDocument();
+    expect(screen.getByText("timeoutSec").nextElementSibling).toHaveTextContent(
+      "{{timeout}} → becomes 30"
+    );
+  });
+
+  it("shows variable substitution failures as blockers instead of failing the preview", () => {
+    openPreview(
+      { kind: "workflow" },
+      {
+        ...preview,
+        steps: [preview.steps[0]],
+        substitutionBlockers: [
+          {
+            stepIndex: 1,
+            message:
+              'steps[1].timeoutSec: variable "timeout" is "soon", expected a number greater than 0.',
+          },
+        ],
+      }
+    );
+
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    const alert = screen.getByRole("alert", {
+      name: "Variable substitution blockers",
+    });
+    expect(alert).toHaveTextContent(
+      'Step 2 blocked: steps[1].timeoutSec: variable "timeout" is "soon", expected a number greater than 0.'
+    );
+    expect(screen.getByText("Workflow summary")).toBeInTheDocument();
+  });
+
+  it("shows a run-start blocker in step scope, where no step preview exists", () => {
+    openPreview(
+      { kind: "step", stepIndex: 0 },
+      {
+        ...preview,
+        steps: [],
+        substitutionBlockers: [
+          { message: 'harness: variable "h" is "nope", expected a harness.' },
+        ],
+      }
+    );
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    expect(
+      screen.getByRole("alert", { name: "Variable substitution blockers" })
+    ).toHaveTextContent('Run start blocked: harness: variable "h" is "nope"');
+  });
 });

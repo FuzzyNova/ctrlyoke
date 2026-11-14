@@ -34,6 +34,11 @@ import { useUiStore } from "./uiStore";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
 import { useWorkflowStore } from "./workflowStore";
 import {
+  readStepEnabled,
+  stepEnabledPatch,
+  type StepEnabledValue,
+} from "@utils/wholeValueVariables";
+import {
   addStepRange,
   collapseStepSelection,
   selectAllSteps,
@@ -259,7 +264,8 @@ interface EditorState {
 
   // Step type — determines editor mode
   stepType: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
-  stepEnabled: boolean;
+  /** `{{name}}` when the authored step's `enabled` is a placeholder. */
+  stepEnabled: StepEnabledValue;
 
   // Editor content
   promptText: string;
@@ -746,7 +752,8 @@ export const useEditorStore = create<
         savedNewPromptState,
         replyContext: null,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.SCRIPT,
-        stepEnabled: pendingEdit?.stepEnabled ?? promptData.enabled !== false,
+        stepEnabled:
+          pendingEdit?.stepEnabled ?? readStepEnabled(promptData.enabled),
         promptText: pendingEdit?.promptText ?? "",
         promptName: pendingEdit
           ? pendingEdit.promptName
@@ -829,7 +836,8 @@ export const useEditorStore = create<
         savedNewPromptState,
         replyContext: null,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.PROMPT,
-        stepEnabled: pendingEdit?.stepEnabled ?? promptData.enabled !== false,
+        stepEnabled:
+          pendingEdit?.stepEnabled ?? readStepEnabled(promptData.enabled),
         promptText: pendingEdit ? pendingEdit.promptText : promptData.prompt,
         promptName: pendingEdit
           ? pendingEdit.promptName
@@ -1790,9 +1798,7 @@ export const useEditorStore = create<
       result.name = promptName.trim();
     }
 
-    if (!get().stepEnabled) {
-      result.enabled = false;
-    }
+    Object.assign(result, stepEnabledPatch(get().stepEnabled));
 
     // Add harness if not default
     if (properties.harness !== undefined) {

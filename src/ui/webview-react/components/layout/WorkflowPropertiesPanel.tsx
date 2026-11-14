@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { isWorkflowVariablePlaceholder } from "@utils/dropdownValidation";
+import { WorkflowVariableValue } from "@components/shared/WorkflowVariableValue";
 import type {
   ErrorBehavior,
   UserHookConfig,
@@ -332,37 +332,6 @@ const WORKFLOW_PICKER_SHORTCUT_TARGETS = Object.keys(
  * - End condition configuration
  * - Quick access to VS Code settings
  */
-/** Read-only display for enum values authored as whole-value variables. */
-function WorkflowVariableEnumValue({
-  value,
-  vars,
-  onClear,
-  children,
-}: {
-  value: string | undefined;
-  vars: Readonly<Record<string, unknown>>;
-  onClear: () => void;
-  children: React.ReactNode;
-}) {
-  if (!value || !isWorkflowVariablePlaceholder(value)) return <>{children}</>;
-  const name = value.slice(2, -2);
-  const resolved = vars[name];
-  return (
-    <div className="flex items-center gap-2 rounded-sm border border-input-border px-2 py-1 text-xs">
-      <span className="font-mono">{value}</span>
-      <span aria-hidden="true">→</span>
-      <span>{resolved === undefined ? "undefined" : String(resolved)}</span>
-      <button
-        type="button"
-        className="ml-auto text-link-fg hover:underline"
-        onClick={onClear}
-      >
-        Clear
-      </button>
-    </div>
-  );
-}
-
 const WorkflowPropertiesPanelInner: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
   onRequestClose?: () => void;
@@ -1796,7 +1765,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <WorkflowVariableEnumValue
+                  <WorkflowVariableValue
                     value={workflowProperties.harness}
                     vars={workflowVars}
                     onClear={() =>
@@ -1820,7 +1789,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                       }
                     />
-                  </WorkflowVariableEnumValue>
+                  </WorkflowVariableValue>
                   <CompatibilitySummary
                     diagnostics={permissionDiagnostics}
                     onReview={reviewCompatibility}
@@ -1845,7 +1814,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <WorkflowVariableEnumValue
+                  <WorkflowVariableValue
                     value={workflowProperties.model}
                     vars={workflowVars}
                     onClear={() =>
@@ -1878,7 +1847,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       nonHideableValues={["default", ""]}
                       warning={modelWarn ?? undefined}
                     />
-                  </WorkflowVariableEnumValue>
+                  </WorkflowVariableValue>
                 </FormField>
               </DrawerRow>
 
@@ -1902,7 +1871,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <WorkflowVariableEnumValue
+                  <WorkflowVariableValue
                     value={workflowProperties.agent ?? undefined}
                     vars={workflowVars}
                     onClear={() =>
@@ -1937,7 +1906,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       nonHideableValues={[]}
                       warning={agentWarn ?? undefined}
                     />
-                  </WorkflowVariableEnumValue>
+                  </WorkflowVariableValue>
                 </FormField>
 
                 <FormField
@@ -2041,7 +2010,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <WorkflowVariableEnumValue
+                  <WorkflowVariableValue
                     value={workflowProperties.executionMode}
                     vars={workflowVars}
                     onClear={() =>
@@ -2059,7 +2028,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         "executionMode"
                       )}
                     />
-                  </WorkflowVariableEnumValue>
+                  </WorkflowVariableValue>
                 </FormField>
               </DrawerRow>
 
@@ -2287,7 +2256,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <WorkflowVariableEnumValue
+                  <WorkflowVariableValue
                     value={
                       typeof workflowProperties.resumeSession === "string"
                         ? workflowProperties.resumeSession
@@ -2315,7 +2284,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       onChange={handleResumeSessionChange}
                       options={[...getResumeSessionOptions()]}
                     />
-                  </WorkflowVariableEnumValue>
+                  </WorkflowVariableValue>
                   {/* Session ID input — always visible, grayed out when not applicable */}
                   <div
                     className={`mt-1 ${
@@ -2556,20 +2525,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   or script step encounters an internal error: stop, retry, or
                   continue.
                 </p>
-                <WorkflowVariableEnumValue
-                  value={workflowProperties.errorBehavior?.onError}
-                  vars={workflowVars}
-                  onClear={() =>
+                <ErrorBehaviorEditor
+                  schemaPath="errorBehavior"
+                  value={effectiveErrorBehavior}
+                  onChange={handleErrorBehaviorChange}
+                  idPrefix="settings-error"
+                  onClearVariable={() =>
                     postWorkflowPropertiesUpdate({ errorBehavior: undefined })
                   }
-                >
-                  <ErrorBehaviorEditor
-                    schemaPath="errorBehavior"
-                    value={effectiveErrorBehavior}
-                    onChange={handleErrorBehaviorChange}
-                    idPrefix="settings-error"
-                  />
-                </WorkflowVariableEnumValue>
+                />
               </PropertyGroup>
 
               <FormField
@@ -2595,6 +2559,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   path="maxSteps"
                   value={workflowProperties.maxSteps}
                   onChange={handleMaxStepsChange}
+                  acceptsVariable
                   inheritLabel={
                     isUnlimited(globalSettings.maxSteps)
                       ? "Unlimited"

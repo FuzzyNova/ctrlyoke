@@ -36,6 +36,7 @@ import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { formatSessionIdPreview } from "@utils/stepOverrideChips";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 import { Icon } from "../shared/Icon";
+import { WorkflowVariableValue } from "../shared/WorkflowVariableValue";
 
 /** Width tiers for the editor header row, from the section's own content width. */
 const EDITOR_HEADER_TIERS = {
@@ -334,45 +335,51 @@ const EditorSectionInner: React.FC = () => {
         {/* Center: Enable toggle + Mode text (clickable to edit name) + token count */}
         <div className="flex items-center justify-center flex-1 gap-1 min-w-0">
           {!isExternallyManaged && (
-            <button
-              type="button"
-              onClick={() =>
-                setStepEnabled(enabledMixed ? false : !bulkEnabled)
-              }
-              disabled={isBulkMode && !bulkCapabilities?.canToggleEnabled}
-              title={
-                bulkToggleDisabledReason ??
-                (enabledMixed
-                  ? "Steps have mixed enabled states — click to disable all"
-                  : bulkEnabled
-                    ? "Step is enabled — click to disable"
-                    : "Step is disabled — click to enable")
-              }
-              aria-label={
-                enabledMixed
-                  ? "Mixed step enabled state"
-                  : bulkEnabled
-                    ? "Disable step"
-                    : "Enable step"
-              }
-              aria-pressed={!enabledMixed && !bulkEnabled}
-              className={`control-button flex items-center shrink-0 px-0.5 bg-transparent border-none leading-none transition-colors ${
-                !enabledMixed && !bulkEnabled
-                  ? "text-warning-fg hover:text-warning-fg cursor-pointer"
-                  : "text-description-fg hover:text-foreground cursor-pointer"
-              }`}
+            <WorkflowVariableValue
+              value={isBulkMode ? undefined : stepEnabled}
+              label="Enabled"
+              onClear={() => setStepEnabled(true)}
             >
-              <Icon
-                name={
-                  enabledMixed
-                    ? "remove"
-                    : bulkEnabled
-                      ? "codicon-check"
-                      : "codicon-circle-slash"
+              <button
+                type="button"
+                onClick={() =>
+                  setStepEnabled(enabledMixed ? false : !bulkEnabled)
                 }
-                className="text-sm"
-              />
-            </button>
+                disabled={isBulkMode && !bulkCapabilities?.canToggleEnabled}
+                title={
+                  bulkToggleDisabledReason ??
+                  (enabledMixed
+                    ? "Steps have mixed enabled states — click to disable all"
+                    : bulkEnabled
+                      ? "Step is enabled — click to disable"
+                      : "Step is disabled — click to enable")
+                }
+                aria-label={
+                  enabledMixed
+                    ? "Mixed step enabled state"
+                    : bulkEnabled
+                      ? "Disable step"
+                      : "Enable step"
+                }
+                aria-pressed={!enabledMixed && !bulkEnabled}
+                className={`control-button flex items-center shrink-0 px-0.5 bg-transparent border-none leading-none transition-colors ${
+                  !enabledMixed && !bulkEnabled
+                    ? "text-warning-fg hover:text-warning-fg cursor-pointer"
+                    : "text-description-fg hover:text-foreground cursor-pointer"
+                }`}
+              >
+                <Icon
+                  name={
+                    enabledMixed
+                      ? "remove"
+                      : bulkEnabled
+                        ? "codicon-check"
+                        : "codicon-circle-slash"
+                  }
+                  className="text-sm"
+                />
+              </button>
+            </WorkflowVariableValue>
           )}
           {!isExternallyManaged &&
             globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (

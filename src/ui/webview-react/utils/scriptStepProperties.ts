@@ -5,6 +5,7 @@ import {
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/CtrlYokeTypes";
+import { stepEnabledPatch, type StepEnabledValue } from "./wholeValueVariables";
 
 export interface ScriptStepEditorValues {
   env: Record<string, string> | undefined;
@@ -20,7 +21,7 @@ export interface ScriptStepEditorValues {
   executionMode: ScriptStep["executionMode"];
   shell: ScriptStep["shell"];
   color: ScriptStep["color"];
-  enabled: boolean;
+  enabled: StepEnabledValue;
   promptName: string;
 }
 
@@ -64,13 +65,14 @@ export function getScriptStepPropertyUpdate(
       ? { operator: editor.operator as ScriptStep["operator"] }
       : {}),
     ...(editor.expected ? { expected: editor.expected } : {}),
-    ...(editor.ignoreCase ? { ignoreCase: true } : {}),
+    // Kept as held: an authored `{{name}}` must not be rewritten to `true`.
+    ...(editor.ignoreCase ? { ignoreCase: editor.ignoreCase } : {}),
     ...(editor.executionMode !== undefined
       ? { executionMode: editor.executionMode }
       : {}),
     ...(editor.shell?.trim() ? { shell: editor.shell } : {}),
     ...(editor.color !== undefined ? { color: editor.color } : {}),
-    ...(!editor.enabled ? { enabled: false } : {}),
+    ...stepEnabledPatch(editor.enabled),
   };
 
   const clearProperties = [
@@ -92,7 +94,7 @@ export function getScriptStepPropertyUpdate(
     ...(editor.executionMode === undefined ? ["executionMode"] : []),
     ...(!editor.shell?.trim() ? ["shell"] : []),
     ...(editor.color === undefined ? ["color"] : []),
-    ...(editor.enabled ? ["enabled"] : []),
+    ...(editor.enabled === true ? ["enabled"] : []),
     ...(!editor.promptName.trim() ? ["name"] : []),
   ];
 

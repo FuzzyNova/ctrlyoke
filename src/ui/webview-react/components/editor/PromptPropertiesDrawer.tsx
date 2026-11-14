@@ -1,3 +1,4 @@
+import { WorkflowVariableValue } from "@components/shared/WorkflowVariableValue";
 import React, { useCallback, useMemo } from "react";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
@@ -668,35 +669,42 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                 >
                   Harness
                 </label>
-                <HarnessDropdown
-                  id="prop-harness"
-                  schemaPath="harness"
-                  triggerAriaLabel="Harness"
-                  value={
-                    (displayedProperties.harness as unknown) === MIXED_VALUE
-                      ? BULK_MIXED_OPTION
-                      : (displayedProperties.harness ?? INHERIT_DEFAULT_OPTION)
-                  }
-                  onChange={handleHarnessChange}
-                  disabled={Boolean(
-                    multiSelection &&
-                    !selectionCapabilities?.canEditPromptProperties
-                  )}
-                  triggerTitle={bulkEditDisabledReason}
-                  showDefault={true}
-                  defaultLabel={defaultHarnessLabel}
-                  defaultHarnessId={resolvedHarness}
-                  showStatus={false}
-                  hiddenValues={
-                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
-                  }
-                  onHideOption={(v) =>
-                    hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                  }
-                  onUnhideOption={(v) =>
-                    unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                  }
-                />
+                <WorkflowVariableValue
+                  value={displayedProperties.harness}
+                  label="Harness"
+                  onClear={() => handleHarnessChange(INHERIT_DEFAULT_OPTION)}
+                >
+                  <HarnessDropdown
+                    id="prop-harness"
+                    schemaPath="harness"
+                    triggerAriaLabel="Harness"
+                    value={
+                      (displayedProperties.harness as unknown) === MIXED_VALUE
+                        ? BULK_MIXED_OPTION
+                        : (displayedProperties.harness ??
+                          INHERIT_DEFAULT_OPTION)
+                    }
+                    onChange={handleHarnessChange}
+                    disabled={Boolean(
+                      multiSelection &&
+                      !selectionCapabilities?.canEditPromptProperties
+                    )}
+                    triggerTitle={bulkEditDisabledReason}
+                    showDefault={true}
+                    defaultLabel={defaultHarnessLabel}
+                    defaultHarnessId={resolvedHarness}
+                    showStatus={false}
+                    hiddenValues={
+                      hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
+                    }
+                    onHideOption={(v) =>
+                      hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                    }
+                    onUnhideOption={(v) =>
+                      unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                    }
+                  />
+                </WorkflowVariableValue>
                 <CompatibilitySummary
                   diagnostics={permissionDiagnostics}
                   onReview={reviewCompatibility}
@@ -992,35 +1000,44 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                 >
                   Execution Mode
                 </label>
-                <CustomSelect
-                  id="prop-execution-mode"
-                  schemaPath="executionMode"
-                  triggerAriaLabel="Execution Mode"
-                  value={
-                    displayedProperties.executionMode ?? INHERIT_DEFAULT_OPTION
+                <WorkflowVariableValue
+                  value={displayedProperties.executionMode}
+                  label="Execution Mode"
+                  onClear={() =>
+                    setProperty(PROMPT_PROPERTIES.EXECUTION_MODE, undefined)
                   }
-                  onChange={(v) =>
-                    setProperty(
-                      PROMPT_PROPERTIES.EXECUTION_MODE,
-                      v === INHERIT_DEFAULT_OPTION
-                        ? undefined
-                        : (v as ExecutionMode)
-                    )
-                  }
-                  options={[
-                    {
-                      value: INHERIT_DEFAULT_OPTION,
-                      label: defaultExecutionModeLabel,
-                      pseudo: { omit: true },
-                    },
-                    ...toSelectOptions(
-                      EXECUTION_MODE_OPTIONS_META,
-                      "executionMode"
-                    ),
-                  ]}
-                  disabled={fieldDisabled(PROMPT_PROPERTIES.EXECUTION_MODE)}
-                  triggerTitle={bulkEditDisabledReason}
-                />
+                >
+                  <CustomSelect
+                    id="prop-execution-mode"
+                    schemaPath="executionMode"
+                    triggerAriaLabel="Execution Mode"
+                    value={
+                      displayedProperties.executionMode ??
+                      INHERIT_DEFAULT_OPTION
+                    }
+                    onChange={(v) =>
+                      setProperty(
+                        PROMPT_PROPERTIES.EXECUTION_MODE,
+                        v === INHERIT_DEFAULT_OPTION
+                          ? undefined
+                          : (v as ExecutionMode)
+                      )
+                    }
+                    options={[
+                      {
+                        value: INHERIT_DEFAULT_OPTION,
+                        label: defaultExecutionModeLabel,
+                        pseudo: { omit: true },
+                      },
+                      ...toSelectOptions(
+                        EXECUTION_MODE_OPTIONS_META,
+                        "executionMode"
+                      ),
+                    ]}
+                    disabled={fieldDisabled(PROMPT_PROPERTIES.EXECUTION_MODE)}
+                    triggerTitle={bulkEditDisabledReason}
+                  />
+                </WorkflowVariableValue>
               </div>
               {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
                 <StepColorField idPrefix="prop-step" />
@@ -1041,38 +1058,46 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                 >
                   Resume Session
                 </label>
-                <CustomSelect
-                  id="prop-resume-session"
-                  schemaPath="resumeSession"
-                  triggerAriaLabel="Resume Session"
-                  value={
-                    displayedProperties.resumeSession === undefined
-                      ? INHERIT_DEFAULT_OPTION
-                      : displayedProperties.sessionId ===
-                            SESSION_ID_SENTINELS.FINAL_STEP &&
-                          displayedProperties.resumeSession
-                        ? SESSION_ID_SENTINELS.FINAL_STEP
-                        : displayedProperties.resumeSession
-                          ? RESUME_SESSION_SELECTIONS.YES
-                          : RESUME_SESSION_SELECTIONS.NO
+                <WorkflowVariableValue
+                  value={displayedProperties.resumeSession}
+                  label="Resume Session"
+                  onClear={() =>
+                    setProperty(PROMPT_PROPERTIES.RESUME_SESSION, undefined)
                   }
-                  onChange={(v) => {
-                    const next = resumeSessionSelection(
-                      v,
-                      displayedProperties.sessionId
-                    );
-                    setProperty(
-                      PROMPT_PROPERTIES.RESUME_SESSION,
-                      next.resumeSession
-                    );
-                    setProperty(PROMPT_PROPERTIES.SESSION_ID, next.sessionId);
-                  }}
-                  disabled={Boolean(multiSelection)}
-                  triggerTitle={bulkEditDisabledReason}
-                  options={[
-                    ...getResumeSessionOptions(defaultResumeSessionLabel),
-                  ]}
-                />
+                >
+                  <CustomSelect
+                    id="prop-resume-session"
+                    schemaPath="resumeSession"
+                    triggerAriaLabel="Resume Session"
+                    value={
+                      displayedProperties.resumeSession === undefined
+                        ? INHERIT_DEFAULT_OPTION
+                        : displayedProperties.sessionId ===
+                              SESSION_ID_SENTINELS.FINAL_STEP &&
+                            displayedProperties.resumeSession
+                          ? SESSION_ID_SENTINELS.FINAL_STEP
+                          : displayedProperties.resumeSession
+                            ? RESUME_SESSION_SELECTIONS.YES
+                            : RESUME_SESSION_SELECTIONS.NO
+                    }
+                    onChange={(v) => {
+                      const next = resumeSessionSelection(
+                        v,
+                        displayedProperties.sessionId
+                      );
+                      setProperty(
+                        PROMPT_PROPERTIES.RESUME_SESSION,
+                        next.resumeSession
+                      );
+                      setProperty(PROMPT_PROPERTIES.SESSION_ID, next.sessionId);
+                    }}
+                    disabled={Boolean(multiSelection)}
+                    triggerTitle={bulkEditDisabledReason}
+                    options={[
+                      ...getResumeSessionOptions(defaultResumeSessionLabel),
+                    ]}
+                  />
+                </WorkflowVariableValue>
                 {/* Session ID — always visible, grayed out when not applicable */}
                 <div
                   className={`mt-1 ${
@@ -1307,6 +1332,9 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                     }
                     disabled={fieldDisabled(PROMPT_PROPERTIES.ERROR_BEHAVIOR)}
                     idPrefix="prop-error"
+                    onClearVariable={() =>
+                      setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, undefined)
+                    }
                   />
                 </div>
               </AnimatedSection>

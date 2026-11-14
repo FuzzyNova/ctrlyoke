@@ -33,6 +33,8 @@ import type {
   CommandPreview,
   ConditionDefinitionPreview,
   StepExecutionPreview,
+  SubstitutedFieldPreview,
+  VariableSubstitutionBlockerPreview,
   WorkflowExecutionPreview,
   WorkspaceMutationPreview,
   WorktreeExecutionPreview,
@@ -217,6 +219,93 @@ function DefinitionList({
   );
 }
 
+/** `value`, followed by the placeholder it was substituted from, if any. */
+function SubstitutedValue({
+  value,
+  path,
+  substitutions,
+}: {
+  value: React.ReactNode;
+  path: string;
+  substitutions: readonly SubstitutedFieldPreview[] | undefined;
+}): React.ReactElement {
+  const field = substitutions?.find((candidate) => candidate.path === path);
+  return (
+    <>
+      {value}
+      {field && (
+        <span
+          className="ml-2 font-mono text-description-fg"
+          title={`Substituted from ${field.authored}`}
+        >
+          ← {field.authored}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Every substituted field of a workflow or step, as `path: authored → value`. */
+function SubstitutionList({
+  title,
+  substitutions,
+}: {
+  title: string;
+  substitutions: readonly SubstitutedFieldPreview[] | undefined;
+}): React.ReactElement | null {
+  if (!substitutions || substitutions.length === 0) return null;
+  return (
+    <section>
+      <h3 className="mb-3 text-sm font-semibold text-foreground">{title}</h3>
+      <DefinitionList
+        entries={substitutions.map((field) => [
+          field.path,
+          <span className="wrap-break-word">
+            <code className="bg-code-block">{field.authored}</code>
+            <span aria-hidden="true"> → </span>
+            <span className="sr-only"> becomes </span>
+            <code className="bg-code-block">{field.value}</code>
+          </span>,
+        ])}
+      />
+    </section>
+  );
+}
+
+/**
+ * Substitutions a run would reject. Shown on every view: a blocked step has
+ * no step preview of its own, and a run-start blocker blocks them all.
+ */
+function SubstitutionBlockers({
+  blockers,
+}: {
+  blockers: readonly VariableSubstitutionBlockerPreview[] | undefined;
+}): React.ReactElement | null {
+  if (!blockers || blockers.length === 0) return null;
+  return (
+    <div
+      className="flex shrink-0 flex-col gap-1 border-b border-error-fg/40 bg-severity-error-bg px-4 py-2 text-xs text-error-fg"
+      role="alert"
+      aria-label="Variable substitution blockers"
+    >
+      {blockers.map((blocker) => (
+        <div
+          key={`${blocker.stepIndex ?? "run"}:${blocker.message}`}
+          className="flex items-start gap-2"
+        >
+          <Icon name="error" className="mt-px shrink-0" />
+          <span className="min-w-0 wrap-break-word">
+            {blocker.stepIndex === undefined
+              ? "Run start blocked: "
+              : `Step ${blocker.stepIndex + 1} blocked: `}
+            {blocker.message}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const WORKTREE_MODE_LABEL: Record<string, string> = Object.fromEntries(
   Object.values(WORKTREE_MODE_OPTIONS_META).map((option) => [
     option.value,
@@ -226,9 +315,22 @@ const WORKTREE_MODE_LABEL: Record<string, string> = Object.fromEntries(
 
 function WorktreeSummary({
   worktree,
+  substitutions,
 }: {
   worktree: WorktreeExecutionPreview;
+  substitutions: readonly SubstitutedFieldPreview[] | undefined;
 }): React.ReactElement {
+  const prefix =
+    worktree.origin === WORKTREE_CONFIG_ORIGINS.AUTHORED
+      ? "worktree"
+      : "defaults.worktree";
+  const substituted = (value: React.ReactNode, field: string) => (
+    <SubstitutedValue
+      value={value}
+      path={`${prefix}.${field}`}
+      substitutions={substitutions}
+    />
+  );
   const entries: [string, React.ReactNode][] = [
     ["Mode", WORKTREE_MODE_LABEL[worktree.mode] ?? worktree.mode],
     [
@@ -238,19 +340,31 @@ function WorktreeSummary({
         : "Default setting",
     ],
     ...(worktree.branch
-      ? ([["Branch", worktree.branch]] as [string, React.ReactNode][])
+      ? ([["Branch", substituted(worktree.branch, "branch")]] as [
+          string,
+          React.ReactNode,
+        ][])
       : []),
     ...(worktree.directory
-      ? ([["Directory", worktree.directory]] as [string, React.ReactNode][])
+      ? ([["Directory", substituted(worktree.directory, "directory")]] as [
+          string,
+          React.ReactNode,
+        ][])
       : []),
     ...(worktree.base
-      ? ([["Base", worktree.base]] as [string, React.ReactNode][])
+      ? ([["Base", substituted(worktree.base, "base")]] as [
+          string,
+          React.ReactNode,
+        ][])
       : []),
     ...(worktree.setupCommand
       ? ([
           [
             "Setup command",
-            <code className="break-all">{worktree.setupCommand}</code>,
+            substituted(
+              <code className="break-all">{worktree.setupCommand}</code>,
+              "setup"
+            ),
           ],
         ] as [string, React.ReactNode][])
       : []),
@@ -606,7 +720,17 @@ function OverviewPanel({
         />
       </div>
 
-      {preview.worktree && <WorktreeSummary worktree={preview.worktree} />}
+      {preview.worktree && (
+        <WorktreeSummary
+          worktree={preview.worktree}
+          substitutions={preview.substitutions}
+        />
+      )}
+
+      <SubstitutionList
+        title="Substituted workflow fields"
+        substitutions={preview.substitutions}
+      />
 
       <section>
         <h3 className="mb-3 text-sm font-semibold text-foreground">
@@ -712,6 +836,13 @@ function SummaryPanel({
 }): React.ReactElement {
   const properties = step.resolvedProperties;
   const permissionMode = properties.permissions.mode ?? "none";
+  const substituted = (value: React.ReactNode, path: string) => (
+    <SubstitutedValue
+      value={value}
+      path={path}
+      substitutions={step.substitutions}
+    />
+  );
   return (
     <div className="flex flex-col gap-5 p-4">
       <section>
@@ -720,10 +851,22 @@ function SummaryPanel({
         </h3>
         <DefinitionList
           entries={[
-            ["Harness", getHarnessDisplayName(properties.harnessId)],
+            [
+              "Harness",
+              substituted(
+                getHarnessDisplayName(properties.harnessId),
+                "harness"
+              ),
+            ],
             ["Harness version", properties.harnessVersion ?? "Not reported"],
-            ["Model", properties.model ?? "Default"],
-            ["Execution mode", properties.executionMode ?? "Default"],
+            ["Model", substituted(properties.model ?? "Default", "model")],
+            [
+              "Execution mode",
+              substituted(
+                properties.executionMode ?? "Default",
+                "executionMode"
+              ),
+            ],
             ["Continuation", properties.continuationMode ?? "Default"],
             ["Session", properties.session.present ? "Present" : "Not present"],
             ["Permission mode", permissionMode],
@@ -747,6 +890,11 @@ function SummaryPanel({
           ]}
         />
       </section>
+
+      <SubstitutionList
+        title="Substituted fields"
+        substitutions={step.substitutions}
+      />
 
       <section>
         <h3 className="mb-3 text-sm font-semibold text-foreground">
@@ -1553,6 +1701,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
               </button>
             </div>
           )}
+          <SubstitutionBlockers blockers={preview.substitutionBlockers} />
           {workflowNarrow && (
             <div className="shrink-0 border-b border-panel-border p-3">
               <CustomSelect

@@ -10,6 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ScriptConditionEditor } from "@components/shared/ScriptConditionEditor";
 import { CONDITION_ACTIONS, MESSAGE_TYPES } from "@/types/messages";
 import { END_CONDITION_SCRIPT_TYPES } from "@root/types/DashboardConstants";
+import { useSettingsStore } from "@store/settingsStore";
 
 const { notifyUserMock } = vi.hoisted(() => ({ notifyUserMock: vi.fn() }));
 
@@ -460,7 +461,8 @@ describe("ScriptConditionEditor", () => {
         );
 
         const timeout = screen.getByLabelText("Timeout (s)");
-        expect(timeout).toHaveValue(null);
+        // A text input (it also accepts a typed {{name}}), so empty is "".
+        expect(timeout).toHaveValue("");
         expect(timeout).toHaveAttribute(
           "placeholder",
           "Default (from settings)"
@@ -1158,6 +1160,136 @@ describe("ScriptConditionEditor", () => {
         expect.stringContaining("property: defaults.preCondition.env")
       );
       expect(screen.getByText("Pass when")).toBeInTheDocument();
+    });
+  });
+
+  describe("workflow variable placeholders", () => {
+    afterEach(() => {
+      useSettingsStore.getState().resetSettings();
+    });
+
+    it("shows an operator placeholder as a chip and Clear returns the picker", () => {
+      useSettingsStore.setState({
+        workflowProperties: { vars: { op: "contains" } },
+      });
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{ script: "npm test", operator: "{{op}}", expected: "ok" }}
+          onChange={onChange}
+          idPrefix="var-condition"
+        />
+      );
+
+      const chip = screen.getByRole("group", {
+        name: "Comparison operator uses variable {{op}}",
+      });
+      expect(chip).toHaveTextContent("{{op}}→contains");
+      expect(
+        screen.queryByRole("button", { name: /^Comparison operator/ })
+      ).toBeNull();
+
+      fireEvent.click(
+        within(chip).getByRole("button", {
+          name: "Clear {{op}} from Comparison operator",
+        })
+      );
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ operator: undefined, expected: "ok" })
+      );
+
+      rerender(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{ script: "npm test", expected: "ok" }}
+          onChange={onChange}
+          idPrefix="var-condition"
+        />
+      );
+      expect(screen.queryByRole("group", { name: /uses variable/ })).toBeNull();
+      expect(
+        screen.getByRole("button", { name: /^Comparison operator/ })
+      ).toBeInTheDocument();
+    });
+
+    it("shows an onFail placeholder as a chip, flagging an undefined variable", () => {
+      const onChange = vi.fn();
+      render(
+        <ScriptConditionEditor
+          variant="preCondition"
+          value={{ script: "npm test", onFail: "{{failAction}}" }}
+          onChange={onChange}
+          idPrefix="var-condition"
+        />
+      );
+
+      const chip = screen.getByRole("group", {
+        name: "On Fail uses variable {{failAction}}",
+      });
+      expect(chip).toHaveTextContent("{{failAction}}→undefined");
+      fireEvent.click(within(chip).getByRole("button", { name: /^Clear/ }));
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ onFail: undefined })
+      );
+      // On Pass is a literal value, so its picker is untouched.
+      expect(
+        screen.queryByRole("group", { name: /On Pass uses variable/ })
+      ).toBeNull();
+    });
+
+    it("keeps an ignoreCase placeholder behind a chip instead of a checkbox", () => {
+      useSettingsStore.setState({
+        workflowProperties: { vars: { fold: "true" } },
+      });
+      render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{
+            script: "npm test",
+            expected: "ok",
+            ignoreCase: "{{fold}}" as unknown as boolean,
+          }}
+          onChange={vi.fn()}
+          idPrefix="var-condition"
+        />
+      );
+
+      expect(
+        screen.getByRole("group", {
+          name: "Ignore case uses variable {{fold}}",
+        })
+      ).toHaveTextContent("{{fold}}→true");
+      expect(
+        screen.queryByRole("checkbox", { name: /Ignore case/ })
+      ).toBeNull();
+    });
+
+    it("accepts a typed {{name}} in the timeout and keeps it as written", () => {
+      const onChange = vi.fn();
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test" }}
+          onChange={onChange}
+          idPrefix="var-condition"
+        />
+      );
+
+      const timeout = screen.getByLabelText("Timeout (s)");
+      fireEvent.change(timeout, { target: { value: " {{timeout}} " } });
+      fireEvent.blur(timeout);
+
+      expect(onChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ timeoutSec: "{{timeout}}" })
+      );
+      expect(timeout).toHaveValue("{{timeout}}");
+
+      fireEvent.change(timeout, { target: { value: "2.5" } });
+      fireEvent.blur(timeout);
+      expect(onChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ timeoutSec: 2.5 })
+      );
     });
   });
 });

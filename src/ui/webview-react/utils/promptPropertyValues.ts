@@ -1,6 +1,7 @@
 import type { PropertyValues } from "@store/editorStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { filterExplicitSecretGrants } from "@components/shared/useSecretGrantOptions";
+import { stepEnabledPatch, type StepEnabledValue } from "./wholeValueVariables";
 
 export interface PropertyUpdateValues {
   properties: Record<string, unknown>;
@@ -14,7 +15,7 @@ export function buildPropertyUpdateValues(
     includeNullsForDefaults?: boolean;
     promptText?: string;
     keys?: ReadonlySet<keyof PropertyValues>;
-    enabled?: boolean;
+    enabled?: StepEnabledValue;
   } = {}
 ): PropertyUpdateValues {
   const {
@@ -98,7 +99,8 @@ export function buildPropertyUpdateValues(
     } else inherit("endCondition");
   }
   if (enabled !== undefined) {
-    if (!enabled) result.enabled = false;
+    const patch = stepEnabledPatch(enabled);
+    if (patch.enabled !== undefined) result.enabled = patch.enabled;
     else if (includeNullsForDefaults) clearProperties.push("enabled");
   }
   return { properties: result, clearProperties };

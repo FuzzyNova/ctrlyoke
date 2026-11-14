@@ -10,6 +10,7 @@ import {
   PRIOR_CONTEXT_SELECT_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
+import { WorkflowVariableValue } from "./WorkflowVariableValue";
 import { CustomSelect } from "./CustomSelect";
 import {
   schemaAriaLabel,
@@ -410,26 +411,33 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
 
       {/* Detail follows the kind, as in `$previous:summary`. */}
       {onDetailChange && (
-        <CustomSelect
-          id={detailId}
-          schemaPath={PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL}
-          triggerAriaLabel="Prior context detail"
-          value={detail ?? INHERIT_DEFAULT_OPTION}
-          onChange={(v) =>
-            onDetailChange(
-              v === INHERIT_DEFAULT_OPTION
-                ? undefined
-                : (v as PriorContextDetail)
-            )
-          }
-          options={detailOptions}
-          disabled={disabled || detailDisabled || !detailApplies}
-          triggerTitle={
-            detailApplies
-              ? disabledReason
-              : "Select prior context to choose its detail"
-          }
-        />
+        <WorkflowVariableValue
+          value={detail}
+          label="Prior context detail"
+          onClear={() => onDetailChange(undefined)}
+          disabled={disabled || detailDisabled}
+        >
+          <CustomSelect
+            id={detailId}
+            schemaPath={PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL}
+            triggerAriaLabel="Prior context detail"
+            value={detail ?? INHERIT_DEFAULT_OPTION}
+            onChange={(v) =>
+              onDetailChange(
+                v === INHERIT_DEFAULT_OPTION
+                  ? undefined
+                  : (v as PriorContextDetail)
+              )
+            }
+            options={detailOptions}
+            disabled={disabled || detailDisabled || !detailApplies}
+            triggerTitle={
+              detailApplies
+                ? disabledReason
+                : "Select prior context to choose its detail"
+            }
+          />
+        </WorkflowVariableValue>
       )}
 
       {mode === PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT &&

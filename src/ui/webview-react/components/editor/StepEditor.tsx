@@ -1580,6 +1580,9 @@ export const StepEditor: React.FC<StepEditorProps> = ({
                   onChange={(updated) => setProperty("errorBehavior", updated)}
                   idPrefix="script-step-error"
                   schemaPath="errorBehavior"
+                  onClearVariable={() =>
+                    setProperty("errorBehavior", undefined)
+                  }
                 />
               )}
             </div>

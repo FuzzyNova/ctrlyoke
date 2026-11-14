@@ -102,6 +102,17 @@ value, for example
 - A parallel group member that fails substitution fails on its own, under its
   own `errorBehavior`; the group's other members are not affected.
 - `ctrlyoke run --dry-run` reports the same failures and exits with code 2.
+  The dashboard's Dry Run lists them as blockers at the top of the preview,
+  and leaves a blocked step out of the step list.
+
+In the dashboard, a typed field (a picker, checkbox or limit) whose value is
+a whole <code v-pre>{{name}}</code> shows it as a read-only
+<code v-pre>{{name}} → value</code> chip with the current value from the
+workflow's `vars`; **Clear** returns the field to its picker. Number fields
+such as **Timeout** and **Max Retries** accept a typed
+<code v-pre>{{name}}</code> as well as a number. Dry Run shows each
+substituted value next to the field it fills, with the authored text beside
+it.
 
 ### Not substituted
 

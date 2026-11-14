@@ -1,5 +1,9 @@
 import { useLocalInput } from "@hooks/useLocalInput";
 import type React from "react";
+import {
+  parseNumberOrVariable,
+  type WorkflowVariablePlaceholder,
+} from "@utils/wholeValueVariables";
 
 type LocalTextInputProps = Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
@@ -49,6 +53,39 @@ export function LocalNumberInput({
     (raw) => String(normalize(raw) ?? (allowEmpty ? "" : undefined))
   );
   return <input type="number" {...props} {...local} />;
+}
+
+/** A number field that may also hold a typed whole-value `{{name}}`. */
+export type NumberOrVariable = number | WorkflowVariablePlaceholder;
+
+type LocalNumberOrVariableInputProps = Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "onChange" | "type" | "value"
+> & {
+  value: NumberOrVariable | undefined;
+  onCommit: (value: NumberOrVariable | undefined) => void;
+  /** Parses numeric text; a typed `{{name}}` bypasses it and is kept as is. */
+  parse: (raw: string) => number | undefined;
+};
+
+/**
+ * Number input for a `kind: value` field: it accepts digits or a typed
+ * `{{name}}`, so it renders as text with a numeric keyboard hint.
+ */
+export function LocalNumberOrVariableInput({
+  value,
+  onCommit,
+  parse,
+  ...props
+}: LocalNumberOrVariableInputProps) {
+  const normalize = (raw: string) => parseNumberOrVariable(raw, parse);
+  const local = useLocalInput(
+    String(value ?? ""),
+    (raw) => onCommit(normalize(raw)),
+    undefined,
+    (raw) => String(normalize(raw) ?? "")
+  );
+  return <input type="text" inputMode="decimal" {...props} {...local} />;
 }
 
 type LocalTextareaProps = Omit<

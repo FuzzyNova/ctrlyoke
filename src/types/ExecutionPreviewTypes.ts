@@ -41,6 +41,35 @@ export interface WorkflowExecutionPreview {
   diagnostics: CompatibilityDiagnostic[];
   /** Absent when the workflow is not configured to use a worktree. */
   worktree?: WorktreeExecutionPreview;
+  /**
+   * Workflow-root and worktree fields whose authored `{{name}}` placeholders
+   * were substituted (`harness`, `maxSteps`, `worktree.branch`, ...).
+   */
+  substitutions?: SubstitutedFieldPreview[];
+  /**
+   * Fields whose substitution failed its policy. A run would stop on each
+   * before any side effect: a run-start blocker fails the whole run start,
+   * a step blocker fails that step. Blocked steps have no step preview.
+   */
+  substitutionBlockers?: VariableSubstitutionBlockerPreview[];
+}
+
+/** One field whose authored placeholders were substituted. */
+export interface SubstitutedFieldPreview {
+  /** Field path, relative to the step for a step's own list. */
+  path: string;
+  /** The authored text, placeholders included. */
+  authored: string;
+  /** The value the run uses. */
+  value: string;
+}
+
+/** A variable substitution that fails validation, reported instead of thrown. */
+export interface VariableSubstitutionBlockerPreview {
+  /** The failure, naming the field, the variable and its value. */
+  message: string;
+  /** The blocked step; absent for a run-start (workflow-level) blocker. */
+  stepIndex?: number;
 }
 
 export interface ParallelGroupPreflightPreview {
@@ -102,6 +131,8 @@ export interface StepExecutionPreview {
   variables: VariableResolutionPreview[];
   conditions: ConditionPreview;
   diagnostics: CompatibilityDiagnostic[];
+  /** This step's fields whose authored placeholders were substituted. */
+  substitutions?: SubstitutedFieldPreview[];
 }
 
 export interface EffectiveSandboxPreview {

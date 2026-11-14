@@ -13,7 +13,15 @@ import {
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { useMemo } from "react";
 import { CustomSelect } from "./CustomSelect";
-import { LocalNumberInput } from "./LocalInputs";
+import {
+  LocalNumberInput,
+  LocalNumberOrVariableInput,
+  type NumberOrVariable,
+} from "./LocalInputs";
+import {
+  asAuthoredValue,
+  isWorkflowVariablePlaceholder,
+} from "@utils/wholeValueVariables";
 
 type LimitMode =
   typeof LIMIT_SELECTION_VALUES.UNLIMITED | typeof LIMIT_SELECTION_VALUES.NEVER;
@@ -24,6 +32,11 @@ interface LimitSelectProps {
   path: string;
   value: number | undefined;
   onChange: (value: number | undefined) => void;
+  /**
+   * The field is a policy `kind: value` field: Custom also accepts a typed
+   * `{{name}}`, and an authored placeholder is shown in the Custom input.
+   */
+  acceptsVariable?: boolean;
   mode?: LimitMode;
   /** Enables an Inherit option and names the resolved value shown beside it. */
   inheritLabel?: string;
@@ -51,7 +64,13 @@ export function LimitSelect({
   max,
   customFallback,
   disabled = false,
+  acceptsVariable = false,
 }: LimitSelectProps) {
+  // A placeholder arrives in a field typed as a number (see
+  // `asAuthoredValue`), so it is recognized at runtime.
+  const variableValue = isWorkflowVariablePlaceholder(value)
+    ? value
+    : undefined;
   const allowInherit = inheritLabel !== undefined;
   const selectOptions = useMemo(() => {
     const metadata = {
@@ -76,22 +95,41 @@ export function LimitSelect({
   }, [allowInherit, inheritLabel, mode, path]);
 
   const selection =
-    value === undefined && allowInherit
-      ? INHERIT_DEFAULT_OPTION
-      : value === UNLIMITED_LIMIT
-        ? mode === LIMIT_SELECTION_VALUES.NEVER
-          ? NEVER_OPTION_META.value
-          : UNLIMITED_OPTION_META.value
-        : CUSTOM_OPTION_META.value;
+    variableValue !== undefined
+      ? CUSTOM_OPTION_META.value
+      : value === undefined && allowInherit
+        ? INHERIT_DEFAULT_OPTION
+        : value === UNLIMITED_LIMIT
+          ? mode === LIMIT_SELECTION_VALUES.NEVER
+            ? NEVER_OPTION_META.value
+            : UNLIMITED_OPTION_META.value
+          : CUSTOM_OPTION_META.value;
 
   const customValue =
-    value === undefined || value === UNLIMITED_LIMIT ? customFallback : value;
+    value === undefined || value === UNLIMITED_LIMIT || variableValue
+      ? customFallback
+      : value;
   const nextCustomValue = (next: number | undefined) => {
     const parsed = next ?? customFallback;
     const finiteValue = Number.isFinite(parsed) ? parsed : customFallback;
     onChange(
       Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, finiteValue))
     );
+  };
+
+  const customInputProps = {
+    id: `${id}-custom`,
+    parse: (raw: string) => {
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed)
+        ? Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, parsed))
+        : customValue;
+    },
+    "aria-label": schemaAriaLabel(`${label} Custom`, path),
+    title: schemaTitle(path),
+    disabled,
+    className:
+      "w-full min-w-0 flex-1 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border",
   };
 
   return (
@@ -117,25 +155,26 @@ export function LimitSelect({
           disabled={disabled}
         />
       </div>
-      {selection === CUSTOM_OPTION_META.value && (
-        <LocalNumberInput
-          id={`${id}-custom`}
-          min={min}
-          max={max}
-          value={customValue}
-          onCommit={nextCustomValue}
-          parse={(raw) => {
-            const parsed = Number.parseInt(raw, 10);
-            return Number.isFinite(parsed)
-              ? Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, parsed))
-              : customValue;
-          }}
-          aria-label={schemaAriaLabel(`${label} Custom`, path)}
-          title={schemaTitle(path)}
-          disabled={disabled}
-          className="w-full min-w-0 flex-1 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
-        />
-      )}
+      {selection === CUSTOM_OPTION_META.value &&
+        (acceptsVariable ? (
+          <LocalNumberOrVariableInput
+            {...customInputProps}
+            value={variableValue ?? customValue}
+            onCommit={(next: NumberOrVariable | undefined) =>
+              isWorkflowVariablePlaceholder(next)
+                ? onChange(asAuthoredValue<number>(next))
+                : nextCustomValue(next)
+            }
+          />
+        ) : (
+          <LocalNumberInput
+            {...customInputProps}
+            min={min}
+            max={max}
+            value={customValue}
+            onCommit={nextCustomValue}
+          />
+        ))}
     </div>
   );
 }

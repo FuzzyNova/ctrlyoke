@@ -106,7 +106,7 @@ export function getExecutionPreviewEditorSnapshot():
   } else {
     delete step.name;
   }
-  if (editor.stepEnabled) delete step.enabled;
+  if (editor.stepEnabled === true) delete step.enabled;
   if (
     editor.properties.sessionId === undefined ||
     !editor.properties.sessionId

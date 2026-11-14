@@ -61,3 +61,14 @@ export function isVariableDefined(
 ): boolean {
   return Object.prototype.hasOwnProperty.call(vars, name);
 }
+
+const WHOLE_VALUE_PLACEHOLDER = new RegExp(`^${PLACEHOLDER_SOURCE}$`);
+
+/**
+ * The variable name when `value` is exactly one `{{name}}` placeholder (the
+ * form a `kind: value` field accepts), otherwise `undefined`.
+ */
+export function wholeValueVariableName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return WHOLE_VALUE_PLACEHOLDER.exec(value)?.[1];
+}

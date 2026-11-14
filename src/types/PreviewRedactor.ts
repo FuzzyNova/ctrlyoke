@@ -9,6 +9,7 @@ import type {
   McpServerPreview,
   RedactionSpan,
   StepExecutionPreview,
+  SubstitutedFieldPreview,
   VariableResolutionPreview,
   WorkflowExecutionPreview,
 } from "./ExecutionPreviewTypes";
@@ -155,6 +156,21 @@ function redactVariable(
   return { ...variable, value: redacted.text, redactions: redacted.spans };
 }
 
+function redactSubstitutions(
+  substitutions: readonly SubstitutedFieldPreview[] | undefined,
+  exactSecrets: readonly string[]
+): { substitutions?: SubstitutedFieldPreview[] } {
+  return substitutions
+    ? {
+        substitutions: substitutions.map((field) => ({
+          ...field,
+          authored: redactPreviewText(field.authored, [], exactSecrets).text,
+          value: redactPreviewText(field.value, [], exactSecrets).text,
+        })),
+      }
+    : {};
+}
+
 function redactHook(
   hook: HookPreview,
   exactSecrets: readonly string[]
@@ -248,6 +264,7 @@ function redactStep(
     variables: step.variables.map((variable) =>
       redactVariable(variable, exactSecrets)
     ),
+    ...redactSubstitutions(step.substitutions, exactSecrets),
   };
   return {
     ...redactedStep,
@@ -283,6 +300,15 @@ export function redactExecutionPreview(
   return {
     ...preview,
     steps: preview.steps.map((step) => redactStep(step, exactSecrets)),
+    ...redactSubstitutions(preview.substitutions, exactSecrets),
+    ...(preview.substitutionBlockers
+      ? {
+          substitutionBlockers: preview.substitutionBlockers.map((blocker) => ({
+            ...blocker,
+            message: redactPreviewText(blocker.message, [], exactSecrets).text,
+          })),
+        }
+      : {}),
     ...(preview.worktree?.setupCommand
       ? {
           worktree: {

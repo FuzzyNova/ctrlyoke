@@ -1393,15 +1393,131 @@ suite("ExecutionPreviewService", () => {
           base: "{{base}}",
           directory: "{{directory}}",
         },
-        vars: { branch: "feature/preview-vars", base: "main", directory: "preview-dir" },
+        vars: {
+          branch: "feature/preview-vars",
+          base: "main",
+          directory: "preview-dir",
+        },
         steps: [{ prompt: "wants a named worktree" }],
       },
     });
 
     assert.deepStrictEqual(
-      [preview.worktree?.branch, preview.worktree?.base, preview.worktree?.directory],
+      [
+        preview.worktree?.branch,
+        preview.worktree?.base,
+        preview.worktree?.directory,
+      ],
       ["feature/preview-vars", "main", "preview-dir"]
     );
+  });
+
+  test("lists substituted values next to the workflow and step fields", async () => {
+    const preview = await createService().build({
+      workflow: {
+        maxSteps: "{{limit}}" as unknown as number,
+        vars: { limit: "5", model: "opus", timeout: "30", label: "Lint" },
+        steps: [
+          { prompt: "inspect", model: "{{model}}", name: "{{label}} step" },
+          {
+            type: "script",
+            script: "echo ok",
+            timeoutSec: "{{timeout}}" as unknown as number,
+          },
+        ],
+      },
+    });
+
+    assert.deepStrictEqual(preview.substitutions, [
+      { path: "maxSteps", authored: "{{limit}}", value: "5" },
+    ]);
+    assert.strictEqual(
+      preview.steps[0]?.resolvedProperties.limits.maxQueueSteps,
+      5
+    );
+    assert.deepStrictEqual(preview.steps[0]?.substitutions, [
+      { path: "name", authored: "{{label}} step", value: "Lint step" },
+      { path: "model", authored: "{{model}}", value: "opus" },
+    ]);
+    assert.strictEqual(preview.steps[0]?.stepName, "Lint step");
+    assert.strictEqual(preview.steps[0]?.resolvedProperties.model, "opus");
+    assert.deepStrictEqual(preview.steps[1]?.substitutions, [
+      { path: "timeoutSec", authored: "{{timeout}}", value: "30" },
+    ]);
+    assert.strictEqual(preview.substitutionBlockers, undefined);
+  });
+
+  test("reports a failed dispatch substitution as a step blocker instead of throwing", async () => {
+    const preview = await createService().build({
+      workflow: {
+        vars: { timeout: "soon" },
+        steps: [
+          { prompt: "fine" },
+          {
+            type: "script",
+            script: "echo ok",
+            timeoutSec: "{{timeout}}" as unknown as number,
+          },
+        ],
+      },
+    });
+
+    assert.deepStrictEqual(
+      preview.steps.map((step) => step.stepIndex),
+      [0]
+    );
+    assert.strictEqual(preview.substitutionBlockers?.length, 1);
+    assert.strictEqual(preview.substitutionBlockers[0]?.stepIndex, 1);
+    assert.match(
+      preview.substitutionBlockers[0]?.message ?? "",
+      /^steps\[1\]\.timeoutSec: variable "timeout" is "soon", expected /
+    );
+  });
+
+  test("reports a failed run-start substitution as a run blocker with no step previews", async () => {
+    const preview = await createService().build({
+      workflow: {
+        harness: "{{agentHarness}}" as unknown as PromptFile["harness"],
+        vars: { agentHarness: "not-a-harness" },
+        steps: [{ prompt: "one" }, { prompt: "two" }],
+      },
+    });
+
+    assert.deepStrictEqual(preview.steps, []);
+    assert.strictEqual(preview.workflow.stepCount, 2);
+    assert.strictEqual(preview.substitutionBlockers?.length, 1);
+    assert.strictEqual(preview.substitutionBlockers[0]?.stepIndex, undefined);
+    assert.match(
+      preview.substitutionBlockers[0]?.message ?? "",
+      /^harness: variable "agentHarness" is "not-a-harness"/
+    );
+  });
+
+  test("redacts credentials in substituted values and blocker messages", async () => {
+    const token = "sk-abcdefghijklmnopqrstuvwxyz";
+    const preview = await createService().build({
+      workflow: {
+        vars: { token },
+        steps: [
+          {
+            type: "script",
+            script: "echo ok",
+            env: { API: "{{token}}" },
+          },
+          {
+            type: "script",
+            script: "echo ok",
+            operator: "{{token}}" as unknown as "eq",
+          },
+        ],
+      },
+    });
+
+    assert.ok(!JSON.stringify(preview).includes(token));
+    assert.ok(
+      preview.steps[0]?.substitutions?.some((f) => f.path === "env.API")
+    );
+    assert.strictEqual(preview.substitutionBlockers?.[0]?.stepIndex, 1);
   });
 
   test("reports the exact directory when the named branch already has a Git worktree checked out", async function () {

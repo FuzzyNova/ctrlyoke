@@ -127,7 +127,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
     const customOptions = screen.getAllByRole("button", { name: /^Custom/ });
     fireEvent.click(customOptions[customOptions.length - 1]);
     expect(useSettingsStore.getState().workflowProperties.maxSteps).toBe(100);
-    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue(100);
+    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue("100");
   });
 
   it.each([
@@ -153,7 +153,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /property maxSteps/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
-    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue(42);
+    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue("42");
 
     act(() => {
       useSettingsStore.getState().updateGlobalSetting("maxSteps", -1);
@@ -161,7 +161,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /property maxSteps/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
-    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue(100);
+    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue("100");
   });
 
   it("shows Set as Default only for a present step cap that differs globally", () => {
