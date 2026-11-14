@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing 096fd5047
 - **Area:** `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`, `src/ui/webview-react/components/settings/settingsCatalog.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli)
 - **Area:** `src/utils/WorktreeUtils.ts` (`resolveWorktreeDirectory`, `assertWorktreePlacement`), `src/core/orchestration/WorktreeManager.ts` (`resolveNamedWorktreeWith`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

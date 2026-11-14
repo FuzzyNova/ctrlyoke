@@ -11,6 +11,7 @@ import type {
   WorktreeConfig,
   WorktreeObjectConfig,
 } from "@root/types/CtrlYokeTypes";
+import { worktreeSettingDescription } from "../settings/settingsCatalog";
 import { EXECUTION_PROPERTY_KEYS } from "@root/types/CtrlYokeTypes";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -273,6 +274,7 @@ const FormField: React.FC<{
   children: React.ReactNode;
   setAsDefaultButton?: React.ReactNode;
   className?: string;
+  preferDescription?: boolean;
 }> = ({
   label,
   schemaPath,
@@ -281,12 +283,18 @@ const FormField: React.FC<{
   children,
   setAsDefaultButton,
   className,
+  preferDescription = false,
 }) => (
   <div className={`flex flex-col gap-1${className ? ` ${className}` : ""}`}>
     <div className="flex items-center justify-between min-h-[18px]">
       <label
         htmlFor={htmlFor}
-        title={schemaFieldTitle(label, schemaPath, description)}
+        title={schemaFieldTitle(
+          label,
+          schemaPath,
+          description,
+          preferDescription
+        )}
         aria-label={schemaAriaLabel(label, schemaPath)}
         className="text-xs font-semibold uppercase text-description-fg cursor-help"
       >
@@ -2103,7 +2111,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         label="Setup"
                         schemaPath="worktree.setup"
                         htmlFor="settings-worktree-setup"
-                        description="Optional command run after a new worktree is created. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
+                        description={worktreeSettingDescription(
+                          worktreeMode === WORKTREE_MODES.NAMED
+                            ? WORKTREE_MODES.NAMED
+                            : WORKTREE_MODES.MANAGED,
+                          "setup"
+                        )}
+                        preferDescription
                       >
                         <ScriptCommandEditor
                           id="settings-worktree-setup"

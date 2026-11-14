@@ -1298,7 +1298,7 @@ const WORKTREE_MODE_DESCRIPTIONS = {
     directory: SCHEMA_DESCRIPTIONS["defaults.worktree.directory"],
     base: "Optional Git ref used as the starting point for a new branch.",
     setup:
-      "Optional command run after creating a named worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it.",
+      "Optional setup command run in the named worktree at the start of every run, such as `npm ci` to pick up dependency changes since the last run. Resuming or continuing a run whose setup already succeeded does not run it again. Omit it for no setup. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a failed setup blocks the worktree and the next Run re-runs it.",
   },
   managed: {
     base: "Optional Git ref used as the starting point for a new managed worktree.",

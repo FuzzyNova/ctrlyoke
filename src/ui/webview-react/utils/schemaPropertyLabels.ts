@@ -122,14 +122,17 @@ export function schemaAriaLabel(
 export function schemaFieldTitle(
   label: string,
   path: string,
-  fallbackDescription?: string
+  fallbackDescription?: string,
+  preferFallbackDescription = false
 ): string {
   return tooltipParagraphs(
     label,
     schemaTitle(
       path,
       undefined,
-      SCHEMA_DESCRIPTIONS[path] ?? fallbackDescription
+      preferFallbackDescription
+        ? (fallbackDescription ?? SCHEMA_DESCRIPTIONS[path])
+        : (SCHEMA_DESCRIPTIONS[path] ?? fallbackDescription)
     )
   );
 }

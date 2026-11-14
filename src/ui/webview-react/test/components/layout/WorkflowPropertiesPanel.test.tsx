@@ -865,6 +865,10 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
 
     expect(screen.getByLabelText("Worktree base")).toHaveTextContent("main");
     expect(screen.getByLabelText("Worktree setup")).toHaveTextContent("npm ci");
+    expect(screen.getByText("Setup", { selector: "label" })).toHaveAttribute(
+      "title",
+      expect.stringContaining("after creating a managed worktree")
+    );
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
     expect(screen.getByLabelText("Merge")).toBeChecked();
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
@@ -903,6 +907,10 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     chooseWorktreeMode("Named");
 
     const setup = screen.getByLabelText("Worktree setup");
+    expect(screen.getByText("Setup", { selector: "label" })).toHaveAttribute(
+      "title",
+      expect.stringContaining("at the start of every run")
+    );
     await user.click(setup);
     await user.keyboard("{Enter}");
 

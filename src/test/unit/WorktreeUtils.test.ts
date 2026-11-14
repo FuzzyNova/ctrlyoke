@@ -269,6 +269,61 @@ suite("WorktreeUtils", function () {
     );
   });
 
+  test("guards planned path-form directories against checkout and worktree placement", async () => {
+    const parent = await makeDirectory("path-placement");
+    const source = path.join(parent, "repo");
+    const linked = path.join(parent, "linked");
+    const root = path.join(parent, "worktrees");
+    const common = path.join(source, ".git");
+    await fs.mkdir(source);
+    await fs.mkdir(linked);
+    await fs.mkdir(root);
+    const linkedEntry: GitWorktreeEntry = {
+      worktreePath: linked,
+      headCommit: "abc",
+      branchName: "linked",
+      detached: false,
+      bare: false,
+    };
+    const resolve = (
+      target: string,
+      entries: readonly GitWorktreeEntry[] = []
+    ) =>
+      resolveWorktreeDirectory(
+        source,
+        target,
+        entries,
+        common,
+        siblingRoot(root)
+      );
+
+    await assert.rejects(
+      resolve(path.join(source, "nested")),
+      /inside the source checkout/
+    );
+    await assert.rejects(
+      resolve(path.join(linked, "nested"), [linkedEntry]),
+      /inside an existing worktree/
+    );
+    await assert.rejects(
+      resolve(parent, [linkedEntry]),
+      /cannot contain the source checkout/
+    );
+
+    const sibling = path.join(parent, "sibling-worktree");
+    assert.deepStrictEqual(await resolve(sibling), {
+      kind: WORKTREE_DIRECTORY_KINDS.PLANNED,
+      path: sibling,
+    });
+
+    const symlinkParent = path.join(parent, "checkout-link");
+    await fs.symlink(source, symlinkParent, "dir");
+    await assert.rejects(
+      resolve(path.join(symlinkParent, "nested")),
+      /inside the source checkout/
+    );
+  });
+
   test("resolves explicit, sibling, and filesystem-fallback roots", async () => {
     const parent = await makeDirectory("roots");
     const source = path.join(parent, "repo");

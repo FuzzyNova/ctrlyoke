@@ -161,6 +161,12 @@ export async function resolveWorktreeDirectory(
     if (entry?.prunable || entry?.prunableReason !== undefined)
       throw prunableDirectoryError(target);
     if (entry) return { kind: WORKTREE_DIRECTORY_KINDS.EXISTING, entry };
+    await assertWorktreePlacement({
+      sourceCheckoutRoot,
+      worktreeRoot: target,
+      discoveredWorktrees: entries,
+      rejectContainingPaths: true,
+    });
     await assertUnregisteredPathIsFree(target);
     return { kind: WORKTREE_DIRECTORY_KINDS.PLANNED, path: target };
   }
@@ -624,6 +630,7 @@ export interface WorktreePlacementOptions {
   worktreeRoot: string;
   worktreePath?: string;
   discoveredWorktrees?: readonly GitWorktreeEntry[];
+  rejectContainingPaths?: boolean;
 }
 
 /** Apply all worktree placement guards after symlink-aware resolution. */
@@ -637,10 +644,14 @@ export async function assertWorktreePlacement(
     options.worktreeRoot
   );
 
-  if (isPathWithinDirectory(root, source)) {
-    throw new Error(
-      `Worktree root cannot be inside the source checkout: ${root}`
-    );
+  if (
+    isPathWithinDirectory(root, source) ||
+    (options.rejectContainingPaths && isPathWithinDirectory(source, root))
+  ) {
+    const rule = isPathWithinDirectory(root, source)
+      ? "inside the source checkout"
+      : "contain the source checkout";
+    throw new Error(`Worktree root cannot ${rule}: ${root}`);
   }
 
   const discovered = options.discoveredWorktrees ?? [];
@@ -648,10 +659,14 @@ export async function assertWorktreePlacement(
     const existing = await resolveThroughNearestExistingAncestor(
       worktree.worktreePath
     );
-    if (isPathWithinDirectory(root, existing)) {
-      throw new Error(
-        `Worktree root cannot be inside an existing worktree: ${existing}`
-      );
+    if (
+      isPathWithinDirectory(root, existing) ||
+      (options.rejectContainingPaths && isPathWithinDirectory(existing, root))
+    ) {
+      const rule = isPathWithinDirectory(root, existing)
+        ? "inside an existing worktree"
+        : "contain an existing worktree";
+      throw new Error(`Worktree root cannot ${rule}: ${root}`);
     }
   }
 

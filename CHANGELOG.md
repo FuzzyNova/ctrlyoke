@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Path-form named worktree directories now enforce the placement guards for the source checkout and linked worktrees, including symlinked paths and paths that contain either.
+- The workflow properties panel and Settings now describe named worktree setup as running at the start of each run, while managed setup remains tied to creating a worktree.
 - A prompt step that recovers from an end-condition error through `onError: retryPhase` keeps its completed AI attempt in run output instead of reporting it as failed.
 - `ctrlyoke run --json` now reports end-condition actions and resolved comparison details.
 - Settings `defaults.secrets` now appears in secret approval and check flows, grants script steps consistently, and is included in run export redaction.

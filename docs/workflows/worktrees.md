@@ -173,6 +173,7 @@ repositories can both use `directory: bug-fix`. An absolute or `~`-prefixed path
 registered worktree, or a new location that ctrlyoke creates. A relative path
 containing separators is rejected. An existing folder that is not a linked
 worktree of this repository is never adopted.
+The selected path cannot be inside the source checkout or another worktree, and cannot contain either.
 
 When the requested branch differs from the branch the directory holds,
 ctrlyoke switches only if the directory is clean and no Git operation is in
