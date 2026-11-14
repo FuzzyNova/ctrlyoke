@@ -18,12 +18,20 @@ filled at generation time).
 
 Each step ticks its own item, notes any deviation under it, and commits.
 
-- [ ] 1. Policy table (`VarSubstitutionPolicy.ts`) and `substituteWorkflowView`;
+- [x] 1. Policy table (`VarSubstitutionPolicy.ts`) and `substituteWorkflowView`;
       existing call sites moved over; fence masking limited to prompt text.
-      Design note: `SubstitutedValueValidator` now bridges the utility layer to
-      the parser's Ajv instance, and CLI run-start preview uses a copied view
-      so resolved values do not overwrite the authored workflow. The walker
-      still contains per-field inventories and is not complete.
+      Final design: each table entry names its `view` (workflow, worktree,
+      settings default worktree, step, resolved properties, script step,
+      prompt text) and its `path` inside it (`[]`/`*` for array items and map
+      values); `value` entries add the JSON pointer of the original
+      sub-schema, and `priorContext.run` declares a post-validator. One
+      walker in `VarSubstitutor` applies every entry of a view and phase,
+      copy-on-write; `substituteWorkflowView`, `substituteStepView` and the
+      `applyTo*` helpers are thin wrappers. Failure messages are built from
+      the sub-schema and always throw `VarSubstitutionValidationError`.
+      `WorkflowSchemaValidation.ts` owns the compiled schema and Ajv instance
+      for both the parser and the substitutor. The duplicate `prompt.prompt`
+      key was folded into `steps[].prompt`.
 - [x] 2. Engine gaps 1–4 (Dry Run grants, preflight additionalArgs, advisory
       with empty `vars`, preset param values left literal).
       Note: MCP supplied env keys are recorded on the attached condition so literal provenance survives run-file persistence and resume.

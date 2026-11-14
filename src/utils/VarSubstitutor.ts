@@ -1,26 +1,64 @@
 import type { ResolvedProperties } from "./SettingsPropertyResolver";
 import type {
-  UserHookConfig,
-  EndCondition,
-  ScriptStep,
-  ScriptProperties,
-} from "../types/CtrlYokeTypes";
-import type {
   PromptFile,
+  ScriptStep,
   WorkflowStep,
-  WorktreeConfig,
   WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
 import {
   findVariablePlaceholders,
   isVariableDefined,
+  type VariablePlaceholder,
 } from "./VariablePlaceholders";
-import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
-import { validateSubstitutedValue } from "./SubstitutedValueValidator";
 import {
-  BOOLEAN_STRING_VALUES,
-  PROMPT_PROPERTIES,
-} from "../types/DashboardConstants";
+  VAR_SUBSTITUTION_KINDS,
+  VAR_SUBSTITUTION_PATH_EACH_ITEM,
+  VAR_SUBSTITUTION_PATH_EACH_KEY,
+  VAR_SUBSTITUTION_PHASES,
+  VAR_SUBSTITUTION_POLICY,
+  VAR_SUBSTITUTION_UNRESOLVED,
+  VAR_SUBSTITUTION_VIEWS,
+  type VarSubstitutionPhase,
+  type VarSubstitutionPolicyEntry,
+  type VarSubstitutionTextEntry,
+  type VarSubstitutionValueEntry,
+  type VarSubstitutionView,
+} from "./VarSubstitutionPolicy";
+import {
+  describeWorkflowSchemaValue,
+  validateWorkflowSchemaValue,
+} from "./WorkflowSchemaValidation";
+import { isRecord } from "./JsonTypeGuards";
+import { BOOLEAN_STRING_VALUES } from "../types/DashboardConstants";
+
+/** `code` carried by every {@link VarSubstitutionValidationError}. */
+export const VAR_SUBSTITUTION_VALIDATION_FAILURE_CODE =
+  "VAR_SUBSTITUTION_VALIDATION_FAILURE";
+
+/**
+ * A substituted field failed its policy: an unresolved placeholder in a
+ * strict field, a partial placeholder in a `value` field, or a value that
+ * does not satisfy the field's schema. The message names the field path, the
+ * variable and its value.
+ */
+export class VarSubstitutionValidationError extends Error {
+  readonly code = VAR_SUBSTITUTION_VALIDATION_FAILURE_CODE;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "VarSubstitutionValidationError";
+  }
+}
+
+/** `stepIndex` that labels a step view as the workflow's `finalStep`. */
+const FINAL_STEP_INDEX = -1;
+const NUMERIC_STRING_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
+
+const POLICY_ENTRIES: readonly VarSubstitutionPolicyEntry[] = Object.values(
+  VAR_SUBSTITUTION_POLICY
+);
+
+type FieldResolver = (value: unknown, fieldPath: string) => unknown;
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.
@@ -29,8 +67,10 @@ import {
  *   1. CLI `--var key=value` flags (merged into PromptFile.vars before execution)
  *   2. Workflow-level `vars:` defaults in the YAML/JSON file
  *
- * The supported field set, phase, and substitution behavior are defined by
- * `VAR_SUBSTITUTION_POLICY` in `VarSubstitutionPolicy.ts`.
+ * Which fields are substituted, in which phase and how, is defined only by
+ * `VAR_SUBSTITUTION_POLICY` (`VarSubstitutionPolicy.ts`). Every entry point
+ * here walks one policy view with the same walker, so adding a field is a
+ * table entry, not code.
  *
  * This is a distinct mechanism from the `CTRLYOKE_VAR_<KEY>` environment
  * variables `ScriptProcessRunner` injects into every script/condition
@@ -38,442 +78,85 @@ import {
  * unconditionally in the runner; this class only rewrites the text handed
  * to it before the process is spawned.
  *
- * Missing variables (a `{{key}}` with no matching entry) remain literal and
- * are reported by the execution layer as an advisory diagnostic. This keeps
- * workflows that document ctrlyoke syntax runnable.
+ * In an `advisory` field a missing variable (a `{{key}}` with no matching
+ * entry) remains literal and is reported by the execution layer as an
+ * advisory diagnostic, which keeps workflows that document ctrlyoke syntax
+ * runnable. An `error` field throws {@link VarSubstitutionValidationError}.
  */
-export class VarSubstitutionValidationError extends Error {
-  readonly code = "VAR_SUBSTITUTION_VALIDATION_FAILURE";
-
-  constructor(message: string) {
-    super(message);
-    this.name = "VarSubstitutionValidationError";
-  }
-}
-
 export class VarSubstitutor {
   private static readonly SECRET_REFERENCE_PREFIX = "${secret:";
 
-  /** Substitution failures that must be handled through the step error policy. */
-  static readonly VALIDATION_FAILURE = "VAR_SUBSTITUTION_VALIDATION_FAILURE";
+  /**
+   * Substitute a workflow's `phase` fields: its root fields and every queue
+   * step and `finalStep`. Returns a copy; the authored workflow is unchanged.
+   */
+  static substituteWorkflowView<T extends PromptFile>(
+    workflow: T,
+    vars: Readonly<Record<string, string>>,
+    phase: VarSubstitutionPhase
+  ): T {
+    const result = {
+      ...this.walkView(workflow, VAR_SUBSTITUTION_VIEWS.WORKFLOW, phase, vars),
+    };
+    if (Array.isArray(workflow.steps))
+      result.steps = workflow.steps.map((step, index) =>
+        this.substituteStepView(step, vars, phase, index)
+      );
+    if (workflow.finalStep)
+      result.finalStep = this.substituteStepView(
+        workflow.finalStep,
+        vars,
+        phase,
+        FINAL_STEP_INDEX
+      ) as T["finalStep"];
+    return result;
+  }
 
-  /** Build the just-in-time dispatch view without changing the authored definition. */
-  static substituteWorkflowView<T extends PromptFile | WorkflowStep>(
-    view: T,
-    vars: Record<string, string>,
-    phase: "dispatch" | "run-start",
+  /**
+   * Substitute one step's `phase` fields. `stepIndex` labels failures
+   * (`steps[2].timeoutSec`); `-1` is the `finalStep`. Returns the step itself
+   * when nothing changes, otherwise a copy.
+   */
+  static substituteStepView<T extends WorkflowStep>(
+    step: T,
+    vars: Readonly<Record<string, string>>,
+    phase: VarSubstitutionPhase,
     stepIndex = 0
   ): T {
-    if (phase === "run-start") {
-      const resolve = (
-        value: unknown,
-        policyPath: string,
-        fieldPath: string
-      ): unknown => {
-        if (typeof value !== "string") return value;
-        const placeholders = findVariablePlaceholders(value).filter(
-          (p) => !p.inFence
-        );
-        if (!/^\{\{\w+\}\}$/.test(value) || placeholders.length !== 1) {
-          if (/\{\{\w+\}\}/.test(value))
-            throw new VarSubstitutionValidationError(
-              `${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`
-            );
-          return value;
-        }
-        const name = placeholders[0]!.name;
-        if (!isVariableDefined(vars, name))
-          throw new Error(
-            `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
-          );
-        const raw = vars[name]!;
-        let valueToCheck: unknown = raw;
-        if (
-          raw === BOOLEAN_STRING_VALUES.TRUE ||
-          raw === BOOLEAN_STRING_VALUES.FALSE
-        )
-          valueToCheck = raw === BOOLEAN_STRING_VALUES.TRUE;
-        else if (/^-?\d+$/.test(raw)) valueToCheck = Number(raw);
-        const pointerByPath: Record<string, string> = {
-          harness: "/$defs/harnessId",
-          "steps[].harness": "/$defs/harnessId",
-          "steps[].enabled":
-            "/$defs/promptStep/allOf/1/properties/enabled/oneOf/0",
-          maxSteps: "/$defs/maxStepsValue",
-        };
-        if (
-          !validateSubstitutedValue(pointerByPath[policyPath]!, valueToCheck)
-        ) {
-          const expected = policyPath.includes("harness")
-            ? "a supported harness"
-            : policyPath.includes("enabled")
-              ? "a boolean"
-              : "a number greater than 0 or -1";
-          throw new Error(
-            `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", expected ${expected}.`
-          );
-        }
-        return valueToCheck;
-      };
-      const workflow = view as PromptFile;
-      const cloneStep = (step: WorkflowStep, index: number): WorkflowStep => {
-        const fields = step as WorkflowStep & Record<string, unknown>;
-        if (
-          !(
-            typeof fields.harness === "string" &&
-            /\{\{\w+\}\}/.test(fields.harness)
-          ) &&
-          !(
-            typeof fields.enabled === "string" &&
-            /\{\{\w+\}\}/.test(fields.enabled)
-          )
-        )
-          return step;
-        const result = { ...step } as WorkflowStep & Record<string, unknown>;
-        if (typeof result.harness === "string")
-          result.harness = resolve(
-            result.harness,
-            "steps[].harness",
-            `steps[${index}].harness`
-          ) as PromptFile["harness"];
-        if (typeof result.enabled === "string")
-          result.enabled = resolve(
-            result.enabled,
-            "steps[].enabled",
-            `steps[${index}].enabled`
-          ) as boolean;
-        return result;
-      };
-      const result = {
-        ...workflow,
-        steps: workflow.steps?.map(cloneStep),
-        finalStep: workflow.finalStep
-          ? cloneStep(workflow.finalStep, -1)
-          : workflow.finalStep,
-      } as PromptFile & Record<string, unknown>;
-      if (typeof result.harness === "string")
-        result.harness = resolve(
-          result.harness,
-          "harness",
-          "harness"
-        ) as PromptFile["harness"];
-      if (typeof result.maxSteps === "string")
-        result.maxSteps = resolve(
-          result.maxSteps,
-          "maxSteps",
-          "maxSteps"
-        ) as number;
-      if (typeof (result as Record<string, unknown>).enabled === "string") {
-        (result as Record<string, unknown>).enabled = resolve(
-          (result as Record<string, unknown>).enabled,
-          "steps[].enabled",
-          "enabled"
-        );
-      }
-      return result as unknown as T;
-    }
-    const substituteField = (
-      value: unknown,
-      policyPath: string,
-      fieldPath: string
-    ): unknown => {
-      if (typeof value !== "string") return value;
-      const unresolved = this.findUnresolvedVariables(value, vars);
-      if (unresolved.length) {
-        const placeholder = unresolved[0]!;
-        const name = placeholder.slice(2, -2);
-        throw new VarSubstitutionValidationError(
-          `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
-        );
-      }
-      return this.substitute(
-        value,
-        vars,
-        VAR_SUBSTITUTION_POLICY[
-          policyPath as keyof typeof VAR_SUBSTITUTION_POLICY
-        ].fencedCodeProtected
-      );
-    };
-    const dispatchValue = (
-      value: unknown,
-      schemaPointer: string,
-      fieldPath: string
-    ): unknown => {
-      if (typeof value !== "string" || !/\{\{\w+\}\}/.test(value)) return value;
-      const matches = findVariablePlaceholders(value, false);
-      if (!/^\{\{\w+\}\}$/.test(value) || matches.length !== 1) {
-        throw new VarSubstitutionValidationError(
-          `${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`
-        );
-      }
-      const name = matches[0]!.name;
-      if (!isVariableDefined(vars, name))
-        throw new VarSubstitutionValidationError(
-          `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
-        );
-      const raw = vars[name]!;
-      let converted: unknown = raw;
-      if (
-        raw === BOOLEAN_STRING_VALUES.TRUE ||
-        raw === BOOLEAN_STRING_VALUES.FALSE
-      )
-        converted = raw === BOOLEAN_STRING_VALUES.TRUE;
-      else if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(raw)) converted = Number(raw);
-      if (!validateSubstitutedValue(schemaPointer, converted)) {
-        throw new VarSubstitutionValidationError(
-          `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", expected a valid schema value.`
-        );
-      }
-      return converted;
-    };
-    const dispatchProperties = (
-      object: Record<string, unknown>,
-      prefix: string,
-      path: string
-    ): void => {
-      const mappings: Array<[string, string, string]> = [
-        [
-          "executionMode",
-          "executionProperties/properties/executionMode",
-          "executionMode",
-        ],
-        [
-          "resumeSession",
-          "executionProperties/properties/resumeSession",
-          "resumeSession",
-        ],
-        [
-          "priorContextDetail",
-          "executionProperties/properties/priorContextDetail",
-          "priorContextDetail",
-        ],
-        ["timeoutSec", "scriptProperties/properties/timeoutSec", "timeoutSec"],
-        [
-          "compareSource",
-          "scriptProperties/properties/compareSource",
-          "compareSource",
-        ],
-        ["operator", "scriptProperties/properties/operator", "operator"],
-        ["ignoreCase", "scriptProperties/properties/ignoreCase", "ignoreCase"],
-        ["onPass", "scriptStep/properties/onPass", "onPass"],
-        ["onFail", "scriptStep/properties/onFail", "onFail"],
-      ];
-      for (const [key, pointer, name] of mappings) {
-        const policy = `${prefix}.${name}`;
-        if (!(policy in VAR_SUBSTITUTION_POLICY)) continue;
-        object[key] = dispatchValue(
-          object[key],
-          `/$defs/${pointer}`,
-          `${path}.${name}`
-        );
-      }
-      const behavior = object.errorBehavior;
-      if (
-        behavior &&
-        typeof behavior === "object" &&
-        !Array.isArray(behavior)
-      ) {
-        const copy = { ...(behavior as Record<string, unknown>) };
-        for (const key of ["onError", "maxRetries", "retryDelaySec"] as const) {
-          const pointer = `/$defs/errorBehavior/properties/${key}`;
-          copy[key] = dispatchValue(
-            copy[key],
-            pointer,
-            `${path}.errorBehavior.${key}`
-          );
-        }
-        object.errorBehavior = copy;
-      }
-      for (const key of [
-        PROMPT_PROPERTIES.PRE_CONDITION,
-        PROMPT_PROPERTIES.END_CONDITION,
-      ] as const) {
-        const condition = object[key];
-        if (
-          !condition ||
-          typeof condition !== "object" ||
-          Array.isArray(condition)
-        )
-          continue;
-        const copy = { ...(condition as Record<string, unknown>) };
-        dispatchProperties(copy, `steps[].${key}`, `${path}.${key}`);
-        for (const field of [
-          "onPass",
-          "onFail",
-          ...(key === PROMPT_PROPERTIES.END_CONDITION ? ["maxRetries"] : []),
-        ]) {
-          const pointer =
-            key === PROMPT_PROPERTIES.END_CONDITION && field === "maxRetries"
-              ? "/$defs/endCondition/properties/maxRetries/oneOf/0"
-              : `/$defs/${key}/properties/${field}`;
-          copy[field] = dispatchValue(
-            copy[field],
-            pointer,
-            `${path}.${key}.${field}`
-          );
-        }
-        object[key] = copy;
-      }
-    };
-
-    const substituteStep = (
-      step: WorkflowStep,
-      index: number
-    ): WorkflowStep => {
-      const fields = step as WorkflowStep & Record<string, unknown>;
-      const supportedValues = [
-        fields.name,
-        fields.expected,
-        fields.shell,
-        fields.agent,
-        ...(Array.isArray(fields.skills) ? fields.skills : []),
-        typeof fields.sessionId === "string" ? fields.sessionId : undefined,
-        ...(fields.priorContext &&
-        typeof fields.priorContext === "object" &&
-        !Array.isArray(fields.priorContext)
-          ? [
-              (fields.priorContext as Record<string, unknown>).workflow,
-              (fields.priorContext as Record<string, unknown>).run,
-            ]
-          : []),
-      ];
-      if (
-        !supportedValues.some(
-          (value) => typeof value === "string" && /\{\{\w+\}\}/.test(value)
-        ) &&
-        Object.keys(vars).length === 0 &&
-        !JSON.stringify(step).includes("{{")
-      )
-        return step;
-      const result = { ...step } as WorkflowStep & Record<string, unknown>;
-      const path = `steps[${index}]`;
-      dispatchProperties(result, "steps[]", path);
-      if (typeof result.name === "string")
-        result.name = substituteField(
-          result.name,
-          "steps[].name",
-          `${path}.name`
-        ) as string;
-      if (typeof result.expected === "string")
-        result.expected = substituteField(
-          result.expected,
-          "steps[].expected",
-          `${path}.expected`
-        ) as string;
-      if (typeof result.shell === "string")
-        result.shell = substituteField(
-          result.shell,
-          "steps[].shell",
-          `${path}.shell`
-        ) as string;
-      if (typeof result.agent === "string")
-        result.agent = substituteField(
-          result.agent,
-          "steps[].agent",
-          `${path}.agent`
-        ) as string;
-      if (Array.isArray(result.skills))
-        result.skills = result.skills.map(
-          (skill, skillIndex) =>
-            substituteField(
-              skill,
-              "steps[].skills[]",
-              `${path}.skills[${skillIndex}]`
-            ) as string
-        );
-      if (typeof result.sessionId === "string")
-        result.sessionId = substituteField(
-          result.sessionId,
-          "steps[].sessionId",
-          `${path}.sessionId`
-        ) as string;
-      const prior = result["priorContext"];
-      if (prior && typeof prior === "object" && !Array.isArray(prior)) {
-        const priorCopy = { ...prior } as Record<string, unknown>;
-        if (typeof priorCopy.workflow === "string")
-          priorCopy.workflow = substituteField(
-            priorCopy.workflow,
-            "steps[].priorContext.workflow",
-            `${path}.priorContext.workflow`
-          );
-        if (typeof priorCopy.run === "string") {
-          const run = substituteField(
-            priorCopy.run,
-            "steps[].priorContext.run",
-            `${path}.priorContext.run`
-          );
-          if (
-            !/^[1-9]\d*$/.test(run as string) &&
-            !/^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/.test(
-              run as string
-            )
-          ) {
-            throw new VarSubstitutionValidationError(
-              `${this.VALIDATION_FAILURE}: ${path}.priorContext.run: variable "run" is "${run}", expected an integer or run reference.`
-            );
-          }
-          priorCopy.run = /^[1-9]\d*$/.test(run as string) ? Number(run) : run;
-        }
-        result["priorContext"] = priorCopy;
-      }
-      return result;
-    };
-    if ("steps" in view) {
-      const workflow = view as PromptFile;
-      return {
-        ...workflow,
-        steps: workflow.steps?.map((step, index) =>
-          substituteStep(step, index)
-        ),
-        finalStep: workflow.finalStep
-          ? (substituteStep(workflow.finalStep, -1) as PromptFile["finalStep"])
-          : workflow.finalStep,
-      } as T;
-    }
-    return substituteStep(view as WorkflowStep, stepIndex) as T;
+    return this.walkView(
+      step,
+      VAR_SUBSTITUTION_VIEWS.STEP,
+      phase,
+      vars,
+      stepIndex === FINAL_STEP_INDEX ? "finalStep" : `steps[${stepIndex}]`
+    );
   }
 
   /** Resolve worktree selectors before preflight; the authored workflow stays untouched. */
   static applyToRunStartWorktree<T extends PromptFile>(
     workflow: T,
     defaultWorktree: WorktreeDefaultConfig,
-    vars: Record<string, string>
+    vars: Readonly<Record<string, string>>
   ): { workflow: T; defaultWorktree: WorktreeDefaultConfig } {
-    const replace = (
-      config: WorktreeConfig | undefined,
-      prefix: string
-    ): WorktreeConfig | undefined => {
-      if (!config || typeof config !== "object") return config;
-      const result = { ...config } as Record<string, unknown>;
-      for (const key of ["branch", "base", "directory"] as const) {
-        const value = result[key];
-        if (typeof value !== "string") continue;
-        const field = `${prefix}.${key}`;
-        const unresolved = this.findUnresolvedVariables(value, vars);
-        if (unresolved.length) {
-          const name = unresolved[0]!.slice(2, -2);
-          throw new Error(
-            `Cannot start: ${field} has unresolved variable "${name}" in value "${value}".`
-          );
-        }
-        result[key] = this.substitute(
-          value,
-          vars,
-          VAR_SUBSTITUTION_POLICY[field as keyof typeof VAR_SUBSTITUTION_POLICY]
-            .fencedCodeProtected
-        );
-      }
-      return result as unknown as WorktreeConfig;
-    };
+    const { RUN_START } = VAR_SUBSTITUTION_PHASES;
     return {
       workflow: {
         ...workflow,
-        worktree: replace(workflow.worktree, "worktree"),
-      } as T,
-      defaultWorktree: replace(
+        worktree: this.walkView(
+          workflow.worktree,
+          VAR_SUBSTITUTION_VIEWS.WORKFLOW_WORKTREE,
+          RUN_START,
+          vars,
+          "worktree"
+        ),
+      },
+      defaultWorktree: this.walkView(
         defaultWorktree,
+        VAR_SUBSTITUTION_VIEWS.DEFAULT_WORKTREE,
+        RUN_START,
+        vars,
         "defaults.worktree"
-      ) as WorktreeDefaultConfig,
+      ),
     };
   }
 
@@ -560,181 +243,221 @@ export class VarSubstitutor {
   }
 
   /**
-   * Apply var substitution to the prompt text string.
-   * Returns the substituted string, or the original if vars is empty.
+   * Apply var substitution to prompt text: the authored prompt, a prompt-file
+   * path, or the loaded file's text. Fenced code stays literal.
    */
   static applyToPromptText(
     promptText: string,
-    vars: Record<string, string>
+    vars: Readonly<Record<string, string>>
   ): string {
-    if (!promptText || Object.keys(vars).length === 0) return promptText;
-    return this.substitute(
+    if (!promptText) return promptText;
+    return this.walkView(
       promptText,
+      VAR_SUBSTITUTION_VIEWS.PROMPT_TEXT,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
       vars,
-      VAR_SUBSTITUTION_POLICY["prompt.prompt"].fencedCodeProtected
+      "prompt"
     );
   }
 
   /**
-   * Apply var substitution to all string fields of `ResolvedProperties`
-   * that may contain placeholders: `model`, `additionalArgs`, hook
-   * commands/env, preCondition, and endCondition.
-   *
-   * Returns a new object; the input is not mutated.
+   * Apply var substitution to the resolved-properties view: `model`,
+   * `additionalArgs`, hook commands/env, preCondition and endCondition.
+   * Returns the input when nothing changes, otherwise a copy.
    */
   static applyToResolvedProperties(
     props: ResolvedProperties,
-    vars: Record<string, string>
+    vars: Readonly<Record<string, string>>
   ): ResolvedProperties {
-    if (Object.keys(vars).length === 0) return props;
-
-    return {
-      ...props,
-      model: this.substitute(
-        props.model,
-        vars,
-        VAR_SUBSTITUTION_POLICY["steps[].model"].fencedCodeProtected
-      ),
-      additionalArgs:
-        props.additionalArgs !== undefined
-          ? this.substitute(
-              props.additionalArgs,
-              vars,
-              VAR_SUBSTITUTION_POLICY["steps[].additionalArgs"]
-                .fencedCodeProtected
-            )
-          : undefined,
-      hooks:
-        props.hooks !== null && props.hooks !== undefined
-          ? props.hooks.map((h) => this.applyToHook(h, vars))
-          : props.hooks,
-      preCondition:
-        props.preCondition !== undefined
-          ? this.applyToScriptProperties(
-              props.preCondition,
-              vars,
-              "preCondition.script",
-              "preCondition.env.*"
-            )
-          : undefined,
-      endCondition:
-        props.endCondition !== undefined
-          ? this.applyToEndCondition(props.endCondition, vars)
-          : undefined,
-    };
+    return this.walkView(
+      props,
+      VAR_SUBSTITUTION_VIEWS.RESOLVED_PROPERTIES,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
+      vars
+    );
   }
 
   /**
    * Apply var substitution to a script step's `script` and `env`.
-   * No-ops (returns the input unchanged) when `vars` is empty.
+   * Returns the input when nothing changes, otherwise a copy.
    */
   static applyToScriptStep(
     step: ScriptStep,
-    vars: Record<string, string>
+    vars: Readonly<Record<string, string>>
   ): ScriptStep {
-    if (Object.keys(vars).length === 0) return step;
-    return this.applyToScriptProperties(
+    return this.walkView(
       step,
-      vars,
-      "scriptStep.script",
-      "scriptStep.env.*"
+      VAR_SUBSTITUTION_VIEWS.SCRIPT_STEP,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
+      vars
     );
-  }
-
-  private static applyToHook(
-    hook: UserHookConfig,
-    vars: Record<string, string>
-  ): UserHookConfig {
-    return {
-      ...hook,
-      command: this.substitute(
-        hook.command,
-        vars,
-        VAR_SUBSTITUTION_POLICY["hooks[].command"].fencedCodeProtected
-      ),
-      ...(hook.env !== undefined && {
-        env: Object.fromEntries(
-          Object.entries(hook.env).map(([key, value]) => [
-            key,
-            this.substitute(
-              value,
-              vars,
-              VAR_SUBSTITUTION_POLICY["hooks[].env.*"].fencedCodeProtected
-            ),
-          ])
-        ),
-      }),
-    };
   }
 
   /**
-   * Shared `script` + `env` substitution for the three consumers of
-   * `ScriptProperties`: preCondition, endCondition, and scriptStep. Keeping
-   * this single-sourced is what keeps those three surfaces from drifting
-   * the way endCondition alone did before.
+   * The one walker: apply every policy entry of `view` and `phase` to
+   * `target`, copying only the objects on a changed path.
    */
-  private static applyToScriptProperties<T extends ScriptProperties>(
-    props: T,
-    vars: Record<string, string>,
-    scriptPolicy:
-      "preCondition.script" | "endCondition.script" | "scriptStep.script",
-    envPolicy: "preCondition.env.*" | "endCondition.env.*" | "scriptStep.env.*"
+  private static walkView<T>(
+    target: T,
+    view: VarSubstitutionView,
+    phase: VarSubstitutionPhase,
+    vars: Readonly<Record<string, string>>,
+    fieldPrefix = ""
   ): T {
-    const literalEnvKeys = new Set(
-      (props as ScriptProperties & { mcpLiteralEnvKeys?: string[] })
-        .mcpLiteralEnvKeys ?? []
-    );
-    return {
-      ...props,
-      script: this.substitute(
-        props.script,
-        vars,
-        VAR_SUBSTITUTION_POLICY[scriptPolicy].fencedCodeProtected
-      ),
-      ...(props.env !== undefined && {
-        env: Object.fromEntries(
-          Object.entries(props.env).map(([key, value]) => [
-            key,
-            literalEnvKeys.has(key) ? value : this.substitute(
-              value,
-              vars,
-              VAR_SUBSTITUTION_POLICY[envPolicy].fencedCodeProtected
-            ),
-          ])
-        ),
-      }),
-    };
+    let result: unknown = target;
+    for (const entry of POLICY_ENTRIES) {
+      if (entry.view !== view || entry.phase !== phase) continue;
+      const resolve: FieldResolver = (value, fieldPath) =>
+        entry.kind === VAR_SUBSTITUTION_KINDS.VALUE
+          ? this.resolveValueField(entry, value, vars, fieldPath)
+          : this.resolveTextField(entry, value, vars, fieldPath);
+      result = this.walkPath(result, entry, 0, undefined, fieldPrefix, resolve);
+    }
+    return result as T;
   }
 
-  private static applyToEndCondition(
-    cond: EndCondition,
-    vars: Record<string, string>
-  ): EndCondition {
-    return {
-      ...this.applyToScriptProperties(
-        cond,
-        vars,
-        "endCondition.script",
-        "endCondition.env.*"
-      ),
-      retryPrompt:
-        cond.retryPrompt !== undefined
-          ? this.substitute(
-              cond.retryPrompt,
-              vars,
-              VAR_SUBSTITUTION_POLICY["endCondition.retryPrompt"]
-                .fencedCodeProtected
-            )
-          : undefined,
-      passRetryPrompt:
-        cond.passRetryPrompt !== undefined
-          ? this.substitute(
-              cond.passRetryPrompt,
-              vars,
-              VAR_SUBSTITUTION_POLICY["endCondition.passRetryPrompt"]
-                .fencedCodeProtected
-            )
-          : undefined,
-    };
+  private static walkPath(
+    node: unknown,
+    entry: VarSubstitutionPolicyEntry,
+    depth: number,
+    owner: Record<string, unknown> | undefined,
+    fieldPath: string,
+    resolve: FieldResolver
+  ): unknown {
+    if (depth === entry.path.length) return resolve(node, fieldPath);
+    const segment = entry.path[depth]!;
+    if (segment === VAR_SUBSTITUTION_PATH_EACH_ITEM) {
+      if (!Array.isArray(node)) return node;
+      let copy: unknown[] | undefined;
+      node.forEach((item: unknown, index) => {
+        const next = this.walkPath(
+          item,
+          entry,
+          depth + 1,
+          undefined,
+          `${fieldPath}[${index}]`,
+          resolve
+        );
+        if (next === item) return;
+        copy ??= [...node];
+        copy[index] = next;
+      });
+      return copy ?? node;
+    }
+    if (!isRecord(node)) return node;
+    let keys: string[];
+    if (segment === VAR_SUBSTITUTION_PATH_EACH_KEY) {
+      const literal = entry.literalKeysFrom
+        ? owner?.[entry.literalKeysFrom]
+        : undefined;
+      const literalKeys = new Set(Array.isArray(literal) ? literal : []);
+      keys = Object.keys(node).filter((key) => !literalKeys.has(key));
+    } else {
+      keys = Object.prototype.hasOwnProperty.call(node, segment)
+        ? [segment]
+        : [];
+    }
+    let copy: Record<string, unknown> | undefined;
+    for (const key of keys) {
+      const child = node[key];
+      const next = this.walkPath(
+        child,
+        entry,
+        depth + 1,
+        node,
+        fieldPath ? `${fieldPath}.${key}` : key,
+        resolve
+      );
+      if (next === child) continue;
+      copy ??= { ...node };
+      copy[key] = next;
+    }
+    return copy ?? node;
+  }
+
+  private static resolveTextField(
+    entry: VarSubstitutionTextEntry,
+    value: unknown,
+    vars: Readonly<Record<string, string>>,
+    fieldPath: string
+  ): unknown {
+    if (typeof value !== "string") return value;
+    const placeholders = findVariablePlaceholders(
+      value,
+      entry.fencedCodeProtected
+    ).filter((placeholder) => !placeholder.inFence);
+    if (entry.unresolved === VAR_SUBSTITUTION_UNRESOLVED.ERROR) {
+      const missing = placeholders.find(
+        (placeholder) => !isVariableDefined(vars, placeholder.name)
+      );
+      if (missing) throw this.unresolvedError(fieldPath, missing, value);
+    }
+    const substituted =
+      placeholders.length > 0
+        ? this.substitute(value, vars, entry.fencedCodeProtected)
+        : value;
+    if (!entry.postValidate) return substituted;
+    const converted = entry.postValidate.convert(substituted);
+    if (converted !== undefined) return converted;
+    const source = placeholders[0]
+      ? `variable "${placeholders[0].name}" is`
+      : "value is";
+    throw new VarSubstitutionValidationError(
+      `${fieldPath}: ${source} "${substituted}", expected ${entry.postValidate.expected}.`
+    );
+  }
+
+  private static resolveValueField(
+    entry: VarSubstitutionValueEntry,
+    value: unknown,
+    vars: Readonly<Record<string, string>>,
+    fieldPath: string
+  ): unknown {
+    if (typeof value !== "string") return value;
+    const placeholders = findVariablePlaceholders(
+      value,
+      entry.fencedCodeProtected
+    );
+    if (placeholders.length === 0) return value;
+    const placeholder = placeholders[0]!;
+    if (
+      placeholders.length !== 1 ||
+      placeholder.from !== 0 ||
+      placeholder.to !== value.length
+    ) {
+      throw new VarSubstitutionValidationError(
+        `${fieldPath}: "${value}" must be one whole-value placeholder such as {{name}}.`
+      );
+    }
+    if (!isVariableDefined(vars, placeholder.name)) {
+      if (entry.unresolved === VAR_SUBSTITUTION_UNRESOLVED.ERROR)
+        throw this.unresolvedError(fieldPath, placeholder, value);
+      return value;
+    }
+    const raw = vars[placeholder.name]!;
+    const coerced = this.coerceValue(raw);
+    if (!validateWorkflowSchemaValue(entry.schema, coerced)) {
+      throw new VarSubstitutionValidationError(
+        `${fieldPath}: variable "${placeholder.name}" is "${raw}", expected ${describeWorkflowSchemaValue(entry.schema)}.`
+      );
+    }
+    return coerced;
+  }
+
+  /** `"true"`/`"false"` become booleans and numeric text a number. */
+  private static coerceValue(raw: string): unknown {
+    if (raw === BOOLEAN_STRING_VALUES.TRUE) return true;
+    if (raw === BOOLEAN_STRING_VALUES.FALSE) return false;
+    return NUMERIC_STRING_PATTERN.test(raw) ? Number(raw) : raw;
+  }
+
+  private static unresolvedError(
+    fieldPath: string,
+    placeholder: VariablePlaceholder,
+    value: string
+  ): VarSubstitutionValidationError {
+    return new VarSubstitutionValidationError(
+      `${fieldPath}: variable "${placeholder.name}" in "${value}" is not defined.`
+    );
   }
 }

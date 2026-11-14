@@ -2241,17 +2241,21 @@ export class WorkflowExecutor {
     preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
     const workflowView = this.promptQueue.getWorkflowFile();
-    const variables = { ...(preflightMember?.variables ?? workflowView.vars ?? {}) };
-    const runStartStep = VarSubstitutor.substituteWorkflowView(
-      { steps: [step] } as PromptFile,
-      variables,
-      "run-start"
-    ).steps?.[0] ?? step;
-    step = VarSubstitutor.substituteWorkflowView(
-      runStartStep,
+    const variables = {
+      ...(preflightMember?.variables ?? workflowView.vars ?? {}),
+    };
+    const viewIndex =
+      target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1;
+    step = VarSubstitutor.substituteStepView(
+      VarSubstitutor.substituteStepView(
+        step,
+        variables,
+        "run-start",
+        viewIndex
+      ),
       variables,
       "dispatch",
-      target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1
+      viewIndex
     );
     const state = this.promptQueue.getState();
     const runtime = this.getRuntime();

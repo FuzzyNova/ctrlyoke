@@ -1,8 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import Ajv from "ajv/dist/2020";
-import addFormats from "ajv-formats";
-import { setSubstitutedValueValidator } from "../utils/SubstitutedValueValidator";
+import { loadCompiledWorkflowSchema } from "../utils/WorkflowSchemaValidation";
 import type { ErrorObject, ValidateFunction } from "ajv";
 import {
   ExecutionProperties,
@@ -87,16 +85,6 @@ type ParallelValidationProperties = Pick<
   "priorContext" | "sessionId" | "maxSteps"
 >;
 
-interface CompiledWorkflowSchema {
-  schema: unknown;
-  ajv: Ajv;
-  strictValidator: ValidateFunction;
-  relaxedValidator: ValidateFunction;
-}
-
-const compiledWorkflowSchemas = new Map<string, CompiledWorkflowSchema>();
-let activeCompiledWorkflowSchema: CompiledWorkflowSchema | undefined;
-
 export interface WorkflowTextValidationIssue {
   instancePath: string;
   message: string;
@@ -170,49 +158,8 @@ export class PromptFileParser {
 
   private loadSchemas(): void {
     try {
-      // The bundled extension (esbuild, __dirname === out/) gets schemas copied to
-      // out/schemas/. The tsc-compiled test output (__dirname === out/ctrlyoke/)
-      // has no such copy, so fall back to the sibling out/schemas/ directory.
-      const candidatePaths = [
-        path.join(__dirname, "schemas", "workflow-schema.json"),
-        path.join(__dirname, "..", "schemas", "workflow-schema.json"),
-      ];
-      const promptSchemaPath = candidatePaths.find((candidate) =>
-        require("fs").existsSync(candidate)
-      );
-      if (!promptSchemaPath) {
-        throw new Error(
-          `workflow-schema.json not found in any of: ${candidatePaths.join(", ")}`
-        );
-      }
-
-      const schemaPath = path.resolve(promptSchemaPath);
-      let compiled = compiledWorkflowSchemas.get(schemaPath);
-      if (!compiled) {
-        // Use synchronous read to avoid racing parsePromptFile. The bundled
-        // schema is process-wide, so compile its validators only once.
-        const promptSchemaContent = require("fs").readFileSync(
-          schemaPath,
-          "utf8"
-        );
-        const schema = JSON.parse(promptSchemaContent);
-        const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
-        addFormats(ajv);
-        compiled = {
-          schema,
-          ajv,
-          strictValidator: ajv.compile(schema),
-          relaxedValidator: ajv.compile(
-            PromptFileParser.createRelaxedSchema(schema)
-          ),
-        };
-        compiledWorkflowSchemas.set(schemaPath, compiled);
-        Log.debug("[PromptFileParser] JSON schema loaded successfully");
-      }
-
+      const compiled = loadCompiledWorkflowSchema();
       this.promptSchema = compiled.schema;
-      activeCompiledWorkflowSchema = compiled;
-      PromptFileParser.installSubstitutedValueValidator();
       this.strictValidator = compiled.strictValidator;
       this.relaxedValidator = compiled.relaxedValidator;
     } catch (error) {
@@ -224,23 +171,6 @@ export class PromptFileParser {
         error
       );
     }
-  }
-
-  /** Validate a substituted value against the authored field's original schema. */
-  static validateSubstitutedValue(pointer: string, value: unknown): boolean {
-    if (!activeCompiledWorkflowSchema) new PromptFileParser();
-    const compiled = activeCompiledWorkflowSchema;
-    if (!compiled) return false;
-    const validator = compiled.ajv.compile({
-      $ref: `${(compiled.schema as { $id: string }).$id}#${pointer}`,
-    });
-    return validator(value) as boolean;
-  }
-
-  private static installSubstitutedValueValidator(): void {
-    setSubstitutedValueValidator((pointer, value) =>
-      PromptFileParser.validateSubstitutedValue(pointer, value)
-    );
   }
 
   /**
@@ -624,27 +554,6 @@ export class PromptFileParser {
       parsed,
       `${path.basename(contentPath)} (${format})`
     );
-  }
-
-  private static createRelaxedSchema(schema: Record<string, unknown>): any {
-    const relaxed = structuredClone(schema) as Record<string, unknown>;
-    // The strict schema is already registered by its $id on this Ajv
-    // instance. The relaxed variant is an in-memory validation helper and
-    // must not claim that same globally addressable schema identity.
-    delete relaxed.$id;
-    const visit = (value: unknown): void => {
-      if (Array.isArray(value)) {
-        value.forEach(visit);
-        return;
-      }
-      if (!isObject(value)) return;
-      if (value.unevaluatedProperties === false) {
-        delete value.unevaluatedProperties;
-      }
-      for (const child of Object.values(value)) visit(child);
-    };
-    visit(relaxed);
-    return relaxed;
   }
 
   /** Strictly validate first; only unknown-key closure failures can be warnings. */

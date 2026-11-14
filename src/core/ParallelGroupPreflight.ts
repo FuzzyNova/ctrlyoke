@@ -171,7 +171,7 @@ export async function preflightParallelGroupMember(
   const variables = Object.freeze({ ...(workflow.vars ?? {}) });
   const issues: ParallelGroupPreflightIssue[] = [];
 
-  const step = VarSubstitutor.substituteWorkflowView(
+  const step = VarSubstitutor.substituteStepView(
     options.step,
     { ...variables },
     "dispatch",

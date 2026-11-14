@@ -434,7 +434,7 @@ $defs:
       defaults.worktree.directory, defaults.worktree.setup, endCondition.env.*,
       endCondition.passRetryPrompt, endCondition.retryPrompt, endCondition.script, harness,
       hooks[].command, hooks[].env.*, maxSteps, preCondition.env.*, preCondition.script,
-      prompt.prompt, scriptStep.env.*, scriptStep.script, steps[].additionalArgs, steps[].agent,
+      scriptStep.env.*, scriptStep.script, steps[].additionalArgs, steps[].agent,
       steps[].compareSource, steps[].enabled, steps[].endCondition.compareSource,
       steps[].endCondition.ignoreCase, steps[].endCondition.maxRetries, steps[].endCondition.onFail,
       steps[].endCondition.onPass, steps[].endCondition.operator, steps[].endCondition.timeoutSec,

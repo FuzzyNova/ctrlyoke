@@ -501,7 +501,7 @@ export class ExecutionPreviewService {
     worktreePreview: WorktreeExecutionPreview | undefined,
     worktreeExecutionWorkspace: ExecutionWorkspace | undefined
   ): Promise<StepExecutionPreview> {
-    const step = VarSubstitutor.substituteWorkflowView(
+    const step = VarSubstitutor.substituteStepView(
       target.step,
       { ...variables },
       "dispatch",

@@ -1,20 +1,31 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import { VAR_SUBSTITUTION_POLICY } from "../../utils/VarSubstitutionPolicy";
-import { VarSubstitutor } from "../../utils/VarSubstitutor";
-import { PromptFileParser } from "../../core/PromptFileParser";
-import type { WorkflowStep } from "../../types/CtrlYokeTypes";
 import {
+  VarSubstitutionValidationError,
+  VarSubstitutor,
+} from "../../utils/VarSubstitutor";
+import { validateWorkflowSchemaValue } from "../../utils/WorkflowSchemaValidation";
+import type {
+  PromptStep,
+  ScriptStep,
+  WorkflowStep,
+} from "../../types/CtrlYokeTypes";
+import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
+import {
+  VAR_SUBSTITUTION_EXCLUDED_FIELDS,
+  VAR_SUBSTITUTION_POLICY,
   VAR_SUBSTITUTION_PHASES,
   VAR_SUBSTITUTION_KINDS,
   VAR_SUBSTITUTION_UNRESOLVED,
+  type VarSubstitutionPolicyEntry,
 } from "../../utils/VarSubstitutionPolicy";
 
+const POLICY_ENTRIES = Object.entries(VAR_SUBSTITUTION_POLICY) as Array<
+  [string, VarSubstitutionPolicyEntry]
+>;
+
 suite("VarSubstitutionPolicy documentation", () => {
-  suiteSetup(() => {
-    new PromptFileParser();
-  });
   test("dispatch text policy substitutes supported step fields on a copy", () => {
     const authored = {
       type: "script" as const,
@@ -27,8 +38,8 @@ suite("VarSubstitutionPolicy documentation", () => {
       sessionId: "{{session}}",
       priorContext: { workflow: "{{workflow}}", run: "{{run}}" },
     };
-    const resolved = VarSubstitutor.substituteWorkflowView(
-      authored,
+    const resolved = VarSubstitutor.substituteStepView(
+      authored as unknown as ScriptStep,
       {
         label: "Build",
         shell: "bash",
@@ -40,7 +51,7 @@ suite("VarSubstitutionPolicy documentation", () => {
         run: "12",
       },
       "dispatch"
-    );
+    ) as ScriptStep & Record<string, unknown>;
     assert.deepStrictEqual(authored.name, "{{label}}");
     assert.strictEqual(resolved.name, "Build");
     assert.strictEqual(resolved.expected, "ok");
@@ -55,7 +66,7 @@ suite("VarSubstitutionPolicy documentation", () => {
   });
 
   test("coerces and validates dispatch value fields", () => {
-    const resolved = VarSubstitutor.substituteWorkflowView(
+    const resolved = VarSubstitutor.substituteStepView(
       {
         type: "script" as const,
         script: "echo hi",
@@ -76,25 +87,34 @@ suite("VarSubstitutionPolicy documentation", () => {
     assert.strictEqual(resolved.endCondition?.maxRetries, 2);
     assert.throws(
       () =>
-        VarSubstitutor.substituteWorkflowView(
+        VarSubstitutor.substituteStepView(
           {
             type: "script",
             script: "echo hi",
             timeoutSec: "{{timeout}}",
           } as unknown as WorkflowStep,
           { timeout: "soon" },
-          "dispatch"
+          "dispatch",
+          2
         ),
-      /timeoutSec.*timeout.*soon/
+      (error: Error) =>
+        error instanceof VarSubstitutionValidationError &&
+        error.message ===
+          'steps[2].timeoutSec: variable "timeout" is "soon", expected a number greater than 0.'
     );
   });
 
   test("keeps numeric expected and session references numeric", () => {
-    const resolved = VarSubstitutor.substituteWorkflowView(
-      { type: "script", script: "echo hi", expected: 3, sessionId: 1 },
+    const resolved = VarSubstitutor.substituteStepView(
+      {
+        type: "script",
+        script: "echo hi",
+        expected: 3,
+        sessionId: 1,
+      } as unknown as ScriptStep,
       { expected: "4", session: "abc" },
       "dispatch"
-    );
+    ) as ScriptStep & Record<string, unknown>;
     assert.strictEqual(resolved.expected, 3);
     assert.strictEqual(resolved.sessionId, 1);
   });
@@ -102,8 +122,12 @@ suite("VarSubstitutionPolicy documentation", () => {
   test("reports unresolved strict fields with their indexed schema path", () => {
     assert.throws(
       () =>
-        VarSubstitutor.substituteWorkflowView(
-          { type: "script", script: "echo hi", skills: ["{{missing}}"] },
+        VarSubstitutor.substituteStepView(
+          {
+            type: "script",
+            script: "echo hi",
+            skills: ["{{missing}}"],
+          } as unknown as ScriptStep,
           {},
           "dispatch"
         ),
@@ -120,12 +144,17 @@ suite("VarSubstitutionPolicy documentation", () => {
       "defaults.worktree.base",
       "defaults.worktree.directory",
     ] as const) {
-      assert.deepStrictEqual(VAR_SUBSTITUTION_POLICY[field], {
-        phase: VAR_SUBSTITUTION_PHASES.RUN_START,
-        kind: VAR_SUBSTITUTION_KINDS.TEXT,
-        fencedCodeProtected: false,
-        unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
-      });
+      const { phase, kind, fencedCodeProtected, unresolved } =
+        VAR_SUBSTITUTION_POLICY[field];
+      assert.deepStrictEqual(
+        { phase, kind, fencedCodeProtected, unresolved },
+        {
+          phase: VAR_SUBSTITUTION_PHASES.RUN_START,
+          kind: VAR_SUBSTITUTION_KINDS.TEXT,
+          fencedCodeProtected: false,
+          unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
+        }
+      );
     }
   });
   const repoPath = (...parts: string[]) =>
@@ -145,68 +174,205 @@ suite("VarSubstitutionPolicy documentation", () => {
     }
   });
 
-  test("value policy entries match run-start schema placeholder fields", () => {
+  test("value entries cover exactly the schema locations accepting varPlaceholder", () => {
     const schema = JSON.parse(
       fs.readFileSync(repoPath("schemas", "workflow-schema.json"), "utf8")
-    ) as any;
-    const valueFields = Object.entries(VAR_SUBSTITUTION_POLICY)
-      .filter(([, entry]) => entry.kind === VAR_SUBSTITUTION_KINDS.VALUE)
-      .map(([field]) => field)
-      .sort();
-    assert.deepStrictEqual(
-      valueFields,
-      Object.keys(VAR_SUBSTITUTION_POLICY)
-        .filter(
-          (field) =>
-            VAR_SUBSTITUTION_POLICY[
-              field as keyof typeof VAR_SUBSTITUTION_POLICY
-            ].kind === VAR_SUBSTITUTION_KINDS.VALUE
-        )
-        .sort()
-    );
-    const hasPlaceholder = (field: unknown): boolean => {
-      const oneOf = (field as { oneOf?: unknown } | undefined)?.oneOf;
-      return (
-        Array.isArray(oneOf) &&
-        oneOf.some(
-          (choice: { $ref?: string }) =>
-            choice.$ref === "#/$defs/varPlaceholder"
-        )
-      );
+    ) as Record<string, unknown>;
+    const VAR_PLACEHOLDER_REF = "#/$defs/varPlaceholder";
+    const PLACEHOLDER_REFS = new Set([
+      VAR_PLACEHOLDER_REF,
+      "#/$defs/templatePlaceholder",
+    ]);
+    type Node = { [key: string]: any };
+    const at = (pointer: string): Node =>
+      pointer
+        .split("/")
+        .slice(1)
+        .reduce<any>((node, key) => node?.[key], schema);
+    const acceptsVar = (node: Node | undefined): boolean =>
+      Array.isArray(node?.oneOf) &&
+      node.oneOf.some((choice: Node) => choice.$ref === VAR_PLACEHOLDER_REF);
+    const locations: string[] = [];
+    const collect = (node: unknown, pointer: string): void => {
+      if (!node || typeof node !== "object") return;
+      if (acceptsVar(node as Node)) locations.push(pointer);
+      for (const [key, child] of Object.entries(node))
+        collect(child, `${pointer}/${key}`);
     };
-    assert.ok(
-      hasPlaceholder(schema.$defs.executionProperties.properties.harness)
+    collect(schema, "");
+    assert.ok(locations.length > 0);
+    // The original sub-schema: the one non-placeholder branch, following a
+    // $ref to its target (and through it when the target accepts placeholders too).
+    const original = (location: string): string => {
+      const branches = (at(location).oneOf as Node[])
+        .map((choice, index) => ({
+          choice,
+          pointer: `${location}/oneOf/${index}`,
+        }))
+        .filter(({ choice }) => !PLACEHOLDER_REFS.has(choice.$ref));
+      assert.strictEqual(branches.length, 1, `${location} original branch`);
+      const { choice, pointer } = branches[0]!;
+      if (typeof choice.$ref !== "string") return pointer;
+      const target = choice.$ref.slice(1);
+      return acceptsVar(at(target)) ? original(target) : target;
+    };
+    const withoutAnnotations = (node: Node): string =>
+      JSON.stringify(node, (key, value) =>
+        key === "description" || key === "default" ? undefined : value
+      );
+    const tableSchemas = new Set(
+      POLICY_ENTRIES.flatMap(([, entry]) =>
+        entry.kind === VAR_SUBSTITUTION_KINDS.VALUE ? [entry.schema] : []
+      )
     );
-    assert.ok(
-      hasPlaceholder(schema.$defs.workflowOnlyProperties.properties.maxSteps)
-    );
-    assert.ok(
-      hasPlaceholder(schema.$defs.promptStep.allOf[1].properties.enabled)
-    );
-    assert.ok(hasPlaceholder(schema.$defs.scriptStep.properties.enabled));
-    assert.ok(
-      !hasPlaceholder(schema.$defs.executionProperties.properties.sandboxMode)
-    );
-    for (const [definition, names] of [
-      [
-        "executionProperties",
-        ["executionMode", "resumeSession", "priorContextDetail"],
-      ],
-      [
-        "scriptProperties",
-        ["compareSource", "timeoutSec", "operator", "ignoreCase"],
-      ],
-      ["scriptStep", ["onPass", "onFail"]],
-      ["errorBehavior", ["onError", "maxRetries", "retryDelaySec"]],
-      ["endCondition", ["maxRetries", "onPass", "onFail"]],
-      ["preCondition", ["onPass", "onFail"]],
-    ] as const) {
-      for (const name of names)
-        assert.ok(
-          hasPlaceholder(schema.$defs[definition].properties[name]),
-          `${definition}.${name} lacks placeholder support`
-        );
+    const schemaOriginals = new Set(locations.map(original));
+    for (const location of locations) {
+      const pointer = original(location);
+      assert.ok(
+        tableSchemas.has(pointer) ||
+          [...tableSchemas].some(
+            (tablePointer) =>
+              withoutAnnotations(at(tablePointer)) ===
+              withoutAnnotations(at(pointer))
+          ),
+        `${location} accepts varPlaceholder but no value entry validates against ${pointer}`
+      );
     }
+    for (const [field, entry] of POLICY_ENTRIES) {
+      if (entry.kind !== VAR_SUBSTITUTION_KINDS.VALUE) continue;
+      assert.ok(
+        schemaOriginals.has(entry.schema),
+        `${field} validates against ${entry.schema}, which no varPlaceholder location names`
+      );
+      assert.strictEqual(
+        validateWorkflowSchemaValue(entry.schema, "{{name}}"),
+        false,
+        `${field} schema must not accept a placeholder`
+      );
+    }
+    assert.ok(
+      !acceptsVar(at("/$defs/executionProperties/properties/sandboxMode"))
+    );
+  });
+
+  test("each view path is owned by one entry, and excluded fields have none", () => {
+    const seen = new Map<string, string>();
+    for (const [field, entry] of POLICY_ENTRIES) {
+      const key = `${entry.view}:${entry.path.join(".")}`;
+      assert.ok(!seen.has(key), `${field} and ${seen.get(key)} share ${key}`);
+      seen.set(key, field);
+    }
+    for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS)
+      assert.ok(
+        !POLICY_ENTRIES.some(([, entry]) => entry.path.includes(excluded)),
+        `${excluded} is excluded but has a policy entry`
+      );
+  });
+
+  test("walker: text fields substitute, keep advisory placeholders, and honor fences", () => {
+    const props = {
+      model: "{{model}}",
+      additionalArgs: "--x {{missing}}",
+      hooks: null,
+    } as unknown as ResolvedProperties;
+    const resolved = VarSubstitutor.applyToResolvedProperties(props, {
+      model: "opus",
+    });
+    assert.strictEqual(resolved.model, "opus");
+    assert.strictEqual(resolved.additionalArgs, "--x {{missing}}");
+    assert.strictEqual(props.model, "{{model}}");
+
+    const fenced = "```\n{{x}}\n```\n{{x}}";
+    assert.strictEqual(
+      VarSubstitutor.applyToPromptText(fenced, { x: "y" }),
+      "```\n{{x}}\n```\ny"
+    );
+    const script = VarSubstitutor.applyToScriptStep(
+      { type: "script", script: fenced } as ScriptStep,
+      { x: "y" }
+    );
+    assert.strictEqual(script.script, "```\ny\n```\ny");
+  });
+
+  test("walker: returns the same object when no field changes", () => {
+    const step = {
+      prompt: "plain",
+      name: "Build",
+      endCondition: { script: "echo ok", maxRetries: 2 },
+    } as PromptStep;
+    assert.strictEqual(
+      VarSubstitutor.substituteStepView(step, { x: "y" }, "dispatch"),
+      step
+    );
+    const props = {
+      model: "opus",
+      hooks: null,
+    } as unknown as ResolvedProperties;
+    assert.strictEqual(
+      VarSubstitutor.applyToResolvedProperties(props, {}),
+      props
+    );
+  });
+
+  test("walker: value fields reject partial and unresolved placeholders", () => {
+    const step = (value: string) =>
+      ({
+        prompt: "x",
+        errorBehavior: { onError: value },
+      }) as unknown as PromptStep;
+    assert.throws(
+      () =>
+        VarSubstitutor.substituteStepView(
+          step("re{{x}}"),
+          { x: "try" },
+          "dispatch",
+          1
+        ),
+      (error: Error) =>
+        error instanceof VarSubstitutionValidationError &&
+        error.message.startsWith("steps[1].errorBehavior.onError:")
+    );
+    assert.throws(
+      () =>
+        VarSubstitutor.substituteStepView(step("{{x}}"), {}, "dispatch", -1),
+      (error: Error) =>
+        error instanceof VarSubstitutionValidationError &&
+        error.message ===
+          'finalStep.errorBehavior.onError: variable "x" in "{{x}}" is not defined.'
+    );
+    assert.throws(
+      () =>
+        VarSubstitutor.substituteStepView(
+          step("{{x}}"),
+          { x: "never" },
+          "dispatch"
+        ),
+      /expected one of "stopWorkflow", "retry", "retryPhase", "continue"\.$/
+    );
+    const resolved = VarSubstitutor.substituteStepView(
+      step("{{x}}"),
+      { x: "continue" },
+      "dispatch"
+    ) as PromptStep;
+    assert.strictEqual(resolved.errorBehavior?.onError, "continue");
+  });
+
+  test("walker: priorContext.run post-validator rejects other text", () => {
+    assert.throws(
+      () =>
+        VarSubstitutor.substituteStepView(
+          {
+            prompt: "x",
+            priorContext: { workflow: "w", run: "{{run}}" },
+          } as unknown as PromptStep,
+          { run: "latest" },
+          "dispatch"
+        ),
+      (error: Error) =>
+        error instanceof VarSubstitutionValidationError &&
+        error.message ===
+          'steps[0].priorContext.run: variable "run" is "latest", expected an integer or run reference.'
+    );
   });
 
   test("variables docs name every substituted policy field", () => {
