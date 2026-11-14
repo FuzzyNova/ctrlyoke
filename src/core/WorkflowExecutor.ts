@@ -4338,9 +4338,10 @@ export class WorkflowExecutor {
           prompt.endCondition?.script ?? "",
           missingScriptResult,
           {
+            action: this.getErrorConditionAction(errorBehavior, errorRetryCount),
             expected: prompt.endCondition?.expected,
-            compareSource: prompt.endCondition?.compareSource,
-            operator: prompt.endCondition?.operator,
+            compareSource: prompt.endCondition?.compareSource ?? "exitCode",
+            operator: prompt.endCondition?.operator ?? "eq",
           }
         )
       );
@@ -4447,9 +4448,10 @@ export class WorkflowExecutor {
           endCondition.script,
           evaluationResult,
           {
+            action: this.getErrorConditionAction(errorBehavior, errorRetryCount),
             expected: endCondition.expected,
-            compareSource: endCondition.compareSource,
-            operator: endCondition.operator,
+            compareSource: endReport.verdict.compareSource,
+            operator: endReport.verdict.operator,
           }
         )
       );

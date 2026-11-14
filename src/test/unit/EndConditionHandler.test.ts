@@ -341,8 +341,11 @@ suite("EndConditionHandler", () => {
     ]);
     assert.deepStrictEqual(queue.getState().results[0].endCondition, {
       passed: true,
+      action: "continue",
       script: "check-results.js",
       expected: "ok",
+      compareSource: "exitCode",
+      operator: "eq",
       actual: "ok",
       stdout: "ok",
       stderr: "",
@@ -647,6 +650,8 @@ suite("EndConditionHandler", () => {
       stdout: "partial stdout",
       stderr: "stderr",
       durationMs: 7,
+      compareSource: "exitCode",
+      operator: "eq",
       error: "could not run",
       errored: true,
     });

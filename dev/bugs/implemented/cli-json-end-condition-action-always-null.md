@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli)
 - **Area:** `src/core/EndConditionHandler.ts` (`recordEndConditionEvaluation`), `src/core/WorkflowExecutor.ts` (`evaluateEndCondition`), `src/cli/CliJsonResultBuilder.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

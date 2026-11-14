@@ -486,9 +486,12 @@ export class EndConditionHandler {
       prompt.endCondition?.script ?? "",
       evaluationResult,
       {
+        ...(evaluationResult.errored ? {} : { action: evaluationResult.passed
+            ? (prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE)
+            : (prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW) }),
         expected: prompt.endCondition?.expected,
-        compareSource: prompt.endCondition?.compareSource,
-        operator: prompt.endCondition?.operator,
+        compareSource: prompt.endCondition?.compareSource ?? "exitCode",
+        operator: prompt.endCondition?.operator ?? "eq",
       }
     );
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {

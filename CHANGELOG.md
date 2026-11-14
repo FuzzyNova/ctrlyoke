@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ctrlyoke run --json` now reports end-condition actions and resolved comparison details.
 - Settings `defaults.secrets` now appears in secret approval and check flows, grants script steps consistently, and is included in run export redaction.
 - CLI coordination tools now work from a running workflow final step in skill mode, without assigning it a queue-step or parallel-group position.
 - The Schedule view's **Next run** preview, its default **Once** time and its check for a schedule with no future runs use the host's timezone instead of the browser's. Before, a hosted dashboard in another timezone previewed a different time than the one that ran, and could refuse a valid one-shot time or accept one already past.
