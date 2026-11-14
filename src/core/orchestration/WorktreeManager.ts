@@ -2959,7 +2959,10 @@ export class WorktreeManager {
     setupRunner?: WorktreeSetupRunner,
     reportUnresolvedVariables?: (placeholders: readonly string[]) => void
   ): Promise<void> {
-    const unresolved = VarSubstitutor.findUnresolvedVariables(setup, vars ?? {});
+    const unresolved = VarSubstitutor.findUnresolvedVariables(
+      setup,
+      vars ?? {}
+    );
     if (unresolved.length > 0) {
       reportUnresolvedVariables?.(unresolved);
     }

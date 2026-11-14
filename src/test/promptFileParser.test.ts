@@ -4,7 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { PromptFileParser } from "../core/PromptFileParser";
 import type { PromptStep, WorkflowStep } from "../types/CtrlYokeTypes";
-import { CTRLYOKE_FILE_KINDS, WORKFLOW_VALIDATION_WARNING_CODES } from "../types/DashboardConstants";
+import {
+  CTRLYOKE_FILE_KINDS,
+  WORKFLOW_VALIDATION_WARNING_CODES,
+} from "../types/DashboardConstants";
 
 suite("PromptFileParser Tests", () => {
   let parser: PromptFileParser;
@@ -39,10 +42,31 @@ suite("PromptFileParser Tests", () => {
 
   suite("run-start variable schema", () => {
     test("accepts {{harness}} without template metadata and still rejects typed exclusions", () => {
-      assert.deepStrictEqual(parser.getSchemaWarnings({ harness: "{{harness}}", steps: [{ prompt: "x" }] }), []);
-      assert.deepStrictEqual(parser.validateWorkflowText(JSON.stringify({ harness: "{{harness}}", steps: [{ prompt: "x" }] }), CTRLYOKE_FILE_KINDS.WORKFLOW_JSON).issues, []);
-      assert.deepStrictEqual(parser.validateWorkflowText(JSON.stringify({ steps: [{ prompt: "x", harness: "{{harness}}" }] }), CTRLYOKE_FILE_KINDS.WORKFLOW_JSON).issues, []);
-      const result = parser.validateWorkflowText(JSON.stringify({ steps: [{ prompt: "x", sandboxMode: "{{x}}" }] }), CTRLYOKE_FILE_KINDS.WORKFLOW_JSON);
+      assert.deepStrictEqual(
+        parser.getSchemaWarnings({
+          harness: "{{harness}}",
+          steps: [{ prompt: "x" }],
+        }),
+        []
+      );
+      assert.deepStrictEqual(
+        parser.validateWorkflowText(
+          JSON.stringify({ harness: "{{harness}}", steps: [{ prompt: "x" }] }),
+          CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+        ).issues,
+        []
+      );
+      assert.deepStrictEqual(
+        parser.validateWorkflowText(
+          JSON.stringify({ steps: [{ prompt: "x", harness: "{{harness}}" }] }),
+          CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+        ).issues,
+        []
+      );
+      const result = parser.validateWorkflowText(
+        JSON.stringify({ steps: [{ prompt: "x", sandboxMode: "{{x}}" }] }),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+      );
       assert.ok(result.issues.some((issue) => issue.severity === "error"));
     });
   });

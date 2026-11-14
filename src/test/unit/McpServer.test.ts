@@ -2627,7 +2627,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       mcpLiteralEnvKeys: ["BUG_FILE"],
     });
     const resumedCondition = VarSubstitutor.applyToResolvedProperties(
-      { model: "model", hooks: null, preCondition: appended.preCondition } as any,
+      {
+        model: "model",
+        hooks: null,
+        preCondition: appended.preCondition,
+      } as any,
       { secretish: "x" }
     ).preCondition;
     assert.strictEqual(resumedCondition?.env?.BUG_FILE, "{{secretish}}");
