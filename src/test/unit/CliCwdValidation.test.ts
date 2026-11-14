@@ -36,6 +36,21 @@ suite("CLI --cwd validation", () => {
     await assert.rejects(fs.stat(path.join(stateHome, "projects")));
   });
 
+  test("keeps run's run-result envelope for a missing cwd", async () => {
+    const missing = path.join(tempRoot, "missing");
+    const result = await runCli(
+      ["run", "--cwd", missing, "--prompt", "hi", "--json"],
+      tempRoot,
+      { CTRLYOKE_HOME: stateHome }
+    );
+
+    assert.strictEqual(result.code, 2);
+    const envelope = JSON.parse(result.stdout);
+    assert.strictEqual(envelope.schemaVersion, 1);
+    assert.ok("status" in envelope && "steps" in envelope, result.stdout);
+    assert.match(JSON.stringify(envelope.error), /is not a directory/);
+  });
+
   test("accepts an existing directory", async () => {
     const workspace = path.join(tempRoot, "workspace");
     await fs.mkdir(workspace);

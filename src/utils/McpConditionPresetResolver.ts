@@ -79,7 +79,8 @@ export function materializeMcpConditionPreset(
       : { passRetryPrompt: reference.passRetryPrompt }),
     // A preset's own retryPrompt intentionally keeps using the user's retry default.
     ...(reference.maxRetries === undefined &&
-    (reference.retryPrompt !== undefined || reference.passRetryPrompt !== undefined) &&
+    (reference.retryPrompt !== undefined ||
+      reference.passRetryPrompt !== undefined) &&
     preset.retryPrompt === undefined
       ? { maxRetries: presetLimit }
       : {}),

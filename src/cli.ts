@@ -298,29 +298,36 @@ const cliRunnerHostIdentity: RunnerHostIdentity = {
 
 const version = CTRLYOKE_VERSION;
 
+/**
+ * Report a usage error raised before a command's action runs. Under `--json`,
+ * `run` keeps its run-result object and every other command gets the generic
+ * error envelope.
+ */
+function reportPreActionUsageError(
+  message: string,
+  commandName: string | undefined,
+  json: boolean,
+  workspaceRoot: string = process.cwd()
+): void {
+  reportCliError(new CliUsageError(message), {
+    json,
+    envelope:
+      commandName === CLI_RUN_OPERATION_KINDS.RUN
+        ? (errorMessage) =>
+            buildCliJsonResult({ workspaceRoot, error: errorMessage })
+        : undefined,
+  });
+}
+
 const program = new Command();
 program.exitOverride((error) => {
   const args = process.argv.slice(2);
   if (error.exitCode !== 0 && args.includes("--json")) {
-    const commandName =
-      args[0] === CLI_RUN_OPERATION_KINDS.RUN
-        ? CLI_RUN_OPERATION_KINDS.RUN
-        : undefined;
-    const message = error.message.replace(/^error: /i, "");
-    reportCliError(new CliUsageError(message), {
-      json: true,
-      envelope: (errorMessage) =>
-        commandName === CLI_RUN_OPERATION_KINDS.RUN
-          ? buildCliJsonResult({
-              workspaceRoot: process.cwd(),
-              error: errorMessage,
-            })
-          : {
-              schemaVersion: 1,
-              success: false,
-              error: { message: errorMessage },
-            },
-    });
+    reportPreActionUsageError(
+      error.message.replace(/^error: /i, ""),
+      args[0],
+      true
+    );
   }
   process.exit(error.exitCode === 0 ? 0 : CLI_USAGE_EXIT_CODE);
 });
@@ -364,9 +371,12 @@ program.hook("preAction", async (_thisCommand, actionCommand) => {
     // Treat missing paths and inaccessible paths alike as invalid workspaces.
   }
   if (!isDirectory) {
-    reportCliError(new CliUsageError(`--cwd ${options.cwd} is not a directory`), {
-      json: options.json,
-    });
+    reportPreActionUsageError(
+      `--cwd ${options.cwd} is not a directory`,
+      actionCommand.name(),
+      options.json === true,
+      path.resolve(options.cwd)
+    );
   }
 });
 

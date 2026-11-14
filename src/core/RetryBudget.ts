@@ -73,7 +73,10 @@ export function resolveRetryBudget(
 
   const hasRetryPrompt = Boolean(endCondition.retryPrompt);
   const hasMaxRetries = endCondition.maxRetries !== undefined;
-  const maxRetries = resolveRetryBudgetMaxRetries(endCondition, defaults.maxRetries);
+  const maxRetries = resolveRetryBudgetMaxRetries(
+    endCondition,
+    defaults.maxRetries
+  );
 
   const retryPrompt = hasRetryPrompt
     ? endCondition.retryPrompt

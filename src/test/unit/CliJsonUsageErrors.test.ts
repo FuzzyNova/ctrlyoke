@@ -40,7 +40,10 @@ suite("CLI JSON usage errors", () => {
   }
 
   test("wraps a rejected run option value", async () => {
-    await assertErrorEnvelope(["run", "s.yaml", "--timeout", "1.5", "--json"], true);
+    await assertErrorEnvelope(
+      ["run", "s.yaml", "--timeout", "1.5", "--json"],
+      true
+    );
   });
 
   test("wraps a rejected import choice", async () => {
