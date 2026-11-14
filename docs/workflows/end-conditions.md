@@ -132,8 +132,8 @@ The MCP tools materialize the preset onto the step when it is queued, so later
 changes to the workflow preset do not affect that step. Attaching a preset
 replaces a workflow-level condition the step would otherwise inherit. The agent
 may supply declared `params` and override retry text or `maxRetries`, but the
-retry count cannot exceed the preset's limit. Parameter values become
-environment variables and are not inserted into the script; preset scripts
+retry count cannot exceed the preset's effective retry budget. Parameter values
+become environment variables and are not inserted into the script; preset scripts
 must quote them, for example `"$BUG_FILE"`. A parameter name cannot collide
 with a key set by the preset's own `env`.
 

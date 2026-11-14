@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MCP condition presets now cap caller retry overrides at the effective budget authored by the preset, including retry-action defaults.
 - Compatibility analysis now warns when `auto` permission mode falls back to `custom` for an old or undetected harness CLI version.
 - Continuing a stopped, failed or appended named-worktree run now uses its recorded directory and branch, even after defaults change.
 - Path-form named worktree directories now enforce the placement guards for the source checkout and linked worktrees, including symlinked paths and paths that contain either.

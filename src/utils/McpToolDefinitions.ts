@@ -411,7 +411,7 @@ function conditionPresetUseSchema(
         type: "number",
         minimum: 0,
         description:
-          "Optional retry limit; it cannot exceed the preset's own maxRetries.",
+          "Optional retry limit; it cannot exceed the preset's effective retry budget.",
       },
     },
     required: ["use"],

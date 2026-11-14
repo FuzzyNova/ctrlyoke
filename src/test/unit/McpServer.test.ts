@@ -42,6 +42,7 @@ import type {
   WorkflowStep,
   WorkingFile,
   WorkingFileWorktreeRuntime,
+  EndCondition,
 } from "../../types/CtrlYokeTypes";
 import {
   DEFAULT_MAX_STEPS,
@@ -72,6 +73,8 @@ import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { resolveCoordinationBoardScope } from "../../core/orchestration/ExecutionRootCoordinationStore";
 import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
+import { materializeMcpConditionPreset } from "../../utils/McpConditionPresetResolver";
+import { resolveRetryBudget } from "../../core/RetryBudget";
 
 interface RunFixture {
   workflowKey: WorkflowKey;
@@ -2783,6 +2786,70 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         /must not be empty|must not contain NUL|must be at most 4096/
       );
     }
+  });
+
+  test("preset retry caps follow the effective authored budget", () => {
+    const onFailRetry = materializeMcpConditionPreset(
+      {
+        startedAt: 0,
+        definitionRevision: 0,
+        conditions: { gate: { script: "x", onFail: "retry" } },
+      } as WorkingFile,
+      "endCondition",
+      { use: "gate", maxRetries: 1 }
+    );
+    assert.strictEqual(
+      "maxRetries" in onFailRetry ? onFailRetry.maxRetries : undefined,
+      1
+    );
+
+    const noRetryPreset = materializeMcpConditionPreset(
+      {
+        startedAt: 0,
+        definitionRevision: 0,
+        conditions: { gate: { script: "x" } },
+      } as WorkingFile,
+      "endCondition",
+      { use: "gate", retryPrompt: "fix it" },
+      3
+    );
+    assert.strictEqual(
+      "maxRetries" in noRetryPreset ? noRetryPreset.maxRetries : undefined,
+      0
+    );
+    assert.strictEqual(
+      resolveRetryBudget(noRetryPreset as EndCondition, { maxRetries: 3 })
+        .maxRetries,
+      0
+    );
+
+    const explicitLimit = materializeMcpConditionPreset(
+      {
+        startedAt: 0,
+        definitionRevision: 0,
+        conditions: { gate: { script: "x", maxRetries: 2 } },
+      } as WorkingFile,
+      "preCondition",
+      { use: "gate", passRetryPrompt: "try again" },
+      3
+    );
+    assert.strictEqual(
+      "maxRetries" in explicitLimit ? explicitLimit.maxRetries : undefined,
+      2
+    );
+    assert.throws(
+      () =>
+        materializeMcpConditionPreset(
+          {
+            startedAt: 0,
+            definitionRevision: 0,
+            conditions: { gate: { script: "x" } },
+          } as WorkingFile,
+          "preCondition",
+          { use: "gate", maxRetries: 1 }
+        ),
+      /maxRetries 1 exceeds preset 'gate' limit 0/
+    );
   });
 
   test("warns for resolved Codex interactive steps and omits warnings otherwise", async () => {

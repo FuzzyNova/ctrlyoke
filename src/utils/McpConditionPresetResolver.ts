@@ -4,6 +4,7 @@ import type {
   PreCondition,
   WorkingFile,
 } from "../types/CtrlYokeTypes";
+import { resolveRetryBudgetMaxRetries } from "../core/RetryBudget";
 import type { McpConditionPresetUse } from "./McpToolDefinitions";
 
 /** Maximum size of one caller-provided environment value for a preset. */
@@ -15,7 +16,8 @@ type ConditionField = "endCondition" | "preCondition";
 export function materializeMcpConditionPreset(
   workingFile: WorkingFile,
   field: ConditionField,
-  reference: McpConditionPresetUse
+  reference: McpConditionPresetUse,
+  defaultMaxRetries = 0
 ): EndCondition | PreCondition {
   const conditions = workingFile.conditions ?? {};
   const preset = conditions[reference.use];
@@ -62,7 +64,8 @@ export function materializeMcpConditionPreset(
     }
   }
 
-  const maxRetries = resolveMaxRetries(preset, reference, field);
+  const presetLimit = resolveRetryBudgetMaxRetries(preset, defaultMaxRetries);
+  const maxRetries = resolveMaxRetries(preset, reference, field, presetLimit);
   const condition = { ...preset };
   delete condition.params;
   return {
@@ -74,6 +77,12 @@ export function materializeMcpConditionPreset(
     ...(reference.passRetryPrompt === undefined
       ? {}
       : { passRetryPrompt: reference.passRetryPrompt }),
+    // A preset's own retryPrompt intentionally keeps using the user's retry default.
+    ...(reference.maxRetries === undefined &&
+    (reference.retryPrompt !== undefined || reference.passRetryPrompt !== undefined) &&
+    preset.retryPrompt === undefined
+      ? { maxRetries: presetLimit }
+      : {}),
     ...(maxRetries === undefined ? {} : { maxRetries }),
   } as EndCondition | PreCondition;
 }
@@ -81,14 +90,17 @@ export function materializeMcpConditionPreset(
 function resolveMaxRetries(
   preset: ConditionPreset,
   reference: McpConditionPresetUse,
-  field: ConditionField
+  field: ConditionField,
+  presetLimit: number
 ): number | undefined {
   if (reference.maxRetries === undefined) return preset.maxRetries;
   if (!Number.isInteger(reference.maxRetries)) {
     throw new Error(`${field}: maxRetries must be an integer.`);
   }
-  const presetLimit = preset.maxRetries ?? 0;
-  if (presetLimit !== -1 && reference.maxRetries > presetLimit) {
+  if (
+    presetLimit !== -1 &&
+    (reference.maxRetries === -1 || reference.maxRetries > presetLimit)
+  ) {
     throw new Error(
       `${field}: maxRetries ${reference.maxRetries} exceeds preset '${reference.use}' limit ${presetLimit}.`
     );

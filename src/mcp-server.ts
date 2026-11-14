@@ -428,7 +428,8 @@ function materializeConditionUpdates(
           endCondition: materializeMcpConditionPreset(
             workingFile,
             "endCondition",
-            endCondition
+            endCondition,
+            ConfigurationUtils.getDefaultMaxRetries()
           ) as PromptStep["endCondition"],
         }
       : {}),
@@ -437,7 +438,8 @@ function materializeConditionUpdates(
           preCondition: materializeMcpConditionPreset(
             workingFile,
             "preCondition",
-            preCondition
+            preCondition,
+            ConfigurationUtils.getDefaultMaxRetries()
           ) as PromptStep["preCondition"],
         }
       : {}),
@@ -456,7 +458,8 @@ function materializeAppendStep(
           endCondition: materializeMcpConditionPreset(
             workingFile,
             "endCondition",
-            endCondition
+            endCondition,
+            ConfigurationUtils.getDefaultMaxRetries()
           ),
         }
       : {}),
@@ -465,7 +468,8 @@ function materializeAppendStep(
           preCondition: materializeMcpConditionPreset(
             workingFile,
             "preCondition",
-            preCondition
+            preCondition,
+            ConfigurationUtils.getDefaultMaxRetries()
           ),
         }
       : {}),

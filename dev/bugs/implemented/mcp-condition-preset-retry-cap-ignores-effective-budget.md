@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli)
 - **Area:** `src/utils/McpConditionPresetResolver.ts` (`resolveMaxRetries`, `materializeMcpConditionPreset`), `src/core/RetryBudget.ts` (`resolveRetryBudget`)
-- **Severity:** medium (an orchestrator agent can exceed a preset author's retry limit)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

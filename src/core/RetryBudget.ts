@@ -30,6 +30,26 @@ export interface ResolvedRetryBudget {
   anyRetryBudget: number;
 }
 
+/** Resolve the authored maxRetries value before retry-prompt sources are expanded. */
+export function resolveRetryBudgetMaxRetries(
+  endCondition: {
+    maxRetries?: number;
+    onFail?: string;
+    onPass?: string;
+    retryPrompt?: string;
+  },
+  defaultMaxRetries: number
+): number {
+  if (endCondition.maxRetries !== undefined) return endCondition.maxRetries;
+  if (
+    endCondition.onFail === CONDITION_ACTIONS.RETRY ||
+    endCondition.onPass === CONDITION_ACTIONS.RETRY
+  ) {
+    return DEFAULT_ERROR_BEHAVIOR_RETRIES;
+  }
+  return endCondition.retryPrompt ? defaultMaxRetries : 0;
+}
+
 /**
  * Resolve retry settings and failure-retry eligibility without reading global
  * state.
@@ -53,14 +73,7 @@ export function resolveRetryBudget(
 
   const hasRetryPrompt = Boolean(endCondition.retryPrompt);
   const hasMaxRetries = endCondition.maxRetries !== undefined;
-  const maxRetries = hasMaxRetries
-    ? endCondition.maxRetries!
-    : endCondition.onFail === CONDITION_ACTIONS.RETRY ||
-        endCondition.onPass === CONDITION_ACTIONS.RETRY
-      ? DEFAULT_ERROR_BEHAVIOR_RETRIES
-      : hasRetryPrompt
-        ? defaults.maxRetries
-        : 0;
+  const maxRetries = resolveRetryBudgetMaxRetries(endCondition, defaults.maxRetries);
 
   const retryPrompt = hasRetryPrompt
     ? endCondition.retryPrompt
