@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CLI coordination tools now work from a running workflow final step in skill mode, without assigning it a queue-step or parallel-group position.
 - The Schedule view's **Next run** preview, its default **Once** time and its check for a schedule with no future runs use the host's timezone instead of the browser's. Before, a hosted dashboard in another timezone previewed a different time than the one that ran, and could refuse a valid one-shot time or accept one already past.
 - In a synced state home, a schedule saved on another machine is read in that machine's timezone, which ctrlyoke now records with the schedule. Before, a machine in a different timezone worked out its next run in its own timezone whenever the owner wasn't running, and could drop a **Once** or **Until** time that fell in its own daylight-saving gap as invalid, deleting the schedule from the shared history the next time it wrote to that workflow.
 

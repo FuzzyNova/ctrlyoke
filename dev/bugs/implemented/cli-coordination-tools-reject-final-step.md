@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reproduced against compiled `out/mcp-server.js`
 - **Area:** `src/mcp-server.ts` (`resolveCallingContext`, CLI-mode live-step check)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

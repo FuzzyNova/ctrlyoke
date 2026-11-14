@@ -2011,6 +2011,68 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(row.totalSteps, 2);
   });
 
+  test("allows CLI coordination tools from a running final step without queue attribution", async () => {
+    const server = await setup();
+    const active = await prepareActiveRun("cli-final-step-coordination");
+    const workingFile = JSON.parse(
+      await fs.readFile(active.run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      executionState: EXECUTION_STATES.RUNNING,
+      currentIndex: workingFile.steps?.length ?? 0,
+      finalStep: { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 1 },
+    };
+    await writeTrustedRunFile(active.run.runFilePath, workingFile);
+    process.env.CTRLYOKE_MCP_CLI_MODE = "true";
+
+    const posted = responseJson(
+      await server.invokeTool(MCP_POST_NOTE_TOOL_NAME, {
+        text: "final step coordination note",
+      })
+    );
+    assert.strictEqual(posted.scope.participants[0].kind, "ctrlyoke-step");
+    assert.strictEqual(
+      posted.scope.participants[0].address.stepIndex,
+      undefined
+    );
+    assert.strictEqual(
+      posted.scope.participants[0].address.parallelGroupId,
+      undefined
+    );
+
+    const claimed = responseJson(
+      await server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+        paths: ["src/final.ts"],
+      })
+    );
+    assert.deepStrictEqual(claimed.granted, ["src/final.ts"]);
+    assert.strictEqual(claimed.scope.you, posted.scope.you);
+    await releaseActiveRun(active.run, active.ownerToken);
+  });
+
+  test("refuses CLI coordination when the queue is drained without a running final step", async () => {
+    const server = await setup();
+    const active = await prepareActiveRun("cli-drained-queue-coordination");
+    const workingFile = JSON.parse(
+      await fs.readFile(active.run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      executionState: EXECUTION_STATES.RUNNING,
+      currentIndex: workingFile.steps?.length ?? 0,
+      finalStep: undefined,
+    };
+    await writeTrustedRunFile(active.run.runFilePath, workingFile);
+    process.env.CTRLYOKE_MCP_CLI_MODE = "true";
+
+    await assert.rejects(
+      () => server.invokeTool(MCP_POST_NOTE_TOOL_NAME, { text: "too late" }),
+      /does not resolve to a live step/
+    );
+    await releaseActiveRun(active.run, active.ownerToken);
+  });
+
   test("allows global_status without an attached run", async () => {
     const server = await setup();
     const run = await createRun("unattached", "2026-01-01T00-00-00-000Z");

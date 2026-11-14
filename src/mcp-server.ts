@@ -63,6 +63,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   EXECUTION_MODES,
+  FINAL_STEP_PHASES,
   HARNESS_IDS,
   StepOutputTextMode,
   LOGS_DIR,
@@ -804,6 +805,8 @@ export class CtrlYokeMCPServer {
     const runtime = workingFile._runtime;
     const currentIndex = runtime?.currentIndex;
     if (cliMode) {
+      const runningFinalStep =
+        runtime?.finalStep?.phase === FINAL_STEP_PHASES.FINAL_STEP;
       const executionRoot = path.resolve(await this.resolveExecutionRoot());
       const persistedExecutionRoot = runtime?.worktree?.executionRoot;
       if (
@@ -819,7 +822,8 @@ export class CtrlYokeMCPServer {
         !ACTIVE_EXECUTION_STATES.has(runtime.executionState) ||
         currentIndex === undefined ||
         currentIndex < 0 ||
-        currentIndex >= (workingFile.steps?.length ?? 0)
+        (currentIndex >= (workingFile.steps?.length ?? 0) &&
+          !runningFinalStep)
       ) {
         throw new Error(
           `CLI coordination address does not resolve to a live step: ${pinnedPath}`
