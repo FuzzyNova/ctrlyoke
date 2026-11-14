@@ -94,7 +94,7 @@ Maximum number of entries in the run steps array. A whole-value <code v-pre>{{na
 Accepted forms:
 
 - `-1` or `integer` — Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `worktree` {#workflow-file-worktree}
 
@@ -147,7 +147,7 @@ Accepted forms:
 
 - [Harness IDs](#harness-ids)
 - [Template placeholder](#template-placeholder)
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `model` {#execution-properties-model}
 
@@ -165,7 +165,7 @@ Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the 
 Accepted forms:
 
 - `"interactive" | "headless"` — Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `agent` {#execution-properties-agent}
 
@@ -190,7 +190,7 @@ Whether this step continues an earlier step's conversation instead of starting a
 Accepted forms:
 
 - `boolean` — Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `mcpServers` {#execution-properties-mcpservers}
 
@@ -285,7 +285,7 @@ How much prior output to include. 'full' includes the complete bounded transcrip
 Accepted forms:
 
 - `"full" | "summary"` — How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `additionalArgs` {#execution-properties-additionalargs}
 
@@ -373,7 +373,7 @@ Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholde
 Accepted forms:
 
 - `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `color` {#prompt-step-color}
 
@@ -422,7 +422,7 @@ Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholde
 Accepted forms:
 
 - `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `color` {#script-step-color}
 
@@ -440,7 +440,7 @@ Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs 
 Accepted forms:
 
 - `"interactive" | "headless"` — Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow's executionMode, then the defaults.executionMode setting.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `script` {#script-step-script}
 
@@ -464,7 +464,7 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 Accepted forms:
 
 - `"stdout" | "stderr" | "exitCode"` or `string` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `timeoutSec` {#script-step-timeoutsec}
 
@@ -475,7 +475,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 Accepted forms:
 
 - `number` or `string` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `shell` {#script-step-shell}
 
@@ -504,7 +504,7 @@ What to do when the script passes (exit 0 / returns matches). 'continue': advanc
 Accepted forms:
 
 - `"continue" | "stopWorkflow"` — What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `onFail` {#script-step-onfail}
 
@@ -515,7 +515,7 @@ What to do when the script fails or returns is not matched. 'continue': log a wa
 Accepted forms:
 
 - `"continue" | "stopWorkflow"` — What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default).
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `_runtime` {#script-step-runtime}
 
@@ -532,7 +532,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 Accepted forms:
 
 - `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` or `string` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `expected` {#script-step-expected}
 
@@ -549,7 +549,7 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 Accepted forms:
 
 - `boolean` or `string` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `returns` {#script-step-returns}
 
@@ -617,7 +617,7 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 Accepted forms:
 
 - `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `returns` {#pre-condition-returns}
 
@@ -634,7 +634,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 Accepted forms:
 
 - `number` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `shell` {#pre-condition-shell}
 
@@ -651,7 +651,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 Accepted forms:
 
 - `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `expected` {#pre-condition-expected}
 
@@ -668,7 +668,7 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 Accepted forms:
 
 - `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `onPass` {#pre-condition-onpass}
 
@@ -679,7 +679,7 @@ What to do when the pre-condition check passes (script exits 0 / returns matches
 Accepted forms:
 
 - `"continue" | "skipPrompt" | "stopWorkflow"` — What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `onFail` {#pre-condition-onfail}
 
@@ -690,7 +690,7 @@ What to do when the pre-condition check fails. 'continue': run the prompt anyway
 Accepted forms:
 
 - `"continue" | "skipPrompt" | "stopWorkflow"` — What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ## End condition {#end-condition}
 
@@ -720,7 +720,7 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 Accepted forms:
 
 - `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `returns` {#end-condition-returns}
 
@@ -737,7 +737,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 Accepted forms:
 
 - `number` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `shell` {#end-condition-shell}
 
@@ -754,7 +754,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 Accepted forms:
 
 - `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `expected` {#end-condition-expected}
 
@@ -771,7 +771,7 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 Accepted forms:
 
 - `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `maxRetries` {#end-condition-maxretries}
 
@@ -782,7 +782,7 @@ Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by de
 Accepted forms:
 
 - `-1` or `integer` — Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `retryPrompt` {#end-condition-retryprompt}
 
@@ -811,7 +811,7 @@ What to do when the end condition passes. 'continue': advance to the next step (
 Accepted forms:
 
 - `"continue" | "retry" | "stopWorkflow"` — What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `onFail` {#end-condition-onfail}
 
@@ -822,7 +822,7 @@ What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRet
 Accepted forms:
 
 - `"continue" | "retry" | "stopWorkflow"` — What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ## Condition presets {#condition-presets}
 
@@ -852,7 +852,7 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 Accepted forms:
 
 - `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `returns` {#condition-presets-returns}
 
@@ -869,7 +869,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 Accepted forms:
 
 - `number` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `shell` {#condition-presets-shell}
 
@@ -886,7 +886,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 Accepted forms:
 
 - `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `expected` {#condition-presets-expected}
 
@@ -903,7 +903,7 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 Accepted forms:
 
 - `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `maxRetries` {#condition-presets-maxretries}
 
@@ -914,7 +914,7 @@ Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by de
 Accepted forms:
 
 - `-1` or `integer` — Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `retryPrompt` {#condition-presets-retryprompt}
 
@@ -978,7 +978,7 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 Accepted forms:
 
 - `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `returns` {#script-fields-returns}
 
@@ -995,7 +995,7 @@ Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting appli
 Accepted forms:
 
 - `number` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `shell` {#script-fields-shell}
 
@@ -1012,7 +1012,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 Accepted forms:
 
 - `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `expected` {#script-fields-expected}
 
@@ -1029,7 +1029,7 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 Accepted forms:
 
 - `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ## Error behavior {#error-behavior}
 
@@ -1045,7 +1045,7 @@ What to do when a step phase cannot run or otherwise encounters an internal erro
 Accepted forms:
 
 - `"stopWorkflow" | "retry" | "retryPhase" | "continue"` — What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `maxRetries` {#error-behavior-maxretries}
 
@@ -1056,7 +1056,7 @@ Maximum retry attempts when onError is retry or retryPhase. When omitted, one re
 Accepted forms:
 
 - `integer` — Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `retryDelaySec` {#error-behavior-retrydelaysec}
 
@@ -1067,7 +1067,7 @@ Delay before retrying, in seconds. A whole-value <code v-pre>{{name}}</code> pla
 Accepted forms:
 
 - `number` — Delay before retrying, in seconds.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ## Prompt Markdown frontmatter {#prompt-file-frontmatter}
 

@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
 import addFormats from "ajv-formats";
+import { setSubstitutedValueValidator } from "../utils/SubstitutedValueValidator";
 import type { ErrorObject, ValidateFunction } from "ajv";
 import {
   ExecutionProperties,
@@ -211,6 +212,7 @@ export class PromptFileParser {
 
       this.promptSchema = compiled.schema;
       activeCompiledWorkflowSchema = compiled;
+      PromptFileParser.installSubstitutedValueValidator();
       this.strictValidator = compiled.strictValidator;
       this.relaxedValidator = compiled.relaxedValidator;
     } catch (error) {
@@ -229,8 +231,16 @@ export class PromptFileParser {
     if (!activeCompiledWorkflowSchema) new PromptFileParser();
     const compiled = activeCompiledWorkflowSchema;
     if (!compiled) return false;
-    const validator = compiled.ajv.compile({ $ref: `${(compiled.schema as { $id: string }).$id}#${pointer}` });
+    const validator = compiled.ajv.compile({
+      $ref: `${(compiled.schema as { $id: string }).$id}#${pointer}`,
+    });
     return validator(value) as boolean;
+  }
+
+  private static installSubstitutedValueValidator(): void {
+    setSubstitutedValueValidator((pointer, value) =>
+      PromptFileParser.validateSubstitutedValue(pointer, value)
+    );
   }
 
   /**

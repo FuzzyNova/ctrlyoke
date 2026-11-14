@@ -16,7 +16,11 @@ import {
   isVariableDefined,
 } from "./VariablePlaceholders";
 import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
-import { PromptFileParser } from "../core/PromptFileParser";
+import { validateSubstitutedValue } from "./SubstitutedValueValidator";
+import {
+  BOOLEAN_STRING_VALUES,
+  PROMPT_PROPERTIES,
+} from "../types/DashboardConstants";
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.
@@ -52,49 +56,111 @@ export class VarSubstitutor {
     stepIndex = 0
   ): T {
     if (phase === "run-start") {
-      const resolve = (value: unknown, policyPath: string, fieldPath: string): unknown => {
+      const resolve = (
+        value: unknown,
+        policyPath: string,
+        fieldPath: string
+      ): unknown => {
         if (typeof value !== "string") return value;
-        const placeholders = findVariablePlaceholders(value).filter((p) => !p.inFence);
+        const placeholders = findVariablePlaceholders(value).filter(
+          (p) => !p.inFence
+        );
         if (!/^\{\{\w+\}\}$/.test(value) || placeholders.length !== 1) {
-          if (/\{\{\w+\}\}/.test(value)) throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`);
+          if (/\{\{\w+\}\}/.test(value))
+            throw new Error(
+              `${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`
+            );
           return value;
         }
         const name = placeholders[0]!.name;
-        if (!isVariableDefined(vars, name)) throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`);
+        if (!isVariableDefined(vars, name))
+          throw new Error(
+            `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
+          );
         const raw = vars[name]!;
         let valueToCheck: unknown = raw;
-        if (raw === String(true) || raw === String(false)) valueToCheck = raw === String(true);
+        if (
+          raw === BOOLEAN_STRING_VALUES.TRUE ||
+          raw === BOOLEAN_STRING_VALUES.FALSE
+        )
+          valueToCheck = raw === BOOLEAN_STRING_VALUES.TRUE;
         else if (/^-?\d+$/.test(raw)) valueToCheck = Number(raw);
         const pointerByPath: Record<string, string> = {
           harness: "/$defs/harnessId",
           "steps[].harness": "/$defs/harnessId",
-          "steps[].enabled": "/$defs/promptStep/allOf/1/properties/enabled/oneOf/0",
+          "steps[].enabled":
+            "/$defs/promptStep/allOf/1/properties/enabled/oneOf/0",
           maxSteps: "/$defs/maxStepsValue",
         };
-        if (!PromptFileParser.validateSubstitutedValue(pointerByPath[policyPath]!, valueToCheck)) {
-          const expected = policyPath.includes("harness") ? "a supported harness" : policyPath.includes("enabled") ? "a boolean" : "a number greater than 0 or -1";
-          throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", expected ${expected}.`);
+        if (
+          !validateSubstitutedValue(pointerByPath[policyPath]!, valueToCheck)
+        ) {
+          const expected = policyPath.includes("harness")
+            ? "a supported harness"
+            : policyPath.includes("enabled")
+              ? "a boolean"
+              : "a number greater than 0 or -1";
+          throw new Error(
+            `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", expected ${expected}.`
+          );
         }
         return valueToCheck;
       };
       const workflow = view as PromptFile;
-        const cloneStep = (step: WorkflowStep, index: number): WorkflowStep => {
-          const fields = step as WorkflowStep & Record<string, unknown>;
-          if (
-            !(typeof fields.harness === "string" && /\{\{\w+\}\}/.test(fields.harness)) &&
-            !(typeof fields.enabled === "string" && /\{\{\w+\}\}/.test(fields.enabled))
-          ) return step;
-          const result = { ...step } as WorkflowStep & Record<string, unknown>;
-          if (typeof result.harness === "string") result.harness = resolve(result.harness, "steps[].harness", `steps[${index}].harness`) as PromptFile["harness"];
-          if (typeof result.enabled === "string") result.enabled = resolve(result.enabled, "steps[].enabled", `steps[${index}].enabled`) as boolean;
-          return result;
-        };
-        const result = { ...workflow, steps: workflow.steps?.map(cloneStep), finalStep: workflow.finalStep ? cloneStep(workflow.finalStep, -1) : workflow.finalStep } as PromptFile & Record<string, unknown>;
-        if (typeof result.harness === "string") result.harness = resolve(result.harness, "harness", "harness") as PromptFile["harness"];
-        if (typeof result.maxSteps === "string") result.maxSteps = resolve(result.maxSteps, "maxSteps", "maxSteps") as number;
-        if (typeof (result as Record<string, unknown>).enabled === "string") {
-          (result as Record<string, unknown>).enabled = resolve((result as Record<string, unknown>).enabled, "steps[].enabled", "enabled");
-        }
+      const cloneStep = (step: WorkflowStep, index: number): WorkflowStep => {
+        const fields = step as WorkflowStep & Record<string, unknown>;
+        if (
+          !(
+            typeof fields.harness === "string" &&
+            /\{\{\w+\}\}/.test(fields.harness)
+          ) &&
+          !(
+            typeof fields.enabled === "string" &&
+            /\{\{\w+\}\}/.test(fields.enabled)
+          )
+        )
+          return step;
+        const result = { ...step } as WorkflowStep & Record<string, unknown>;
+        if (typeof result.harness === "string")
+          result.harness = resolve(
+            result.harness,
+            "steps[].harness",
+            `steps[${index}].harness`
+          ) as PromptFile["harness"];
+        if (typeof result.enabled === "string")
+          result.enabled = resolve(
+            result.enabled,
+            "steps[].enabled",
+            `steps[${index}].enabled`
+          ) as boolean;
+        return result;
+      };
+      const result = {
+        ...workflow,
+        steps: workflow.steps?.map(cloneStep),
+        finalStep: workflow.finalStep
+          ? cloneStep(workflow.finalStep, -1)
+          : workflow.finalStep,
+      } as PromptFile & Record<string, unknown>;
+      if (typeof result.harness === "string")
+        result.harness = resolve(
+          result.harness,
+          "harness",
+          "harness"
+        ) as PromptFile["harness"];
+      if (typeof result.maxSteps === "string")
+        result.maxSteps = resolve(
+          result.maxSteps,
+          "maxSteps",
+          "maxSteps"
+        ) as number;
+      if (typeof (result as Record<string, unknown>).enabled === "string") {
+        (result as Record<string, unknown>).enabled = resolve(
+          (result as Record<string, unknown>).enabled,
+          "steps[].enabled",
+          "enabled"
+        );
+      }
       return result as unknown as T;
     }
     const substituteField = (
@@ -119,30 +185,65 @@ export class VarSubstitutor {
         ].fencedCodeProtected
       );
     };
-    const dispatchValue = (value: unknown, schemaPointer: string, fieldPath: string): unknown => {
+    const dispatchValue = (
+      value: unknown,
+      schemaPointer: string,
+      fieldPath: string
+    ): unknown => {
       if (typeof value !== "string" || !/\{\{\w+\}\}/.test(value)) return value;
       const matches = findVariablePlaceholders(value, false);
       if (!/^\{\{\w+\}\}$/.test(value) || matches.length !== 1) {
-        throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`);
+        throw new Error(
+          `${this.VALIDATION_FAILURE}: ${fieldPath}: expected one whole-value placeholder.`
+        );
       }
       const name = matches[0]!.name;
-      if (!isVariableDefined(vars, name)) throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`);
+      if (!isVariableDefined(vars, name))
+        throw new Error(
+          `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is unresolved, expected a defined variable.`
+        );
       const raw = vars[name]!;
       let converted: unknown = raw;
-      if (raw === "true" || raw === "false") converted = raw === "true";
+      if (
+        raw === BOOLEAN_STRING_VALUES.TRUE ||
+        raw === BOOLEAN_STRING_VALUES.FALSE
+      )
+        converted = raw === BOOLEAN_STRING_VALUES.TRUE;
       else if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(raw)) converted = Number(raw);
-      if (!PromptFileParser.validateSubstitutedValue(schemaPointer, converted)) {
-        throw new Error(`${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", which fails the field's schema validation.`);
+      if (!validateSubstitutedValue(schemaPointer, converted)) {
+        throw new Error(
+          `${this.VALIDATION_FAILURE}: ${fieldPath}: variable "${name}" is "${raw}", expected a valid schema value.`
+        );
       }
       return converted;
     };
-    const dispatchProperties = (object: Record<string, unknown>, prefix: string, path: string): void => {
+    const dispatchProperties = (
+      object: Record<string, unknown>,
+      prefix: string,
+      path: string
+    ): void => {
       const mappings: Array<[string, string, string]> = [
-        ["executionMode", "executionProperties/properties/executionMode", "executionMode"],
-        ["resumeSession", "executionProperties/properties/resumeSession", "resumeSession"],
-        ["priorContextDetail", "executionProperties/properties/priorContextDetail", "priorContextDetail"],
+        [
+          "executionMode",
+          "executionProperties/properties/executionMode",
+          "executionMode",
+        ],
+        [
+          "resumeSession",
+          "executionProperties/properties/resumeSession",
+          "resumeSession",
+        ],
+        [
+          "priorContextDetail",
+          "executionProperties/properties/priorContextDetail",
+          "priorContextDetail",
+        ],
         ["timeoutSec", "scriptProperties/properties/timeoutSec", "timeoutSec"],
-        ["compareSource", "scriptProperties/properties/compareSource", "compareSource"],
+        [
+          "compareSource",
+          "scriptProperties/properties/compareSource",
+          "compareSource",
+        ],
         ["operator", "scriptProperties/properties/operator", "operator"],
         ["ignoreCase", "scriptProperties/properties/ignoreCase", "ignoreCase"],
         ["onPass", "scriptStep/properties/onPass", "onPass"],
@@ -151,25 +252,56 @@ export class VarSubstitutor {
       for (const [key, pointer, name] of mappings) {
         const policy = `${prefix}.${name}`;
         if (!(policy in VAR_SUBSTITUTION_POLICY)) continue;
-        object[key] = dispatchValue(object[key], `/$defs/${pointer}`, `${path}.${name}`);
+        object[key] = dispatchValue(
+          object[key],
+          `/$defs/${pointer}`,
+          `${path}.${name}`
+        );
       }
       const behavior = object.errorBehavior;
-      if (behavior && typeof behavior === "object" && !Array.isArray(behavior)) {
+      if (
+        behavior &&
+        typeof behavior === "object" &&
+        !Array.isArray(behavior)
+      ) {
         const copy = { ...(behavior as Record<string, unknown>) };
         for (const key of ["onError", "maxRetries", "retryDelaySec"] as const) {
           const pointer = `/$defs/errorBehavior/properties/${key}`;
-          copy[key] = dispatchValue(copy[key], pointer, `${path}.errorBehavior.${key}`);
+          copy[key] = dispatchValue(
+            copy[key],
+            pointer,
+            `${path}.errorBehavior.${key}`
+          );
         }
         object.errorBehavior = copy;
       }
-      for (const key of ["preCondition", "endCondition"] as const) {
+      for (const key of [
+        PROMPT_PROPERTIES.PRE_CONDITION,
+        PROMPT_PROPERTIES.END_CONDITION,
+      ] as const) {
         const condition = object[key];
-        if (!condition || typeof condition !== "object" || Array.isArray(condition)) continue;
+        if (
+          !condition ||
+          typeof condition !== "object" ||
+          Array.isArray(condition)
+        )
+          continue;
         const copy = { ...(condition as Record<string, unknown>) };
         dispatchProperties(copy, `steps[].${key}`, `${path}.${key}`);
-        for (const field of ["onPass", "onFail", ...(key === "endCondition" ? ["maxRetries"] : [])]) {
-          const pointer = key === "endCondition" && field === "maxRetries" ? "/$defs/endCondition/properties/maxRetries/oneOf/0" : `/$defs/${key}/properties/${field}`;
-          copy[field] = dispatchValue(copy[field], pointer, `${path}.${key}.${field}`);
+        for (const field of [
+          "onPass",
+          "onFail",
+          ...(key === PROMPT_PROPERTIES.END_CONDITION ? ["maxRetries"] : []),
+        ]) {
+          const pointer =
+            key === PROMPT_PROPERTIES.END_CONDITION && field === "maxRetries"
+              ? "/$defs/endCondition/properties/maxRetries/oneOf/0"
+              : `/$defs/${key}/properties/${field}`;
+          copy[field] = dispatchValue(
+            copy[field],
+            pointer,
+            `${path}.${key}.${field}`
+          );
         }
         object[key] = copy;
       }
@@ -196,7 +328,14 @@ export class VarSubstitutor {
             ]
           : []),
       ];
-      if (!supportedValues.some((value) => typeof value === "string" && /\{\{\w+\}\}/.test(value)) && Object.keys(vars).length === 0 && !JSON.stringify(step).includes("{{")) return step;
+      if (
+        !supportedValues.some(
+          (value) => typeof value === "string" && /\{\{\w+\}\}/.test(value)
+        ) &&
+        Object.keys(vars).length === 0 &&
+        !JSON.stringify(step).includes("{{")
+      )
+        return step;
       const result = { ...step } as WorkflowStep & Record<string, unknown>;
       const path = `steps[${index}]`;
       dispatchProperties(result, "steps[]", path);

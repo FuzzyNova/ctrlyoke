@@ -2758,4 +2758,4 @@ $defs:
     pattern: ^\{\{\w+\}\}$
     description: >-
       A whole-value workflow variable placeholder. See
-      https://ctrlyoke.dev/workflows/variables#where-substituted.
+      https://ctrlyoke.dev/docs/workflows/variables#where-substituted.

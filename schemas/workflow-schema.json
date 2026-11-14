@@ -14,9 +14,7 @@
     {
       "if": {
         "not": {
-          "required": [
-            "_templateMeta"
-          ]
+          "required": ["_templateMeta"]
         }
       },
       "then": {
@@ -177,9 +175,7 @@
               "$ref": "#/$defs/runtimeMetadata"
             }
           },
-          "required": [
-            "steps"
-          ]
+          "required": ["steps"]
         }
       ],
       "type": "object",
@@ -263,14 +259,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": [
-            "text",
-            "file",
-            "directory",
-            "select",
-            "harness",
-            "model"
-          ],
+          "enum": ["text", "file", "directory", "select", "harness", "model"],
           "description": "Control used to collect this variable in the template dialog. A `model` variable shows the models of the harness variable named by `harness`, beside that harness picker. Not substituted: This structural field or identity value stays as authored."
         },
         "harness": {
@@ -320,14 +309,10 @@
             "const": "model"
           }
         },
-        "required": [
-          "type"
-        ]
+        "required": ["type"]
       },
       "then": {
-        "required": [
-          "harness"
-        ]
+        "required": ["harness"]
       },
       "additionalProperties": false
     },
@@ -393,9 +378,7 @@
               "description": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped."
             }
           },
-          "required": [
-            "mode"
-          ],
+          "required": ["mode"],
           "additionalProperties": false
         },
         {
@@ -427,10 +410,7 @@
               "description": "Optional setup command run in the named worktree at the start of every run, such as `npm ci` to pick up dependency changes since the last run. Resuming or continuing a run whose setup already succeeded does not run it again. Omit it for no setup. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a failed setup blocks the worktree and the next Run re-runs it."
             }
           },
-          "required": [
-            "mode",
-            "branch"
-          ],
+          "required": ["mode", "branch"],
           "additionalProperties": false
         }
       ]
@@ -642,18 +622,13 @@
           "$ref": "#/$defs/scriptStep/properties/returns"
         }
       },
-      "required": [
-        "type",
-        "script"
-      ],
+      "required": ["type", "script"],
       "unevaluatedProperties": false
     },
     "priorContextRunSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "workflow"
-      ],
+      "required": ["workflow"],
       "properties": {
         "workflow": {
           "type": "string",
@@ -760,10 +735,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "interactive",
-                "headless"
-              ],
+              "enum": ["interactive", "headless"],
               "description": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default."
             },
             {
@@ -870,10 +842,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "full",
-                "summary"
-              ],
+              "enum": ["full", "summary"],
               "default": "full",
               "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt \u2192 workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference."
             },
@@ -911,10 +880,7 @@
         },
         "sandboxMode": {
           "type": "string",
-          "enum": [
-            "workspace-write",
-            "read-only"
-          ],
+          "enum": ["workspace-write", "read-only"],
           "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step \u2192 workflow \u2192 the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value."
         },
         "errorBehavior": {
@@ -939,25 +905,19 @@
         {
           "not": {
             "type": "object",
-            "required": [
-              "worktree"
-            ]
+            "required": ["worktree"]
           }
         },
         {
           "not": {
             "type": "object",
-            "required": [
-              "trustedExternalRoots"
-            ]
+            "required": ["trustedExternalRoots"]
           }
         },
         {
           "not": {
             "type": "object",
-            "required": [
-              "maxSteps"
-            ]
+            "required": ["maxSteps"]
           }
         }
       ],
@@ -978,9 +938,7 @@
               {
                 "not": {
                   "type": "object",
-                  "required": [
-                    "parallel"
-                  ]
+                  "required": ["parallel"]
                 }
               }
             ]
@@ -993,9 +951,7 @@
           "default": true
         }
       },
-      "required": [
-        "parallel"
-      ],
+      "required": ["parallel"],
       "unevaluatedProperties": false
     },
     "parallelGroupDefinition": {
@@ -1018,12 +974,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "id",
-        "startIndex",
-        "endIndex",
-        "failFast"
-      ],
+      "required": ["id", "startIndex", "endIndex", "failFast"],
       "additionalProperties": false
     },
     "promptStep": {
@@ -1070,16 +1021,12 @@
               "description": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored."
             }
           },
-          "required": [
-            "prompt"
-          ]
+          "required": ["prompt"]
         },
         {
           "not": {
             "type": "object",
-            "required": [
-              "script"
-            ]
+            "required": ["script"]
           }
         }
       ]
@@ -1119,10 +1066,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "interactive",
-                "headless"
-              ],
+              "enum": ["interactive", "headless"],
               "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow's executionMode, then the defaults.executionMode setting."
             },
             {
@@ -1192,10 +1136,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "continue",
-                "stopWorkflow"
-              ],
+              "enum": ["continue", "stopWorkflow"],
               "default": "continue",
               "description": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately."
             },
@@ -1209,10 +1150,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "continue",
-                "stopWorkflow"
-              ],
+              "enum": ["continue", "stopWorkflow"],
               "default": "stopWorkflow",
               "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default)."
             },
@@ -1255,10 +1193,7 @@
           "$ref": "#/$defs/scriptProperties/properties/returns"
         }
       },
-      "required": [
-        "type",
-        "script"
-      ]
+      "required": ["type", "script"]
     },
     "endCondition": {
       "type": "object",
@@ -1333,11 +1268,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "continue",
-                "retry",
-                "stopWorkflow"
-              ],
+              "enum": ["continue", "retry", "stopWorkflow"],
               "default": "continue",
               "description": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately."
             },
@@ -1351,11 +1282,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "continue",
-                "retry",
-                "stopWorkflow"
-              ],
+              "enum": ["continue", "retry", "stopWorkflow"],
               "default": "stopWorkflow",
               "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry."
             },
@@ -1366,9 +1293,7 @@
           "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         }
       },
-      "required": [
-        "script"
-      ],
+      "required": ["script"],
       "unevaluatedProperties": false
     },
     "conditionPreset": {
@@ -1421,22 +1346,12 @@
         },
         "onPass": {
           "type": "string",
-          "enum": [
-            "continue",
-            "retry",
-            "skipPrompt",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "retry", "skipPrompt", "stopWorkflow"],
           "description": "Action when the condition passes. Valid actions depend on whether the preset is used as an end condition or pre-condition."
         },
         "onFail": {
           "type": "string",
-          "enum": [
-            "continue",
-            "retry",
-            "skipPrompt",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "retry", "skipPrompt", "stopWorkflow"],
           "description": "Action when the condition fails. Valid actions depend on whether the preset is used as an end condition or pre-condition."
         },
         "params": {
@@ -1449,9 +1364,7 @@
           "uniqueItems": true
         }
       },
-      "required": [
-        "script"
-      ],
+      "required": ["script"],
       "unevaluatedProperties": false
     },
     "scriptProperties": {
@@ -1473,11 +1386,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "stdout",
-                "stderr",
-                "exitCode"
-              ],
+              "enum": ["stdout", "stderr", "exitCode"],
               "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
             },
             {
@@ -1506,14 +1415,7 @@
         "shell": {
           "type": "string",
           "description": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
-          "examples": [
-            "pwsh",
-            "powershell",
-            "bash",
-            "zsh",
-            "sh",
-            "cmd"
-          ]
+          "examples": ["pwsh", "powershell", "bash", "zsh", "sh", "cmd"]
         },
         "operator": {
           "oneOf": [
@@ -1541,10 +1443,7 @@
           "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression \u2014 add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "expected": {
-          "type": [
-            "string",
-            "number"
-          ],
+          "type": ["string", "number"],
           "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 \u2014 there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
         },
         "ignoreCase": {
@@ -1560,9 +1459,7 @@
           "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         }
       },
-      "required": [
-        "script"
-      ]
+      "required": ["script"]
     },
     "preCondition": {
       "type": "object",
@@ -1604,11 +1501,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "continue",
-                "skipPrompt",
-                "stopWorkflow"
-              ],
+              "enum": ["continue", "skipPrompt", "stopWorkflow"],
               "default": "continue",
               "description": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution."
             },
@@ -1622,11 +1515,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "continue",
-                "skipPrompt",
-                "stopWorkflow"
-              ],
+              "enum": ["continue", "skipPrompt", "stopWorkflow"],
               "default": "skipPrompt",
               "description": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution."
             },
@@ -1637,9 +1526,7 @@
           "description": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         }
       },
-      "required": [
-        "script"
-      ],
+      "required": ["script"],
       "unevaluatedProperties": false
     },
     "errorBehavior": {
@@ -1650,12 +1537,7 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": [
-                "stopWorkflow",
-                "retry",
-                "retryPhase",
-                "continue"
-              ],
+              "enum": ["stopWorkflow", "retry", "retryPhase", "continue"],
               "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored \u2014 an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count."
             },
             {
@@ -1691,9 +1573,7 @@
           "description": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         }
       },
-      "required": [
-        "onError"
-      ],
+      "required": ["onError"],
       "additionalProperties": false
     },
     "promptRuntimeMetadata": {
@@ -1706,17 +1586,13 @@
         {
           "not": {
             "type": "object",
-            "required": [
-              "worktree"
-            ]
+            "required": ["worktree"]
           }
         },
         {
           "not": {
             "type": "object",
-            "required": [
-              "trustedExternalRoots"
-            ]
+            "required": ["trustedExternalRoots"]
           }
         },
         {
@@ -1853,23 +1729,14 @@
             },
             "unit": {
               "type": "string",
-              "enum": [
-                "steps",
-                "seconds"
-              ]
+              "enum": ["steps", "seconds"]
             },
             "message": {
               "type": "string",
               "description": "Canonical human-readable message for the stop."
             }
           },
-          "required": [
-            "code",
-            "threshold",
-            "observed",
-            "unit",
-            "message"
-          ],
+          "required": ["code", "threshold", "observed", "unit", "message"],
           "additionalProperties": false
         },
         "activeParallelGroup": {
@@ -1881,16 +1748,10 @@
             },
             "admission": {
               "type": "string",
-              "enum": [
-                "accepting",
-                "closing"
-              ]
+              "enum": ["accepting", "closing"]
             }
           },
-          "required": [
-            "groupId",
-            "admission"
-          ],
+          "required": ["groupId", "admission"],
           "additionalProperties": false
         },
         "tokenTotals": {
@@ -1910,10 +1771,7 @@
               "description": "Definition revision the rewind was taken from"
             }
           },
-          "required": [
-            "fromStepIndex",
-            "baseDefinitionRevision"
-          ],
+          "required": ["fromStepIndex", "baseDefinitionRevision"],
           "additionalProperties": false
         },
         "worktree": {
@@ -1926,18 +1784,11 @@
             },
             "mode": {
               "type": "string",
-              "enum": [
-                "managed",
-                "named"
-              ]
+              "enum": ["managed", "named"]
             },
             "origin": {
               "type": "string",
-              "enum": [
-                "created",
-                "discovered",
-                "recovered"
-              ],
+              "enum": ["created", "discovered", "recovered"],
               "description": "Whether ctrlyoke created the worktree, found it already present, or recovered it after an interrupted run"
             },
             "branchName": {
@@ -1975,10 +1826,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "name",
-                  "fsPath"
-                ],
+                "required": ["name", "fsPath"],
                 "additionalProperties": false
               }
             },
@@ -2009,10 +1857,7 @@
             },
             "lifecycleOwner": {
               "type": "string",
-              "enum": [
-                "ctrlyoke",
-                "user"
-              ]
+              "enum": ["ctrlyoke", "user"]
             },
             "lifecycleState": {
               "type": "string",
@@ -2027,20 +1872,11 @@
             },
             "setupOutcome": {
               "type": "string",
-              "enum": [
-                "pending",
-                "running",
-                "succeeded",
-                "failed"
-              ]
+              "enum": ["pending", "running", "succeeded", "failed"]
             },
             "landingOutcome": {
               "type": "string",
-              "enum": [
-                "landed",
-                "no-changes",
-                "blocked"
-              ]
+              "enum": ["landed", "no-changes", "blocked"]
             },
             "mergeOutcome": {
               "type": "string",
@@ -2054,20 +1890,11 @@
             },
             "directoryState": {
               "type": "string",
-              "enum": [
-                "present",
-                "removed",
-                "missing",
-                "remove-failed"
-              ]
+              "enum": ["present", "removed", "missing", "remove-failed"]
             },
             "branchState": {
               "type": "string",
-              "enum": [
-                "present",
-                "deleted",
-                "missing"
-              ]
+              "enum": ["present", "deleted", "missing"]
             },
             "finalBranchTip": {
               "type": "string"
@@ -2114,10 +1941,7 @@
           "properties": {
             "phase": {
               "type": "string",
-              "enum": [
-                "queue",
-                "finalStep"
-              ],
+              "enum": ["queue", "finalStep"],
               "description": "Current workflow execution phase"
             },
             "loopCount": {
@@ -2170,17 +1994,11 @@
               "description": "Latest end-condition evaluation retained for the final step's automation result projection"
             }
           },
-          "required": [
-            "phase",
-            "loopCount"
-          ],
+          "required": ["phase", "loopCount"],
           "additionalProperties": false
         }
       },
-      "required": [
-        "currentIndex",
-        "executionState"
-      ],
+      "required": ["currentIndex", "executionState"],
       "additionalProperties": false
     },
     "conditionEvaluationSummary": {
@@ -2192,12 +2010,7 @@
         },
         "action": {
           "type": "string",
-          "enum": [
-            "continue",
-            "stopWorkflow",
-            "retry",
-            "skipPrompt"
-          ],
+          "enum": ["continue", "stopWorkflow", "retry", "skipPrompt"],
           "description": "Populated for pre-conditions, where it explains the gate decision."
         },
         "script": {
@@ -2258,10 +2071,7 @@
         },
         "coverage": {
           "type": "string",
-          "enum": [
-            "complete",
-            "partial"
-          ]
+          "enum": ["complete", "partial"]
         },
         "reportedAttemptCount": {
           "type": "number"
@@ -2279,11 +2089,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": [
-              "harness-reported",
-              "price-table",
-              "user-override"
-            ]
+            "enum": ["harness-reported", "price-table", "user-override"]
           }
         }
       }
@@ -2298,10 +2104,7 @@
         },
         "coverage": {
           "type": "string",
-          "enum": [
-            "complete",
-            "partial"
-          ],
+          "enum": ["complete", "partial"],
           "description": "'complete' only when every executed AI attempt reported a usable total"
         },
         "reportedAttemptCount": {
@@ -2324,11 +2127,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": [
-              "harness-reported",
-              "price-table",
-              "user-override"
-            ]
+            "enum": ["harness-reported", "price-table", "user-override"]
           }
         },
         "byHarness": {
@@ -2361,10 +2160,7 @@
     },
     "userHookConfig": {
       "type": "object",
-      "required": [
-        "event",
-        "command"
-      ],
+      "required": ["event", "command"],
       "additionalProperties": false,
       "properties": {
         "event": {
@@ -2449,10 +2245,7 @@
         },
         "transport": {
           "type": "string",
-          "enum": [
-            "streamable-http",
-            "sse"
-          ],
+          "enum": ["streamable-http", "sse"],
           "description": "Transport protocol for remote servers. Defaults to \"streamable-http\"."
         },
         "headers": {
@@ -2472,23 +2265,15 @@
       },
       "oneOf": [
         {
-          "required": [
-            "command"
-          ],
+          "required": ["command"],
           "not": {
-            "required": [
-              "url"
-            ]
+            "required": ["url"]
           }
         },
         {
-          "required": [
-            "url"
-          ],
+          "required": ["url"],
           "not": {
-            "required": [
-              "command"
-            ]
+            "required": ["command"]
           }
         }
       ],
@@ -2498,13 +2283,9 @@
             "const": "ctrlyoke"
           }
         },
-        "required": [
-          "id"
-        ]
+        "required": ["id"]
       },
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "additionalProperties": false
     },
     "toolPermissions": {
@@ -2565,13 +2346,7 @@
     },
     "priorContextKeyword": {
       "type": "string",
-      "enum": [
-        "all",
-        "previous",
-        "none",
-        "finalStepAll",
-        "finalStepPrevious"
-      ],
+      "enum": ["all", "previous", "none", "finalStepAll", "finalStepPrevious"],
       "description": "Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final-step pass outputs, 'finalStepPrevious' = immediately preceding final-step pass output"
     },
     "priorContextPromptNumbers": {
@@ -2593,9 +2368,7 @@
           "description": "How many of the most recent earlier outputs to include"
         }
       },
-      "required": [
-        "previous"
-      ],
+      "required": ["previous"],
       "additionalProperties": false,
       "description": "The last N queue prompt outputs before this prompt, oldest first (e.g. { previous: 3 }). Counted relative to the prompt, so it stays correct when steps are inserted or reordered. Like 'previous', steps that produced no output are skipped rather than counted; { previous: 1 } is the same as 'previous'. Inline equivalent: $previous:N."
     },
@@ -2664,9 +2437,7 @@
               }
             }
           },
-          "required": [
-            "id"
-          ],
+          "required": ["id"],
           "additionalProperties": false
         },
         {
@@ -2707,7 +2478,7 @@
     "varPlaceholder": {
       "type": "string",
       "pattern": "^\\{\\{\\w+\\}\\}$",
-      "description": "A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted."
+      "description": "A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted."
     }
   }
 }

@@ -1816,12 +1816,17 @@ function handleSecretCommand(
     });
 }
 
-function warnUnusedCliVariables(workflow: PromptFile, vars: Record<string, string>): void {
+function warnUnusedCliVariables(
+  workflow: PromptFile,
+  vars: Record<string, string>
+): void {
   if (Object.keys(vars).length === 0) return;
   const authored = JSON.stringify(workflow);
   for (const name of Object.keys(vars)) {
     if (!authored.includes(`{{${name}}}`)) {
-      console.error(`Warning: --var ${name}=... is unused; no workflow field references {{${name}}}.`);
+      console.error(
+        `Warning: --var ${name}=... is unused; no workflow field references {{${name}}}.`
+      );
     }
   }
 }
@@ -1996,13 +2001,16 @@ async function dryRunCommand(
 
     mergeCliVarsIntoWorkflow(workflow, config.vars);
     warnUnusedCliVariables(workflow, config.vars);
-    const runStartView = VarSubstitutor.substituteWorkflowView(workflow, workflow.vars ?? {}, "run-start");
-    Object.assign(workflow, runStartView);
+    const runStartView = VarSubstitutor.substituteWorkflowView(
+      workflow,
+      workflow.vars ?? {},
+      "run-start"
+    );
     await exitUnlessTrustDecided(
       secretGrantsTrustRequest(workflow, workingDir, resolvedFile)
     );
 
-    const previewWorkflow = workflow;
+    const previewWorkflow = runStartView;
     collectWorkflowHarnesses(previewWorkflow, harness);
     const capabilityRegistry = createCliCapabilityRegistry();
     let capabilities;

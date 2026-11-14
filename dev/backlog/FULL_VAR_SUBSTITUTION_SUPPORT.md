@@ -20,17 +20,22 @@ Each step ticks its own item, notes any deviation under it, and commits.
 
 - [ ] 1. Policy table (`VarSubstitutionPolicy.ts`) and `substituteWorkflowView`;
       existing call sites moved over; fence masking limited to prompt text.
+      Design note: `SubstitutedValueValidator` now bridges the utility layer to
+      the parser's Ajv instance, and CLI run-start preview uses a copied view
+      so resolved values do not overwrite the authored workflow. The walker
+      still contains per-field inventories and is not complete.
 - [ ] 2. Engine gaps 1–4 (Dry Run grants, preflight additionalArgs, advisory
       with empty `vars`, preset param values left literal).
 - [x] 3. Gaps 5–6: CLI help, schema descriptions and docs table driven by the
       policy table; Dry Run shows worktree setup.
-      Note: `VarSubstitutionPolicy.ts` exists, but the prerequisite
-      `substituteWorkflowView` API was absent in this checkout; this item uses
-      the existing policy and substitution API without adding the missing API.
+      Note: `substituteWorkflowView` exists in this checkout; it remains only
+      partially table-driven, with schema-derived validation and full shared
+      definition coverage still outstanding.
 - [x] 4. Run-start phase in startup/continue; `worktree.branch`/`base`/
       `directory` substituted; workspace-trust predicate; worktrees docs.
-      Note: this checkout lacked `substituteWorkflowView`; a dedicated shared
-      worktree run-start helper was added to preserve authored definitions.
+      Note: startup and continue invoke the run-start view and retain authored
+      definitions, but the executor still recomputes run-start fields during
+      dispatch and attempts.
 - [x] 5. Dispatch `text` fields (step `name`, `expected`, `shell`, `agent`,
       `skills[]`, `sessionId`, `priorContext.*`).
       Note: dispatch views are copied before execution and preflight; error

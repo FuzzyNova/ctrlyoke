@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { VAR_SUBSTITUTION_POLICY } from "../../utils/VarSubstitutionPolicy";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
+import { PromptFileParser } from "../../core/PromptFileParser";
 import type { WorkflowStep } from "../../types/CtrlYokeTypes";
 import {
   VAR_SUBSTITUTION_PHASES,
@@ -11,6 +12,9 @@ import {
 } from "../../utils/VarSubstitutionPolicy";
 
 suite("VarSubstitutionPolicy documentation", () => {
+  suiteSetup(() => {
+    new PromptFileParser();
+  });
   test("dispatch text policy substitutes supported step fields on a copy", () => {
     const authored = {
       type: "script" as const,
@@ -71,11 +75,16 @@ suite("VarSubstitutionPolicy documentation", () => {
     assert.strictEqual(resolved.ignoreCase, true);
     assert.strictEqual(resolved.endCondition?.maxRetries, 2);
     assert.throws(
-      () => VarSubstitutor.substituteWorkflowView(
-        { type: "script", script: "echo hi", timeoutSec: "{{timeout}}" } as unknown as WorkflowStep,
-        { timeout: "soon" },
-        "dispatch"
-      ),
+      () =>
+        VarSubstitutor.substituteWorkflowView(
+          {
+            type: "script",
+            script: "echo hi",
+            timeoutSec: "{{timeout}}",
+          } as unknown as WorkflowStep,
+          { timeout: "soon" },
+          "dispatch"
+        ),
       /timeoutSec.*timeout.*soon/
     );
   });
@@ -157,23 +166,46 @@ suite("VarSubstitutionPolicy documentation", () => {
     );
     const hasPlaceholder = (field: unknown): boolean => {
       const oneOf = (field as { oneOf?: unknown } | undefined)?.oneOf;
-      return Array.isArray(oneOf) &&
-        oneOf.some((choice: { $ref?: string }) => choice.$ref === "#/$defs/varPlaceholder");
+      return (
+        Array.isArray(oneOf) &&
+        oneOf.some(
+          (choice: { $ref?: string }) =>
+            choice.$ref === "#/$defs/varPlaceholder"
+        )
+      );
     };
-    assert.ok(hasPlaceholder(schema.$defs.executionProperties.properties.harness));
-    assert.ok(hasPlaceholder(schema.$defs.workflowOnlyProperties.properties.maxSteps));
-    assert.ok(hasPlaceholder(schema.$defs.promptStep.allOf[1].properties.enabled));
+    assert.ok(
+      hasPlaceholder(schema.$defs.executionProperties.properties.harness)
+    );
+    assert.ok(
+      hasPlaceholder(schema.$defs.workflowOnlyProperties.properties.maxSteps)
+    );
+    assert.ok(
+      hasPlaceholder(schema.$defs.promptStep.allOf[1].properties.enabled)
+    );
     assert.ok(hasPlaceholder(schema.$defs.scriptStep.properties.enabled));
-    assert.ok(!hasPlaceholder(schema.$defs.executionProperties.properties.sandboxMode));
+    assert.ok(
+      !hasPlaceholder(schema.$defs.executionProperties.properties.sandboxMode)
+    );
     for (const [definition, names] of [
-      ["executionProperties", ["executionMode", "resumeSession", "priorContextDetail"]],
-      ["scriptProperties", ["compareSource", "timeoutSec", "operator", "ignoreCase"]],
+      [
+        "executionProperties",
+        ["executionMode", "resumeSession", "priorContextDetail"],
+      ],
+      [
+        "scriptProperties",
+        ["compareSource", "timeoutSec", "operator", "ignoreCase"],
+      ],
       ["scriptStep", ["onPass", "onFail"]],
       ["errorBehavior", ["onError", "maxRetries", "retryDelaySec"]],
       ["endCondition", ["maxRetries", "onPass", "onFail"]],
       ["preCondition", ["onPass", "onFail"]],
     ] as const) {
-      for (const name of names) assert.ok(hasPlaceholder(schema.$defs[definition].properties[name]), `${definition}.${name} lacks placeholder support`);
+      for (const name of names)
+        assert.ok(
+          hasPlaceholder(schema.$defs[definition].properties[name]),
+          `${definition}.${name} lacks placeholder support`
+        );
     }
   });
 

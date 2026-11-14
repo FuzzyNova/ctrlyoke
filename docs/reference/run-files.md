@@ -584,7 +584,7 @@ How the compare source is compared against `expected`. Default: 'eq' (whole-valu
 Accepted forms:
 
 - `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/workflows/variables#where-substituted.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ## Token totals {#token-totals}
 
