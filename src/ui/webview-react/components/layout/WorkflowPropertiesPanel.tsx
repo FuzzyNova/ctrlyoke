@@ -120,6 +120,7 @@ import {
   toSelectOptions,
 } from "../../../../types/SchemaUiMetadata";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
+import { holdsValueFieldPlaceholder } from "../../utils/wholeValueVariables";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import {
   clearedWorkflowPropertyKeys,
@@ -677,6 +678,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
       const globalValue =
         globalSettings[property as keyof typeof globalSettings];
       if (workflowValue === undefined) return false;
+      // A `{{name}}` in a typed field resolves per run and the settings
+      // schema rejects it, so it is never offered as a default.
+      if (holdsValueFieldPlaceholder(property, workflowValue)) return false;
       if (property === PROMPT_PROPERTIES.WORKTREE) {
         const normalize = (value: WorktreeConfig | undefined) => {
           const config = toWorktreeObjectConfig(value);

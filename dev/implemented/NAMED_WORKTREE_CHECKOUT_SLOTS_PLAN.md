@@ -307,7 +307,7 @@ that block. The authored or default `worktree` is consulted only to detect that
 it was turned off (`false`), which keeps today's
 `abandonActiveWorktree` path. This also keeps continue correct once `branch`
 accepts `{{vars}}` (see
-[FULL_VAR_SUBSTITUTION_SUPPORT.md](../backlog/FULL_VAR_SUBSTITUTION_SUPPORT.md)):
+[FULL_VAR_SUBSTITUTION_SUPPORT.md](FULL_VAR_SUBSTITUTION_SUPPORT.md)):
 the recorded, already-substituted branch is reused rather than substituted
 again with different values.
 
@@ -502,7 +502,7 @@ behind?: number }` to `WorktreeManagementEntry` (both the
 - **`{{vars}}` in `branch` and `checkout`.** Resolved: yes. Variable
   substitution is extended to (nearly) every workflow field in a separate
   change,
-  [FULL_VAR_SUBSTITUTION_SUPPORT.md](../backlog/FULL_VAR_SUBSTITUTION_SUPPORT.md),
+  [FULL_VAR_SUBSTITUTION_SUPPORT.md](FULL_VAR_SUBSTITUTION_SUPPORT.md),
   which covers `worktree.branch`, `worktree.base` and `worktree.checkout`. A
   reusable "bug-fix slot" workflow then writes `branch: "{{branch}}"` and runs
   with `--var branch=fix-race-condition`. This plan does not depend on it and

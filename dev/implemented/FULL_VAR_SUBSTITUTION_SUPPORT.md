@@ -5,13 +5,13 @@ the slots plan's `worktree.checkout` field shipped as `directory`, and this plan
 now uses that name.
 **Priority:** P2
 **Related:**
-[NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md](../implemented/NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md)
+[NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md](NAMED_WORKTREE_CHECKOUT_SLOTS_PLAN.md)
 (wants `{{branch}}` in `worktree.branch`),
-[TEMPLATE_AUTHORING_MODE_PLAN.md](TEMPLATE_AUTHORING_MODE_PLAN.md) (`emitAs:
+[TEMPLATE_AUTHORING_MODE_PLAN.md](../backlog/TEMPLATE_AUTHORING_MODE_PLAN.md) (`emitAs:
 var` needs the substituted field set from one source),
-[COMPUTED_VARIABLES_PLAN.md](COMPUTED_VARIABLES_PLAN.md) (where values come
+[COMPUTED_VARIABLES_PLAN.md](../backlog/COMPUTED_VARIABLES_PLAN.md) (where values come
 from; this plan is only about where they go),
-[SCRIPT_GENERATED_STEPS_PLAN.md](SCRIPT_GENERATED_STEPS_PLAN.md) (`{{item}}`
+[SCRIPT_GENERATED_STEPS_PLAN.md](../backlog/SCRIPT_GENERATED_STEPS_PLAN.md) (`{{item}}`
 filled at generation time).
 
 ## Progress
@@ -55,9 +55,8 @@ Each step ticks its own item, notes any deviation under it, and commits.
       Note: MCP supplied env keys are recorded on the attached condition so literal provenance survives run-file persistence and resume.
 - [x] 3. Gaps 5–6: CLI help, schema descriptions and docs table driven by the
       policy table; Dry Run shows worktree setup.
-      Note: `substituteWorkflowView` exists in this checkout; it remains only
-      partially table-driven, with schema-derived validation and full shared
-      definition coverage still outstanding.
+      Note: the help, descriptions and docs read the same table that drives
+      the walker (see item 1).
 - [x] 4. Run-start phase in startup/continue; `worktree.branch`/`base`/
       `directory` substituted; workspace-trust predicate; worktrees docs.
       Note: run-start is single-sourced in `RunStartView`
@@ -124,9 +123,10 @@ Each step ticks its own item, notes any deviation under it, and commits.
       extension's required `field` option name the entry;
       `CodeMirrorEditor` takes `variableField` (the retry-prompt editors pass
       theirs) and `WorkflowPromptDiagnostics` maps each span to its entry.
-      Deviations: the Set-as-default buttons are not hidden for a placeholder
-      value, so promoting one writes it into settings, whose schema does not
-      accept it for `maxSteps`/`executionMode`/`resumeSession`. No dashboard
+      The Set-as-default buttons are hidden while a workflow property holds a
+      placeholder in one of its `kind: value` fields
+      (`holdsValueFieldPlaceholder`, read from the table), because the
+      settings schema does not accept one there. Deviation: no dashboard
       or VS Code editor yet lints non-prompt fields as text (the dashboard
       edits them with plain inputs, and the workflow schema already rejects a
       partial placeholder in a `value` field); the shared rules accept any

@@ -2,6 +2,14 @@ import {
   isVariableDefined,
   wholeValueVariableName,
 } from "@root/utils/VariablePlaceholders";
+import {
+  VAR_SUBSTITUTION_KINDS,
+  VAR_SUBSTITUTION_PATH_EACH_ITEM,
+  VAR_SUBSTITUTION_PATH_EACH_KEY,
+  VAR_SUBSTITUTION_POLICY,
+  VAR_SUBSTITUTION_VIEWS,
+  type VarSubstitutionPolicyEntry,
+} from "@root/utils/VarSubstitutionPolicy";
 
 /** A workflow's `vars` map. */
 export type WorkflowVariables = Readonly<Record<string, string>>;
@@ -30,6 +38,56 @@ export function resolveWorkflowVariable(
   return name !== undefined && isVariableDefined(vars, name)
     ? vars[name]
     : undefined;
+}
+
+/** Workflow-level views whose paths start at a workflow property. */
+const WORKFLOW_PROPERTY_VIEWS: ReadonlySet<string> = new Set([
+  VAR_SUBSTITUTION_VIEWS.WORKFLOW,
+  VAR_SUBSTITUTION_VIEWS.RESOLVED_PROPERTIES,
+]);
+
+function pathHoldsPlaceholder(
+  value: unknown,
+  path: readonly string[]
+): boolean {
+  if (path.length === 0) return isWorkflowVariablePlaceholder(value);
+  const [segment, ...rest] = path;
+  if (segment === VAR_SUBSTITUTION_PATH_EACH_ITEM) {
+    return (
+      Array.isArray(value) &&
+      value.some((item) => pathHoldsPlaceholder(item, rest))
+    );
+  }
+  if (value === null || typeof value !== "object") return false;
+  if (segment === VAR_SUBSTITUTION_PATH_EACH_KEY) {
+    return Object.values(value).some((item) =>
+      pathHoldsPlaceholder(item, rest)
+    );
+  }
+  return (
+    Object.prototype.hasOwnProperty.call(value, segment) &&
+    pathHoldsPlaceholder((value as Record<string, unknown>)[segment], rest)
+  );
+}
+
+/**
+ * Whether a workflow-level property value holds a whole-value placeholder in
+ * one of its `kind: value` fields. The settings schema types those fields
+ * without `varPlaceholder`, so such a value cannot be promoted to a default.
+ */
+export function holdsValueFieldPlaceholder(
+  property: string,
+  value: unknown
+): boolean {
+  return (
+    Object.values(VAR_SUBSTITUTION_POLICY) as VarSubstitutionPolicyEntry[]
+  ).some(
+    (entry) =>
+      entry.kind === VAR_SUBSTITUTION_KINDS.VALUE &&
+      WORKFLOW_PROPERTY_VIEWS.has(entry.view) &&
+      entry.path[0] === property &&
+      pathHoldsPlaceholder(value, entry.path.slice(1))
+  );
 }
 
 /**
