@@ -104,7 +104,11 @@ import {
   buildWorkflowTimeLimitStopReason,
 } from "../utils/GuardrailStopMessages";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
-import { VarSubstitutor } from "../utils/VarSubstitutor";
+import {
+  VarSubstitutionValidationError,
+  VarSubstitutor,
+} from "../utils/VarSubstitutor";
+import { VAR_SUBSTITUTION_PHASES } from "../utils/VarSubstitutionPolicy";
 import { RunStartView } from "../utils/RunStartView";
 import {
   findSecretInterpolationsInPrompt,
@@ -515,6 +519,28 @@ function getErrorBehaviorDecision(
   // Name the configured action itself ("stopWorkflow", "continue"), never an
   // internal outcome such as "stop".
   return { canRetry, action, actionText: action };
+}
+
+/** Phase label for a dispatch-phase variable substitution failure. */
+const VAR_SUBSTITUTION_PHASE_LABEL = "Variable substitution";
+
+/**
+ * A dispatch substitution failure as an errored evaluation, so it takes the
+ * same `errorBehavior` route as a condition script that could not run.
+ */
+function varSubstitutionEvaluationResult(
+  error: VarSubstitutionValidationError
+): EvaluationResult {
+  return {
+    passed: false,
+    actual: "",
+    errored: true,
+    stdout: "",
+    stderr: "",
+    result: "",
+    error: error.message,
+    duration: 0,
+  };
 }
 
 function getAttemptStartReason(
@@ -2295,12 +2321,9 @@ export class WorkflowExecutor {
     };
     const viewIndex =
       target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1;
-    step = VarSubstitutor.substituteStepView(
-      runStartView.resolveStep(step, viewIndex),
-      variables,
-      "dispatch",
-      viewIndex
-    );
+    // Run-start fields only: dispatch fields are substituted per attempt
+    // below, where a failure takes the step's errorBehavior route.
+    const authoredStep = runStartView.resolveStep(step, viewIndex);
     const state = this.promptQueue.getState();
     const runtime = this.getRuntime();
     const currentStatus = runtime.status;
@@ -2318,9 +2341,9 @@ export class WorkflowExecutor {
 
     const progress = this.promptQueue.getProgress();
 
-    if (!isStepEnabled(step)) {
+    if (!isStepEnabled(authoredStep)) {
       return this.handleSkippedStep(
-        step,
+        this.substituteStepLabel(authoredStep, variables, viewIndex),
         target,
         context,
         "Skipped because enabled=false",
@@ -2329,13 +2352,11 @@ export class WorkflowExecutor {
     }
 
     // Route script steps directly — no AI harness interaction needed
-    if (isScriptStep(step)) {
-      const stepIndex =
-        target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1;
-      return this.executeScriptStep(step, stepIndex, context, target);
+    if (isScriptStep(authoredStep)) {
+      return this.executeScriptStep(authoredStep, viewIndex, context, target);
     }
 
-    let prompt: PromptStep = step as PromptStep;
+    let prompt: PromptStep = authoredStep as PromptStep;
 
     // The attempt loop intentionally encloses the entire step contract:
     // pre-condition -> prompt -> end-condition. A whole-step retry therefore
@@ -2344,6 +2365,29 @@ export class WorkflowExecutor {
     let preConditionErrorRetryCount = 0;
     const promptErrorRetryCounter = { count: 0 };
     let endConditionErrorRetryCount = 0;
+    let substitutionErrorRetryCount = 0;
+    // Routes a substitution failure of the current attempt; `undefined`
+    // means a retry was scheduled and the loop goes on.
+    const failSubstitution = async (
+      error: unknown
+    ): Promise<boolean | undefined> => {
+      const disposition = await this.routeVarSubstitutionFailure(
+        error,
+        context,
+        target,
+        authoredStep,
+        variables,
+        attemptIndex,
+        substitutionErrorRetryCount
+      );
+      if (disposition.outcome !== CONDITION_ACTIONS.RETRY) {
+        return disposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE;
+      }
+      attemptIndex = disposition.nextAttemptIndex ?? attemptIndex + 1;
+      substitutionErrorRetryCount =
+        disposition.nextErrorRetryCount ?? substitutionErrorRetryCount + 1;
+      return undefined;
+    };
     // Set when an `onError: retryPhase` prompt failure re-sends the prompt:
     // the pre-condition already passed, so the next attempt skips it.
     let skipPreCondition = false;
@@ -2354,11 +2398,30 @@ export class WorkflowExecutor {
       runtime.beginAttempt(target, attemptIndex, Date.now());
       context.registerActiveTarget?.(target, attemptIndex);
 
-      // Evaluate pre-condition gate before running the AI prompt.
+      // Substitute every dispatch field before any side effect of this
+      // attempt (pre-condition, hooks, harness launch).
       const preVars = variables;
-      const preResolvedProperties =
-        preflightMember?.resolvedProperties ??
-        this.resolveDispatchProperties(prompt, context, preVars);
+      let preResolvedProperties: ResolvedProperties;
+      try {
+        if (preflightMember?.varSubstitutionError) {
+          throw preflightMember.varSubstitutionError;
+        }
+        prompt = VarSubstitutor.substituteStepView(
+          authoredStep as PromptStep,
+          variables,
+          VAR_SUBSTITUTION_PHASES.DISPATCH,
+          viewIndex
+        );
+        preResolvedProperties =
+          preflightMember?.resolvedProperties ??
+          this.resolveDispatchProperties(prompt, context, preVars);
+      } catch (error) {
+        const shouldContinue = await failSubstitution(error);
+        if (shouldContinue === undefined) continue;
+        return shouldContinue;
+      }
+
+      // Evaluate pre-condition gate before running the AI prompt.
       const resolvedPreCondition = preResolvedProperties.preCondition;
       this.reportUnresolvedVariables(
         [
@@ -2488,7 +2551,7 @@ export class WorkflowExecutor {
 
           if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
             runtime.completeAttempt(target, attemptIndex);
-            return this.handleSkippedStep(step, target, context);
+            return this.handleSkippedStep(prompt, target, context);
           }
           if (preAction === CONDITION_ACTIONS.STOP_WORKFLOW) {
             Log.info("[WorkflowExecutor] Pre-condition stopWorkflow triggered");
@@ -2507,9 +2570,17 @@ export class WorkflowExecutor {
 
       const workflowFile = this.getRunStartWorkflow(context);
       const vars = variables;
-      let resolvedProperties =
-        preflightMember?.resolvedProperties ??
-        this.resolveDispatchProperties(prompt, context, vars);
+      let resolvedProperties: ResolvedProperties;
+      try {
+        resolvedProperties =
+          preflightMember?.resolvedProperties ??
+          this.resolveDispatchProperties(prompt, context, vars);
+      } catch (error) {
+        // The live definition changed while the pre-condition ran.
+        const shouldContinue = await failSubstitution(error);
+        if (shouldContinue === undefined) continue;
+        return shouldContinue;
+      }
 
       // Substitute first, then resolve a standalone prompt-file reference into
       // a local copy. The queue and working file retain the authored path so
@@ -2950,14 +3021,15 @@ export class WorkflowExecutor {
    * user input. Output is simultaneously streamed to the CliOutput panel (ANSI
    * stripped) and sent as TERMINAL_OUTPUT to the embedded xterm terminal.
    *
-   * @param step      The ScriptStep to execute
+   * @param authoredStep The ScriptStep to execute, with run-start fields
+   *                  resolved; its dispatch fields are substituted here
    * @param stepIndex The queue step index (use -1 for finalStep)
    * @param context   Workflow execution context
    * @param target    Execution target for status machine tracking
    * @returns true to continue the workflow, false to stop
    */
   private async executeScriptStep(
-    step: ScriptStep,
+    authoredStep: ScriptStep,
     stepIndex: number,
     context: WorkflowExecutionContext,
     target: ExecutionTarget
@@ -2965,23 +3037,68 @@ export class WorkflowExecutor {
     const runtime = this.getRuntime();
     const scriptVars = this.getRunStartView(context).vars;
     const scriptWorkflow = this.getRunStartWorkflow(context);
-    const effectiveStep = VarSubstitutor.applyToScriptStep(step, scriptVars);
-    // A script step inherits only these two from the workflow; they walk the
-    // same resolved-properties entries as a prompt step's.
-    const inherited = VarSubstitutor.applyToResolvedProperties(
-      {
-        executionMode: SettingsPropertyResolver.resolveExecutionMode(
-          step,
-          scriptWorkflow,
-          { hostCanProvidePty: context.hostCanProvidePty }
+    const substituteForDispatch = () => {
+      const step = VarSubstitutor.substituteStepView(
+        authoredStep,
+        scriptVars,
+        VAR_SUBSTITUTION_PHASES.DISPATCH,
+        stepIndex
+      );
+      return {
+        step,
+        effectiveStep: VarSubstitutor.applyToScriptStep(step, scriptVars),
+        // A script step inherits only these two from the workflow; they walk
+        // the same resolved-properties entries as a prompt step's.
+        inherited: VarSubstitutor.applyToResolvedProperties(
+          {
+            executionMode: SettingsPropertyResolver.resolveExecutionMode(
+              step,
+              scriptWorkflow,
+              { hostCanProvidePty: context.hostCanProvidePty }
+            ),
+            errorBehavior:
+              step.errorBehavior === null
+                ? undefined
+                : (step.errorBehavior ??
+                  scriptWorkflow.errorBehavior ??
+                  undefined),
+          },
+          scriptVars
         ),
-        errorBehavior:
-          step.errorBehavior === null
-            ? undefined
-            : (step.errorBehavior ?? scriptWorkflow.errorBehavior ?? undefined),
-      },
-      scriptVars
-    );
+      };
+    };
+    // Begin each whole-step attempt before the script executes. An evaluator
+    // retry therefore re-runs the complete script step with the same budget.
+    let attemptIndex = 0;
+    let errorRetryCount = 0;
+    // Substitution comes first: a failure must not resolve secrets or spawn.
+    let substituted: ReturnType<typeof substituteForDispatch>;
+    while (true) {
+      try {
+        substituted = substituteForDispatch();
+        break;
+      } catch (error) {
+        if (!(error instanceof VarSubstitutionValidationError)) throw error;
+        if (context.abortSignal?.aborted) return false;
+        runtime.beginAttempt(target, attemptIndex, Date.now());
+        const disposition = await this.routeVarSubstitutionFailure(
+          error,
+          context,
+          target,
+          authoredStep,
+          scriptVars,
+          attemptIndex,
+          errorRetryCount
+        );
+        if (disposition.outcome !== CONDITION_ACTIONS.RETRY) {
+          return disposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE;
+        }
+        attemptIndex = disposition.nextAttemptIndex ?? attemptIndex + 1;
+        errorRetryCount =
+          disposition.nextErrorRetryCount ?? errorRetryCount + 1;
+      }
+    }
+    const { step, effectiveStep, inherited } = substituted;
     const stepLabel = step.name ?? effectiveStep.script.split(/\s+/)[0];
     const resolvedScriptHarness = SettingsPropertyResolver.resolveHarnessValue(
       undefined,
@@ -3027,10 +3144,6 @@ export class WorkflowExecutor {
       { secrets: secretNames }
     );
 
-    // Begin each whole-step attempt before the script executes. An evaluator
-    // retry therefore re-runs the complete script step with the same budget.
-    let attemptIndex = 0;
-    let errorRetryCount = 0;
     while (true) {
       if (context.abortSignal?.aborted) {
         return false;
@@ -4215,6 +4328,111 @@ export class WorkflowExecutor {
       );
     }
     return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP, actionText };
+  }
+
+  /**
+   * Route a dispatch-phase substitution failure for the attempt the caller
+   * has begun, through the same `errorBehavior` policy as a condition script
+   * that could not run. Nothing of the attempt has run yet. `continue` fails
+   * the step and moves on; any other error than
+   * {@link VarSubstitutionValidationError} is rethrown.
+   */
+  private async routeVarSubstitutionFailure(
+    error: unknown,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    authoredStep: WorkflowStep,
+    vars: Readonly<Record<string, string>>,
+    attemptIndex: number,
+    errorRetryCount: number
+  ): Promise<PhaseDisposition> {
+    if (!(error instanceof VarSubstitutionValidationError)) throw error;
+    Log.warn(`[WorkflowExecutor] ${error.message}`);
+    const signedStepIndex = this.getSignedStepIndex(target);
+    const disposition = await this.handleEvaluationError(
+      context,
+      target,
+      signedStepIndex,
+      VAR_SUBSTITUTION_PHASE_LABEL,
+      varSubstitutionEvaluationResult(error),
+      this.resolveSubstitutionFailureErrorBehavior(authoredStep, context, vars),
+      attemptIndex,
+      errorRetryCount,
+      false,
+      false
+    );
+    if (
+      disposition.outcome === CONDITION_ACTIONS.RETRY &&
+      (await this.checkExecutionTimeLimitBeforeRetry())
+    ) {
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
+    }
+    if (disposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE) {
+      await this.failStepForInternalError(
+        context,
+        target,
+        signedStepIndex,
+        attemptIndex,
+        `${VAR_SUBSTITUTION_PHASE_LABEL}: ${error.message}`
+      );
+    }
+    return disposition;
+  }
+
+  /**
+   * The `errorBehavior` a substitution failure routes through. Each level
+   * (step, workflow, settings default) is substituted on its own; a level
+   * that cannot be substituted, because the failing field is part of it,
+   * falls back to the next. An explicit `null` and the end of the chain mean
+   * the built-in default.
+   */
+  private resolveSubstitutionFailureErrorBehavior(
+    step: WorkflowStep,
+    context: WorkflowExecutionContext,
+    vars: Readonly<Record<string, string>>
+  ): ErrorBehavior | undefined {
+    const levels = [
+      step.errorBehavior,
+      this.getRunStartWorkflow(context).errorBehavior,
+      SettingsPropertyResolver.createContext({
+        hostCanProvidePty: context.hostCanProvidePty,
+      }).defaults.errorBehavior,
+    ];
+    for (const errorBehavior of levels) {
+      if (errorBehavior === null) return undefined;
+      if (errorBehavior === undefined) continue;
+      try {
+        return (
+          VarSubstitutor.applyToResolvedProperties({ errorBehavior }, vars)
+            .errorBehavior ?? undefined
+        );
+      } catch (error) {
+        if (!(error instanceof VarSubstitutionValidationError)) throw error;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * A step with its dispatch fields substituted when they resolve, for a
+   * label only (a disabled step's skip message); otherwise the step as given.
+   */
+  private substituteStepLabel(
+    step: WorkflowStep,
+    vars: Readonly<Record<string, string>>,
+    viewIndex: number
+  ): WorkflowStep {
+    try {
+      return VarSubstitutor.substituteStepView(
+        step,
+        vars,
+        VAR_SUBSTITUTION_PHASES.DISPATCH,
+        viewIndex
+      );
+    } catch (error) {
+      if (!(error instanceof VarSubstitutionValidationError)) throw error;
+      return step;
+    }
   }
 
   private async failStepForInternalError(

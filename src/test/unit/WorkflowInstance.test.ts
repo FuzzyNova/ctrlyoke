@@ -1646,6 +1646,71 @@ suite("WorkflowInstance runtime transitions", () => {
     }
   });
 
+  test("a continue whose run-start variable fails substitution fails before the lock or worktree", async () => {
+    // Continue re-resolves run-start fields from the run file's vars, which a
+    // continue with changed --var values has rewritten.
+    const platform = new MockPlatform();
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-resume-run-start-fail-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempDir
+      );
+      const steps: PromptStep[] = [
+        { prompt: "done" },
+        { prompt: "pending", harness: "{{h}}" as never },
+      ];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "resume-run-start-fail",
+        steps,
+        tempDir
+      );
+      instance.promptQueue.loadPrompts({ steps }, workingFilePath);
+
+      const runtime = instance.promptQueue.getRuntimeStateMachine();
+      await startQueueExecution(instance);
+      assert.strictEqual(runtime.pause(), true);
+      assert.strictEqual(runtime.confirmPaused(), true);
+      await instance.promptQueue.commitRuntimeTransition();
+      instance.promptQueue.getWorkflowFile().vars = { h: "not-a-harness" };
+
+      let started = false;
+      let lockCalls = 0;
+      let worktreeCalls = 0;
+      (instance as any).startWorkflowExecution = async () => {
+        started = true;
+      };
+      (instance as any).ensureRunnerLock = async () => {
+        lockCalls += 1;
+      };
+      (instance as any).prepareExecutionWorktree = async () => {
+        worktreeCalls += 1;
+      };
+
+      await instance.resume();
+
+      assert.strictEqual(started, false, "nothing may dispatch");
+      assert.strictEqual(lockCalls, 0, "the runner lock was not taken");
+      assert.strictEqual(worktreeCalls, 0, "no worktree was prepared");
+      assert.strictEqual(
+        instance.getQueueState().status,
+        EXECUTION_STATES.ERROR
+      );
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("drives execution-state updates and cancelled-step status from runtime transitions", async () => {
     const platform = new MockPlatform();
 

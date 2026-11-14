@@ -79,7 +79,6 @@ import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { RunStartView } from "../../utils/RunStartView";
-import { VarSubstitutionValidationError } from "../../utils/VarSubstitutor";
 import {
   VAR_SUBSTITUTION_KINDS,
   VAR_SUBSTITUTION_POLICY,
@@ -6186,17 +6185,17 @@ suite("WorkflowExecutor variable substitution of inherited fields", () => {
   });
 
   test("a workflow-level value placeholder with an invalid value fails before dispatch", async () => {
-    await assert.rejects(
-      runCapturingProperties({
-        executionMode: "{{mode}}" as never,
-        vars: { mode: "sideways" },
-        steps: [{ prompt: "one" }],
-      }),
-      (error: Error) =>
-        error instanceof RecordedTargetFailureError &&
-        error.cause instanceof VarSubstitutionValidationError &&
-        error.message ===
-          'executionMode: variable "mode" is "sideways", expected one of "interactive", "headless".'
+    const { queue, dispatched } = await runCapturingProperties({
+      executionMode: "{{mode}}" as never,
+      vars: { mode: "sideways" },
+      steps: [{ prompt: "one" }],
+    });
+    assert.deepStrictEqual(dispatched, []);
+    const result = queue.getState().results[0];
+    assert.strictEqual(result?.status, STEP_STATUS.FAILED);
+    assert.strictEqual(
+      result?.error,
+      'Variable substitution: executionMode: variable "mode" is "sideways", expected one of "interactive", "headless".'
     );
   });
 
@@ -6408,5 +6407,250 @@ suite("WorkflowExecutor run-start view", () => {
       queue.getState().steps[0]?._runtime?.harness,
       HARNESS_IDS.CODEX_CLI
     );
+  });
+});
+
+suite("WorkflowExecutor dispatch substitution failures", () => {
+  /** Counts every condition/script evaluation; each one would spawn a process. */
+  class CountingEvaluator extends EndConditionEvaluator {
+    calls = 0;
+
+    override async evaluateCondition(
+      _condition: ScriptProperties
+    ): Promise<EvaluationResult> {
+      this.calls += 1;
+      return makeEvaluationResult();
+    }
+  }
+
+  interface FailureRun {
+    readonly queue: PromptQueue;
+    readonly integration: MockHarnessIntegration;
+    readonly evaluator: CountingEvaluator;
+    readonly messages: Array<{ stepIndex: number; message: string }>;
+  }
+
+  async function run(
+    workflow: Parameters<PromptQueue["loadPrompts"]>[0]
+  ): Promise<FailureRun> {
+    const queue = new PromptQueue();
+    queue.loadPrompts(workflow);
+    const integration = new MockHarnessIntegration(undefined, false);
+    const context = makeContext(integration);
+    const messages: FailureRun["messages"] = [];
+    context.onStatusMessage = (stepIndex, message) =>
+      messages.push({ stepIndex, message });
+    const evaluator = new CountingEvaluator(new MockPlatform());
+    await makeExecutor(queue, evaluator).execute(integration, context);
+    return { queue, integration, evaluator, messages };
+  }
+
+  const TIMEOUT_FAILURE =
+    'steps[0].timeoutSec: variable "timeout" is "soon", expected';
+
+  test("a bad timeoutSec var with onError: continue fails the step without launching and moves on", async () => {
+    const { queue, integration, evaluator, messages } = await run({
+      vars: { timeout: "soon" },
+      steps: [
+        {
+          prompt: "one",
+          timeoutSec: "{{timeout}}",
+          errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+          preCondition: { script: "node -e 0" },
+          hooks: [{ event: "Stop", command: "node -e 0" }],
+        } as never,
+        { prompt: "two" },
+      ],
+    });
+
+    assert.deepStrictEqual(integration.sentPrompts, ["two"]);
+    assert.strictEqual(evaluator.calls, 0, "no pre-condition script ran");
+    const state = queue.getState();
+    assert.strictEqual(state.results[0]?.status, STEP_STATUS.FAILED);
+    assert.ok(
+      state.results[0]?.error?.startsWith(
+        `Variable substitution: ${TIMEOUT_FAILURE}`
+      ),
+      String(state.results[0]?.error)
+    );
+    assert.strictEqual(state.steps[0]?._runtime?.terminalFailure, false);
+    assert.strictEqual(state.results[1]?.status, STEP_STATUS.COMPLETED);
+    assert.strictEqual(state.status, EXECUTION_STATES.COMPLETED);
+    assert.ok(
+      messages.some(
+        ({ stepIndex, message }) =>
+          stepIndex === 0 &&
+          message.includes(TIMEOUT_FAILURE) &&
+          message.endsWith("→ continue")
+      ),
+      JSON.stringify(messages)
+    );
+  });
+
+  test("onError: retry retries up to maxRetries, then fails the workflow", async () => {
+    const { queue, integration, evaluator, messages } = await run({
+      vars: { timeout: "soon" },
+      steps: [
+        {
+          prompt: "one",
+          timeoutSec: "{{timeout}}",
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY, maxRetries: 2 },
+        } as never,
+        { prompt: "two" },
+      ],
+    });
+
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    assert.strictEqual(evaluator.calls, 0);
+    assert.deepStrictEqual(
+      messages
+        .filter(({ message }) => message.includes(TIMEOUT_FAILURE))
+        .map(({ message }) => message.slice(message.lastIndexOf("→ "))),
+      ["→ retry 1 of 2", "→ retry 2 of 2", "→ stopWorkflow"]
+    );
+    const state = queue.getState();
+    assert.strictEqual(state.results[0]?.status, STEP_STATUS.FAILED);
+    assert.strictEqual(state.results[1]?.status, STEP_STATUS.PENDING);
+    assert.notStrictEqual(state.status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("a bad errorBehavior.maxRetries var falls back to the workflow-level policy", async () => {
+    const { queue, integration, messages } = await run({
+      vars: { n: "many" },
+      errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+      steps: [
+        {
+          prompt: "one",
+          errorBehavior: {
+            onError: CONDITION_ACTIONS.RETRY,
+            maxRetries: "{{n}}" as never,
+          },
+        },
+        { prompt: "two" },
+      ],
+    });
+
+    assert.deepStrictEqual(integration.sentPrompts, ["two"]);
+    const failure = messages.filter(({ message }) =>
+      message.includes(
+        'steps[0].errorBehavior.maxRetries: variable "n" is "many"'
+      )
+    );
+    assert.strictEqual(failure.length, 1, JSON.stringify(messages));
+    assert.ok(failure[0]!.message.endsWith("→ continue"));
+    assert.strictEqual(queue.getState().results[0]?.status, STEP_STATUS.FAILED);
+    assert.strictEqual(
+      queue.getState().results[1]?.status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
+  test("an errorBehavior that cannot be resolved at any level uses the built-in stop", async () => {
+    const { queue, integration, messages } = await run({
+      vars: { n: "many" },
+      errorBehavior: {
+        onError: CONDITION_ACTIONS.CONTINUE,
+        maxRetries: "{{n}}" as never,
+      },
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+    });
+
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    assert.ok(
+      messages.some(({ message }) => message.endsWith("→ stopWorkflow")),
+      JSON.stringify(messages)
+    );
+    assert.strictEqual(queue.getState().results[0]?.status, STEP_STATUS.FAILED);
+    assert.strictEqual(
+      queue.getState().results[1]?.status,
+      STEP_STATUS.PENDING
+    );
+  });
+
+  test("a script step with a bad onPass var never spawns its script", async () => {
+    const { queue, evaluator, integration, messages } = await run({
+      vars: { pass: "sideways" },
+      steps: [
+        {
+          type: "script",
+          script: "node -e 0",
+          onPass: "{{pass}}",
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY, maxRetries: 1 },
+        } as never,
+        { prompt: "two" },
+      ],
+    });
+
+    assert.strictEqual(evaluator.calls, 0, "the script never ran");
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    const failures = messages.filter(({ message }) =>
+      message.includes('steps[0].onPass: variable "pass" is "sideways"')
+    );
+    assert.deepStrictEqual(
+      failures.map(({ message }) => message.slice(message.lastIndexOf("→ "))),
+      ["→ retry 1 of 1", "→ stopWorkflow"]
+    );
+    assert.strictEqual(queue.getState().results[0]?.status, STEP_STATUS.FAILED);
+  });
+
+  test("a bad finalStep var fails the final step without launching", async () => {
+    const { queue, integration } = await run({
+      vars: { mode: "sideways" },
+      steps: [{ prompt: "one" }],
+      finalStep: { prompt: "final", executionMode: "{{mode}}" as never },
+    });
+
+    assert.deepStrictEqual(integration.sentPrompts, ["one"]);
+    assert.strictEqual(queue.getFinalStepRuntime()?.status, STEP_STATUS.FAILED);
+    assert.ok(
+      queue
+        .getFinalStepRuntime()
+        ?.failureMessage?.includes(
+          'finalStep.executionMode: variable "mode" is "sideways"'
+        ),
+      String(queue.getFinalStepRuntime()?.failureMessage)
+    );
+  });
+
+  test("a parallel member's bad var fails that member alone under its errorBehavior", async () => {
+    const queue = new PromptQueue();
+    const failing = new MockHarnessIntegration(undefined, false);
+    const sibling = new MockHarnessIntegration(undefined, false);
+    queue.loadPrompts({
+      vars: { mode: "sideways" },
+      steps: [
+        {
+          prompt: "bad-member",
+          executionMode: "{{mode}}" as never,
+          errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+        },
+        { prompt: "sibling" },
+      ],
+      parallelGroups: [
+        { id: "group", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+    const context = makeParallelContext(
+      new Map([
+        [0, failing],
+        [1, sibling],
+      ])
+    );
+    await makeExecutor(queue).execute(failing, context);
+
+    assert.deepStrictEqual(failing.sentPrompts, []);
+    assert.deepStrictEqual(sibling.sentPrompts, ["sibling"]);
+    const state = queue.getState();
+    assert.deepStrictEqual(
+      state.results.map((result) => result.status),
+      [STEP_STATUS.FAILED, STEP_STATUS.COMPLETED]
+    );
+    assert.ok(
+      state.results[0]?.error?.includes(
+        'steps[0].executionMode: variable "mode" is "sideways"'
+      ),
+      String(state.results[0]?.error)
+    );
+    assert.strictEqual(state.status, EXECUTION_STATES.COMPLETED);
   });
 });

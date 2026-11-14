@@ -688,6 +688,71 @@ suite("WorkflowStartupPipeline", () => {
     });
   });
 
+  suite(
+    "a run-start variable that fails substitution fails the start before any side effect",
+    () => {
+      const CASES: ReadonlyArray<{
+        readonly field: string;
+        readonly workflow: PromptFile;
+        readonly message: RegExp;
+      }> = [
+        {
+          field: "steps[].harness",
+          workflow: {
+            vars: { h: "not-a-harness" },
+            steps: [{ prompt: "one", harness: "{{h}}" as never }],
+          },
+          message: /steps\[0\]\.harness: variable "h" is "not-a-harness"/,
+        },
+        {
+          field: "steps[].enabled",
+          workflow: {
+            vars: { on: "maybe" },
+            steps: [{ prompt: "one", enabled: "{{on}}" as never }],
+          },
+          message: /steps\[0\]\.enabled: variable "on" is "maybe"/,
+        },
+        {
+          field: "maxSteps",
+          workflow: {
+            vars: { max: "lots" },
+            maxSteps: "{{max}}" as never,
+            steps: [{ prompt: "one" }],
+          },
+          message: /maxSteps: variable "max" is "lots"/,
+        },
+        {
+          field: "worktree.branch",
+          workflow: {
+            worktree: { mode: WORKTREE_MODES.NAMED, branch: "{{branch}}" },
+            steps: [{ prompt: "one" }],
+          },
+          message:
+            /worktree\.branch: variable "branch" in "\{\{branch\}\}" is not defined/,
+        },
+      ];
+
+      for (const { field, workflow, message } of CASES) {
+        test(field, async () => {
+          const { pipeline, port } = createPipeline();
+          (port.queue as PromptQueue).loadPrompts(workflow);
+          port.execution.currentPrompt = {
+            filePath: "workflow.prompt.md",
+            promptFile: workflow,
+          };
+          await pipeline.execute();
+
+          assert.strictEqual(port.failed, true);
+          assert.match(port.status.reports.at(-1)?.message ?? "", message);
+          assert.strictEqual(port.approveCalls, 0, "secrets were not approved");
+          assert.strictEqual(port.worktree.ensureCalls, 0, "no runner lock");
+          assert.strictEqual(port.execution.preparedWorktree, "");
+          assert.strictEqual(port.execution.started, false);
+        });
+      }
+    }
+  );
+
   test("fails and reports the in-flight step for a startup failure", async () => {
     const { pipeline, port } = createPipeline();
     const state = (port.queue as any).state as QueueState;

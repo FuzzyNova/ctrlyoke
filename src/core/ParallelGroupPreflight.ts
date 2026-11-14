@@ -27,7 +27,11 @@ import {
 } from "../types/ExecutionPropertyResolver";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { SessionResolver } from "../utils/SessionResolver";
-import { VarSubstitutor } from "../utils/VarSubstitutor";
+import {
+  VarSubstitutionValidationError,
+  VarSubstitutor,
+} from "../utils/VarSubstitutor";
+import { VAR_SUBSTITUTION_PHASES } from "../utils/VarSubstitutionPolicy";
 import { RunStartView } from "../utils/RunStartView";
 import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
 import {
@@ -59,6 +63,12 @@ export interface ParallelGroupPreflightMember {
   readonly autoResumeSharedWith?: number;
   /** Internal reservation used to verify integration isolation. */
   readonly integrationReservation?: unknown;
+  /**
+   * A dispatch field of this member failed substitution. The member holds no
+   * session or integration reservation; the executor fails it under its own
+   * `errorBehavior` before any side effect, as it would a sequential step.
+   */
+  readonly varSubstitutionError?: VarSubstitutionValidationError;
 }
 
 export interface ParallelGroupMemberPreflightResult {
@@ -178,22 +188,49 @@ export async function preflightParallelGroupMember(
   const variables = runStartView.vars;
   const issues: ParallelGroupPreflightIssue[] = [];
 
-  const step = VarSubstitutor.substituteStepView(
-    runStartView.resolveStep(options.step, options.stepIndex),
-    variables,
-    "dispatch",
+  const authoredStep = runStartView.resolveStep(
+    options.step,
     options.stepIndex
   );
+  const resolveTarget = (from: WorkflowStep) =>
+    resolveExecutionProperties(
+      promptProjection(from),
+      runStartView.applyToWorkflow(workflow),
+      { defaults: options.defaults, hostCanProvidePty }
+    );
+  let step: WorkflowStep;
+  let resolvedTarget: ResolvedExecutionTarget;
+  let resolvedProperties: ResolvedProperties;
+  try {
+    step = VarSubstitutor.substituteStepView(
+      authoredStep,
+      variables,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
+      options.stepIndex
+    );
+    resolvedTarget = resolveTarget(step);
+    resolvedProperties = VarSubstitutor.applyToResolvedProperties(
+      resolvedTarget.properties,
+      variables
+    );
+  } catch (error) {
+    if (!(error instanceof VarSubstitutionValidationError)) throw error;
+    // Not a group conflict: the member fails alone, under its errorBehavior.
+    const unresolvedTarget = resolveTarget(authoredStep);
+    return {
+      member: {
+        stepIndex: options.stepIndex,
+        step: authoredStep,
+        resolvedTarget: unresolvedTarget,
+        resolvedProperties: unresolvedTarget.properties,
+        variables,
+        varSubstitutionError: error,
+      },
+      issues: [],
+      failureMessage: "",
+    };
+  }
   const prompt = promptProjection(step);
-  const resolvedTarget = resolveExecutionProperties(
-    prompt,
-    runStartView.applyToWorkflow(workflow),
-    { defaults: options.defaults, hostCanProvidePty }
-  );
-  let resolvedProperties = VarSubstitutor.applyToResolvedProperties(
-    resolvedTarget.properties,
-    variables
-  );
   const effectivePromptText = isScriptStep(step)
     ? undefined
     : await resolvePromptTextWithVariables(
@@ -300,6 +337,7 @@ export async function preflightParallelGroupMember(
 
   const interactiveOwners = reservedMembers.filter(
     (reserved) =>
+      reserved.varSubstitutionError === undefined &&
       reserved.resolvedProperties.executionMode === EXECUTION_MODES.INTERACTIVE
   );
   if (

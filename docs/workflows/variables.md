@@ -75,9 +75,33 @@ steps:
 A `value` field must contain one whole-value placeholder; ctrlyoke coerces its string to the field type and validates it against the workflow schema before the run-start side effects or step dispatch. Invalid dispatch values fail before the step starts an external process. Dispatch text fields resolve for each attempt. `expected` is substituted only
 when authored as text; numeric values stay numeric. `sessionId` is substituted
 only in its string form; numeric step references stay numeric. `priorContext.run`
-must resolve to a run number or stable run reference. Unresolved placeholders
-fail before the step starts an external process. Execution labels use the
+must resolve to a run number or stable run reference. Execution labels use the
 resolved name; the saved definition keeps its authored placeholder.
+
+### When a substituted value is invalid {#substitution-failures}
+
+A `value` field whose variable does not fit the field's type, or a
+placeholder that names no variable in a field that requires one, is a
+substitution failure. The message names the field, the variable and its
+value, for example
+`steps[2].timeoutSec: variable "timeout" is "soon", expected a number greater than 0.`
+
+- **Run-start fields** fail the run start, or the continue, before anything
+  else happens: no secret approval, runner lock, worktree or step.
+- **Dispatch fields** fail the step before it does anything: no harness
+  launch, script, hook or pre-condition. The failure appears on the step and
+  in its output, and the step's effective `errorBehavior` decides what
+  happens next, as for any other step error: `retry` and `retryPhase` retry
+  the step up to `maxRetries` after `retryDelaySec`, `continue` marks the step
+  failed and moves on, and `stopWorkflow` stops the run. Retrying only helps
+  when the definition is edited meanwhile, because variables do not change
+  during a run.
+- If the failing field is part of `errorBehavior` itself, the next level is
+  used instead: the workflow's `errorBehavior`, then the settings default,
+  then the built-in default, which stops the run.
+- A parallel group member that fails substitution fails on its own, under its
+  own `errorBehavior`; the group's other members are not affected.
+- `ctrlyoke run --dry-run` reports the same failures and exits with code 2.
 
 ### Not substituted
 

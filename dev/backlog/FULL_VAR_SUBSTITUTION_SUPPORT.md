@@ -1,6 +1,6 @@
 # Full Variable Substitution Support
 
-**Status:** In progress (items 1–6 complete; items 7–8 partially implemented 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
+**Status:** In progress (items 1–7 complete; item 8 partially implemented 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
 the slots plan's `worktree.checkout` field shipped as `directory`, and this plan
 now uses that name.
 **Priority:** P2
@@ -79,13 +79,23 @@ Each step ticks its own item, notes any deviation under it, and commits.
       policy routing and execution-layer validation coverage remain incomplete.
 - [x] 6. Schema `varPlaceholder`, coercion and post-substitution validation;
       run-start `value` fields (`harness`, `enabled`, `maxSteps`).
-- [ ] 7. Dispatch `value` fields, errorBehavior fallback, CLI `--dry-run`
+- [x] 7. Dispatch `value` fields, errorBehavior fallback, CLI `--dry-run`
       exit 2 and unused-`--var` warning.
-      Partial: schema support, policy entries, dispatch coercion/validation,
-      dry-run exit 2 and unused-variable warning are implemented and verified.
-      Deviation: validation failures still take the executor's generic failed
-      step path; inherited errorBehavior fallback/retry routing and its runtime
-      test remain to be completed.
+      Note: a dispatch `VarSubstitutionValidationError` is routed by
+      `WorkflowExecutor.routeVarSubstitutionFailure` through the existing
+      `handleEvaluationError` policy (a synthetic errored evaluation), so
+      retry/`retryPhase`/continue/stop, `maxRetries` and `retryDelaySec` behave
+      as for a condition script that could not run; `continue` fails the step
+      and moves on. A prompt step substitutes its step view and resolved
+      properties at the top of each attempt, before the pre-condition; a
+      script step substitutes before secret resolution. The policy comes from
+      `resolveSubstitutionFailureErrorBehavior`: step, then workflow, then
+      settings default, each substituted on its own, then the built-in stop.
+      Parallel preflight records the error on the member
+      (`varSubstitutionError`, no reservations) instead of failing the group.
+      Run-start failures already threw before any side effect; startup and
+      continue now have tests for each run-start field. Deviation: the spec's
+      `onError: skip` does not exist; the tests use `continue`.
 - [ ] 8. Dashboard and editor: dropdown warnings, placeholder chips,
       CodeMirror/diagnostics from the policy table, Dry Run substituted values
       and blockers.
