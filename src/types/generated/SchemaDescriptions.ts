@@ -28,8 +28,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.",
   "_runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "_runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "_runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "_runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "_runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "_runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "_runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "_runtime.executionEndTime": "Wall-clock timestamp when workflow execution reached a terminal state",
   "_runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
@@ -198,8 +198,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "defaults.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.",
   "defaults.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "defaults.errorBehavior": "Default policy for internal errors in any step phase. `null` (the default) stops the workflow unless the workflow or step sets its own policy.",
-  "defaults.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "defaults.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "defaults.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "defaults.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "defaults.errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "defaults.executionMode": "Default execution mode for new workflows. 'interactive' spawns a live terminal (TUI) the user can steer; 'headless' runs in the background with output in the Output panel. Workflows and individual steps can override this.",
   "defaults.harness": "The default harness for workflows and steps that do not name one. Empty = auto-detect: the first installed harness in alphabetical order (antigravity-cli, claude-cli, codex-cli, copilot-cli, opencode-cli, qwen-cli).",
@@ -275,8 +275,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "execution": "Execution settings.",
   "execution.autoDeleteTempFiles": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging.",
@@ -314,8 +314,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.",
   "finalStep._runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "finalStep._runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "finalStep._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "finalStep._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "finalStep._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "finalStep._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "finalStep._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "finalStep._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "finalStep._runtime.failureKind": "Structured classification of the last harness/session failure for this prompt.",
@@ -395,8 +395,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "finalStep.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "finalStep.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "finalStep.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "finalStep.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "finalStep.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "finalStep.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "finalStep.errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "finalStep.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "finalStep.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
@@ -632,8 +632,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.",
   "steps[]._runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "steps[]._runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "steps[]._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "steps[]._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "steps[]._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "steps[]._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "steps[]._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "steps[]._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "steps[]._runtime.failureKind": "Structured classification of the last harness/session failure for this prompt.",
@@ -713,8 +713,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "steps[].env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "steps[].errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "steps[].errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "steps[].errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "steps[].errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "steps[].errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "steps[].errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "steps[].executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "steps[].expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
@@ -769,8 +769,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.",
   "steps[].parallel[]._runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "steps[].parallel[]._runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "steps[].parallel[]._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "steps[].parallel[]._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "steps[].parallel[]._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "steps[].parallel[]._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "steps[].parallel[]._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "steps[].parallel[]._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "steps[].parallel[]._runtime.failureKind": "Structured classification of the last harness/session failure for this prompt.",
@@ -850,8 +850,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[].endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "steps[].parallel[].env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "steps[].parallel[].errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-  "steps[].parallel[].errorBehavior.maxRetries": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed.",
-  "steps[].parallel[].errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
+  "steps[].parallel[].errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed.",
+  "steps[].parallel[].errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count.",
   "steps[].parallel[].errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "steps[].parallel[].executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "steps[].parallel[].expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
@@ -1063,6 +1063,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "_runtime.errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "_runtime.executionMode": [
@@ -1411,6 +1412,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "defaults.errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "defaults.executionMode": [
@@ -1530,6 +1532,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "execution.contextResolutionFailure": [
@@ -1584,6 +1587,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "finalStep._runtime.errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "finalStep._runtime.executionMode": [
@@ -1721,6 +1725,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "finalStep.errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "finalStep.executionMode": [
@@ -2142,6 +2147,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "steps[]._runtime.errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "steps[]._runtime.executionMode": [
@@ -2279,6 +2285,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "steps[].errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "steps[].executionMode": [
@@ -2368,6 +2375,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "steps[].parallel[]._runtime.errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "steps[].parallel[]._runtime.executionMode": [
@@ -2505,6 +2513,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "steps[].parallel[].errorBehavior.onError": [
     "stopWorkflow",
     "retry",
+    "retryPhase",
     "continue"
   ],
   "steps[].parallel[].executionMode": [

@@ -7,6 +7,8 @@ import {
   SANDBOX_MODE_LABELS,
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
+  ERROR_BEHAVIOR_ACTIONS,
+  type ErrorBehaviorAction,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EDITOR_FONT_SIZE_VSCODE,
   EXECUTION_MODES,
@@ -506,14 +508,39 @@ export const SCRIPT_STEP_CONDITION_ACTION_OPTIONS_META = {
     CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.STOP_WORKFLOW],
 };
 
-/** Shared labels for the subset accepted by errorBehavior.onError. */
-export const ERROR_BEHAVIOR_ACTION_OPTIONS_META = {
-  [CONDITION_ACTIONS.STOP_WORKFLOW]:
-    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.STOP_WORKFLOW],
-  [CONDITION_ACTIONS.RETRY]:
-    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.RETRY],
-  [CONDITION_ACTIONS.CONTINUE]:
-    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.CONTINUE],
+/**
+ * Labels for errorBehavior.onError. `retry` is labelled "Retry Step" here
+ * (not the shared "Retry") to distinguish it from `retryPhase`; the
+ * end-condition `onFail: retry` keeps its conversational "Retry" label.
+ */
+export const ERROR_BEHAVIOR_ACTION_OPTIONS_META: Record<
+  ErrorBehaviorAction,
+  SchemaOptionMeta<ErrorBehaviorAction>
+> = {
+  [ERROR_BEHAVIOR_ACTIONS.STOP_WORKFLOW]: {
+    value: ERROR_BEHAVIOR_ACTIONS.STOP_WORKFLOW,
+    label: CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.STOP_WORKFLOW].label,
+  },
+  [ERROR_BEHAVIOR_ACTIONS.RETRY]: {
+    value: ERROR_BEHAVIOR_ACTIONS.RETRY,
+    label: "Retry Step",
+    alias: {
+      reason:
+        "errorBehavior's retry re-runs the whole step; the label sets it apart from retryPhase and from an end condition's conversational retry.",
+    },
+  },
+  [ERROR_BEHAVIOR_ACTIONS.RETRY_PHASE]: {
+    value: ERROR_BEHAVIOR_ACTIONS.RETRY_PHASE,
+    label: "Retry Failed Phase",
+    alias: {
+      reason:
+        "Names which phase is retried: only the one that errored, not the whole step.",
+    },
+  },
+  [ERROR_BEHAVIOR_ACTIONS.CONTINUE]: {
+    value: ERROR_BEHAVIOR_ACTIONS.CONTINUE,
+    label: CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.CONTINUE].label,
+  },
 };
 
 export const COMPARE_SOURCE_OPTIONS_META: Record<

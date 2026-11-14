@@ -26,7 +26,9 @@ describe("ErrorBehaviorEditor", () => {
 
     await user.click(screen.getAllByRole("button")[0]);
     await user.click(
-      screen.getAllByText("Retry")[0].closest("button") as HTMLButtonElement
+      screen
+        .getAllByText("Retry Step")[0]
+        .closest("button") as HTMLButtonElement
     );
 
     expect(onChange).toHaveBeenCalledWith({
@@ -56,7 +58,12 @@ describe("ErrorBehaviorEditor", () => {
     fireEvent.click(trigger);
     expect(
       screen.getByRole("button", {
-        name: "Retry, defaults.errorBehavior.onError: retry",
+        name: "Retry Step, defaults.errorBehavior.onError: retry",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Retry Failed Phase, defaults.errorBehavior.onError: retryPhase",
       })
     ).toBeInTheDocument();
     expect(
@@ -64,6 +71,53 @@ describe("ErrorBehaviorEditor", () => {
         name: "Continue, defaults.errorBehavior.onError: continue",
       })
     ).toBeInTheDocument();
+  });
+
+  it("keeps retryPhase and its retry controls when switching to it", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(
+      <ErrorBehaviorEditor
+        value={{ onError: "retry", maxRetries: 3, retryDelaySec: 2 }}
+        onChange={onChange}
+        idPrefix="test-error"
+      />
+    );
+
+    await user.click(screen.getAllByRole("button")[0]);
+    await user.click(
+      screen
+        .getAllByText("Retry Failed Phase")[0]
+        .closest("button") as HTMLButtonElement
+    );
+
+    expect(onChange).toHaveBeenCalledWith({
+      onError: "retryPhase",
+      maxRetries: 3,
+      retryDelaySec: 2,
+    });
+  });
+
+  it("commits retryPhase numeric values without reverting to retry", () => {
+    const onChange = vi.fn();
+
+    render(
+      <ErrorBehaviorEditor
+        value={{ onError: "retryPhase", maxRetries: 2 }}
+        onChange={onChange}
+        idPrefix="test-error"
+      />
+    );
+
+    const maxRetries = screen.getByLabelText("Max Retries");
+    fireEvent.change(maxRetries, { target: { value: "5" } });
+    fireEvent.blur(maxRetries);
+
+    expect(onChange).toHaveBeenCalledWith({
+      onError: "retryPhase",
+      maxRetries: 5,
+    });
   });
 
   it("commits retry numeric values on blur", () => {

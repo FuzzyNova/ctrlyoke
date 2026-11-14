@@ -18,7 +18,7 @@ fit around it.
 
 ```yaml
 errorBehavior:
-  onError: retry # stopWorkflow (default), retry or continue
+  onError: retry # stopWorkflow (default), retry, retryPhase or continue
   maxRetries: 2 # retries after the first attempt; default 1
   retryDelaySec: 30 # wait before each retry
 
@@ -31,15 +31,33 @@ steps:
     script: npm test
 ```
 
-| `onError`      | What happens                                                                                  |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `stopWorkflow` | The step is marked failed and the workflow stops. This is the default.                        |
-| `retry`        | The phase runs again, up to `maxRetries` times, waiting `retryDelaySec` first. Then it stops. |
-| `continue`     | The step is marked failed with a warning, and the workflow moves on to the next step.         |
+| `onError`      | Dashboard label    | What happens                                                                                                           |
+| -------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `stopWorkflow` | Stop Workflow      | The step is marked failed and the workflow stops. This is the default.                                                 |
+| `retry`        | Retry Step         | The whole step runs again from its pre-condition, in a fresh harness session, up to `maxRetries` times. Then it stops. |
+| `retryPhase`   | Retry Failed Phase | Only the phase that errored runs again, up to `maxRetries` times. Then it stops.                                       |
+| `continue`     | Continue           | The step is marked failed with a warning, and the workflow moves on to the next step.                                  |
 
-`maxRetries` and `retryDelaySec` only matter with `onError: retry`. Each retry
-is a new attempt of the same step, and the output pane shows a status line with the
-reason and the retry count, such as `Retrying attempt 1/2`.
+`maxRetries` and `retryDelaySec` only matter with `retry` and `retryPhase`.
+Each retry is a new attempt of the same step, waiting `retryDelaySec` first,
+and the output pane shows a status line with the reason and the retry count,
+such as `Retrying attempt 1/2`. Each phase keeps its own retry count.
+
+### `retry` or `retryPhase`
+
+The two differ only for a step that has more than one phase:
+
+| Phase that errored | `retry`                                                  | `retryPhase`                                                                   |
+| ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Pre-condition      | Runs the pre-condition again                             | Same as `retry`                                                                |
+| Prompt / harness   | Runs the pre-condition again, then sends the prompt      | Sends the prompt again in a fresh harness session, without the pre-condition   |
+| End condition      | Runs the pre-condition and the prompt again, then checks | Runs only the end condition again, against the files already there; no AI call |
+| Script step        | Runs the script again                                    | Same as `retry`                                                                |
+
+Use `retry` when the pre-condition prepares or checks something the prompt
+depends on and must hold again before another attempt. Use `retryPhase` when
+the earlier phases are expensive and only the part that broke should run again,
+such as an end condition whose test command occasionally can't start.
 
 ### What counts as an internal error
 
@@ -103,12 +121,12 @@ Behavior** in the settings.
 
 ## `errorBehavior` vs `onFail`
 
-|              | `errorBehavior`                             | `onFail`                                                           |
-| ------------ | ------------------------------------------- | ------------------------------------------------------------------ |
-| Reacts to    | A phase that couldn't run                   | A phase that ran and failed its check                              |
-| Set on       | Step, workflow, or `defaults.errorBehavior` | Each end condition, pre-condition and script step                  |
-| Retry means  | Run the same phase again, unchanged         | Send the model a retry prompt in the same session (end conditions) |
-| Retry budget | `errorBehavior.maxRetries`                  | The condition's own `maxRetries`                                   |
+|              | `errorBehavior`                                | `onFail`                                                           |
+| ------------ | ---------------------------------------------- | ------------------------------------------------------------------ |
+| Reacts to    | A phase that couldn't run                      | A phase that ran and failed its check                              |
+| Set on       | Step, workflow, or `defaults.errorBehavior`    | Each end condition, pre-condition and script step                  |
+| Retry means  | Run the step, or only the errored phase, again | Send the model a retry prompt in the same session (end conditions) |
+| Retry budget | `errorBehavior.maxRetries`                     | The condition's own `maxRetries`                                   |
 
 The two budgets are counted separately. An end condition whose script times out
 twice uses `errorBehavior` retries; the same end condition reporting failing
@@ -149,7 +167,9 @@ steps:
 - If `npm test` runs and fails, Claude gets the retry prompt with the test
   output, up to three times. After that the step fails and the workflow stops.
 - If `npm test` can't be started at all, that's an internal error, retried
-  under the workflow's `errorBehavior`.
+  under the workflow's `errorBehavior`. With `onError: retry` the whole step
+  runs again, including a new Claude session; `onError: retryPhase` would run
+  only `npm test` again.
 - If the changelog check exits non-zero, `onFail: continue` logs a warning and
   the run completes.
 

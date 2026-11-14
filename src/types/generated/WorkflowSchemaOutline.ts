@@ -893,13 +893,14 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "enum": [
           "stopWorkflow",
           "retry",
+          "retryPhase",
           "continue"
         ],
-        "description": "What to do when a step phase cannot run or otherwise encounters an internal error."
+        "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count."
       },
       "maxRetries": {
         "valueKind": "number",
-        "description": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed."
+        "description": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed."
       },
       "retryDelaySec": {
         "valueKind": "number",

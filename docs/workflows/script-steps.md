@@ -180,7 +180,7 @@ a `reason`.
 A script that cannot be run at all — for example an unsupported file type or a
 spawn failure — is an internal error, not a failed validation. It is handled by
 the step's [`errorBehavior`](/reference/workflow-schema#execution-properties-errorbehavior)
-policy (`stopWorkflow`, `retry`, or `continue`) rather than by `onFail`.
+policy (`stopWorkflow`, `retry`, `retryPhase`, or `continue`) rather than by `onFail`.
 
 ## See also
 

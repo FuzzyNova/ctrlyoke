@@ -42,6 +42,7 @@ const FAILING_SCRIPT = "pre-fail.js";
 const ERROR_SCRIPT = "pre-error.txt";
 const RETRY_GATE_SCRIPT = "pre-retry.js";
 const SHARED_BUDGET_GATE_SCRIPT = "pre-shared-budget.js";
+const APPEND_GATE_SCRIPT = "pre-append.js";
 const WRITE_MARKER = `require('fs').writeFileSync(require('path').join(__dirname, '${MARKER_FILE}'), 'ran');`;
 const APPEND_MARKER = `const fs = require('fs'); const p = require('path').join(__dirname, '${MARKER_FILE}'); const before = fs.existsSync(p) ? fs.readFileSync(p, 'utf8').length : 0; fs.appendFileSync(p, 'x');`;
 
@@ -492,6 +493,61 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     assert.strictEqual(
       harness.instance.promptQueue.getState().status,
       EXECUTION_STATES.ERROR
+    );
+  });
+
+  test("onError retryPhase re-sends a failed prompt without re-running the passed gate", async () => {
+    await fs.writeFile(path.join(workspace, APPEND_GATE_SCRIPT), APPEND_MARKER);
+    harness = createExecutionHarness(workspace);
+    harness.integration.harnessErrorFailure = true;
+    let sends = 0;
+    harness.integration.onSend = async () => {
+      sends++;
+      if (sends === 1) {
+        (harness!.integration as any).lastFailureReason =
+          "mock harness failure";
+        return { success: false };
+      }
+      return { success: true, responseText: "ok" };
+    };
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: { script: APPEND_GATE_SCRIPT },
+        errorBehavior: { onError: "retryPhase", maxRetries: 1 },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(await markerLength(), 1);
+    assert.deepStrictEqual(harness.integration.sentPrompts, [
+      "step 1",
+      "step 1",
+    ]);
+    assert.strictEqual(
+      harness.instance.promptQueue.getState().status,
+      EXECUTION_STATES.COMPLETED
+    );
+  });
+
+  test("onError retryPhase re-runs an errored end-condition without another AI call", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        // Times out (errors) on its first run, passes on its second.
+        endCondition: {
+          script: RETRY_GATE_SCRIPT,
+          timeoutSec: GATE_TIMEOUT_MS / 1000,
+        },
+        errorBehavior: { onError: "retryPhase", maxRetries: 1 },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(await markerLength(), 2);
+    assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+    assert.strictEqual(
+      harness.instance.promptQueue.getState().status,
+      EXECUTION_STATES.COMPLETED
     );
   });
 

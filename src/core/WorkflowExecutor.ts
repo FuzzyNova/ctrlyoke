@@ -52,6 +52,8 @@ import {
   SCRIPT_SOURCE_LABELS,
   FAILURE_KINDS,
   DEFAULT_ERROR_BEHAVIOR_RETRIES,
+  ERROR_BEHAVIOR_ACTIONS,
+  isErrorBehaviorRetry,
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -472,9 +474,16 @@ function canRetryErrorBehavior(
   attemptIndex: number
 ): boolean {
   return (
-    errorBehavior.onError === CONDITION_ACTIONS.RETRY &&
+    isErrorBehaviorRetry(errorBehavior.onError) &&
     attemptIndex < (errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES)
   );
+}
+
+/** True when an errorBehavior policy retries only the phase that errored. */
+function isPhaseRetryPolicy(
+  errorBehavior: ErrorBehavior | null | undefined
+): boolean {
+  return errorBehavior?.onError === ERROR_BEHAVIOR_ACTIONS.RETRY_PHASE;
 }
 
 function getErrorBehaviorDecision(
@@ -487,7 +496,7 @@ function getErrorBehaviorDecision(
     return {
       canRetry,
       action: CONDITION_ACTIONS.RETRY,
-      actionText: `retry ${errorRetryCount + 1} of ${formatRetryDenominator(maxRetries)}`,
+      actionText: `${isPhaseRetryPolicy(errorBehavior) ? "retry phase" : "retry"} ${errorRetryCount + 1} of ${formatRetryDenominator(maxRetries)}`,
     };
   }
   const action =
@@ -2272,6 +2281,9 @@ export class WorkflowExecutor {
     let preConditionErrorRetryCount = 0;
     const promptErrorRetryCounter = { count: 0 };
     let endConditionErrorRetryCount = 0;
+    // Set when an `onError: retryPhase` prompt failure re-sends the prompt:
+    // the pre-condition already passed, so the next attempt skips it.
+    let skipPreCondition = false;
     while (true) {
       if (context.abortSignal?.aborted) {
         return false;
@@ -2331,7 +2343,10 @@ export class WorkflowExecutor {
         { secrets: resolvedPreSecretNames }
       );
 
+      const runPreCondition = !skipPreCondition;
+      skipPreCondition = false;
       if (
+        runPreCondition &&
         resolvedPreCondition !== null &&
         resolvedPreCondition !== undefined &&
         resolvedPreCondition.script?.trim()
@@ -2685,6 +2700,9 @@ export class WorkflowExecutor {
           promptErrorRetryCounter.count =
             failureDisposition.nextErrorRetryCount ??
             promptErrorRetryCounter.count + 1;
+          skipPreCondition = isPhaseRetryPolicy(
+            resolvedProperties.errorBehavior
+          );
           continue;
         }
 
@@ -2719,21 +2737,46 @@ export class WorkflowExecutor {
           : prompt;
 
       if (resolvedEndCondition) {
-        const endDisposition = await this.evaluateEndCondition(
-          promptForEval,
-          integration,
-          context,
-          target,
-          target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-          runIndex,
-          attemptIndex,
-          duration,
-          promptErrorRetryCounter,
-          endConditionErrorRetryCount,
-          vars && Object.keys(vars).length > 0 ? vars : undefined,
-          resolvedProperties.errorBehavior,
-          resolvedProperties.secrets
-        );
+        const evaluateEnd = () =>
+          this.evaluateEndCondition(
+            promptForEval,
+            integration,
+            context,
+            target,
+            target.kind === FINAL_STEP_PHASES.QUEUE
+              ? signedStepIndex
+              : undefined,
+            runIndex,
+            attemptIndex,
+            duration,
+            promptErrorRetryCounter,
+            endConditionErrorRetryCount,
+            vars && Object.keys(vars).length > 0 ? vars : undefined,
+            resolvedProperties.errorBehavior,
+            resolvedProperties.secrets
+          );
+        let endDisposition = await evaluateEnd();
+
+        // `onError: retryPhase` re-runs only the end-condition script. The
+        // response it validates is already on disk, so no AI call is spent.
+        while (
+          endDisposition.outcome === CONDITION_ACTIONS.RETRY &&
+          isPhaseRetryPolicy(resolvedProperties.errorBehavior)
+        ) {
+          if (await this.checkExecutionTimeLimitBeforeRetry()) {
+            return false;
+          }
+          if (context.abortSignal?.aborted) {
+            return false;
+          }
+          attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
+          endConditionErrorRetryCount =
+            endDisposition.nextErrorRetryCount ??
+            endConditionErrorRetryCount + 1;
+          runtime.beginAttempt(target, attemptIndex, Date.now());
+          context.registerActiveTarget?.(target, attemptIndex);
+          endDisposition = await evaluateEnd();
+        }
 
         if (endDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           if (await this.checkExecutionTimeLimitBeforeRetry()) {

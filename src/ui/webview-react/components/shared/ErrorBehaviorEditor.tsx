@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { CustomSelect } from "./CustomSelect";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import {
-  CONDITION_ACTIONS,
   DEFAULT_ERROR_BEHAVIOR_RETRIES,
+  ERROR_BEHAVIOR_ACTIONS,
+  isErrorBehaviorRetry,
 } from "@root/types/DashboardConstants";
 import {
   ERROR_BEHAVIOR_ACTION_OPTIONS_META,
@@ -12,7 +13,7 @@ import {
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
 const DEFAULT_ERROR_BEHAVIOR: ErrorBehavior = {
-  onError: CONDITION_ACTIONS.STOP_WORKFLOW,
+  onError: ERROR_BEHAVIOR_ACTIONS.STOP_WORKFLOW,
 };
 
 function normalizeErrorBehavior(value: ErrorBehavior | null | undefined) {
@@ -23,7 +24,7 @@ function applyActionDefaults(
   current: ErrorBehavior,
   onError: ErrorBehavior["onError"]
 ): ErrorBehavior {
-  if (onError !== CONDITION_ACTIONS.RETRY) {
+  if (!isErrorBehaviorRetry(onError)) {
     return { onError };
   }
 
@@ -69,7 +70,7 @@ export function ErrorBehaviorEditor({
     setRetryDelayInput(String(resolvedValue.retryDelaySec ?? ""));
   }, [resolvedValue.retryDelaySec]);
 
-  const isRetry = resolvedValue.onError === CONDITION_ACTIONS.RETRY;
+  const isRetry = isErrorBehaviorRetry(resolvedValue.onError);
 
   return (
     <div className="space-y-3">
@@ -80,7 +81,7 @@ export function ErrorBehaviorEditor({
           title={schemaTitle(
             `${schemaPath}.onError`,
             undefined,
-            "What ctrlyoke should do when a step phase encounters an internal error, including pre-conditions, prompts/harnesses, end-conditions, and script steps."
+            "What ctrlyoke should do when a step phase encounters an internal error, including pre-conditions, prompts/harnesses, end-conditions, and script steps. Retry Step re-runs the whole step; Retry Failed Phase re-runs only the phase that errored."
           )}
         >
           On Error
@@ -136,7 +137,6 @@ export function ErrorBehaviorEditor({
                 setMaxRetriesInput(String(nextValue));
                 onChange({
                   ...resolvedValue,
-                  onError: CONDITION_ACTIONS.RETRY,
                   maxRetries: nextValue,
                 });
               }}
@@ -177,7 +177,6 @@ export function ErrorBehaviorEditor({
                 delete withoutRetryDelay.retryDelaySec;
                 onChange({
                   ...withoutRetryDelay,
-                  onError: CONDITION_ACTIONS.RETRY,
                   maxRetries:
                     resolvedValue.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES,
                   ...(nextValue !== undefined && { retryDelaySec: nextValue }),

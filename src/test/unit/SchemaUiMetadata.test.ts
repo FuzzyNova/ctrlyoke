@@ -5,6 +5,7 @@ import {
   AGENT_SELECTION_OPTIONS_META,
   COMPARE_SOURCE_OPTIONS_META,
   CONDITION_ACTION_OPTIONS_META,
+  ERROR_BEHAVIOR_ACTION_OPTIONS_META,
   CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
   DEFAULT_FORMAT_OPTIONS_META,
   EXECUTION_MODE_OPTIONS_META,
@@ -35,6 +36,7 @@ import {
   SANDBOX_MODES,
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
+  ERROR_BEHAVIOR_ACTIONS,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
   AUTO_DETECT_HARNESS,
@@ -109,9 +111,12 @@ const META_BINDINGS: Array<{
       "endCondition.onFail",
       "steps[].onPass",
       "steps[].onFail",
-      "errorBehavior.onError",
-      "defaults.errorBehavior.onError",
     ],
+  },
+  {
+    name: "error behavior actions",
+    rows: Object.values(ERROR_BEHAVIOR_ACTION_OPTIONS_META),
+    paths: ["errorBehavior.onError", "defaults.errorBehavior.onError"],
   },
   {
     name: "compare sources",
@@ -289,8 +294,12 @@ const CONSTANT_BINDINGS: Array<{
       "preCondition.onFail",
       "endCondition.onPass",
       "endCondition.onFail",
-      "errorBehavior.onError",
     ],
+  },
+  {
+    name: "ERROR_BEHAVIOR_ACTIONS",
+    values: Object.values(ERROR_BEHAVIOR_ACTIONS),
+    paths: ["errorBehavior.onError"],
   },
   {
     name: "COMPARE_SOURCES",
@@ -537,6 +546,11 @@ suite("Schema UI metadata", () => {
             limitTable,
             `unlimited is outside the limit allowlist: ${paths.join(", ")}`
           );
+        // An aliased row documents why its label differs, which covers a
+        // value whose meaning differs by field (errorBehavior's "retry").
+        if ("alias" in row && row.alias) {
+          continue;
+        }
         const prior = labelsByValue.get(row.value);
         assert.ok(
           prior === undefined || prior === row.label,

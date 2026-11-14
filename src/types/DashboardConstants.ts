@@ -4729,6 +4729,29 @@ export const SCRIPT_STEP_COPY_FIELDS = [
 /** Retry attempts allowed when an error policy selects retry without a limit. */
 export const DEFAULT_ERROR_BEHAVIOR_RETRIES = 1;
 
+/**
+ * `errorBehavior.onError` values. `retry` re-runs the whole step from its
+ * pre-condition; `retryPhase` re-runs only the phase that errored
+ * (pre-condition, prompt/harness, end-condition, or script).
+ */
+export const ERROR_BEHAVIOR_ACTIONS = {
+  STOP_WORKFLOW: CONDITION_ACTIONS.STOP_WORKFLOW,
+  RETRY: CONDITION_ACTIONS.RETRY,
+  RETRY_PHASE: "retryPhase",
+  CONTINUE: CONDITION_ACTIONS.CONTINUE,
+} as const;
+
+export type ErrorBehaviorAction =
+  (typeof ERROR_BEHAVIOR_ACTIONS)[keyof typeof ERROR_BEHAVIOR_ACTIONS];
+
+/** True for either retry scope (`retry` or `retryPhase`). */
+export function isErrorBehaviorRetry(action: ErrorBehaviorAction): boolean {
+  return (
+    action === ERROR_BEHAVIOR_ACTIONS.RETRY ||
+    action === ERROR_BEHAVIOR_ACTIONS.RETRY_PHASE
+  );
+}
+
 /** Rendering variants supported by the shared script condition editor. */
 export const SCRIPT_CONDITION_VARIANTS = {
   END_CONDITION: PROMPT_PROPERTIES.END_CONDITION,

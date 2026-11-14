@@ -140,7 +140,7 @@ the step back to the harness; when `maxRetries` is omitted, one retry is allowed
 
 **The script could not run.** A command that cannot be started (for example, an interpreter that is
 not installed) or a timeout is an error, not a failed condition, and it is handled by
-`errorBehavior` (`onError: stopWorkflow`, `retry`, or `continue`). Check the script path or command and the
+`errorBehavior` (`onError: stopWorkflow`, `retry`, `retryPhase`, or `continue`). Check the script path or command and the
 timeout (`timeoutSec` on the condition, or the `execution.scriptTimeoutSec` setting). A script file that
 is missing usually makes its interpreter exit non-zero, which counts as a failed condition instead.
 
