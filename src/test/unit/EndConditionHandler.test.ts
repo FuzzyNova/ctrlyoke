@@ -661,7 +661,7 @@ suite("EndConditionHandler", () => {
     const platform = new MockPlatform();
     const runtime = new WorkflowStateMachine();
     const queue = new PromptQueue(runtime);
-    const prompt = createPrompt(1);
+    const prompt = createPrompt(1, "continue", { onFail: "retry" });
     const integration = new MockHarnessIntegration(undefined, false);
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform, [validationFailure("final")]),
@@ -694,6 +694,12 @@ suite("EndConditionHandler", () => {
       "final"
     );
     assert.strictEqual(queue.getState().results[0].endCondition?.passed, false);
+    // The exhausted retry stopped the workflow, so the summary must not
+    // claim another retry is coming.
+    assert.strictEqual(
+      queue.getState().results[0].endCondition?.action,
+      "stopWorkflow"
+    );
   });
 
   test("retries onFail without a retry prompt using its fallback and budget", async () => {
@@ -987,6 +993,11 @@ suite("EndConditionHandler", () => {
       `${WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY}:2`,
       `${WORKFLOW_ATTEMPT_COMMANDS.COMPLETE}:2`,
     ]);
+    // The pass-retry budget ran out and the workflow advanced.
+    assert.strictEqual(
+      queue.getState().results[0].endCondition?.action,
+      "continue"
+    );
     assert.strictEqual(queue.getCurrentRetryCount(), 0);
   });
 

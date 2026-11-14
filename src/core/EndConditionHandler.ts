@@ -7,6 +7,8 @@ import {
 import {
   STATUS_MESSAGE_SEVERITY,
   CONDITION_ACTIONS,
+  DEFAULT_COMPARE_SOURCE,
+  DEFAULT_SCRIPT_OPERATOR,
   FINAL_STEP_PHASES,
   RETRY_KINDS,
   type RetryKind,
@@ -461,6 +463,38 @@ export class EndConditionHandler {
     };
   }
 
+  /**
+   * The action a non-errored end-condition result actually leads to, given
+   * the retry budget left for `target`: `retry` only while a retry will be
+   * sent, otherwise what happens once retrying is over (an exhausted pass
+   * retry continues, an exhausted failure retry stops the workflow). The
+   * executor's reporter verdict and the recorded run summary both use it.
+   * Call it before the retry count for this evaluation is incremented.
+   */
+  resolveEndConditionAction(
+    prompt: PromptStep,
+    evaluationResult: EvaluationResult,
+    target: WorkflowAttemptTarget
+  ): EndConditionAction {
+    const onPass = prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
+    const onFail =
+      prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+    if (evaluationResult.passed) {
+      if (onPass !== CONDITION_ACTIONS.RETRY) {
+        return onPass;
+      }
+      return this.promptQueue.canPassRetry(prompt, target)
+        ? CONDITION_ACTIONS.RETRY
+        : CONDITION_ACTIONS.CONTINUE;
+    }
+    if (onFail === CONDITION_ACTIONS.CONTINUE) {
+      return CONDITION_ACTIONS.CONTINUE;
+    }
+    return this.promptQueue.canRetry(prompt, target)
+      ? CONDITION_ACTIONS.RETRY
+      : CONDITION_ACTIONS.STOP_WORKFLOW;
+  }
+
   private workflowStopped(
     failureReason: string,
     target: WorkflowAttemptTarget
@@ -486,12 +520,19 @@ export class EndConditionHandler {
       prompt.endCondition?.script ?? "",
       evaluationResult,
       {
-        ...(evaluationResult.errored ? {} : { action: evaluationResult.passed
-            ? (prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE)
-            : (prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW) }),
+        ...(evaluationResult.errored
+          ? {}
+          : {
+              action: this.resolveEndConditionAction(
+                prompt,
+                evaluationResult,
+                target
+              ),
+            }),
         expected: prompt.endCondition?.expected,
-        compareSource: prompt.endCondition?.compareSource ?? "exitCode",
-        operator: prompt.endCondition?.operator ?? "eq",
+        compareSource:
+          prompt.endCondition?.compareSource ?? DEFAULT_COMPARE_SOURCE,
+        operator: prompt.endCondition?.operator ?? DEFAULT_SCRIPT_OPERATOR,
       }
     );
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {

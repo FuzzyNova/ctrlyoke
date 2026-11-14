@@ -43,6 +43,8 @@ import {
   CLI_EVENT_TYPES,
   PARALLEL_GROUP_ADMISSION,
   CONDITION_ACTIONS,
+  DEFAULT_COMPARE_SOURCE,
+  DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
   SCRIPT_VERDICT_OUTCOMES,
   WORKFLOW_EXECUTION_OUTCOMES,
@@ -4338,10 +4340,14 @@ export class WorkflowExecutor {
           prompt.endCondition?.script ?? "",
           missingScriptResult,
           {
-            action: this.getErrorConditionAction(errorBehavior, errorRetryCount),
+            action: this.getErrorConditionAction(
+              errorBehavior,
+              errorRetryCount
+            ),
             expected: prompt.endCondition?.expected,
-            compareSource: prompt.endCondition?.compareSource ?? "exitCode",
-            operator: prompt.endCondition?.operator ?? "eq",
+            compareSource:
+              prompt.endCondition?.compareSource ?? DEFAULT_COMPARE_SOURCE,
+            operator: prompt.endCondition?.operator ?? DEFAULT_SCRIPT_OPERATOR,
           }
         )
       );
@@ -4361,32 +4367,19 @@ export class WorkflowExecutor {
     }
 
     const endCondition = prompt.endCondition;
-    const willRetryEndCondition = (result: EvaluationResult): boolean =>
-      !result.errored &&
-      (result.passed
-        ? endCondition.onPass === CONDITION_ACTIONS.RETRY &&
-          this.promptQueue.canPassRetry(prompt, target)
-        : endCondition.onFail !== CONDITION_ACTIONS.CONTINUE &&
-          this.promptQueue.canRetry(prompt, target));
     const endConditionActionForResult = (
       result: EvaluationResult
-    ): ConditionAction => {
-      if (result.errored) {
-        return this.getErrorConditionAction(errorBehavior, errorRetryCount);
-      }
-      if (willRetryEndCondition(result)) {
-        return CONDITION_ACTIONS.RETRY;
-      }
-      if (result.passed && endCondition.onPass === CONDITION_ACTIONS.RETRY) {
-        return CONDITION_ACTIONS.CONTINUE;
-      }
-      if (!result.passed && endCondition.onFail === CONDITION_ACTIONS.RETRY) {
-        return CONDITION_ACTIONS.STOP_WORKFLOW;
-      }
-      return result.passed
-        ? (endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
-        : (endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
-    };
+    ): ConditionAction =>
+      result.errored
+        ? this.getErrorConditionAction(errorBehavior, errorRetryCount)
+        : this.endConditionHandler.resolveEndConditionAction(
+            prompt,
+            result,
+            target
+          );
+    const willRetryEndCondition = (result: EvaluationResult): boolean =>
+      !result.errored &&
+      endConditionActionForResult(result) === CONDITION_ACTIONS.RETRY;
     const erroredActionDetail = this.errorRetryActionDetail(
       errorBehavior,
       errorRetryCount
@@ -4448,7 +4441,10 @@ export class WorkflowExecutor {
           endCondition.script,
           evaluationResult,
           {
-            action: this.getErrorConditionAction(errorBehavior, errorRetryCount),
+            action: this.getErrorConditionAction(
+              errorBehavior,
+              errorRetryCount
+            ),
             expected: endCondition.expected,
             compareSource: endReport.verdict.compareSource,
             operator: endReport.verdict.operator,
@@ -4499,6 +4495,25 @@ export class WorkflowExecutor {
     );
 
     if (result.errorResult) {
+      // The handler records an errored retry evaluation without an action,
+      // because the error action depends on errorBehavior, which only the
+      // executor knows.
+      this.recordEndConditionSummary(
+        target,
+        createConditionEvaluationSummary(
+          endCondition.script,
+          result.errorResult,
+          {
+            action: this.getErrorConditionAction(
+              errorBehavior,
+              errorRetryCount
+            ),
+            expected: endCondition.expected,
+            compareSource: endCondition.compareSource ?? DEFAULT_COMPARE_SOURCE,
+            operator: endCondition.operator ?? DEFAULT_SCRIPT_OPERATOR,
+          }
+        )
+      );
       return this.handleEvaluationError(
         context,
         target,
