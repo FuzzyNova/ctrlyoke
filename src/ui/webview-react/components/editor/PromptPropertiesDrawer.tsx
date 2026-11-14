@@ -575,9 +575,8 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
     const action = resolved?.onError;
     const label =
       (action && ERROR_BEHAVIOR_ACTION_OPTIONS_META[action]?.label) ??
-      ERROR_BEHAVIOR_ACTION_OPTIONS_META[
-        ERROR_BEHAVIOR_ACTIONS.STOP_WORKFLOW
-      ].label;
+      ERROR_BEHAVIOR_ACTION_OPTIONS_META[ERROR_BEHAVIOR_ACTIONS.STOP_WORKFLOW]
+        .label;
     return `Inherit (${label})`;
   };
 

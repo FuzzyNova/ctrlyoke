@@ -401,7 +401,9 @@ suite("Secret command JSON output", () => {
 
 suite("Secret command handlers", () => {
   test("secret check reports settings-default grants as pending approval", async () => {
-    configService.setCliOverlay({ defaults: { secrets: ["DEFAULT_PENDING_TOKEN"] } });
+    configService.setCliOverlay({
+      defaults: { secrets: ["DEFAULT_PENDING_TOKEN"] },
+    });
     try {
       const io = new TestIo();
       const result = await checkSecretsCommand(
@@ -413,7 +415,10 @@ suite("Secret command handlers", () => {
         io
       );
       assert.strictEqual(result, 2);
-      assert.match(io.errors.join("\n"), /DEFAULT_PENDING_TOKEN.*not been approved/);
+      assert.match(
+        io.errors.join("\n"),
+        /DEFAULT_PENDING_TOKEN.*not been approved/
+      );
     } finally {
       configService.setCliOverlay({});
     }

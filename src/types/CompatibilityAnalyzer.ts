@@ -278,9 +278,10 @@ export function analyzeCompatibility({
     ];
 
     const autoModeDeclaration = declarations?.autoMode;
-    const autoModeOverride = autoModeDeclaration?.modeOverrides?.[
-      target.resolved.properties.executionMode
-    ];
+    const autoModeOverride =
+      autoModeDeclaration?.modeOverrides?.[
+        target.resolved.properties.executionMode
+      ];
     const autoModeAlreadyUnsupported =
       (autoModeOverride?.fidelity ?? autoModeDeclaration?.fidelity) ===
       CAPABILITY_FIDELITIES.UNSUPPORTED;

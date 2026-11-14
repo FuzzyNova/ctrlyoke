@@ -26,6 +26,7 @@ Two classes of failure break this:
    `history search x --limit 0`, `history show --attempt foo`) do get the
    envelope, so a CI script gets JSON for some bad values and empty stdout for
    others.
+
 2. **`run --json`'s early usage checks use the generic envelope, not the
    run-result object.** `run s.yaml --prompt hi --json` and
    `run s.yaml --harness bogus --json` print

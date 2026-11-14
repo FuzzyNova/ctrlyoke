@@ -826,8 +826,7 @@ export class CtrlYokeMCPServer {
         !ACTIVE_EXECUTION_STATES.has(runtime.executionState) ||
         currentIndex === undefined ||
         currentIndex < 0 ||
-        (currentIndex >= (workingFile.steps?.length ?? 0) &&
-          !runningFinalStep)
+        (currentIndex >= (workingFile.steps?.length ?? 0) && !runningFinalStep)
       ) {
         throw new Error(
           `CLI coordination address does not resolve to a live step: ${pinnedPath}`

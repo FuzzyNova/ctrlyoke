@@ -1219,56 +1219,90 @@ suite("WorkflowExecutor condition shell reporting", () => {
       ]);
       const terminals: Array<{ attempt: number; state: string }> = [];
       const manager = new Proxy(
-        { recordAttemptTerminal: async (...args: unknown[]) => {
-          terminals.push({ attempt: args[3] as number, state: args[4] as string });
-        } },
-        { get: (target, property) => Reflect.get(target, property) ?? (async () => undefined) }
+        {
+          recordAttemptTerminal: async (...args: unknown[]) => {
+            terminals.push({
+              attempt: args[3] as number,
+              state: args[4] as string,
+            });
+          },
+        },
+        {
+          get: (target, property) =>
+            Reflect.get(target, property) ?? (async () => undefined),
+        }
       );
       queue.loadPrompts({
-        steps: !isFinalStep ? [{
-          prompt: "work",
-          errorBehavior: { onError: "retryPhase", maxRetries: 1 },
-          endCondition: { script: "check" },
-        }] : [],
-        ...(isFinalStep ? { finalStep: {
-          prompt: "work",
-          errorBehavior: { onError: "retryPhase", maxRetries: 1 },
-          endCondition: { script: "check" },
-        } } : {}),
+        steps: !isFinalStep
+          ? [
+              {
+                prompt: "work",
+                errorBehavior: { onError: "retryPhase", maxRetries: 1 },
+                endCondition: { script: "check" },
+              },
+            ]
+          : [],
+        ...(isFinalStep
+          ? {
+              finalStep: {
+                prompt: "work",
+                errorBehavior: { onError: "retryPhase", maxRetries: 1 },
+                endCondition: { script: "check" },
+              },
+            }
+          : {}),
       });
       const context = makeContext(integration);
       context.historyFilePath = "history.json";
       context.outputHistoryManager = manager as any;
       await makeExecutor(queue, evaluator).execute(integration, context);
       const latest = terminals.filter(({ attempt }) => attempt === 0).at(-1);
-      assert.strictEqual(latest?.state, TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED);
+      assert.strictEqual(
+        latest?.state,
+        TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+      );
     }
   });
 
   test("retryPhase exhaustion fails and whole-step retry remains unchanged", async () => {
-    const run = async (onError: "retry" | "retryPhase", results: EvaluationResult[]) => {
+    const run = async (
+      onError: "retry" | "retryPhase",
+      results: EvaluationResult[]
+    ) => {
       const queue = new PromptQueue();
       const integration = new MockHarnessIntegration(undefined, false);
       const terminals: string[] = [];
       const responseTerminals: string[] = [];
       const manager = new Proxy(
-        { recordAttemptTerminal: async (...args: unknown[]) => {
-          terminals.push(args[4] as string);
-          if (args[3] === 0) {
-            responseTerminals.push(args[4] as string);
-          }
-        } },
-        { get: (target, property) => Reflect.get(target, property) ?? (async () => undefined) }
+        {
+          recordAttemptTerminal: async (...args: unknown[]) => {
+            terminals.push(args[4] as string);
+            if (args[3] === 0) {
+              responseTerminals.push(args[4] as string);
+            }
+          },
+        },
+        {
+          get: (target, property) =>
+            Reflect.get(target, property) ?? (async () => undefined),
+        }
       );
-      queue.loadPrompts({ steps: [{
-        prompt: "work",
-        errorBehavior: { onError, maxRetries: 1 },
-        endCondition: { script: "check" },
-      }] });
+      queue.loadPrompts({
+        steps: [
+          {
+            prompt: "work",
+            errorBehavior: { onError, maxRetries: 1 },
+            endCondition: { script: "check" },
+          },
+        ],
+      });
       const context = makeContext(integration);
       context.historyFilePath = "history.json";
       context.outputHistoryManager = manager as any;
-      await makeExecutor(queue, new RecordingShellEvaluator(new MockPlatform(), results)).execute(integration, context);
+      await makeExecutor(
+        queue,
+        new RecordingShellEvaluator(new MockPlatform(), results)
+      ).execute(integration, context);
       return { queue, integration, terminals, responseTerminals };
     };
 
@@ -1276,8 +1310,13 @@ suite("WorkflowExecutor condition shell reporting", () => {
       makeEvaluationResult({ errored: true, error: "temporary failure" }),
       makeEvaluationResult({ errored: true, error: "still failing" }),
     ]);
-    assert.strictEqual(exhausted.queue.getState().results[0].status, STEP_STATUS.FAILED);
-    assert.ok(exhausted.terminals.includes(TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED));
+    assert.strictEqual(
+      exhausted.queue.getState().results[0].status,
+      STEP_STATUS.FAILED
+    );
+    assert.ok(
+      exhausted.terminals.includes(TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED)
+    );
     // The run projection skips condition attempts, so the AI attempt that
     // produced the response must carry the failure, as it does with
     // `maxRetries: 0` or `onError: retry`.
@@ -1291,8 +1330,12 @@ suite("WorkflowExecutor condition shell reporting", () => {
       shellEvaluationResult(true),
     ]);
     assert.deepStrictEqual(retried.integration.sentPrompts, ["work", "work"]);
-    assert.ok(retried.terminals.includes(TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED));
-    assert.ok(retried.terminals.includes(TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED));
+    assert.ok(
+      retried.terminals.includes(TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED)
+    );
+    assert.ok(
+      retried.terminals.includes(TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED)
+    );
   });
 
   test("keeps an errorBehavior harness retry separate from the end-condition retry budget", async () => {
@@ -3403,7 +3446,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         new MockHarnessIntegration(undefined, false),
         makeContext(new MockHarnessIntegration(undefined, false))
       );
-      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, [secretName]);
+      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, [
+        secretName,
+      ]);
     } finally {
       configService.setCliOverlay({});
       if (previousValue === undefined) delete process.env[secretName];
