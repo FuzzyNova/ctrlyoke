@@ -9,6 +9,7 @@ import {
   findVariablePlaceholders,
   isVariableDefined,
 } from "./VariablePlaceholders";
+import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.
@@ -46,12 +47,19 @@ export class VarSubstitutor {
    * literal; see `findVariablePlaceholders` for why inline code does not
    * protect a placeholder.
    */
-  static substitute(text: string, vars: Record<string, string>): string {
+  static substitute(
+    text: string,
+    vars: Record<string, string>,
+    fencedCodeProtected = true
+  ): string {
     const substitutedSpans: Array<{ start: number; end: number; key: string }> =
       [];
     let substitutedText = "";
     let cursor = 0;
-    for (const { from, to, name, inFence } of findVariablePlaceholders(text)) {
+    for (const { from, to, name, inFence } of findVariablePlaceholders(
+      text,
+      fencedCodeProtected
+    )) {
       if (inFence || !isVariableDefined(vars, name)) continue;
       const value = vars[name];
       // Variable substitution must not turn ordinary workflow data into an
@@ -124,7 +132,11 @@ export class VarSubstitutor {
     vars: Record<string, string>
   ): string {
     if (!promptText || Object.keys(vars).length === 0) return promptText;
-    return this.substitute(promptText, vars);
+    return this.substitute(
+      promptText,
+      vars,
+      VAR_SUBSTITUTION_POLICY["prompt.prompt"].fencedCodeProtected
+    );
   }
 
   /**
@@ -142,10 +154,19 @@ export class VarSubstitutor {
 
     return {
       ...props,
-      model: this.substitute(props.model, vars),
+      model: this.substitute(
+        props.model,
+        vars,
+        VAR_SUBSTITUTION_POLICY["steps[].model"].fencedCodeProtected
+      ),
       additionalArgs:
         props.additionalArgs !== undefined
-          ? this.substitute(props.additionalArgs, vars)
+          ? this.substitute(
+              props.additionalArgs,
+              vars,
+              VAR_SUBSTITUTION_POLICY["steps[].additionalArgs"]
+                .fencedCodeProtected
+            )
           : undefined,
       hooks:
         props.hooks !== null && props.hooks !== undefined
@@ -153,7 +174,12 @@ export class VarSubstitutor {
           : props.hooks,
       preCondition:
         props.preCondition !== undefined
-          ? this.applyToScriptProperties(props.preCondition, vars)
+          ? this.applyToScriptProperties(
+              props.preCondition,
+              vars,
+              "preCondition.script",
+              "preCondition.env.*"
+            )
           : undefined,
       endCondition:
         props.endCondition !== undefined
@@ -171,7 +197,12 @@ export class VarSubstitutor {
     vars: Record<string, string>
   ): ScriptStep {
     if (Object.keys(vars).length === 0) return step;
-    return this.applyToScriptProperties(step, vars);
+    return this.applyToScriptProperties(
+      step,
+      vars,
+      "scriptStep.script",
+      "scriptStep.env.*"
+    );
   }
 
   private static applyToHook(
@@ -180,12 +211,20 @@ export class VarSubstitutor {
   ): UserHookConfig {
     return {
       ...hook,
-      command: this.substitute(hook.command, vars),
+      command: this.substitute(
+        hook.command,
+        vars,
+        VAR_SUBSTITUTION_POLICY["hooks[].command"].fencedCodeProtected
+      ),
       ...(hook.env !== undefined && {
         env: Object.fromEntries(
           Object.entries(hook.env).map(([key, value]) => [
             key,
-            this.substitute(value, vars),
+            this.substitute(
+              value,
+              vars,
+              VAR_SUBSTITUTION_POLICY["hooks[].env.*"].fencedCodeProtected
+            ),
           ])
         ),
       }),
@@ -200,16 +239,27 @@ export class VarSubstitutor {
    */
   private static applyToScriptProperties<T extends ScriptProperties>(
     props: T,
-    vars: Record<string, string>
+    vars: Record<string, string>,
+    scriptPolicy:
+      "preCondition.script" | "endCondition.script" | "scriptStep.script",
+    envPolicy: "preCondition.env.*" | "endCondition.env.*" | "scriptStep.env.*"
   ): T {
     return {
       ...props,
-      script: this.substitute(props.script, vars),
+      script: this.substitute(
+        props.script,
+        vars,
+        VAR_SUBSTITUTION_POLICY[scriptPolicy].fencedCodeProtected
+      ),
       ...(props.env !== undefined && {
         env: Object.fromEntries(
           Object.entries(props.env).map(([key, value]) => [
             key,
-            this.substitute(value, vars),
+            this.substitute(
+              value,
+              vars,
+              VAR_SUBSTITUTION_POLICY[envPolicy].fencedCodeProtected
+            ),
           ])
         ),
       }),
@@ -221,14 +271,29 @@ export class VarSubstitutor {
     vars: Record<string, string>
   ): EndCondition {
     return {
-      ...this.applyToScriptProperties(cond, vars),
+      ...this.applyToScriptProperties(
+        cond,
+        vars,
+        "endCondition.script",
+        "endCondition.env.*"
+      ),
       retryPrompt:
         cond.retryPrompt !== undefined
-          ? this.substitute(cond.retryPrompt, vars)
+          ? this.substitute(
+              cond.retryPrompt,
+              vars,
+              VAR_SUBSTITUTION_POLICY["endCondition.retryPrompt"]
+                .fencedCodeProtected
+            )
           : undefined,
       passRetryPrompt:
         cond.passRetryPrompt !== undefined
-          ? this.substitute(cond.passRetryPrompt, vars)
+          ? this.substitute(
+              cond.passRetryPrompt,
+              vars,
+              VAR_SUBSTITUTION_POLICY["endCondition.passRetryPrompt"]
+                .fencedCodeProtected
+            )
           : undefined,
     };
   }

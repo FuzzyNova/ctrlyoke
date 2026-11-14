@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Variable placeholders in script, environment, hook command and worktree setup text now substitute even inside fenced code blocks; prompt text remains protected inside fences.
+
 - A nonexistent or non-directory `--cwd` now fails with a usage error instead of returning empty results.
 - A workspace settings file that sets `auto` over a different user permission mode, or a custom allow list not covered by the user's auto allow list, now asks for workspace-settings trust.
 - In the dashboard's **On Error** menu, `retry` is now labelled **Retry Step**, to set it apart from the new **Retry Failed Phase**. Workflow files still say `retry`.

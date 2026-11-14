@@ -30,10 +30,15 @@ const PLACEHOLDER_SOURCE = `\\{\\{(${VARIABLE_NAME_PATTERN_SOURCE})\\}\\}`;
  * vars are also substituted into script text, where backticks are shell
  * command substitution, and authors put vars inside inline code on purpose.
  */
-export function findVariablePlaceholders(text: string): VariablePlaceholder[] {
+export function findVariablePlaceholders(
+  text: string,
+  fencedCodeProtected = true
+): VariablePlaceholder[] {
   const placeholders: VariablePlaceholder[] = [];
   if (!text.includes("{{")) return placeholders;
-  const maskedText = maskCodeRanges(text, { fencesOnly: true });
+  const maskedText = fencedCodeProtected
+    ? maskCodeRanges(text, { fencesOnly: true })
+    : text;
   const pattern = new RegExp(PLACEHOLDER_SOURCE, "g");
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text)) !== null) {

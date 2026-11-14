@@ -76,6 +76,17 @@ suite("VarSubstitutor Tests", () => {
       );
     });
 
+    test("allows fenced placeholders when the field policy does not protect code", () => {
+      assert.strictEqual(
+        VarSubstitutor.substitute(
+          "```\n{{value}}\n```",
+          { value: "ok" },
+          false
+        ),
+        "```\nok\n```"
+      );
+    });
+
     test("substitutes placeholders inside inline code spans", () => {
       // Vars reach script text, where backticks are shell command
       // substitution, so only block fences keep a placeholder literal.

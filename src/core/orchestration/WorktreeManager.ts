@@ -2965,7 +2965,7 @@ export class WorktreeManager {
         reportUnresolvedVariables?.(unresolved);
       }
     }
-    const command = VarSubstitutor.substitute(setup, vars ?? {});
+    const command = VarSubstitutor.substitute(setup, vars ?? {}, false);
     const result = await (setupRunner ?? this.worktreeSetupRunner).run({
       executionRoot,
       command,
