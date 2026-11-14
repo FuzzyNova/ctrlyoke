@@ -100,7 +100,7 @@ export function GlobalSettingsVerticalTabBar({
   // chevrons stand in for it as the "more tabs this way" cue.
   return (
     <div
-      className={`relative flex flex-col min-h-0 border-r border-panel-border bg-sidebar-bg shrink-0 ${iconOnly ? "w-12" : "w-44"}`}
+      className={`relative flex flex-col min-h-0 border-r border-panel-border bg-sidebar-bg shrink-0 ${iconOnly ? "w-11" : "w-44"}`}
     >
       {canScrollUp && <ScrollChevron direction={-1} onScroll={scrollByPage} />}
       <div
@@ -126,7 +126,7 @@ export function GlobalSettingsVerticalTabBar({
               }
               className={`flex items-center gap-2 text-sm text-left w-full
             border-l-2 transition-colors touch-manipulation
-            ${iconOnly ? "justify-center px-0 py-3" : "px-3 py-2"}
+            ${iconOnly ? "justify-center px-0 py-2.5" : "px-3 py-2"}
             ${tab.matchCount === 0 ? "opacity-40" : ""}
             ${
               activeTab === tab.id

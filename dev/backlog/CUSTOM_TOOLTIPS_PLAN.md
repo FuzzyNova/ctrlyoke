@@ -29,6 +29,12 @@ Every tooltip in the React dashboard is a native `title` attribute: about 475 of
 - **control the delay or placement.** Inside the dropdown portals, the tooltip often covers the
   next rows.
 
+- **show reliably in the VS Code webview.** Confirmed 2026-11-14: native `title` tooltips work in a
+  desktop browser on macOS, including the hosted dashboard, but rarely appear in the VS Code
+  webview, and only sometimes do. The cause is the webview environment, not a component bug, so
+  none of the ~500 `title`s can be relied on there. This makes the custom tooltip more than
+  styling.
+
 The interim fix (2026-10-09) made the most of native tooltips. `schemaPropertyLabels.ts` now
 builds every schema tooltip as blank-line-separated paragraphs with the same order:
 
@@ -70,6 +76,10 @@ the current paragraph string. The `aria-label`/`aria-describedby` text and any r
     Escape, blur, pointer-leave or scroll.
   - Use one delegated listener on the root, not one per element. The dropdown lists can hold
     hundreds of rows.
+  - **Open on mouse hover only** (`pointerType === "mouse"`), never on touch. An iOS tap fires
+    hover events and nothing closes them: a hover-driven tooltip tried on the settings tab rail
+    (2026-11-14) stayed open through taps and page scroll on iPhone. Also close on scroll and on
+    any pointer-down outside the tooltip.
 - **Styling:**
   - Use Tailwind token classes from `globals.css`, not raw VS Code variables.
   - Cap the width at `max-w-xs` (about 320px).
@@ -77,6 +87,9 @@ the current paragraph string. The `aria-label`/`aria-describedby` text and any r
 - **Placement:**
   - Prefer the right side of a dropdown row, so the next rows stay visible. Prefer below a field
     label.
+  - Position against the portal root, not with `position: fixed` inside a component. The settings
+    drawer is CSS-transformed (`translate-y-0`), and `fixed` inside a transformed ancestor resolves
+    against that ancestor, which offset a tab-rail tooltip far below its icon.
   - Flip when there isn't room, and clamp to the visual viewport. `keyboardTooltipSpace.ts` has
     the iOS keyboard-viewport logic.
 
