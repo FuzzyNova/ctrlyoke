@@ -20,6 +20,7 @@ import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DRAWER_PAGES } from "@/types/drawerPages";
 import {
   CONDITION_ACTIONS,
+  ERROR_BEHAVIOR_ACTIONS,
   EXECUTION_MODES,
   HARNESS_IDS,
   HOOK_EVENT_NAMES,
@@ -309,6 +310,34 @@ describe("PromptPropertiesDrawer execution mode", () => {
       screen.queryByLabelText(/^Step Color, color:/)
     ).not.toBeInTheDocument();
   });
+});
+
+describe("PromptPropertiesDrawer error behavior inheritance", () => {
+  beforeEach(resetStores);
+
+  afterEach(cleanup);
+
+  it.each([
+    [ERROR_BEHAVIOR_ACTIONS.RETRY_PHASE, "Inherit (Retry Failed Phase)"],
+    [ERROR_BEHAVIOR_ACTIONS.RETRY, "Inherit (Retry Step)"],
+  ])(
+    "labels inherited %s policies from the error behavior options",
+    (onError, label) => {
+      useSettingsStore.setState((state) => ({
+        workflowProperties: {
+          ...state.workflowProperties,
+          errorBehavior: { onError },
+        },
+      }));
+      renderValidationDrawer();
+
+      fireEvent.click(screen.getByRole("button", { name: /^Error Behavior/ }));
+
+      expect(
+        screen.getByRole("button", { name: /^Inherit/ })
+      ).toHaveTextContent(label);
+    }
+  );
 });
 
 describe("PromptPropertiesDrawer sandbox", () => {

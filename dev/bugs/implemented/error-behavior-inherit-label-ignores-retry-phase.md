@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing a1f660730
 - **Area:** `src/ui/webview-react/components/editor/PromptPropertiesDrawer.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

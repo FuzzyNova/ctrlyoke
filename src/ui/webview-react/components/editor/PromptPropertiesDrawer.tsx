@@ -36,6 +36,7 @@ import {
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  ERROR_BEHAVIOR_ACTIONS,
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
   STEP_TYPES,
@@ -80,6 +81,7 @@ import {
   AGENT_SELECTION_OPTIONS_META,
   CONDITION_SELECTION_OPTIONS_META,
   ERROR_BEHAVIOR_SELECTION_OPTIONS_META,
+  ERROR_BEHAVIOR_ACTION_OPTIONS_META,
   EXECUTION_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
   PRIOR_CONTEXT_DETAIL_OPTIONS_META,
@@ -570,12 +572,12 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
   const buildErrorBehaviorInheritLabel = (
     resolved: ErrorBehavior | null | undefined
   ) => {
+    const action = resolved?.onError;
     const label =
-      resolved?.onError === CONDITION_ACTIONS.RETRY
-        ? "Retry"
-        : resolved?.onError === CONDITION_ACTIONS.CONTINUE
-          ? "Continue"
-          : "Stop Workflow";
+      (action && ERROR_BEHAVIOR_ACTION_OPTIONS_META[action]?.label) ??
+      ERROR_BEHAVIOR_ACTION_OPTIONS_META[
+        ERROR_BEHAVIOR_ACTIONS.STOP_WORKFLOW
+      ].label;
     return `Inherit (${label})`;
   };
 
