@@ -6,7 +6,9 @@ import {
   getPriorContextDiagnostics,
   getPromptDiagnostics,
   getReferenceDiagnostics,
+  getPartialValuePlaceholderDiagnostics,
   getUndefinedVariableDiagnostics,
+  getVariableDiagnostics,
   type ContextReferenceResolver,
   type PromptDiagnosticContext,
 } from "../../utils/PromptDiagnosticRules";
@@ -16,6 +18,16 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   RETRY_PROMPT_PLACEHOLDERS,
 } from "../../types/DashboardConstants";
+import {
+  VAR_SUBSTITUTION_KINDS,
+  VAR_SUBSTITUTION_POLICY,
+  VAR_SUBSTITUTION_UNRESOLVED,
+  type VarSubstitutionPolicyField,
+} from "../../utils/VarSubstitutionPolicy";
+
+const POLICY_FIELDS = Object.keys(
+  VAR_SUBSTITUTION_POLICY
+) as VarSubstitutionPolicyField[];
 
 const baseContext: PromptDiagnosticContext = {
   stepIndex: 3,
@@ -24,6 +36,7 @@ const baseContext: PromptDiagnosticContext = {
   hasPreCondition: true,
   hasEndCondition: true,
   field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
+  variableField: "steps[].prompt",
 };
 
 function context(
@@ -339,9 +352,11 @@ suite("PromptDiagnosticRules", () => {
   suite("variables", () => {
     test("warns on a placeholder the vars don't define, naming the variable", () => {
       const text = "Use {{known}} and {{missing}}";
-      const diagnostics = getUndefinedVariableDiagnostics(text, {
-        known: "x",
-      });
+      const diagnostics = getUndefinedVariableDiagnostics(
+        text,
+        { known: "x" },
+        "steps[].prompt"
+      );
       assert.deepStrictEqual(
         diagnostics.map((d) => ({
           code: d.code,
@@ -364,7 +379,9 @@ suite("PromptDiagnosticRules", () => {
     test("flags inline-code placeholders but not fenced ones", () => {
       const text = "`{{inline}}`\n```\n{{fenced}}\n```";
       assert.deepStrictEqual(
-        getUndefinedVariableDiagnostics(text, {}).map((d) => d.variableName),
+        getUndefinedVariableDiagnostics(text, {}, "steps[].prompt").map(
+          (d) => d.variableName
+        ),
         ["inline"]
       );
     });
@@ -376,6 +393,101 @@ suite("PromptDiagnosticRules", () => {
           (diagnostic) => diagnostic.variableName
         ),
         ["scriptValue"]
+      );
+    });
+
+    test("every policy field flags an undefined placeholder and accepts a defined one", () => {
+      for (const field of POLICY_FIELDS) {
+        const undefinedCodes = getUndefinedVariableDiagnostics(
+          "{{x}}",
+          {},
+          field
+        ).map((d) => d.code);
+        assert.deepStrictEqual(
+          undefinedCodes,
+          [PROMPT_DIAGNOSTIC_CODES.VARIABLE_UNDEFINED],
+          field
+        );
+        assert.deepStrictEqual(
+          getVariableDiagnostics("{{x}}", { x: "1" }, field),
+          [],
+          field
+        );
+      }
+    });
+
+    test("the undefined-variable message follows the field's unresolved policy", () => {
+      for (const field of POLICY_FIELDS) {
+        const [diagnostic] = getUndefinedVariableDiagnostics(
+          "{{x}}",
+          {},
+          field
+        );
+        assert.match(
+          diagnostic.message,
+          VAR_SUBSTITUTION_POLICY[field].unresolved ===
+            VAR_SUBSTITUTION_UNRESOLVED.ERROR
+            ? /the run fails/
+            : /sent as literal text/,
+          field
+        );
+      }
+    });
+
+    test("a partial placeholder is an error in value fields only", () => {
+      for (const field of POLICY_FIELDS) {
+        const text = "x{{n}}";
+        const diagnostics = getPartialValuePlaceholderDiagnostics(text, field);
+        if (
+          VAR_SUBSTITUTION_POLICY[field].kind === VAR_SUBSTITUTION_KINDS.VALUE
+        ) {
+          assert.deepStrictEqual(
+            summarize(text, diagnostics),
+            [
+              {
+                code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_PARTIAL_VALUE,
+                severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+                text,
+              },
+            ],
+            field
+          );
+          assert.ok(diagnostics[0].message.startsWith(`${field} `), field);
+        } else {
+          assert.deepStrictEqual(diagnostics, [], field);
+        }
+      }
+    });
+
+    test("a whole-value placeholder or a plain value is not partial", () => {
+      for (const text of ["{{n}}", "30", ""]) {
+        assert.deepStrictEqual(
+          getPartialValuePlaceholderDiagnostics(text, "steps[].timeoutSec"),
+          [],
+          text
+        );
+      }
+      assert.deepStrictEqual(
+        getPartialValuePlaceholderDiagnostics("{{a}}{{b}}", "maxSteps").map(
+          (d) => d.code
+        ),
+        [PROMPT_DIAGNOSTIC_CODES.VARIABLE_PARTIAL_VALUE]
+      );
+    });
+
+    test("getVariableDiagnostics checks partial values even without vars", () => {
+      assert.deepStrictEqual(
+        getVariableDiagnostics("x{{n}}", undefined, "maxSteps").map(
+          (d) => d.code
+        ),
+        [PROMPT_DIAGNOSTIC_CODES.VARIABLE_PARTIAL_VALUE]
+      );
+      assert.deepStrictEqual(
+        getVariableDiagnostics("x{{n}}", {}, "maxSteps").map((d) => d.code),
+        [
+          PROMPT_DIAGNOSTIC_CODES.VARIABLE_PARTIAL_VALUE,
+          PROMPT_DIAGNOSTIC_CODES.VARIABLE_UNDEFINED,
+        ]
       );
     });
 

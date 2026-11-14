@@ -45,12 +45,19 @@ import {
 import {
   findVariablePlaceholders,
   isVariableDefined,
+  wholeValueVariableName,
+  type VariablePlaceholder,
 } from "./VariablePlaceholders";
 import {
   HARNESS_SHELL_ESCAPE_PREFIX,
   isHarnessShellEscape,
 } from "./HarnessShellEscape";
-import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
+import {
+  VAR_SUBSTITUTION_KINDS,
+  VAR_SUBSTITUTION_POLICY,
+  VAR_SUBSTITUTION_UNRESOLVED,
+  type VarSubstitutionPolicyField,
+} from "./VarSubstitutionPolicy";
 
 /** What the text alone can't say about where it sits in a workflow. */
 export interface PromptDiagnosticContext {
@@ -62,6 +69,11 @@ export interface PromptDiagnosticContext {
   hasPreCondition: boolean;
   hasEndCondition: boolean;
   field: PromptDiagnosticField;
+  /**
+   * The `VAR_SUBSTITUTION_POLICY` entry the text is substituted under, which
+   * decides the variable rules (fence protection, unresolved policy, kind).
+   */
+  variableField: VarSubstitutionPolicyField;
   /**
    * The workflow's `vars` defaults. Omitted when the text has no knowable set
    * of vars (a `.prompt.md` body can run under any workflow), which turns the
@@ -395,35 +407,96 @@ export function getConditionOutputDiagnostics(
   return diagnostics;
 }
 
+/** The `{{name}}` placeholders in a field's text that the engine substitutes. */
+export function findSubstitutedVariablePlaceholders(
+  text: string,
+  field: VarSubstitutionPolicyField
+): VariablePlaceholder[] {
+  const { fencedCodeProtected } = VAR_SUBSTITUTION_POLICY[field];
+  return findVariablePlaceholders(text, fencedCodeProtected).filter(
+    (placeholder) => !placeholder.inFence
+  );
+}
+
+function undefinedVariableConsequence(
+  field: VarSubstitutionPolicyField
+): string {
+  return VAR_SUBSTITUTION_POLICY[field].unresolved ===
+    VAR_SUBSTITUTION_UNRESOLVED.ERROR
+    ? "the run fails"
+    : "it is sent as literal text";
+}
+
 /**
- * `{{name}}` placeholders the workflow's `vars` don't define. A warning, not
- * an error: the CLI's `--var name=value` can still supply the value at run
- * time, and without one the placeholder is sent as literal text. Fenced
- * placeholders are never substituted, so they are never flagged.
+ * `{{name}}` placeholders the workflow's `vars` don't define, in the text of
+ * one `VAR_SUBSTITUTION_POLICY` field. A warning, not an error: the CLI's
+ * `--var name=value` can still supply the value at run time. Without one, the
+ * field's `unresolved` policy decides what happens, and the message says so.
+ * The field's `fencedCodeProtected` decides whether a fenced placeholder is
+ * substituted, so only substituted placeholders are flagged.
  */
 export function getUndefinedVariableDiagnostics(
   text: string,
   vars: Readonly<Record<string, unknown>>,
-  policyPath: keyof typeof VAR_SUBSTITUTION_POLICY = "steps[].prompt"
+  field: VarSubstitutionPolicyField
 ): PromptDiagnostic[] {
-  const policy = VAR_SUBSTITUTION_POLICY[policyPath];
-  return findVariablePlaceholders(text)
-    .filter(
-      ({ name, inFence }) =>
-        !(policy.fencedCodeProtected && inFence) &&
-        !isVariableDefined(vars, name)
-    )
+  const consequence = undefinedVariableConsequence(field);
+  return findSubstitutedVariablePlaceholders(text, field)
+    .filter(({ name }) => !isVariableDefined(vars, name))
     .map(({ from, to, name }) => ({
       from,
       to,
       severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_UNDEFINED,
-      message: `Variable "${name}" is not defined in this workflow's vars — it is sent as literal text unless passed with --var ${name}=<value>`,
+      message: `Variable "${name}" is not defined in this workflow's vars — ${consequence} unless it is passed with --var ${name}=<value>`,
       variableName: name,
     }));
 }
 
-/** The synchronous rules (prior context, condition output, vars) over the whole text. */
+/**
+ * A `kind: value` field whose text holds a placeholder that is not the whole
+ * value (`"x{{n}}"`). The engine rejects it before the run or step starts, so
+ * this is an error over the whole text. `text` fields accept any placement.
+ */
+export function getPartialValuePlaceholderDiagnostics(
+  text: string,
+  field: VarSubstitutionPolicyField
+): PromptDiagnostic[] {
+  if (VAR_SUBSTITUTION_POLICY[field].kind !== VAR_SUBSTITUTION_KINDS.VALUE) {
+    return [];
+  }
+  const placeholders = findSubstitutedVariablePlaceholders(text, field);
+  if (placeholders.length === 0 || wholeValueVariableName(text) !== undefined) {
+    return [];
+  }
+  return [
+    {
+      from: 0,
+      to: text.length,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+      code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_PARTIAL_VALUE,
+      message: `${field} takes a plain value or one whole-value placeholder such as {{${placeholders[0]!.name}}}; a placeholder inside other text is rejected when the workflow runs`,
+    },
+  ];
+}
+
+/**
+ * Every variable rule for one policy field's text. The undefined-variable rule
+ * needs the workflow's vars and is skipped without them; the partial-value
+ * rule holds whatever the vars are.
+ */
+export function getVariableDiagnostics(
+  text: string,
+  vars: Readonly<Record<string, unknown>> | undefined,
+  field: VarSubstitutionPolicyField
+): PromptDiagnostic[] {
+  return [
+    ...getPartialValuePlaceholderDiagnostics(text, field),
+    ...(vars ? getUndefinedVariableDiagnostics(text, vars, field) : []),
+  ];
+}
+
+/** The synchronous rules (prior context, condition output, variables) over the whole text. */
 export function getPromptDiagnostics(
   text: string,
   context: PromptDiagnosticContext
@@ -432,9 +505,7 @@ export function getPromptDiagnostics(
     ...getHarnessShellEscapeDiagnostics(text),
     ...getPriorContextDiagnostics(text, context),
     ...getConditionOutputDiagnostics(text, context),
-    ...(context.vars
-      ? getUndefinedVariableDiagnostics(text, context.vars)
-      : []),
+    ...getVariableDiagnostics(text, context.vars, context.variableField),
   ];
 }
 

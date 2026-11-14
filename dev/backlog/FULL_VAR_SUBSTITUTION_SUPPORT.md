@@ -1,6 +1,6 @@
 # Full Variable Substitution Support
 
-**Status:** In progress (items 1–7 complete; item 8 partially implemented 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
+**Status:** All items complete (2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
 the slots plan's `worktree.checkout` field shipped as `directory`, and this plan
 now uses that name.
 **Priority:** P2
@@ -96,36 +96,41 @@ Each step ticks its own item, notes any deviation under it, and commits.
       Run-start failures already threw before any side effect; startup and
       continue now have tests for each run-start field. Deviation: the spec's
       `onError: skip` does not exist; the tests use `continue`.
-- [ ] 8. Dashboard and editor: dropdown warnings, placeholder chips,
+- [x] 8. Dashboard and editor: dropdown warnings, placeholder chips,
       CodeMirror/diagnostics from the policy table, Dry Run substituted values
       and blockers.
-      Partial: dropdown validation ignores whole-value placeholders; step
-      names resolve from workflow vars; variable lint/highlighting and
-      named-worktree preview values consult the substitution policy.
-      Done: the shared `WorkflowVariableValue` chip
+      Note: dropdown validation ignores whole-value placeholders; step names
+      resolve from workflow vars. The shared `WorkflowVariableValue` chip
       (`components/shared/WorkflowVariableValue.tsx`) sits on every
       enum/boolean editor of a `kind: value` field, inside the shared editors
-      so step and workflow level both get it (`ScriptConditionEditor`:
-      compare source, operator, ignore case, onPass/onFail, script-step
-      execution mode; `ErrorBehaviorEditor` onError; `PriorContextSelect`
-      detail; the drawer's harness/execution mode/resume session; the panel's
-      existing six; the editor header's step `enabled`). Number inputs
-      (timeout, error-behavior retries/delay, `LimitSelect` with
-      `acceptsVariable` for `endCondition.maxRetries` and `maxSteps`) are text
-      inputs that keep a typed `{{n}}`; `wholeValueVariables.ts` holds the
-      helpers, and the editor store carries an authored `enabled` placeholder
-      through a save (`stepEnabledPatch`). Dry Run: `ExecutionPreviewService`
-      resolves `RunStartView` itself, records substituted fields
-      (`substitutions` on the workflow and each step, from
-      `VarSubstitutionDiff.ts`) and turns a `VarSubstitutionValidationError`
-      into `substitutionBlockers` (a run-start one yields no step previews; a
-      blocked step is left out); the modal shows `value ← authored` next to
-      the fields it lists plus a blocker banner, and `PreviewRedactor` covers
-      the new strings. The CLI `--dry-run` still exits 2 on a blocker.
-      Deviation: the Set-as-default buttons are not hidden for a placeholder
+      so step and workflow level both get it. Number inputs (timeout,
+      error-behavior retries/delay, `LimitSelect` with `acceptsVariable`) are
+      text inputs that keep a typed `{{n}}` (`wholeValueVariables.ts`), and
+      the editor store carries an authored `enabled` placeholder through a
+      save. Dry Run: `ExecutionPreviewService` resolves `RunStartView`,
+      records `substitutions` per workflow and step (`VarSubstitutionDiff.ts`)
+      and turns a `VarSubstitutionValidationError` into
+      `substitutionBlockers`; the modal shows `value ← authored` and a blocker
+      banner. Variable lint and highlighting take a policy field and read
+      only the table: `PromptDiagnosticRules` exposes
+      `findSubstitutedVariablePlaceholders`, `getUndefinedVariableDiagnostics`
+      and `getPartialValuePlaceholderDiagnostics` (new
+      `VARIABLE_PARTIAL_VALUE`, an error, for a `kind: value` field whose
+      placeholder is not the whole value), combined in
+      `getVariableDiagnostics`. The field's `fencedCodeProtected` decides
+      fence masking, and its `unresolved` decides whether the
+      undefined-variable message says the run fails or the text stays
+      literal. `PromptDiagnosticContext.variableField` and the CodeMirror
+      extension's required `field` option name the entry;
+      `CodeMirrorEditor` takes `variableField` (the retry-prompt editors pass
+      theirs) and `WorkflowPromptDiagnostics` maps each span to its entry.
+      Deviations: the Set-as-default buttons are not hidden for a placeholder
       value, so promoting one writes it into settings, whose schema does not
-      accept it for `maxSteps`/`executionMode`/`resumeSession`.
-      Remaining: broader policy-driven CodeMirror/diagnostic coverage.
+      accept it for `maxSteps`/`executionMode`/`resumeSession`. No dashboard
+      or VS Code editor yet lints non-prompt fields as text (the dashboard
+      edits them with plain inputs, and the workflow schema already rejects a
+      partial placeholder in a `value` field); the shared rules accept any
+      table field when one does.
 
 ## Problem
 

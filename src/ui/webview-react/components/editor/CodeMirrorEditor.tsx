@@ -104,6 +104,7 @@ import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { buildFileReference } from "@root/utils/ContextReferenceBuilder";
 import { createWorkflowVariableExtension } from "@utils/codemirrorWorkflowVariables";
+import type { VarSubstitutionPolicyField } from "@root/utils/VarSubstitutionPolicy";
 import { isReferenceBoundaryBefore } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 import {
@@ -193,6 +194,12 @@ interface CodeMirrorEditorProps {
    * cannot know the vars, so it styles placeholders but does not lint them.
    */
   workflowCompletionContext?: PromptCompletionWorkflowContext;
+  /**
+   * The `VAR_SUBSTITUTION_POLICY` field this editor's text is substituted
+   * under; it decides how `{{name}}` placeholders are styled and linted.
+   * Fixed for the editor's lifetime. Defaults to step prompt text.
+   */
+  variableField?: VarSubstitutionPolicyField;
   /** Ctrl/Cmd+click on a `{{name}}`: show that variable's workflow setting. */
   onRevealVariable?: (name: string) => void;
   /** The undefined-variable lint's "add to workflow vars" quick fix. */
@@ -316,6 +323,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     dicUri,
     readOnly = false,
     mode = CODE_MIRROR_EDITOR_MODES.PROMPT,
+    variableField = "steps[].prompt",
     surface = "editor",
     className,
     minHeightClassName,
@@ -1230,6 +1238,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           },
         }),
         createWorkflowVariableExtension({
+          field: variableField,
           getVars: () => workflowCompletionContextRef.current?.vars,
           revealVariable: canRevealVariables
             ? (name) => onRevealVariableRef.current?.(name)

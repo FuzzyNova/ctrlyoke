@@ -932,6 +932,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 value={passRetryPromptInput}
                 onChange={setPassRetryPromptInput}
                 onBlur={() => update({ passRetryPrompt: passRetryPromptInput })}
+                variableField="endCondition.passRetryPrompt"
                 placeholder={
                   "Validation passed, but the condition still holds.\n\nContinue working until it fails."
                 }
@@ -966,6 +967,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 value={retryPromptInput}
                 onChange={setRetryPromptInput}
                 onBlur={() => update({ retryPrompt: retryPromptInput })}
+                variableField="endCondition.retryPrompt"
                 placeholder={
                   "Validation failed: expected $endCondition:expected but got $endCondition:actual from $endCondition:compareSource\n\nPlease fix the issues."
                 }

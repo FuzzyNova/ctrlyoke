@@ -2433,6 +2433,7 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   SECRET_INTERPOLATION_IGNORED: "prompt.secret.interpolation-ignored",
   VARIABLE_SUBSTITUTION_IGNORED: "prompt.variable.substitution-ignored",
   VARIABLE_UNDEFINED: "prompt.variable.undefined",
+  VARIABLE_PARTIAL_VALUE: "prompt.variable.partial-value",
   CTRLYOKE_MCP_MODE_SKILL: "prompt.mcp.skill-mode",
   EXPANSION_SUPPRESSED_IN_CODE: "prompt.reference.suppressed-in-code",
   PRIOR_CONTEXT_NO_PRIOR_STEPS: "prompt.prior-context.no-prior-steps",

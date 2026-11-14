@@ -20,6 +20,7 @@ import { isRecord } from "../utils/JsonTypeGuards";
 import type { WorkflowTextSpan } from "./WorkflowTextDecoding";
 import { resolveNullable } from "../types/ExecutionPropertyResolver";
 import type { PromptCompletionWorkflowContext } from "./PromptContextCompletions";
+import type { VarSubstitutionPolicyField } from "../utils/VarSubstitutionPolicy";
 
 /**
  * Prompt-text diagnostics for a whole ctrlyoke file: every prompt value runs
@@ -38,6 +39,22 @@ function parallelMembers(entry: unknown): unknown[] | undefined {
 /** Steps an entry contributes to the flat step list (a plain step counts one). */
 function flatStepCount(entry: unknown): number {
   return parallelMembers(entry)?.length ?? 1;
+}
+
+/**
+ * The `VAR_SUBSTITUTION_POLICY` entry each prompt-text span is substituted
+ * under. A `.prompt.md` body and a step or final-step `prompt` are prompt
+ * text; the retry prompts are their own resolved-property entries.
+ */
+function variableField(span: WorkflowTextSpan): VarSubstitutionPolicyField {
+  switch (span.field) {
+    case END_CONDITION_PROPERTIES.RETRY_PROMPT:
+      return "endCondition.retryPrompt";
+    case END_CONDITION_PROPERTIES.PASS_RETRY_PROMPT:
+      return "endCondition.passRetryPrompt";
+    default:
+      return "steps[].prompt";
+  }
 }
 
 function promptField(span: WorkflowTextSpan): PromptDiagnosticField {
@@ -64,6 +81,7 @@ const PROMPT_MARKDOWN_SPAN_CONTEXT: PromptDiagnosticContext = {
   hasPreCondition: true,
   hasEndCondition: true,
   field: PROMPT_DIAGNOSTIC_FIELDS.RETRY_PROMPT,
+  variableField: "steps[].prompt",
 };
 
 /**
@@ -142,6 +160,7 @@ function getSpanContext(
     hasEndCondition:
       isRecord(owner) && owner[PROMPT_PROPERTIES.END_CONDITION] != null,
     field: promptField(span),
+    variableField: variableField(span),
     vars: isRecord(fields[PROMPT_PROPERTIES.VARS])
       ? (fields[PROMPT_PROPERTIES.VARS] as Record<string, unknown>)
       : {},

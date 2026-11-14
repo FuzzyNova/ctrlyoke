@@ -11,14 +11,17 @@ const views: EditorView[] = [];
 
 function createView(
   doc: string,
-  options: WorkflowVariableEditorOptions
+  options: Omit<WorkflowVariableEditorOptions, "field"> &
+    Partial<Pick<WorkflowVariableEditorOptions, "field">>
 ): EditorView {
   const parent = document.createElement("div");
   document.body.appendChild(parent);
   const view = new EditorView({
     parent,
     doc,
-    extensions: [createWorkflowVariableExtension(options)],
+    extensions: [
+      createWorkflowVariableExtension({ field: "steps[].prompt", ...options }),
+    ],
   });
   views.push(view);
   return view;
@@ -30,12 +33,14 @@ async function lint(view: EditorView) {
   const diagnostics: Array<{
     text: string;
     severity: string;
+    message: string;
     actions: string[];
   }> = [];
   forEachDiagnostic(view.state, (diagnostic, from, to) => {
     diagnostics.push({
       text: view.state.sliceDoc(from, to),
       severity: diagnostic.severity,
+      message: diagnostic.message,
       actions: (diagnostic.actions ?? []).map((action) => action.name),
     });
   });
@@ -83,6 +88,7 @@ describe("workflow variable editor extension", () => {
       {
         text: "{{testvar}}",
         severity: "warning",
+        message: expect.stringContaining("sent as literal text"),
         actions: ['Add "testvar" to workflow vars'],
       },
     ]);
@@ -120,6 +126,57 @@ describe("workflow variable editor extension", () => {
 
     vars = { testvar: "value" };
     view.dispatch({ effects: varsChanged.of(undefined) });
+    expect(await lint(view)).toEqual([]);
+  });
+
+  it("styles fenced placeholders in a field the fence does not protect", () => {
+    const view = createView("```\n{{fenced}}\n```", {
+      field: "scriptStep.script",
+      getVars: () => ({}),
+    });
+    expect(styledNames(view)).toEqual(["{{fenced}}"]);
+  });
+
+  describe.each([
+    ["workflow-level", "maxSteps"],
+    ["step-level", "steps[].timeoutSec"],
+  ] as const)("a %s value field (%s)", (_level, field) => {
+    it("accepts a defined whole-value placeholder", async () => {
+      const view = createView("{{n}}", { field, getVars: () => ({ n: "3" }) });
+      expect(styledNames(view)).toEqual(["{{n}}"]);
+      expect(await lint(view)).toEqual([]);
+    });
+
+    it("warns that an undefined placeholder fails the run", async () => {
+      const view = createView("{{n}}", { field, getVars: () => ({}) });
+      expect(await lint(view)).toEqual([
+        {
+          text: "{{n}}",
+          severity: "warning",
+          message: expect.stringContaining("the run fails"),
+          actions: [],
+        },
+      ]);
+    });
+
+    it("rejects a partial placeholder, even without the vars", async () => {
+      const view = createView("x{{n}}", { field, getVars: () => undefined });
+      expect(await lint(view)).toEqual([
+        {
+          text: "x{{n}}",
+          severity: "error",
+          message: expect.stringContaining("whole-value placeholder"),
+          actions: [],
+        },
+      ]);
+    });
+  });
+
+  it("does not flag a partial placeholder in a text field", async () => {
+    const view = createView("x{{n}}", {
+      field: "steps[].name",
+      getVars: () => ({ n: "1" }),
+    });
     expect(await lint(view)).toEqual([]);
   });
 

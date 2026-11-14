@@ -11,13 +11,14 @@ import {
 } from "@codemirror/view";
 import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
 import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
-import { getUndefinedVariableDiagnostics } from "@root/utils/PromptDiagnosticRules";
-import { VAR_SUBSTITUTION_POLICY } from "@root/utils/VarSubstitutionPolicy";
 import {
-  findVariablePlaceholders,
+  findSubstitutedVariablePlaceholders,
+  getVariableDiagnostics,
+} from "@root/utils/PromptDiagnosticRules";
+import type { VarSubstitutionPolicyField } from "@root/utils/VarSubstitutionPolicy";
+import {
   isVariableDefined,
   VARIABLE_PLACEHOLDER_DELIMITER_LENGTH,
-  type VariablePlaceholder,
 } from "@root/utils/VariablePlaceholders";
 
 /**
@@ -27,17 +28,22 @@ import {
  *
  * Deliberately a mark, not an atomic chip: the raw `{{name}}` is already short
  * and *is* the meaning, and a name is something authors edit in place. The
- * ranges come from `findVariablePlaceholders`, the same scanner
- * `VarSubstitutor` substitutes from — so a placeholder inside inline code is
- * styled (it is substituted) and one inside a fenced block is plain text (it
- * is not).
+ * ranges come from `findSubstitutedVariablePlaceholders` under the editor's
+ * `VAR_SUBSTITUTION_POLICY` field, the same scanner and policy
+ * `VarSubstitutor` substitutes with — so in prompt text a placeholder inside
+ * inline code is styled (it is substituted) and one inside a fenced block is
+ * plain text (it is not), while in script text a fenced one is styled too.
+ * The lint is the shared `getVariableDiagnostics` for that field, so a
+ * `kind: value` field also gets the partial-placeholder error.
  */
 
 export interface WorkflowVariableEditorOptions {
+  /** The policy field whose text this editor holds. */
+  field: VarSubstitutionPolicyField;
   /**
    * The workflow's vars defaults, or undefined when this editor cannot know
-   * them (e.g. a global-default retry prompt). Undefined turns the lint off
-   * and makes the hover generic.
+   * them (e.g. a global-default retry prompt). Undefined turns the
+   * undefined-variable lint off and makes the hover generic.
    */
   getVars: () => Readonly<Record<string, unknown>> | undefined;
   /** Ctrl/Cmd+click on a variable. */
@@ -55,18 +61,14 @@ const HOVER_VALUE_MAX_CHARS = 120;
 
 const braceMark = Decoration.mark({ class: VARIABLE_BRACE_CLASS });
 
-/** The substitutable placeholders: fenced ones are literal and stay plain. */
-function findSubstitutablePlaceholders(text: string): VariablePlaceholder[] {
-  const policy = VAR_SUBSTITUTION_POLICY["steps[].prompt"];
-  return findVariablePlaceholders(text).filter(
-    (placeholder) => !(policy.fencedCodeProtected && placeholder.inFence)
-  );
-}
-
-function buildDecorations(view: EditorView): DecorationSet {
+function buildDecorations(
+  view: EditorView,
+  field: VarSubstitutionPolicyField
+): DecorationSet {
   const ranges: Range<Decoration>[] = [];
-  for (const { from, to, name } of findSubstitutablePlaceholders(
-    view.state.doc.toString()
+  for (const { from, to, name } of findSubstitutedVariablePlaceholders(
+    view.state.doc.toString(),
+    field
   )) {
     ranges.push(
       Decoration.mark({
@@ -80,18 +82,20 @@ function buildDecorations(view: EditorView): DecorationSet {
   return Decoration.set(ranges, true);
 }
 
-function createVariableDecorationExtension(): Extension {
+function createVariableDecorationExtension(
+  field: VarSubstitutionPolicyField
+): Extension {
   return ViewPlugin.fromClass(
     class implements PluginValue {
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view);
+        this.decorations = buildDecorations(view, field);
       }
 
       update(update: ViewUpdate) {
         if (update.docChanged) {
-          this.decorations = buildDecorations(update.view);
+          this.decorations = buildDecorations(update.view, field);
         }
       }
     },
@@ -111,8 +115,9 @@ function createVariableHoverExtension(
 ): Extension {
   return hoverTooltip(
     (view, pos) => {
-      const placeholder = findSubstitutablePlaceholders(
-        view.state.doc.toString()
+      const placeholder = findSubstitutedVariablePlaceholders(
+        view.state.doc.toString(),
+        options.field
       ).find(({ from, to }) => pos >= from && pos <= to);
       if (!placeholder) return null;
       const vars = options.getVars();
@@ -155,18 +160,16 @@ function createVariableLintExtension(
   options: WorkflowVariableEditorOptions
 ): Extension {
   return linter(
-    (view): Diagnostic[] => {
-      const vars = options.getVars();
-      if (!vars) return [];
-      return getUndefinedVariableDiagnostics(
+    (view): Diagnostic[] =>
+      getVariableDiagnostics(
         view.state.doc.toString(),
-        vars
+        options.getVars(),
+        options.field
       ).map((diagnostic) =>
         toCodeMirrorPromptDiagnostic(diagnostic, {
           defineVariable: options.defineVariable,
         })
-      );
-    },
+      ),
     {
       delay: 300,
       needsRefresh: (update) =>
@@ -239,7 +242,7 @@ export function createWorkflowVariableExtension(
     // Colour-bearing marks are Prec.highest so they draw inside markdown's
     // highlighting spans (Prec.high) and inside the inline-code mark — a
     // placeholder in backticks is substituted, so it must still read as one.
-    Prec.highest(createVariableDecorationExtension()),
+    Prec.highest(createVariableDecorationExtension(options.field)),
     createVariableHoverExtension(options),
     createVariableLintExtension(options),
     ...(options.revealVariable
