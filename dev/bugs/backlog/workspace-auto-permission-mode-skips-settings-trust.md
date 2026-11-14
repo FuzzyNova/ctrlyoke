@@ -34,11 +34,11 @@ approval. Two cases slip through:
 Call `collectWorkspaceSensitiveSettingRequests` (or `isToolPermissionConfigNoWiderThan`
 directly) with:
 
-| user (baseline)                 | workspace (candidate)             | requests today | expected |
-| ------------------------------- | --------------------------------- | -------------- | -------- |
-| shipped default (`allowAll`)    | `{mode:"auto"}`                   | 0              | 1        |
-| `{mode:"auto",allowedTools:["write"]}` | `{mode:"custom",allowedTools:["shell"]}` | 0 | 1 |
-| `{mode:"auto",allowedTools:["write"]}` | `{mode:"auto",allowedTools:["shell"]}`   | 1 | 1 (control) |
+| user (baseline)                        | workspace (candidate)                    | requests today | expected    |
+| -------------------------------------- | ---------------------------------------- | -------------- | ----------- |
+| shipped default (`allowAll`)           | `{mode:"auto"}`                          | 0              | 1           |
+| `{mode:"auto",allowedTools:["write"]}` | `{mode:"custom",allowedTools:["shell"]}` | 0              | 1           |
+| `{mode:"auto",allowedTools:["write"]}` | `{mode:"auto",allowedTools:["shell"]}`   | 1              | 1 (control) |
 
 ## Root Cause
 

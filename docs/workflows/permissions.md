@@ -53,8 +53,9 @@ Permissions quick picker in the prompt editor's footer.
 A [headless](/reference/settings#defaults-executionmode) step has no terminal, so an approval
 prompt can never be answered. With `custom` mode, a tool that is not on the
 allow list is refused and the step may not make progress. ctrlyoke warns once
-when a headless step starts with a mode other than `allowAll`, `auto`, or
-`dangerouslyAllowAll` (on Antigravity, other than `dangerouslyAllowAll`). Turn the warning off with
+when a headless step starts with a mode other than `allowAll` or
+`dangerouslyAllowAll`. That includes `auto`, because its judge can refuse a
+request and there is no one to ask instead. Turn the warning off with
 [`ui.showHeadlessPermissionWarning`](/reference/settings#ui-showheadlesspermissionwarning).
 
 For CI, see [Tool permissions on CI](/cli/ci#tool-permissions).
