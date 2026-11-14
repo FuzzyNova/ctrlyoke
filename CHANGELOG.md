@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A workspace settings file that sets `auto` over a different user permission mode, or a custom allow list not covered by the user's auto allow list, now asks for workspace-settings trust.
 - In the dashboard's **On Error** menu, `retry` is now labelled **Retry Step**, to set it apart from the new **Retry Failed Phase**. Workflow files still say `retry`.
 
 - A named worktree's `setup` command now runs at the start of every run, not only when ctrlyoke creates the worktree, so a dependency change pulled or merged into the branch since the last run is installed before the first step. Resuming or continuing a run whose setup already succeeded doesn't run it again. Omit `setup` if you don't want it to run. Managed worktrees are unchanged.

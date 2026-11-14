@@ -7,6 +7,13 @@ import {
 import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 
+/** Relative breadth for modes that are comparable across harnesses. */
+const PERMISSION_MODE_BREADTH: Partial<Record<PermissionMode, number>> = {
+  [PERMISSION_MODES.CUSTOM]: 0,
+  [PERMISSION_MODES.ALLOW_ALL]: 1,
+  [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: 2,
+};
+
 /**
  * Merge per-server MCP denials into the unified tool permission configuration.
  *
@@ -150,14 +157,6 @@ export function foldMcpToolDenialsIntoServers(
   };
 }
 
-/** Breadth of each managed mode; `none` defers to the harness and has no rank. */
-const PERMISSION_MODE_BREADTH: Partial<Record<PermissionMode, number>> = {
-  [PERMISSION_MODES.CUSTOM]: 0,
-  [PERMISSION_MODES.AUTO]: 1,
-  [PERMISSION_MODES.ALLOW_ALL]: 2,
-  [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: 3,
-};
-
 /** `null` and mode `none` both pass no flags, leaving the harness's own config. */
 function defersToHarness(config: ToolPermissionConfig | null): boolean {
   return config === null || config.mode === PERMISSION_MODES.NONE;
@@ -165,9 +164,9 @@ function defersToHarness(config: ToolPermissionConfig | null): boolean {
 
 /**
  * True when `candidate` provably lets a harness do no more without asking
- * than `baseline`. Patterns compare as exact strings, so anything this can't
- * prove narrower (a reworded pattern, deferring to the harness's own config
- * while the baseline does not) counts as wider.
+ * than `baseline`. Auto is only comparable with auto because harnesses can
+ * give it a distinct escalation path. Patterns compare as exact strings, so
+ * anything this can't prove narrower counts as wider.
  */
 export function isToolPermissionConfigNoWiderThan(
   candidate: ToolPermissionConfig | null,
@@ -178,9 +177,16 @@ export function isToolPermissionConfigNoWiderThan(
   }
   const candidateConfig = candidate!;
   const baselineConfig = baseline!;
-  const candidateBreadth = PERMISSION_MODE_BREADTH[candidateConfig.mode]!;
-  const baselineBreadth = PERMISSION_MODE_BREADTH[baselineConfig.mode]!;
-  if (candidateBreadth > baselineBreadth) return false;
+  if (candidateConfig.mode === PERMISSION_MODES.AUTO) {
+    if (baselineConfig.mode !== PERMISSION_MODES.AUTO) return false;
+  } else if (baselineConfig.mode === PERMISSION_MODES.AUTO) {
+    if (candidateConfig.mode !== PERMISSION_MODES.CUSTOM) return false;
+  } else if (
+    PERMISSION_MODE_BREADTH[candidateConfig.mode]! >
+    PERMISSION_MODE_BREADTH[baselineConfig.mode]!
+  ) {
+    return false;
+  }
   if (candidateConfig.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
     return true;
   }
@@ -202,12 +208,13 @@ export function isToolPermissionConfigNoWiderThan(
   ).every((pattern) => candidateDenied.has(pattern));
   if (!keepsBaselineDenials) return false;
 
-  // A custom allow-list only narrows execution against another custom list.
-  if (!(
-    candidateConfig.mode === baselineConfig.mode &&
-    (candidateConfig.mode === PERMISSION_MODES.CUSTOM ||
-      candidateConfig.mode === PERMISSION_MODES.AUTO)
-  )) {
+  // Custom and auto both apply their allow-list as pre-approval rules.
+  const usesPreApprovalList = (mode: PermissionMode): boolean =>
+    mode === PERMISSION_MODES.CUSTOM || mode === PERMISSION_MODES.AUTO;
+  if (
+    !usesPreApprovalList(candidateConfig.mode) ||
+    !usesPreApprovalList(baselineConfig.mode)
+  ) {
     return true;
   }
   const baselineAllowed = new Set(baselineConfig.allowedTools);

@@ -530,6 +530,13 @@ suite("WorkspaceSensitiveSettings", () => {
       );
     });
 
+    test("requests auto over the shipped default", () => {
+      assert.strictEqual(
+        toolPermissionRequests({ mode: PERMISSION_MODES.AUTO }).length,
+        1
+      );
+    });
+
     test("requests deferring to the harness while the user's is managed", () => {
       assert.strictEqual(toolPermissionRequests(null).length, 1);
       assert.strictEqual(

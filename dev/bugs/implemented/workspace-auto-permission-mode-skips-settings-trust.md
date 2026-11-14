@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing 821990c3f; reproduced against compiled `out/` with `collectWorkspaceSensitiveSettingRequests`
 - **Area:** `src/utils/ToolPermissionUtils.ts` (`isToolPermissionConfigNoWiderThan`, `PERMISSION_MODE_BREADTH`)
-- **Severity:** high (security: a checked-in workspace setting widens tool permissions without the trust prompt)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

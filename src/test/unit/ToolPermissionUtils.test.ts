@@ -49,7 +49,7 @@ suite("ToolPermissionUtils", () => {
   });
 
   suite("isToolPermissionConfigNoWiderThan", () => {
-    test("orders auto between custom and allowAll", () => {
+    test("only compares auto with auto", () => {
       assert.strictEqual(
         isToolPermissionConfigNoWiderThan(
           config(PERMISSION_MODES.AUTO),
@@ -69,7 +69,38 @@ suite("ToolPermissionUtils", () => {
           config(PERMISSION_MODES.AUTO),
           config(PERMISSION_MODES.ALLOW_ALL)
         ),
+        false
+      );
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.AUTO),
+          config(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
+        ),
+        false
+      );
+    });
+
+    test("compares custom allow-lists against auto allow-lists", () => {
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.CUSTOM, ["shell"]),
+          config(PERMISSION_MODES.AUTO, ["write"])
+        ),
+        false
+      );
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.CUSTOM, ["write"]),
+          config(PERMISSION_MODES.AUTO, ["write"])
+        ),
         true
+      );
+      assert.strictEqual(
+        isToolPermissionConfigNoWiderThan(
+          config(PERMISSION_MODES.CUSTOM, ["write"]),
+          config(PERMISSION_MODES.AUTO, ["write"], ["shell"])
+        ),
+        false
       );
     });
 
