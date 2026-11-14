@@ -300,6 +300,28 @@ const version = CTRLYOKE_VERSION;
 
 const program = new Command();
 program.exitOverride((error) => {
+  const args = process.argv.slice(2);
+  if (error.exitCode !== 0 && args.includes("--json")) {
+    const commandName =
+      args[0] === CLI_RUN_OPERATION_KINDS.RUN
+        ? CLI_RUN_OPERATION_KINDS.RUN
+        : undefined;
+    const message = error.message.replace(/^error: /i, "");
+    reportCliError(new CliUsageError(message), {
+      json: true,
+      envelope: (errorMessage) =>
+        commandName === CLI_RUN_OPERATION_KINDS.RUN
+          ? buildCliJsonResult({
+              workspaceRoot: process.cwd(),
+              error: errorMessage,
+            })
+          : {
+              schemaVersion: 1,
+              success: false,
+              error: { message: errorMessage },
+            },
+    });
+  }
   process.exit(error.exitCode === 0 ? 0 : CLI_USAGE_EXIT_CODE);
 });
 
@@ -947,21 +969,31 @@ async function runCommand(
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
 ): Promise<void> {
+  const reportRunUsageError = (error: unknown): void => {
+    reportCliError(error, {
+      json: options.json === true,
+      envelope: (message) =>
+        buildCliJsonResult({
+          workspaceRoot: options.cwd ?? process.cwd(),
+          workflowFileReference: file,
+          error: message,
+        }),
+    });
+  };
   if (
     operation.kind === CLI_RUN_OPERATION_KINDS.RUN &&
     options.sessionId !== undefined &&
     options.resumeSession === false
   ) {
-    reportCliError(
-      new CliUsageError("--session-id cannot be used with --no-resume-session"),
-      { json: options.json === true }
+    reportRunUsageError(
+      new CliUsageError("--session-id cannot be used with --no-resume-session")
     );
   }
   if (options.harness !== undefined) {
     try {
       assertHarnessId(options.harness);
     } catch (error) {
-      reportCliError(error, { json: options.json === true });
+      reportRunUsageError(error);
     }
   }
 
@@ -973,9 +1005,8 @@ async function runCommand(
     !file &&
     !options.prompt
   ) {
-    reportCliError(
-      new CliUsageError("Provide a file argument or --prompt <text>"),
-      { json: options.json === true }
+    reportRunUsageError(
+      new CliUsageError("Provide a file argument or --prompt <text>")
     );
   }
   if (
@@ -984,11 +1015,8 @@ async function runCommand(
     file &&
     options.prompt
   ) {
-    reportCliError(
-      new CliUsageError(
-        "--prompt cannot be used together with a file argument"
-      ),
-      { json: options.json === true }
+    reportRunUsageError(
+      new CliUsageError("--prompt cannot be used together with a file argument")
     );
   }
 

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CLI usage errors now keep the documented JSON envelope for rejected option values, invalid choices and missing required options; `run --json` usage failures use the run-result shape.
 - MCP condition presets now cap caller retry overrides at the effective budget authored by the preset, including retry-action defaults.
 - Compatibility analysis now warns when `auto` permission mode falls back to `custom` for an old or undetected harness CLI version.
 - Continuing a stopped, failed or appended named-worktree run now uses its recorded directory and branch, even after defaults change.

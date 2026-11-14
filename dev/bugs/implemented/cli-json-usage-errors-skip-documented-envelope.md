@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli, docs/CLI subagent)
 - **Area:** `src/cli.ts` (`program.exitOverride`, early checks in `runCommand`), `src/cli/CliRunCommandDefinitions.ts` (option parsers), `src/cli/RunImportCommand.ts` (`--changes` choices), `src/cli/CliExitCode.ts` (`reportCliError`)
-- **Severity:** medium (breaks scripts that parse `--json` stdout)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

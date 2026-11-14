@@ -48,11 +48,16 @@ suite("CLI error contract baseline", () => {
 
     const json = await runCli(["run", "--json"], cwd);
     assert.strictEqual(json.code, 2, json.stderr);
-    assert.deepStrictEqual(JSON.parse(json.stdout), {
-      schemaVersion: 1,
-      success: false,
-      error: { message: "Provide a file argument or --prompt <text>" },
-    });
+    const result = JSON.parse(json.stdout);
+    assert.strictEqual(result.schemaVersion, 1);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, "error");
+    assert.strictEqual(
+      result.error.message,
+      "Provide a file argument or --prompt <text>"
+    );
+    assert.ok(result.summary);
+    assert.ok(Array.isArray(result.steps));
     assert.strictEqual(json.stderr, "");
   });
 

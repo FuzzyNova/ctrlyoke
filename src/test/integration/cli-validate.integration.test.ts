@@ -277,12 +277,14 @@ suite("ctrlyoke validate compatibility command", () => {
     for (const args of commands) {
       const result = await runCli(args, root);
       assert.strictEqual(result.code, 2, `${args[0]}: ${result.stderr}`);
-      // Under --json the shared reporter writes the error envelope to stdout.
-      assert.deepStrictEqual(JSON.parse(result.stdout), {
-        schemaVersion: 1,
-        success: false,
-        error: { message: "Invalid harness: bogus" },
-      });
+      // Run-family validation keeps the run-result shape under --json.
+      const json = JSON.parse(result.stdout);
+      assert.strictEqual(json.schemaVersion, 1);
+      assert.strictEqual(json.success, false);
+      assert.strictEqual(json.status, "error");
+      assert.strictEqual(json.error.message, "Invalid harness: bogus");
+      assert.ok(json.summary);
+      assert.ok(Array.isArray(json.steps));
     }
   });
 
