@@ -108,7 +108,7 @@ export const WORKFLOW_PROPERTY_SNIPPETS: Readonly<
   [PROMPT_PROPERTIES.ERROR_BEHAVIOR]: {
     detail: "Harness/session failure policy",
     documentation:
-      "Controls what happens when the harness itself fails. `onError` supports `stopWorkflow`, `retry`, or `continue`. `maxRetries` and `retryDelaySec` apply when retry is selected.",
+      "Controls what happens when the harness itself fails. `onError` supports `stopWorkflow`, `retry` (re-run the whole step), `retryPhase` (re-run only the phase that errored), or `continue`. `maxRetries` and `retryDelaySec` apply to `retry` and `retryPhase`.",
     insertSnippet: `${PROMPT_PROPERTIES.ERROR_BEHAVIOR}:\n  onError: stopWorkflow`,
   },
   [PROMPT_PROPERTIES.SCRIPT]: {
