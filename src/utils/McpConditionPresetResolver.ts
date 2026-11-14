@@ -68,9 +68,11 @@ export function materializeMcpConditionPreset(
   const maxRetries = resolveMaxRetries(preset, reference, field, presetLimit);
   const condition = { ...preset };
   delete condition.params;
+  const literalEnvKeys = Object.keys(suppliedParams);
   return {
     ...condition,
     env: { ...env, ...suppliedParams },
+    ...(literalEnvKeys.length > 0 ? { mcpLiteralEnvKeys: literalEnvKeys } : {}),
     ...(reference.retryPrompt === undefined
       ? {}
       : { retryPrompt: reference.retryPrompt }),

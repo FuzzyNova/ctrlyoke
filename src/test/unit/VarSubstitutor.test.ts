@@ -21,6 +21,22 @@ suite("VarSubstitutor Tests", () => {
     assert.strictEqual((full.finalStep as any).harness, "codex-cli");
     assert.notStrictEqual(result, source);
   });
+  test("keeps MCP supplied condition env values literal during dispatch substitution", () => {
+    const condition = {
+      script: "echo {{authored}}",
+      env: { AUTHORED: "{{authored}}", SUPPLIED: "{{secretish}}" },
+      mcpLiteralEnvKeys: ["SUPPLIED"],
+    };
+    const result = VarSubstitutor.applyToResolvedProperties(
+      { model: "model", hooks: null, preCondition: condition } as any,
+      { authored: "expanded", secretish: "x" }
+    );
+    assert.strictEqual((result as any).preCondition.script, "echo expanded");
+    assert.deepStrictEqual((result as any).preCondition.env, {
+      AUTHORED: "expanded",
+      SUPPLIED: "{{secretish}}",
+    });
+  });
 
   test("rejects invalid typed values and partial value placeholders", () => {
     new PromptFileParser();

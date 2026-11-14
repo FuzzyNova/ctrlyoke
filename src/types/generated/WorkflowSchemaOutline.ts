@@ -724,6 +724,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
   },
   "endCondition": {
     "properties": {
+      "mcpLiteralEnvKeys": {
+        "valueKind": "array",
+        "description": "Internal provenance for MCP supplied literal env values."
+      },
       "script": {
         "valueKind": "string",
         "description": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`."
@@ -836,6 +840,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
   },
   "preCondition": {
     "properties": {
+      "mcpLiteralEnvKeys": {
+        "valueKind": "array",
+        "description": "Internal provenance for MCP supplied literal env values."
+      },
       "script": {
         "valueKind": "string",
         "description": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`."

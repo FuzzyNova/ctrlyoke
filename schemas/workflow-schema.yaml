@@ -1357,6 +1357,12 @@ $defs:
     allOf:
       - $ref: '#/$defs/scriptProperties'
     properties:
+      mcpLiteralEnvKeys:
+        type: array
+        items:
+          type: string
+        description: Internal provenance for MCP supplied literal env values.
+        title: MCP Literal Env Keys
       script:
         $ref: '#/$defs/scriptProperties/properties/script'
         title: Script
@@ -1692,6 +1698,12 @@ $defs:
     allOf:
       - $ref: '#/$defs/scriptProperties'
     properties:
+      mcpLiteralEnvKeys:
+        type: array
+        items:
+          type: string
+        description: Internal provenance for MCP supplied literal env values.
+        title: MCP Literal Env Keys
       script:
         $ref: '#/$defs/scriptProperties/properties/script'
         title: Script

@@ -1148,7 +1148,7 @@ suite("WorktreeManager", function () {
     await info.lease.release();
   });
 
-  test("does not report setup variables when workflow vars are absent", async () => {
+  test("reports unresolved setup variables when workflow vars are absent", async () => {
     const { parent, repository } = await makeRepository(
       "setup-unresolved-variable-without-vars"
     );
@@ -1171,7 +1171,7 @@ suite("WorktreeManager", function () {
         unresolved.push([...placeholders]),
     });
 
-    assert.deepStrictEqual(unresolved, []);
+    assert.deepStrictEqual(unresolved, [["{{unknown}}"]]);
     assert.strictEqual(runner.calls[0]!.command, "echo {{unknown}}");
     await info.lease.release();
   });

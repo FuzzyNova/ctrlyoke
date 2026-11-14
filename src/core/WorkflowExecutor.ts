@@ -5241,10 +5241,6 @@ export class WorkflowExecutor {
     step: WorkflowStep,
     phase?: string
   ): void {
-    if (Object.keys(vars).length === 0) {
-      return;
-    }
-
     const findings = fields.flatMap(({ field, value }) =>
       value === undefined
         ? []

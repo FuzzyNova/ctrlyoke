@@ -523,7 +523,7 @@ export class ExecutionPreviewService {
       promptStep.prompt
     );
     const secretNames = getEffectiveSecretGrants(
-      promptStep,
+      target.step,
       properties.secrets,
       getProcessMapSecretNames(properties)
     );

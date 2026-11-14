@@ -679,10 +679,15 @@ export class WorkflowStartupPipeline {
   async preflightCompatibility(
     workflow = this.port.queue.getWorkflowFile()
   ): Promise<boolean> {
+    const compatibilityView = VarSubstitutor.substituteWorkflowView(
+      workflow,
+      workflow.vars ?? {},
+      "dispatch"
+    );
     this.compatibilityDiagnostics =
       await this.port.analyzeWorkflowCompatibility({
-        ...workflow,
-        steps: workflow.steps ?? this.port.queue.getState().steps,
+        ...compatibilityView,
+        steps: compatibilityView.steps ?? this.port.queue.getState().steps,
       });
     const compatibilityErrors = this.compatibilityDiagnostics.filter(
       (diagnostic) =>

@@ -671,6 +671,10 @@ export class VarSubstitutor {
       "preCondition.script" | "endCondition.script" | "scriptStep.script",
     envPolicy: "preCondition.env.*" | "endCondition.env.*" | "scriptStep.env.*"
   ): T {
+    const literalEnvKeys = new Set(
+      (props as ScriptProperties & { mcpLiteralEnvKeys?: string[] })
+        .mcpLiteralEnvKeys ?? []
+    );
     return {
       ...props,
       script: this.substitute(
@@ -682,7 +686,7 @@ export class VarSubstitutor {
         env: Object.fromEntries(
           Object.entries(props.env).map(([key, value]) => [
             key,
-            this.substitute(
+            literalEnvKeys.has(key) ? value : this.substitute(
               value,
               vars,
               VAR_SUBSTITUTION_POLICY[envPolicy].fencedCodeProtected

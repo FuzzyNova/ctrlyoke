@@ -24,8 +24,9 @@ Each step ticks its own item, notes any deviation under it, and commits.
       the parser's Ajv instance, and CLI run-start preview uses a copied view
       so resolved values do not overwrite the authored workflow. The walker
       still contains per-field inventories and is not complete.
-- [ ] 2. Engine gaps 1–4 (Dry Run grants, preflight additionalArgs, advisory
+- [x] 2. Engine gaps 1–4 (Dry Run grants, preflight additionalArgs, advisory
       with empty `vars`, preset param values left literal).
+      Note: MCP supplied env keys are recorded on the attached condition so literal provenance survives run-file persistence and resume.
 - [x] 3. Gaps 5–6: CLI help, schema descriptions and docs table driven by the
       policy table; Dry Run shows worktree setup.
       Note: `substituteWorkflowView` exists in this checkout; it remains only

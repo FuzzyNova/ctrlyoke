@@ -1308,6 +1308,8 @@ export interface ScriptProperties {
 }
 
 export interface EndCondition extends ScriptProperties {
+  /** Internal MCP provenance: env keys supplied as literal agent values. */
+  mcpLiteralEnvKeys?: string[];
   /** Maximum shared retry attempts across both pass and fail directions (default: 0). */
   maxRetries?: number;
   retryPrompt?: string; // Template with placeholders for retry messages
@@ -1324,6 +1326,8 @@ export interface EndCondition extends ScriptProperties {
  * Determines whether to run the prompt, skip it, or stop the workflow.
  */
 export interface PreCondition extends ScriptProperties {
+  /** Internal MCP provenance: env keys supplied as literal agent values. */
+  mcpLiteralEnvKeys?: string[];
   /** What to do when the pre-condition passes. Default: "continue" (run the prompt). */
   onPass?: PreConditionAction;
   /** What to do when the pre-condition fails. Default: "skipPrompt". */

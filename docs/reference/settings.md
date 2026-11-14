@@ -401,7 +401,7 @@ Fields:
 
 ### `defaults.endCondition` {#defaults-endcondition}
 
-- **Type:** `{ script, env?, compareSource?, … }` or `null`
+- **Type:** `{ mcpLiteralEnvKeys?, script, env?, … }` or `null`
 - **Default:** `null`
 - **Workflow field:** [`endCondition`](/reference/workflow-schema#execution-properties-endcondition) — a workflow or step value overrides this default
 
@@ -409,6 +409,7 @@ Default end condition for new workflows. `null` (the default) means new workflow
 
 Fields:
 
+- `mcpLiteralEnvKeys` · `string[]` — Internal provenance for MCP supplied literal env values.
 - `script` · `string` · required — Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.
 - `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` or `string` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
@@ -427,7 +428,7 @@ Fields:
 
 ### `defaults.preCondition` {#defaults-precondition}
 
-- **Type:** `{ script, env?, compareSource?, … }` or `null`
+- **Type:** `{ mcpLiteralEnvKeys?, script, env?, … }` or `null`
 - **Default:** `null`
 - **Workflow field:** [`preCondition`](/reference/workflow-schema#execution-properties-precondition) — a workflow or step value overrides this default
 
@@ -435,6 +436,7 @@ Default pre-condition for new workflows. `null` (the default) means new workflow
 
 Fields:
 
+- `mcpLiteralEnvKeys` · `string[]` — Internal provenance for MCP supplied literal env values.
 - `script` · `string` · required — Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.
 - `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` or `string` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.

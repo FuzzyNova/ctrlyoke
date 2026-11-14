@@ -595,6 +595,12 @@ Script gate that runs before the prompt. Determines whether to run the prompt, s
 
 Also includes every field from [Shared script fields](#script-fields).
 
+### `mcpLiteralEnvKeys` {#pre-condition-mcpliteralenvkeys}
+
+- **Type:** `string[]`
+
+Internal provenance for MCP supplied literal env values.
+
 ### `script` {#pre-condition-script}
 
 - **Type:** `string`
@@ -697,6 +703,12 @@ Accepted forms:
 Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeoutSec with preCondition and scriptStep via scriptProperties.
 
 Also includes every field from [Shared script fields](#script-fields).
+
+### `mcpLiteralEnvKeys` {#end-condition-mcpliteralenvkeys}
+
+- **Type:** `string[]`
+
+Internal provenance for MCP supplied literal env values.
 
 ### `script` {#end-condition-script}
 

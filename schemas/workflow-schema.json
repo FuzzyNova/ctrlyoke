@@ -1204,6 +1204,11 @@
         }
       ],
       "properties": {
+        "mcpLiteralEnvKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Internal provenance for MCP supplied literal env values."
+        },
         "script": {
           "$ref": "#/$defs/scriptProperties/properties/script"
         },
@@ -1470,6 +1475,11 @@
         }
       ],
       "properties": {
+        "mcpLiteralEnvKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Internal provenance for MCP supplied literal env values."
+        },
         "script": {
           "$ref": "#/$defs/scriptProperties/properties/script"
         },

@@ -74,6 +74,7 @@ import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { resolveCoordinationBoardScope } from "../../core/orchestration/ExecutionRootCoordinationStore";
 import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
 import { materializeMcpConditionPreset } from "../../utils/McpConditionPresetResolver";
+import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import { resolveRetryBudget } from "../../core/RetryBudget";
 
 interface RunFixture {
@@ -2592,7 +2593,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           },
           preCondition: {
             use: "inspect",
-            params: { BUG_FILE: "dev/bugs/backlog/example.md" },
+            params: { BUG_FILE: "{{secretish}}" },
           },
         },
         {
@@ -2621,9 +2622,15 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     assert.deepStrictEqual(appended.preCondition, {
       script: 'node "$BUG_FILE"',
-      env: { PREFIX: "src/", BUG_FILE: "dev/bugs/backlog/example.md" },
+      env: { PREFIX: "src/", BUG_FILE: "{{secretish}}" },
       maxRetries: 1,
+      mcpLiteralEnvKeys: ["BUG_FILE"],
     });
+    const resumedCondition = VarSubstitutor.applyToResolvedProperties(
+      { model: "model", hooks: null, preCondition: appended.preCondition } as any,
+      { secretish: "x" }
+    ).preCondition;
+    assert.strictEqual(resumedCondition?.env?.BUG_FILE, "{{secretish}}");
     assert.strictEqual(
       (persisted.steps![3] as PromptStep).endCondition?.script,
       "git status --porcelain"
