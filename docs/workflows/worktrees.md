@@ -226,7 +226,9 @@ up would only fail later.
 
 There is no separate retry action. Fix the cause (or the `setup` command) and
 press **Run** again: ctrlyoke reuses the same worktree and runs setup again. The
-failed attempt's output stays in that run's history.
+failed attempt's output stays in that run's history. Until setup succeeds,
+every workflow that uses that `directory` needs a `setup` command: a run without
+one is refused, because the worktree was never provisioned.
 
 ## Parallel groups
 
