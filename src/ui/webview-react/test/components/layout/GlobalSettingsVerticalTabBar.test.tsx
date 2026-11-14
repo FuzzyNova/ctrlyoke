@@ -177,4 +177,29 @@ describe("GlobalSettingsVerticalTabBar", () => {
 
     expect(scroller.scrollTop).toBe(50);
   });
+
+  it("shows the tab name as a tooltip on hover in icon-only mode", () => {
+    renderRail();
+    const tab = screen.getByRole("button", { name: ALL_TABS[0].label });
+
+    fireEvent.mouseEnter(tab);
+    expect(screen.getByRole("tooltip").textContent).toBe(ALL_TABS[0].label);
+
+    fireEvent.mouseLeave(tab);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("shows no custom tooltip when the rail is expanded", () => {
+    render(
+      <GlobalSettingsVerticalTabBar
+        tabs={TABS}
+        activeTab={ALL_TABS[0].id}
+        onTabChange={vi.fn()}
+      />
+    );
+    fireEvent.mouseEnter(
+      screen.getByRole("button", { name: ALL_TABS[0].label })
+    );
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
 });
