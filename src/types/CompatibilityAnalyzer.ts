@@ -44,6 +44,7 @@ import {
 } from "./CompatibilityTypes";
 import type { CompatibilityCaveatCode } from "./CompatibilityTypes";
 import { isShippedDefaultToolList } from "./CtrlYokeSettings";
+import { versionSatisfies } from "../utils/HarnessVersion";
 
 export interface CompatibilityExecutionTarget {
   consumer: CompatibilityConsumerTarget;
@@ -275,6 +276,42 @@ export function analyzeCompatibility({
         ),
       },
     ];
+
+    const autoModeDeclaration = declarations?.autoMode;
+    const autoModeOverride = autoModeDeclaration?.modeOverrides?.[
+      target.resolved.properties.executionMode
+    ];
+    const autoModeAlreadyUnsupported =
+      (autoModeOverride?.fidelity ?? autoModeDeclaration?.fidelity) ===
+      CAPABILITY_FIDELITIES.UNSUPPORTED;
+    const autoModeVersionGate = autoModeDeclaration?.autoModeMinimumVersion;
+    const versionAssessment = installed.versionAssessment;
+    if (
+      permissions.mode === PERMISSION_MODES.AUTO &&
+      !autoModeAlreadyUnsupported &&
+      autoModeVersionGate &&
+      versionAssessment &&
+      (!versionAssessment.installedVersion ||
+        !versionSatisfies(
+          versionAssessment.installedVersion,
+          autoModeVersionGate
+        ))
+    ) {
+      const code = COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK;
+      diagnostics.push({
+        code,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId,
+        capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+        consumer: target.consumer,
+        sourceTier,
+        state: effective.autoMode,
+        message: getCompatibilityDiagnosticMessage(code, {
+          harnessId,
+          capability: PERMISSION_CAPABILITY_KEYS.AUTO_MODE,
+        }),
+      });
+    }
 
     for (const field of permissionFields) {
       if (!field.used) {

@@ -142,6 +142,7 @@ export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor
     autoMode: {
       fidelity: "exact",
       mechanism: "native",
+      autoModeMinimumVersion: ANTIGRAVITY_AGENT_MODE_SETTING_RANGE,
       verification: capabilitySuiteVerification(
         [ANTIGRAVITY_AGENT_MODE_SETTING_RANGE],
         INLINE_CONFIG_SUITE_REFERENCE
@@ -250,8 +251,7 @@ export class AntigravityToolPermissionMapper
     const fallback = await this.prepareAutoModeFallback(
       config,
       context,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      ANTIGRAVITY_AGENT_MODE_SETTING_RANGE
+      HARNESS_IDS.ANTIGRAVITY_CLI
     );
     if (fallback) return fallback;
     // The same gate decides whether `agentMode` may be written at all.

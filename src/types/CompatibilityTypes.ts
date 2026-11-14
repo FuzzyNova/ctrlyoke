@@ -102,6 +102,8 @@ export interface CapabilityDeclaration {
   fidelity: CapabilityFidelity;
   mechanism: CapabilityMechanism;
   verification?: CapabilityVerification;
+  /** Minimum CLI version required to use auto permission mode without fallback. */
+  autoModeMinimumVersion?: HarnessVersionRange;
   caveatCode?: CompatibilityCaveatCode;
   remediationCode?: string;
   /** Capability refinements for harness execution modes. */

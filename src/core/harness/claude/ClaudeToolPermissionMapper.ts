@@ -32,6 +32,7 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "exact",
     mechanism: "native",
+    autoModeMinimumVersion: CLAUDE_AUTO_MODE_MIN_VERSION,
     verification: capabilitySuiteVerification(
       [CLAUDE_AUTO_MODE_MIN_VERSION],
       INLINE_CONFIG_SUITE_REFERENCE
@@ -115,8 +116,7 @@ export class ClaudeToolPermissionMapper
     const fallback = await this.prepareAutoModeFallback(
       config,
       context,
-      HARNESS_IDS.CLAUDE_CLI,
-      CLAUDE_AUTO_MODE_MIN_VERSION
+      HARNESS_IDS.CLAUDE_CLI
     );
     if (fallback) return fallback;
     const isAuto = config.mode === PERMISSION_MODES.AUTO;

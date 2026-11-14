@@ -53,6 +53,7 @@ const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "exact",
     mechanism: "native",
+    autoModeMinimumVersion: QWEN_AUTO_MODE_MIN_VERSION,
     verification: {
       ...QWEN_PERMISSION_VERIFICATION,
       verifiedVersions: [QWEN_AUTO_MODE_MIN_VERSION],
@@ -119,8 +120,7 @@ export class QwenToolPermissionMapper
     const fallback = await this.prepareAutoModeFallback(
       config,
       context,
-      HARNESS_IDS.QWEN_CLI,
-      QWEN_AUTO_MODE_MIN_VERSION
+      HARNESS_IDS.QWEN_CLI
     );
     if (fallback) return fallback;
     if (config.mode === PERMISSION_MODES.NONE) {

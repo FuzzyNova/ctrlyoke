@@ -33,6 +33,7 @@ const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "exact",
     mechanism: "native",
+    autoModeMinimumVersion: COPILOT_AUTO_MODE_MIN_VERSION,
     verification: {
       kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
       reference: COPILOT_AUTO_MODE_BUG,
@@ -150,8 +151,7 @@ export class CopilotToolPermissionMapper
     const fallback = await this.prepareAutoModeFallback(
       config,
       context,
-      HARNESS_IDS.COPILOT_CLI,
-      COPILOT_AUTO_MODE_MIN_VERSION
+      HARNESS_IDS.COPILOT_CLI
     );
     if (fallback) return fallback;
     const isAuto = config.mode === PERMISSION_MODES.AUTO;

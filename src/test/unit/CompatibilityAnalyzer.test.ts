@@ -187,6 +187,47 @@ function mixedWorkflow(overrides: Partial<PromptFile> = {}): PromptFile {
 }
 
 suite("CompatibilityAnalyzer", () => {
+  test("warns when detected CLI version cannot use auto permission mode", () => {
+    const base = installed(HARNESS_IDS.CLAUDE_CLI, true, "exact", "unknown");
+    const workflow = mixedWorkflow({
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      steps: [{ prompt: "Auto target" }],
+      toolPermissions: { mode: "auto", allowedTools: [], deniedTools: [] },
+    });
+    const capabilitiesFor = (installedVersion?: string) =>
+      snapshot({
+        [HARNESS_IDS.CLAUDE_CLI]: {
+          ...base,
+          descriptor: {
+            ...base.descriptor,
+            permissions: {
+              ...base.descriptor!.permissions!,
+              autoMode: {
+                ...base.descriptor!.permissions!.autoMode,
+                autoModeMinimumVersion: ">=2.1.170",
+              },
+            },
+          },
+          versionAssessment: {
+            status: HARNESS_VERSION_STATUSES.UNKNOWN,
+            ...(installedVersion ? { installedVersion } : {}),
+            minimumVersion: "1.0.0",
+            testedWithVersion: "2.1.170",
+            updateCommand: "claude update",
+          },
+        },
+      });
+    const fallback = (version?: string) =>
+      analyze(workflow, capabilitiesFor(version)).filter(
+        (item) =>
+          item.code ===
+          COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
+      );
+    assert.strictEqual(fallback("2.1.169").length, 1);
+    assert.strictEqual(fallback().length, 1);
+    assert.strictEqual(fallback("2.1.170").length, 0);
+  });
+
   test("uses autoMode capability only for auto permissions", () => {
     const base = installed(HARNESS_IDS.OPENCODE_CLI, true, "exact", "verified");
     const unsupported = {

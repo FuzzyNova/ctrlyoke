@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing the `auto` permission mode commits (821990c3f..3a701824a)
 - **Area:** `src/types/CompatibilityAnalyzer.ts` (`autoModeFieldState`, the unverified-diagnostic branch), `src/core/harness/shared/interfaces/IToolPermissionMapper.ts` (`prepareAutoModeFallback`), the per-harness `*_AUTO_MODE_MIN_VERSION` constants
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

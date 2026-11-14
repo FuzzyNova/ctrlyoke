@@ -11,7 +11,6 @@ import {
 } from "../../../../types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
-  HarnessVersionRange,
   PermissionCapabilityDescriptor,
 } from "../../../../types/CompatibilityTypes";
 import { versionSatisfies } from "../../../../utils/HarnessVersion";
@@ -153,8 +152,7 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
   protected async prepareAutoModeFallback(
     config: ToolPermissionConfig,
     context: PermissionContext,
-    harnessId: HarnessId,
-    minVersion?: HarnessVersionRange
+    harnessId: HarnessId
   ): Promise<ToolPermissionApplication | undefined> {
     if (config.mode !== PERMISSION_MODES.AUTO) return undefined;
     const declaration = this.capabilities.autoMode;
@@ -167,6 +165,7 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
     const declaredSupported =
       (override?.fidelity ?? declaration.fidelity) !==
       CAPABILITY_FIDELITIES.UNSUPPORTED;
+    const minVersion = declaration.autoModeMinimumVersion;
     const versionSupported =
       minVersion === undefined ||
       (!!context.cliVersion &&

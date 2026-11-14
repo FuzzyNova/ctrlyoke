@@ -27,6 +27,7 @@ export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "exact",
     mechanism: "native",
+    autoModeMinimumVersion: CODEX_AUTO_MODE_MIN_VERSION,
     verification: capabilitySuiteVerification(
       [CODEX_AUTO_MODE_MIN_VERSION],
       INLINE_CONFIG_SUITE_REFERENCE
@@ -94,8 +95,7 @@ export class CodexToolPermissionMapper
     const fallback = await this.prepareAutoModeFallback(
       config,
       context,
-      HARNESS_IDS.CODEX_CLI,
-      CODEX_AUTO_MODE_MIN_VERSION
+      HARNESS_IDS.CODEX_CLI
     );
     if (fallback) return fallback;
     return {
