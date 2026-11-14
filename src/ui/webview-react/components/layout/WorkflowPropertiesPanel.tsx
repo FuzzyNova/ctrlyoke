@@ -1902,34 +1902,42 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <CustomSelect
-                    id="settings-agent"
-                    schemaPath="agent"
-                    triggerAriaLabel="Agent"
-                    value={effectiveAgent || ""}
-                    onChange={handleAgentChange}
-                    options={[
-                      ...toSelectOptions(
-                        WORKFLOW_AGENT_SELECTION_OPTIONS_META,
-                        "agent"
-                      ),
-                      ...availableAgents.map((agent) =>
-                        toAgentSelectOption(agent, agent.name || agent.path)
-                      ),
-                    ]}
-                    namespace={DROPDOWN_NAMESPACES.AGENT}
-                    hiddenValues={
-                      hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
+                  <WorkflowVariableEnumValue
+                    value={workflowProperties.agent ?? undefined}
+                    vars={workflowVars}
+                    onClear={() =>
+                      postWorkflowPropertiesUpdate({ agent: undefined })
                     }
-                    onHideOption={(v) =>
-                      hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-                    }
-                    onUnhideOption={(v) =>
-                      unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-                    }
-                    nonHideableValues={[]}
-                    warning={agentWarn ?? undefined}
-                  />
+                  >
+                    <CustomSelect
+                      id="settings-agent"
+                      schemaPath="agent"
+                      triggerAriaLabel="Agent"
+                      value={effectiveAgent || ""}
+                      onChange={handleAgentChange}
+                      options={[
+                        ...toSelectOptions(
+                          WORKFLOW_AGENT_SELECTION_OPTIONS_META,
+                          "agent"
+                        ),
+                        ...availableAgents.map((agent) =>
+                          toAgentSelectOption(agent, agent.name || agent.path)
+                        ),
+                      ]}
+                      namespace={DROPDOWN_NAMESPACES.AGENT}
+                      hiddenValues={
+                        hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
+                      }
+                      onHideOption={(v) =>
+                        hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                      }
+                      onUnhideOption={(v) =>
+                        unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                      }
+                      nonHideableValues={[]}
+                      warning={agentWarn ?? undefined}
+                    />
+                  </WorkflowVariableEnumValue>
                 </FormField>
 
                 <FormField
@@ -2279,23 +2287,35 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <CustomSelect
-                    id="settings-resume-session"
-                    schemaPath="resumeSession"
-                    shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME}
-                    triggerAriaLabel="Resume Session"
+                  <WorkflowVariableEnumValue
                     value={
-                      workflowProperties.sessionId ===
-                        SESSION_ID_SENTINELS.FINAL_STEP &&
-                      effectiveResumeSession
-                        ? SESSION_ID_SENTINELS.FINAL_STEP
-                        : effectiveResumeSession
-                          ? RESUME_SESSION_SELECTIONS.YES
-                          : RESUME_SESSION_SELECTIONS.NO
+                      typeof workflowProperties.resumeSession === "string"
+                        ? workflowProperties.resumeSession
+                        : undefined
                     }
-                    onChange={handleResumeSessionChange}
-                    options={[...getResumeSessionOptions()]}
-                  />
+                    vars={workflowVars}
+                    onClear={() =>
+                      postWorkflowPropertiesUpdate({ resumeSession: undefined })
+                    }
+                  >
+                    <CustomSelect
+                      id="settings-resume-session"
+                      schemaPath="resumeSession"
+                      shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME}
+                      triggerAriaLabel="Resume Session"
+                      value={
+                        workflowProperties.sessionId ===
+                          SESSION_ID_SENTINELS.FINAL_STEP &&
+                        effectiveResumeSession
+                          ? SESSION_ID_SENTINELS.FINAL_STEP
+                          : effectiveResumeSession
+                            ? RESUME_SESSION_SELECTIONS.YES
+                            : RESUME_SESSION_SELECTIONS.NO
+                      }
+                      onChange={handleResumeSessionChange}
+                      options={[...getResumeSessionOptions()]}
+                    />
+                  </WorkflowVariableEnumValue>
                   {/* Session ID input — always visible, grayed out when not applicable */}
                   <div
                     className={`mt-1 ${
@@ -2536,12 +2556,20 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   or script step encounters an internal error: stop, retry, or
                   continue.
                 </p>
-                <ErrorBehaviorEditor
-                  schemaPath="errorBehavior"
-                  value={effectiveErrorBehavior}
-                  onChange={handleErrorBehaviorChange}
-                  idPrefix="settings-error"
-                />
+                <WorkflowVariableEnumValue
+                  value={workflowProperties.errorBehavior?.onError}
+                  vars={workflowVars}
+                  onClear={() =>
+                    postWorkflowPropertiesUpdate({ errorBehavior: undefined })
+                  }
+                >
+                  <ErrorBehaviorEditor
+                    schemaPath="errorBehavior"
+                    value={effectiveErrorBehavior}
+                    onChange={handleErrorBehaviorChange}
+                    idPrefix="settings-error"
+                  />
+                </WorkflowVariableEnumValue>
               </PropertyGroup>
 
               <FormField
