@@ -64,6 +64,7 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { pathsEqual } from "../utils/PathCasing";
+import { VarSubstitutor } from "../utils/VarSubstitutor";
 import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
 import {
   USER_FEEDBACK_SEVERITY,
@@ -2627,9 +2628,29 @@ export class WorkflowInstance
       ) {
         this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
       }
-      this.worktreeResolution = await resolveWorktreeForStart(
-        this.promptQueue.getWorkflowFile().worktree,
+      const authoredWorkflow = this.promptQueue.getWorkflowFile();
+      const runStart = VarSubstitutor.applyToRunStartWorktree(
+        authoredWorkflow,
         ConfigurationUtils.getDefaultWorktree(),
+        authoredWorkflow.vars ?? {}
+      );
+      const recorded = (authoredWorkflow as WorkingFile)._runtime?.worktree;
+      const continueWorkflow =
+        recorded?.mode === WORKTREE_MODES.NAMED
+          ? {
+              ...runStart.workflow,
+              worktree: {
+                mode: WORKTREE_MODES.NAMED,
+                branch: recorded.branchName,
+                ...(recorded.directory
+                  ? { directory: recorded.directory }
+                  : {}),
+              },
+            }
+          : runStart.workflow;
+      this.worktreeResolution = await resolveWorktreeForStart(
+        continueWorkflow.worktree,
+        runStart.defaultWorktree,
         this.platform.getNamedWorkspaceRoots(),
         (this.promptQueue.getWorkflowFile() as WorkingFile)._runtime?.worktree,
         true

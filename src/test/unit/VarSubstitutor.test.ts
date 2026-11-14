@@ -4,6 +4,39 @@ import type { ResolvedProperties } from "../../utils/SettingsPropertyResolver";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("VarSubstitutor Tests", () => {
+  test("substitutes run-start worktree values on a copy and rejects unresolved values", () => {
+    const workflow = {
+      worktree: {
+        mode: "named" as const,
+        branch: "{{b}}",
+        base: "main",
+        directory: "{{slot}}",
+      },
+      vars: { b: "feature/test", slot: "named-dir" },
+    };
+    const resolved = VarSubstitutor.applyToRunStartWorktree(
+      workflow,
+      false,
+      workflow.vars
+    );
+    assert.strictEqual(
+      (resolved.workflow.worktree as { branch: string }).branch,
+      "feature/test"
+    );
+    assert.strictEqual(
+      (workflow.worktree as { branch: string }).branch,
+      "{{b}}"
+    );
+    assert.throws(
+      () =>
+        VarSubstitutor.applyToRunStartWorktree(
+          { worktree: { mode: "named", branch: "{{missing}}" } },
+          false,
+          {}
+        ),
+      /worktree\.branch.*missing.*\{\{missing\}\}/
+    );
+  });
   suite("substitute", () => {
     test("replaces a single placeholder", () => {
       assert.strictEqual(

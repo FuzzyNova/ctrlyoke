@@ -33,6 +33,7 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { UserFeedbackSink } from "../../core/UserFeedbackSink";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { WorkspaceWorktreeResolution } from "../../utils/WorktreeResolution";
 import type { WorktreeInfo } from "../../core/orchestration/WorktreeManager";
@@ -371,6 +372,31 @@ suite("WorkflowStartupPipeline", () => {
     await pipeline.resolveWorktree();
 
     assert.strictEqual(port.worktree.resolution.origin, "default");
+  });
+
+  test("resolves a substituted run-start branch before worktree preflight", async () => {
+    const { pipeline, port } = createPipeline();
+    const authored = {
+      worktree: { mode: "named" as const, branch: "{{branch}}" },
+      vars: { branch: "feature/substituted" },
+    };
+    const resolved = VarSubstitutor.applyToRunStartWorktree(
+      authored,
+      false,
+      authored.vars
+    );
+    await pipeline.resolveWorktree(
+      false,
+      resolved.workflow,
+      resolved.defaultWorktree
+    );
+    assert.strictEqual(
+      port.worktree.resolution.config?.mode === WORKTREE_MODES.NAMED
+        ? port.worktree.resolution.config.branch
+        : undefined,
+      "feature/substituted"
+    );
+    assert.strictEqual(authored.worktree.branch, "{{branch}}");
   });
 
   test("allows a compatible workflow through the hard-fail preflight", async () => {

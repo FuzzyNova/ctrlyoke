@@ -17,6 +17,42 @@ export type VarSubstitutionUnresolved =
   (typeof VAR_SUBSTITUTION_UNRESOLVED)[keyof typeof VAR_SUBSTITUTION_UNRESOLVED];
 
 export const VAR_SUBSTITUTION_POLICY = {
+  "worktree.branch": {
+    phase: VAR_SUBSTITUTION_PHASES.RUN_START,
+    kind: VAR_SUBSTITUTION_KINDS.TEXT,
+    fencedCodeProtected: false,
+    unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
+  },
+  "worktree.base": {
+    phase: VAR_SUBSTITUTION_PHASES.RUN_START,
+    kind: VAR_SUBSTITUTION_KINDS.TEXT,
+    fencedCodeProtected: false,
+    unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
+  },
+  "worktree.directory": {
+    phase: VAR_SUBSTITUTION_PHASES.RUN_START,
+    kind: VAR_SUBSTITUTION_KINDS.TEXT,
+    fencedCodeProtected: false,
+    unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
+  },
+  "defaults.worktree.branch": {
+    phase: VAR_SUBSTITUTION_PHASES.RUN_START,
+    kind: VAR_SUBSTITUTION_KINDS.TEXT,
+    fencedCodeProtected: false,
+    unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
+  },
+  "defaults.worktree.base": {
+    phase: VAR_SUBSTITUTION_PHASES.RUN_START,
+    kind: VAR_SUBSTITUTION_KINDS.TEXT,
+    fencedCodeProtected: false,
+    unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
+  },
+  "defaults.worktree.directory": {
+    phase: VAR_SUBSTITUTION_PHASES.RUN_START,
+    kind: VAR_SUBSTITUTION_KINDS.TEXT,
+    fencedCodeProtected: false,
+    unresolved: VAR_SUBSTITUTION_UNRESOLVED.ERROR,
+  },
   "prompt.prompt": {
     phase: VAR_SUBSTITUTION_PHASES.DISPATCH,
     kind: VAR_SUBSTITUTION_KINDS.TEXT,

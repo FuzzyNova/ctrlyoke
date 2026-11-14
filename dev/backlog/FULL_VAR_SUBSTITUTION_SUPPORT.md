@@ -27,8 +27,10 @@ Each step ticks its own item, notes any deviation under it, and commits.
       Note: `VarSubstitutionPolicy.ts` exists, but the prerequisite
       `substituteWorkflowView` API was absent in this checkout; this item uses
       the existing policy and substitution API without adding the missing API.
-- [ ] 4. Run-start phase in startup/continue; `worktree.branch`/`base`/
+- [x] 4. Run-start phase in startup/continue; `worktree.branch`/`base`/
       `directory` substituted; workspace-trust predicate; worktrees docs.
+      Note: this checkout lacked `substituteWorkflowView`; a dedicated shared
+      worktree run-start helper was added to preserve authored definitions.
 - [ ] 5. Dispatch `text` fields (step `name`, `expected`, `shell`, `agent`,
       `skills[]`, `sessionId`, `priorContext.*`).
 - [ ] 6. Schema `varPlaceholder`, coercion and post-substitution validation;

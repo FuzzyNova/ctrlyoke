@@ -169,7 +169,11 @@ function worktreeDirectoryPath(value: unknown): string | undefined {
 
 function isSensitiveWorktreeDefault(value: unknown): boolean {
   return (
-    hasWorktreeSetupCommand(value) || worktreeDirectoryPath(value) !== undefined
+    hasWorktreeSetupCommand(value) ||
+    worktreeDirectoryPath(value) !== undefined ||
+    (isPlainObject(value) &&
+      typeof value.directory === "string" &&
+      value.directory.includes("{{"))
   );
 }
 
@@ -181,9 +185,17 @@ function worktreeSetupCoveredByUser(
   workspaceValue: unknown,
   userValue: unknown
 ): boolean {
+  const placeholderDirectory = (value: unknown) =>
+    isPlainObject(value) &&
+    typeof value.directory === "string" &&
+    value.directory.includes("{{")
+      ? value.directory
+      : undefined;
   return (
     worktreeSetupCommand(workspaceValue) === worktreeSetupCommand(userValue) &&
-    worktreeDirectoryPath(workspaceValue) === worktreeDirectoryPath(userValue)
+    worktreeDirectoryPath(workspaceValue) ===
+      worktreeDirectoryPath(userValue) &&
+    placeholderDirectory(workspaceValue) === placeholderDirectory(userValue)
   );
 }
 

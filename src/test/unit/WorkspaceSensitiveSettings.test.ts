@@ -453,6 +453,17 @@ suite("WorkspaceSensitiveSettings", () => {
       );
     });
 
+    test("trust-gates placeholder directories", () => {
+      assert.deepStrictEqual(
+        worktreeRequests({
+          mode: "named",
+          branch: "feature",
+          directory: "{{slot}}",
+        }).map((r) => r.settingPath),
+        [SETTING_PATHS.DEFAULTS_WORKTREE]
+      );
+    });
+
     test("covers path directories only when the user has the same path", () => {
       const checkout = {
         mode: "named",

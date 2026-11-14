@@ -120,7 +120,7 @@ The object form adds `base` and `setup`:
 ```yaml
 worktree:
   mode: named
-  branch: feature/search-filters
+  branch: "{{branch}}" # supplied with --var branch=feature/search-filters
   base: main # used only when the branch doesn't exist yet
   setup: npm ci # runs at the start of every run
 steps:

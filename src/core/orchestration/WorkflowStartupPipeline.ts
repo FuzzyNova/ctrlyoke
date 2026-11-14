@@ -43,6 +43,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
 import { Log } from "../../utils/Log";
 import { getErrorMessage } from "../../utils/ErrorUtils";
+import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { ExecutionLeaseConflictError } from "./ExecutionRootLeaseManager";
 import { RecordedTargetFailureError } from "../RecordedTargetFailureError";
@@ -359,13 +360,21 @@ export class WorkflowStartupPipeline {
       // A window with no folder open has nowhere to keep run state; refuse
       // before anything is written.
       requireWorkspaceRoot(this.port.platform);
+      const authoredWorkflow = this.port.queue.getWorkflowFile();
+      const runStart = VarSubstitutor.applyToRunStartWorktree(
+        authoredWorkflow,
+        ConfigurationUtils.getDefaultWorktree(),
+        authoredWorkflow.vars ?? {}
+      );
       await this.preflightSecrets();
       await this.resolveWorktree(
         continueFromCurrent ||
           classification.isAppendContinuation ||
-          classification.isIdleContinuation
+          classification.isIdleContinuation,
+        runStart.workflow,
+        runStart.defaultWorktree
       );
-      if (!(await this.preflightCompatibility())) {
+      if (!(await this.preflightCompatibility(runStart.workflow))) {
         return;
       }
       if (!(await this.ensureHarnessReadiness(modeOverride, fileName))) {
@@ -646,11 +655,14 @@ export class WorkflowStartupPipeline {
     );
   }
 
-  async resolveWorktree(isContinuation: boolean = false): Promise<void> {
-    const workflow = this.port.queue.getWorkflowFile();
+  async resolveWorktree(
+    isContinuation: boolean = false,
+    workflow = this.port.queue.getWorkflowFile(),
+    defaultWorktree = ConfigurationUtils.getDefaultWorktree()
+  ): Promise<void> {
     const resolution = await resolveWorktreeForStart(
       workflow.worktree,
-      ConfigurationUtils.getDefaultWorktree(),
+      defaultWorktree,
       this.port.platform.getNamedWorkspaceRoots(),
       (workflow as WorkingFile)._runtime?.worktree,
       isContinuation
@@ -659,10 +671,12 @@ export class WorkflowStartupPipeline {
     this.worktreeNotice = resolution.notice;
   }
 
-  async preflightCompatibility(): Promise<boolean> {
+  async preflightCompatibility(
+    workflow = this.port.queue.getWorkflowFile()
+  ): Promise<boolean> {
     this.compatibilityDiagnostics =
       await this.port.analyzeWorkflowCompatibility({
-        ...this.port.queue.getWorkflowFile(),
+        ...workflow,
         steps: this.port.queue.getState().steps,
       });
     const compatibilityErrors = this.compatibilityDiagnostics.filter(

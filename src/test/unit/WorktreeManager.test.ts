@@ -30,6 +30,7 @@ import {
   WORKTREE_ROOT_TIERS,
 } from "../../types/DashboardConstants";
 import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
+import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_LIFECYCLE_STATES,
@@ -871,6 +872,47 @@ suite("WorktreeManager", function () {
       true
     );
     await created.lease.release();
+  });
+
+  test("resolves a variable branch and rejects unresolved input before Git mutation", async () => {
+    const { parent, repository } = await makeRepository("variable-branch");
+    const workflow = {
+      worktree: { mode: "named" as const, branch: "{{b}}" },
+      vars: { b: "feature/from-var" },
+    };
+    const substituted = VarSubstitutor.applyToRunStartWorktree(
+      workflow,
+      false,
+      workflow.vars
+    ).workflow.worktree;
+    assert.ok(substituted && typeof substituted === "object");
+    const created = await resolve(
+      manager(parent),
+      repository,
+      (substituted as { branch: string }).branch
+    );
+    assert.strictEqual(created.branchName, "feature/from-var");
+
+    const branchListBefore = execFileSync(
+      "git",
+      ["-C", repository, "branch", "--list"],
+      { encoding: "utf8" }
+    );
+    assert.throws(
+      () =>
+        VarSubstitutor.applyToRunStartWorktree(
+          { worktree: { mode: "named", branch: "{{missing}}" } },
+          false,
+          {}
+        ),
+      /worktree\.branch.*missing/
+    );
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "branch", "--list"], {
+        encoding: "utf8",
+      }),
+      branchListBefore
+    );
   });
 
   test("reports dirty named worktrees and persists provisioning then ready", async () => {

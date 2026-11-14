@@ -5,6 +5,11 @@ import type {
   ScriptStep,
   ScriptProperties,
 } from "../types/CtrlYokeTypes";
+import type {
+  PromptFile,
+  WorktreeConfig,
+  WorktreeDefaultConfig,
+} from "../types/CtrlYokeTypes";
 import {
   findVariablePlaceholders,
   isVariableDefined,
@@ -33,6 +38,50 @@ import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
  */
 export class VarSubstitutor {
   private static readonly SECRET_REFERENCE_PREFIX = "${secret:";
+
+  /** Resolve worktree selectors before preflight; the authored workflow stays untouched. */
+  static applyToRunStartWorktree<T extends PromptFile>(
+    workflow: T,
+    defaultWorktree: WorktreeDefaultConfig,
+    vars: Record<string, string>
+  ): { workflow: T; defaultWorktree: WorktreeDefaultConfig } {
+    const replace = (
+      config: WorktreeConfig | undefined,
+      prefix: string
+    ): WorktreeConfig | undefined => {
+      if (!config || typeof config !== "object") return config;
+      const result = { ...config } as Record<string, unknown>;
+      for (const key of ["branch", "base", "directory"] as const) {
+        const value = result[key];
+        if (typeof value !== "string") continue;
+        const field = `${prefix}.${key}`;
+        const unresolved = this.findUnresolvedVariables(value, vars);
+        if (unresolved.length) {
+          const name = unresolved[0]!.slice(2, -2);
+          throw new Error(
+            `Cannot start: ${field} has unresolved variable "${name}" in value "${value}".`
+          );
+        }
+        result[key] = this.substitute(
+          value,
+          vars,
+          VAR_SUBSTITUTION_POLICY[field as keyof typeof VAR_SUBSTITUTION_POLICY]
+            .fencedCodeProtected
+        );
+      }
+      return result as unknown as WorktreeConfig;
+    };
+    return {
+      workflow: {
+        ...workflow,
+        worktree: replace(workflow.worktree, "worktree"),
+      } as T,
+      defaultWorktree: replace(
+        defaultWorktree,
+        "defaults.worktree"
+      ) as WorktreeDefaultConfig,
+    };
+  }
 
   /**
    * Substitute all `{{key}}` placeholders in `text` using `vars`.
