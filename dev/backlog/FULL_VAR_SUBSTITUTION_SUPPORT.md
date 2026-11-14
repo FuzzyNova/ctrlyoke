@@ -1,6 +1,6 @@
 # Full Variable Substitution Support
 
-**Status:** In progress (staged 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
+**Status:** In progress (items 1–7 complete; item 8 partially implemented 2026-11-14). Written 2026-11-12 against `0e5bd6ea0`;
 the slots plan's `worktree.checkout` field shipped as `directory`, and this plan
 now uses that name.
 **Priority:** P2
@@ -47,6 +47,12 @@ Each step ticks its own item, notes any deviation under it, and commits.
 - [ ] 8. Dashboard and editor: dropdown warnings, placeholder chips,
       CodeMirror/diagnostics from the policy table, Dry Run substituted values
       and blockers.
+      Partial: dropdown validation ignores whole-value placeholders; the
+      properties panel has shared chips for harness, model and execution mode;
+      step names resolve from workflow vars; variable lint/highlighting and
+      named-worktree preview values consult the substitution policy. Remaining:
+      chips for the other enum editors, broader policy-driven editor/diagnostic
+      coverage, Dry Run substituted-field display/blockers, and component tests.
 
 ## Problem
 

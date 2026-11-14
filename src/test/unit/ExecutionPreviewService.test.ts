@@ -1374,6 +1374,36 @@ suite("ExecutionPreviewService", () => {
     );
   });
 
+  test("shows substituted named-worktree fields in the dry-run preview", async function () {
+    const parent = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-worktree-vars-")
+    );
+    temporaryRoots.push(parent);
+    const workspaceRoot = path.join(parent, "repository");
+    await fsPromises.mkdir(workspaceRoot);
+    await initGitRepo(workspaceRoot);
+
+    const preview = await createService(workspaceRoot, undefined, [
+      { name: "root", fsPath: workspaceRoot },
+    ]).build({
+      workflow: {
+        worktree: {
+          mode: WORKTREE_MODES.NAMED,
+          branch: "{{branch}}",
+          base: "{{base}}",
+          directory: "{{directory}}",
+        },
+        vars: { branch: "feature/preview-vars", base: "main", directory: "preview-dir" },
+        steps: [{ prompt: "wants a named worktree" }],
+      },
+    });
+
+    assert.deepStrictEqual(
+      [preview.worktree?.branch, preview.worktree?.base, preview.worktree?.directory],
+      ["feature/preview-vars", "main", "preview-dir"]
+    );
+  });
+
   test("reports the exact directory when the named branch already has a Git worktree checked out", async function () {
     const parent = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-preview-worktree-exact-")

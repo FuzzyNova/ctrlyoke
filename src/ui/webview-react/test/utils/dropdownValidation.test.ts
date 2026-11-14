@@ -41,12 +41,25 @@ describe("dropdown validation", () => {
 
   it("identifies models unavailable for the selected harness", () => {
     expect(
+      modelWarning("{{model}}", "codex-cli", [
+        { value: "gpt-5", label: "GPT-5" },
+      ])
+    ).toBeNull();
+    expect(
       modelWarning("missing", "codex-cli", [{ value: "gpt-5", label: "GPT-5" }])
     ).toBe('Model "missing" is not available for codex-cli.');
     expect(
       modelWarning("gpt-5", "codex-cli", [{ value: "gpt-5", label: "GPT-5" }])
     ).toBeNull();
     expect(modelWarning("gpt-5", "codex-cli", [])).toBeNull();
+  });
+
+  it("does not warn for variable-backed agents or skills", () => {
+    expect(agentWarning("{{agent}}", [])).toBeNull();
+    expect(skillsWarning(["{{skill}}"], [])).toBeNull();
+    expect(skillsWarning(["missing", "{{skill}}"], [])).toBe(
+      '1 skill not found: "missing".'
+    );
   });
 
   it("warns only for a pinned shell this platform does not normally have", () => {

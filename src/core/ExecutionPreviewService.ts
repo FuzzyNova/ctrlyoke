@@ -939,14 +939,21 @@ export class ExecutionPreviewService {
     if (!selection.config) {
       return {};
     }
-    const { mode, base } = selection.config;
+    const { mode } = selection.config;
+    const base = selection.config.base
+      ? VarSubstitutor.substitute(selection.config.base, variables, false)
+      : undefined;
     const setupCommand = selection.config.setup
       ? VarSubstitutor.substitute(selection.config.setup, variables, false)
       : undefined;
     const branch =
-      "branch" in selection.config ? selection.config.branch : undefined;
+      "branch" in selection.config && selection.config.branch
+        ? VarSubstitutor.substitute(selection.config.branch, variables, false)
+        : undefined;
     const directory =
-      "directory" in selection.config ? selection.config.directory : undefined;
+      "directory" in selection.config && selection.config.directory
+        ? VarSubstitutor.substitute(selection.config.directory, variables, false)
+        : undefined;
     const workspaceRoot = this.options.workspaceRoot;
     const eligibility = await evaluateWorkspaceEligibility(
       this.options.namedWorkspaceRoots ?? []

@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import { isWorkflowVariablePlaceholder } from "@utils/dropdownValidation";
 import type {
   ErrorBehavior,
   UserHookConfig,
@@ -331,6 +332,37 @@ const WORKFLOW_PICKER_SHORTCUT_TARGETS = Object.keys(
  * - End condition configuration
  * - Quick access to VS Code settings
  */
+/** Read-only display for enum values authored as whole-value variables. */
+function WorkflowVariableEnumValue({
+  value,
+  vars,
+  onClear,
+  children,
+}: {
+  value: string | undefined;
+  vars: Readonly<Record<string, unknown>>;
+  onClear: () => void;
+  children: React.ReactNode;
+}) {
+  if (!value || !isWorkflowVariablePlaceholder(value)) return <>{children}</>;
+  const name = value.slice(2, -2);
+  const resolved = vars[name];
+  return (
+    <div className="flex items-center gap-2 rounded-sm border border-input-border px-2 py-1 text-xs">
+      <span className="font-mono">{value}</span>
+      <span aria-hidden="true">→</span>
+      <span>{resolved === undefined ? "undefined" : String(resolved)}</span>
+      <button
+        type="button"
+        className="ml-auto text-link-fg hover:underline"
+        onClick={onClear}
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
 const WorkflowPropertiesPanelInner: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
   onRequestClose?: () => void;
@@ -384,6 +416,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     getEffectivePriorContext,
     getEffectiveAdditionalArgs,
   } = useSettingsStore();
+  const workflowVars = workflowProperties.vars ?? {};
 
   // New workflows do not have a working-file override until their first edit.
   // Render their effective validation defaults without losing an explicit null,
@@ -1763,23 +1796,31 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <HarnessDropdown
-                    id="settings-harness"
-                    shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS}
-                    triggerAriaLabel="Harness"
-                    value={effectiveHarness}
-                    onChange={handleHarnessChange}
-                    harnessStatus={harnessStatus}
-                    hiddenValues={
-                      hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
+                  <WorkflowVariableEnumValue
+                    value={workflowProperties.harness}
+                    vars={workflowVars}
+                    onClear={() =>
+                      postWorkflowPropertiesUpdate({ harness: undefined })
                     }
-                    onHideOption={(v) =>
-                      hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                    }
-                    onUnhideOption={(v) =>
-                      unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                    }
-                  />
+                  >
+                    <HarnessDropdown
+                      id="settings-harness"
+                      shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS}
+                      triggerAriaLabel="Harness"
+                      value={effectiveHarness}
+                      onChange={handleHarnessChange}
+                      harnessStatus={harnessStatus}
+                      hiddenValues={
+                        hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
+                      }
+                      onHideOption={(v) =>
+                        hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                      }
+                      onUnhideOption={(v) =>
+                        unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                      }
+                    />
+                  </WorkflowVariableEnumValue>
                   <CompatibilitySummary
                     diagnostics={permissionDiagnostics}
                     onReview={reviewCompatibility}
@@ -1804,32 +1845,40 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <CustomSelect
-                    id="settings-model"
-                    schemaPath="model"
-                    shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL}
-                    triggerAriaLabel="Model"
-                    value={effectiveModel}
-                    onChange={handleModelChange}
-                    options={
-                      currentHarnessModels.length === 0
-                        ? [
-                            {
-                              value: "",
-                              label: "Loading models...",
-                              disabled: true,
-                            },
-                          ]
-                        : currentHarnessModels.map((m) => ({
-                            value: m.value,
-                            label: m.label,
-                            description: m.description,
-                          }))
+                  <WorkflowVariableEnumValue
+                    value={workflowProperties.model}
+                    vars={workflowVars}
+                    onClear={() =>
+                      postWorkflowPropertiesUpdate({ model: undefined })
                     }
-                    {...modelHiding}
-                    nonHideableValues={["default", ""]}
-                    warning={modelWarn ?? undefined}
-                  />
+                  >
+                    <CustomSelect
+                      id="settings-model"
+                      schemaPath="model"
+                      shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL}
+                      triggerAriaLabel="Model"
+                      value={effectiveModel}
+                      onChange={handleModelChange}
+                      options={
+                        currentHarnessModels.length === 0
+                          ? [
+                              {
+                                value: "",
+                                label: "Loading models...",
+                                disabled: true,
+                              },
+                            ]
+                          : currentHarnessModels.map((m) => ({
+                              value: m.value,
+                              label: m.label,
+                              description: m.description,
+                            }))
+                      }
+                      {...modelHiding}
+                      nonHideableValues={["default", ""]}
+                      warning={modelWarn ?? undefined}
+                    />
+                  </WorkflowVariableEnumValue>
                 </FormField>
               </DrawerRow>
 
@@ -1984,17 +2033,25 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <CustomSelect
-                    id="settings-execution-mode"
-                    schemaPath="executionMode"
-                    triggerAriaLabel="Execution Mode"
-                    value={effectiveExecutionMode}
-                    onChange={handleExecutionModeChange}
-                    options={toSelectOptions(
-                      EXECUTION_MODE_OPTIONS_META,
-                      "executionMode"
-                    )}
-                  />
+                  <WorkflowVariableEnumValue
+                    value={workflowProperties.executionMode}
+                    vars={workflowVars}
+                    onClear={() =>
+                      postWorkflowPropertiesUpdate({ executionMode: undefined })
+                    }
+                  >
+                    <CustomSelect
+                      id="settings-execution-mode"
+                      schemaPath="executionMode"
+                      triggerAriaLabel="Execution Mode"
+                      value={effectiveExecutionMode}
+                      onChange={handleExecutionModeChange}
+                      options={toSelectOptions(
+                        EXECUTION_MODE_OPTIONS_META,
+                        "executionMode"
+                      )}
+                    />
+                  </WorkflowVariableEnumValue>
                 </FormField>
               </DrawerRow>
 

@@ -12,6 +12,7 @@ import {
 import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
 import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
 import { getUndefinedVariableDiagnostics } from "@root/utils/PromptDiagnosticRules";
+import { VAR_SUBSTITUTION_POLICY } from "@root/utils/VarSubstitutionPolicy";
 import {
   findVariablePlaceholders,
   isVariableDefined,
@@ -56,8 +57,9 @@ const braceMark = Decoration.mark({ class: VARIABLE_BRACE_CLASS });
 
 /** The substitutable placeholders: fenced ones are literal and stay plain. */
 function findSubstitutablePlaceholders(text: string): VariablePlaceholder[] {
+  const policy = VAR_SUBSTITUTION_POLICY["steps[].prompt"];
   return findVariablePlaceholders(text).filter(
-    (placeholder) => !placeholder.inFence
+    (placeholder) => !(policy.fencedCodeProtected && placeholder.inFence)
   );
 }
 

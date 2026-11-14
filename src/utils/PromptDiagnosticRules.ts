@@ -50,6 +50,7 @@ import {
   HARNESS_SHELL_ESCAPE_PREFIX,
   isHarnessShellEscape,
 } from "./HarnessShellEscape";
+import { VAR_SUBSTITUTION_POLICY } from "./VarSubstitutionPolicy";
 
 /** What the text alone can't say about where it sits in a workflow. */
 export interface PromptDiagnosticContext {
@@ -402,10 +403,16 @@ export function getConditionOutputDiagnostics(
  */
 export function getUndefinedVariableDiagnostics(
   text: string,
-  vars: Readonly<Record<string, unknown>>
+  vars: Readonly<Record<string, unknown>>,
+  policyPath: keyof typeof VAR_SUBSTITUTION_POLICY = "steps[].prompt"
 ): PromptDiagnostic[] {
+  const policy = VAR_SUBSTITUTION_POLICY[policyPath];
   return findVariablePlaceholders(text)
-    .filter(({ name, inFence }) => !inFence && !isVariableDefined(vars, name))
+    .filter(
+      ({ name, inFence }) =>
+        !(policy.fencedCodeProtected && inFence) &&
+        !isVariableDefined(vars, name)
+    )
     .map(({ from, to, name }) => ({
       from,
       to,

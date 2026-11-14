@@ -18,6 +18,11 @@ function isKnownName(
   return options.some((option) => option.name === value);
 }
 
+/** Whole-value workflow variables are resolved when the workflow runs. */
+export function isWorkflowVariablePlaceholder(value: string): boolean {
+  return /^\{\{\w+\}\}$/.test(value);
+}
+
 /** Returns a warning when an explicit model is unavailable for its harness. */
 export function modelWarning(
   model: string | null | undefined,
@@ -28,6 +33,7 @@ export function modelWarning(
   // configured model is invalid.
   if (
     !model ||
+    isWorkflowVariablePlaceholder(model) ||
     modelOptions.length === 0 ||
     modelOptions.some((option) => option.value === model)
   ) {
@@ -42,7 +48,11 @@ export function agentWarning(
   agent: string | null | undefined,
   availableAgents: ReadonlyArray<AgentOption>
 ): string | null {
-  if (!agent || availableAgents.some((available) => available.name === agent)) {
+  if (
+    !agent ||
+    isWorkflowVariablePlaceholder(agent) ||
+    availableAgents.some((available) => available.name === agent)
+  ) {
     return null;
   }
 
@@ -59,7 +69,9 @@ export function skillsWarning(
   }
 
   const missingSkills = skills.filter(
-    (skill) => !isKnownName(skill, availableSkills)
+    (skill) =>
+      !isWorkflowVariablePlaceholder(skill) &&
+      !isKnownName(skill, availableSkills)
   );
   if (missingSkills.length === 0) {
     return null;

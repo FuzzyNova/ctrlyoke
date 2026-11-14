@@ -11,6 +11,8 @@ import {
   type StepClickModifiers,
 } from "./WorkflowStepItem";
 import type { WorkflowStep } from "@store/workflowStore";
+import { useSettingsStore } from "@store/settingsStore";
+import { VAR_SUBSTITUTION_POLICY } from "@root/utils/VarSubstitutionPolicy";
 import {
   ExecutingStepHighlight,
   PauseBoundary,
@@ -128,6 +130,15 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     onSetStartPosition,
     onOpenContextMenu,
   }) => {
+    const storedVars = useSettingsStore(
+      (state) => state.workflowProperties.vars
+    );
+    const vars = storedVars ?? EMPTY_WORKFLOW_VARS;
+    const resolvedName = step.name?.replace(
+      /\{\{(\w+)\}\}/g,
+      (match, name: string) =>
+        Object.prototype.hasOwnProperty.call(vars, name) ? vars[name] : match
+    );
     const harnessModel = getStepHarnessModel(step, status);
     const overrides = getStepOverrides(step);
     const details: StepDetails = {};
@@ -195,7 +206,9 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         text={getStepText(step)}
         index={index}
         displayNumber={slotNumber}
-        name={step.name}
+        name={
+          VAR_SUBSTITUTION_POLICY["steps[].name"] ? resolvedName : step.name
+        }
         status={status}
         retryState={retryState}
         details={details}
@@ -224,6 +237,8 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     );
   }
 );
+
+const EMPTY_WORKFLOW_VARS: Readonly<Record<string, string>> = {};
 
 WorkflowStepRow.displayName = "WorkflowStepRow";
 

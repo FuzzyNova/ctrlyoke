@@ -369,6 +369,16 @@ suite("PromptDiagnosticRules", () => {
       );
     });
 
+    test("uses field policy so fenced script placeholders remain diagnosable", () => {
+      const text = "```\n{{scriptValue}}\n```";
+      assert.deepStrictEqual(
+        getUndefinedVariableDiagnostics(text, {}, "scriptStep.script").map(
+          (diagnostic) => diagnostic.variableName
+        ),
+        ["scriptValue"]
+      );
+    });
+
     test("getPromptDiagnostics lints vars only when the context knows them", () => {
       const text = "{{missing}}";
       assert.deepStrictEqual(getPromptDiagnostics(text, baseContext), []);
