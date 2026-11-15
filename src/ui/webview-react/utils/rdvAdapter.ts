@@ -14,6 +14,7 @@ import {
   isDisplayableDiffLine,
   normalizeStructuredPatch,
 } from "@root/utils/DiffLines";
+import { languageFromPath } from "@root/utils/WorkspaceFileLanguage";
 import {
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,
@@ -68,56 +69,6 @@ const DEV_NULL = "/dev/null";
 
 function realPath(path: string | undefined): string | undefined {
   return path && path !== DEV_NULL ? path : undefined;
-}
-
-function languageFromPath(filePath: string): string | undefined {
-  const LANGUAGE_MAP: Record<string, string> = {
-    ts: "typescript",
-    tsx: "typescriptreact",
-    js: "javascript",
-    jsx: "javascriptreact",
-    mjs: "javascript",
-    cjs: "javascript",
-    py: "python",
-    json: "json",
-    jsonc: "jsonc",
-    yaml: "yaml",
-    yml: "yaml",
-    md: "markdown",
-    mdx: "mdx",
-    css: "css",
-    scss: "scss",
-    less: "less",
-    html: "html",
-    htm: "html",
-    xml: "xml",
-    svg: "xml",
-    sh: "shell",
-    bash: "shell",
-    ps1: "powershell",
-    cs: "csharp",
-    java: "java",
-    kt: "kotlin",
-    go: "go",
-    rs: "rust",
-    c: "c",
-    cpp: "cpp",
-    rb: "ruby",
-    php: "php",
-    swift: "swift",
-    toml: "toml",
-    ini: "ini",
-    sql: "sql",
-    graphql: "graphql",
-    gql: "graphql",
-    tf: "hcl",
-    txt: "plaintext",
-  };
-  const base = filePath.split("/").pop()?.toLowerCase() ?? "";
-  if (base === "dockerfile") return "dockerfile";
-  if (base === ".env" || base.startsWith(".env.")) return "properties";
-  const ext = base.includes(".") ? base.slice(base.lastIndexOf(".") + 1) : "";
-  return LANGUAGE_MAP[ext];
 }
 
 /**

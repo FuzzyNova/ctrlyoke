@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-14 by smell-hunt pass (claude-cli)
 - **Area:** `src/ui/webview-react/utils/rdvAdapter.ts`, `src/server/HostedWorkspaceViewerService.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

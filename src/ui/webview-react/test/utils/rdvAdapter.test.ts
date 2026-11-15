@@ -495,6 +495,15 @@ index 6666666..0000000
 -second
 `;
 
+const SAMPLE_HEADER_DIFF = `diff --git a/include/example.h b/include/example.h
+index abc1234..def5678 100644
+--- a/include/example.h
++++ b/include/example.h
+@@ -1 +1 @@
+-int value;
++long value;
+`;
+
 describe("parseUnifiedDiffToFiles", () => {
   it("returns an empty array for empty input", () => {
     expect(parseUnifiedDiffToFiles("")).toHaveLength(0);
@@ -523,6 +532,11 @@ describe("parseUnifiedDiffToFiles", () => {
     const files = parseUnifiedDiffToFiles(SAMPLE_UNIFIED_DIFF);
     expect(files[0]!.language).toBe("typescript");
     expect(files[1]!.language).toBe("markdown");
+  });
+
+  it("infers C language for header files", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_HEADER_DIFF);
+    expect(files[0]!.language).toBe("c");
   });
 
   it("produces non-empty hunks for each changed file", () => {

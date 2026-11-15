@@ -358,6 +358,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Monaco language map: `languageFromPath` in `HostedWorkspaceViewerService.ts` and
     `rdvAdapter.ts`. The webview copy has drifted (missing `zsh`, `h`, `hpp`, `env`,
     `dockerfile`); filed `dev/bugs/backlog/diff-list-language-map-drifts-from-hosted-viewer.md`.
+    Landed: the hosted viewer and diff list now share the import-free workspace file language lookup.
   - Setting source badge + reset button: `SettingInputRow`, `SettingToggleRow` and
     `DefaultsValidationPage.ObjectSettingHeader`.
   - The mobile visual-viewport remeasure effect, copied verbatim in `CodeMirrorEditor`,

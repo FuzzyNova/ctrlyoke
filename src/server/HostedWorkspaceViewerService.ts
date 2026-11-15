@@ -47,7 +47,6 @@ import {
   GIT_CHANGE_KINDS,
   LINE_ENDINGS,
   PROMISE_SETTLED_STATUSES,
-  WORKSPACE_FILE_LANGUAGE_IDS,
   GIT_REF_LABEL_TYPES,
   workspaceMediaInfoForPath,
   WORKSPACE_MEDIA_GIT_INDEX_REF,
@@ -69,6 +68,7 @@ import {
   SCM_FILE_KINDS,
   WORKSPACE_ENTRY_KINDS,
 } from "../types/DashboardConstants";
+import { languageFromPath } from "../utils/WorkspaceFileLanguage";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import type { RunnerHostIdentity } from "../types/CtrlYokeTypes";
 import {
@@ -293,67 +293,6 @@ async function mapWithBoundedConcurrency<T, R>(
     Array.from({ length: Math.min(concurrency, values.length) }, () => worker())
   );
   return results;
-}
-
-/** Extension → Monaco language ID mapping. */
-const LANGUAGE_MAP: Record<string, string> = {
-  ts: "typescript",
-  tsx: "typescriptreact",
-  js: "javascript",
-  jsx: "javascriptreact",
-  mjs: "javascript",
-  cjs: "javascript",
-  py: "python",
-  json: "json",
-  jsonc: "jsonc",
-  yaml: "yaml",
-  yml: "yaml",
-  md: "markdown",
-  mdx: "mdx",
-  css: "css",
-  scss: "scss",
-  less: "less",
-  html: "html",
-  htm: "html",
-  xml: "xml",
-  svg: "xml",
-  sh: "shell",
-  bash: "shell",
-  zsh: "shell",
-  ps1: "powershell",
-  cs: "csharp",
-  java: "java",
-  kt: "kotlin",
-  go: "go",
-  rs: "rust",
-  c: "c",
-  cpp: "cpp",
-  h: "c",
-  hpp: "cpp",
-  rb: "ruby",
-  php: "php",
-  swift: "swift",
-  toml: "toml",
-  ini: "ini",
-  env: "properties",
-  sql: "sql",
-  graphql: "graphql",
-  gql: "graphql",
-  tf: "hcl",
-  [WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE]:
-    WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE,
-  txt: "plaintext",
-};
-
-function languageFromPath(filePath: string): string | undefined {
-  const base = path.basename(filePath).toLowerCase();
-  // Special full-filename matches
-  if (base === WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE) {
-    return WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE;
-  }
-  if (base === ".env" || base.startsWith(".env.")) return "properties";
-  const ext = path.extname(filePath).toLowerCase().replace(/^\./, "");
-  return LANGUAGE_MAP[ext];
 }
 
 /** Convert OS path separators to forward slashes for git commands. */
