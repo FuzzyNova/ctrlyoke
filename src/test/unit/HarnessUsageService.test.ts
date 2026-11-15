@@ -187,6 +187,28 @@ suite("HarnessUsageService", () => {
     );
   });
 
+  test("quarantines corrupt provider snapshots using the injected clock", async () => {
+    const filePath = providerSnapshotsPath();
+    const timestamp = 1_234_567_890;
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, "not-json", "utf8");
+
+    const service = new HarnessUsageService(
+      workspaceRoot,
+      [],
+      undefined,
+      undefined,
+      () => timestamp
+    );
+    await service.initialize();
+
+    assert.strictEqual(
+      await fs.readFile(`${filePath}.corrupt-${timestamp}.json`, "utf8"),
+      "not-json"
+    );
+    await assert.rejects(fs.access(filePath));
+  });
+
   test("persists and reloads a live Copilot provider snapshot", async () => {
     const filePath = providerSnapshotsPath();
     const provider = new CopilotProvider();

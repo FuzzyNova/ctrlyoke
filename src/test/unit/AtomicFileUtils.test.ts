@@ -15,6 +15,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import {
+  quarantineCorruptFile,
   renameWithTransientRetry,
   writeFileAtomic,
   WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
@@ -172,6 +173,36 @@ suite("AtomicFileUtils", () => {
         await fs.readdir(dir),
         ["workflow.ctrlyoke.json"],
         "the temp file must not outlive the write"
+      );
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("quarantines a corrupt file with the supplied timestamp", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-atomic-"));
+    try {
+      const target = path.join(dir, "usage.json");
+      const timestamp = 1_234_567_890;
+      await fs.writeFile(target, "not-json", "utf8");
+
+      await quarantineCorruptFile(target, timestamp);
+
+      assert.strictEqual(
+        await fs.readFile(`${target}.corrupt-${timestamp}.json`, "utf8"),
+        "not-json"
+      );
+      await assert.rejects(fs.access(target));
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("ignores a missing file when quarantining", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-atomic-"));
+    try {
+      await assert.doesNotReject(
+        quarantineCorruptFile(path.join(dir, "missing.json"), 123)
       );
     } finally {
       await fs.rm(dir, { recursive: true, force: true });

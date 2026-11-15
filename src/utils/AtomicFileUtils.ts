@@ -206,6 +206,18 @@ export async function writeFileAtomic(
   }
 }
 
+/** Best-effort rename of a malformed persisted file out of the way. */
+export async function quarantineCorruptFile(
+  filePath: string,
+  timestamp: number = Date.now()
+): Promise<void> {
+  try {
+    await fs.rename(filePath, `${filePath}.corrupt-${timestamp}.json`);
+  } catch {
+    // Recovery is best effort; callers handle the malformed contents.
+  }
+}
+
 /**
  * Atomically replace a text file while preserving a symlink at its path and
  * the existing file's permissions. A user config such as `~/.codex/config.toml`

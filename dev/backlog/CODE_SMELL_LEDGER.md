@@ -461,6 +461,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     write each hand-roll a `${file}.${pid}.${ms}.tmp` write and rename instead of using
     `writeFileAtomic`. The temp name can collide within one millisecond. Their three
     `.corrupt-<ms>.json` quarantine renames are copies too.
+    Landed: Shared atomic writes and corrupt-file quarantine through `AtomicFileUtils`, with timestamp and injected-clock coverage.
   - Ask-user-question object option: the label/description/preview record parse is
     verbatim in the Claude, Codex, Copilot and Antigravity builders. This is the
     "one object-option parser" piece of the Deferred ask-user-question entry.

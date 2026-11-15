@@ -21,7 +21,10 @@ import type {
   WorkflowKey,
 } from "../../../../types/CtrlYokeTypes";
 import type { WorkflowRunManifest } from "../../../../types/WorkflowTimelineTypes";
-import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
+import {
+  quarantineCorruptFile,
+  writeFileAtomic,
+} from "../../../../utils/AtomicFileUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
 import {
   assertValidRunRef,
@@ -1145,25 +1148,11 @@ export class LifetimeUsageStore {
   }
 
   private async quarantineMalformedFile(): Promise<void> {
-    try {
-      await fs.rename(
-        this.filePath,
-        `${this.filePath}.corrupt-${Date.now()}.json`
-      );
-    } catch {
-      // Recovery is best effort; callers receive a fresh in-memory store.
-    }
+    await quarantineCorruptFile(this.filePath);
   }
 
   private async writeAtomic(data: LifetimeUsageStoreData): Promise<void> {
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-    try {
-      await fs.writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
-      await renameWithTransientRetry(tempPath, this.filePath);
-    } catch (error) {
-      await fs.rm(tempPath, { force: true }).catch(() => undefined);
-      throw error;
-    }
+    await writeFileAtomic(this.filePath, JSON.stringify(data, null, 2));
   }
 }
 

@@ -17,7 +17,10 @@ import type {
   HarnessUsageWindow,
 } from "../../../../types/UsageTypes";
 import { defaultStaleAfterMs } from "../../../../types/UsageTypes";
-import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
+import {
+  quarantineCorruptFile,
+  writeFileAtomic,
+} from "../../../../utils/AtomicFileUtils";
 import { getErrorMessage, hasErrnoCode } from "../../../../utils/ErrorUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
 import { Log } from "../../../../utils/Log";
@@ -490,19 +493,12 @@ export class HarnessUsageService {
           schemaVersion: PROVIDER_USAGE_SCHEMA_VERSION,
           snapshots,
         };
-        const tempPath = `${this.providerSnapshotsFile}.${process.pid}.${this.now()}.tmp`;
-        try {
-          await fs.writeFile(tempPath, JSON.stringify(data, null, 2), {
-            encoding: "utf8",
-            mode: PRIVATE_FILE_MODE,
-          });
-          await fs.chmod(tempPath, PRIVATE_FILE_MODE);
-          await renameWithTransientRetry(tempPath, this.providerSnapshotsFile);
-          await fs.chmod(this.providerSnapshotsFile, PRIVATE_FILE_MODE);
-        } catch (error) {
-          await fs.unlink(tempPath).catch(() => undefined);
-          throw error;
-        }
+        await writeFileAtomic(
+          this.providerSnapshotsFile,
+          JSON.stringify(data, null, 2),
+          { mode: PRIVATE_FILE_MODE }
+        );
+        await fs.chmod(this.providerSnapshotsFile, PRIVATE_FILE_MODE);
       });
     } catch (error) {
       // Provider persistence is best effort and never affects execution — but
@@ -515,12 +511,7 @@ export class HarnessUsageService {
   }
 
   private async quarantineProviderSnapshotFile(): Promise<void> {
-    await fs
-      .rename(
-        this.providerSnapshotsFile,
-        `${this.providerSnapshotsFile}.corrupt-${this.now()}.json`
-      )
-      .catch(() => undefined);
+    await quarantineCorruptFile(this.providerSnapshotsFile, this.now());
   }
 }
 
