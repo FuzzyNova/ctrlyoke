@@ -19,12 +19,8 @@
 // below — it's optional (DOM-renderer fallback) and best-effort.
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import {
-  TERMINAL_CURSOR_STYLES,
-  TERMINAL_MOBILE_CONTROL_BAR,
-} from "@root/types/DashboardConstants";
+import { cloneDefaultTerminalSettings } from "@root/types/CtrlYokeSettings";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
-import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
 import { WebviewLog } from "./utils/logger";
 
 export type { Terminal, ITheme };
@@ -100,24 +96,7 @@ let viewportMeasurementEntry: FitRegistryTarget | null = null;
  */
 const metricsChangedListeners = new Set<() => void>();
 
-let currentTerminalSettings: TerminalSettings = {
-  fontSize: 14,
-  lineHeight: 1.2,
-  scrollback: 5000,
-  cursorStyle: TERMINAL_CURSOR_STYLES.BLOCK,
-  cursorBlink: true,
-  macOptionIsMeta: false,
-  wordSeparators: " ()[]{}',\"`",
-  replayBufferKb: 50,
-  shellExecutable: "",
-  mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
-  mobileBarLayout: {
-    bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
-    popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
-    hidden: [...DEFAULT_TERMINAL_BAR_LAYOUT.hidden],
-  },
-  mobileCustomShortcuts: [],
-};
+let currentTerminalSettings: TerminalSettings = cloneDefaultTerminalSettings();
 
 /**
  * xterm's screen-reader mode (`ui.accessibility.terminalScreenReaderMode`).

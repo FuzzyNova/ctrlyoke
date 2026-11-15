@@ -8,11 +8,42 @@ import {
   TOAST_LEVEL_MODES,
   EDITOR_FONT_SIZE_VSCODE,
 } from "@root/types/DashboardConstants";
+import {
+  cloneDefaultTerminalSettings,
+  CTRLYOKE_SETTINGS_DEFAULTS,
+} from "@root/types/CtrlYokeSettings";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 
 // Zustand stores are module singletons — reset between tests.
 beforeEach(() => {
   useSettingsStore.getState().resetSettings();
+});
+
+describe("terminal settings defaults", () => {
+  it("clones the defaults with distinct nested arrays", () => {
+    const defaults = CTRLYOKE_SETTINGS_DEFAULTS.terminal;
+    const cloned = cloneDefaultTerminalSettings();
+
+    expect(cloned).toEqual(defaults);
+    expect(cloned).not.toBe(defaults);
+    expect(cloned.mobileBarLayout).not.toBe(defaults.mobileBarLayout);
+    expect(cloned.mobileBarLayout.bar).not.toBe(defaults.mobileBarLayout.bar);
+    expect(cloned.mobileBarLayout.popup).not.toBe(
+      defaults.mobileBarLayout.popup
+    );
+    expect(cloned.mobileBarLayout.hidden).not.toBe(
+      defaults.mobileBarLayout.hidden
+    );
+    expect(cloned.mobileCustomShortcuts).not.toBe(
+      defaults.mobileCustomShortcuts
+    );
+  });
+
+  it("initializes the settings store terminal value from the defaults", () => {
+    expect(useSettingsStore.getState().globalSettings.terminal).toEqual(
+      CTRLYOKE_SETTINGS_DEFAULTS.terminal
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

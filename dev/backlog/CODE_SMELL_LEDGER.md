@@ -367,6 +367,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     Landed: all three editors now share `useVisualViewportEditorSync` with focused hook coverage.
   - Terminal setting defaults retyped in `settingsStore.ts` and `terminalRegistry.ts`
     beside `CTRLYOKE_SETTINGS_DEFAULTS.terminal`.
+    Landed: both consumers now use `cloneDefaultTerminalSettings()` with isolated nested arrays.
 
 ## Deferred
 

@@ -758,6 +758,19 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   diagnostics: { verboseLogging: false, logRawCliOutput: false },
 };
 
+export function cloneDefaultTerminalSettings(): TerminalSettings {
+  const terminal = CTRLYOKE_SETTINGS_DEFAULTS.terminal;
+  return {
+    ...terminal,
+    mobileBarLayout: {
+      bar: [...terminal.mobileBarLayout.bar],
+      popup: [...terminal.mobileBarLayout.popup],
+      hidden: [...terminal.mobileBarLayout.hidden],
+    },
+    mobileCustomShortcuts: [...terminal.mobileCustomShortcuts],
+  };
+}
+
 /**
  * True when `patterns` is exactly the shipped default `key` list, in any
  * order, wherever it was written. Compatibility diagnostics report such a list

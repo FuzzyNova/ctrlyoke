@@ -22,8 +22,6 @@ import {
   DEFAULT_MODELS,
   HARNESS_DISPLAY_ORDER,
   PERMISSION_MODES,
-  TERMINAL_CURSOR_STYLES,
-  TERMINAL_MOBILE_CONTROL_BAR,
   COMPARE_SOURCES,
   TOAST_LEVEL_MODES,
   SETTING_SCOPES,
@@ -55,6 +53,7 @@ import type {
 import { inheritsWorkflowHarnessScopedValues } from "@root/types/ExecutionPropertyResolver";
 import {
   CTRLYOKE_SETTINGS_DEFAULTS,
+  cloneDefaultTerminalSettings,
   DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
   type HarnessColorSettings,
   type SpellingSettings,
@@ -64,7 +63,6 @@ import {
 import type { WorktreeObjectConfig } from "@root/types/CtrlYokeTypes";
 import { effectiveWorktreeObjectConfig } from "@root/utils/WorktreeConfigShape";
 import type { CapabilitiesModel } from "@root/types/CapabilitiesTypes";
-import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
 
 /**
  * Model option for dropdowns: the same shape the host builds and writes to
@@ -479,24 +477,7 @@ const initialGlobalSettings: GlobalSettings = {
   defaultEndCondition: null,
   defaultPreCondition: null,
   worktree: false,
-  terminal: {
-    fontSize: 14,
-    lineHeight: 1.2,
-    scrollback: 5000,
-    cursorStyle: TERMINAL_CURSOR_STYLES.BLOCK,
-    cursorBlink: true,
-    macOptionIsMeta: false,
-    wordSeparators: " ()[]{}',\"`",
-    replayBufferKb: 50,
-    shellExecutable: "",
-    mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
-    mobileBarLayout: {
-      bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
-      popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
-      hidden: [...DEFAULT_TERMINAL_BAR_LAYOUT.hidden],
-    },
-    mobileCustomShortcuts: [],
-  },
+  terminal: cloneDefaultTerminalSettings(),
   toastLevel: TOAST_LEVEL_MODES.ALL,
   settingSources: {},
 };
