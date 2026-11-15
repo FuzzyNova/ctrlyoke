@@ -1,4 +1,3 @@
-import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import { useState } from "react";
 import type {
   FullGlobalSettings,
@@ -10,9 +9,10 @@ import {
   ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
+  SettingResetButton,
 } from "../../shared";
 import { SettingSourceBadge } from "../../shared/SettingSourceBadge";
-import { Icon } from "../../shared/Icon";
+import { hasSettingSourceBadge } from "../../shared/SettingResetButton";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -35,39 +35,18 @@ function ObjectSettingHeader({
   onReset: (path: string) => void;
 }) {
   const source = sources[path];
-  const canReset =
-    source !== undefined &&
-    source !== INHERIT_DEFAULT_OPTION &&
-    source === activeScope;
 
   return (
     <div className="flex items-center gap-1.5">
       <span>{label}</span>
-      {source && source !== INHERIT_DEFAULT_OPTION && (
-        <SettingSourceBadge source={source} />
-      )}
-      <button
-        type="button"
-        aria-label={`Reset ${label}`}
-        onClick={() => {
-          if (canReset) onReset(path);
-        }}
-        disabled={!canReset}
-        title={
-          canReset
-            ? "Reset to default"
-            : source
-              ? `Defined in ${source} config`
-              : undefined
-        }
-        className={`w-4 h-4 flex items-center justify-center rounded-sm text-description-fg hover:text-foreground transition-opacity ${
-          canReset
-            ? "opacity-0 group-hover:opacity-100"
-            : "opacity-0 pointer-events-none"
-        }`}
-      >
-        <Icon name="discard" className="text-xxs" />
-      </button>
+      {hasSettingSourceBadge(source) && <SettingSourceBadge source={source} />}
+      <SettingResetButton
+        label={label}
+        path={path}
+        source={source}
+        activeScope={activeScope}
+        onReset={onReset}
+      />
     </div>
   );
 }

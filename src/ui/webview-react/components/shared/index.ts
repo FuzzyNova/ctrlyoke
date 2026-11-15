@@ -115,6 +115,11 @@ export {
 } from "./SecretGrantsEditor";
 export { AnimatedSection } from "./AnimatedSection";
 export { SettingSourceBadge } from "./SettingSourceBadge";
+export {
+  canResetSetting,
+  hasSettingSourceBadge,
+  SettingResetButton,
+} from "./SettingResetButton";
 export { SettingToggleRow } from "./SettingToggleRow";
 export { SettingInputRow } from "./SettingInputRow";
 export {

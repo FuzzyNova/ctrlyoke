@@ -361,6 +361,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     Landed: the hosted viewer and diff list now share the import-free workspace file language lookup.
   - Setting source badge + reset button: `SettingInputRow`, `SettingToggleRow` and
     `DefaultsValidationPage.ObjectSettingHeader`.
+    Landed: badge visibility and reset-button logic are shared across all three settings surfaces and covered by regression tests.
   - The mobile visual-viewport remeasure effect, copied verbatim in `CodeMirrorEditor`,
     `SingleLineCompletionEditor` and `WorkspaceFileEditor`.
   - Terminal setting defaults retyped in `settingsStore.ts` and `terminalRegistry.ts`
