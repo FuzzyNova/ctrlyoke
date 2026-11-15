@@ -419,6 +419,60 @@ suite("PromptQueue State Machine Tests", () => {
       }
     });
 
+    test("restores step results from completed runtime terminal statuses", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-terminal-status-")
+      );
+
+      try {
+        const terminalStatuses = [
+          PROMPT_TERMINAL_STATUS.SKIPPED,
+          PROMPT_TERMINAL_STATUS.CANCELLED,
+          PROMPT_TERMINAL_STATUS.FAILED,
+          PROMPT_TERMINAL_STATUS.COMPLETED,
+        ];
+        const workingFilePath = await queue.createWorkingFile(
+          "terminal-status-recovery",
+          [
+            ...terminalStatuses.map((status) => ({ prompt: status })),
+            { prompt: "pending" },
+          ],
+          workspace
+        );
+        const workingFile = await queue.readWorkingFile(workingFilePath);
+        terminalStatuses.forEach((terminalStatus, index) => {
+          workingFile.steps![index]._runtime = {
+            ...workingFile.steps![index]._runtime,
+            startedAt: 1,
+            completedAt: 2,
+            terminalStatus,
+          };
+        });
+        workingFile._runtime = {
+          ...workingFile._runtime,
+          currentIndex: terminalStatuses.length,
+          executionState: EXECUTION_STATES.STOPPED,
+        };
+        await writeTrustedRunFile(workingFilePath, workingFile);
+
+        const restored = new PromptQueue();
+        await restored.restoreFromWorkingFile(workingFilePath);
+
+        assert.deepStrictEqual(
+          restored.getState().results.map((result) => result.status),
+          [
+            STEP_STATUS.SKIPPED,
+            STEP_STATUS.CANCELLED,
+            STEP_STATUS.FAILED,
+            STEP_STATUS.COMPLETED,
+            STEP_STATUS.PENDING,
+          ]
+        );
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
     test("rebuilds admission only for a resumed unsettled group", async () => {
       const workspace = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-prompt-queue-admission-")

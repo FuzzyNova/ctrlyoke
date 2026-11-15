@@ -1,12 +1,11 @@
 import { useEffect } from "react";
 import { useWorkflowStore, type WorkflowStep } from "../store/workflowStore";
 import { WebviewLog } from "@utils/logger";
+import type { StepStatus } from "../types/messages";
 import {
-  PROMPT_TERMINAL_STATUS,
-  STEP_STATUS,
-  type StepStatus,
-} from "../types/messages";
-import { isTerminalStepStatus } from "@root/types/DashboardConstants";
+  isTerminalStepStatus,
+  stepStatusForCompletedRuntime,
+} from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "./useVsCodeApi";
 import { postUndoRedoSync } from "../utils/undoRedoSync";
 import { useEditorStore } from "../store/editorStore";
@@ -100,13 +99,7 @@ function deriveStatusFromRuntime(
   const terminalStatus =
     "terminalStatus" in runtime ? runtime.terminalStatus : undefined;
 
-  return terminalStatus === PROMPT_TERMINAL_STATUS.CANCELLED
-    ? STEP_STATUS.CANCELLED
-    : terminalStatus === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
-      ? STEP_STATUS.NO_TURN_STARTED
-      : terminalStatus === PROMPT_TERMINAL_STATUS.FAILED
-        ? STEP_STATUS.FAILED
-        : STEP_STATUS.COMPLETED;
+  return stepStatusForCompletedRuntime(terminalStatus);
 }
 
 export function mergeRuntimeForUndoRedo(

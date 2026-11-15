@@ -33,7 +33,9 @@ import {
   STEP_CLAIM_OUTCOMES,
   type ParallelGroupAdmission,
   type PromptTerminalStatus,
+  type ExecutionState,
   STEP_STATUS,
+  stepStatusForCompletedRuntime,
 } from "../types/DashboardConstants";
 
 /**
@@ -624,52 +626,17 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         steps: [...prompts],
         parallelGroups: topology.parallelGroups,
       };
-      this.stateMachine.restore({
-        status: executionState,
-        stopped: executionState === EXECUTION_STATES.STOPPED,
-        startTime: runtime?.startTime,
-        pausedTime: runtime?.pausedTime,
-        totalPausedDuration: runtime?.totalPausedDuration ?? 0,
-        executionEndTime: runtime?.executionEndTime,
-        stopReason: runtime?.stopReason,
-      });
+      this.restoreStateMachineFromRuntime(executionState, runtime);
 
       // Rebuild results array with proper status based on completion state
       this.state.results = prompts.map((prompt, index) => {
-        let status: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
-
-        // Check if this prompt was processed (per-prompt completedAt is authoritative)
-        // Use terminalStatus to restore the correct visual state (cancelled/failed vs completed).
-        if (prompt._runtime?.completedAt !== undefined) {
-          const terminal = prompt._runtime.terminalStatus;
-          status =
-            terminal === PROMPT_TERMINAL_STATUS.SKIPPED
-              ? STEP_STATUS.SKIPPED
-              : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
-                ? STEP_STATUS.CANCELLED
-                : terminal === PROMPT_TERMINAL_STATUS.FAILED
-                  ? STEP_STATUS.FAILED
-                  : terminal === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
-                    ? STEP_STATUS.NO_TURN_STARTED
-                    : STEP_STATUS.COMPLETED;
-        }
-        // Check if this is the current prompt (always PENDING or SENT — never CANCELLED)
-        else if (index === this.state.currentIndex) {
-          // RUNNING → SENT (actively being processed)
-          // Otherwise (IDLE, PAUSED, STOPPED, etc.) → PENDING
-          status =
-            executionState === EXECUTION_STATES.RUNNING
-              ? STEP_STATUS.SENT
-              : STEP_STATUS.PENDING;
-        }
-        // All other prompts are pending
-        else {
-          status = STEP_STATUS.PENDING;
-        }
-
         return {
           prompt: isScriptStep(prompt) ? prompt.script : prompt.prompt,
-          status,
+          status: this.getResultStatusFromRuntime(
+            prompt,
+            index,
+            this.state.currentIndex
+          ),
           timestamp: new Date(),
         };
       });
@@ -2039,6 +2006,21 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       : undefined;
   }
 
+  private restoreStateMachineFromRuntime(
+    executionState: ExecutionState,
+    runtime: WorkingFileRuntime | undefined
+  ): void {
+    this.stateMachine.restore({
+      status: executionState,
+      stopped: executionState === EXECUTION_STATES.STOPPED,
+      startTime: runtime?.startTime,
+      pausedTime: runtime?.pausedTime,
+      totalPausedDuration: runtime?.totalPausedDuration ?? 0,
+      executionEndTime: runtime?.executionEndTime,
+      stopReason: runtime?.stopReason,
+    });
+  }
+
   private adoptDiskRuntime(workingFile: WorkingFile): void {
     const runtime = workingFile._runtime;
     const executionState = runtime?.executionState ?? EXECUTION_STATES.IDLE;
@@ -2069,15 +2051,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state.tokenTotals = runtime?.tokenTotals;
     this.finalStepRuntime = runtime?.finalStep;
     this.activeParallelGroupRuntime = runtime?.activeParallelGroup;
-    this.stateMachine.restore({
-      status: executionState,
-      stopped: executionState === EXECUTION_STATES.STOPPED,
-      startTime: runtime?.startTime,
-      pausedTime: runtime?.pausedTime,
-      totalPausedDuration: runtime?.totalPausedDuration ?? 0,
-      executionEndTime: runtime?.executionEndTime,
-      stopReason: runtime?.stopReason,
-    });
+    this.restoreStateMachineFromRuntime(executionState, runtime);
     this.state.results = this.state.steps.map((step, index) => ({
       prompt: isScriptStep(step) ? step.script : step.prompt,
       status: this.getResultStatusFromRuntime(step, index, currentIndex),
@@ -3791,16 +3765,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     currentIndex: number
   ): (typeof STEP_STATUS)[keyof typeof STEP_STATUS] {
     if (step._runtime?.completedAt !== undefined) {
-      const terminal = step._runtime.terminalStatus;
-      return terminal === PROMPT_TERMINAL_STATUS.SKIPPED
-        ? STEP_STATUS.SKIPPED
-        : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
-          ? STEP_STATUS.CANCELLED
-          : terminal === PROMPT_TERMINAL_STATUS.FAILED
-            ? STEP_STATUS.FAILED
-            : terminal === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
-              ? STEP_STATUS.NO_TURN_STARTED
-              : STEP_STATUS.COMPLETED;
+      return stepStatusForCompletedRuntime(step._runtime.terminalStatus);
     }
 
     return index === currentIndex &&

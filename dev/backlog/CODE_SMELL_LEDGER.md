@@ -383,9 +383,10 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Runtime `terminalStatus` → step status ladder: `PromptQueue.restoreFromWorkingFile`
     (inline), `PromptQueue.getResultStatusFromRuntime`, and the webview's
     `deriveStatusFromRuntime` in `useUndoRedoKeyHandler.ts`, which has drifted (no
-    `skipped` branch); filed `dev/bugs/backlog/undo-redo-shows-skipped-step-as-completed.md`.
+    `skipped` branch); filed `dev/bugs/implemented/undo-redo-shows-skipped-step-as-completed.md`.
     `restoreFromWorkingFile` and `adoptDiskRuntime` also share a verbatim
     `stateMachine.restore(...)` block.
+    Landed: shared the completed-runtime status projection across core and webview, fixed skipped undo/redo status, and extracted the runtime state-machine restore helper.
   - Dispatched-prompt echo matching in all six `classifyUserEvent` overrides
     (`*LogParser.ts`): three variants (100-char prefix + `includes` for Codex, Copilot,
     OpenCode; 100-char prefix + equality for Claude, Qwen; full text + `includes` for

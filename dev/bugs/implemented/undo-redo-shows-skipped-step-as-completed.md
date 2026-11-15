@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-14 by the smell-hunt final step (pass 15), comparing the runtime → step-status ladders
 - **Area:** `src/ui/webview-react/hooks/useUndoRedoKeyHandler.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

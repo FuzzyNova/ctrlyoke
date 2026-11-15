@@ -13,7 +13,11 @@ import {
   WORKSPACE_MEDIA_KINDS,
   workspaceMediaInfoForPath,
   PROMPT_TERMINAL_STATUS,
+  STEP_STATUS,
   isTerminalStepStatus,
+  stepStatusForCompletedRuntime,
+  type PromptTerminalStatus,
+  type StepStatus,
 } from "../../types/DashboardConstants";
 
 suite("isTerminalStepStatus", () => {
@@ -27,6 +31,36 @@ suite("isTerminalStepStatus", () => {
     assert.strictEqual(isTerminalStepStatus("running"), false);
     assert.strictEqual(isTerminalStepStatus(undefined), false);
     assert.strictEqual(isTerminalStepStatus(null), false);
+  });
+});
+
+suite("stepStatusForCompletedRuntime", () => {
+  const expectedStatuses: Record<PromptTerminalStatus, StepStatus> = {
+    [PROMPT_TERMINAL_STATUS.COMPLETED]: STEP_STATUS.COMPLETED,
+    [PROMPT_TERMINAL_STATUS.CANCELLED]: STEP_STATUS.CANCELLED,
+    [PROMPT_TERMINAL_STATUS.FAILED]: STEP_STATUS.FAILED,
+    [PROMPT_TERMINAL_STATUS.SKIPPED]: STEP_STATUS.SKIPPED,
+    [PROMPT_TERMINAL_STATUS.NO_TURN_STARTED]: STEP_STATUS.NO_TURN_STARTED,
+  };
+
+  test("maps every recognized terminal status", () => {
+    for (const terminalStatus of Object.values(PROMPT_TERMINAL_STATUS)) {
+      assert.strictEqual(
+        stepStatusForCompletedRuntime(terminalStatus),
+        expectedStatuses[terminalStatus]
+      );
+    }
+  });
+
+  test("defaults missing and unknown terminal statuses to completed", () => {
+    assert.strictEqual(
+      stepStatusForCompletedRuntime(undefined),
+      STEP_STATUS.COMPLETED
+    );
+    assert.strictEqual(
+      stepStatusForCompletedRuntime("future-terminal-status"),
+      STEP_STATUS.COMPLETED
+    );
   });
 });
 

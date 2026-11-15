@@ -3729,6 +3729,23 @@ export function isTerminalStepStatus(
   return typeof status === "string" && PROMPT_TERMINAL_STATUSES.has(status);
 }
 
+export function stepStatusForCompletedRuntime(
+  terminalStatus: unknown
+): StepStatus {
+  switch (terminalStatus) {
+    case PROMPT_TERMINAL_STATUS.SKIPPED:
+      return STEP_STATUS.SKIPPED;
+    case PROMPT_TERMINAL_STATUS.CANCELLED:
+      return STEP_STATUS.CANCELLED;
+    case PROMPT_TERMINAL_STATUS.FAILED:
+      return STEP_STATUS.FAILED;
+    case PROMPT_TERMINAL_STATUS.NO_TURN_STARTED:
+      return STEP_STATUS.NO_TURN_STARTED;
+    default:
+      return STEP_STATUS.COMPLETED;
+  }
+}
+
 /** Shared compact labels used by step badges and history status filters. */
 export const PROMPT_TERMINAL_STATUS_LABELS: Record<
   PromptTerminalStatus,
