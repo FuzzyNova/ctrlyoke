@@ -400,6 +400,27 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     `WorkflowOrchestrator.prepareDefinitionMutation` (draft branch).
     Landed: shared the sequential draft revision check across all three call sites and covered stale revisions.
 
+- **2026-11-14, pass 16**: reviewed pass 15's four refactors. `stepStatusForCompletedRuntime`
+  is the core ladder verbatim; the webview gained the `skipped` branch, which was the
+  filed bug. The inline restore copy used the local `executionState` where
+  `getResultStatusFromRuntime` reads `stateMachine.status`, but the state machine is
+  restored from that same value first. `isDispatchedPromptEcho` keeps each parser's
+  prefix/equality/full mode. `loadSecretCommandWorkflow` is verbatim. In
+  `readDraftAtRevisions`, the orchestrator's dropped `?? 1` is already applied inside
+  `assertDefinitionRevision`, and the sequential order was the intended change. Nothing
+  to fix.
+
+  Hunted `src/completions/`, `src/platform/`, `src/utils/`, `src/config/` and the
+  extension entry point (repeated 7-line window scan plus a command-ID literal scan).
+  Queued two steps:
+  - Reference match extraction: `WorkspaceFileEditor.findWorkspaceReferenceMatches`
+    is a near-verbatim copy of `PromptReferenceScanner.findContextReferenceMatches`
+    (minus git refs, with a bare `"symbol"` literal), and `PromptLinkProvider`'s four
+    finders re-derive the same capture groups from `createReferencePatterns()`.
+  - Command IDs: `ctrlyoke.openPanel` (already in `VSCODE_COMMANDS`, still literal at
+    seven sites), `showOutputPanel`, `openGitChange`, `openFileWithSelection` and
+    `confirmExternalFileTrust` are spelled out at both registration and call/URI sites.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -665,3 +686,13 @@ still deferred.
 - `ShellCatalog.findShellChoice` vs `resolveShellKind`: picker lookup against the
   choice catalog and aliases, not the kind ladder. Its doc comment explains why an
   unknown shell must stay `undefined`.
+- `BASELINE_SCHEMA_VERSIONS` (`FormatMigrations.ts`) vs `CURRENT_SCHEMA_VERSIONS`
+  (`PersistedSchemaGuard.ts`): same keys, different meaning (first-release format vs
+  what this build writes); several values already differ.
+- `ExternalRootsTrustStore`/`SecretGrantsTrustStore` paired `approved`/`pending` filters
+  and `SecretKey.ts`'s two key builders: inverse pairs of two- or three-line bodies,
+  not copies.
+- `ContextMenuReferenceCommands.addSelectionToPromptEditor`/`addSymbolToPromptEditor`
+  shared resolve-path-or-warn prelude, and `extension.ts`'s two
+  `awaitPanelReady().then(promptPendingExternalRoots)` blocks: about six lines each,
+  within one file; a helper would save little.
