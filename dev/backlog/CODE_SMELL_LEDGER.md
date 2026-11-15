@@ -352,6 +352,19 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     outside-root absolute paths, relative paths, and absent workspace names; a path
     equal to the root is unreachable because the header only titles files.
 
+- **2026-11-14, pass 14** (new workflow run, so no steps to review). Hunted the
+  dashboard settings rows, the CodeMirror editors and the server/webview seam with the
+  repeated 8-line window scan. Queued four steps:
+  - Monaco language map: `languageFromPath` in `HostedWorkspaceViewerService.ts` and
+    `rdvAdapter.ts`. The webview copy has drifted (missing `zsh`, `h`, `hpp`, `env`,
+    `dockerfile`); filed `dev/bugs/backlog/diff-list-language-map-drifts-from-hosted-viewer.md`.
+  - Setting source badge + reset button: `SettingInputRow`, `SettingToggleRow` and
+    `DefaultsValidationPage.ObjectSettingHeader`.
+  - The mobile visual-viewport remeasure effect, copied verbatim in `CodeMirrorEditor`,
+    `SingleLineCompletionEditor` and `WorkspaceFileEditor`.
+  - Terminal setting defaults retyped in `settingsStore.ts` and `terminalRegistry.ts`
+    beside `CTRLYOKE_SETTINGS_DEFAULTS.terminal`.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -610,6 +623,10 @@ still deferred.
   any length) vs `HarnessVersion.ts` (parsed major/minor/patch): different inputs.
 - `normalizeAbsolutePath` in `platform/NodeFileWatcher.ts` and
   `VsCodeFileWatcher.ts`: a one-line `path.normalize(path.resolve())` idiom.
+- `EXTENSION_LANGUAGE_MAP`/`LANGUAGE_ALIAS_MAP` in
+  `ui/webview-react/utils/syntaxHighlighting.tsx` vs the Monaco `LANGUAGE_MAP`: they map
+  to refractor grammar names (`markup`, `bash`, `tsx`), a different vocabulary from the
+  Monaco-style IDs the viewer and diff list carry.
 - `ShellCatalog.findShellChoice` vs `resolveShellKind`: picker lookup against the
   choice catalog and aliases, not the kind ladder. Its doc comment explains why an
   unknown shell must stay `undefined`.
