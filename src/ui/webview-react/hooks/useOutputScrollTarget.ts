@@ -169,6 +169,13 @@ export function useOutputScrollTarget({
     typeof setTimeout
   > | null>(null);
   const scrollTargetCommitRetryCountRef = useRef(0);
+  // At most one pending frame per call site. A webview that is not painting
+  // (hidden panel, covered or minimized window, display asleep) never runs
+  // its animation frames, so a fresh requestAnimationFrame per scroll write
+  // queues forever, and each queued closure pins its render's whole scope,
+  // row model included — a long run reached 4 GB and crashed the renderer.
+  const programmaticScrollResetFrameRef = useRef<number | null>(null);
+  const workflowTargetRestoreFrameRef = useRef<number | null>(null);
   // Diagnostics for the apply log only — never read by behaviour.
   const lastObservedAnchorOffsetRef = useRef<number | null>(null);
   const lastApplyAtRef = useRef<number | null>(null);
@@ -525,9 +532,14 @@ export function useOutputScrollTarget({
         // has already been lowered (see the echo guard in OutputSection's
         // handleScroll), and only the position identifies it as ours.
         lastProgrammaticScrollTopRef.current = scrollElement.scrollTop;
-        requestAnimationFrame(() => {
-          isProgrammaticScrollRef.current = false;
-        });
+        if (programmaticScrollResetFrameRef.current === null) {
+          programmaticScrollResetFrameRef.current = requestAnimationFrame(
+            () => {
+              programmaticScrollResetFrameRef.current = null;
+              isProgrammaticScrollRef.current = false;
+            }
+          );
+        }
         onScrollTopWritten?.(phase, target, scrollElement.scrollTop - previous);
       }
 
@@ -687,9 +699,14 @@ export function useOutputScrollTarget({
     ) {
       setOutputScrollTarget(workflowScrollTargetId, nextTarget);
     }
-    requestAnimationFrame(() => {
-      applyScrollTargetRef.current("workflow-target-restore", { force: true });
-    });
+    if (workflowTargetRestoreFrameRef.current === null) {
+      workflowTargetRestoreFrameRef.current = requestAnimationFrame(() => {
+        workflowTargetRestoreFrameRef.current = null;
+        applyScrollTargetRef.current("workflow-target-restore", {
+          force: true,
+        });
+      });
+    }
   }, [
     applyScrollTargetRef,
     autoscrollEnabledRef,
@@ -754,6 +771,15 @@ export function useOutputScrollTarget({
       if (deferredScrollTargetApplyTimerRef.current !== null) {
         clearTimeout(deferredScrollTargetApplyTimerRef.current);
         deferredScrollTargetApplyTimerRef.current = null;
+      }
+      for (const frameRef of [
+        programmaticScrollResetFrameRef,
+        workflowTargetRestoreFrameRef,
+      ]) {
+        if (frameRef.current !== null) {
+          cancelAnimationFrame(frameRef.current);
+          frameRef.current = null;
+        }
       }
     },
     []

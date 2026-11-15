@@ -197,6 +197,111 @@ describe("useOutputScrollTarget", () => {
   // streaming output has grown past must still commit the bottom target.
   // Committing a row anchor here would disarm auto-scroll for the rest of the
   // run (setCurrentScrollTarget derives the armed flag from the target kind).
+  // A webview that is not painting (hidden panel, covered window) never runs
+  // animation frames. One frame per scroll write then queued forever, each
+  // closure pinning its render's row model, until the renderer ran out of heap.
+  it("keeps at most one pending frame however many writes land while frames are paused", () => {
+    const pendingFrames = new Map<number, FrameRequestCallback>();
+    let nextFrameId = 1;
+    const requestFrame = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        const id = nextFrameId++;
+        pendingFrames.set(id, callback);
+        return id;
+      });
+    const cancelFrame = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation((id) => {
+        pendingFrames.delete(id);
+      });
+
+    const scrollElement = document.createElement("div");
+    let scrollHeight = 1000;
+    let scrollTop = 0;
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+    });
+    const defaultTarget: OutputScrollTarget = { kind: "bottom" };
+    const isProgrammaticScrollRef = { current: false };
+
+    const { result, unmount } = renderHook(() =>
+      useOutputScrollTarget({
+        applyScrollTargetRef: {
+          current: () => ({ resolved: false, appliedDelta: 0 }),
+        },
+        autoscrollEnabledRef: { current: true },
+        bottomThresholdPx: 40,
+        commitMaxRetries: 2,
+        commitScrollTargetFromViewportRef: { current: () => undefined },
+        defaultTarget,
+        isProgrammaticScrollRef,
+        lastProgrammaticScrollTopRef: { current: null },
+        lastScrollEventAtRef: { current: null },
+        lastScrollTopRef: { current: null },
+        lastUserScrollInputAtRef: { current: null },
+        layoutApplyTrigger: "initial",
+        outputOverscanRef: { current: 6 },
+        outputRef: { current: scrollElement },
+        pendingNavigationRef: { current: null },
+        restoreTrigger: "workflow",
+        rowLayout: { rowStartsByKey: new Map(), totalSize: 1000 },
+        rowsRef: { current: [{ key: "row-1" }] },
+        rowVirtualizer: { measurementsCache: [] },
+        savedOutputScrollTarget: defaultTarget,
+        scrollTargetRef: { current: defaultTarget },
+        setOutputScrollTarget: vi.fn(),
+        userScrollInputGraceMs: 200,
+        workflowScrollTargetId: "workflow",
+      })
+    );
+
+    const writeWhileFramesPaused = () => {
+      scrollHeight += 100;
+      act(() => {
+        result.current.applyScrollTarget("auto-scroll");
+      });
+    };
+    // Mount queues the workflow-target restore; the first write queues the
+    // programmatic-scroll reset. Neither may grow from there.
+    writeWhileFramesPaused();
+    const pendingAfterFirstWrite = pendingFrames.size;
+    expect(pendingAfterFirstWrite).toBeLessThanOrEqual(2);
+    for (let write = 0; write < 50; write++) writeWhileFramesPaused();
+    expect(scrollTop).toBe(scrollHeight - 200);
+    expect(isProgrammaticScrollRef.current).toBe(true);
+    expect(pendingFrames.size).toBe(pendingAfterFirstWrite);
+
+    // The one pending frame still lowers the flag once frames resume, and the
+    // next write after that can arm a fresh one.
+    act(() => {
+      const frames = [...pendingFrames.values()];
+      pendingFrames.clear();
+      for (const frame of frames) frame(performance.now());
+    });
+    expect(isProgrammaticScrollRef.current).toBe(false);
+    scrollHeight += 100;
+    act(() => {
+      result.current.applyScrollTarget("auto-scroll");
+    });
+    expect(isProgrammaticScrollRef.current).toBe(true);
+    expect(pendingFrames.size).toBe(1);
+
+    unmount();
+    expect(pendingFrames.size).toBe(0);
+
+    requestFrame.mockRestore();
+    cancelFrame.mockRestore();
+  });
+
   it("commits the bottom target while auto-scroll is armed, even far from the bottom", () => {
     const scrollElement = document.createElement("div");
     Object.defineProperties(scrollElement, {
