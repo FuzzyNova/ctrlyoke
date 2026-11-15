@@ -56,6 +56,7 @@ import {
   toSkillSelectOption,
   DrawerRow,
   PropertyGroup,
+  PageTitle,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
   formatPriorContextLabel,
@@ -110,7 +111,11 @@ import {
 import { HooksEditor } from "../shared/HooksEditor";
 import { StepColorField } from "./StepColorField";
 import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
-import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import {
+  DRAWER_PAGES,
+  drawerPageTitle,
+  type DrawerPage,
+} from "../../types/drawerPages";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
@@ -655,6 +660,24 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
       <div
         className={`drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-2${activePage === DRAWER_PAGES.PERMISSIONS ? " flex flex-col" : ""}`}
       >
+        <PageTitle
+          title={drawerPageTitle(activePage)}
+          level={4}
+          actions={
+            activePage === DRAWER_PAGES.VALIDATION && (
+              <button
+                type="button"
+                className="flex h-6 w-6 items-center justify-center rounded-sm text-description-fg transition-colors hover:bg-toolbar-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={openDryRunStep}
+                disabled={!hasEditorContent}
+                title="Dry Run Step"
+                aria-label="Dry Run Step"
+              >
+                <Icon name="telescope" />
+              </button>
+            )
+          }
+        />
         {/* Page: Harness */}
         {activePage === DRAWER_PAGES.HARNESS && (
           <div className="space-y-2">
@@ -1165,21 +1188,6 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
         {/* Page: Validation */}
         {activePage === DRAWER_PAGES.VALIDATION && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-panel-border pb-2">
-              <h4 className="text-xs font-semibold uppercase text-description-fg">
-                Validation
-              </h4>
-              <button
-                type="button"
-                className="flex h-6 w-6 items-center justify-center rounded-sm text-description-fg transition-colors hover:bg-toolbar-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={openDryRunStep}
-                disabled={!hasEditorContent}
-                title="Dry Run Step"
-                aria-label="Dry Run Step"
-              >
-                <Icon name="telescope" />
-              </button>
-            </div>
             {/* Pre-Condition Section */}
             <PropertyGroup>
               <label
@@ -1345,9 +1353,6 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
         {/* Page: MCP */}
         {activePage === DRAWER_PAGES.MCP && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase text-description-fg">
-              MCP Servers
-            </p>
             <McpServersEditor
               controlId="prop-mcp-servers"
               value={displayedProperties.mcpServers as McpServersValue}
@@ -1648,9 +1653,6 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
         {/* Page: Hooks */}
         {activePage === DRAWER_PAGES.HOOKS && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase text-description-fg">
-              Hooks
-            </p>
             <HooksEditor
               schemaPath="hooks"
               value={displayedProperties.hooks}

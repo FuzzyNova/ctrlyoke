@@ -477,14 +477,11 @@ export function SecretsSection({
     <>
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3
-              data-settings-search-id="landmark:secrets:grants"
-              className="text-xs font-semibold uppercase tracking-wide text-description-fg"
-            >
-              Secrets
-            </h3>
-            <p className="mt-1 text-xs text-description-fg">
+          <div
+            className="min-w-0"
+            data-settings-search-id="landmark:secrets:grants"
+          >
+            <p className="text-xs text-description-fg">
               Secrets let a workflow reference a credential by name instead of
               embedding it. Reference one inline in a prompt with{" "}
               <code className="text-foreground">!NAME</code> (for example{" "}

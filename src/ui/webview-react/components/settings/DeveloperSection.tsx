@@ -145,16 +145,11 @@ export function DeveloperSection() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Developer
-        </h3>
-        <p className="text-xs text-description-fg">
-          Command output comes from the extension host. Use reload for UI-only
-          changes and restart the extension host whenever extension code is
-          rebuilt.
-        </p>
-      </div>
+      <p className="text-xs text-description-fg">
+        Command output comes from the extension host. Use reload for UI-only
+        changes and restart the extension host whenever extension code is
+        rebuilt.
+      </p>
 
       <div className="text-xs text-description-fg space-y-1">
         <div>Extension build date: {formatBuildDate(dev.buildDate)}</div>

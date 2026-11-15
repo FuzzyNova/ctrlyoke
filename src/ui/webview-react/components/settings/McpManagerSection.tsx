@@ -831,13 +831,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-      <div className="space-y-2 lg:col-span-2">
-        <h3
-          data-settings-search-id="landmark:mcp-manager:servers"
-          className="text-xs font-semibold uppercase tracking-wide text-description-fg"
-        >
-          MCP Manager
-        </h3>
+      <div
+        className="space-y-2 lg:col-span-2"
+        data-settings-search-id="landmark:mcp-manager:servers"
+      >
         <p className="text-xs text-description-fg">
           Manage the ctrlyoke MCP registry in the active {activeScope} scope,
           import servers from local configs or the public{" "}

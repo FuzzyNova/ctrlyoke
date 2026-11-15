@@ -51,6 +51,7 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { defaultModelForHarness } from "@utils/harnessChangeCascade";
 import {
   PanelBar,
+  PageTitle,
   CustomSelect,
   toAgentSelectOption,
   toSkillSelectOption,
@@ -83,7 +84,11 @@ import {
 } from "../shared";
 import { HooksEditor } from "../shared/HooksEditor";
 import { PermissionListEditor } from "../shared/PermissionListEditor";
-import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import {
+  DRAWER_PAGES,
+  drawerPageTitle,
+  type DrawerPage,
+} from "../../types/drawerPages";
 import {
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
@@ -1744,8 +1749,53 @@ const WorkflowPropertiesPanelInner: React.FC<{
         ref={scrollBodyRef}
         className={`flex-1 overflow-y-auto${activePage === DRAWER_PAGES.MCP ? " flex flex-col" : ""}${isExternallyManaged || isViewingDeletedWorkflow || isSystemGeneratedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
+        <PageTitle
+          title={drawerPageTitle(activePage)}
+          level={4}
+          className="mx-4 mt-2"
+          tooltip={
+            activePage === DRAWER_PAGES.MCP
+              ? schemaFieldTitle(
+                  drawerPageTitle(activePage),
+                  "mcpServers",
+                  "MCP servers to attach to the harness for this workflow. Include ctrlyoke to let the harness append steps (a dynamic workflow). Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
+                )
+              : activePage === DRAWER_PAGES.HOOKS
+                ? schemaFieldTitle(
+                    drawerPageTitle(activePage),
+                    "hooks",
+                    "User-defined hooks to run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness."
+                  )
+                : undefined
+          }
+          actions={
+            activePage === DRAWER_PAGES.MCP ? (
+              <SetAsDefaultButton
+                property={PROMPT_PROPERTIES.MCP_SERVERS}
+                show={isDifferentFromGlobal(PROMPT_PROPERTIES.MCP_SERVERS)}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    PROMPT_PROPERTIES.MCP_SERVERS,
+                    workflowProperties.mcpServers
+                  )
+                }
+              />
+            ) : activePage === DRAWER_PAGES.HOOKS ? (
+              <SetAsDefaultButton
+                property={PROMPT_PROPERTIES.HOOKS}
+                show={isDifferentFromGlobal(PROMPT_PROPERTIES.HOOKS)}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    PROMPT_PROPERTIES.HOOKS,
+                    workflowProperties.hooks
+                  )
+                }
+              />
+            ) : undefined
+          }
+        />
         <div
-          className={`px-4 py-2${activePage === DRAWER_PAGES.MCP ? " flex flex-col flex-1 min-h-0 gap-2" : ` space-y-2${activePage === DRAWER_PAGES.PERMISSIONS ? " min-h-full flex flex-col" : ""}`}`}
+          className={`px-4 pb-2${activePage === DRAWER_PAGES.MCP ? " flex flex-col flex-1 min-h-0 gap-2" : ` space-y-2${activePage === DRAWER_PAGES.PERMISSIONS ? " min-h-full flex flex-col" : ""}`}`}
         >
           {activePage === DRAWER_PAGES.HARNESS && (
             <>
@@ -2577,33 +2627,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
           {activePage === DRAWER_PAGES.MCP && (
             <div className="flex-1 flex flex-col min-h-0">
-              <FormField
-                label="MCP Servers"
-                schemaPath="mcpServers"
-                description="MCP servers to attach to the harness for this workflow. Include ctrlyoke to let the harness append steps (a dynamic workflow). Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
-                className="flex-1 min-h-0"
-                setAsDefaultButton={
-                  <SetAsDefaultButton
-                    property={PROMPT_PROPERTIES.MCP_SERVERS}
-                    show={isDifferentFromGlobal(PROMPT_PROPERTIES.MCP_SERVERS)}
-                    onSetDefault={() =>
-                      handleSetAsDefault(
-                        PROMPT_PROPERTIES.MCP_SERVERS,
-                        workflowProperties.mcpServers
-                      )
-                    }
-                  />
-                }
-              >
-                <McpServersEditor
-                  controlId="settings-mcp-servers"
-                  value={effectiveMcpServers as McpServersValue}
-                  onChange={handleMcpServersChange}
-                  showDefault={false}
-                  fillHeight={true}
-                  diagnostics={mcpDiagnostics}
-                />
-              </FormField>
+              <McpServersEditor
+                controlId="settings-mcp-servers"
+                value={effectiveMcpServers as McpServersValue}
+                onChange={handleMcpServersChange}
+                showDefault={false}
+                fillHeight={true}
+                diagnostics={mcpDiagnostics}
+              />
             </div>
           )}
 
@@ -2946,33 +2977,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
           )}
 
           {activePage === DRAWER_PAGES.HOOKS && (
-            <>
-              <FormField
-                label="Hooks"
-                schemaPath="hooks"
-                description="User-defined hooks to run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness."
-                setAsDefaultButton={
-                  <SetAsDefaultButton
-                    property={PROMPT_PROPERTIES.HOOKS}
-                    show={isDifferentFromGlobal(PROMPT_PROPERTIES.HOOKS)}
-                    onSetDefault={() =>
-                      handleSetAsDefault(
-                        PROMPT_PROPERTIES.HOOKS,
-                        workflowProperties.hooks
-                      )
-                    }
-                  />
-                }
-              >
-                <HooksEditor
-                  schemaPath="hooks"
-                  value={effectiveHooks}
-                  onChange={handleHooksChange}
-                  showDefault={false}
-                  diagnostics={hookDiagnostics}
-                />
-              </FormField>
-            </>
+            <HooksEditor
+              schemaPath="hooks"
+              value={effectiveHooks}
+              onChange={handleHooksChange}
+              showDefault={false}
+              diagnostics={hookDiagnostics}
+            />
           )}
         </div>
       </div>

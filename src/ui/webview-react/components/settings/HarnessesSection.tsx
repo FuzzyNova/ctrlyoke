@@ -80,9 +80,6 @@ export function HarnessesSection({
     hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? EMPTY_HIDDEN_VALUES;
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-        Harness Defaults
-      </h3>
       <SettingInputRow
         settingKey="defaults.harness"
         id="harness-active"

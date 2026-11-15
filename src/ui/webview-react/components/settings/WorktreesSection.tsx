@@ -550,16 +550,11 @@ export function WorktreesSection({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-1 tracking-wide">
-          Worktrees
-        </h3>
-        <p className="text-xs text-description-fg">
-          Worktree directories are shared machine configuration. The resolver
-          tries a configured root first, then the repository sibling, then the
-          user fallback when the earlier location is unavailable.
-        </p>
-      </div>
+      <p className="text-xs text-description-fg">
+        Worktree directories are shared machine configuration. The resolver
+        tries a configured root first, then the repository sibling, then the
+        user fallback when the earlier location is unavailable.
+      </p>
 
       <SettingInputRow
         settingKey="worktrees.root"

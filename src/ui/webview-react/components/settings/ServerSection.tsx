@@ -385,10 +385,6 @@ export function ServerSection({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-        Server
-      </h3>
-
       {!licenseAccess.isPro && (
         <button
           type="button"

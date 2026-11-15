@@ -73,11 +73,42 @@ describe("GlobalSettingsDrawer", () => {
     render(<GlobalSettingsDrawer />);
 
     const content = screen
-      .getByText(heading, { selector: "h3" })
-      .closest("div.p-4");
+      .getByRole("heading", { level: 2, name: heading })
+      .closest("div.pt-2");
 
     expect(content).toHaveClass("max-w-none");
     expect(content).not.toHaveClass("max-w-2xl");
+  });
+
+  it.each([
+    ["general", "General"],
+    ["queue", "Queue"],
+    ["mcpmanager", "MCP Manager"],
+  ])("titles the %s tab with its tab label exactly once", (tab, title) => {
+    useUiStore.setState({ globalSettingsActiveTab: tab });
+
+    render(<GlobalSettingsDrawer />);
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: title })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryAllByRole("heading", { level: 3, name: title })
+    ).toHaveLength(0);
+  });
+
+  it("titles each Workflow Defaults page after its properties page", () => {
+    useUiStore.setState({ globalSettingsActiveTab: "workflow" });
+
+    render(<GlobalSettingsDrawer />);
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Harness Setup Defaults" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Validation Defaults" })
+    ).toBeInTheDocument();
   });
 
   it("disables settings controls when the settings file uses a newer format", () => {

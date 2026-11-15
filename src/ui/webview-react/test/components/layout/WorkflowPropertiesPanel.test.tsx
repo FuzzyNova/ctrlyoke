@@ -659,6 +659,25 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
     );
   });
 
+  it("titles each page, with the MCP and Hooks titles replacing their field labels", () => {
+    render(<WorkflowPropertiesPanel />);
+
+    expect(
+      screen.getByRole("heading", { level: 4, name: "Harness Setup" })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "MCP" }));
+    expect(
+      screen.getByRole("heading", { level: 4, name: "MCP Servers" })
+    ).toBeInTheDocument();
+    expect(screen.queryAllByText("MCP Servers")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Hooks" }));
+    expect(
+      screen.getByRole("heading", { level: 4, name: "Hooks" })
+    ).toBeInTheDocument();
+  });
+
   it("persists null to explicitly disable inherited conditions", () => {
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Validation" }));

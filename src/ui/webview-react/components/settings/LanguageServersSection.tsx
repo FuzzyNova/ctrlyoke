@@ -297,15 +297,10 @@ export function LanguageServersSection({ activeScope }: Props) {
       data-landmark="landmark:language-servers:servers"
       data-settings-search-id="landmark:language-servers:servers"
     >
-      <div>
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-1 tracking-wide">
-          Language servers
-        </h3>
-        <p className="text-xs text-description-fg">
-          Used by the browser workspace editor and, in{" "}
-          <code>ctrlyoke server</code>, by <code>#</code> symbol completions.
-        </p>
-      </div>
+      <p className="text-xs text-description-fg">
+        Used by the browser workspace editor and, in{" "}
+        <code>ctrlyoke server</code>, by <code>#</code> symbol completions.
+      </p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="min-w-0 space-y-3 rounded-sm border border-panel-border p-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg">

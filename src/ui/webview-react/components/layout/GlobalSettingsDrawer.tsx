@@ -48,6 +48,7 @@ import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle, SETTING_SCOPE_OPTIONS } from "../shared";
 import { IconToggleButton } from "../shared/IconToggleButton";
 import { Icon } from "../shared/Icon";
+import { PageTitle } from "../shared/PageTitle";
 import { DRAWER_PAGES, type DrawerPage } from "@/types/drawerPages";
 import { isFindShortcut } from "@utils/findShortcut";
 import { SETTINGS_CATALOG_ENTRIES } from "../settings/settingsCatalog";
@@ -119,6 +120,9 @@ export function GlobalSettingsDrawer() {
       No settings match “{settingsSearch.query}”
     </div>
   );
+  const activeTabLabel = visibleTabs.find(
+    (t) => t.id === effectiveActiveTab
+  )?.label;
   const isFullWidthSettingsTab =
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER ||
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER ||
@@ -435,10 +439,11 @@ export function GlobalSettingsDrawer() {
               >
                 {noSearchMatchesNotice}
                 <div
-                  className={`p-4 ${
+                  className={`px-4 pt-2 pb-4 ${
                     isFullWidthSettingsTab ? "max-w-none" : "max-w-2xl"
                   }`}
                 >
+                  {activeTabLabel && <PageTitle title={activeTabLabel} />}
                   {fullSettings &&
                     effectiveActiveTab === GLOBAL_SETTINGS_TABS.GENERAL && (
                       <GeneralSection

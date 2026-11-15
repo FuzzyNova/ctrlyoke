@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A nonexistent or non-directory `--cwd` now fails with a usage error instead of returning empty results.
 - A workspace settings file that sets `auto` over a different user permission mode, or a custom allow list not covered by the user's auto allow list, now asks for workspace-settings trust.
+- Every page in Settings, Workflow Properties and Prompt Properties now opens with a title, and the section headings that repeated it are gone. Workflow Defaults pages are named after their Workflow Properties page (for example **Validation Defaults**), the Harness page is titled **Harness Setup**, and the General tab's first section is now **Workflow Files**.
 - In the dashboard's **On Error** menu, `retry` is now labelled **Retry Step**, to set it apart from the new **Retry Failed Phase**. Workflow files still say `retry`.
 
 - A named worktree's `setup` command now runs at the start of every run, not only when ctrlyoke creates the worktree, so a dependency change pulled or merged into the branch since the last run is installed before the first step. Resuming or continuing a run whose setup already succeeded doesn't run it again. Omit `setup` if you don't want it to run. Managed worktrees are unchanged.

@@ -8,8 +8,10 @@ import { DrawerTabBar } from "../shared/DrawerTabBar";
 import {
   DRAWER_PAGES,
   DRAWER_TABS,
+  drawerPageDefaultsTitle,
   type DrawerPage,
 } from "../../types/drawerPages";
+import { PageTitle } from "../shared/PageTitle";
 import { DefaultsHarnessPage } from "./defaults/DefaultsHarnessPage";
 import { DefaultsContextPage } from "./defaults/DefaultsContextPage";
 import { DefaultsValidationPage } from "./defaults/DefaultsValidationPage";
@@ -51,8 +53,9 @@ export function WorkflowDefaultsSection({
     <div className="flex flex-col h-full">
       <div
         data-settings-content-scroll
-        className="flex-1 overflow-y-auto px-4 py-3"
+        className="flex-1 overflow-y-auto px-4 pt-2 pb-3"
       >
+        <PageTitle title={drawerPageDefaultsTitle(activePage)} />
         {activePage === DRAWER_PAGES.HARNESS && (
           <DefaultsHarnessPage {...pageProps} />
         )}

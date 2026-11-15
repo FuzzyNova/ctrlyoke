@@ -680,14 +680,10 @@ export function AgentSkillsManagerSection({
   };
 
   return (
-    <div className="space-y-4">
-      <h3
-        data-settings-search-id="landmark:agent-skills:manager"
-        className="text-xs font-semibold uppercase text-description-fg tracking-wide"
-      >
-        Agent & Skills Manager
-      </h3>
-
+    <div
+      className="space-y-4"
+      data-settings-search-id="landmark:agent-skills:manager"
+    >
       {/* Type switcher + Open Folder */}
       <div className="flex items-center gap-2">
         <div

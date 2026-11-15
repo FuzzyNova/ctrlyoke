@@ -300,13 +300,7 @@ export function LicenseSection() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3
-            data-settings-search-id="landmark:license:account"
-            className="text-xs font-semibold uppercase text-description-fg mb-1 tracking-wide"
-          >
-            License
-          </h3>
+        <div data-settings-search-id="landmark:license:account">
           <p className="text-xs text-description-fg">
             Manage the Pro license for ctrlyoke and the machine it is activated
             on.

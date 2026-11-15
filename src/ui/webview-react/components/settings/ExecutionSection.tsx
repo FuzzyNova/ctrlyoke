@@ -35,9 +35,6 @@ export function ExecutionSection({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-        Execution
-      </h3>
       <SettingInputRow
         settingKey="execution.contextResolutionFailure"
         id="exec-strict-context-resolution"

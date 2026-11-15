@@ -113,10 +113,7 @@ export function CommitSection({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-        Commit Message Generation
-      </h3>
-      <p className="text-xs text-description-fg -mt-2">
+      <p className="text-xs text-description-fg">
         Configure the AI harness, model, and system prompt used when generating
         commit messages via the generate button (SCM panel, hosted dashboard) or
         the <code className="font-mono">ctrlyoke commit</code> CLI command.

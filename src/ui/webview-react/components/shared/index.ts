@@ -68,6 +68,7 @@ export {
 export { DrawerTabBar } from "./DrawerTabBar";
 export { DrawerRow } from "./DrawerRow";
 export { PropertyGroup } from "./PropertyGroup";
+export { PageTitle } from "./PageTitle";
 export { PriorContextSelect, type KeywordMode } from "./PriorContextSelect";
 export { formatPriorContextLabel } from "@utils/priorContext";
 export { LimitSelect } from "./LimitSelect";

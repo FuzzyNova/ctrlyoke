@@ -64,7 +64,7 @@ export function GeneralSection({
   return (
     <div className="space-y-1">
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-        Workflow File Defaults
+        Workflow Files
       </h3>
       <SettingInputRow
         settingKey="general.defaultFormat"

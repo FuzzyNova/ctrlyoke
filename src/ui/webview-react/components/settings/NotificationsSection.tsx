@@ -158,10 +158,6 @@ export function NotificationsSection({
 
   return (
     <div className="space-y-6">
-      <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-        Notifications
-      </h3>
-
       <div className="space-y-3">
         <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Channels

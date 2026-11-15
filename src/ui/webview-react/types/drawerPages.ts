@@ -30,3 +30,27 @@ export const DRAWER_TABS: DrawerTab[] = [
     codicon: "workspace-trusted",
   },
 ];
+
+/**
+ * The title shown at the top of each drawer page. It differs from the tab
+ * label where the page's first control already carries the tab's name (the
+ * Harness dropdown), or where the title stands in for that control's label
+ * (MCP Servers).
+ */
+const DRAWER_PAGE_TITLES: Record<DrawerPage, string> = {
+  harness: "Harness Setup",
+  context: "Context",
+  validation: "Validation",
+  mcp: "MCP Servers",
+  hooks: "Hooks",
+  permissions: "Permissions",
+};
+
+export function drawerPageTitle(page: DrawerPage): string {
+  return DRAWER_PAGE_TITLES[page];
+}
+
+/** The same page's title in Settings → Workflow Defaults. */
+export function drawerPageDefaultsTitle(page: DrawerPage): string {
+  return `${DRAWER_PAGE_TITLES[page]} Defaults`;
+}

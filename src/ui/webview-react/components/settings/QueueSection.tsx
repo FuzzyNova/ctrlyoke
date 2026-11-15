@@ -28,9 +28,6 @@ export function QueueSection({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-        Queue
-      </h3>
       <SettingInputRow
         settingKey="queue.maxSteps"
         id="queue-max-steps"
