@@ -960,7 +960,6 @@ export function findWorkspaceReferenceMatches(
       (
         match
       ): match is ContextReferenceMatch & { type: WorkspaceReferenceType } =>
-        match.type !== ATOMIC_REFERENCE_KINDS.GIT &&
         isWorkspaceReferenceType(match.type)
     )
     .map((match) => ({

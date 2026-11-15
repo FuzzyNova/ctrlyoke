@@ -1917,7 +1917,7 @@ function registerCommands(
   );
 
   const regenerateServerTokenCommand = vscode.commands.registerCommand(
-    "ctrlyoke.regenerateServerToken",
+    VSCODE_COMMANDS.REGENERATE_SERVER_TOKEN,
     async () => {
       const stateRoot = getVsCodeWorkspaceRoot();
       if (!stateRoot) {

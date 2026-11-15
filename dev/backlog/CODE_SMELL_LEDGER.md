@@ -423,6 +423,28 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     `confirmExternalFileTrust` are spelled out at both registration and call/URI sites.
     Landed: Routed these command IDs through `VSCODE_COMMANDS` and added package command-ID and uniqueness coverage.
 
+- **2026-11-14, pass 17**: reviewed pass 16's two refactors. Quoted-first ordering is
+  kept for file and directory links. The scanner's directory-inside-file filter now
+  ignores whether the file link resolved, but a file ref that fails `resolveReferencePath`
+  fails for its own directory prefix too. Fixed directly: `ctrlyoke.regenerateServerToken`
+  was still literal at its registration, though `VSCODE_COMMANDS.REGENERATE_SERVER_TOKEN`
+  already existed. Also dropped a redundant GIT check in `findWorkspaceReferenceMatches`.
+  `npm test` baseline in this worktree (`core.autocrlf=true`, Windows): the same 8
+  extension tests fail before and after (CRLF content asserts, symlink `EPERM`,
+  PowerShell `0xC000013A`, `node -e` quoting in worktree setup, CLI interrupted run).
+  None are related to the refactors.
+
+  Hunted `src/server/`, `src/scm/`, `src/git/`, `src/ui/` and the dashboard components
+  with the repeated 8-line window scan. Queued two steps:
+  - Git ref diff paging: `HostedWorkspaceViewerService.getGitRefDiffPage` and
+    `getWorktreeDiffPage` repeat the offset check, the `diffId` snapshot resume, and
+    the visible-file filter plus frozen snapshot build.
+  - Worktree action results: three `DashboardMessageRouter` handlers
+    (`WORKTREE_MANAGEMENT_ACTION`, `SYNC_NAMED_WORKTREE`,
+    `UPDATE_NAMED_WORKTREE_FROM_SOURCE`) repeat the
+    `WORKTREE_MANAGEMENT_ACTION_RESULT` emit block, and two repeat the
+    fast-forward/merge-commit success predicate.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -698,3 +720,15 @@ still deferred.
   shared resolve-path-or-warn prelude, and `extension.ts`'s two
   `awaitPanelReady().then(promptPendingExternalRoots)` blocks: about six lines each,
   within one file; a helper would save little.
+- `FILE_PATH_SOURCE` (`ui/webview-react/components/output/MarkdownText.tsx`) vs
+  `CLI_FILE_PATH_SOURCE` (`ui/webview-react/utils/cliCommandFileLinks.ts`): the CLI copy
+  adds an `@` prefix, a POSIX-absolute branch, lookbehind boundaries and a leading-dot
+  segment. Its doc comment says sharing it would change prose auto-linking.
+- The snapshot-resume checks for listings, file history and commit log in
+  `HostedWorkspaceViewerService.ts`: each validates a different id, compares different
+  context fields and has its own mismatch message. A generic helper would need about as
+  many parameters as the copies have lines. (The two git-ref diff copies are queued in
+  pass 17.)
+- `EXIT_IDLE_TERMINALS` result emit in `DashboardMessageRouter.ts`: unlike the worktree
+  action handlers, it falls back to a `USER_FEEDBACK` toast when there's no `requestId`,
+  and it sends worktree state without a refresh.
