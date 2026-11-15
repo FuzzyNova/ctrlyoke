@@ -209,6 +209,68 @@ suite("Secret command parser", () => {
     }
   });
 
+  test("check and trust-secret-grants preserve exact parse failure output", async () => {
+    const file = "workflow.ctrlyoke.yaml";
+    const filePath = path.resolve(file);
+    const parseFailures = [
+      [
+        "throw",
+        async () => {
+          throw new Error("Parser failed.");
+        },
+        "Parser failed.",
+      ],
+      [
+        "validation",
+        async () => null,
+        `Workflow failed validation: ${filePath}`,
+      ],
+    ] as const;
+
+    for (const [failureKind, parseWorkflow, message] of parseFailures) {
+      for (const [commandName, command] of [
+        ["secret check", checkSecretsCommand],
+        ["trust-secret-grants", trustSecretGrantsCommand],
+      ] as const) {
+        for (const json of [false, true]) {
+          const io = new TestIo();
+          const code = await command(
+            file,
+            { json },
+            {
+              ...dependencies(new InMemorySecretStore()),
+              parseWorkflow,
+            },
+            io
+          );
+          assert.strictEqual(
+            code,
+            2,
+            `${commandName} ${failureKind} exit code`
+          );
+          assert.deepStrictEqual(
+            io.output,
+            json
+              ? [
+                  JSON.stringify({
+                    schemaVersion: 1,
+                    success: false,
+                    error: { message },
+                  }),
+                ]
+              : [],
+            `${commandName} ${failureKind} stdout`
+          );
+          assert.deepStrictEqual(
+            io.errors,
+            json ? [] : [`Error: ${message}`],
+            `${commandName} ${failureKind} stderr`
+          );
+        }
+      }
+    }
+  });
+
   test("parses scopes and stdin without exposing a value-bearing argv option", async () => {
     const calls: Parameters<typeof createParserProgram>[0] = {};
     await createParserProgram(calls).parseAsync(

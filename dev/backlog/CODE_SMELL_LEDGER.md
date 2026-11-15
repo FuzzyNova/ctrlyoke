@@ -394,6 +394,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     Landed: centralized the three dispatched-prompt echo match modes in BaseLogParser and added characterization tests.
   - `SecretCommands.checkSecretsCommand`/`trustSecretGrantsCommand`: verbatim
     workspace-root + parse + validation-error block.
+    Landed: shared secret workflow loading and added exact-output characterization tests.
   - Draft revision preconditions: read descriptor + draft, then assert both revisions,
     in `RunLifecycleService.setStartPositionAtDraft`, `executeDraftAtAddress` and
     `WorkflowOrchestrator.prepareDefinitionMutation` (draft branch).

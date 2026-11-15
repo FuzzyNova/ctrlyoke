@@ -194,18 +194,21 @@ export async function removeSecretCommand(
   );
 }
 
-/** Return the command exit code while using the same preflight as `run`. */
-export async function checkSecretsCommand(
-  file: string | undefined,
-  options: SecretCheckOptions,
+type SecretWorkflowLoadResult =
+  | {
+      loaded: true;
+      workspaceRoot: string;
+      filePath: string;
+      workflow: PromptFile;
+    }
+  | { loaded: false; exitCode: 2 };
+
+async function loadSecretCommandWorkflow(
+  file: string,
+  options: Pick<SecretCheckOptions, "cwd" | "json">,
   dependencies: SecretCommandDependencies,
   io: SecretCommandIo
-): Promise<number> {
-  if (!file) {
-    writeSecretError(options.json, io, "Provide a workflow file to check.", 2);
-    return 2;
-  }
-
+): Promise<SecretWorkflowLoadResult> {
   const workspaceRoot = resolveWorkspaceRoot(
     options.cwd,
     dependencies.workspaceRoot
@@ -218,7 +221,7 @@ export async function checkSecretsCommand(
       : await parseCliPromptFile(filePath, dependencies.platform);
   } catch (error) {
     writeSecretError(options.json, io, getErrorMessage(error), 2);
-    return 2;
+    return { loaded: false, exitCode: 2 };
   }
   if (!workflow) {
     writeSecretError(
@@ -227,8 +230,32 @@ export async function checkSecretsCommand(
       `Workflow failed validation: ${filePath}`,
       2
     );
+    return { loaded: false, exitCode: 2 };
+  }
+
+  return { loaded: true, workspaceRoot, filePath, workflow };
+}
+
+/** Return the command exit code while using the same preflight as `run`. */
+export async function checkSecretsCommand(
+  file: string | undefined,
+  options: SecretCheckOptions,
+  dependencies: SecretCommandDependencies,
+  io: SecretCommandIo
+): Promise<number> {
+  if (!file) {
+    writeSecretError(options.json, io, "Provide a workflow file to check.", 2);
     return 2;
   }
+
+  const loadedWorkflow = await loadSecretCommandWorkflow(
+    file,
+    options,
+    dependencies,
+    io
+  );
+  if (!loadedWorkflow.loaded) return loadedWorkflow.exitCode;
+  const { workspaceRoot, filePath, workflow } = loadedWorkflow;
 
   try {
     await preflightWorkflowSecrets(
@@ -269,29 +296,14 @@ export async function trustSecretGrantsCommand(
   dependencies: SecretCommandDependencies,
   io: SecretCommandIo
 ): Promise<number> {
-  const workspaceRoot = resolveWorkspaceRoot(
-    options.cwd,
-    dependencies.workspaceRoot
+  const loadedWorkflow = await loadSecretCommandWorkflow(
+    file,
+    options,
+    dependencies,
+    io
   );
-  const filePath = resolveCliFileArgument(file);
-  let workflow: PromptFile | null;
-  try {
-    workflow = dependencies.parseWorkflow
-      ? await dependencies.parseWorkflow(filePath)
-      : await parseCliPromptFile(filePath, dependencies.platform);
-  } catch (error) {
-    writeSecretError(options.json, io, getErrorMessage(error), 2);
-    return 2;
-  }
-  if (!workflow) {
-    writeSecretError(
-      options.json,
-      io,
-      `Workflow failed validation: ${filePath}`,
-      2
-    );
-    return 2;
-  }
+  if (!loadedWorkflow.loaded) return loadedWorkflow.exitCode;
+  const { workspaceRoot, workflow } = loadedWorkflow;
 
   const workspaceIdentity =
     ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
