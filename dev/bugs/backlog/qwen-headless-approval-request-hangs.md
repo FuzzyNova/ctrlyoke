@@ -33,9 +33,20 @@ approval is ever requested.
 `auto` mode is not affected for benign commands (the judge decides in-band), but a command the
 judge escalates to manual approval may hang the same way.
 
+**Correction (2026-11-15, source + probe on 0.27.1):** no `can_use_tool` request is ever written
+in this launch. The positional prompt becomes the first stream-json message, which puts Qwen in
+"direct mode" with its control system off (`packages/cli/src/nonInteractive/session.ts:380-412`).
+The tool then waits in `awaiting_approval` with no confirm handler, and after stdin EOF the session
+waits for it with no timeout. A probe showed stdout ending at the `tool_use`. If the session is
+opened with an `initialize` control request instead, the request arrives, allow and deny both work,
+and stdin EOF cancels a pending request.
+
 ## Suggested Fix
 
-- Answer `can_use_tool` control requests in headless runs with a deny (ctrlyoke already parses
-  Qwen's stream-json output), which keeps the stream-json exemption from the stale alias gate.
-- Or drop `--input-format stream-json` and work around the auto-deny alias table in
-  `QwenToolPermissionMapper` instead. Re-run the Qwen permission cases either way.
+Stage 1 of [`HEADLESS_SESSION_CONTROL_PLAN.md`](../../backlog/HEADLESS_SESSION_CONTROL_PLAN.md):
+
+- Drop the positional prompt and send `initialize` first, then the prompt as a `user` message.
+- Answer every `can_use_tool` request with a deny that tells the model why.
+
+That plan also builds headless steering and "ask me" approvals on the same channel. Dropping
+`--input-format stream-json` is still possible, but it would lose the auto-deny gate exemption.

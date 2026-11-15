@@ -40,6 +40,12 @@ against the user's own message. It sees only the file reference, and it apparent
 treat what the agent read from that file as the user's intent, which is a reasonable
 prompt-injection defence. So the user's authority for the action is "unavailable".
 
+**Confirmed 2026-11-15 (Copilot 1.0.112, `gpt-6-luna`)** with the prompt piped on stdin, which is
+the transport in [`HEADLESS_STDIN_INLINE_PROMPT_PLAN.md`](../../backlog/HEADLESS_STDIN_INLINE_PROMPT_PLAN.md):
+
+- Full instruction text on stdin: the command ran in **4 of 4** runs.
+- `follow the instructions in @task.prompt.md ` on stdin: refused in **3 of 4** runs.
+
 ## Suggested Fix
 
 Options, roughly in order of preference:
