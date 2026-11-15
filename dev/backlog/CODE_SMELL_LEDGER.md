@@ -398,6 +398,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Draft revision preconditions: read descriptor + draft, then assert both revisions,
     in `RunLifecycleService.setStartPositionAtDraft`, `executeDraftAtAddress` and
     `WorkflowOrchestrator.prepareDefinitionMutation` (draft branch).
+    Landed: shared the sequential draft revision check across all three call sites and covered stale revisions.
 
 ## Deferred
 

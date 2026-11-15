@@ -248,7 +248,151 @@ function createHost(
   };
 }
 
+async function createDraftDefinition(
+  workspaceRoot: string
+): Promise<WorkflowKey> {
+  const manager = new WorkingFileManager({
+    getWorkingFilePath: () => undefined,
+    getSteps: () => [{ prompt: "draft revision test" }],
+    getCurrentIndex: () => 0,
+    getStatus: () => EXECUTION_STATES.IDLE,
+    getDefinitionRevision: () => 1,
+    setDefinitionRevision: () => undefined,
+    getWorkflowName: () => "Draft revision test",
+    mergeDiskSteps: () => [],
+    emitStateChange: () => undefined,
+    getFinalStepRuntime: () => undefined,
+    updateWorkflowProperty: () => undefined,
+  });
+  const created = await manager.createWorkingFile(
+    "draft-revision-test",
+    [{ prompt: "draft revision test" }],
+    workspaceRoot,
+    "Draft revision test"
+  );
+  return created.workflowKey;
+}
+
+function createDraftLifecycleService(
+  workspaceRoot: string,
+  key: WorkflowKey,
+  descriptorRevision: number
+): RunLifecycleService {
+  const registry = new FakeRegistry();
+  const views = new FakeViews();
+  views.address = { workflowKey: key, kind: "draft" };
+  const state = queueState(EXECUTION_STATES.IDLE);
+  state.workflowKey = key;
+  const instance = new FakeInstance(state);
+  registry.viewedInstance = instance;
+  const lineageDescriptor = descriptor();
+  lineageDescriptor.workflowKey = key;
+  lineageDescriptor.revision = descriptorRevision;
+  const host = createHost(
+    registry,
+    views,
+    new FakeLineageRepository(lineageDescriptor)
+  );
+  return new RunLifecycleService({
+    ...host,
+    getWorkspaceRoot: () => workspaceRoot,
+    getInstanceForClient: () => instance,
+  });
+}
+
 suite("RunLifecycleService continuation validation", () => {
+  test("setStartPositionAtDraft rejects a stale descriptor before reading the draft", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-start-stale-descriptor-")
+    );
+    try {
+      const key = await createDraftDefinition(workspace);
+      await fs.rm(WorkflowPaths.draftFilePath(workspace, key));
+      const service = createDraftLifecycleService(workspace, key, 2);
+
+      await assert.rejects(
+        service.setStartPositionAtDraft(
+          { workflowKey: key, kind: "draft" },
+          0,
+          1,
+          1,
+          "panel"
+        ),
+        /Descriptor revision conflict: expected 1, found 2/
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("setStartPositionAtDraft rejects a stale definition revision", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-start-stale-definition-")
+    );
+    try {
+      const key = await createDraftDefinition(workspace);
+      const service = createDraftLifecycleService(workspace, key, 1);
+
+      await assert.rejects(
+        service.setStartPositionAtDraft(
+          { workflowKey: key, kind: "draft" },
+          0,
+          2,
+          1,
+          "panel"
+        ),
+        /Definition revision conflict: expected 2, found 1/
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("executeDraftAtAddress rejects a stale descriptor before reading the draft", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-execute-stale-descriptor-")
+    );
+    try {
+      const key = await createDraftDefinition(workspace);
+      await fs.rm(WorkflowPaths.draftFilePath(workspace, key));
+      const service = createDraftLifecycleService(workspace, key, 2);
+
+      await assert.rejects(
+        service.executeDraftAtAddress(
+          { workflowKey: key, kind: "draft" },
+          1,
+          1,
+          "panel"
+        ),
+        /Descriptor revision conflict: expected 1, found 2/
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("executeDraftAtAddress rejects a stale definition revision", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-execute-stale-definition-")
+    );
+    try {
+      const key = await createDraftDefinition(workspace);
+      const service = createDraftLifecycleService(workspace, key, 1);
+
+      await assert.rejects(
+        service.executeDraftAtAddress(
+          { workflowKey: key, kind: "draft" },
+          2,
+          1,
+          "panel"
+        ),
+        /Definition revision conflict: expected 2, found 1/
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("settles a draft start when execution finishes without preparation", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-draft-no-prepare-")

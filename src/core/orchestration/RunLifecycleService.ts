@@ -14,6 +14,7 @@ import {
   assertDefinitionRevision,
   assertDescriptorRevision,
 } from "./RevisionPrecondition";
+import { readDraftAtRevisions } from "./DraftRevisionPrecondition";
 import type {
   RunnerHostIdentity,
   QueueState,
@@ -401,19 +402,12 @@ export class RunLifecycleService {
         "Cannot set start position while this workflow lineage is executing"
       );
     }
-    const descriptor = await this.host
-      .getLineageRepository()
-      .readDescriptor(workspaceRoot, address.workflowKey);
-    assertDescriptorRevision(expectedDescriptorRevision, descriptor.revision);
-    const draft = JSON.parse(
-      await fs.readFile(
-        WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey),
-        "utf8"
-      )
-    ) as WorkingFile;
-    assertDefinitionRevision(
+    await readDraftAtRevisions(
+      this.host.getLineageRepository(),
+      workspaceRoot,
+      address.workflowKey,
       expectedDefinitionRevision,
-      draft.definitionRevision
+      expectedDescriptorRevision
     );
 
     // The client's own instance is the live owner of the draft it is viewing —
@@ -649,19 +643,12 @@ export class RunLifecycleService {
       throw new Error("Run no longer targets this client's viewed draft");
     }
     const workspaceRoot = this.requireWorkspaceRoot();
-    const descriptor = await this.host
-      .getLineageRepository()
-      .readDescriptor(workspaceRoot, address.workflowKey);
-    assertDescriptorRevision(expectedDescriptorRevision, descriptor.revision);
-    const draft = JSON.parse(
-      await fs.readFile(
-        WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey),
-        "utf8"
-      )
-    ) as WorkingFile;
-    assertDefinitionRevision(
+    await readDraftAtRevisions(
+      this.host.getLineageRepository(),
+      workspaceRoot,
+      address.workflowKey,
       expectedDefinitionRevision,
-      draft.definitionRevision
+      expectedDescriptorRevision
     );
     const instance = this.findInstanceForClient(clientId);
     let prepared = false;

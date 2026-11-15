@@ -3125,6 +3125,104 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 });
 
 suite("WorkflowOrchestrator draft mutation preparation", () => {
+  async function createDraftMutationFixture(workspace: string) {
+    const manager = new WorkingFileManager({
+      getWorkingFilePath: () => undefined,
+      getSteps: () => [{ prompt: "draft mutation" }],
+      getCurrentIndex: () => 0,
+      getStatus: () => EXECUTION_STATES.IDLE,
+      getDefinitionRevision: () => 1,
+      setDefinitionRevision: () => undefined,
+      getWorkflowName: () => "Draft mutation",
+      mergeDiskSteps: () => [],
+      emitStateChange: () => undefined,
+      getFinalStepRuntime: () => undefined,
+      updateWorkflowProperty: () => undefined,
+    });
+    const { workflowKey } = await manager.createWorkingFile(
+      "draft-mutation",
+      [{ prompt: "draft mutation" }],
+      workspace,
+      "Draft mutation"
+    );
+    const repository = new WorkflowLineageRepository();
+    const descriptor = await repository.readDescriptor(workspace, workflowKey);
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    internal.currentWorkspaceFolderPath = workspace;
+    internal.lineageRepository = repository;
+    internal.viewAddressRegistry = new Map([
+      ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
+    ]);
+    internal.getInstanceForClient = () => ({
+      expectDefinitionRevision: () => undefined,
+    });
+    return { descriptor, internal, orchestrator, repository, workflowKey };
+  }
+
+  test("checks the descriptor revision before reading a missing draft", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-mutation-stale-descriptor-")
+    );
+    try {
+      const { descriptor, internal, orchestrator, workflowKey } =
+        await createDraftMutationFixture(workspace);
+      internal.lineageRepository = {
+        readDescriptor: async () => ({
+          ...descriptor,
+          revision: descriptor.revision + 1,
+        }),
+      };
+      await fs.rm(WorkflowPaths.draftFilePath(workspace, workflowKey));
+
+      await assert.rejects(
+        orchestrator.prepareDefinitionMutation(
+          {
+            address: {
+              workflowKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+            },
+            expectedDefinitionRevision: 1,
+            expectedDescriptorRevision: descriptor.revision,
+          },
+          "client-a"
+        ),
+        new RegExp(
+          `Descriptor revision conflict: expected ${descriptor.revision}, found ${descriptor.revision + 1}`
+        )
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects a stale draft definition revision", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-mutation-stale-definition-")
+    );
+    try {
+      const { descriptor, orchestrator, workflowKey } =
+        await createDraftMutationFixture(workspace);
+
+      await assert.rejects(
+        orchestrator.prepareDefinitionMutation(
+          {
+            address: {
+              workflowKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+            },
+            expectedDefinitionRevision: 2,
+            expectedDescriptorRevision: descriptor.revision,
+          },
+          "client-a"
+        ),
+        /Definition revision conflict: expected 2, found 1/
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("reconciles a client's own addressed definition revision before the deep guard", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-ledger-orchestrator-")

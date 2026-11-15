@@ -105,10 +105,8 @@ import {
   RecentWorkflowPublisher,
 } from "./orchestration/RecentWorkflowCatalog";
 import { DefinitionAuthorLedger } from "./orchestration/DefinitionAuthorLedger";
-import {
-  assertDefinitionRevision,
-  assertDescriptorRevision,
-} from "./orchestration/RevisionPrecondition";
+import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
+import { readDraftAtRevisions } from "./orchestration/DraftRevisionPrecondition";
 import {
   ExecutionRootCoordinationWatchSession,
   readCoordinationScopeSnapshot,
@@ -3318,28 +3316,12 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const [descriptor, draft] = await Promise.all([
-      this.lineageRepository.readDescriptor(
-        workspaceRoot,
-        mutation.address.workflowKey
-      ),
-      fs.promises.readFile(
-        WorkflowPaths.draftFilePath(
-          workspaceRoot,
-          mutation.address.workflowKey
-        ),
-        "utf8"
-      ),
-    ]);
-    const draftRevision =
-      (JSON.parse(draft) as WorkingFile).definitionRevision ?? 1;
-    assertDescriptorRevision(
-      mutation.expectedDescriptorRevision,
-      descriptor.revision
-    );
-    assertDefinitionRevision(
+    await readDraftAtRevisions(
+      this.lineageRepository,
+      workspaceRoot,
+      mutation.address.workflowKey,
       mutation.expectedDefinitionRevision,
-      draftRevision
+      mutation.expectedDescriptorRevision
     );
     this.getInstanceForClient(clientId).expectDefinitionRevision(
       mutation.expectedDefinitionRevision
