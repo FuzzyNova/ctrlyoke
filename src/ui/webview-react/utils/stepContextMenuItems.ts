@@ -1,7 +1,10 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import type { ContextMenuItem } from "../components/shared/ContextMenu";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
-import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type ParallelGroupDefinition,
+} from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
   FINAL_STEP_PHASES,
@@ -17,7 +20,6 @@ import {
 } from "./outputProjection";
 import {
   getWorkflowStepRawText,
-  isScriptWorkflowStep,
   serializeWorkflowStepText,
 } from "./workflowStepSerialization";
 import { writeClipboardText } from "./clipboard";
@@ -62,7 +64,7 @@ export function buildStepCopyMenuItems({
   const outputText = latestOutput
     ? getStepAssistantTextForCopy(latestOutput)
     : undefined;
-  const isScript = isScriptWorkflowStep(step);
+  const isScript = isScriptStep(step);
   const copyContentLabel = isScript ? "Copy Script" : "Copy Prompt";
   const copyLabels = getStepCopyLabels(isScript);
 
@@ -154,20 +156,20 @@ export function buildReplyToStepMenuItem({
   sessionModel,
   sourceLabel,
 }: ReplyToStepMenuItemInput): ContextMenuItem {
-  const isScriptStep = isScriptWorkflowStep(step);
+  const isScript = isScriptStep(step);
   const hasSession = typeof sessionId === "string" && sessionId.length > 0;
 
   return {
     label: "Reply to Step",
     icon: "codicon-reply",
-    disabled: isScriptStep || !hasSession,
-    disabledTitle: isScriptStep
+    disabled: isScript || !hasSession,
+    disabledTitle: isScript
       ? "Script steps have no AI session to reply to"
       : !hasSession
         ? "This step has no session to resume yet"
         : undefined,
     onClick: () => {
-      if (isScriptWorkflowStep(step) || !sessionId) return;
+      if (isScriptStep(step) || !sessionId) return;
       startReplyFromStep(
         step,
         sessionId,

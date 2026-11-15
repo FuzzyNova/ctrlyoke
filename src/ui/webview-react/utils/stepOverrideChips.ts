@@ -8,7 +8,10 @@ import {
   sandboxValueLabel,
 } from "@root/types/DashboardConstants";
 import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
-import type { PromptStep as CorePromptStep } from "@root/types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type PromptStep as CorePromptStep,
+} from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 import type { WorkflowStep } from "@store/workflowStore";
@@ -20,7 +23,6 @@ import {
   toCoreWorkflow,
 } from "@utils/coreWorkflowAdapter";
 import { schemaTitle } from "@utils/schemaPropertyLabels";
-import { isScriptWorkflowStep } from "@utils/workflowStepSerialization";
 
 /** Visible length of a session ID in chips and banners. */
 const SESSION_ID_PREVIEW_LENGTH = 8;
@@ -284,7 +286,7 @@ export function buildStepOverrideChips(
   workflowProperties: WorkflowProperties,
   globalSettings: GlobalSettings
 ): StepOverrideChip[] {
-  if (isScriptWorkflowStep(step)) {
+  if (isScriptStep(step)) {
     return step.executionMode ? [executionModeChip(step.executionMode)] : [];
   }
 

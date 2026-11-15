@@ -64,7 +64,7 @@ export const STEP_KIND_ICONS: Record<StepType, string> = {
 
 /**
  * Get the codicon class for a step's kind. Anything that is not explicitly a
- * script step is a prompt step, matching `isScriptWorkflowStep`.
+ * script step is a prompt step, matching the core `isScriptStep` guard.
  */
 export function getStepKindIconClass(stepType: StepType | undefined): string {
   return stepType === STEP_TYPES.SCRIPT

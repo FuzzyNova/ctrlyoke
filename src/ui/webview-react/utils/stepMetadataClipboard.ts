@@ -2,7 +2,7 @@ import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
-import type { PriorContext } from "@root/types/CtrlYokeTypes";
+import { isScriptStep, type PriorContext } from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
 import {
   PRIOR_CONTEXT_DETAILS,
@@ -11,7 +11,6 @@ import {
   sandboxModeApplies,
   sandboxValueLabel,
 } from "@root/types/DashboardConstants";
-import { isScriptWorkflowStep } from "./workflowStepSerialization";
 import { formatClockDuration } from "./time";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
@@ -197,7 +196,7 @@ export function buildStepMetadataClipboardText({
     getEffectiveSecrets,
   } = useSettingsStore.getState();
 
-  const isScript = isScriptWorkflowStep(step);
+  const isScript = isScriptStep(step);
   const stepKind = isScript ? "Script" : "Prompt";
   const headerLabel = isFinalStep
     ? `Final ${stepKind.toLowerCase()} step`

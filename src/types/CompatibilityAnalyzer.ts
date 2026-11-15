@@ -16,12 +16,12 @@ import {
   permissionModeAppliesToolList,
   PROMPT_INPUT_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
-  STEP_TYPES,
   type ExecutionMode,
   type HarnessId,
   type HookEvent,
 } from "./DashboardConstants";
-import type { PromptFile, PromptStep, WorkflowStep } from "./CtrlYokeTypes";
+import { isScriptStep } from "./CtrlYokeTypes";
+import type { PromptFile, PromptStep } from "./CtrlYokeTypes";
 import { parseAllFileReferences } from "../utils/FileReferenceParser";
 import type {
   HookOrigin,
@@ -103,7 +103,7 @@ export function enumerateCompatibilityTargets(
 ): CompatibilityExecutionTarget[] {
   const targets: CompatibilityExecutionTarget[] = [];
   for (const [stepIndex, step] of (workflow.steps ?? []).entries()) {
-    if (step.enabled === false || isScriptWorkflowStep(step)) {
+    if (step.enabled === false || isScriptStep(step)) {
       continue;
     }
     const imageFileRefs = getPromptImageFileRefs(step.prompt);
@@ -115,11 +115,7 @@ export function enumerateCompatibilityTargets(
   }
 
   const finalStep = workflow.finalStep;
-  if (
-    finalStep &&
-    finalStep.enabled !== false &&
-    !isScriptWorkflowStep(finalStep)
-  ) {
+  if (finalStep && finalStep.enabled !== false && !isScriptStep(finalStep)) {
     const imageFileRefs = getPromptImageFileRefs(finalStep.prompt);
     targets.push({
       consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },
@@ -864,10 +860,4 @@ function unknownCapabilityState(): EffectiveCapabilityState {
     mechanism: CAPABILITY_MECHANISMS.NONE,
     verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
   };
-}
-
-function isScriptWorkflowStep(
-  step: WorkflowStep
-): step is Exclude<WorkflowStep, PromptStep> {
-  return step.type === STEP_TYPES.SCRIPT;
 }

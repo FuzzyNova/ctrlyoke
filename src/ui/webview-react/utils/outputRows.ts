@@ -606,7 +606,7 @@ export function getStepName(
 /**
  * Normalize a step to its kind. Prompt steps historically omit `type`, so
  * anything that is not explicitly a script step is a prompt step — the same
- * rule `isScriptWorkflowStep` applies.
+ * classification used by the core `isScriptStep` guard.
  */
 function getStepKind(step: WorkflowStep | null | undefined): StepType {
   return step?.type === STEP_TYPES.SCRIPT

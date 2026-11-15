@@ -494,6 +494,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - `isScriptWorkflowStep`: copies of the core `isScriptStep` guard in
     `utils/workflowStepSerialization.ts` (about 20 webview call sites) and privately in
     `src/types/CompatibilityAnalyzer.ts`. Pass 2 missed these.
+    Landed: All webview and compatibility-analysis call sites now use the core `isScriptStep` guard.
   - CLI truncation detail: `CliTerminalFormatter.ts` builds the
     "N more lines, M more characters" join three times.
 

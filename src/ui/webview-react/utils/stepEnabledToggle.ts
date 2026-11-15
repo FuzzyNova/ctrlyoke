@@ -1,7 +1,7 @@
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { isScriptStep } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
-  isScriptWorkflowStep,
   parseWorkflowStepClipboardText,
   serializeWorkflowStepText,
 } from "./workflowStepSerialization";
@@ -17,7 +17,7 @@ export function buildWorkflowStepEnabledUpdate(
   step: WorkflowStep,
   enabled: boolean
 ): WorkflowStepUpdateRequest {
-  if (isScriptWorkflowStep(step)) {
+  if (isScriptStep(step)) {
     return {
       text: step.script,
       promptName: step.name ?? "",
