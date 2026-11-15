@@ -439,6 +439,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Git ref diff paging: `HostedWorkspaceViewerService.getGitRefDiffPage` and
     `getWorktreeDiffPage` repeat the offset check, the `diffId` snapshot resume, and
     the visible-file filter plus frozen snapshot build.
+    Landed: Added `pageGitRefDiffSnapshot` and worktree validation coverage.
   - Worktree action results: three `DashboardMessageRouter` handlers
     (`WORKTREE_MANAGEMENT_ACTION`, `SYNC_NAMED_WORKTREE`,
     `UPDATE_NAMED_WORKTREE_FROM_SOURCE`) repeat the

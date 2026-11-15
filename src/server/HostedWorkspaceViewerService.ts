@@ -3299,6 +3299,72 @@ export class HostedWorkspaceViewerService {
     );
   }
 
+  private async pageGitRefDiffSnapshot({
+    offset,
+    pageSize,
+    diffId,
+    mismatchMessage,
+    resolve,
+    load,
+  }: {
+    offset: number;
+    pageSize?: number;
+    diffId?: string;
+    mismatchMessage: string;
+    resolve: () => Promise<{ ref: string; repoRoot: string }>;
+    load: (repoRoot: string) => Promise<{
+      changedFiles: GitChangedFile[];
+      sources: NonTextDiffSources;
+      commitInfo?: WorkspaceGitRefDiffPageResponse["commitInfo"];
+    }>;
+  }): Promise<WorkspaceGitRefDiffPageResponse> {
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "offset must be a non-negative integer"
+      );
+    }
+
+    const { ref, repoRoot } = await resolve();
+    let snapshot: GitRefDiffSnapshot;
+
+    if (diffId !== undefined) {
+      if (!isValidHistoryId(diffId)) {
+        throw new WorkspaceTreeBadRequestError("diffId is invalid");
+      }
+      const existing = this.gitRefDiffSnapshots.get(diffId);
+      if (!existing) throw new WorkspaceTreeExpiredError();
+      if (existing.ref !== ref || !pathsEqual(existing.repoRoot, repoRoot)) {
+        throw new WorkspaceTreeBadRequestError(mismatchMessage);
+      }
+      snapshot = existing;
+    } else {
+      const resolvedPageSize = this.resolveGitRefDiffPageSize(pageSize);
+      const resolution = await load(repoRoot);
+      const visibleChangedFiles = resolution.changedFiles
+        .filter((file) => this.isVisibleGitChangedFile(repoRoot, file))
+        .map((file) => Object.freeze({ ...file }));
+      snapshot = Object.freeze({
+        diffId: this.gitRefDiffSnapshots.createId(),
+        ref,
+        repoRoot,
+        pageSize: resolvedPageSize,
+        sources: Object.freeze({ ...resolution.sources }),
+        changedFiles: Object.freeze(visibleChangedFiles),
+        ...("commitInfo" in resolution
+          ? {
+              commitInfo: resolution.commitInfo
+                ? Object.freeze({ ...resolution.commitInfo })
+                : undefined,
+            }
+          : {}),
+        lastAccessedAt: Date.now(),
+      });
+      this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
+    }
+
+    return this.getGitRefDiffSnapshotPage(snapshot, offset);
+  }
+
   /**
    * Git pathspecs that represent the same roots accepted by paged diffs.
    * `undefined` means a trusted root is the repo toplevel (so preserve Git's
@@ -3392,53 +3458,29 @@ export class HostedWorkspaceViewerService {
     diffId?: string,
     repoId?: string
   ): Promise<WorkspaceGitRefDiffPageResponse> {
-    if (!Number.isSafeInteger(offset) || offset < 0) {
-      throw new WorkspaceTreeBadRequestError(
-        "offset must be a non-negative integer"
-      );
-    }
-
-    const repoRoot = await this.resolveRepoRoot(repoId);
-    let snapshot: GitRefDiffSnapshot;
-
-    if (diffId !== undefined) {
-      if (!isValidHistoryId(diffId)) {
-        throw new WorkspaceTreeBadRequestError("diffId is invalid");
-      }
-      const existing = this.gitRefDiffSnapshots.get(diffId);
-      if (!existing) throw new WorkspaceTreeExpiredError();
-      if (existing.ref !== ref || !pathsEqual(existing.repoRoot, repoRoot)) {
-        throw new WorkspaceTreeBadRequestError(
-          "ref or repository does not match the diff snapshot"
-        );
-      }
-      snapshot = existing;
-    } else {
-      const resolvedPageSize = this.resolveGitRefDiffPageSize(pageSize);
-      const resolution = this.resolveGitRefDiff(ref);
-      const [changedFiles, commitInfo] = await Promise.all([
-        getChangedFilesWithBinaryStatus(repoRoot, resolution.changedFilesArgs),
-        resolution.commitHash
-          ? getCommitInfo(repoRoot, resolution.commitHash)
-          : Promise.resolve(undefined),
-      ]);
-      const visibleChangedFiles = changedFiles
-        .filter((file) => this.isVisibleGitChangedFile(repoRoot, file))
-        .map((file) => Object.freeze({ ...file }));
-      snapshot = Object.freeze({
-        diffId: this.gitRefDiffSnapshots.createId(),
+    return this.pageGitRefDiffSnapshot({
+      offset,
+      pageSize,
+      diffId,
+      mismatchMessage: "ref or repository does not match the diff snapshot",
+      resolve: async () => ({
         ref,
-        repoRoot,
-        pageSize: resolvedPageSize,
-        sources: Object.freeze({ ...resolution.sources }),
-        changedFiles: Object.freeze(visibleChangedFiles),
-        commitInfo: commitInfo ? Object.freeze({ ...commitInfo }) : undefined,
-        lastAccessedAt: Date.now(),
-      });
-      this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
-    }
-
-    return this.getGitRefDiffSnapshotPage(snapshot, offset);
+        repoRoot: await this.resolveRepoRoot(repoId),
+      }),
+      load: async (repoRoot) => {
+        const resolution = this.resolveGitRefDiff(ref);
+        const [changedFiles, commitInfo] = await Promise.all([
+          getChangedFilesWithBinaryStatus(
+            repoRoot,
+            resolution.changedFilesArgs
+          ),
+          resolution.commitHash
+            ? getCommitInfo(repoRoot, resolution.commitHash)
+            : Promise.resolve(undefined),
+        ]);
+        return { changedFiles, sources: resolution.sources, commitInfo };
+      },
+    });
   }
 
   private async getGitRefDiffSnapshotPage(
@@ -3653,85 +3695,66 @@ export class HostedWorkspaceViewerService {
     pageSize?: number,
     diffId?: string
   ): Promise<WorkspaceGitRefDiffPageResponse> {
-    if (!Number.isSafeInteger(offset) || offset < 0) {
-      throw new WorkspaceTreeBadRequestError(
-        "offset must be a non-negative integer"
-      );
-    }
-    const { repoRoot } = await this.requireRepoRootForPath(
-      path.resolve(sourceCheckoutRoot)
-    );
-    const ref = `worktree:${JSON.stringify([path.resolve(sourceCheckoutRoot), baseCommit, branchName])}`;
-    let snapshot: GitRefDiffSnapshot;
-    if (diffId !== undefined) {
-      if (!isValidHistoryId(diffId)) {
-        throw new WorkspaceTreeBadRequestError("diffId is invalid");
-      }
-      const existing = this.gitRefDiffSnapshots.get(diffId);
-      if (!existing) throw new WorkspaceTreeExpiredError();
-      if (existing.ref !== ref || !pathsEqual(existing.repoRoot, repoRoot)) {
-        throw new WorkspaceTreeBadRequestError(
-          "worktree diff request does not match the diff snapshot"
-        );
-      }
-      snapshot = existing;
-    } else {
-      const resolvedPageSize = this.resolveGitRefDiffPageSize(pageSize);
-      const branchRef = `refs/heads/${branchName}`;
-      const [baseHashResult, targetHashResult] = await Promise.all([
-        execFileAsync(
-          "git",
-          [
-            "-C",
-            repoRoot,
-            "rev-parse",
-            "--verify",
-            "--end-of-options",
-            `${baseCommit}^{commit}`,
-          ],
-          { timeout: GIT_COMMAND_TIMEOUT_MS }
-        ),
-        execFileAsync(
-          "git",
-          [
-            "-C",
-            repoRoot,
-            "rev-parse",
-            "--verify",
-            "--end-of-options",
-            `${branchRef}^{commit}`,
-          ],
-          { timeout: GIT_COMMAND_TIMEOUT_MS }
-        ),
-      ]);
-      const baseRef = baseHashResult.stdout.trim();
-      const targetRef = targetHashResult.stdout.trim();
-      const changedFiles = await getChangedFilesWithBinaryStatus(repoRoot, [
-        "diff",
-        "--no-ext-diff",
-        "--end-of-options",
-        baseRef,
-        targetRef,
-      ]);
-      const visibleChangedFiles = changedFiles
-        .filter((file) => this.isVisibleGitChangedFile(repoRoot, file))
-        .map((file) => Object.freeze({ ...file }));
-      snapshot = Object.freeze({
-        diffId: this.gitRefDiffSnapshots.createId(),
-        ref,
-        repoRoot,
-        pageSize: resolvedPageSize,
-        sources: Object.freeze({
+    return this.pageGitRefDiffSnapshot({
+      offset,
+      pageSize,
+      diffId,
+      mismatchMessage: "worktree diff request does not match the diff snapshot",
+      resolve: async () => {
+        const absoluteRoot = path.resolve(sourceCheckoutRoot);
+        const { repoRoot } = await this.requireRepoRootForPath(absoluteRoot);
+        return {
+          ref: `worktree:${JSON.stringify([absoluteRoot, baseCommit, branchName])}`,
+          repoRoot,
+        };
+      },
+      load: async (repoRoot) => {
+        const branchRef = `refs/heads/${branchName}`;
+        const [baseHashResult, targetHashResult] = await Promise.all([
+          execFileAsync(
+            "git",
+            [
+              "-C",
+              repoRoot,
+              "rev-parse",
+              "--verify",
+              "--end-of-options",
+              `${baseCommit}^{commit}`,
+            ],
+            { timeout: GIT_COMMAND_TIMEOUT_MS }
+          ),
+          execFileAsync(
+            "git",
+            [
+              "-C",
+              repoRoot,
+              "rev-parse",
+              "--verify",
+              "--end-of-options",
+              `${branchRef}^{commit}`,
+            ],
+            { timeout: GIT_COMMAND_TIMEOUT_MS }
+          ),
+        ]);
+        const baseRef = baseHashResult.stdout.trim();
+        const targetRef = targetHashResult.stdout.trim();
+        const changedFiles = await getChangedFilesWithBinaryStatus(repoRoot, [
+          "diff",
+          "--no-ext-diff",
+          "--end-of-options",
           baseRef,
           targetRef,
-          targetIsWorkingTree: false,
-        }),
-        changedFiles: Object.freeze(visibleChangedFiles),
-        lastAccessedAt: Date.now(),
-      });
-      this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
-    }
-    return this.getGitRefDiffSnapshotPage(snapshot, offset);
+        ]);
+        return {
+          changedFiles,
+          sources: {
+            baseRef,
+            targetRef,
+            targetIsWorkingTree: false,
+          },
+        };
+      },
+    });
   }
 
   dispose(): void {

@@ -4003,6 +4003,69 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(entry.media.new?.ref, featureHash);
     });
 
+    test("validates snapshot requests and omits commit info", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      const baseCommit = runGit(root, "rev-parse", "HEAD");
+      runGit(root, "checkout", "-b", "feature");
+      commitFile(root, "feature.txt", "feature\n", "Feature");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const page = await svc.getWorktreeDiffPage(root, baseCommit, "feature");
+      assert.strictEqual(page.commitInfo, undefined);
+
+      await assert.rejects(
+        svc.getWorktreeDiffPage(
+          root,
+          baseCommit,
+          "feature",
+          0,
+          undefined,
+          "invalid"
+        ),
+        (error: unknown) =>
+          error instanceof WorkspaceTreeBadRequestError &&
+          error.message === "diffId is invalid"
+      );
+
+      await assert.rejects(
+        svc.getWorktreeDiffPage(
+          root,
+          baseCommit,
+          "feature",
+          0,
+          undefined,
+          "00000000-0000-4000-8000-000000000099"
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+
+      await assert.rejects(
+        svc.getWorktreeDiffPage(
+          root,
+          baseCommit,
+          "other",
+          0,
+          undefined,
+          page.diffId
+        ),
+        (error: unknown) =>
+          error instanceof WorkspaceTreeBadRequestError &&
+          error.message ===
+            "worktree diff request does not match the diff snapshot"
+      );
+
+      const unresolvableRoot = createWorkspace();
+      await assert.rejects(
+        svc.getWorktreeDiffPage(unresolvableRoot, baseCommit, "feature", -1),
+        (error: unknown) =>
+          error instanceof WorkspaceTreeBadRequestError &&
+          error.message === "offset must be a non-negative integer"
+      );
+    });
+
     test("pages a worktree diff larger than GitUtils' default maxBuffer", async function () {
       this.timeout(60_000);
       const root = createWorkspace();
