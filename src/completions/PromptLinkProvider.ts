@@ -19,10 +19,11 @@ import {
   type FileAccessDecision,
 } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { createGitChangeReferencePattern } from "../utils/ReferencePatterns";
 import {
-  createGitChangeReferencePattern,
-  createReferencePatterns,
-} from "../utils/ReferencePatterns";
+  findContextReferenceMatches,
+  type ContextReferenceMatch,
+} from "../utils/PromptReferenceScanner";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
 import { PromptFileResolver } from "../core/PromptFileResolver";
@@ -33,6 +34,7 @@ import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import {
+  ATOMIC_REFERENCE_KINDS,
   CTRLYOKE_SLASH_TOKEN_KINDS,
   PROMPT_FILE_RESOLUTION_STATUSES,
   VSCODE_COMMANDS,
@@ -53,11 +55,6 @@ import { parseSecretReferences } from "../utils/SecretReferenceParser";
  * Complements PromptCompletionProvider for bidirectional context flow.
  */
 export class PromptLinkProvider implements vscode.DocumentLinkProvider {
-  // Canonical reference patterns, shared with the webview decorators. Each
-  // call site clones a pattern before use, so the `g` flag's lastIndex never
-  // leaks between documents. See ReferencePatterns.ts for the group contract.
-  private readonly patterns = createReferencePatterns();
-
   /**
    * Provide document links for prompt files
    */
@@ -122,6 +119,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     const ownStateRoots = [
       projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
     ];
+    const referenceMatches = findContextReferenceMatches(text);
 
     // A standalone prompt-file path has no @/# marker, so it needs its own
     // link entry. Keep this separate from context-reference matching because
@@ -140,17 +138,21 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     );
 
     // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
-    const fileLinks = this.findFileLinks(
-      document,
-      text,
-      workspaceRoot,
-      namedRoots,
-      trustedRoots,
-      approvedExternalRoots,
-      ownStateRoots,
-      sourceDefinitionDir
+    links.push(
+      ...this.findFileLinks(
+        document,
+        text,
+        referenceMatches.filter(
+          (match) => match.type === ATOMIC_REFERENCE_KINDS.FILE
+        ),
+        workspaceRoot,
+        namedRoots,
+        trustedRoots,
+        approvedExternalRoots,
+        ownStateRoots,
+        sourceDefinitionDir
+      )
     );
-    links.push(...fileLinks);
 
     // 2. Detect directory references (@dir/ and @"path with spaces/dir/").
     // The directory pattern also matches the folder prefix of a file
@@ -160,17 +162,15 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       ...this.findDirectoryLinks(
         document,
         text,
+        referenceMatches.filter(
+          (match) => match.type === ATOMIC_REFERENCE_KINDS.DIRECTORY
+        ),
         workspaceRoot,
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
         ownStateRoots,
         sourceDefinitionDir
-      ).filter(
-        (directoryLink) =>
-          !fileLinks.some((fileLink) =>
-            fileLink.range.contains(directoryLink.range)
-          )
       )
     );
 
@@ -178,7 +178,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     links.push(
       ...this.findLineRangeLinks(
         document,
-        text,
+        referenceMatches.filter(
+          (match) => match.type === ATOMIC_REFERENCE_KINDS.LINE_RANGE
+        ),
         workspaceRoot,
         namedRoots,
         trustedRoots,
@@ -192,7 +194,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     links.push(
       ...this.findSymbolLinks(
         document,
-        text,
+        referenceMatches.filter(
+          (match) => match.type === ATOMIC_REFERENCE_KINDS.SYMBOL
+        ),
         workspaceRoot,
         namedRoots,
         trustedRoots,
@@ -400,6 +404,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private findFileLinks(
     document: vscode.TextDocument,
     text: string,
+    matches: readonly ContextReferenceMatch[],
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
@@ -409,9 +414,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
-    // Helper to add a file link from a regex match
-    const addFileLink = (match: RegExpExecArray): void => {
-      const relativePath = match[1];
+    for (const match of quotedAtReferencesFirst(text, matches)) {
+      const relativePath = match.path;
+      if (relativePath === undefined) continue;
       const decision = this.resolveLinkAccess(
         relativePath,
         workspaceRoot,
@@ -422,10 +427,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         sourceDefinitionDir
       );
       if (!decision) {
-        return;
+        continue;
       }
-      const startPos = document.positionAt(match.index);
-      const endPos = document.positionAt(match.index + match[0].length);
+      const startPos = document.positionAt(match.from);
+      const endPos = document.positionAt(match.to);
       const range = new vscode.Range(startPos, endPos);
 
       if (decision.allowed) {
@@ -433,7 +438,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         const link = new vscode.DocumentLink(range, fileUri);
         link.tooltip = `Open ${relativePath}`;
         links.push(link);
-        return;
+        continue;
       }
 
       const commandUri = this.buildTrustCommandUri({
@@ -443,27 +448,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const link = new vscode.DocumentLink(range, commandUri);
       link.tooltip = `Trust and open ${relativePath}`;
       links.push(link);
-    };
-
-    // Match quoted paths first (@"path with spaces/file.ext")
-    const quotedPattern = new RegExp(
-      this.patterns.fullFileQuoted.source,
-      this.patterns.fullFileQuoted.flags
-    );
-    let match: RegExpExecArray | null;
-    while ((match = quotedPattern.exec(text)) !== null) {
-      addFileLink(match);
     }
-
-    // Match plain unquoted paths (@file.ext)
-    const plainPattern = new RegExp(
-      this.patterns.fullFile.source,
-      this.patterns.fullFile.flags
-    );
-    while ((match = plainPattern.exec(text)) !== null) {
-      addFileLink(match);
-    }
-
     return links;
   }
 
@@ -473,6 +458,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private findDirectoryLinks(
     document: vscode.TextDocument,
     text: string,
+    matches: readonly ContextReferenceMatch[],
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
@@ -482,9 +468,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
-    // Helper to add a directory link from a regex match
-    const addDirLink = (match: RegExpExecArray): void => {
-      const relativePath = match[1];
+    for (const match of quotedAtReferencesFirst(text, matches)) {
+      const relativePath = match.path;
+      if (relativePath === undefined) continue;
       const decision = this.resolveLinkAccess(
         relativePath,
         workspaceRoot,
@@ -495,10 +481,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         sourceDefinitionDir
       );
       if (!decision) {
-        return;
+        continue;
       }
-      const startPos = document.positionAt(match.index);
-      const endPos = document.positionAt(match.index + match[0].length);
+      const startPos = document.positionAt(match.from);
+      const endPos = document.positionAt(match.to);
       const range = new vscode.Range(startPos, endPos);
 
       if (decision.allowed) {
@@ -510,7 +496,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         const link = new vscode.DocumentLink(range, commandUri);
         link.tooltip = `Reveal ${relativePath} in File Explorer`;
         links.push(link);
-        return;
+        continue;
       }
 
       const trustCommandUri = this.buildTrustCommandUri({
@@ -521,27 +507,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const link = new vscode.DocumentLink(range, trustCommandUri);
       link.tooltip = `Trust and reveal ${relativePath} in File Explorer`;
       links.push(link);
-    };
-
-    // Match quoted directory paths first (@"path with spaces/dir/")
-    const quotedPattern = new RegExp(
-      this.patterns.directoryQuoted.source,
-      this.patterns.directoryQuoted.flags
-    );
-    let match: RegExpExecArray | null;
-    while ((match = quotedPattern.exec(text)) !== null) {
-      addDirLink(match);
     }
-
-    // Match plain unquoted directory paths (@dir/)
-    const plainPattern = new RegExp(
-      this.patterns.directory.source,
-      this.patterns.directory.flags
-    );
-    while ((match = plainPattern.exec(text)) !== null) {
-      addDirLink(match);
-    }
-
     return links;
   }
 
@@ -550,7 +516,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
    */
   private findLineRangeLinks(
     document: vscode.TextDocument,
-    text: string,
+    matches: readonly ContextReferenceMatch[],
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
@@ -560,11 +526,19 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
-    // Helper to add a line range link from a regex match
-    const addLineRangeLink = (match: RegExpExecArray): void => {
-      const relativePath = match[1] ?? match[2];
-      const startLine = parseInt(match[3], 10);
-      const endLine = parseInt(match[4], 10);
+    for (const match of matches) {
+      const relativePath = match.path;
+      const lineStart = match.lineStart;
+      const lineEnd = match.lineEnd;
+      if (
+        relativePath === undefined ||
+        lineStart === undefined ||
+        lineEnd === undefined
+      ) {
+        continue;
+      }
+      const startLine = parseInt(lineStart, 10);
+      const endLine = parseInt(lineEnd, 10);
 
       const decision = this.resolveLinkAccess(
         relativePath,
@@ -576,10 +550,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         sourceDefinitionDir
       );
       if (!decision) {
-        return;
+        continue;
       }
-      const startPos = document.positionAt(match.index);
-      const endPos = document.positionAt(match.index + match[0].length);
+      const startPos = document.positionAt(match.from);
+      const endPos = document.positionAt(match.to);
       const range = new vscode.Range(startPos, endPos);
 
       if (decision.allowed) {
@@ -592,7 +566,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         const link = new vscode.DocumentLink(range, commandUri);
         link.tooltip = `Open ${relativePath} at lines ${startLine}-${endLine}`;
         links.push(link);
-        return;
+        continue;
       }
 
       const trustCommandUri = this.buildTrustCommandUri({
@@ -604,17 +578,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const link = new vscode.DocumentLink(range, trustCommandUri);
       link.tooltip = `Trust and open ${relativePath} at lines ${startLine}-${endLine}`;
       links.push(link);
-    };
-
-    const pattern = new RegExp(
-      this.patterns.lineRange.source,
-      this.patterns.lineRange.flags
-    );
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      addLineRangeLink(match);
     }
-
     return links;
   }
 
@@ -664,7 +628,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
    */
   private findSymbolLinks(
     document: vscode.TextDocument,
-    text: string,
+    matches: readonly ContextReferenceMatch[],
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
@@ -674,12 +638,21 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
-    // Helper to add a symbol link from a regex match
-    const addSymbolLink = (match: RegExpExecArray): void => {
-      const relativePath = match[2] ?? match[3];
-      const symbolName = match[4] ?? match[5];
-      const startLine = parseInt(match[6], 10);
-      const endLine = parseInt(match[7], 10);
+    for (const match of matches) {
+      const relativePath = match.path;
+      const symbolName = match.symbolName;
+      const lineStart = match.lineStart;
+      const lineEnd = match.lineEnd;
+      if (
+        relativePath === undefined ||
+        symbolName === undefined ||
+        lineStart === undefined ||
+        lineEnd === undefined
+      ) {
+        continue;
+      }
+      const startLine = parseInt(lineStart, 10);
+      const endLine = parseInt(lineEnd, 10);
 
       const decision = this.resolveLinkAccess(
         relativePath,
@@ -691,10 +664,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         sourceDefinitionDir
       );
       if (!decision) {
-        return;
+        continue;
       }
-      const startPos = document.positionAt(match.index);
-      const endPos = document.positionAt(match.index + match[0].length);
+      const startPos = document.positionAt(match.from);
+      const endPos = document.positionAt(match.to);
       const range = new vscode.Range(startPos, endPos);
 
       if (decision.allowed) {
@@ -711,7 +684,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         const link = new vscode.DocumentLink(range, commandUri);
         link.tooltip = `Go to ${symbolName} in ${relativePath}:${startLine}-${endLine}`;
         links.push(link);
-        return;
+        continue;
       }
 
       const trustCommandUri = this.buildTrustCommandUri({
@@ -723,17 +696,16 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const link = new vscode.DocumentLink(range, trustCommandUri);
       link.tooltip = `Trust and go to ${symbolName} in ${relativePath}:${startLine}-${endLine}`;
       links.push(link);
-    };
-
-    const pattern = new RegExp(
-      this.patterns.symbol.source,
-      this.patterns.symbol.flags
-    );
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      addSymbolLink(match);
     }
-
     return links;
   }
+}
+
+function quotedAtReferencesFirst(
+  text: string,
+  matches: readonly ContextReferenceMatch[]
+): ContextReferenceMatch[] {
+  const quotedMatches = matches.filter(({ from }) => text[from + 1] === '"');
+  const plainMatches = matches.filter(({ from }) => text[from + 1] !== '"');
+  return [...quotedMatches, ...plainMatches];
 }

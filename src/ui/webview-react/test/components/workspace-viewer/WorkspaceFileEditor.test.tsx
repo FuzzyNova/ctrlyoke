@@ -4,12 +4,16 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   WorkspaceFileEditor,
   type WorkspaceFileEditorHandle,
+  findWorkspaceReferenceMatches,
 } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { act } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  ATOMIC_REFERENCE_KINDS,
+  WORKSPACE_ENTRY_KINDS,
+} from "@root/types/DashboardConstants";
 import { EditorView } from "codemirror";
 import { EditorSelection } from "@codemirror/state";
 
@@ -22,6 +26,122 @@ vi.mock("@components/workspace-viewer/WorkspacePdfViewer", () => ({
     </div>
   ),
 }));
+
+describe("WorkspaceFileEditor reference matching", () => {
+  it("matches prompt references with source offsets and omits git refs", () => {
+    const text = [
+      '@"src/quoted file.ts"',
+      "@src/plain.ts",
+      '@"src/quoted directory/"',
+      "@src/plain-directory/",
+      "@src/nested/file.ts",
+      '#selection:"src/quoted file.ts":10-20',
+      "#selection:src/plain.ts:21-30",
+      '#sym.type-parameter:"src/quoted file.ts":"get value":31-40',
+      "!SERVICE_TOKEN",
+      "~diff",
+    ].join(" | ");
+    const offset = 37;
+    const matches = findWorkspaceReferenceMatches(text, offset);
+
+    expect(
+      matches.map((match) => [
+        text.slice(match.from - offset, match.to - offset),
+        match.from,
+        match.type,
+        match.path,
+        match.lineStart,
+        match.lineEnd,
+        match.secretName,
+      ])
+    ).toEqual([
+      [
+        '@"src/quoted file.ts"',
+        offset + text.indexOf('@"src/quoted file.ts"'),
+        WORKSPACE_ENTRY_KINDS.FILE,
+        "src/quoted file.ts",
+        undefined,
+        undefined,
+        undefined,
+      ],
+      [
+        "@src/plain.ts",
+        offset + text.indexOf("@src/plain.ts"),
+        WORKSPACE_ENTRY_KINDS.FILE,
+        "src/plain.ts",
+        undefined,
+        undefined,
+        undefined,
+      ],
+      [
+        '@"src/quoted directory/"',
+        offset + text.indexOf('@"src/quoted directory/"'),
+        WORKSPACE_ENTRY_KINDS.DIRECTORY,
+        "src/quoted directory/",
+        undefined,
+        undefined,
+        undefined,
+      ],
+      [
+        "@src/plain-directory/",
+        offset + text.indexOf("@src/plain-directory/"),
+        WORKSPACE_ENTRY_KINDS.DIRECTORY,
+        "src/plain-directory/",
+        undefined,
+        undefined,
+        undefined,
+      ],
+      [
+        "@src/nested/file.ts",
+        offset + text.indexOf("@src/nested/file.ts"),
+        WORKSPACE_ENTRY_KINDS.FILE,
+        "src/nested/file.ts",
+        undefined,
+        undefined,
+        undefined,
+      ],
+      [
+        '#selection:"src/quoted file.ts":10-20',
+        offset + text.indexOf('#selection:"src/quoted file.ts":10-20'),
+        ATOMIC_REFERENCE_KINDS.LINE_RANGE,
+        "src/quoted file.ts",
+        "10",
+        "20",
+        undefined,
+      ],
+      [
+        "#selection:src/plain.ts:21-30",
+        offset + text.indexOf("#selection:src/plain.ts:21-30"),
+        ATOMIC_REFERENCE_KINDS.LINE_RANGE,
+        "src/plain.ts",
+        "21",
+        "30",
+        undefined,
+      ],
+      [
+        '#sym.type-parameter:"src/quoted file.ts":"get value":31-40',
+        offset +
+          text.indexOf(
+            '#sym.type-parameter:"src/quoted file.ts":"get value":31-40'
+          ),
+        ATOMIC_REFERENCE_KINDS.SYMBOL,
+        "src/quoted file.ts",
+        "31",
+        "40",
+        undefined,
+      ],
+      [
+        "!SERVICE_TOKEN",
+        offset + text.indexOf("!SERVICE_TOKEN"),
+        ATOMIC_REFERENCE_KINDS.SECRET,
+        "",
+        undefined,
+        undefined,
+        "SERVICE_TOKEN",
+      ],
+    ]);
+  });
+});
 
 describe("WorkspaceFileEditor link navigation", () => {
   beforeAll(() => {

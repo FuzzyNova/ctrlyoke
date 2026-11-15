@@ -165,6 +165,97 @@ suite("PromptLinkProvider slash-token links", () => {
     );
   });
 
+  test("resolves scanned references with their existing ranges and targets", async () => {
+    const text = [
+      "@src/plain.ts",
+      '@"src/quoted file.ts"',
+      "@src/editor/CodeMirrorEditor.tsx",
+      "@src/plain-directory/",
+      '@"src/quoted directory/"',
+      "#selection:src/plain.ts:10-20",
+      '#selection:"src/quoted file.ts":21-30',
+      '#sym.type-parameter:"src/my utils.ts":"get value":31-40',
+    ].join(" | ");
+    const document = new PromptDocumentStub(
+      path.join(workspaceRoot, "prompt.prompt.md"),
+      "markdown",
+      text
+    );
+
+    const links =
+      (await new PromptLinkProvider().provideDocumentLinks(
+        document.asDocument(),
+        {} as vscode.CancellationToken
+      )) ?? [];
+    const linkTexts = links.map((link) =>
+      text.slice(
+        document.offsetAt(link.range.start),
+        document.offsetAt(link.range.end)
+      )
+    );
+
+    assert.deepStrictEqual(linkTexts, [
+      '@"src/quoted file.ts"',
+      "@src/plain.ts",
+      "@src/editor/CodeMirrorEditor.tsx",
+      '@"src/quoted directory/"',
+      "@src/plain-directory/",
+      "#selection:src/plain.ts:10-20",
+      '#selection:"src/quoted file.ts":21-30',
+      '#sym.type-parameter:"src/my utils.ts":"get value":31-40',
+    ]);
+
+    for (const [index, relativePath] of [
+      [0, "src/quoted file.ts"],
+      [1, "src/plain.ts"],
+      [2, "src/editor/CodeMirrorEditor.tsx"],
+    ] as const) {
+      assert.strictEqual(
+        pathsEqual(
+          links[index].target?.fsPath ?? "",
+          path.join(workspaceRoot, relativePath)
+        ),
+        true
+      );
+    }
+
+    for (const [index, relativePath] of [
+      [3, "src/quoted directory"],
+      [4, "src/plain-directory"],
+    ] as const) {
+      const link = links[index];
+      assert.strictEqual(link.target?.path, "ctrlyoke.revealDirectory");
+      const args = JSON.parse(link.target?.query ?? "") as { path: string };
+      assert.ok(pathsEqual(args.path, path.join(workspaceRoot, relativePath)));
+    }
+
+    for (const [index, relativePath, startLine, endLine] of [
+      [5, "src/plain.ts", 10, 20],
+      [6, "src/quoted file.ts", 21, 30],
+      [7, "src/my utils.ts", 31, 40],
+    ] as const) {
+      const target = links[index].target;
+      assert.strictEqual(target?.path, "ctrlyoke.openFileWithSelection");
+      const args = JSON.parse(target?.query ?? "") as {
+        uri: string;
+        startLine: number;
+        endLine: number;
+      };
+      assert.ok(
+        pathsEqual(
+          vscode.Uri.parse(args.uri).fsPath,
+          path.join(workspaceRoot, relativePath)
+        )
+      );
+      assert.strictEqual(args.startLine, startLine);
+      assert.strictEqual(args.endLine, endLine);
+    }
+    assert.strictEqual(
+      links[7].tooltip,
+      "Go to get value in src/my utils.ts:31-40"
+    );
+  });
+
   test("does not link partial git-change references inside longer tokens", async () => {
     const text = "~differently ~1500000x ~staged_files ~stash:1a";
     const document = new PromptDocumentStub(

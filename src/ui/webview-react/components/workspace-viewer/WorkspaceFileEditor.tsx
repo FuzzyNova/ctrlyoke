@@ -80,8 +80,10 @@ import {
   forceLinting,
 } from "@utils/workflowFileSupport/workflowDocumentLintExtension";
 import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/workflowValueDataSource";
-import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
-import { createReferencePatterns } from "@root/utils/ReferencePatterns";
+import {
+  findContextReferenceMatches,
+  type ContextReferenceMatch,
+} from "@root/utils/PromptReferenceScanner";
 import { getInclusiveEndLine } from "@root/utils/InclusiveLineRange";
 import { WorkspaceMediaElement } from "@components/shared/WorkspaceMediaElement";
 import { WorkspacePdfViewer } from "./WorkspacePdfViewer";
@@ -99,7 +101,6 @@ import {
   LSP_METHODS,
   type WorkflowFileKind,
   PROMPT_FILE_LANGUAGE_IDS,
-  WORKSPACE_ENTRY_KINDS,
   WORKSPACE_MEDIA_KINDS,
   type WorkspaceFileTreeEntryKind,
   type WorkspaceMediaKind,
@@ -160,6 +161,21 @@ interface WorkspaceReferenceMatch {
   secretName?: string;
   lineStart?: string;
   lineEnd?: string;
+}
+
+function isWorkspaceReferenceType(
+  type: ContextReferenceMatch["type"]
+): type is WorkspaceReferenceType {
+  switch (type) {
+    case ATOMIC_REFERENCE_KINDS.FILE:
+    case ATOMIC_REFERENCE_KINDS.DIRECTORY:
+    case ATOMIC_REFERENCE_KINDS.LINE_RANGE:
+    case ATOMIC_REFERENCE_KINDS.SYMBOL:
+    case ATOMIC_REFERENCE_KINDS.SECRET:
+      return true;
+    default:
+      return false;
+  }
 }
 
 export const WorkspaceFileEditor = forwardRef<
@@ -935,111 +951,29 @@ function getCachedPromptCodeRanges(
   return ranges;
 }
 
-function findWorkspaceReferenceMatches(
+export function findWorkspaceReferenceMatches(
   text: string,
   offset = 0
 ): WorkspaceReferenceMatch[] {
-  const patterns = createReferencePatterns();
-
-  const fileMatches: WorkspaceReferenceMatch[] = [];
-  const directoryMatches: WorkspaceReferenceMatch[] = [];
-  const lineRangeMatches: WorkspaceReferenceMatch[] = [];
-  const symbolMatches: WorkspaceReferenceMatch[] = [];
-  const secretMatches: WorkspaceReferenceMatch[] = parseSecretReferences(
-    text
-  ).map((reference) => ({
-    from: offset + reference.startOffset,
-    to: offset + reference.endOffset,
-    type: ATOMIC_REFERENCE_KINDS.SECRET,
-    path: "",
-    secretName: reference.name,
-  }));
-  let match: RegExpExecArray | null;
-
-  const collectPathMatches = (
-    pattern: RegExp,
-    type: WorkspaceFileTreeEntryKind,
-    target: WorkspaceReferenceMatch[]
-  ) => {
-    const regex = new RegExp(pattern.source, pattern.flags);
-    while ((match = regex.exec(text)) !== null) {
-      target.push({
-        from: offset + match.index,
-        to: offset + match.index + match[0].length,
-        type,
-        path: match[1],
-      });
-    }
-  };
-
-  collectPathMatches(
-    patterns.fullFileQuoted,
-    WORKSPACE_ENTRY_KINDS.FILE,
-    fileMatches
-  );
-  collectPathMatches(
-    patterns.fullFile,
-    WORKSPACE_ENTRY_KINDS.FILE,
-    fileMatches
-  );
-  collectPathMatches(
-    patterns.directoryQuoted,
-    WORKSPACE_ENTRY_KINDS.DIRECTORY,
-    directoryMatches
-  );
-  collectPathMatches(
-    patterns.directory,
-    WORKSPACE_ENTRY_KINDS.DIRECTORY,
-    directoryMatches
-  );
-
-  const collectLineRangeMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, pattern.flags);
-    while ((match = regex.exec(text)) !== null) {
-      lineRangeMatches.push({
-        from: offset + match.index,
-        to: offset + match.index + match[0].length,
-        type: ATOMIC_REFERENCE_KINDS.LINE_RANGE,
-        // Group 1 is the quoted path, group 2 the bare one; exactly one is set.
-        path: match[1] ?? match[2],
-        lineStart: match[3],
-        lineEnd: match[4],
-      });
-    }
-  };
-
-  collectLineRangeMatches(patterns.lineRange);
-
-  const collectSymbolMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, pattern.flags);
-    while ((match = regex.exec(text)) !== null) {
-      symbolMatches.push({
-        from: offset + match.index,
-        to: offset + match.index + match[0].length,
-        type: "symbol",
-        path: match[2] ?? match[3],
-        lineStart: match[6],
-        lineEnd: match[7],
-      });
-    }
-  };
-
-  collectSymbolMatches(patterns.symbol);
-
-  const filteredDirectoryMatches = directoryMatches.filter((dirMatch) => {
-    return !fileMatches.some(
-      (fileMatch) =>
-        dirMatch.from >= fileMatch.from && dirMatch.to <= fileMatch.to
-    );
-  });
-
-  return [
-    ...fileMatches,
-    ...filteredDirectoryMatches,
-    ...lineRangeMatches,
-    ...symbolMatches,
-    ...secretMatches,
-  ].sort((a, b) => a.from - b.from);
+  return findContextReferenceMatches(text, offset)
+    .filter(
+      (
+        match
+      ): match is ContextReferenceMatch & { type: WorkspaceReferenceType } =>
+        match.type !== ATOMIC_REFERENCE_KINDS.GIT &&
+        isWorkspaceReferenceType(match.type)
+    )
+    .map((match) => ({
+      from: match.from,
+      to: match.to,
+      type: match.type,
+      path: match.path ?? "",
+      ...(match.secretName === undefined
+        ? {}
+        : { secretName: match.secretName }),
+      ...(match.lineStart === undefined ? {} : { lineStart: match.lineStart }),
+      ...(match.lineEnd === undefined ? {} : { lineEnd: match.lineEnd }),
+    }));
 }
 
 function createWorkspaceReferenceDecorationExtension() {

@@ -417,6 +417,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     is a near-verbatim copy of `PromptReferenceScanner.findContextReferenceMatches`
     (minus git refs, with a bare `"symbol"` literal), and `PromptLinkProvider`'s four
     finders re-derive the same capture groups from `createReferencePatterns()`.
+    Landed: both the workspace viewer and prompt links consume `findContextReferenceMatches`, preserving viewer git omission and quoted-first link ordering.
   - Command IDs: `ctrlyoke.openPanel` (already in `VSCODE_COMMANDS`, still literal at
     seven sites), `showOutputPanel`, `openGitChange`, `openFileWithSelection` and
     `confirmExternalFileTrust` are spelled out at both registration and call/URI sites.
