@@ -53,7 +53,7 @@ function renderModel(
   return renderHook(() =>
     useOutputMinimapModel({
       allMessages: messages,
-      allowUndoActions: workspaceSnapshot !== undefined,
+      showChangeActions: workspaceSnapshot !== undefined,
       finalStep: null,
       finalStepWorkspaceSnapshots: {},
       firstRowIndexByTarget: new Map([["queue:2", 0]]),
@@ -118,7 +118,7 @@ describe("useOutputMinimapModel hidden activity", () => {
       const { result } = renderHook(() =>
         useOutputMinimapModel({
           allMessages: [makeMessage(100)],
-          allowUndoActions: false,
+          showChangeActions: false,
           finalStep: null,
           finalStepWorkspaceSnapshots: {},
           firstRowIndexByTarget: new Map([
@@ -251,7 +251,7 @@ describe("useOutputMinimapModel hidden activity", () => {
             data: output,
           } as OutputMessage,
         ],
-        allowUndoActions: true,
+        showChangeActions: true,
         finalStep: { name: "Finish" } as never,
         finalStepWorkspaceSnapshots: { 1: liveSnapshot },
         firstRowIndexByTarget: new Map([["finalStep:1", 0]]),

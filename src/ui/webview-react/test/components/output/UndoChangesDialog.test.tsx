@@ -26,6 +26,11 @@ import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import type { UndoFileCandidate, UndoFileInstruction } from "@/types/messages";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
+import {
+  IN_FLIGHT_RUN_PARTIAL_CHANGES_MESSAGE,
+  IN_FLIGHT_RUN_REOPEN_TO_UNDO_MESSAGE,
+  IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE,
+} from "@root/utils/InFlightRunUndo";
 
 const { sendMessageMock } = vi.hoisted(() => ({
   sendMessageMock: vi.fn(),
@@ -376,7 +381,7 @@ describe("UndoChangesDialog", () => {
             data: { isStreaming: false },
           } as never,
         ],
-        allowUndoActions: true,
+        showChangeActions: true,
         finalStepWorkspaceSnapshots: {},
         historyOutputs: null,
         isViewingHistory: false,
@@ -680,6 +685,107 @@ describe("UndoChangesDialog", () => {
         },
       }
     );
+  });
+
+  it("lists changes read-only while a step is in flight and stays read-only after the run stops", () => {
+    const instruction: UndoFileInstruction = {
+      path: "src/example.ts",
+      action: "reverse-patch",
+      structuredPatch: [],
+    };
+    const input = {
+      scope: { mode: "prompt" as const, target: queueTarget },
+      eventAttributedFiles: [
+        {
+          path: instruction.path,
+          changeType: "modified" as const,
+          tier: "tier1" as const,
+          instruction,
+        },
+      ],
+      snapshotOnlyFiles: [],
+      workspacePath: "C:/dev/ctrlyoke",
+    };
+    const dialog = (undoBlockedReason: string | undefined) => (
+      <UndoChangesDialog
+        mode="undo"
+        intent={UNDO_DIALOG_INTENTS.ACT}
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        input={input}
+        requestId="blocked-undo"
+        onClose={vi.fn()}
+        undoBlockedReason={undoBlockedReason}
+      />
+    );
+
+    const { rerender } = render(dialog(IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE));
+
+    expect(screen.getByLabelText("src/example.ts")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      IN_FLIGHT_RUN_PARTIAL_CHANGES_MESSAGE
+    );
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    const confirm = screen.getByRole("button", { name: "Undo" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(sendMessageMock).not.toHaveBeenCalled();
+
+    // The list was captured mid-run, so the run ending must not arm it.
+    rerender(dialog(undefined));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      IN_FLIGHT_RUN_REOPEN_TO_UNDO_MESSAGE
+    );
+    expect(screen.getByRole("status")).not.toHaveTextContent(
+      IN_FLIGHT_RUN_PARTIAL_CHANGES_MESSAGE
+    );
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+  });
+
+  it("withdraws selection when a run starts under an open dialog", () => {
+    const instruction: UndoFileInstruction = {
+      path: "src/example.ts",
+      action: "reverse-patch",
+      structuredPatch: [],
+    };
+    const input = {
+      scope: { mode: "prompt" as const, target: queueTarget },
+      eventAttributedFiles: [
+        {
+          path: instruction.path,
+          changeType: "modified" as const,
+          tier: "tier1" as const,
+          instruction,
+        },
+      ],
+      snapshotOnlyFiles: [],
+      workspacePath: "C:/dev/ctrlyoke",
+    };
+    const dialog = (undoBlockedReason: string | undefined) => (
+      <UndoChangesDialog
+        mode="undo"
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        input={input}
+        requestId="run-started-undo"
+        onClose={vi.fn()}
+        undoBlockedReason={undoBlockedReason}
+      />
+    );
+
+    const { rerender } = render(dialog(undefined));
+    expect(screen.getByRole("button", { name: "Undo 1 file" })).toBeEnabled();
+
+    rerender(dialog(IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE));
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    expect(sendMessageMock).not.toHaveBeenCalled();
   });
 
   it("sends fetched snapshot restore content in an undo request", () => {

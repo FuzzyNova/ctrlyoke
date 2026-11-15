@@ -46,6 +46,7 @@ import {
   ACTION_TYPES,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   HARNESS_IDS,
+  IN_FLIGHT_EXECUTION_STATES,
   getHarnessDisplayName,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
@@ -3119,6 +3120,21 @@ export class WorkflowOrchestrator {
       definitionRollback,
       announceReplayBoundary,
       skipTerminalReplay
+    );
+  }
+
+  /**
+   * Whether this host is executing a step of `address` right now (running,
+   * pausing or cancelling). Undo/redo is refused for such a run: the harness
+   * may still be writing the files, and the step's snapshot is not final.
+   */
+  isRunInFlight(address: WorkflowRunAddress): boolean {
+    const state = this.workflowInstanceRegistry
+      .findInstanceForLineage(address.workflowKey)
+      ?.getQueueState();
+    return (
+      state?.runRef === address.runRef &&
+      IN_FLIGHT_EXECUTION_STATES.has(state.status)
     );
   }
 

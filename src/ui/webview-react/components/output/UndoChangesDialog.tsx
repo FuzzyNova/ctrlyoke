@@ -8,6 +8,7 @@ import React, {
 import { Modal } from "../shared/Modal";
 import { Button } from "../shared/Button";
 import { ExpandCollapseAllDiffsButton } from "../shared/ExpandCollapseAllDiffsButton";
+import { Icon } from "../shared/Icon";
 import {
   DiffFileList,
   OpenFileButton,
@@ -38,6 +39,10 @@ import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { sendMessage } from "@messaging/sendMessage";
+import {
+  IN_FLIGHT_RUN_PARTIAL_CHANGES_MESSAGE,
+  IN_FLIGHT_RUN_REOPEN_TO_UNDO_MESSAGE,
+} from "@root/utils/InFlightRunUndo";
 
 export type { WorkflowStepEntry } from "../../utils/promptUndo";
 
@@ -57,6 +62,11 @@ export interface UndoChangesDialogProps {
   workflowName?: string;
   stepLabel?: string;
   stepName?: string;
+  /**
+   * Live reason undo/redo is refused (a step of this run is in flight). The
+   * dialog still lists the changes; it only withholds selection and confirm.
+   */
+  undoBlockedReason?: string;
 }
 
 const RESULT_STATE = {
@@ -153,7 +163,15 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   workflowName,
   stepLabel,
   stepName,
+  undoBlockedReason,
 }) => {
+  // A dialog opened mid-run holds the change list as it stood then — missing
+  // whatever the finishing step's snapshot adds — so it stays read-only for
+  // its whole lifetime, even after the run stops.
+  const [openedWhileBlocked] = useState(() => undoBlockedReason !== undefined);
+  const blockedReason =
+    undoBlockedReason ??
+    (openedWhileBlocked ? IN_FLIGHT_RUN_REOPEN_TO_UNDO_MESSAGE : undefined);
   const isWorkflowMode = (workflowEntries?.length ?? 0) > 0;
   const model = useMemo(() => {
     const undoModel = buildPromptUndoDialogModel({
@@ -186,13 +204,15 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }, [input, isWorkflowMode, redoInstructions, workflowEntries]);
 
   const initialChecked = useMemo(() => {
-    if (intent === UNDO_DIALOG_INTENTS.VIEW) return new Set<string>();
+    if (intent === UNDO_DIALOG_INTENTS.VIEW || openedWhileBlocked) {
+      return new Set<string>();
+    }
     return new Set(
       getAllSelectableRows(model, isWorkflowMode, mode)
         .filter((row) => row.instruction !== null)
         .map((row) => row.key)
     );
-  }, [intent, isWorkflowMode, mode, model]);
+  }, [intent, isWorkflowMode, mode, model, openedWhileBlocked]);
 
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(initialChecked);
   const [activeDirection, setActiveDirection] =
@@ -273,6 +293,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }
 
   function handleConfirm() {
+    if (blockedReason) return;
     if (isWorkflowMode) {
       const entries = expandAggregatedWorkflowSelection(
         model.workflowFiles,
@@ -322,7 +343,10 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   const hasDiffs = selectableRows.some((row) => row.hasDiff);
   const canConfirm =
-    checkedCount > 0 && !isSubmitting && resultState === RESULT_STATE.IDLE;
+    blockedReason === undefined &&
+    checkedCount > 0 &&
+    !isSubmitting &&
+    resultState === RESULT_STATE.IDLE;
 
   function handleExpandAllDiffs() {
     diffFileListRef.current?.prepareGlobalLayoutChange();
@@ -361,10 +385,11 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         : [stepLabel, stepName].filter(Boolean).length > 0
           ? `${[stepLabel, stepName].filter(Boolean).join(" — ")} · ${changeCountSubtitle}`
           : undefined;
-  const confirmLabel =
-    activeDirection === UNDO_REDO_DIRECTIONS.REDO
-      ? `Redo ${checkedCount} file${checkedCount !== 1 ? "s" : ""}`
-      : `Undo ${checkedCount} file${checkedCount !== 1 ? "s" : ""}`;
+  const confirmVerb =
+    activeDirection === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo";
+  const confirmLabel = blockedReason
+    ? confirmVerb
+    : `${confirmVerb} ${checkedCount} file${checkedCount !== 1 ? "s" : ""}`;
   const submittingLabel =
     activeDirection === UNDO_REDO_DIRECTIONS.REDO ? "Redoing…" : "Undoing…";
 
@@ -397,22 +422,28 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                 <OpenFileButton path={file.path} />
               </>
             ),
-            selection: {
-              checked: checkedPaths.has(key),
-              onChange: (checked: boolean) => handleToggle(key, checked),
-              ...(instruction === null ? { disabledReason } : {}),
-            },
+            ...(blockedReason
+              ? {}
+              : {
+                  selection: {
+                    checked: checkedPaths.has(key),
+                    onChange: (checked: boolean) => handleToggle(key, checked),
+                    ...(instruction === null ? { disabledReason } : {}),
+                  },
+                }),
           };
         }),
       })),
-    [checkedPaths, handleToggle, model.groups]
+    [blockedReason, checkedPaths, handleToggle, model.groups]
   );
 
   const hasBothDirections =
     selectableRows.some((row) => row.direction === UNDO_REDO_DIRECTIONS.UNDO) &&
     selectableRows.some((row) => row.direction === UNDO_REDO_DIRECTIONS.REDO);
   const selectionSummary =
-    checkableCount > 0 && resultState === RESULT_STATE.IDLE ? (
+    checkableCount > 0 &&
+    resultState === RESULT_STATE.IDLE &&
+    blockedReason === undefined ? (
       <div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-description-fg">
@@ -450,6 +481,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         size="md"
         onClick={handleConfirm}
         disabled={!canConfirm}
+        title={blockedReason}
       >
         {isSubmitting ? (
           <span className="flex items-center gap-1.5">
@@ -491,6 +523,12 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         ) : undefined
       }
     >
+      {blockedReason && resultState === RESULT_STATE.IDLE && (
+        <UndoBlockedBanner
+          reason={blockedReason}
+          showPartialChangesNote={undoBlockedReason !== undefined}
+        />
+      )}
       {resultState !== RESULT_STATE.IDLE && (
         <ResultBanner
           result={resultState}
@@ -512,6 +550,24 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
     </Modal>
   );
 };
+
+const UndoBlockedBanner: React.FC<{
+  reason: string;
+  showPartialChangesNote: boolean;
+}> = ({ reason, showPartialChangesNote }) => (
+  <div
+    role="status"
+    className="mb-3 flex gap-2 rounded-sm px-3 py-2 text-xs bg-severity-warning-bg text-warning-fg border border-warning-fg/30"
+  >
+    <Icon name="warning" className="shrink-0 translate-y-px" />
+    <div>
+      <div>{reason}</div>
+      {showPartialChangesNote && (
+        <div className="mt-0.5">{IN_FLIGHT_RUN_PARTIAL_CHANGES_MESSAGE}</div>
+      )}
+    </div>
+  </div>
+);
 
 interface ResultBannerProps {
   result: "success" | "partial" | "error";

@@ -46,6 +46,7 @@ import {
 } from "../../types/messages";
 import {
   DIFF_VIEW_TYPES,
+  IN_FLIGHT_EXECUTION_STATES,
   OUTPUT_SCROLL_APPLY_PHASES,
   OUTPUT_SCROLL_TARGET_KINDS,
   OUTPUT_TABS,
@@ -58,6 +59,7 @@ import {
   type RunBannerData,
 } from "../output/RunSummaryBanner";
 import { TerminalView } from "../output/TerminalView";
+import { IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE } from "@root/utils/InFlightRunUndo";
 import { liveRunDuration, settledRunDuration } from "../workflow/RunDuration";
 import { isTerminalSessionInUseByActiveStep } from "@utils/terminalPresentation";
 import { useTerminalStore } from "@store/terminalStore";
@@ -502,9 +504,15 @@ const OutputSectionInner: React.FC = () => {
             stepIndex >= group.startIndex && stepIndex <= group.endIndex
         )
     );
-  const allowUndoActions =
-    (isViewingHistory || !isExecutionActive) &&
-    !isManagedWorktreeUndoUnavailable(displayedRunBanner?.worktree);
+  // Changes stay viewable while the run executes; only applying undo/redo is
+  // refused, by the dialog (and again by the extension host).
+  const showChangeActions = !isManagedWorktreeUndoUnavailable(
+    displayedRunBanner?.worktree
+  );
+  const undoBlockedReason =
+    !isViewingHistory && IN_FLIGHT_EXECUTION_STATES.has(executionState)
+      ? IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE
+      : undefined;
 
   // Forward refs let useOutputRowsModel call the real invalidation/measurement
   // logic even though that logic is defined later (it depends on rowVirtualizer,
@@ -564,7 +572,7 @@ const OutputSectionInner: React.FC = () => {
     streamingChunks,
     finalStepStreamingChunks,
     isExecutionActive,
-    allowUndoActions,
+    showChangeActions,
     workspaceSnapshots,
     finalStepWorkspaceSnapshots,
     undoRecords,
@@ -1374,7 +1382,7 @@ const OutputSectionInner: React.FC = () => {
   const outputUndo = useOutputUndoActions({
     importedSequenceBoundary,
     allMessages,
-    allowUndoActions,
+    showChangeActions,
     finalStepWorkspaceSnapshots,
     parallelGroups,
     historyOutputs,
@@ -1401,7 +1409,7 @@ const OutputSectionInner: React.FC = () => {
 
   const { minimapSteps, stepScrollFractions } = useOutputMinimapModel({
     allMessages,
-    allowUndoActions,
+    showChangeActions,
     finalStep,
     parallelGroups,
     finalStepWorkspaceSnapshots,
@@ -1820,6 +1828,7 @@ const OutputSectionInner: React.FC = () => {
       <OutputUndoDialogs
         minimapDialogState={minimapDialogState}
         workflowDialogState={workflowDialogState}
+        undoBlockedReason={undoBlockedReason}
         onCloseMinimapDialog={closeMinimapDialog}
         onCloseWorkflowDialog={closeWorkflowDialog}
       />

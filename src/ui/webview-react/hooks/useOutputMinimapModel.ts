@@ -51,7 +51,7 @@ interface OutputRowLayoutModel {
 
 interface UseOutputMinimapModelInput {
   allMessages: OutputMessage[];
-  allowUndoActions: boolean;
+  showChangeActions: boolean;
   anchorRowIndexByTarget?: Map<string, number>;
   finalStep: WorkflowStep | null;
   parallelGroups?: readonly ParallelGroupDefinition[];
@@ -103,7 +103,7 @@ function getStepScrollFractions(
 
 export function useOutputMinimapModel({
   allMessages,
-  allowUndoActions,
+  showChangeActions,
   anchorRowIndexByTarget,
   firstRowIndexByTarget,
   finalStep,
@@ -227,7 +227,7 @@ export function useOutputMinimapModel({
           const noAction = null;
           const stepOutputs = stepOutputsMap.get(key) ?? [];
 
-          if (!allowUndoActions) {
+          if (!showChangeActions) {
             return [
               {
                 key,
@@ -268,7 +268,7 @@ export function useOutputMinimapModel({
 
           const lastMsg = allMessages[lastCliIdx];
           const lastOutput = lastMsg?.data as CliOutputType | undefined;
-          if (!lastOutput || lastOutput.isStreaming) {
+          if (!lastOutput) {
             return [
               {
                 key,
@@ -385,7 +385,7 @@ export function useOutputMinimapModel({
     );
   }, [
     allMessages,
-    allowUndoActions,
+    showChangeActions,
     finalStep,
     finalStepWorkspaceSnapshots,
     anchorRowIndexByTarget,

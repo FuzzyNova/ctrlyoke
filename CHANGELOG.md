@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In the dashboard's **On Error** menu, `retry` is now labelled **Retry Step**, to set it apart from the new **Retry Failed Phase**. Workflow files still say `retry`.
 
 - A named worktree's `setup` command now runs at the start of every run, not only when ctrlyoke creates the worktree, so a dependency change pulled or merged into the branch since the last run is installed before the first step. Resuming or continuing a run whose setup already succeeded doesn't run it again. Omit `setup` if you don't want it to run. Managed worktrees are unchanged.
+- The **View N changes** links in the output toolbar and on step headers now stay visible while a run is executing, counting the files changed so far, instead of being hidden until the run stops or pauses. The changes dialog they open lists what's known so far but disables undo and redo until the run stops or pauses, and says that files changed by shell commands or scripts appear only when their step finishes. The extension now also refuses an undo or redo of a run that has a step in flight.
 - When the dashboard is open in a browser whose timezone differs from the machine running ctrlyoke, such as a hosted dashboard on a server set to UTC, the Schedule view and the Scheduled section show times in the host's timezone and name it. The Schedule view also says which timezone its times are in.
 
 ### Fixed
