@@ -427,7 +427,12 @@ export interface BuildOutputRowsInput {
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
-  allowUndoActions: boolean;
+  /**
+   * Whether step headers carry a change summary ("View N files"). True mid-run
+   * too, including for the step still streaming: the dialog it opens is where
+   * undo is refused while a step is in flight.
+   */
+  showChangeActions: boolean;
   isViewingHistory: boolean;
   historyOutputs: {
     orderedEntries: WorkflowOutputHistory["orderedEntries"];
@@ -2698,14 +2703,13 @@ export function buildOutputRows(
     const isLastAttemptForStep =
       lastAttemptRowKeyBasePerStep.get(targetKey) ===
       getAttemptRowKeyBase(targetKey, runIndex, attemptIndex, undefined);
-    const canUndoAttempt =
-      input.allowUndoActions && isLastAttemptForStep && !output.isStreaming;
+    const showsAttemptChanges = input.showChangeActions && isLastAttemptForStep;
     // A concurrently executed group shares one workspace snapshot — stored
     // against its first member — so it has exactly one undo, and that undo
     // belongs to the group header rather than to any member's CLI header. It is
     // stashed here because the header row opens the section long before the
     // rows carrying the aggregation are built (see the adoption pass below).
-    const concurrentGroup = canUndoAttempt
+    const concurrentGroup = showsAttemptChanges
       ? getConcurrentGroupForStep(input, target.index)
       : undefined;
     if (concurrentGroup && target.index === concurrentGroup.startIndex) {
@@ -2726,7 +2730,7 @@ export function buildOutputRows(
       }
     }
     const promptChangeSummary =
-      canUndoAttempt && !concurrentGroup
+      showsAttemptChanges && !concurrentGroup
         ? getPromptChangeSummaryForTarget(
             targetKey,
             allStepOutputs,

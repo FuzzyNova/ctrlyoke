@@ -468,7 +468,7 @@ function buildRows(
     streamingChunks: {},
     finalStepStreamingChunks: {},
     isExecutionActive: false,
-    allowUndoActions: false,
+    showChangeActions: false,
     isViewingHistory: true,
     historyOutputs: {
       orderedEntries: history.orderedEntries,

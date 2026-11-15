@@ -24,7 +24,7 @@ function renderUndoActions() {
     renderCount += 1;
     return useOutputUndoActions({
       allMessages: [],
-      allowUndoActions: true,
+      showChangeActions: true,
       finalStepWorkspaceSnapshots: {},
       historyOutputs: null,
       isViewingHistory: true,
@@ -95,7 +95,7 @@ describe("useOutputUndoActions", () => {
     const { result } = renderHook(() =>
       useOutputUndoActions({
         allMessages: [],
-        allowUndoActions: true,
+        showChangeActions: true,
         finalStepWorkspaceSnapshots: {},
         historyOutputs: {
           orderedEntries: [],
@@ -142,7 +142,7 @@ describe("useOutputUndoActions", () => {
             data: { isStreaming: false },
           } as never,
         ],
-        allowUndoActions: true,
+        showChangeActions: true,
         finalStepWorkspaceSnapshots: {},
         historyOutputs: null,
         isViewingHistory: false,
@@ -200,7 +200,7 @@ describe("useOutputUndoActions", () => {
             data: { isStreaming: false },
           } as never,
         ],
-        allowUndoActions: true,
+        showChangeActions: true,
         finalStepWorkspaceSnapshots: {},
         parallelGroups: [
           {
@@ -256,7 +256,7 @@ describe("useOutputUndoActions", () => {
             data: { isStreaming: false },
           } as never,
         ],
-        allowUndoActions: true,
+        showChangeActions: true,
         finalStepWorkspaceSnapshots: {},
         historyOutputs: null,
         isViewingHistory: false,
@@ -471,7 +471,7 @@ describe("useOutputUndoActions", () => {
         allMessages: [
           { type: "cli", target, timestamp: 1, data: output } as never,
         ],
-        allowUndoActions: true,
+        showChangeActions: true,
         finalStepWorkspaceSnapshots: {},
         historyOutputs: null,
         isViewingHistory: false,

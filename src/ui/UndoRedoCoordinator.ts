@@ -44,6 +44,7 @@ import {
   IMPORTED_OUTPUT_READ_ONLY_MESSAGE,
   isPreImportOutput,
 } from "../utils/ImportedRunUndo";
+import { IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE } from "../utils/InFlightRunUndo";
 
 type SnapshotEntry = {
   target: OutputExecutionTarget;
@@ -274,6 +275,18 @@ export class UndoRedoCoordinator {
     );
     if (writableEntries.length === 0)
       return { restoredFiles, failedFiles, redoInstructions };
+
+    // The dashboard already disables the action mid-run; this keeps a stale
+    // dialog or another client from restoring files under a live step.
+    if (this.getOrchestrator()?.isRunInFlight({ workflowKey, runRef })) {
+      failedFiles.push(
+        ...this.createFailedUndoFiles(
+          writableEntries.flatMap((entry) => entry.files),
+          IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE
+        )
+      );
+      return { restoredFiles, failedFiles, redoInstructions };
+    }
 
     let workspace: UndoExecutionWorkspace;
     try {

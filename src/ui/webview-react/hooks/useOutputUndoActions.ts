@@ -75,7 +75,7 @@ type OutputHistoryView = {
 interface UseOutputUndoActionsInput {
   importedSequenceBoundary?: number | null;
   allMessages: OutputMessage[];
-  allowUndoActions: boolean;
+  showChangeActions: boolean;
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
   parallelGroups?: readonly ParallelGroupDefinition[];
   historyOutputs: OutputHistoryView;
@@ -114,7 +114,7 @@ function toUndoExecutionTarget(
 export function useOutputUndoActions({
   importedSequenceBoundary,
   allMessages,
-  allowUndoActions,
+  showChangeActions,
   finalStepWorkspaceSnapshots,
   parallelGroups,
   historyOutputs,
@@ -155,7 +155,7 @@ export function useOutputUndoActions({
       entries: [] as WorkflowStepEntry[],
       summary: createPromptChangeSummary(0, 0, 0, 0),
     });
-    if (!allowUndoActions) return emptyWorkflowChangeData();
+    if (!showChangeActions) return emptyWorkflowChangeData();
 
     try {
       const entries: WorkflowStepEntry[] = [];
@@ -167,7 +167,9 @@ export function useOutputUndoActions({
 
         const lastMsg = allMessages[lastCliIdx];
         const lastOutput = lastMsg?.data as CliOutputType | undefined;
-        if (!lastOutput || lastOutput.isStreaming) continue;
+        // A streaming step counts too, so the header total grows during the
+        // run; its list holds only what file-edit events have reported so far.
+        if (!lastOutput) continue;
         const importedBoundary =
           importedSequenceBoundary ??
           historyOutputs?.runMetadata.importedSequenceBoundary;
@@ -281,7 +283,7 @@ export function useOutputUndoActions({
       return emptyWorkflowChangeData();
     }
   }, [
-    allowUndoActions,
+    showChangeActions,
     allMessages,
     finalStepWorkspaceSnapshots,
     historyOutputs,

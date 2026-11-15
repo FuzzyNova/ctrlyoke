@@ -90,7 +90,7 @@ describe("buildOutputRows undo-action memoization", () => {
       streamingChunks: {},
       finalStepStreamingChunks: {},
       isExecutionActive: false,
-      allowUndoActions: true,
+      showChangeActions: true,
       isViewingHistory: false,
       historyOutputs: null,
       workspaceSnapshots: {

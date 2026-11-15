@@ -18,7 +18,7 @@ page is about undoing the _files_ a step changed in your project.
 
 ## Viewing changes
 
-Once a step stops running, links to its changes appear in the output:
+As soon as a step changes a file, links to its changes appear in the output:
 
 | Where                                                        | What it opens                                                    |
 | ------------------------------------------------------------ | ---------------------------------------------------------------- |
@@ -34,10 +34,15 @@ The link counts the files, and adds "(K undone)" in green when you've undone
 some of them. In a narrow output pane the links shorten to **View N**, and
 where even that doesn't fit, to just the count and then just the diff icon.
 
-The step and workflow links are hidden while the run you're watching is still
-running, because the files are still changing. They come back when the run
-finishes, stops or pauses, and they are always available when you open a past
-run from the [workflow menu](/guide/dashboard#the-workflow-menu).
+The links stay up while the run you're watching is still running, and their
+counts grow as steps report edits. Opening one mid-run shows the changes so far
+but doesn't let you undo or redo them, because the files may still be changing.
+The list can also be incomplete then: a step's file-edit tools are reported as
+they happen, but files changed by shell commands or scripts are only found when
+that step finishes. Stop or pause the run, then open the dialog again to undo.
+A dialog opened mid-run stays read-only even after the run stops, so its list
+is never out of date when you undo. Past runs you open from the
+[workflow menu](/guide/dashboard#the-workflow-menu) can always be undone.
 
 Steps in a parallel group share the workspace and run at the same time, so
 ctrlyoke can't tell which member changed which file. A parallel group has one

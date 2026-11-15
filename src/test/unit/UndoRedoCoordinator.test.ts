@@ -21,6 +21,7 @@ import type {
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE } from "../../utils/InFlightRunUndo";
 
 suite("UndoRedoCoordinator", function () {
   function git(cwd: string, ...args: string[]): string {
@@ -60,6 +61,88 @@ suite("UndoRedoCoordinator", function () {
       "utf8"
     );
   }
+
+  test("refuses undo and redo while the run has a step in flight", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-undo-in-flight-")
+    );
+    try {
+      const filePath = path.join(workspaceRoot, "live.txt");
+      await fs.writeFile(filePath, "written by the live step\n", "utf8");
+      const workflowKey = "undo-in-flight" as WorkflowKey;
+      const runRef = "run-2026-11-15T00-00-00-000Z" as RunRef;
+      const inFlightAddresses: unknown[] = [];
+      const orchestrator = {
+        getOutputHistoryManager: () => undefined,
+        getWorkspaceSnapshotFileContent: async () => undefined,
+        isRunInFlight: (address: unknown) => {
+          inFlightAddresses.push(address);
+          return true;
+        },
+      } as unknown as WorkflowOrchestrator;
+      const coordinator = new UndoRedoCoordinator(
+        () => orchestrator,
+        () => ({ executionRoot: workspaceRoot, namedWorkspaceRoots: [] })
+      );
+      const messages: Record<string, unknown>[] = [];
+      const postMessage = ((message: Record<string, unknown>) => {
+        messages.push(message);
+      }) as PostMessageFn;
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      const files = [{ path: "live.txt", action: UNDO_FILE_ACTIONS.DELETE }];
+
+      await coordinator.handleUndoPromptChanges(
+        {
+          type: MESSAGE_TYPES.UNDO_PROMPT_CHANGES,
+          data: { requestId: "undo-live", target, workflowKey, runRef, files },
+        },
+        postMessage
+      );
+      await coordinator.handleRedoWorkflowChanges(
+        {
+          type: MESSAGE_TYPES.REDO_WORKFLOW_CHANGES,
+          data: {
+            requestId: "redo-live",
+            workflowKey,
+            runRef,
+            entries: [{ target, files }],
+          },
+        },
+        postMessage
+      );
+
+      assert.strictEqual(
+        await fs.readFile(filePath, "utf8"),
+        "written by the live step\n"
+      );
+      assert.deepStrictEqual(inFlightAddresses, [
+        { workflowKey, runRef },
+        { workflowKey, runRef },
+      ]);
+      const results = messages.filter(
+        (message) => message.type === MESSAGE_TYPES.UNDO_PROMPT_RESULT
+      ) as Array<{
+        data: {
+          restoredFiles: string[];
+          failedFiles: Array<{ path: string; error: string }>;
+        };
+      }>;
+      assert.strictEqual(results.length, 2);
+      for (const result of results) {
+        assert.deepStrictEqual(result.data.restoredFiles, []);
+        assert.deepStrictEqual(result.data.failedFiles, [
+          { path: "live.txt", error: IN_FLIGHT_RUN_UNDO_BLOCKED_MESSAGE },
+        ]);
+      }
+      assert.ok(
+        !messages.some(
+          (message) => message.type === MESSAGE_TYPES.UNDO_RECORD_UPDATED
+        )
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
 
   test("undoes two edits to one file and redoes them as a round trip", async () => {
     const workspaceRoot = await fs.mkdtemp(
@@ -216,6 +299,7 @@ suite("UndoRedoCoordinator", function () {
           contentToRestore: "authoritative history content",
         }),
         getOutputHistoryManager: () => undefined,
+        isRunInFlight: () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,
@@ -302,6 +386,7 @@ suite("UndoRedoCoordinator", function () {
               ],
             }),
           }),
+          isRunInFlight: () => false,
         }) as unknown as WorkflowOrchestrator;
 
       const undo = async (
@@ -425,6 +510,7 @@ suite("UndoRedoCoordinator", function () {
         getWorkspaceSnapshotFileContent: async () => ({
           contentToRestore: "before\n",
         }),
+        isRunInFlight: () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,
@@ -545,6 +631,7 @@ suite("UndoRedoCoordinator", function () {
         getWorkspaceSnapshotFileContent: async () => ({
           contentToRestore: "base\n",
         }),
+        isRunInFlight: () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,
@@ -729,6 +816,7 @@ suite("UndoRedoCoordinator", function () {
         getWorkspaceSnapshotFileContent: async () => ({
           contentToRestore: "base\n",
         }),
+        isRunInFlight: () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,

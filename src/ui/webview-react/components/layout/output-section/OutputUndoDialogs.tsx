@@ -34,6 +34,8 @@ export interface WorkflowDialogState {
 interface OutputUndoDialogsProps {
   minimapDialogState: MinimapDialogState | null;
   workflowDialogState: WorkflowDialogState | null;
+  /** Live reason undo/redo is refused right now (a step is in flight). */
+  undoBlockedReason?: string;
   onCloseMinimapDialog: () => void;
   onCloseWorkflowDialog: () => void;
 }
@@ -41,6 +43,7 @@ interface OutputUndoDialogsProps {
 export const OutputUndoDialogs: React.FC<OutputUndoDialogsProps> = ({
   minimapDialogState,
   workflowDialogState,
+  undoBlockedReason,
   onCloseMinimapDialog,
   onCloseWorkflowDialog,
 }) => (
@@ -57,6 +60,7 @@ export const OutputUndoDialogs: React.FC<OutputUndoDialogsProps> = ({
         stepLabel={minimapDialogState.stepLabel}
         stepName={minimapDialogState.stepName}
         requestId={minimapDialogState.requestId}
+        undoBlockedReason={undoBlockedReason}
         onClose={onCloseMinimapDialog}
       />
     )}
@@ -71,6 +75,7 @@ export const OutputUndoDialogs: React.FC<OutputUndoDialogsProps> = ({
         requestId={workflowDialogState.requestId}
         workflowEntries={workflowDialogState.entries}
         workflowName={workflowDialogState.workflowName}
+        undoBlockedReason={undoBlockedReason}
         onClose={onCloseWorkflowDialog}
       />
     )}
