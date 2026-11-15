@@ -9,6 +9,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import type { UndoRecord } from "@root/types/OutputHistoryTypes";
 import type { OutputRowPromptUndoMeta } from "@utils/outputRows";
 
 const RUN_ADDRESS = {
@@ -173,6 +174,109 @@ describe("useOutputUndoActions", () => {
       result.current.workflowDialogState?.entries[0]?.undoCandidates?.[0]
         ?.instruction
     ).toBeNull();
+  });
+
+  it("uses the historical start-step snapshot for a concurrent group", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const nextTarget = { kind: FINAL_STEP_PHASES.QUEUE, index: 1 } as const;
+    const groupSnapshot = {
+      capturedAt: 1,
+      parallelGroupId: "parallel-0-1",
+      strategy: "filesystem" as const,
+      changedFiles: [
+        {
+          path: "src/group.ts",
+          changeType: "modified" as const,
+        },
+      ],
+    };
+    const { result } = renderHook(() =>
+      useOutputUndoActions({
+        allMessages: [
+          {
+            type: "cli",
+            target,
+            timestamp: 1,
+            data: { isStreaming: false },
+          } as never,
+        ],
+        allowUndoActions: true,
+        finalStepWorkspaceSnapshots: {},
+        parallelGroups: [
+          {
+            id: "parallel-0-1",
+            startIndex: 0,
+            endIndex: 1,
+            failFast: false,
+          },
+        ],
+        historyOutputs: {
+          orderedEntries: [],
+          promptOutputs: { 0: { workspaceSnapshot: groupSnapshot } },
+          runMetadata: {
+            runId: 1,
+            startedAt: 1,
+            executionState: "completed" as never,
+          },
+        },
+        isViewingHistory: true,
+        lastCliIndexPerStep: new Map([["queue:0", 0]]),
+        stepOutputsMap: new Map([["queue:0", []]]),
+        undoRecords: {},
+        uniqueStepTargets: [target, nextTarget],
+        workspaceSnapshots: {},
+      })
+    );
+
+    expect(result.current.workflowChangeEntries).toHaveLength(1);
+    expect(result.current.workflowChangeEntries[0]?.target).toEqual({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 0,
+    });
+    expect(result.current.workflowChangeSummary.total).toBe(1);
+  });
+
+  it("uses a final-step live undo record", () => {
+    const target = {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      index: 2,
+    } as const;
+    const undoRecord: UndoRecord = {
+      appliedAt: 1,
+      restoredFiles: ["src/final.ts"],
+      redoInstructions: [{ path: "src/final.ts", action: "delete" }],
+    };
+    const { result } = renderHook(() =>
+      useOutputUndoActions({
+        allMessages: [
+          {
+            type: "cli",
+            target,
+            timestamp: 1,
+            data: { isStreaming: false },
+          } as never,
+        ],
+        allowUndoActions: true,
+        finalStepWorkspaceSnapshots: {},
+        historyOutputs: null,
+        isViewingHistory: false,
+        lastCliIndexPerStep: new Map([["finalStep:2", 0]]),
+        stepOutputsMap: new Map(),
+        undoRecords: { "finalStep-2": undoRecord },
+        uniqueStepTargets: [target],
+        workspaceSnapshots: {},
+      })
+    );
+
+    expect(result.current.workflowChangeEntries).toEqual([
+      expect.objectContaining({
+        target: {
+          kind: FINAL_STEP_PHASES.FINAL_STEP,
+          loopIndex: 2,
+        },
+        redoInstructions: undoRecord.redoInstructions,
+      }),
+    ]);
   });
 
   it("fetches indexed snapshot restore content before opening a prompt dialog", async () => {

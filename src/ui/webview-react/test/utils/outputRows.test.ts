@@ -3,8 +3,10 @@ import type { WorkflowStep } from "@store/workflowStore";
 import {
   buildOutputRows,
   estimateOutputRowHeight,
+  getConcurrentGroupArtifactsForStep,
   getConcurrentGroupForStep,
   getParallelGroupForStep,
+  getStepOutputArtifacts,
 } from "@utils/outputRows";
 import {
   mapOrderedHistoryEntriesToMessages,
@@ -1505,10 +1507,152 @@ describe("outputRows", () => {
       isViewingHistory: false,
       historyOutputs: null,
       workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
     };
 
     expect(getParallelGroupForStep(parallelGroups, 1)).toBe(parallelGroups[0]);
     expect(getConcurrentGroupForStep(input, 1)).toBeUndefined();
+  });
+
+  it("uses the historical start-step snapshot for concurrent-group lookup", () => {
+    const parallelGroups = [
+      {
+        id: "parallel-0-1",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: false,
+      },
+    ];
+    const groupSnapshot = {
+      capturedAt: 1,
+      parallelGroupId: "parallel-0-1",
+      strategy: "filesystem" as const,
+      changedFiles: [],
+    };
+    const input = {
+      parallelGroups,
+      isViewingHistory: true,
+      historyOutputs: {
+        orderedEntries: [],
+        promptOutputs: { 0: { workspaceSnapshot: groupSnapshot } },
+        runMetadata: {
+          runId: 1,
+          startedAt: 1,
+          executionState: "completed" as never,
+        },
+      },
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+    };
+
+    expect(getConcurrentGroupArtifactsForStep(input, 1)).toEqual({
+      group: parallelGroups[0],
+      groupSnapshot,
+    });
+    expect(getConcurrentGroupForStep(input, 1)).toBe(parallelGroups[0]);
+  });
+
+  it("gets queue and final-step output artifacts from live and history data", () => {
+    const queueLiveSnapshot = {
+      capturedAt: 1,
+      strategy: "filesystem" as const,
+      changedFiles: [],
+    };
+    const finalLiveSnapshot = {
+      capturedAt: 2,
+      strategy: "filesystem" as const,
+      changedFiles: [],
+    };
+    const queueHistorySnapshot = {
+      capturedAt: 3,
+      strategy: "filesystem" as const,
+      changedFiles: [],
+    };
+    const finalHistorySnapshot = {
+      capturedAt: 4,
+      strategy: "filesystem" as const,
+      changedFiles: [],
+    };
+    const queueLiveUndoRecord = {
+      appliedAt: 1,
+      restoredFiles: [],
+      redoInstructions: [],
+    };
+    const finalLiveUndoRecord = {
+      appliedAt: 2,
+      restoredFiles: [],
+      redoInstructions: [],
+    };
+    const queueHistoryUndoRecord = {
+      appliedAt: 3,
+      restoredFiles: [],
+      redoInstructions: [],
+    };
+    const finalHistoryUndoRecord = {
+      appliedAt: 4,
+      restoredFiles: [],
+      redoInstructions: [],
+    };
+    const artifactInput = {
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: { 0: queueLiveSnapshot },
+      finalStepWorkspaceSnapshots: { 1: finalLiveSnapshot },
+      undoRecords: {
+        "queue-0": queueLiveUndoRecord,
+        "finalStep-1": finalLiveUndoRecord,
+      },
+    };
+    const queueTarget = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const finalTarget = {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      index: 1,
+    } as const;
+
+    expect(getStepOutputArtifacts(artifactInput, queueTarget)).toEqual({
+      workspaceSnapshot: queueLiveSnapshot,
+      undoRecord: queueLiveUndoRecord,
+    });
+    expect(getStepOutputArtifacts(artifactInput, finalTarget)).toEqual({
+      workspaceSnapshot: finalLiveSnapshot,
+      undoRecord: finalLiveUndoRecord,
+    });
+
+    const historyInput = {
+      ...artifactInput,
+      isViewingHistory: true,
+      historyOutputs: {
+        orderedEntries: [],
+        promptOutputs: {
+          0: {
+            workspaceSnapshot: queueHistorySnapshot,
+            undoRecord: queueHistoryUndoRecord,
+          },
+        },
+        finalStepOutputs: {
+          1: {
+            workspaceSnapshot: finalHistorySnapshot,
+            undoRecord: finalHistoryUndoRecord,
+          },
+        },
+        runMetadata: {
+          runId: 1,
+          startedAt: 1,
+          executionState: "completed" as never,
+        },
+      },
+    };
+
+    expect(getStepOutputArtifacts(historyInput, queueTarget)).toEqual({
+      workspaceSnapshot: queueHistorySnapshot,
+      undoRecord: queueHistoryUndoRecord,
+    });
+    expect(getStepOutputArtifacts(historyInput, finalTarget)).toEqual({
+      workspaceSnapshot: finalHistorySnapshot,
+      undoRecord: finalHistoryUndoRecord,
+    });
   });
 
   it("puts a concurrent group's only undo on its header row, not on a member", () => {

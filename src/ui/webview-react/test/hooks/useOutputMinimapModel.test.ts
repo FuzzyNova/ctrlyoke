@@ -205,4 +205,92 @@ describe("useOutputMinimapModel hidden activity", () => {
       expect.objectContaining({ snapshot })
     );
   });
+
+  it("uses a history snapshot for a final-step minimap action", () => {
+    const target = {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      index: 1,
+    } as const;
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1,
+      strategy: "filesystem",
+      changedFiles: [
+        {
+          path: "src/history-final.ts",
+          changeType: "created",
+          contentAvailableOnDemand: true,
+        },
+      ],
+    };
+    const liveSnapshot: WorkspaceSnapshot = {
+      capturedAt: 2,
+      strategy: "filesystem",
+      changedFiles: [
+        {
+          path: "src/live-final.ts",
+          changeType: "created",
+          contentAvailableOnDemand: true,
+        },
+      ],
+    };
+    const onOpenMinimapDialog = vi.fn();
+    const output = {
+      prompt: "finish",
+      response: "done",
+      elapsed: 1,
+      isStreaming: false,
+      workingDirectory: "/repo",
+    };
+    const { result } = renderHook(() =>
+      useOutputMinimapModel({
+        allMessages: [
+          {
+            type: "cli",
+            target,
+            timestamp: 201,
+            data: output,
+          } as OutputMessage,
+        ],
+        allowUndoActions: true,
+        finalStep: { name: "Finish" } as never,
+        finalStepWorkspaceSnapshots: { 1: liveSnapshot },
+        firstRowIndexByTarget: new Map([["finalStep:1", 0]]),
+        hiddenAtMs: {},
+        hiddenTargetKeys: [],
+        historyOutputs: {
+          orderedEntries: [],
+          promptOutputs: {},
+          finalStepOutputs: { 1: { workspaceSnapshot: snapshot } },
+          runMetadata: {
+            runId: 1,
+            startedAt: 1,
+            executionState: "completed" as never,
+          },
+        },
+        isViewingHistory: true,
+        lastCliIndexPerStep: new Map([["finalStep:1", 0]]),
+        onOpenMinimapDialog,
+        outputFontSize: 14,
+        rowLayout: {
+          rowStartsByIndex: [0],
+          rowStartsByKey: new Map(),
+          totalSize: 40,
+        },
+        rows: [] as OutputRenderRow[],
+        stepOutputsMap: new Map([["finalStep:1", [output]]]),
+        steps: [],
+        undoRecords: {},
+        uniqueStepTargets: [target],
+        workspaceSnapshots: {},
+      })
+    );
+
+    expect(result.current.minimapSteps[0]?.changeSummary).toMatchObject({
+      total: 1,
+    });
+    result.current.minimapSteps[0]?.changeAction?.onTrigger();
+    expect(onOpenMinimapDialog).toHaveBeenCalledWith(
+      expect.objectContaining({ snapshot })
+    );
+  });
 });

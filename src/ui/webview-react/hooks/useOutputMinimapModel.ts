@@ -8,9 +8,9 @@ import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
 import {
   estimateOutputDiffBlockHeight,
+  getConcurrentGroupForStep,
   getStepName,
-  parallelGroupActionTooltip,
-  parallelGroupStepCount,
+  getStepOutputArtifacts,
   type OutputRenderRow,
 } from "@utils/outputRows";
 import { measurePhase } from "@utils/performanceProfiler";
@@ -195,24 +195,19 @@ export function useOutputMinimapModel({
           const stepIndex = msgTarget.index;
           const isFinalStep = kind === FINAL_STEP_PHASES.FINAL_STEP;
           const workflowStep = isFinalStep ? finalStep : steps[stepIndex];
-          const parallelGroup = isFinalStep
+          const concurrentGroup = isFinalStep
             ? undefined
-            : parallelGroups?.find(
-                (group) =>
-                  stepIndex >= group.startIndex &&
-                  stepIndex <= group.endIndex &&
-                  group.startIndex !== group.endIndex
+            : getConcurrentGroupForStep(
+                {
+                  parallelGroups,
+                  isViewingHistory,
+                  historyOutputs,
+                  workspaceSnapshots,
+                  finalStepWorkspaceSnapshots,
+                  undoRecords,
+                },
+                stepIndex
               );
-          const groupSnapshot = parallelGroup
-            ? isViewingHistory && historyOutputs
-              ? historyOutputs.promptOutputs[parallelGroup.startIndex]
-                  ?.workspaceSnapshot
-              : workspaceSnapshots[parallelGroup.startIndex]
-            : undefined;
-          const concurrentGroup =
-            parallelGroup?.id === groupSnapshot?.parallelGroupId
-              ? parallelGroup
-              : undefined;
           const label = isFinalStep
             ? getStepName(workflowStep, formatFinalPassLabel(stepIndex + 1))
             : getStepName(workflowStep, getQueueStepLabel(stepIndex));
@@ -296,7 +291,6 @@ export function useOutputMinimapModel({
             ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
             : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
 
-          const groupForLabels = concurrentGroup;
           if (concurrentGroup) {
             return [
               {
@@ -316,31 +310,25 @@ export function useOutputMinimapModel({
             ];
           }
 
-          let effectiveSnapshot: WorkspaceSnapshot | undefined;
-          let effectiveUndoRecord: UndoRecord | undefined;
-
-          if (isViewingHistory && historyOutputs) {
-            effectiveSnapshot = isFinalStep
-              ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
-              : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
-            effectiveUndoRecord = isFinalStep
-              ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
-              : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
-          } else {
-            effectiveSnapshot = isFinalStep
-              ? finalStepWorkspaceSnapshots[stepIndex]
-              : workspaceSnapshots[stepIndex];
-            effectiveUndoRecord =
-              undoRecords[
-                isFinalStep ? `finalStep-${stepIndex}` : `queue-${stepIndex}`
-              ];
-          }
+          const {
+            workspaceSnapshot: effectiveSnapshot,
+            undoRecord: effectiveUndoRecord,
+          } = getStepOutputArtifacts(
+            {
+              isViewingHistory,
+              historyOutputs,
+              workspaceSnapshots,
+              finalStepWorkspaceSnapshots,
+              undoRecords,
+            },
+            msgTarget
+          );
 
           const workspacePath = lastOutput.workingDirectory ?? "";
           const summary = computePromptChangeSummary(
             stepOutputs,
             effectiveUndoRecord,
-            groupForLabels ? groupSnapshot : effectiveSnapshot
+            effectiveSnapshot
           );
           const alreadyUndone =
             effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
@@ -357,12 +345,7 @@ export function useOutputMinimapModel({
             summary.total > 0
               ? {
                   label: summary.label,
-                  title: groupForLabels
-                    ? parallelGroupActionTooltip(
-                        summary.title,
-                        parallelGroupStepCount(groupForLabels)
-                      )
-                    : summary.title,
+                  title: summary.title,
                   onTrigger: () => {
                     onOpenMinimapDialog({
                       target: undoTarget,

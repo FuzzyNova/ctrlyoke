@@ -132,8 +132,10 @@ import {
   cliEntryIdentityKey,
   getCliEntryIdentity,
   matchesCliEntryIdentity,
+  toOutputMessageTarget,
   type CliEntryIdentity,
 } from "@utils/outputProjection";
+import { buildUndoRecordKey } from "@utils/undoRecordKey";
 
 /**
  * Merge incoming structured events into an existing CliOutput array.
@@ -1026,12 +1028,6 @@ function appendStreamingChunkToActivityState(
   };
 }
 
-function getUndoRecordKey(target: UndoExecutionTarget): string {
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? `queue-${target.stepIndex}`
-    : `finalStep-${target.loopIndex}`;
-}
-
 function projectLiveHistoryArtifacts(
   history: WorkflowOutputHistory
 ): Pick<
@@ -1050,7 +1046,12 @@ function projectLiveHistoryArtifacts(
     }
     if (output.undoRecord) {
       undoRecords[
-        getUndoRecordKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex })
+        buildUndoRecordKey(
+          toOutputMessageTarget({
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex,
+          })
+        )
       ] = output.undoRecord;
     }
   }
@@ -1065,10 +1066,12 @@ function projectLiveHistoryArtifacts(
     }
     if (output.undoRecord) {
       undoRecords[
-        getUndoRecordKey({
-          kind: FINAL_STEP_PHASES.FINAL_STEP,
-          loopIndex,
-        })
+        buildUndoRecordKey(
+          toOutputMessageTarget({
+            kind: FINAL_STEP_PHASES.FINAL_STEP,
+            loopIndex,
+          })
+        )
       ] = output.undoRecord;
     }
   }
@@ -1879,7 +1882,7 @@ export const useWorkflowStore = create<
         }),
 
       setUndoRecord: (target, record) => {
-        const key = getUndoRecordKey(target);
+        const key = buildUndoRecordKey(toOutputMessageTarget(target));
         withUndoPause(() =>
           set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } }))
         );

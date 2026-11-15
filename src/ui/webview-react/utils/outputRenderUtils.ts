@@ -493,9 +493,3 @@ function applyDiffGapExpansionStateWithStats(
     },
   };
 }
-
-export function buildUndoRecordKey(target: OutputMessageTarget): string {
-  return target.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ? `finalStep-${target.index}`
-    : `queue-${target.index}`;
-}

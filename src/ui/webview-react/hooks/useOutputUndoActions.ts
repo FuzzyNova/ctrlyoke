@@ -23,11 +23,13 @@ import {
   sameFilePath,
   resolveSnapshotFileMatch,
 } from "@utils/promptUndo";
-import type {
-  CliHeaderRow,
-  OutputRowPromptUndoMeta,
-  ParallelGroupHeaderRow,
-  StructuredEventRow,
+import {
+  getConcurrentGroupArtifactsForStep,
+  getStepOutputArtifacts,
+  type CliHeaderRow,
+  type OutputRowPromptUndoMeta,
+  type ParallelGroupHeaderRow,
+  type StructuredEventRow,
 } from "@utils/outputRows";
 import type { OutputMessageTarget } from "@utils/outputProjection";
 import type {
@@ -175,52 +177,41 @@ export function useOutputUndoActions({
 
         const isFinalStep = msgTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
         const stepIndex = msgTarget.index;
-        const parallelGroup = isFinalStep
+        const concurrentGroupArtifacts = isFinalStep
           ? undefined
-          : parallelGroups?.find(
-              (group) =>
-                stepIndex >= group.startIndex &&
-                stepIndex <= group.endIndex &&
-                group.startIndex !== group.endIndex
+          : getConcurrentGroupArtifactsForStep(
+              {
+                parallelGroups,
+                isViewingHistory,
+                historyOutputs,
+                workspaceSnapshots,
+                finalStepWorkspaceSnapshots,
+                undoRecords,
+              },
+              stepIndex
             );
-        const groupSnapshot = parallelGroup
-          ? isViewingHistory && historyOutputs
-            ? historyOutputs.promptOutputs[parallelGroup.startIndex]
-                ?.workspaceSnapshot
-            : workspaceSnapshots[parallelGroup.startIndex]
-          : undefined;
-        const concurrentGroup =
-          parallelGroup?.id === groupSnapshot?.parallelGroupId
-            ? parallelGroup
-            : undefined;
+        const concurrentGroup = concurrentGroupArtifacts?.group;
         if (concurrentGroup && stepIndex !== concurrentGroup.startIndex) {
           continue;
         }
 
-        let effectiveSnapshot: WorkspaceSnapshot | undefined;
-        let effectiveUndoRecord: UndoRecord | undefined;
-
-        if (isViewingHistory && historyOutputs) {
-          effectiveSnapshot = isFinalStep
-            ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
-            : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
-          effectiveUndoRecord = isFinalStep
-            ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
-            : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
-        } else {
-          const targetKey = isFinalStep
-            ? `finalStep-${stepIndex}`
-            : `queue-${stepIndex}`;
-          effectiveSnapshot = isFinalStep
-            ? finalStepWorkspaceSnapshots[stepIndex]
-            : workspaceSnapshots[stepIndex];
-          effectiveUndoRecord = undoRecords[targetKey];
-        }
+        const {
+          workspaceSnapshot: targetSnapshot,
+          undoRecord: effectiveUndoRecord,
+        } = getStepOutputArtifacts(
+          {
+            isViewingHistory,
+            historyOutputs,
+            workspaceSnapshots,
+            finalStepWorkspaceSnapshots,
+            undoRecords,
+          },
+          msgTarget
+        );
+        const effectiveSnapshot =
+          concurrentGroupArtifacts?.groupSnapshot ?? targetSnapshot;
 
         const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
-        if (concurrentGroup) {
-          effectiveSnapshot = groupSnapshot;
-        }
         const undoTarget: UndoExecutionTarget = isFinalStep
           ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
           : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };

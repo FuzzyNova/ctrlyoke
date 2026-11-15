@@ -484,6 +484,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     undo-record key that `buildUndoRecordKey` and `workflowStore.getUndoRecordKey` also
     build. The minimap's `groupForLabels` branches are dead (always `undefined` after
     the concurrent-group early return).
+    Landed: Shared artifact lookup and undo-record key formatting across output hooks and store.
   - Step list context-menu wiring: `WorkflowStepsPanel` and `StepChipRail` hand-wire
     the same read-only flags, `useStepContextMenu`, `usePasteToEndContextMenu`,
     `useFinalStepContextMenu` and final-step handlers. The rail's copy drifted: no

@@ -57,7 +57,6 @@ import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
 import { computePromptChangeSummary } from "./promptUndo";
 import type { PromptChangeSummary } from "./promptUndo";
 import {
-  buildUndoRecordKey,
   computeOutputDiffStats,
   getOutputDiffKey,
   getRawTextOutput,
@@ -66,6 +65,7 @@ import {
   isRenderableStructuredEvent,
   isScriptOutput,
 } from "./outputRenderUtils";
+import { buildUndoRecordKey } from "./undoRecordKey";
 import { getStepAssistantTextForCopy } from "./outputUtils";
 import type { DiffGapExpansionState } from "./outputRenderUtils";
 import {
@@ -467,25 +467,42 @@ export function getParallelGroupForStep(
   return group && group.startIndex !== group.endIndex ? group : undefined;
 }
 
-type ConcurrentGroupInput = Pick<
+type StepOutputArtifactsInput = Pick<
   BuildOutputRowsInput,
-  | "parallelGroups"
   | "isViewingHistory"
   | "historyOutputs"
   | "workspaceSnapshots"
+  | "finalStepWorkspaceSnapshots"
+  | "undoRecords"
 >;
+
+type ConcurrentGroupInput = Pick<BuildOutputRowsInput, "parallelGroups"> &
+  StepOutputArtifactsInput;
+
+export function getConcurrentGroupArtifactsForStep(
+  input: ConcurrentGroupInput,
+  stepIndex: number
+):
+  | {
+      group: ParallelGroupDefinition;
+      groupSnapshot: WorkspaceSnapshot;
+    }
+  | undefined {
+  const group = getParallelGroupForStep(input.parallelGroups, stepIndex);
+  if (!group) return undefined;
+  const { workspaceSnapshot: groupSnapshot } = getStepOutputArtifacts(input, {
+    kind: FINAL_STEP_PHASES.QUEUE,
+    index: group.startIndex,
+  });
+  if (groupSnapshot?.parallelGroupId !== group.id) return undefined;
+  return { group, groupSnapshot };
+}
 
 export function getConcurrentGroupForStep(
   input: ConcurrentGroupInput,
   stepIndex: number
 ): ParallelGroupDefinition | undefined {
-  const group = getParallelGroupForStep(input.parallelGroups, stepIndex);
-  if (!group) return undefined;
-  const groupSnapshot =
-    input.isViewingHistory && input.historyOutputs
-      ? input.historyOutputs.promptOutputs[group.startIndex]?.workspaceSnapshot
-      : input.workspaceSnapshots[group.startIndex];
-  return groupSnapshot?.parallelGroupId === group.id ? group : undefined;
+  return getConcurrentGroupArtifactsForStep(input, stepIndex)?.group;
 }
 
 /**
@@ -651,8 +668,8 @@ function getEffectiveStepHarness(
     HarnessId | undefined;
 }
 
-function getStepOutputArtifacts(
-  input: BuildOutputRowsInput,
+export function getStepOutputArtifacts(
+  input: StepOutputArtifactsInput,
   target: OutputMessageTarget
 ): {
   workspaceSnapshot?: WorkspaceSnapshot;
