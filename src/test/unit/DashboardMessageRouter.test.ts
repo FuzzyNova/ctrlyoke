@@ -33,6 +33,7 @@ import {
   WORKSPACE_FOLDER_PICKERS,
   LOG_LEVELS,
   EXECUTION_STATES,
+  WORKTREE_MERGE_OUTCOMES,
 } from "../../types/DashboardConstants";
 import type { WorkingFile } from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
@@ -796,6 +797,196 @@ suite("DashboardMessageRouter — dashboard host actions", () => {
       "Worktree action failed: worktree is locked"
     );
     assert.deepStrictEqual(otherClientReplies, []);
+  });
+
+  suite("worktree action results", () => {
+    const worktreeState = { entries: [] };
+
+    function buildResultRouter(
+      orchestrator: Record<string, unknown>
+    ): DashboardMessageRouter {
+      return buildRouter({
+        executeLoadedPromptFile: async () => {},
+        refreshWorktreeManagementState: async () => worktreeState,
+        ...orchestrator,
+      });
+    }
+
+    async function routeWorktreeMessage(
+      orchestrator: Record<string, unknown>,
+      message: Parameters<DashboardMessageRouter["route"]>[0]
+    ): Promise<unknown[]> {
+      const replies: unknown[] = [];
+      await buildResultRouter(orchestrator).route(message, {
+        clientTag: "test:worktree-results",
+        postMessage: (reply) => replies.push(reply),
+      });
+      return replies;
+    }
+
+    const stateReply = {
+      type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_STATE,
+      state: worktreeState,
+    };
+
+    test("reports a two-way fast-forward sync with its request id", async () => {
+      const replies = await routeWorktreeMessage(
+        {
+          syncNamedWorktree: async () => ({
+            sourceBranch: "main",
+            worktreeBranch: "feature",
+            intoSource: {
+              mergeOutcome: WORKTREE_MERGE_OUTCOMES.FAST_FORWARD,
+            },
+            intoWorktree: {
+              mergeOutcome: WORKTREE_MERGE_OUTCOMES.FAST_FORWARD,
+            },
+          }),
+        },
+        {
+          type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
+          worktreePath: "worktree",
+          requestId: "req-sync",
+        }
+      );
+
+      assert.deepStrictEqual(replies, [
+        {
+          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+          requestId: "req-sync",
+          success: true,
+          message:
+            'Worktree synced. "main": up to date — "feature": up to date',
+        },
+        stateReply,
+      ]);
+    });
+
+    test("reports a partial sync without a request id and includes its error", async () => {
+      const replies = await routeWorktreeMessage(
+        {
+          syncNamedWorktree: async () => ({
+            sourceBranch: "main",
+            worktreeBranch: "feature",
+            intoSource: {
+              mergeOutcome: WORKTREE_MERGE_OUTCOMES.CONFLICT,
+              message: "source conflict",
+            },
+            intoWorktree: {
+              mergeOutcome: WORKTREE_MERGE_OUTCOMES.FAST_FORWARD,
+            },
+          }),
+        },
+        {
+          type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
+          worktreePath: "worktree",
+        }
+      );
+
+      const resultMessage =
+        'Worktree sync finished with issues. "main": source conflict — "feature": up to date';
+      assert.deepStrictEqual(replies, [
+        {
+          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+          success: false,
+          message: resultMessage,
+          error: resultMessage,
+        },
+        stateReply,
+      ]);
+    });
+
+    test("reports a thrown sync failure even without a request id", async () => {
+      const replies = await routeWorktreeMessage(
+        {
+          syncNamedWorktree: async () => {
+            throw new Error("sync failed");
+          },
+        },
+        {
+          type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
+          worktreePath: "worktree",
+        }
+      );
+
+      assert.deepStrictEqual(replies, [
+        {
+          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+          success: false,
+          message: "Worktree sync failed: sync failed",
+          error: "Worktree sync failed: sync failed",
+        },
+        stateReply,
+      ]);
+    });
+
+    test("reports an update merge commit with its request id", async () => {
+      const replies = await routeWorktreeMessage(
+        {
+          updateNamedWorktreeFromSource: async () => ({
+            mergeOutcome: WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT,
+          }),
+        },
+        {
+          type: MESSAGE_TYPES.UPDATE_NAMED_WORKTREE_FROM_SOURCE,
+          worktreePath: "worktree",
+          requestId: "req-update",
+        }
+      );
+
+      assert.deepStrictEqual(replies, [
+        {
+          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+          requestId: "req-update",
+          success: true,
+          message: "Worktree updated from source. merge-commit",
+        },
+        stateReply,
+      ]);
+    });
+
+    test("does not report a successful update without a request id", async () => {
+      const replies = await routeWorktreeMessage(
+        {
+          updateNamedWorktreeFromSource: async () => ({
+            mergeOutcome: WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT,
+          }),
+        },
+        {
+          type: MESSAGE_TYPES.UPDATE_NAMED_WORKTREE_FROM_SOURCE,
+          worktreePath: "worktree",
+        }
+      );
+
+      assert.deepStrictEqual(replies, [stateReply]);
+    });
+
+    test("reports a blocked update with its error", async () => {
+      const replies = await routeWorktreeMessage(
+        {
+          updateNamedWorktreeFromSource: async () => ({
+            mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+            message: "source branch changed",
+          }),
+        },
+        {
+          type: MESSAGE_TYPES.UPDATE_NAMED_WORKTREE_FROM_SOURCE,
+          worktreePath: "worktree",
+        }
+      );
+
+      const resultMessage =
+        "Worktree update finished with issues. source branch changed";
+      assert.deepStrictEqual(replies, [
+        {
+          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+          success: false,
+          message: resultMessage,
+          error: resultMessage,
+        },
+        stateReply,
+      ]);
+    });
   });
 
   suite("exit idle terminals", () => {

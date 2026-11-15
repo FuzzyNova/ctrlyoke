@@ -445,6 +445,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     `UPDATE_NAMED_WORKTREE_FROM_SOURCE`) repeat the
     `WORKTREE_MANAGEMENT_ACTION_RESULT` emit block, and two repeat the
     fast-forward/merge-commit success predicate.
+    Landed: Shared the typed action-result emitter and merge-success predicate, with exact-payload coverage.
 
 ## Deferred
 

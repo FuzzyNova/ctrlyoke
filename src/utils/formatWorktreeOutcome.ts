@@ -2,6 +2,7 @@ import {
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_LANDING_OUTCOMES,
   WORKTREE_MERGE_OUTCOMES,
+  type WorktreeMergeOutcome,
 } from "../types/DashboardConstants";
 import type { WorktreeRunProjection } from "../types/CtrlYokeTypes";
 
@@ -17,6 +18,15 @@ export type WorktreeOutcomeSeverity =
 export interface WorktreeOutcome {
   severity: WorktreeOutcomeSeverity;
   text: string;
+}
+
+export function isWorktreeMergeSuccess(
+  outcome: WorktreeMergeOutcome | undefined
+): boolean {
+  return (
+    outcome === WORKTREE_MERGE_OUTCOMES.FAST_FORWARD ||
+    outcome === WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT
+  );
 }
 
 export function formatRelativeWorktreePath(

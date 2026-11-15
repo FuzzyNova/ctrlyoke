@@ -39,7 +39,6 @@ import {
   DASHBOARD_HOST_ACTIONS,
   PATH_SELECTION_KINDS,
   PATH_SELECTION_TITLES,
-  WORKTREE_MERGE_OUTCOMES,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import {
@@ -113,6 +112,7 @@ import type {
   ServerPortFallbackInfo,
   BindAddressFallbackInfo,
   DashboardHostActionResultMessage,
+  WorktreeManagementActionResultMessage,
   SaveLspDefinitionMessage,
   DeleteLspDefinitionMessage,
   InstallLspServerMessage,
@@ -157,6 +157,7 @@ import {
 import type { HistorySearchFilters } from "../types/WorkflowTimelineTypes";
 import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
+import { isWorktreeMergeSuccess } from "../utils/formatWorktreeOutcome";
 import {
   LicenseSettingsHandlers,
   type LicenseActionService,
@@ -2951,6 +2952,24 @@ export class DashboardMessageRouter {
       });
     };
 
+    const emitWorktreeActionResult = (
+      ctx: DashboardClientContext,
+      requestId: string | undefined,
+      success: boolean,
+      resultMessage: string,
+      errorMessage: string | undefined
+    ): void => {
+      if (!requestId && !errorMessage) return;
+      const result: WorktreeManagementActionResultMessage = {
+        type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+        ...(requestId ? { requestId } : {}),
+        success,
+        message: resultMessage,
+        ...(errorMessage ? { error: errorMessage } : {}),
+      };
+      ctx.emit(result);
+    };
+
     table.set(
       MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE,
       (message, ctx) => {
@@ -2998,15 +3017,13 @@ export class DashboardMessageRouter {
             `[WorktreeManagement] ${message.action} failed for "${target}": ${getErrorMessage(error)}`
           );
         }
-        if (message.requestId || errorMessage) {
-          ctx.emit({
-            type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
-            ...(message.requestId ? { requestId: message.requestId } : {}),
-            success,
-            message: resultMessage,
-            ...(errorMessage ? { error: errorMessage } : {}),
-          });
-        }
+        emitWorktreeActionResult(
+          ctx,
+          message.requestId,
+          success,
+          resultMessage,
+          errorMessage
+        );
         await sendWorktreeManagementState(true, ctx);
       }
     );
@@ -3024,8 +3041,7 @@ export class DashboardMessageRouter {
           message.worktreePath
         );
         const succeeded = (direction: typeof result.intoSource) =>
-          direction.mergeOutcome === WORKTREE_MERGE_OUTCOMES.FAST_FORWARD ||
-          direction.mergeOutcome === WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT;
+          isWorktreeMergeSuccess(direction.mergeOutcome);
         const describe = (
           label: string,
           direction: typeof result.intoSource
@@ -3056,15 +3072,13 @@ export class DashboardMessageRouter {
           `[WorktreeManagement] sync failed for "${message.worktreePath}": ${getErrorMessage(error)}`
         );
       }
-      if (message.requestId || errorMessage) {
-        ctx.emit({
-          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
-          ...(message.requestId ? { requestId: message.requestId } : {}),
-          success,
-          message: resultMessage,
-          ...(errorMessage ? { error: errorMessage } : {}),
-        });
-      }
+      emitWorktreeActionResult(
+        ctx,
+        message.requestId,
+        success,
+        resultMessage,
+        errorMessage
+      );
       await sendWorktreeManagementState(true, ctx);
     });
     table.set(
@@ -3079,9 +3093,7 @@ export class DashboardMessageRouter {
           const result = await orchestrator.updateNamedWorktreeFromSource(
             message.worktreePath
           );
-          success =
-            result.mergeOutcome === WORKTREE_MERGE_OUTCOMES.FAST_FORWARD ||
-            result.mergeOutcome === WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT;
+          success = isWorktreeMergeSuccess(result.mergeOutcome);
           resultMessage = success
             ? `Worktree updated from source. ${result.mergeOutcome}`
             : `Worktree update finished with issues. ${result.message ?? result.mergeOutcome}`;
@@ -3091,15 +3103,13 @@ export class DashboardMessageRouter {
           resultMessage = `Worktree update failed: ${getErrorMessage(error)}`;
           errorMessage = resultMessage;
         }
-        if (message.requestId || errorMessage) {
-          ctx.emit({
-            type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
-            ...(message.requestId ? { requestId: message.requestId } : {}),
-            success,
-            message: resultMessage,
-            ...(errorMessage ? { error: errorMessage } : {}),
-          });
-        }
+        emitWorktreeActionResult(
+          ctx,
+          message.requestId,
+          success,
+          resultMessage,
+          errorMessage
+        );
         await sendWorktreeManagementState(true, ctx);
       }
     );
