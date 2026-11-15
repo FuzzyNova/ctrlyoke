@@ -421,6 +421,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Command IDs: `ctrlyoke.openPanel` (already in `VSCODE_COMMANDS`, still literal at
     seven sites), `showOutputPanel`, `openGitChange`, `openFileWithSelection` and
     `confirmExternalFileTrust` are spelled out at both registration and call/URI sites.
+    Landed: Routed these command IDs through `VSCODE_COMMANDS` and added package command-ID and uniqueness coverage.
 
 ## Deferred
 

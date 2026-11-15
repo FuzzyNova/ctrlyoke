@@ -157,7 +157,7 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
   }
 
   async revealOutput(): Promise<void> {
-    await vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
+    await vscode.commands.executeCommand(VSCODE_COMMANDS.SHOW_OUTPUT_PANEL);
   }
 
   async openFolderWindow(absolutePath: string): Promise<ActionResult> {
@@ -198,7 +198,7 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
       const command =
         request.kind === "worktree"
           ? VSCODE_COMMANDS.VIEW_WORKTREE_DIFF
-          : "ctrlyoke.openGitChange";
+          : VSCODE_COMMANDS.OPEN_GIT_CHANGE;
       await vscode.commands.executeCommand(
         command,
         request.kind === "worktree"

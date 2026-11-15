@@ -908,7 +908,7 @@ function registerCommands(
     getWorkspaceRoot,
     undefined,
     async () => {
-      await vscode.commands.executeCommand("ctrlyoke.openPanel");
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_PANEL);
       await webviewProvider.awaitPanelReady();
       return webviewProvider.getUserInteractionPort();
     }
@@ -925,7 +925,7 @@ function registerCommands(
 
   // Open Panel command
   const openPanelCommand = vscode.commands.registerCommand(
-    "ctrlyoke.openPanel",
+    VSCODE_COMMANDS.OPEN_PANEL,
     async () => {
       await workflowOrchestrator.openPanel();
     }
@@ -1303,7 +1303,7 @@ function registerCommands(
 
   // Show Output Panel command
   const showOutputPanelCommand = vscode.commands.registerCommand(
-    "ctrlyoke.showOutputPanel",
+    VSCODE_COMMANDS.SHOW_OUTPUT_PANEL,
     () => {
       showLogOutputChannel();
     }
@@ -1319,7 +1319,7 @@ function registerCommands(
 
   // Open File with Selection command (for clickable links in prompt files)
   const openFileWithSelectionCommand = vscode.commands.registerCommand(
-    "ctrlyoke.openFileWithSelection",
+    VSCODE_COMMANDS.OPEN_FILE_WITH_SELECTION,
     async (args: { uri: string; startLine: number; endLine: number }) => {
       try {
         const fileUri = vscode.Uri.parse(args.uri);
@@ -1361,9 +1361,9 @@ function registerCommands(
   // links) that resolve outside the workspace and outside every currently
   // trusted external root. See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
   const confirmExternalFileTrustCommand = vscode.commands.registerCommand(
-    "ctrlyoke.confirmExternalFileTrust",
+    VSCODE_COMMANDS.CONFIRM_EXTERNAL_FILE_TRUST,
     async (target: FileOpenTarget) => {
-      await vscode.commands.executeCommand("ctrlyoke.openPanel");
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_PANEL);
       await webviewProvider.awaitPanelReady();
       await confirmExternalFileTrustAndOpen(target, {
         port: webviewProvider.getUserInteractionPort(),
@@ -1379,7 +1379,7 @@ function registerCommands(
   // stash (built from per-file git URIs). Any failure (e.g. Git extension disabled)
   // falls back to a generated diff document.
   const openGitChangeCommand = vscode.commands.registerCommand(
-    "ctrlyoke.openGitChange",
+    VSCODE_COMMANDS.OPEN_GIT_CHANGE,
     async (args: { ref: string; workspaceRoot?: string }) => {
       const workspaceRoot = args.workspaceRoot ?? getVsCodeWorkspaceRoot();
       if (!workspaceRoot) {
@@ -1949,7 +1949,7 @@ function registerCommands(
   const manageWorktreesCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.MANAGE_WORKTREES,
     async () => {
-      await vscode.commands.executeCommand("ctrlyoke.openPanel");
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_PANEL);
     }
   );
 

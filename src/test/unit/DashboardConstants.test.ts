@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   QUEUE_POSITION,
@@ -16,9 +18,71 @@ import {
   STEP_STATUS,
   isTerminalStepStatus,
   stepStatusForCompletedRuntime,
+  VSCODE_COMMANDS,
   type PromptTerminalStatus,
   type StepStatus,
 } from "../../types/DashboardConstants";
+
+interface ExtensionManifest {
+  contributes?: {
+    commands?: Array<{ command: string }>;
+  };
+}
+
+const PACKAGE_CONTRIBUTED_COMMAND_KEYS = [
+  "OPEN_PANEL",
+  "ENABLE_SERVER",
+  "DISABLE_SERVER",
+  "MANAGE_WORKTREES",
+  "REFRESH_HARNESS_USAGE",
+  "REFRESH_WORKSPACE_STATS",
+  "REVIEW_WORKSPACE_SETTINGS_TRUST",
+  "INSTALL_CLI",
+  "ACTIVATE_PRO",
+  "ACTIVATE_OFFLINE_PRO",
+  "DEACTIVATE_PRO",
+  "MANAGE_LICENSE",
+  "SELECT_PROMPT_FILE",
+  "SHOW_OUTPUT_PANEL",
+  "ADD_EDITOR_COMMIT_TO_PROMPT_EDITOR",
+  "SEARCH_HISTORY",
+  "GENERATE_COMMIT_MESSAGE",
+  "CANCEL_COMMIT_MESSAGE_GENERATION",
+] as const satisfies readonly (keyof typeof VSCODE_COMMANDS)[];
+
+suite("VSCODE_COMMANDS", () => {
+  test("keeps unique values and contributed command IDs in sync with package.json", () => {
+    const commandIds = Object.values(VSCODE_COMMANDS);
+    assert.strictEqual(new Set(commandIds).size, commandIds.length);
+
+    const manifestPath = path.resolve(__dirname, "../../../package.json");
+    const manifest = JSON.parse(
+      fs.readFileSync(manifestPath, "utf8")
+    ) as ExtensionManifest;
+    const contributedCommandIds = new Set(
+      manifest.contributes?.commands?.map(({ command }) => command) ?? []
+    );
+    const contributedConstantKeys = Object.entries(VSCODE_COMMANDS)
+      .filter(
+        ([, commandId]) =>
+          commandId.startsWith("ctrlyoke.") &&
+          contributedCommandIds.has(commandId)
+      )
+      .map(([key]) => key)
+      .sort();
+
+    assert.deepStrictEqual(
+      contributedConstantKeys,
+      [...PACKAGE_CONTRIBUTED_COMMAND_KEYS].sort()
+    );
+    for (const key of PACKAGE_CONTRIBUTED_COMMAND_KEYS) {
+      assert.ok(
+        contributedCommandIds.has(VSCODE_COMMANDS[key]),
+        `${key} (${VSCODE_COMMANDS[key]}) must match a package.json command`
+      );
+    }
+  });
+});
 
 suite("isTerminalStepStatus", () => {
   test("recognizes every canonical prompt terminal status", () => {

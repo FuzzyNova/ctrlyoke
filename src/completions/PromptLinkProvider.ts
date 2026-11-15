@@ -374,7 +374,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
    */
   private buildTrustCommandUri(target: FileOpenTarget): vscode.Uri {
     return vscode.Uri.parse(
-      `command:ctrlyoke.confirmExternalFileTrust?${encodeURIComponent(JSON.stringify(target))}`
+      `command:${VSCODE_COMMANDS.CONFIRM_EXTERNAL_FILE_TRUST}?${encodeURIComponent(JSON.stringify(target))}`
     );
   }
 
@@ -559,7 +559,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       if (decision.allowed) {
         const fileUri = vscode.Uri.file(decision.normalizedPath);
         const commandUri = vscode.Uri.parse(
-          `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
+          `command:${VSCODE_COMMANDS.OPEN_FILE_WITH_SELECTION}?${encodeURIComponent(
             JSON.stringify({ uri: fileUri.toString(), startLine, endLine })
           )}`
         );
@@ -609,7 +609,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         const range = new vscode.Range(startPos, endPos);
 
         const commandUri = vscode.Uri.parse(
-          `command:ctrlyoke.openGitChange?${encodeURIComponent(
+          `command:${VSCODE_COMMANDS.OPEN_GIT_CHANGE}?${encodeURIComponent(
             JSON.stringify({ ref: ref.toLowerCase() })
           )}`
         );
@@ -673,7 +673,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       if (decision.allowed) {
         const fileUri = vscode.Uri.file(decision.normalizedPath);
         const commandUri = vscode.Uri.parse(
-          `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
+          `command:${VSCODE_COMMANDS.OPEN_FILE_WITH_SELECTION}?${encodeURIComponent(
             JSON.stringify({
               uri: fileUri.toString(),
               startLine,

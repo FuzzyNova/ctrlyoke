@@ -9,6 +9,7 @@ import type {
 import type { DashboardClient } from "./DashboardBroadcastHub";
 import {
   NOTIFICATION_SEVERITY,
+  VSCODE_COMMANDS,
   type StepStatus,
 } from "../types/DashboardConstants";
 import {
@@ -146,9 +147,11 @@ export class NotificationManager implements DashboardClient {
         "Dismiss"
       ).then((action) => {
         if (action === "Open Dashboard") {
-          void vscode.commands.executeCommand("ctrlyoke.openPanel");
+          void vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_PANEL);
         } else if (action === "View Output") {
-          void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
+          void vscode.commands.executeCommand(
+            VSCODE_COMMANDS.SHOW_OUTPUT_PANEL
+          );
         }
       });
       return;
@@ -163,9 +166,11 @@ export class NotificationManager implements DashboardClient {
         "Dismiss"
       ).then((action) => {
         if (action === "Open Dashboard") {
-          void vscode.commands.executeCommand("ctrlyoke.openPanel");
+          void vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_PANEL);
         } else if (action === "View Output") {
-          void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
+          void vscode.commands.executeCommand(
+            VSCODE_COMMANDS.SHOW_OUTPUT_PANEL
+          );
         }
       });
       return;
@@ -178,7 +183,7 @@ export class NotificationManager implements DashboardClient {
       "Dismiss"
     ).then((action) => {
       if (action === "Open Dashboard") {
-        void vscode.commands.executeCommand("ctrlyoke.openPanel");
+        void vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_PANEL);
       }
     });
   }
