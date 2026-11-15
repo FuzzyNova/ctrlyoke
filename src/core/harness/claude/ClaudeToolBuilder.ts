@@ -19,6 +19,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
+import { parseAskUserQuestionOptionRecord } from "../shared/AskUserQuestionPreview";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_TOOL_RESULT_TYPES,
@@ -247,15 +248,7 @@ export class ClaudeToolBuilder {
     rawOptions: unknown
   ): AskUserQuestionOption[] {
     if (!Array.isArray(rawOptions)) return [];
-    return rawOptions.map((raw) => {
-      const o = (raw ?? {}) as Record<string, unknown>;
-      return {
-        label: typeof o.label === "string" ? o.label : "",
-        description:
-          typeof o.description === "string" ? o.description : undefined,
-        preview: typeof o.preview === "string" ? o.preview : undefined,
-      };
-    });
+    return rawOptions.map((raw) => parseAskUserQuestionOptionRecord(raw));
   }
 
   private static parseAskUserQuestionEntries(

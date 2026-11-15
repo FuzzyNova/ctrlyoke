@@ -26,6 +26,7 @@ import {
   buildApplyPatchFallbackEvent,
   buildApplyPatchFileEvent,
 } from "../shared/ApplyPatchEventMapper";
+import { parseAskUserQuestionOptionRecord } from "../shared/AskUserQuestionPreview";
 import { Log } from "../../../utils/Log";
 import { escapeRegExp } from "../../../utils/TextUtils";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
@@ -1142,18 +1143,9 @@ export class CodexToolBuilder {
       return [];
     }
 
-    return rawOptions.map((rawOption) => {
-      const option = (rawOption ?? {}) as Record<string, unknown>;
-      return {
-        label: typeof option.label === "string" ? option.label : "",
-        description:
-          typeof option.description === "string"
-            ? option.description
-            : undefined,
-        preview:
-          typeof option.preview === "string" ? option.preview : undefined,
-      };
-    });
+    return rawOptions.map((rawOption) =>
+      parseAskUserQuestionOptionRecord(rawOption)
+    );
   }
 
   private static buildRequestUserInputCompletedEvent(

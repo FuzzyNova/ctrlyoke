@@ -31,6 +31,7 @@ import {
   BaseToolBuilder,
   extractFileReadRange,
 } from "../shared/BaseToolBuilder";
+import { parseAskUserQuestionOptionRecord } from "../shared/AskUserQuestionPreview";
 import { COPILOT_TOOL_NAMES } from "./CopilotProtocolConstants";
 
 type CopilotToolArgs = Record<string, unknown> | string;
@@ -76,16 +77,7 @@ export class CopilotToolBuilder {
 
   private static parseChoice(rawChoice: unknown): AskUserQuestionOption {
     if (typeof rawChoice !== "string") {
-      const choice = (rawChoice ?? {}) as Record<string, unknown>;
-      return {
-        label: typeof choice.label === "string" ? choice.label : "",
-        description:
-          typeof choice.description === "string"
-            ? choice.description
-            : undefined,
-        preview:
-          typeof choice.preview === "string" ? choice.preview : undefined,
-      };
+      return parseAskUserQuestionOptionRecord(rawChoice);
     }
 
     const [firstLine, ...previewLines] = rawChoice.split("\n");

@@ -1803,6 +1803,11 @@ suite("ClaudeLogParser", () => {
                           preview: "/\\_/\\",
                         },
                         { label: "Dog", description: "Canine" },
+                        {
+                          label: "Bird",
+                          description: 42,
+                          preview: false,
+                        },
                       ],
                     },
                   ],
@@ -1859,7 +1864,15 @@ suite("ClaudeLogParser", () => {
       const initiated = askEvents[0].data as AskUserQuestionData;
       assert.strictEqual(initiated.status, "initiated");
       assert.strictEqual(initiated.questions.length, 1);
-      assert.strictEqual(initiated.questions[0].options.length, 2);
+      assert.deepStrictEqual(initiated.questions[0].options, [
+        {
+          label: "Cat",
+          description: "Feline",
+          preview: "/\\_/\\",
+        },
+        { label: "Dog", description: "Canine", preview: undefined },
+        { label: "Bird", description: undefined, preview: undefined },
+      ]);
 
       const completed = askEvents[1].data as AskUserQuestionData;
       assert.strictEqual(completed.status, "completed");
@@ -4132,6 +4145,9 @@ suite("CopilotLogParser", () => {
         "dog \u2014 loyal companion\n / \\__",
         "cat \u2014 curious friend\n /\\_/\\\\\n( o.o )",
         "snake \u2014 quiet reptile",
+        { label: "owl", description: "Night hunter", preview: " /\\ /" },
+        { label: "fox", description: 42, preview: false },
+        7,
       ];
       const events = [
         {
@@ -4201,8 +4217,23 @@ suite("CopilotLogParser", () => {
       );
       assert.deepStrictEqual(
         initiated.questions[0].options.map((option) => option.label),
-        ["dog", "cat", "snake"]
+        ["dog", "cat", "snake", "owl", "fox", ""]
       );
+      assert.deepStrictEqual(initiated.questions[0].options[3], {
+        label: "owl",
+        description: "Night hunter",
+        preview: " /\\ /",
+      });
+      assert.deepStrictEqual(initiated.questions[0].options[4], {
+        label: "fox",
+        description: undefined,
+        preview: undefined,
+      });
+      assert.deepStrictEqual(initiated.questions[0].options[5], {
+        label: "",
+        description: undefined,
+        preview: undefined,
+      });
       assert.strictEqual(
         initiated.questions[0].options[1].description,
         "curious friend"
@@ -7225,10 +7256,12 @@ suite("CodexLogParser", () => {
                     {
                       label: "Dog",
                       description: "Loyal and playful companion.",
+                      preview: " /\\__",
                     },
                     {
                       label: "Cat",
-                      description: "Curious and independent companion.",
+                      description: 42,
+                      preview: false,
                     },
                     {
                       label: "Snake",
@@ -7263,17 +7296,19 @@ suite("CodexLogParser", () => {
       const initiated = askEvents[0].data as AskUserQuestionData;
       assert.strictEqual(initiated.status, OPERATION_STATUS.INITIATED);
       assert.strictEqual(initiated.questions[0].id, "favorite_animal");
-      assert.deepStrictEqual(
-        initiated.questions[0].options.map(({ label, description }) => ({
-          label,
-          description,
-        })),
-        [
-          { label: "Dog", description: "Loyal and playful companion." },
-          { label: "Cat", description: "Curious and independent companion." },
-          { label: "Snake", description: "Sleek and fascinating reptile." },
-        ]
-      );
+      assert.deepStrictEqual(initiated.questions[0].options, [
+        {
+          label: "Dog",
+          description: "Loyal and playful companion.",
+          preview: " /\\__",
+        },
+        { label: "Cat", description: undefined, preview: undefined },
+        {
+          label: "Snake",
+          description: "Sleek and fascinating reptile.",
+          preview: undefined,
+        },
+      ]);
 
       const completed = askEvents[1].data as AskUserQuestionData;
       assert.strictEqual(completed.status, OPERATION_STATUS.COMPLETED);

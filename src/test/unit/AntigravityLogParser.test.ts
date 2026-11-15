@@ -1225,6 +1225,17 @@ suite("AntigravityLogParser", () => {
                           "(Recommended) dog - Loyal and playful companion.\nASCII Art:\n / \\__",
                           "cat - Curious and independent.\nASCII Art:\n /\\_/\\\n( o.o )",
                           "snake - Sleek and quiet reptile.\nASCII Art:\n  ~~\\",
+                          {
+                            label: "bird",
+                            description: "A colorful flyer.",
+                            preview: " /\\",
+                          },
+                          {
+                            label: "fox",
+                            description: 42,
+                            preview: false,
+                          },
+                          7,
                         ],
                       },
                     ],
@@ -1266,8 +1277,21 @@ suite("AntigravityLogParser", () => {
           );
           assert.deepStrictEqual(
             initiated.questions[0].options.map((option) => option.label),
-            ["dog", "cat", "snake"]
+            ["dog", "cat", "snake", "bird", "fox", ""]
           );
+          assert.deepStrictEqual(initiated.questions[0].options[3], {
+            label: "bird",
+            description: "A colorful flyer.",
+            preview: " /\\",
+          });
+          assert.deepStrictEqual(initiated.questions[0].options[4], {
+            label: "fox",
+            description: undefined,
+            preview: undefined,
+          });
+          assert.deepStrictEqual(initiated.questions[0].options[5], {
+            label: "",
+          });
           assert.strictEqual(
             initiated.questions[0].options[1].description,
             "Curious and independent."

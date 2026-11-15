@@ -22,6 +22,7 @@ import {
   AntigravityTranscriptEntry,
 } from "./AntigravityTranscriptTypes";
 import { isRecord } from "../../../utils/JsonTypeGuards";
+import { parseAskUserQuestionOptionRecord } from "../shared/AskUserQuestionPreview";
 import {
   ANTIGRAVITY_ENTRY_TYPES,
   ANTIGRAVITY_TOOL_NAMES,
@@ -382,17 +383,7 @@ export class AntigravityToolEventBuilder {
 
     return rawOptions.map((rawOption) => {
       if (isRecord(rawOption)) {
-        return {
-          label: typeof rawOption.label === "string" ? rawOption.label : "",
-          description:
-            typeof rawOption.description === "string"
-              ? rawOption.description
-              : undefined,
-          preview:
-            typeof rawOption.preview === "string"
-              ? rawOption.preview
-              : undefined,
-        };
+        return parseAskUserQuestionOptionRecord(rawOption);
       }
 
       if (typeof rawOption !== "string") {

@@ -465,6 +465,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   - Ask-user-question object option: the label/description/preview record parse is
     verbatim in the Claude, Codex, Copilot and Antigravity builders. This is the
     "one object-option parser" piece of the Deferred ask-user-question entry.
+    Landed: Shared the record parser across four builders; exact option-shape tests added.
 
 ## Deferred
 
@@ -486,7 +487,9 @@ still deferred.
     (Copilot, Antigravity) and the description splitters (Qwen, OpenCode) stay
     per-harness. That saves about 120 lines.
   - **Before merging.** Add a characterization test per harness for every alias key.
-  - **Already shared.** The description splitter: Qwen and OpenCode both call
+  - **Already shared.** The object-option parser is now shared too:
+    `parseAskUserQuestionOptionRecord` serves Claude, Codex, Copilot, and Antigravity.
+    Qwen and OpenCode share the description splitter,
     `splitDescriptionPreview` (`shared/AskUserQuestionPreview.ts`).
 - Run-history/project-state bootstrap in `src/cli.ts` (`runCommand`),
   `src/mcp-server.ts` (`initializeMcpStorage`), `src/extension.ts` and
