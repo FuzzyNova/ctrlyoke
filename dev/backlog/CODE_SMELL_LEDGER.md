@@ -467,6 +467,34 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     "one object-option parser" piece of the Deferred ask-user-question entry.
     Landed: Shared the record parser across four builders; exact option-shape tests added.
 
+- **2026-11-14, pass 19**: reviewed pass 18's two refactors. `writeFileAtomic` chmods
+  the temp file before writing, as the provider-snapshot copy did, and its random temp
+  name fixes the millisecond collision. The service still chmods the published file.
+  `quarantineCorruptFile` keeps the injected clock for the provider file and `Date.now()`
+  for the two stores. `parseAskUserQuestionOptionRecord` is the verbatim
+  `(raw ?? {})` body; the Antigravity call keeps its `isRecord` gate outside. Nothing
+  to fix.
+
+  Hunted the dashboard hooks, store, messaging and utils, the CLI, `src/scripts/` and
+  `src/templates/` (repeated 6-line window scan), then the dashboard components. Queued
+  four steps:
+  - Undo artifact lookup: `useOutputMinimapModel` and `useOutputUndoActions` re-inline
+    `outputRows.getConcurrentGroupForStep` and the private `getStepOutputArtifacts`
+    (snapshot + undo record per target), and spell out the `queue-<n>`/`finalStep-<n>`
+    undo-record key that `buildUndoRecordKey` and `workflowStore.getUndoRecordKey` also
+    build. The minimap's `groupForLabels` branches are dead (always `undefined` after
+    the concurrent-group early return).
+  - Step list context-menu wiring: `WorkflowStepsPanel` and `StepChipRail` hand-wire
+    the same read-only flags, `useStepContextMenu`, `usePasteToEndContextMenu`,
+    `useFinalStepContextMenu` and final-step handlers. The rail's copy drifted: no
+    `pendingRewind` and no final-step `status`/`phase`. Filed
+    `dev/bugs/backlog/step-chip-rail-context-menus-miss-rewind-and-final-step-state.md`.
+  - `isScriptWorkflowStep`: copies of the core `isScriptStep` guard in
+    `utils/workflowStepSerialization.ts` (about 20 webview call sites) and privately in
+    `src/types/CompatibilityAnalyzer.ts`. Pass 2 missed these.
+  - CLI truncation detail: `CliTerminalFormatter.ts` builds the
+    "N more lines, M more characters" join three times.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -761,6 +789,13 @@ still deferred.
   `writeFileAtomic` can't do. `historySearchRebuildWorker.writeDocumentsShardAtomically`
   streams to an already unique temp path. `ExecutionRootCoordinationStore`'s
   `.corrupt-<ms>` rename has no `.json` suffix and different semantics.
+- `responseIsUsable` in `hooks/usePaged{CommitHistory,FileHistory,GitRefDiff,WorkspaceDirectory}.ts`:
+  the shared offset/pageSize checks are only four lines; every other clause validates a
+  different response shape (listing id field, total vs cursor, branch fields). Covered by
+  the generic `usePagedListing` ruling above.
+- `runsHistoryCommand`/`stepsHistoryCommand` in `src/cli/HistoryInspectionCommands.ts`:
+  share only the `bootstrapCliWorkspace` dependency-injection opener, then resolve
+  different things (lineage vs one run through `resolveHistoryRun`).
 - Qwen `parseQwenOptions` and OpenCode `parseOpenCodeOptions`: not copies of the
   shared object-option parse, because they derive description and preview through
   `splitDescriptionPreview`.
