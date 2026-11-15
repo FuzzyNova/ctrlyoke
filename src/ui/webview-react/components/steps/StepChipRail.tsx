@@ -8,35 +8,24 @@
  * Width is determined by the parent container. Internal layout adapts to the
  * available space — no fixed width is applied here.
  */
-import React, { useCallback, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   isScriptStep,
   type ParallelGroupDefinition,
 } from "@root/types/CtrlYokeTypes";
 import { useEditorStore, useIsStepMultiSelected } from "@store/editorStore";
-import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { sendMessage } from "@messaging/sendMessage";
 import {
   useStepStatus,
   useContextPct,
   useStepClickHandler,
-  useStepContextMenu,
-  useFinalStepContextMenu,
   useLongPress,
   useLatestStepOutput,
-  useFinalStepLatestOutput,
-  usePasteToEndContextMenu,
-  useIsViewingDeletedWorkflow,
-  useIsSystemGeneratedWorkflow,
-  useActiveWorkflowExternalOwner,
+  useStepListContextMenus,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
 import {
-  EXECUTION_STATES,
-  MESSAGE_TYPES,
-  FINAL_STEP_PHASES,
   STEP_STATUS,
   type HarnessId,
   type StepStatus,
@@ -52,7 +41,6 @@ import {
   executionOwnsCurrentStep,
   isFinalStepExecuting,
   isStepExecuting,
-  isWorkflowRunning,
 } from "../../utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import {
@@ -62,9 +50,6 @@ import {
 import { buildStepHoverTooltip } from "@root/utils/TokenFormatting";
 import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
 import type { StepHarnessModel } from "./WorkflowStepRow";
-import { buildWorkflowStepEnabledState } from "@utils/stepEnabledToggle";
-import { isScriptWorkflowStep } from "@utils/workflowStepSerialization";
-import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   ExecutingStepHighlight,
   PauseBoundary,
@@ -415,68 +400,34 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
     liveContextWindow,
     liveFinalStepContextWindow,
   } = useWorkflowStore();
-  const { setFinalStepFooterExpanded } = useUiStore();
-  const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
+  const { deselect } = useEditorStore();
   const { globalSettings, workflowProperties } = useSettingsStore();
   const showCostEstimates = useSettingsStore(
     (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
-
-  const activeExternalOwner = useActiveWorkflowExternalOwner();
-  const isExternallyManaged = activeExternalOwner != null;
-  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeExternalOwner);
-  // The lineage on screen was deleted while being viewed, or is an internal
-  // system lineage (e.g. commit message generation) whose properties are
-  // overridden by its owning feature on the next run regardless of what's
-  // edited here — either way, nothing here has anywhere meaningful to write to.
-  const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
-  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
-  const isLineageReadOnly =
-    isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
-
-  const isRunning = isWorkflowRunning(executionState);
-  const isPaused = executionState === EXECUTION_STATES.PAUSED;
-  const canChangeStartPosition =
-    !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
-  const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
+  const {
+    isLineageReadOnly,
+    isPaused,
+    stepContextMenu: {
+      openContextMenu,
+      contextMenuPortal,
+      setPositionModal,
+      deleteModal,
+    },
+    pasteToEndContextMenu: { openPasteToEndMenu, pasteToEndMenuPortal },
+    handleFinalStepSelect,
+    finalStepLatestOutput,
+    finalStepContextMenu: {
+      openFinalStepContextMenu,
+      finalStepContextMenuPortal,
+    },
+  } = useStepListContextMenus();
 
   const getLatestOutput = useLatestStepOutput();
 
   const getStepStatus = useStepStatus();
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
-
-  const { openContextMenu, contextMenuPortal, setPositionModal, deleteModal } =
-    useStepContextMenu({
-      isExternallyManaged,
-      externalReadOnlyLabel,
-      canChangeStartPosition,
-      canPasteStep,
-      executionState,
-      confirmResetOperations: globalSettings.confirmResetOperations,
-      confirmDeleteOperations: globalSettings.confirmDeleteOperations,
-      totalSteps: prompts.length,
-      currentStep,
-      parallelGroups,
-      pendingGroups: parallelGroups
-        .filter((group) => group.startIndex >= currentStep)
-        .map((group) => ({
-          id: group.id,
-          start: group.startIndex - currentStep,
-          end: group.endIndex - currentStep,
-          failFast: group.failFast,
-        })),
-    });
-
-  const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
-    {
-      isExternallyManaged,
-      externalReadOnlyLabel,
-      canPasteStep,
-      executionState,
-      totalSteps: prompts.length,
-    }
-  );
 
   const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
 
@@ -542,7 +493,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
     isCurrentChip: boolean
   ): string => {
     const latestOutput = getLatestOutput(index);
-    const runtimeMeta = !isScriptWorkflowStep(step) ? step._runtime : undefined;
+    const runtimeMeta = !isScriptStep(step) ? step._runtime : undefined;
     const ctx = resolveEffectiveContextWindow({
       isCurrent: isCurrentChip,
       liveContextWindow: liveContextWindow?.[index],
@@ -614,9 +565,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
             isExecutionTargetLocked,
             direction: index < currentStep ? "rewind" : "forward",
             latestOutput: getLatestOutput(index),
-            runtimeMeta: !isScriptWorkflowStep(prompt)
-              ? prompt._runtime
-              : undefined,
+            runtimeMeta: !isScriptStep(prompt) ? prompt._runtime : undefined,
             liveContextWindow: liveContextWindow?.[index],
           })
         }
@@ -667,11 +616,6 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
 
   // Final step derived state
   const hasFinalStep = !!finalStep;
-  const finalStepIsReadOnly =
-    isExternallyManaged ||
-    isLineageReadOnly ||
-    (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
-      finalStepStatus === STEP_STATUS.RUNNING);
   const finalStepEffectiveStatus: StepStatus = hasFinalStep
     ? (finalStepStatus ?? STEP_STATUS.PENDING)
     : STEP_STATUS.PENDING;
@@ -685,60 +629,18 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
       })
     : undefined;
 
-  const handleFinalStepClick = useCallback(() => {
-    if (isExternallyManaged || isLineageReadOnly) return;
-    if (finalStep) {
-      selectFinalStep(finalStep);
-    } else {
-      setFinalStepFooterExpanded(true);
-      selectPrompt({ kind: FINAL_STEP_PHASES.FINAL_STEP }, { prompt: "" });
-    }
-  }, [
-    isExternallyManaged,
-    isLineageReadOnly,
-    finalStep,
-    selectFinalStep,
-    setFinalStepFooterExpanded,
-    selectPrompt,
-  ]);
-
-  const handleToggleFinalStepEnabled = useCallback(() => {
-    if (isExternallyManaged || isLineageReadOnly || !finalStep) return;
-    const enabling = finalStep.enabled === false;
-    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
-      finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
-      ...(enabling ? { clearProperties: ["enabled"] } : {}),
-    });
-  }, [isExternallyManaged, isLineageReadOnly, finalStep]);
-
   const finalStepIsExecuting = isFinalStepExecuting(
     executionState,
     finalStepStatus,
     finalStepPhase
   );
-  const finalStepLatestOutput = useFinalStepLatestOutput();
   const finalStepContextWindow = resolveEffectiveContextWindow({
     isCurrent: finalStepIsExecuting,
     liveContextWindow: liveFinalStepContextWindow[finalStepLoopCount],
     latestOutputTokens: finalStepLatestOutput?.tokens,
     runtimeContextWindow:
-      finalStep && !isScriptWorkflowStep(finalStep)
-        ? finalStep._runtime
-        : undefined,
+      finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
   });
-
-  const { openFinalStepContextMenu, finalStepContextMenuPortal } =
-    useFinalStepContextMenu({
-      finalStep,
-      isReadOnly: finalStepIsReadOnly,
-      isDisabled: finalStep?.enabled === false,
-      onToggleEnabled: handleToggleFinalStepEnabled,
-      latestOutput: finalStepLatestOutput,
-      runtimeMeta:
-        finalStep && !isScriptWorkflowStep(finalStep)
-          ? finalStep._runtime
-          : undefined,
-    });
 
   return (
     <div className="flex flex-col h-full">
@@ -819,7 +721,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
           hasFinalStep &&
           finalStep?.enabled !== false
         }
-        onChipClick={handleFinalStepClick}
+        onChipClick={handleFinalStepSelect}
         onOpenContextMenu={openFinalStepContextMenu}
       />
 

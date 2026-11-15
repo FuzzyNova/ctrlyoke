@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StepChipRail } from "@components/steps/StepChipRail";
@@ -15,12 +15,14 @@ import {
 } from "@/types/messages";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import type { StepHarnessModel } from "@components/steps/WorkflowStepRow";
 
 function resetStores() {
   useWorkflowStore.getState().resetWorkflow();
   useSettingsStore.getState().resetSettings();
+  useUiStore.setState({ pendingRewind: null });
 }
 
 function getStepHarnessModel(): StepHarnessModel {
@@ -125,6 +127,68 @@ describe("StepChipRail", () => {
     expect(useEditorStore.getState().selectionTarget).toEqual({
       kind: FINAL_STEP_PHASES.FINAL_STEP,
     });
+  });
+
+  it("offers Discard Continuation for the pending rewind step", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Rewound prompt" }, { prompt: "Later prompt" }],
+      executionState: EXECUTION_STATES.IDLE,
+    });
+    useUiStore.setState({
+      pendingRewind: { fromStepIndex: 0, baseDefinitionRevision: 3 },
+    });
+
+    render(<StepChipRail onExpand={vi.fn()} />);
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Prompt 1" }), {
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(
+      screen.getByRole("menuitem", { name: "Discard Continuation" })
+    ).toBeInTheDocument();
+  });
+
+  it("copies the live context window for a running final step", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [],
+      finalStep: {
+        prompt: "Final prompt",
+        _runtime: { contextWindowUsed: 20_000, contextWindowSize: 100_000 },
+      },
+      finalStepStatus: STEP_STATUS.RUNNING,
+      finalStepLoopCount: 0,
+      finalStepPhase: FINAL_STEP_PHASES.FINAL_STEP,
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    useWorkflowStore
+      .getState()
+      .updateLiveFinalStepContextWindow(0, 40_000, 200_000);
+
+    render(<StepChipRail onExpand={vi.fn()} />);
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Final step" }), {
+      clientX: 10,
+      clientY: 10,
+    });
+    await user.click(screen.getByRole("menuitem", { name: "Copy Metadata" }));
+
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0][0]).toContain(
+      "Current context window: 40k/200k (20%)"
+    );
+    expect(writeText.mock.calls[0][0]).not.toContain(
+      "Current context window: 20k/100k (20%)"
+    );
   });
 
   it("restores the status border when identity colors are disabled", () => {

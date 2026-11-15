@@ -22,16 +22,10 @@ import {
   useStepStatus,
   useStepClickHandler,
   useStepCapabilityContext,
-  useStepContextMenu,
-  useFinalStepContextMenu,
   useLatestStepOutput,
-  useFinalStepLatestOutput,
-  usePasteToEndContextMenu,
   useLongPress,
   useSortableDndSensors,
-  useIsViewingDeletedWorkflow,
-  useIsSystemGeneratedWorkflow,
-  useActiveWorkflowExternalOwner,
+  useStepListContextMenus,
 } from "@hooks/index";
 import { getHarnessDisplayName } from "../../types/messages";
 import { formatParallelStepsLabel } from "@root/utils/FinalStepLabels";
@@ -56,14 +50,12 @@ import {
 } from "@utils/stepCapabilities";
 import {
   MESSAGE_TYPES,
-  STEP_STATUS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   type StepStatus,
 } from "../../types/messages";
 import { isTerminalStepStatus } from "@root/types/DashboardConstants";
 import { sendMessage } from "@messaging/sendMessage";
-import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   DndContext,
   closestCenter,
@@ -83,13 +75,11 @@ import {
   executionOwnsCurrentStep,
   isFinalStepExecuting,
   isStepExecuting,
-  isWorkflowRunning,
 } from "../../utils/status";
 import {
   resolveStepColor,
   type StepColorGroupMember,
 } from "../../utils/stepColor";
-import { buildWorkflowStepEnabledState } from "@utils/stepEnabledToggle";
 import {
   isEditableClipboardTarget,
   writeClipboardText,
@@ -849,28 +839,38 @@ const WorkflowStepsPanelInner: React.FC<{
     togglePromptsCollapse,
     finalStepFooterExpanded,
     toggleFinalStepFooterExpanded,
-    setFinalStepFooterExpanded,
-    pendingRewind,
   } = useUiStore();
+  const {
+    isExternallyManaged,
+    isLineageReadOnly,
+    isPaused,
+    canChangeStartPosition,
+    canPasteStep,
+    pendingGroups,
+    stepContextMenu: {
+      openContextMenu,
+      handleDeleteSelection,
+      handleSetStartPosition,
+      contextMenuPortal,
+      setPositionModal,
+      deleteModal,
+    },
+    pasteToEndContextMenu: { openPasteToEndMenu, pasteToEndMenuPortal },
+    handleFinalStepSelect,
+    handleToggleFinalStepEnabled,
+    finalStepIsReadOnly,
+    finalStepLatestOutput,
+    finalStepContextMenu: {
+      openFinalStepContextMenu,
+      finalStepContextMenuPortal,
+    },
+  } = useStepListContextMenus();
 
   const getStepStatus = useStepStatus();
   const stepClickHandler = useStepClickHandler();
   const getLatestOutput = useLatestStepOutput();
 
-  // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const activeExternalOwner = useActiveWorkflowExternalOwner();
-  const isExternallyManaged = activeExternalOwner != null;
-  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeExternalOwner);
-  // The lineage on screen was deleted while being viewed, or is an internal
-  // system lineage (e.g. commit message generation) whose properties are
-  // overridden by its owning feature on the next run regardless of what's
-  // edited here — either way, nothing here has anywhere meaningful to write to.
-  const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
-  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
-  const isLineageReadOnly =
-    isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
-  const { selectionTarget, selectPrompt, selectFinalStep, deselect } =
-    useEditorStore();
+  const { selectionTarget, deselect } = useEditorStore();
   const multiSelectionIndices = useEditorStore(
     (state) => state.multiSelection?.indices
   );
@@ -887,56 +887,6 @@ const WorkflowStepsPanelInner: React.FC<{
   const { workflowProperties, globalSettings, getEffectiveModel } =
     useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
-  // Determine if workflow is running
-  const isRunning = isWorkflowRunning(executionState);
-  const isPaused = executionState === EXECUTION_STATES.PAUSED;
-  const canChangeStartPosition =
-    !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
-  const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
-  const pendingGroupRanges = useMemo(
-    () =>
-      parallelGroups
-        .filter((group) => group.startIndex >= currentStep)
-        .map((group) => ({
-          id: group.id,
-          start: group.startIndex - currentStep,
-          end: group.endIndex - currentStep,
-          failFast: group.failFast,
-        })),
-    [currentStep, parallelGroups]
-  );
-  const {
-    openContextMenu,
-    handleDeleteSelection,
-    handleSetStartPosition,
-    contextMenuPortal,
-    setPositionModal,
-    deleteModal,
-  } = useStepContextMenu({
-    isExternallyManaged,
-    externalReadOnlyLabel,
-    canChangeStartPosition,
-    canPasteStep,
-    executionState,
-    confirmResetOperations: globalSettings.confirmResetOperations,
-    confirmDeleteOperations: globalSettings.confirmDeleteOperations,
-    totalSteps: steps.length,
-    currentStep,
-    pendingRewind: pendingRewind ?? undefined,
-    parallelGroups,
-    pendingGroups: pendingGroupRanges,
-  });
-
-  const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
-    {
-      isExternallyManaged,
-      externalReadOnlyLabel,
-      canPasteStep,
-      executionState,
-      totalSteps: steps.length,
-    }
-  );
-
   const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
 
   // Compute the harness/model to display for a step.
@@ -1021,23 +971,6 @@ const WorkflowStepsPanelInner: React.FC<{
     },
     [isExternallyManaged, stepClickHandler]
   );
-
-  const handleFinalStepSelect = useCallback(() => {
-    if (isExternallyManaged || isLineageReadOnly) return;
-    if (finalStep) {
-      selectFinalStep(finalStep);
-    } else {
-      setFinalStepFooterExpanded(true);
-      selectPrompt({ kind: FINAL_STEP_PHASES.FINAL_STEP }, { prompt: "" });
-    }
-  }, [
-    isExternallyManaged,
-    isLineageReadOnly,
-    finalStep,
-    selectFinalStep,
-    setFinalStepFooterExpanded,
-    selectPrompt,
-  ]);
 
   const sensors = useSortableDndSensors();
   const reorderableStepCount = executionOwnsCurrentStep(
@@ -1277,12 +1210,12 @@ const WorkflowStepsPanelInner: React.FC<{
           { length: steps.length - currentStep },
           (_, index) => index
         ),
-        pendingGroups: pendingGroupRanges.map((candidate) =>
+        pendingGroups: pendingGroups.map((candidate) =>
           candidate.id === group.id ? { ...candidate, failFast } : candidate
         ),
       });
     },
-    [currentStep, executionState, finalStepPhase, pendingGroupRanges, steps]
+    [currentStep, executionState, finalStepPhase, pendingGroups, steps]
   );
 
   const renderParallelGroup = useCallback(
@@ -1358,15 +1291,6 @@ const WorkflowStepsPanelInner: React.FC<{
     ]
   );
 
-  const handleToggleFinalStepEnabled = useCallback(() => {
-    if (isExternallyManaged || isLineageReadOnly || !finalStep) return;
-    const enabling = finalStep.enabled === false;
-    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
-      finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
-      ...(enabling ? { clearProperties: ["enabled"] } : {}),
-    });
-  }, [isExternallyManaged, isLineageReadOnly, finalStep]);
-
   const handleSelectedStepCopy = useCallback(() => {
     if (selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE) {
       return;
@@ -1401,32 +1325,11 @@ const WorkflowStepsPanelInner: React.FC<{
       .catch(() => {});
   }, [canPasteStep, isExternallyManaged, isLineageReadOnly, selectionTarget]);
 
-  const finalStepIsReadOnly =
-    isExternallyManaged ||
-    isLineageReadOnly ||
-    (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
-      finalStepStatus === STEP_STATUS.RUNNING);
   // A running final step remains selectable so its prompt can be reviewed and
   // edited locally. The editor footer prevents updating or deleting it until
   // execution finishes; only CLI-managed / read-only lineages block editor
   // selection outright.
   const finalStepSelectionIsReadOnly = isExternallyManaged || isLineageReadOnly;
-
-  // Get the latest CLI output of the final step's most recent pass
-  const finalStepLatestOutput = useFinalStepLatestOutput();
-
-  const { openFinalStepContextMenu, finalStepContextMenuPortal } =
-    useFinalStepContextMenu({
-      finalStep,
-      isReadOnly: finalStepIsReadOnly,
-      isDisabled: finalStep?.enabled === false,
-      onToggleEnabled: handleToggleFinalStepEnabled,
-      latestOutput: finalStepLatestOutput,
-      runtimeMeta:
-        finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
-      status: finalStepStatus,
-      phase: finalStepPhase,
-    });
 
   // Compute resolved harness/model for the final step using the same
   // three-tier logic as regular steps, so defaults are shown correctly.

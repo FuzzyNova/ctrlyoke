@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-14 by smell-hunt final step (pass 19, claude-cli)
 - **Area:** `src/ui/webview-react/components/steps/StepChipRail.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

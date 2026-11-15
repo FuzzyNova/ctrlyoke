@@ -40,6 +40,7 @@ export {
   usePasteToEndContextMenu,
 } from "./useStepContextMenu";
 export { useFinalStepContextMenu } from "./useFinalStepContextMenu";
+export { useStepListContextMenus } from "./useStepListContextMenus";
 export {
   useWorkflowContextMenu,
   type WorkflowContextMenuTarget,

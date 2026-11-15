@@ -490,6 +490,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     `useFinalStepContextMenu` and final-step handlers. The rail's copy drifted: no
     `pendingRewind` and no final-step `status`/`phase`. Filed
     `dev/bugs/backlog/step-chip-rail-context-menus-miss-rewind-and-final-step-state.md`.
+    Landed: Added shared `useStepListContextMenus` wiring, including pending-rewind and running final-step state.
   - `isScriptWorkflowStep`: copies of the core `isScriptStep` guard in
     `utils/workflowStepSerialization.ts` (about 20 webview call sites) and privately in
     `src/types/CompatibilityAnalyzer.ts`. Pass 2 missed these.
