@@ -49,6 +49,7 @@ import {
 import {
   BaseCliEvent,
   ILogParser,
+  UserEventClassification,
 } from "../../../core/harness/shared/interfaces/ILogParser";
 import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
 import { CliEventMapper } from "../../../core/harness/shared/CliEventMapper";
@@ -62,6 +63,60 @@ import {
   CODEX_PAYLOAD_TYPES,
   CODEX_TOOL_NAMES,
 } from "../../../core/harness/codex/CodexProtocolConstants";
+
+function assertDispatchedPromptEchoClassifications(
+  classify: (
+    loggedText: string,
+    dispatchedPromptText?: string
+  ) => UserEventClassification,
+  leadingAndTrailingExtraExpected: UserEventClassification
+): void {
+  const dispatchedPromptText = "Please inspect the workflow parser";
+  const cases: {
+    name: string;
+    loggedText: string;
+    dispatchedPromptText?: string;
+    expected: UserEventClassification;
+  }[] = [
+    {
+      name: "exact echo",
+      loggedText: dispatchedPromptText,
+      dispatchedPromptText,
+      expected: "injected-prompt",
+    },
+    {
+      name: "trailing extra text",
+      loggedText: `${dispatchedPromptText} [attachment metadata]`,
+      dispatchedPromptText,
+      expected: leadingAndTrailingExtraExpected,
+    },
+    {
+      name: "leading extra text",
+      loggedText: `Copied from a previous turn: ${dispatchedPromptText}`,
+      dispatchedPromptText,
+      expected: leadingAndTrailingExtraExpected,
+    },
+    {
+      name: "different message",
+      loggedText: "Please inspect another workflow",
+      dispatchedPromptText,
+      expected: "human-steer",
+    },
+    {
+      name: "no dispatched prompt",
+      loggedText: dispatchedPromptText,
+      expected: "human-steer",
+    },
+  ];
+
+  for (const testCase of cases) {
+    assert.strictEqual(
+      classify(testCase.loggedText, testCase.dispatchedPromptText),
+      testCase.expected,
+      testCase.name
+    );
+  }
+}
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -3293,6 +3348,20 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(classification, "injected-prompt");
     });
 
+    test("preserves dispatched-prompt echo matching behavior", () => {
+      assertDispatchedPromptEchoClassifications(
+        (loggedText, dispatchedPromptText) =>
+          parser.classifyUserEvent(
+            {
+              type: "user",
+              message: { role: "user", content: loggedText },
+            },
+            { dispatchedPromptText }
+          ),
+        "human-steer"
+      );
+    });
+
     test("should classify a CLI-injected isMeta message as a system message", () => {
       const resizeNote =
         "[Image: original 3390x748, displayed at 2000x441. Multiply coordinates by 1.70 to map to original image.]";
@@ -5521,6 +5590,20 @@ suite("CopilotLogParser", () => {
   });
 
   suite("classifyUserEvent", () => {
+    test("preserves dispatched-prompt echo matching behavior", () => {
+      assertDispatchedPromptEchoClassifications(
+        (loggedText, dispatchedPromptText) =>
+          parser.classifyUserEvent(
+            {
+              type: "user.message",
+              data: { content: loggedText, delivery: "steering" },
+            },
+            { dispatchedPromptText }
+          ),
+        "injected-prompt"
+      );
+    });
+
     test("classifies the dispatched idle message as an sent prompt", () => {
       const prompt = "Please inspect the terminal resize behavior.";
       const event: BaseCliEvent = {
@@ -6933,6 +7016,20 @@ suite("CodexLogParser", () => {
   });
 
   suite("classifyUserEvent", () => {
+    test("preserves dispatched-prompt echo matching behavior", () => {
+      assertDispatchedPromptEchoClassifications(
+        (loggedText, dispatchedPromptText) =>
+          parser.classifyUserEvent(
+            {
+              type: "event_msg",
+              payload: { type: "user_message", message: loggedText },
+            },
+            { dispatchedPromptText }
+          ),
+        "injected-prompt"
+      );
+    });
+
     test("should ignore user-role response items containing injected project context", () => {
       const event = {
         type: "response_item",
@@ -8527,6 +8624,19 @@ suite("OpenCodeLogParser", () => {
 
   setup(() => {
     parser = new OpenCodeLogParser();
+  });
+
+  suite("classifyUserEvent", () => {
+    test("preserves dispatched-prompt echo matching behavior", () => {
+      assertDispatchedPromptEchoClassifications(
+        (loggedText, dispatchedPromptText) =>
+          parser.classifyUserEvent(
+            { type: OPENCODE_EVENT_TYPES.USER_TEXT, text: loggedText },
+            { dispatchedPromptText }
+          ),
+        "injected-prompt"
+      );
+    });
   });
 
   test("follows registered sidecar records and merges child usage", async () => {

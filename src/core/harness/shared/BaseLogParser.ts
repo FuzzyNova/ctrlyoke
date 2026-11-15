@@ -18,6 +18,17 @@ import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { splitCompleteLines, splitLines } from "../../../utils/TextLines";
 
+export const PROMPT_ECHO_MATCH = {
+  PREFIX_CONTAINS: "prefix-contains",
+  PREFIX_EQUALS: "prefix-equals",
+  FULL_CONTAINS: "full-contains",
+} as const;
+
+export type PromptEchoMatch =
+  (typeof PROMPT_ECHO_MATCH)[keyof typeof PROMPT_ECHO_MATCH];
+
+const PROMPT_ECHO_PREFIX_LENGTH = 100;
+
 /**
  * Abstract base class for CLI harness log parsers
  *
@@ -784,6 +795,38 @@ export abstract class BaseLogParser implements ILogParser {
    */
   protected normalizePromptForMatching(text: string): string {
     return text.toLowerCase().trim().replace(/\\/g, "/"); // Convert all backslashes to forward slashes
+  }
+
+  protected isDispatchedPromptEcho(
+    loggedText: string,
+    dispatchedPromptText: string | undefined,
+    match: PromptEchoMatch
+  ): boolean {
+    if (!dispatchedPromptText) {
+      return false;
+    }
+
+    const shouldUsePrefix = match !== PROMPT_ECHO_MATCH.FULL_CONTAINS;
+    const normalizedDispatched = this.normalizePromptForMatching(
+      shouldUsePrefix
+        ? dispatchedPromptText.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
+        : dispatchedPromptText
+    );
+    const normalizedLogged = this.normalizePromptForMatching(
+      shouldUsePrefix
+        ? loggedText.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
+        : loggedText
+    );
+
+    switch (match) {
+      case PROMPT_ECHO_MATCH.PREFIX_CONTAINS:
+      case PROMPT_ECHO_MATCH.FULL_CONTAINS:
+        return normalizedLogged.includes(normalizedDispatched);
+      case PROMPT_ECHO_MATCH.PREFIX_EQUALS:
+        return normalizedLogged === normalizedDispatched;
+    }
+
+    return false;
   }
 
   /**

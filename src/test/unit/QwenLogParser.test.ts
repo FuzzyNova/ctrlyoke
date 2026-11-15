@@ -325,6 +325,58 @@ suite("QwenLogParser background work", () => {
     );
   });
 
+  test("preserves dispatched-prompt echo matching behavior", () => {
+    const parser = new QwenLogParser();
+    const dispatchedPromptText = "Please inspect the workflow parser";
+    const cases = [
+      {
+        name: "exact echo",
+        loggedText: dispatchedPromptText,
+        dispatchedPromptText,
+        expected: "injected-prompt",
+      },
+      {
+        name: "trailing extra text",
+        loggedText: `${dispatchedPromptText} [attachment metadata]`,
+        dispatchedPromptText,
+        expected: "human-steer",
+      },
+      {
+        name: "leading extra text",
+        loggedText: `Copied from a previous turn: ${dispatchedPromptText}`,
+        dispatchedPromptText,
+        expected: "human-steer",
+      },
+      {
+        name: "different message",
+        loggedText: "Please inspect another workflow",
+        dispatchedPromptText,
+        expected: "human-steer",
+      },
+      {
+        name: "no dispatched prompt",
+        loggedText: dispatchedPromptText,
+        dispatchedPromptText: undefined,
+        expected: "human-steer",
+      },
+    ];
+
+    for (const testCase of cases) {
+      assert.strictEqual(
+        parser.classifyUserEvent(
+          {
+            type: "user",
+            provenance: "real_user",
+            message: { role: "user", parts: [{ text: testCase.loggedText }] },
+          },
+          { dispatchedPromptText: testCase.dispatchedPromptText }
+        ),
+        testCase.expected,
+        testCase.name
+      );
+    }
+  });
+
   test("tracks background agents and a backlog drained into one turn", () => {
     const parser = new QwenLogParser();
     track(

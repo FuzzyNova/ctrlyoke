@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { StringDecoder } from "string_decoder";
-import { BaseLogParser } from "../shared/BaseLogParser";
+import { BaseLogParser, PROMPT_ECHO_MATCH } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
   UserEventClassification,
@@ -1304,16 +1304,16 @@ export class CopilotLogParser extends BaseLogParser {
     }
 
     if (ctx.dispatchedPromptText) {
-      const normalizedDispatched = this.normalizePromptForMatching(
-        ctx.dispatchedPromptText.substring(0, 100)
-      );
-      const normalizedLogged = this.normalizePromptForMatching(
-        text.substring(0, 100)
-      );
       // Copilot may append file-attachment metadata after the prompt text, so
       // match by prefix containment rather than exact equality (mirrors
       // discoverSessionLog's own matching strategy above).
-      if (normalizedLogged.includes(normalizedDispatched)) {
+      if (
+        this.isDispatchedPromptEcho(
+          text,
+          ctx.dispatchedPromptText,
+          PROMPT_ECHO_MATCH.PREFIX_CONTAINS
+        )
+      ) {
         return "injected-prompt";
       }
       // Copilot marks the initial prompt submitted while idle distinctly from

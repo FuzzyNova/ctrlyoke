@@ -391,6 +391,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     (`*LogParser.ts`): three variants (100-char prefix + `includes` for Codex, Copilot,
     OpenCode; 100-char prefix + equality for Claude, Qwen; full text + `includes` for
     Antigravity).
+    Landed: centralized the three dispatched-prompt echo match modes in BaseLogParser and added characterization tests.
   - `SecretCommands.checkSecretsCommand`/`trustSecretGrantsCommand`: verbatim
     workspace-root + parse + validation-error block.
   - Draft revision preconditions: read descriptor + draft, then assert both revisions,

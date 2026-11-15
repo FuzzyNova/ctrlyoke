@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseLogParser } from "../shared/BaseLogParser";
+import { BaseLogParser, PROMPT_ECHO_MATCH } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
   SessionErrorSignal,
@@ -983,16 +983,14 @@ export class CodexLogParser extends BaseLogParser {
       return "other";
     }
 
-    if (ctx.dispatchedPromptText) {
-      const normalizedDispatched = this.normalizePromptForMatching(
-        ctx.dispatchedPromptText.substring(0, 100)
-      );
-      const normalizedLogged = this.normalizePromptForMatching(
-        text.substring(0, 100)
-      );
-      if (normalizedLogged.includes(normalizedDispatched)) {
-        return "injected-prompt";
-      }
+    if (
+      this.isDispatchedPromptEcho(
+        text,
+        ctx.dispatchedPromptText,
+        PROMPT_ECHO_MATCH.PREFIX_CONTAINS
+      )
+    ) {
+      return "injected-prompt";
     }
 
     return "human-steer";

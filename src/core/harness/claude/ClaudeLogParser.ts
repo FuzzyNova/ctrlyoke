@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseLogParser } from "../shared/BaseLogParser";
+import { BaseLogParser, PROMPT_ECHO_MATCH } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
   ILogParser,
@@ -889,7 +889,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       if (!text) {
         return "other";
       }
-      return this.matchesDispatchedPrompt(text, ctx.dispatchedPromptText)
+      return this.isDispatchedPromptEcho(
+        text,
+        ctx.dispatchedPromptText,
+        PROMPT_ECHO_MATCH.PREFIX_EQUALS
+      )
         ? "injected-prompt"
         : "human-steer";
     }
@@ -920,24 +924,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return "system-message";
     }
 
-    return this.matchesDispatchedPrompt(text, ctx.dispatchedPromptText)
+    return this.isDispatchedPromptEcho(
+      text,
+      ctx.dispatchedPromptText,
+      PROMPT_ECHO_MATCH.PREFIX_EQUALS
+    )
       ? "injected-prompt"
       : "human-steer";
-  }
-
-  /** True when logged text is ctrlyoke's own dispatched prompt echoed back. */
-  private matchesDispatchedPrompt(
-    text: string,
-    dispatchedPromptText: string | undefined
-  ): boolean {
-    if (!dispatchedPromptText) {
-      return false;
-    }
-    return (
-      this.normalizePromptForMatching(
-        dispatchedPromptText.substring(0, 100)
-      ) === this.normalizePromptForMatching(text.substring(0, 100))
-    );
   }
 
   /**

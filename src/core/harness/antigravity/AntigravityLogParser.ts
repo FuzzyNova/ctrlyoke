@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { fileURLToPath } from "url";
-import { BaseLogParser } from "../shared/BaseLogParser";
+import { BaseLogParser, PROMPT_ECHO_MATCH } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
   ILogParser,
@@ -1116,14 +1116,14 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return "other";
     }
 
-    if (ctx.dispatchedPromptText) {
-      const normalizedDispatched = this.normalizePromptForMatching(
-        ctx.dispatchedPromptText
-      );
-      const normalizedLogged = this.normalizePromptForMatching(text);
-      if (normalizedLogged.includes(normalizedDispatched)) {
-        return "injected-prompt";
-      }
+    if (
+      this.isDispatchedPromptEcho(
+        text,
+        ctx.dispatchedPromptText,
+        PROMPT_ECHO_MATCH.FULL_CONTAINS
+      )
+    ) {
+      return "injected-prompt";
     }
 
     return "human-steer";
