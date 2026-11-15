@@ -497,6 +497,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     Landed: All webview and compatibility-analysis call sites now use the core `isScriptStep` guard.
   - CLI truncation detail: `CliTerminalFormatter.ts` builds the
     "N more lines, M more characters" join three times.
+    Landed: Shared the omitted-line and omitted-character detail formatter across all three paths.
 
 ## Deferred
 

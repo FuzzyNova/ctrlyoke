@@ -814,6 +814,96 @@ CliTerminalFormatter.renderEvent({
     );
   });
 
+  test("formats exact Bash truncation details for combined and single counts", () => {
+    const output = runFormatterScript(`
+const cases = [
+  ["both", Array.from({ length: 250 }, () => "x".repeat(90) + "\\n").join("")],
+  ["lines", "\\n".repeat(201)],
+  ["characters", "x".repeat(20_001)],
+];
+for (const [command, value] of cases) {
+  CliTerminalFormatter.renderEvent({
+    type: CLI_EVENT_TYPES.BASH_COMMAND,
+    data: { command, output: value },
+  });
+}`);
+
+    const lines = output.split("\n");
+    const noticeSuffix = "(see .ctrlyoke/.runs/…/events.jsonl)";
+    assert.ok(
+      lines.includes(`… 20 more lines, 2750 more characters ${noticeSuffix}`)
+    );
+    assert.ok(lines.includes(`… 1 more lines ${noticeSuffix}`));
+    assert.ok(lines.includes(`… 1 more characters ${noticeSuffix}`));
+  });
+
+  test("formats exact streamed script truncation details for combined and single counts", () => {
+    const output = runFormatterScript(`
+const cases = [
+  ["both", Array.from({ length: 250 }, () => "x".repeat(90) + "\\n").join("")],
+  ["characters", "x".repeat(20_001)],
+];
+for (const [key, chunk] of cases) {
+  const target = { stepIndex: 0, stepName: "script", key };
+  CliTerminalFormatter.renderScriptOutput({
+    source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+    elapsed: 0,
+    isStreaming: true,
+    scriptOutput: { command: "check.sh", stdout: chunk, stderr: "", exitCode: 0 },
+  }, target);
+  CliTerminalFormatter.renderScriptOutput({
+    source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+    elapsed: 0,
+    isStreaming: false,
+  }, target, { command: "check.sh", stdout: chunk, stderr: "", exitCode: 0 });
+}`);
+
+    assert.ok(
+      output.includes(
+        "│ … script output truncated: 50 more lines, 4551 more characters (see .ctrlyoke/.runs/…/events.jsonl)"
+      )
+    );
+    assert.ok(
+      output.includes(
+        "│ … script output truncated: 1 more characters (see .ctrlyoke/.runs/…/events.jsonl)"
+      )
+    );
+  });
+
+  test("formats exact verdict-field truncation details for combined and single counts", () => {
+    const output = runFormatterScript(`
+const cases = [
+  ["both", Array.from({ length: 30 }, () => "x".repeat(150) + "\\n").join("")],
+  ["characters", "x".repeat(4_001)],
+];
+for (const [key, actual] of cases) {
+  CliTerminalFormatter.renderScriptOutput({
+    source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+    elapsed: 0,
+    isStreaming: false,
+    scriptVerdict: {
+      compareSource: "stdout",
+      operator: "eq",
+      expected: "expected",
+      actual,
+      outcome: "passed",
+      action: "continue",
+      durationMs: 1,
+    },
+  }, { stepIndex: 0, stepName: "script", key });
+}`);
+
+    const lines = output.split("\n");
+    const noticeSuffix = "(see .ctrlyoke/.runs/…/events.jsonl)";
+    assert.deepStrictEqual(
+      lines.filter((line) => line.includes("more characters (see")),
+      [
+        `│     … 11 more lines, 1511 more characters ${noticeSuffix}`,
+        `│     … 1 more characters ${noticeSuffix}`,
+      ]
+    );
+  });
+
   test("prints a ranged FILE_READ header", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderEvent({

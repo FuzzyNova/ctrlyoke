@@ -153,11 +153,8 @@ function boundBashOutput(text: string): string {
   }
 
   if (omittedChars || omittedLines) {
-    const details = [
-      omittedLines ? `${omittedLines} more lines` : "",
-      omittedChars ? `${omittedChars} more characters` : "",
-    ].filter(Boolean);
-    bounded += `${bounded.endsWith("\n") ? "" : "\n"}${formatTruncationNotice(details.join(", "))}`;
+    const detail = formatOmittedDetail(omittedLines, omittedChars);
+    bounded += `${bounded.endsWith("\n") ? "" : "\n"}${formatTruncationNotice(detail)}`;
   }
   return bounded;
 }
@@ -180,6 +177,18 @@ function countNewOutputLines(text: string, endsWithNewline: boolean): number {
 
 function formatTruncationNotice(detail: string): string {
   return `… ${detail} (see ${EVENTS_LOG_PATH_HINT})`;
+}
+
+function formatOmittedDetail(
+  omittedLines: number,
+  omittedChars: number
+): string {
+  return [
+    omittedLines > 0 ? `${omittedLines} more lines` : "",
+    omittedChars > 0 ? `${omittedChars} more characters` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function truncateEventText(text: string, maxChars: number): string {
@@ -857,14 +866,9 @@ export class CliTerminalFormatter {
       const omittedLines = Math.max(0, state.totalLines - state.shownLines);
       const omittedChars = Math.max(0, state.totalChars - state.shownChars);
       if (omittedLines > 0 || omittedChars > 0) {
-        const omitted = [
-          omittedLines > 0 ? `${omittedLines} more lines` : "",
-          omittedChars > 0 ? `${omittedChars} more characters` : "",
-        ]
-          .filter(Boolean)
-          .join(", ");
+        const detail = formatOmittedDetail(omittedLines, omittedChars);
         console.log(
-          `${border} ${chalk.yellow(formatTruncationNotice(`script output truncated: ${omitted}`))}`
+          `${border} ${chalk.yellow(formatTruncationNotice(`script output truncated: ${detail}`))}`
         );
       }
     }
@@ -991,14 +995,9 @@ export class CliTerminalFormatter {
       console.log(`${border}     ${color(line)}`);
     }
     if (omittedLines > 0 || omittedChars > 0) {
-      const omitted = [
-        omittedLines > 0 ? `${omittedLines} more lines` : "",
-        omittedChars > 0 ? `${omittedChars} more characters` : "",
-      ]
-        .filter(Boolean)
-        .join(", ");
+      const detail = formatOmittedDetail(omittedLines, omittedChars);
       console.log(
-        `${border}     ${chalk.yellow(formatTruncationNotice(omitted))}`
+        `${border}     ${chalk.yellow(formatTruncationNotice(detail))}`
       );
     }
   }
