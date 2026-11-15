@@ -16,7 +16,7 @@ import {
   type Extension,
   type StateField,
 } from "@codemirror/state";
-import { keymap, repositionTooltips, type PluginValue } from "@codemirror/view";
+import { keymap, type PluginValue } from "@codemirror/view";
 import {
   indentWithTab,
   undo,
@@ -39,6 +39,7 @@ import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useLanguageIntelligence } from "@hooks/useLanguageIntelligence";
+import { useVisualViewportEditorSync } from "@hooks/useVisualViewportEditorSync";
 import {
   registerLanguageIntelligenceView,
   requestLanguageIntelligence,
@@ -716,42 +717,7 @@ export const WorkspaceFileEditor = forwardRef<
       onPendingSelectionAppliedRef.current?.(pendingSelection.requestId);
     }, [content, pendingSelection]);
 
-    // Keep the caret visible above the mobile keyboard on visual viewport
-    // changes — same treatment as CodeMirrorEditor. Resize fires once after
-    // the keyboard fully opens, so a synchronous scrollIntoView dispatch is
-    // safe; scroll fires continuously during native scroll animations, so
-    // only requestMeasure runs there (no dispatches that could interfere).
-    useEffect(() => {
-      const vv = window.visualViewport;
-      if (!vv) return;
-      // requestMeasure alone does not re-run an open completion tooltip's own
-      // placement, so reposition it against the keyboard-shrunk viewport.
-      const handleScroll = () => {
-        const view = viewRef.current;
-        if (!view) return;
-        view.requestMeasure();
-        repositionTooltips(view);
-      };
-      const handleResize = () => {
-        const view = viewRef.current;
-        if (!view) return;
-        view.requestMeasure();
-        repositionTooltips(view);
-        if (!view.hasFocus) return;
-        view.dispatch({
-          effects: EditorView.scrollIntoView(view.state.selection.main.head, {
-            y: "end",
-            yMargin: 24,
-          }),
-        });
-      };
-      vv.addEventListener("resize", handleResize);
-      vv.addEventListener("scroll", handleScroll);
-      return () => {
-        vv.removeEventListener("resize", handleResize);
-        vv.removeEventListener("scroll", handleScroll);
-      };
-    }, []);
+    useVisualViewportEditorSync(viewRef);
 
     if (media) {
       return (

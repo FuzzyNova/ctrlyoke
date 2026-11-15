@@ -364,6 +364,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     Landed: badge visibility and reset-button logic are shared across all three settings surfaces and covered by regression tests.
   - The mobile visual-viewport remeasure effect, copied verbatim in `CodeMirrorEditor`,
     `SingleLineCompletionEditor` and `WorkspaceFileEditor`.
+    Landed: all three editors now share `useVisualViewportEditorSync` with focused hook coverage.
   - Terminal setting defaults retyped in `settingsStore.ts` and `terminalRegistry.ts`
     beside `CTRLYOKE_SETTINGS_DEFAULTS.terminal`.
 

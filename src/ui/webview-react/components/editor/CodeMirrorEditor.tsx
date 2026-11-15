@@ -14,7 +14,6 @@ import {
   type PluginValue,
   Decoration,
   WidgetType,
-  repositionTooltips,
 } from "@codemirror/view";
 import {
   createAtomicReferenceWidgetTheme,
@@ -52,6 +51,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
+import { useVisualViewportEditorSync } from "@hooks/useVisualViewportEditorSync";
 import {
   asAtomicReferenceKind,
   openContextReference,
@@ -543,44 +543,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     onFocusApplied?.(pendingFocusRequest);
   }, [onFocusApplied, pendingFocusRequest, viewReady]);
 
-  // Remeasure CodeMirror geometry on visual viewport changes (tooltip repositioning
-  // on scroll; caret scroll-into-view on resize when the mobile keyboard opens).
-  // Resize fires once after the keyboard fully opens — safe to dispatch scrollIntoView
-  // synchronously. Scroll fires continuously during native scroll animations so we
-  // only call requestMeasure there (no dispatches that could interfere).
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    // requestMeasure alone does NOT re-run the tooltip plugin's own measure
-    // request, so an already-open dropdown would keep the placement it computed
-    // against the pre-keyboard viewport. repositionTooltips re-evaluates
-    // keyboardTooltipSpace, which is what flips it above the caret.
-    const handleScroll = () => {
-      const view = viewRef.current;
-      if (!view) return;
-      view.requestMeasure();
-      repositionTooltips(view);
-    };
-    const handleResize = () => {
-      const view = viewRef.current;
-      if (!view) return;
-      view.requestMeasure();
-      repositionTooltips(view);
-      if (!view.hasFocus) return;
-      view.dispatch({
-        effects: EditorView.scrollIntoView(view.state.selection.main.head, {
-          y: "end",
-          yMargin: 24,
-        }),
-      });
-    };
-    vv.addEventListener("resize", handleResize);
-    vv.addEventListener("scroll", handleScroll);
-    return () => {
-      vv.removeEventListener("resize", handleResize);
-      vv.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
+  useVisualViewportEditorSync(viewRef);
 
   // Re-measure after an ancestor panel is resized programmatically. This event
   // can be emitted from a CodeMirror measure write callback, where a synchronous

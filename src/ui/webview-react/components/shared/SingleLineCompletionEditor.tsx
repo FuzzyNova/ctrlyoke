@@ -14,18 +14,13 @@ import {
   Prec,
   type Extension,
 } from "@codemirror/state";
-import {
-  EditorView,
-  keymap,
-  placeholder,
-  repositionTooltips,
-  tooltips,
-} from "@codemirror/view";
+import { EditorView, keymap, placeholder, tooltips } from "@codemirror/view";
 import { minimalSetup } from "codemirror";
 import { createThemeExtension } from "@utils/codemirrorTheme";
 import type { ThemeExtensionOptions } from "@utils/codemirrorTheme";
 import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
 import { WebviewLog } from "@utils/logger";
+import { useVisualViewportEditorSync } from "@hooks/useVisualViewportEditorSync";
 
 export interface SingleLineCompletionEditorProps {
   id: string;
@@ -462,40 +457,7 @@ export function SingleLineCompletionEditor({
     };
   }, [multiline, wrapSingleLine]);
 
-  // Remeasure the editor and reposition an already-open completion dropdown
-  // when the mobile keyboard changes the visual viewport. requestMeasure alone
-  // does not re-run CodeMirror's tooltip measure request.
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const handleScroll = () => {
-      const view = viewRef.current;
-      if (!view) return;
-      view.requestMeasure();
-      repositionTooltips(view);
-    };
-    const handleResize = () => {
-      const view = viewRef.current;
-      if (!view) return;
-      view.requestMeasure();
-      repositionTooltips(view);
-      if (!view.hasFocus) return;
-      view.dispatch({
-        effects: EditorView.scrollIntoView(view.state.selection.main.head, {
-          y: "end",
-          yMargin: 24,
-        }),
-      });
-    };
-
-    vv.addEventListener("resize", handleResize);
-    vv.addEventListener("scroll", handleScroll);
-    return () => {
-      vv.removeEventListener("resize", handleResize);
-      vv.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
+  useVisualViewportEditorSync(viewRef);
 
   useEffect(() => {
     const view = viewRef.current;
