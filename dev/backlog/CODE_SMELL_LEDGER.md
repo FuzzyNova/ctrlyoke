@@ -369,6 +369,33 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     beside `CTRLYOKE_SETTINGS_DEFAULTS.terminal`.
     Landed: both consumers now use `cloneDefaultTerminalSettings()` with isolated nested arrays.
 
+- **2026-11-14, pass 15**: reviewed pass 14's four refactors. `languageFromPath` matches
+  `path.extname`/`path.basename` on every input the server passes (trailing slashes,
+  `foo.`, backslashes); the webview gained the server's superset map, which was the
+  filed bug. `SettingResetButton` keeps each copy's markup; the toggle row's extra
+  classes come through `className`, and `preventDefault` is harmless on the two
+  non-label copies. `useVisualViewportEditorSync` is verbatim. `cloneDefaultTerminalSettings`
+  copies `CTRLYOKE_SETTINGS_DEFAULTS.terminal`, which matched both retyped literals
+  field for field. Nothing to fix.
+
+  Hunted the core queue, the harness log parsers, the CLI and the orchestration
+  services with the repeated 8-line window scan. Queued four steps:
+  - Runtime `terminalStatus` → step status ladder: `PromptQueue.restoreFromWorkingFile`
+    (inline), `PromptQueue.getResultStatusFromRuntime`, and the webview's
+    `deriveStatusFromRuntime` in `useUndoRedoKeyHandler.ts`, which has drifted (no
+    `skipped` branch); filed `dev/bugs/backlog/undo-redo-shows-skipped-step-as-completed.md`.
+    `restoreFromWorkingFile` and `adoptDiskRuntime` also share a verbatim
+    `stateMachine.restore(...)` block.
+  - Dispatched-prompt echo matching in all six `classifyUserEvent` overrides
+    (`*LogParser.ts`): three variants (100-char prefix + `includes` for Codex, Copilot,
+    OpenCode; 100-char prefix + equality for Claude, Qwen; full text + `includes` for
+    Antigravity).
+  - `SecretCommands.checkSecretsCommand`/`trustSecretGrantsCommand`: verbatim
+    workspace-root + parse + validation-error block.
+  - Draft revision preconditions: read descriptor + draft, then assert both revisions,
+    in `RunLifecycleService.setStartPositionAtDraft`, `executeDraftAtAddress` and
+    `WorkflowOrchestrator.prepareDefinitionMutation` (draft branch).
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
