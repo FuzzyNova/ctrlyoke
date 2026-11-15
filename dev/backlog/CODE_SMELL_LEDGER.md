@@ -447,6 +447,24 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     fast-forward/merge-commit success predicate.
     Landed: Shared the typed action-result emitter and merge-success predicate, with exact-payload coverage.
 
+- **2026-11-14, pass 18**: reviewed pass 17's two refactors. `pageGitRefDiffSnapshot`
+  keeps the order of both copies (offset check, repo resolve, `diffId` resume, then page
+  size before the load). The `"commitInfo" in resolution` spread keeps the ref diff's
+  always-present `commitInfo` key and the worktree diff's missing one.
+  `emitWorktreeActionResult` and `isWorktreeMergeSuccess` match the copies verbatim.
+  Nothing to fix.
+
+  Hunted `src/core/` (the harness layer, shared usage stores and orchestration) and the
+  dashboard with the repeated 7-line window scan. Queued two steps:
+  - Usage store atomic writes: `LifetimeUsageStore.writeAtomic`,
+    `ObservedHarnessUsageStore.writeAtomic` and `HarnessUsageService`'s provider-snapshot
+    write each hand-roll a `${file}.${pid}.${ms}.tmp` write and rename instead of using
+    `writeFileAtomic`. The temp name can collide within one millisecond. Their three
+    `.corrupt-<ms>.json` quarantine renames are copies too.
+  - Ask-user-question object option: the label/description/preview record parse is
+    verbatim in the Claude, Codex, Copilot and Antigravity builders. This is the
+    "one object-option parser" piece of the Deferred ask-user-question entry.
+
 ## Deferred
 
 Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
@@ -734,3 +752,11 @@ still deferred.
 - `EXIT_IDLE_TERMINALS` result emit in `DashboardMessageRouter.ts`: unlike the worktree
   action handlers, it falls back to a `USER_FEEDBACK` toast when there's no `requestId`,
   and it sends worktree state without a refresh.
+- `ProjectStateRegistry.ts` metadata write: hand-rolled temp write and rename, but it
+  re-checks root containment and symlinks between the write and the rename, which
+  `writeFileAtomic` can't do. `historySearchRebuildWorker.writeDocumentsShardAtomically`
+  streams to an already unique temp path. `ExecutionRootCoordinationStore`'s
+  `.corrupt-<ms>` rename has no `.json` suffix and different semantics.
+- Qwen `parseQwenOptions` and OpenCode `parseOpenCodeOptions`: not copies of the
+  shared object-option parse, because they derive description and preview through
+  `splitDescriptionPreview`.
