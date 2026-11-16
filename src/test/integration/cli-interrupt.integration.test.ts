@@ -3,7 +3,7 @@ import { spawn } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { suite, teardown, test } from "mocha";
+import { suite, suiteSetup, teardown, test } from "mocha";
 
 const temporaryRoots: string[] = [];
 
@@ -145,6 +145,15 @@ async function interruptRun(
 }
 
 suite("CLI interrupted run", () => {
+  suiteSetup(function () {
+    // Node cannot deliver SIGINT to another process on Windows:
+    // `child.kill("SIGINT")` terminates it outright (exit code 1), so the CLI
+    // never runs its shutdown path and its script grandchild outlives it,
+    // holding the temp directory. The shutdown sequence itself is covered
+    // platform-independently by SignalShutdown.test.ts.
+    if (process.platform === "win32") this.skip();
+  });
+
   teardown(async () => {
     for (const root of temporaryRoots.splice(0)) {
       await fs.rm(root, { recursive: true, force: true });

@@ -7,6 +7,12 @@ import { runCli } from "./helpers/cliProcess";
 
 const temporaryRoots: string[] = [];
 
+// Runs through the platform default shell (PowerShell on Windows, sh
+// elsewhere), so it must use only quoting every one of them accepts: `1>&2`
+// is reserved in PowerShell, and `cmd` would print `; echo …` literally.
+const MARKER_SCRIPT =
+  "node -e \"console.log('out-marker'); console.error('err-marker')\"";
+
 // An interactive run used to install no output subscriptions at all, so every
 // step that was not an interactive TUI (headless steps, scripts, verdicts,
 // status lines) ran in silence.
@@ -63,7 +69,7 @@ suite("CLI interactive run output", () => {
           {
             type: "script",
             name: "markers",
-            script: "echo out-marker; echo err-marker 1>&2",
+            script: MARKER_SCRIPT,
           },
         ],
       }),
@@ -77,9 +83,7 @@ suite("CLI interactive run output", () => {
     );
 
     assert.strictEqual(result.code, 0, result.stderr);
-    const commandLineEnd = result.stdout.indexOf(
-      "echo out-marker; echo err-marker 1>&2"
-    );
+    const commandLineEnd = result.stdout.indexOf(MARKER_SCRIPT);
     assert.notStrictEqual(commandLineEnd, -1, result.stdout);
     const outputAfterCommand = result.stdout
       .slice(commandLineEnd)

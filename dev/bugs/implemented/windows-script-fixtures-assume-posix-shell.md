@@ -6,7 +6,7 @@
   `src/test/integration/cli-interrupt.integration.test.ts`, `src/test/unit/WorktreeManager.test.ts`;
   shell resolution in `src/core/harness/PtyProcessManager.ts` (`resolveShellInvocation`,
   `resolveWindowsShell`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -55,3 +55,17 @@ Make each fixture portable or pin its shell:
 
 Keep at least one case that runs through the platform default shell on Windows, so shell
 resolution stays covered.
+
+## Fix
+
+- The stdout/stderr case now runs one `node -e` that calls `console.log` and `console.error`,
+  still through the platform default shell, so it keeps covering shell resolution.
+- The worktree setup command puts the counter path in a single-quoted JS string inside the
+  double-quoted argument, the quoting every other setup fixture in that file already uses.
+- The interrupt case was misdiagnosed: its script runs fine in PowerShell. Node cannot deliver
+  SIGINT to another process on Windows; `child.kill("SIGINT")` calls `TerminateProcess`, so the
+  CLI exits with code 1 without running its shutdown path, and its script grandchild outlives
+  it holding the temp directory (the `EBUSY`). The suite is skipped on Windows; the shutdown
+  sequence itself is covered on every platform by `SignalShutdown.test.ts`. The other two
+  interrupt cases failed the same way but never ran, because the `afterEach` failure aborted
+  the suite.

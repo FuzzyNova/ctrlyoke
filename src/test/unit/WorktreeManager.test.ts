@@ -658,9 +658,13 @@ suite("WorktreeManager", function () {
   test("runs setup once per run across a named directory switch", async () => {
     const { parent, repository } = await makeRepository("checkout-setup");
     const counter = path.join(parent, "setup-count.txt");
-    const setup = `node -e "require('fs').appendFileSync(${JSON.stringify(
-      JSON.stringify(counter.replace(/\\/g, "/"))
-    ).slice(1, -1)}, 'x')"`;
+    // Single-quoted JS string inside a double-quoted shell argument: the only
+    // quoting that survives sh, cmd and PowerShell alike (PowerShell does not
+    // unescape `\"`).
+    const setup = `node -e "require('fs').appendFileSync('${counter.replace(
+      /\\/g,
+      "/"
+    )}', 'x')"`;
     const first = await resolve(manager(parent), repository, "feature/one", {
       directory: "bug-fix",
       setup,
