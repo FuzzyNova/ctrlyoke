@@ -8,6 +8,11 @@ import {
 } from "../../core/harness/shared/CliPromptPreparer";
 import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
+import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import {
   HarnessIntegration,
   HarnessStatus,
@@ -32,6 +37,8 @@ import {
   PREVIEW_TRUNCATION_REASONS,
   PROMPT_DIAGNOSTIC_CODES,
   TEMP_FILE_CATEGORIES,
+  INLINE_GENERATED_PROMPT_ROOT_TAG,
+  MAX_INLINE_GENERATED_PROMPT_CHARS,
 } from "../../types/DashboardConstants";
 
 class SimplePromptTestIntegration extends HarnessIntegration {
@@ -88,6 +95,258 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
+  const inlinePromptProviders: Array<[string, IHarnessAdapter, string]> = [
+    ["Qwen", new QwenHarnessAdapter(), "\\@generated"],
+    ["Copilot", new CopilotHarnessAdapter(), "@generated"],
+    ["Codex", new CodexHarnessAdapter(), "@generated"],
+    ["Antigravity", new AntigravityHarnessAdapter(), "@generated"],
+  ];
+  for (const [
+    name,
+    provider,
+    expectedGeneratedMention,
+  ] of inlinePromptProviders) {
+    test(`${name} inline prompt plan wraps generated sections and keeps workspace refs`, async () => {
+      const workspaceRoot = makeTempDir(
+        `ctrlyoke-${name.toLowerCase()}-inline-plan-`
+      );
+      const workspaceFile = path.join(workspaceRoot, "src", "file.ts");
+      const preparer = new CliPromptPreparer({
+        shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+        buildPromptSections: async () =>
+          createSections({
+            skillContent: "/Generated @generated mention.",
+            directFileRefs: [workspaceFile],
+            userPromptText: "/inspect this file",
+          }),
+        extractLeadingSlashCommand: () => null,
+        isSimplePrompt: () => false,
+        buildPriorContextXmlFromItems: () => "",
+        getWorkspaceRoot: () => workspaceRoot,
+        getTempFileSplitConfig: () => undefined,
+        formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+        formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+        formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+        shouldInlineGeneratedPromptOnStdin: () =>
+          provider.config.inlinesGeneratedPromptOnStdin === true,
+        transformInlinedGeneratedPrompt: (text) =>
+          provider.transformInlinedGeneratedPrompt?.(text) ?? text,
+        requiresNonSlashInlinePromptPrefix:
+          provider.requiresNonSlashInlinePromptPrefix,
+      });
+
+      try {
+        const plan = await preparer.planPrompt(
+          { prompt: "/inspect this file" },
+          undefined,
+          { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
+          undefined
+        );
+        assert.ok(
+          plan.promptWithInstruction.includes(
+            `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>`
+          )
+        );
+        assert.ok(
+          plan.promptWithInstruction.includes(expectedGeneratedMention)
+        );
+        assert.ok(plan.promptWithInstruction.includes(`@${workspaceFile}`));
+        assert.ok(!plan.promptWithInstruction.includes(`\\@${workspaceFile}`));
+        if (name === "Qwen") {
+          assert.ok(
+            plan.promptWithInstruction.startsWith(
+              `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n `
+            )
+          );
+        }
+        assert.strictEqual(plan.tempFilePaths.length, 0);
+      } finally {
+        removeTempDir(workspaceRoot);
+      }
+    });
+  }
+
+  test("inlines labelled generated sections while preserving direct file refs", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-prompt-");
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          agentContent: "Follow the agent rules.",
+          skillContent: "<skillsIndex>Use the available skill.</skillsIndex>",
+          directFileRefs: [path.join(workspaceRoot, "src", "file.ts")],
+          excerptContent: "<attachment>Relevant excerpt.</attachment>",
+          userPromptText: "Make the change.",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (
+        agentRefs,
+        skillRefs,
+        directRefs,
+        contextRefs,
+        excerptRefs,
+        promptRefs,
+        secretRefs
+      ) =>
+        [
+          ...agentRefs,
+          ...skillRefs,
+          ...directRefs,
+          ...contextRefs,
+          ...excerptRefs,
+          ...promptRefs,
+          ...secretRefs,
+        ].join(" "),
+      shouldInlineGeneratedPromptOnStdin: () => true,
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "Make the change." },
+        undefined,
+        { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
+        undefined
+      );
+      assert.ok(
+        plan.promptWithInstruction.includes(
+          `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>`
+        )
+      );
+      assert.ok(plan.promptWithInstruction.includes("<agentInstructions>"));
+      assert.ok(plan.promptWithInstruction.includes("<skillsIndex>"));
+      assert.ok(plan.promptWithInstruction.includes("<attachment>"));
+      assert.ok(plan.promptWithInstruction.includes("<userPrompt>"));
+      assert.ok(
+        plan.promptWithInstruction.includes(
+          `@${path.join(workspaceRoot, "src", "file.ts")}`
+        )
+      );
+      assert.strictEqual(plan.tempFilePaths.length, 0);
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
+  test("falls back to split temp files for the largest sections over budget", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-budget-");
+    const oversizedAgent = "a".repeat(MAX_INLINE_GENERATED_PROMPT_CHARS + 1);
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ agentContent: oversizedAgent }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => ({ maxTokensPerFile: 100_000 }),
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+      shouldInlineGeneratedPromptOnStdin: () => true,
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "Do it." },
+        undefined,
+        { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
+        undefined
+      );
+      assert.ok(plan.tempFilePaths.length > 0);
+      assert.ok(
+        plan.files.every((file) => file.category === TEMP_FILE_CATEGORIES.AGENT)
+      );
+      assert.ok(!plan.promptWithInstruction.includes(oversizedAgent));
+      assert.ok(plan.promptWithInstruction.includes("@"));
+      assert.ok(plan.promptWithInstruction.includes("<userPrompt>"));
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
+  test("applies provider escaping and guards a leading slash in the inline block", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-escape-");
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ skillContent: "/@literal" }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+      shouldInlineGeneratedPromptOnStdin: () => true,
+      transformInlinedGeneratedPrompt: (text) => text.replaceAll("@", "\\@"),
+      requiresNonSlashInlinePromptPrefix: true,
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "Do it." },
+        undefined,
+        { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
+        undefined
+      );
+      assert.ok(
+        plan.promptWithInstruction.startsWith(
+          `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n `
+        )
+      );
+      assert.ok(plan.promptWithInstruction.includes("\\@literal"));
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
+  test("keeps setting-off and interactive plans on the temp-reference path", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-disabled-");
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ agentContent: "Agent rules." }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+      shouldInlineGeneratedPromptOnStdin: () => false,
+    });
+
+    try {
+      for (const executionMode of [
+        EXECUTION_MODES.HEADLESS,
+        EXECUTION_MODES.INTERACTIVE,
+      ]) {
+        const plan = await preparer.planPrompt(
+          { prompt: "Do it." },
+          undefined,
+          { executionMode } as ResolvedProperties,
+          undefined
+        );
+        assert.ok(plan.tempFilePaths.length > 0);
+        assert.ok(
+          !plan.promptWithInstruction.includes(
+            `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>`
+          )
+        );
+      }
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
   test("adds the headless execution note only to headless prompts", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,

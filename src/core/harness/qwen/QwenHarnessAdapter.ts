@@ -51,6 +51,7 @@ import {
 } from "./QwenSystemSettings";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
+import { QwenHeadlessControlChannel } from "./QwenHeadlessControlChannel";
 import { resolveCliModelFlag } from "../shared/CliModelSelection";
 import {
   ConfigurationUtils,
@@ -229,6 +230,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       updateCommand: "npm install -g @qwen-code/qwen-code@latest",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: true,
 
     // Qwen uses log file monitoring for completion detection in interactive mode
     // Process exit is primary for headless mode
@@ -271,6 +273,13 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * OpenCode and Antigravity.
    */
   readonly requiresAbsoluteFileReferences = true;
+
+  /** Qwen can interpret generated @mentions and a leading slash as commands. */
+  readonly requiresNonSlashInlinePromptPrefix = true;
+
+  transformInlinedGeneratedPrompt(text: string): string {
+    return text.replaceAll("@", "\\@");
+  }
 
   /** Extract Qwen's session ID from any complete JSON object in stdout. */
   extractSessionIdFromStdout(chunk: string): string | undefined {
@@ -407,8 +416,8 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       );
     }
 
-    // Note: Headless-specific flags (--output-format) are added by
-    // buildHeadlessArgs() to ensure correct positioning after the prompt argument.
+    // Note: Headless-specific flags (--output-format / --input-format) are added by
+    // buildHeadlessArgs(); stream-json SDK mode sends its prompt through stdin.
 
     // Model selection with validation - use resolved property if available
     const model = this.validateAndGetModel(resolvedModel);
@@ -813,35 +822,28 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
   /**
    * Build CLI arguments for headless mode
    *
-   * Qwen CLI expects the prompt as a positional argument.
-   * Format: qwen "prompt" --output-format stream-json --input-format stream-json [other args]
-   *
-   * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
+   * Qwen's stream-json SDK mode receives the prompt as a stdin user message
+   * after its initialize handshake; no prompt is included in argv.
    *
    * @param baseArgs Base arguments array
-   * @param prompt Prompt text or file reference
-   * @returns Complete arguments array
+   * @param _prompt Prompt text or file reference, delivered by the control channel
+   * @returns Headless mode arguments
    */
-  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+  buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
     this.logParser.setSubagentUsageEnabled(false);
-    // --output-format stream-json enables structured JSON output for reliable parsing.
-    // --input-format stream-json is required alongside it (Qwen rejects the combination
-    // otherwise) and exempts this run from Qwen's non-interactive auto-deny gate, which
-    // resolves --allowed-tools entries against a narrower, stale alias table than the
-    // one used everywhere else and silently force-denies tools it doesn't recognize
-    // (e.g. write_file) even when explicitly allowed. Qwen auto-wraps this positional
-    // prompt into the initial stream-json user message internally — no stdin writing
-    // needed — and ctrlyoke's headless spawn already runs with stdin ignored, so the
-    // session's stdin read loop EOFs immediately and drains the in-flight turn before
-    // exiting, matching the existing process-exit completion signal.
+    // Stream-json SDK mode requires stdin control messages: the coordinator sends
+    // initialize, waits for its response, then sends the first user message.
     return [
-      prompt,
       "--output-format",
       "stream-json",
       "--input-format",
       "stream-json",
       ...baseArgs,
     ];
+  }
+
+  createHeadlessControlChannel(): QwenHeadlessControlChannel {
+    return new QwenHeadlessControlChannel();
   }
 
   /**

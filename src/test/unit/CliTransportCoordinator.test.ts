@@ -9,12 +9,21 @@ import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarn
 import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHeadlessControlChannel } from "../../core/harness/qwen/QwenHeadlessControlChannel";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import {
+  QWEN_CONTROL,
+  QWEN_EVENT_TYPES,
+} from "../../core/harness/qwen/QwenProtocolConstants";
 import {
   HARNESS_IDS,
   CLI_EVENT_TYPES,
   HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
+  HEADLESS_CONTROL_OBSERVATION_KINDS,
   FAILURE_KINDS,
+  APPROVAL_DECISIONS,
+  HEADLESS_APPROVAL_DENIAL_MESSAGE,
   type HeadlessPromptDelivery,
   MESSAGE_TYPES,
   SESSION_KINDS,
@@ -331,6 +340,492 @@ suite("CliTransportCoordinator", () => {
       { args: ["run"], stdinText: 'read "C:\\a b\\x.md"' },
       { args: ["run", 'read "C:\\a b\\x.md"'], stdinText: undefined },
     ]);
+  });
+
+  test("runs the control handshake before the prompt and serializes writes", async () => {
+    const writes: string[] = [];
+    let activeWrites = 0;
+    let maxConcurrentWrites = 0;
+    let closed = false;
+    const calls: string[] = [];
+    let writerHandle:
+      { write(text: string): Promise<void>; end(): Promise<void> } | undefined;
+    const channel = {
+      spawnShape: { args: ["--control"] },
+      steerDelivery: "queue" as const,
+      start: async (writer: { write(text: string): Promise<void> }) => {
+        writerHandle = writer as typeof writerHandle;
+        await writer.write("initialize\n");
+      },
+      sendUserMessage: async (text: string) => {
+        calls.push(`user:${text}`);
+        await writerHandle?.write(`user:${text}\n`);
+      },
+      observe: (record: unknown) => {
+        const kind = (record as { kind?: string }).kind;
+        if (kind === "approval") {
+          return [
+            {
+              kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
+              requestId: "approval-1",
+            },
+          ];
+        }
+        if (kind === "turn-end") {
+          return [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }];
+        }
+        return [];
+      },
+      answerApproval: async (
+        requestId: string,
+        decision: string,
+        message?: string
+      ) => {
+        calls.push(`approval:${requestId}:${decision}:${message}`);
+        await writerHandle?.write(`deny:${requestId}\n`);
+      },
+      close: () => {
+        closed = true;
+      },
+    };
+    const rawWriter = {
+      write: (
+        chunk: string,
+        _encoding: string,
+        callback?: (error?: Error) => void
+      ) => {
+        activeWrites++;
+        maxConcurrentWrites = Math.max(maxConcurrentWrites, activeWrites);
+        setTimeout(() => {
+          writes.push(chunk);
+          activeWrites--;
+          callback?.();
+        }, 1);
+        return true;
+      },
+      end: (callback?: () => void) => callback?.(),
+    };
+    const provider = createHeadlessProvider();
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        ...provider,
+        createHeadlessControlChannel: () => channel,
+      } as any,
+      processManager: {
+        spawn: async (
+          _command: string,
+          args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          assert.deepStrictEqual(args, ["prompt", "--control"]);
+          options.onStdinReady?.(rawWriter);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          options.onStdout?.('{"kind":"approval"}\n{"kind":"turn-end"}\n');
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await coordinator.executeHeadless([], "prompt", [], async () => true);
+
+    assert.deepStrictEqual(writes, [
+      "initialize\n",
+      "user:prompt\n",
+      "deny:approval-1\n",
+    ]);
+    assert.strictEqual(maxConcurrentWrites, 1);
+    assert.deepStrictEqual(calls, [
+      "user:prompt",
+      `approval:approval-1:${APPROVAL_DECISIONS.DENY}:${HEADLESS_APPROVAL_DENIAL_MESSAGE}`,
+    ]);
+    assert.strictEqual(closed, true);
+  });
+
+  test("runs Qwen initialize, user message, approval denial, and result through one process", async () => {
+    const writes: string[] = [];
+    let emitResult!: () => void;
+    const resultReceived = new Promise<void>((resolve) => {
+      emitResult = resolve;
+    });
+    const qwen = new QwenHarnessAdapter();
+    const provider = {
+      ...createHeadlessProvider(),
+      config: {
+        ...createHeadlessProvider().config,
+        name: "qwen",
+      },
+      buildHeadlessArgs: (_args: string[], prompt: string) =>
+        qwen.buildHeadlessArgs([], prompt),
+      createHeadlessControlChannel: () => new QwenHeadlessControlChannel(),
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          assert.deepStrictEqual(args, [
+            "--output-format",
+            "stream-json",
+            "--input-format",
+            "stream-json",
+          ]);
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              writes.push(chunk);
+              const message = JSON.parse(chunk) as {
+                type: string;
+                request_id?: string;
+                message?: { content?: string };
+                response?: { response?: { behavior?: string } };
+              };
+              if (message.type === QWEN_CONTROL.REQUEST_TYPE) {
+                options.onStdout?.(
+                  `${JSON.stringify({
+                    type: QWEN_CONTROL.RESPONSE_TYPE,
+                    response: { request_id: message.request_id },
+                  })}\n`
+                );
+              } else if (message.type === QWEN_CONTROL.USER_TYPE) {
+                options.onStdout?.(
+                  `${JSON.stringify({
+                    type: QWEN_CONTROL.REQUEST_TYPE,
+                    request_id: "qwen-approval-1",
+                    request: { subtype: QWEN_CONTROL.CAN_USE_TOOL_SUBTYPE },
+                  })}\n`
+                );
+              } else if (message.type === QWEN_CONTROL.RESPONSE_TYPE) {
+                assert.strictEqual(
+                  message.response?.response?.behavior,
+                  QWEN_CONTROL.DENY_BEHAVIOR
+                );
+                options.onStdout?.(
+                  `${JSON.stringify({ type: QWEN_EVENT_TYPES.RESULT })}\n`
+                );
+                emitResult();
+              }
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => callback?.(),
+          });
+          await resultReceived;
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    assert.strictEqual(
+      await coordinator.executeHeadless(
+        [],
+        "Qwen prompt",
+        [],
+        async () => true
+      ),
+      true
+    );
+    const initialize = JSON.parse(writes[0]) as {
+      type: string;
+      request: { subtype: string };
+    };
+    const userMessage = JSON.parse(writes[1]) as {
+      type: string;
+      message: { content: string };
+    };
+    const denial = JSON.parse(writes[2]) as {
+      type: string;
+      response: {
+        subtype: string;
+        request_id: string;
+        response: { behavior: string; message: string };
+      };
+    };
+    assert.deepStrictEqual(
+      [initialize.type, initialize.request.subtype],
+      [QWEN_CONTROL.REQUEST_TYPE, QWEN_CONTROL.INITIALIZE_SUBTYPE]
+    );
+    assert.deepStrictEqual(
+      [userMessage.type, userMessage.message.content],
+      [QWEN_CONTROL.USER_TYPE, "Qwen prompt"]
+    );
+    assert.deepStrictEqual(
+      [
+        denial.type,
+        denial.response.subtype,
+        denial.response.request_id,
+        denial.response.response.behavior,
+      ],
+      [
+        QWEN_CONTROL.RESPONSE_TYPE,
+        QWEN_CONTROL.SUCCESS_SUBTYPE,
+        "qwen-approval-1",
+        QWEN_CONTROL.DENY_BEHAVIOR,
+      ]
+    );
+    assert.ok(
+      denial.response.response.message.includes("cannot ask for approval")
+    );
+  });
+
+  test("cancels a Qwen process and surfaces initialize timeout as a transport error", async () => {
+    let finishSpawn!: () => void;
+    let cancelled = false;
+    const qwen = new QwenHarnessAdapter();
+    const provider = {
+      ...createHeadlessProvider(),
+      buildHeadlessArgs: (_args: string[], prompt: string) =>
+        qwen.buildHeadlessArgs([], prompt),
+      createHeadlessControlChannel: () => new QwenHeadlessControlChannel(5),
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: { onStdinReady?: (writer: any) => void }
+        ) => {
+          options.onStdinReady?.({
+            write: (
+              _chunk: string,
+              _encoding: string,
+              callback?: () => void
+            ) => {
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => callback?.(),
+          });
+          await new Promise<void>((resolve) => (finishSpawn = resolve));
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+        cancel: async () => {
+          cancelled = true;
+          finishSpawn();
+        },
+        isActive: () => true,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await assert.rejects(
+      coordinator.executeHeadless([], "Qwen prompt", [], async () => true),
+      (error: unknown) =>
+        error instanceof CliTransportError &&
+        error.message.includes("did not answer")
+    );
+    assert.strictEqual(cancelled, true);
+  });
+
+  test("observes complete stdout records for both streaming source modes", async () => {
+    for (const mode of [
+      HEADLESS_SOURCE_MODES.STDOUT,
+      HEADLESS_SOURCE_MODES.LOG,
+    ]) {
+      const observed: unknown[] = [];
+      let logTailStdout = "";
+      const channel = {
+        spawnShape: {},
+        steerDelivery: "queue" as const,
+        start: async () => {},
+        sendUserMessage: async () => {},
+        observe: (record: unknown) => {
+          observed.push(record);
+          return [];
+        },
+        answerApproval: async () => {},
+        close: () => {},
+      };
+      const provider = createHeadlessProvider();
+      const coordinator = new CliTransportCoordinator({
+        provider: {
+          ...provider,
+          createHeadlessControlChannel: () => channel,
+        } as any,
+        processManager: {
+          spawn: async (
+            _command: string,
+            _args: string[],
+            options: {
+              onStdinReady?: (writer: any) => void;
+              onStdout?: (chunk: string) => void;
+            }
+          ) => {
+            options.onStdinReady?.({
+              write: () => true,
+              end: (callback?: () => void) => callback?.(),
+            });
+            options.onStdout?.('{"id":1}\n{"id":2}\n');
+            return { stdout: "", stderr: "", exitCode: 0 };
+          },
+          isActive: () => false,
+        } as any,
+        resolveCliCommand: resolveCommand,
+        runtimeState: {
+          getWorkspaceRoot: () => process.cwd(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: createHeadlessHostCallbacks(),
+      });
+      const source = {
+        mode,
+        parser: {},
+        logTail:
+          mode === HEADLESS_SOURCE_MODES.LOG
+            ? {
+                start: async () => {},
+                onStdoutChunk: (chunk: string) => (logTailStdout += chunk),
+                finish: async () => {},
+                abort: () => {},
+              }
+            : undefined,
+      } as any;
+
+      await coordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true,
+        undefined,
+        source
+      );
+
+      assert.deepStrictEqual(observed, [{ id: 1 }, { id: 2 }]);
+      if (mode === HEADLESS_SOURCE_MODES.LOG) {
+        assert.strictEqual(logTailStdout, '{"id":1}\n{"id":2}\n');
+      }
+    }
+  });
+
+  test("closes the control channel on cancellation and spawn errors", async () => {
+    let closedOnCancel = false;
+    let spawnEntered!: () => void;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    const spawnEnteredPromise = new Promise<void>(
+      (resolve) => (spawnEntered = resolve)
+    );
+    const heldSpawn = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const channel = {
+      spawnShape: {},
+      steerDelivery: "queue" as const,
+      start: async () => {},
+      sendUserMessage: async () => {},
+      observe: () => [],
+      answerApproval: async () => {},
+      close: () => (closedOnCancel = true),
+    };
+    const provider = createHeadlessProvider();
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        ...provider,
+        createHeadlessControlChannel: () => channel,
+      } as any,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: { onStdinReady?: (writer: any) => void }
+        ) => {
+          options.onStdinReady?.({
+            write: () => true,
+            end: (callback?: () => void) => callback?.(),
+          });
+          spawnEntered();
+          return heldSpawn;
+        },
+        isActive: () => true,
+        cancel: async () => {},
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    const execution = coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => true
+    );
+    await spawnEnteredPromise;
+    await coordinator.cancel();
+    assert.strictEqual(closedOnCancel, true);
+    finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+    await execution;
+
+    let closedOnError = false;
+    const errorCoordinator = new CliTransportCoordinator({
+      provider: {
+        ...provider,
+        createHeadlessControlChannel: () => ({
+          ...channel,
+          close: () => (closedOnError = true),
+        }),
+      } as any,
+      processManager: {
+        spawn: async () => {
+          throw new Error("spawn failed");
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    assert.strictEqual(
+      await errorCoordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true
+      ),
+      false
+    );
+    assert.strictEqual(closedOnError, true);
   });
 
   test("classifies headless prompt expiry as a timeout transport failure", async () => {

@@ -75,6 +75,25 @@ suite("CliProcessManager stdin", () => {
     assert.strictEqual(JSON.parse(result.stdout), text);
   });
 
+  test("keeps stdin open for writes from the caller", async () => {
+    const manager = new CliProcessManager(process.cwd());
+    let writerReady!: import("stream").Writable;
+    const result = await manager.spawn(process.execPath, ["-e", echoStdin], {
+      onStdinReady: (writer) => {
+        writerReady = writer;
+        writer.write("first ");
+        setTimeout(() => {
+          writer.write("second");
+          writer.end();
+        }, 10);
+      },
+    });
+
+    assert.ok(writerReady);
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(JSON.parse(result.stdout), "first second");
+  });
+
   test("leaves stdin ignored without stdinText", async () => {
     const manager = new CliProcessManager(process.cwd());
     const result = await manager.spawn(process.execPath, ["-e", echoStdin]);

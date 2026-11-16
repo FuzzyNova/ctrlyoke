@@ -14,6 +14,10 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CTRLYOKE_MCP_MODES,
   EXECUTION_MODES,
+  INLINE_GENERATED_PROMPT_ROOT_TAG,
+  INLINE_GENERATED_PROMPT_USER_SECTION_TAG,
+  MAX_INLINE_GENERATED_PROMPT_CHARS,
+  ESTIMATED_CHARS_PER_TOKEN,
   MCP_SKILL_NAMES,
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
@@ -144,6 +148,9 @@ export interface CliPromptPreparerDeps {
     promptRefs: string[],
     secretRefs: string[]
   ) => string;
+  shouldInlineGeneratedPromptOnStdin?: () => boolean;
+  transformInlinedGeneratedPrompt?: (text: string) => string;
+  requiresNonSlashInlinePromptPrefix?: boolean;
   /** Resolve a name without exposing its value to prompt preparation. */
   isSecretAvailable?: (name: string) => Promise<boolean>;
 }
@@ -175,6 +182,9 @@ export class CliPromptPreparer {
     const originalPromptText = conditionOutputSubstitution.text;
     const harnessId =
       resolvedProperties?.harness ?? ConfigurationUtils.getIntegrationMode();
+    const executionMode =
+      resolvedProperties?.executionMode ??
+      ConfigurationUtils.getCliExecutionMode();
     const ctrlyokeMcpModeDiagnostics =
       resolvedProperties?.ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL &&
       resolvedProperties !== undefined &&
@@ -503,7 +513,9 @@ export class CliPromptPreparer {
       harnessId,
       sourceRuntimeCopyMutations,
       secretNames,
-      effectiveSkills
+      effectiveSkills,
+      executionMode === EXECUTION_MODES.HEADLESS &&
+        (this.deps.shouldInlineGeneratedPromptOnStdin?.() ?? false)
     );
     const planWithDiagnostics = this.withDiagnostics(
       this.withSourceRuntimeDisclosure(
@@ -693,8 +705,21 @@ export class CliPromptPreparer {
     harnessId: ResolvedProperties["harness"],
     sourceRuntimeCopyMutations: readonly PreparedMutation[],
     secretNames: readonly string[],
-    effectiveSkills: readonly string[]
+    effectiveSkills: readonly string[],
+    inlineGeneratedPromptOnStdin: boolean
   ): Promise<PromptPreparationPlan> {
+    if (inlineGeneratedPromptOnStdin) {
+      return this.createInlineCategorizedPromptPlan(
+        sections,
+        workflowContext,
+        contextContent,
+        hasPriorContext,
+        harnessId,
+        sourceRuntimeCopyMutations,
+        secretNames,
+        effectiveSkills
+      );
+    }
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace root available for categorized temp files");
@@ -943,6 +968,280 @@ export class CliPromptPreparer {
       promptRefs,
       secretRefs
     );
+
+    return {
+      tempFilePaths: plannedFiles.map((file) => file.path),
+      promptWithInstruction,
+      files: plannedFiles,
+      mutations,
+      promptPreview: {
+        sections: previewSections,
+        totalByteCount: previewSections.reduce(
+          (sum, section) => sum + section.byteCount,
+          0
+        ),
+        includedBodyByteCount: previewSections.reduce(
+          (sum, section) =>
+            sum + (section.body ? Buffer.byteLength(section.body, "utf8") : 0),
+          0
+        ),
+        bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
+      },
+      diagnostics,
+      imageFileRefs: [...sections.imageFileRefs],
+      attachedSkills: [...effectiveSkills],
+    };
+  }
+
+  private async createInlineCategorizedPromptPlan(
+    sections: PromptSections,
+    workflowContext: WorkflowContext | undefined,
+    contextContent: string | undefined,
+    hasPriorContext: boolean,
+    harnessId: ResolvedProperties["harness"],
+    sourceRuntimeCopyMutations: readonly PreparedMutation[],
+    secretNames: readonly string[],
+    effectiveSkills: readonly string[]
+  ): Promise<PromptPreparationPlan> {
+    const workspaceRoot = this.deps.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace root available for categorized temp files");
+    }
+
+    type InlineSection = {
+      category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES];
+      previewCategory: PreviewPromptCategory;
+      content: string;
+      chunks: string[];
+      tokenCounts: number[];
+      lineCounts: number[];
+    };
+    const splitter = new PromptFileSplitter(this.deps.getTempFileSplitConfig());
+    const sectionsToInline: InlineSection[] = [];
+    const addSection = (
+      category: InlineSection["category"],
+      previewCategory: PreviewPromptCategory,
+      content: string,
+      splitContext = false,
+      fallbackContent = content
+    ) => {
+      const split = splitContext
+        ? splitter.splitContextContent(fallbackContent)
+        : splitter.split(fallbackContent);
+      sectionsToInline.push({
+        category,
+        previewCategory,
+        content,
+        chunks: split.chunks,
+        tokenCounts: split.tokenCounts,
+        lineCounts: split.lineCounts,
+      });
+    };
+
+    if (sections.agentContent) {
+      addSection(
+        TEMP_FILE_CATEGORIES.AGENT,
+        PREVIEW_PROMPT_CATEGORIES.AGENT_INSTRUCTIONS,
+        `<agentInstructions>\n${sections.agentContent}\n</agentInstructions>`
+      );
+    }
+    if (secretNames.length > 0) {
+      addSection(
+        TEMP_FILE_CATEGORIES.SECRETS,
+        PREVIEW_PROMPT_CATEGORIES.SECRETS,
+        createAvailableSecretsBlock(secretNames)
+      );
+    }
+    if (sections.skillContent) {
+      addSection(
+        TEMP_FILE_CATEGORIES.SKILLS,
+        PREVIEW_PROMPT_CATEGORIES.SKILL_CONTENT,
+        sections.skillContent
+      );
+    }
+    if (contextContent) {
+      addSection(
+        TEMP_FILE_CATEGORIES.CONTEXT,
+        PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+        contextContent,
+        true
+      );
+    }
+    if (sections.excerptContent) {
+      addSection(
+        TEMP_FILE_CATEGORIES.EXCERPTS,
+        PREVIEW_PROMPT_CATEGORIES.INLINE_REFERENCE,
+        sections.excerptContent
+      );
+    }
+    addSection(
+      TEMP_FILE_CATEGORIES.PROMPT,
+      PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
+      `<${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>\n${sections.userPromptText}\n</${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>`,
+      false,
+      sections.userPromptText
+    );
+
+    const transform = (text: string) =>
+      this.deps.transformInlinedGeneratedPrompt?.(text) ?? text;
+    const transformedContent = new Map(
+      sectionsToInline.map((section) => [
+        section.category,
+        transform(section.content),
+      ])
+    );
+    const selectedForFallback = new Set<InlineSection>();
+    const getInlineLength = () => {
+      const inlineContent = sectionsToInline
+        .filter((section) => !selectedForFallback.has(section))
+        .map((section) => transformedContent.get(section.category) ?? "")
+        .join("\n\n");
+      return `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n${inlineContent}\n</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`
+        .length;
+    };
+    if (getInlineLength() > MAX_INLINE_GENERATED_PROMPT_CHARS) {
+      for (const section of [...sectionsToInline].sort((left, right) => {
+        const leftLength = transformedContent.get(left.category)?.length ?? 0;
+        const rightLength = transformedContent.get(right.category)?.length ?? 0;
+        return rightLength - leftLength;
+      })) {
+        selectedForFallback.add(section);
+        if (getInlineLength() <= MAX_INLINE_GENERATED_PROMPT_CHARS) {
+          break;
+        }
+      }
+    }
+
+    const tempMgr = new TempFileManager(workspaceRoot);
+    const planId = TempFileManager.createPlanId();
+    const filePath = workflowContext?.workflowName ?? workflowContext?.filePath;
+    const stepNumber = workflowContext
+      ? workflowContext.promptIndex + 1
+      : undefined;
+    const plannedFiles: PlannedPromptFile[] = [];
+    const mutations: PreparedMutation[] = [...sourceRuntimeCopyMutations];
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    const previewSections: CategorizedPromptSectionPreview[] = [];
+    let remainingBodyBytes = MAX_PREVIEW_BODY_BYTES;
+    const refs = new Map<InlineSection["category"], string[]>();
+
+    for (const section of sectionsToInline) {
+      const isFallback = selectedForFallback.has(section);
+      if (!isFallback) {
+        const preview = this.createBodySection(
+          section.previewCategory,
+          section.content,
+          0,
+          this.isTierTwoCategory(section.previewCategory)
+            ? Math.min(remainingBodyBytes, MAX_CONTENT_SIZE)
+            : remainingBodyBytes,
+          Math.ceil(section.content.length / ESTIMATED_CHARS_PER_TOKEN),
+          section.content.split("\n").length
+        );
+        remainingBodyBytes -= preview.includedByteCount;
+        previewSections.push(preview.section);
+        continue;
+      }
+
+      const categoryRefs: string[] = [];
+      const chunks = section.chunks;
+      for (let index = 0; index < chunks.length; index++) {
+        const chunkIndex = chunks.length > 1 ? index + 1 : undefined;
+        const plannedPath = tempMgr.getCategoryFilePath(
+          section.category,
+          filePath,
+          stepNumber,
+          chunkIndex,
+          planId
+        );
+        const reference = this.deps.formatTempFileRef(
+          tempMgr,
+          plannedPath,
+          section.category
+        );
+        plannedFiles.push({
+          path: plannedPath,
+          category: section.category,
+          reference,
+          content: chunks[index],
+          chunkIndex: index,
+        });
+        mutations.push({
+          path: plannedPath,
+          intendedContent: chunks[index],
+          apply: () => tempMgr.writeCategoryFile(plannedPath, chunks[index]),
+          restore: () => tempMgr.deleteFiles([plannedPath]),
+        });
+        const preview = this.createBodySection(
+          section.previewCategory,
+          chunks[index],
+          index,
+          remainingBodyBytes,
+          section.tokenCounts[index],
+          section.lineCounts[index]
+        );
+        remainingBodyBytes -= preview.includedByteCount;
+        previewSections.push(preview.section);
+        categoryRefs.push(reference);
+      }
+      refs.set(section.category, categoryRefs);
+    }
+
+    const directRefs: string[] = [];
+    for (let index = 0; index < sections.directFileRefs.length; index++) {
+      const absolutePath = sections.directFileRefs[index];
+      const reference = this.deps.formatDirectFileRef(absolutePath);
+      directRefs.push(reference);
+      previewSections.push(
+        await this.buildFileReferenceSection(
+          absolutePath,
+          index,
+          harnessId,
+          diagnostics,
+          reference
+        )
+      );
+    }
+    if (hasPriorContext && !contextContent) {
+      previewSections.push({
+        category: PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+        byteCount: 0,
+        tokenEstimate: 0,
+        chunkIndex: 0,
+        lineCount: null,
+        contentHash: null,
+        truncationReason: PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE,
+      });
+    }
+
+    const inlineBody = sectionsToInline
+      .filter((section) => !selectedForFallback.has(section))
+      .map(
+        (section) => transformedContent.get(section.category) ?? section.content
+      )
+      .join("\n\n");
+    let rootContent = inlineBody;
+    if (
+      this.deps.requiresNonSlashInlinePromptPrefix &&
+      rootContent.startsWith("/")
+    ) {
+      rootContent = ` ${rootContent}`;
+    }
+    const rootBlock = `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n${rootContent}\n</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`;
+    const formatRefs = (category: InlineSection["category"]) =>
+      refs.get(category) ?? [];
+    const fallbackInstruction = this.deps.formatCategorizedReferences(
+      formatRefs(TEMP_FILE_CATEGORIES.AGENT),
+      formatRefs(TEMP_FILE_CATEGORIES.SKILLS),
+      directRefs,
+      formatRefs(TEMP_FILE_CATEGORIES.CONTEXT),
+      formatRefs(TEMP_FILE_CATEGORIES.EXCERPTS),
+      formatRefs(TEMP_FILE_CATEGORIES.PROMPT),
+      formatRefs(TEMP_FILE_CATEGORIES.SECRETS)
+    );
+    const promptWithInstruction = [rootBlock, fallbackInstruction.trim()]
+      .filter(Boolean)
+      .join("\n\n");
 
     return {
       tempFilePaths: plannedFiles.map((file) => file.path),

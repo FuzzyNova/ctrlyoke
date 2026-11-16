@@ -6,6 +6,22 @@ export const QWEN_EVENT_TYPES = {
   RESULT: "result",
 } as const;
 
+/** Stream-json SDK control protocol vocabulary used by Qwen's headless channel. */
+export const QWEN_CONTROL = {
+  REQUEST_TYPE: "control_request",
+  RESPONSE_TYPE: "control_response",
+  USER_TYPE: "user",
+  INITIALIZE_SUBTYPE: "initialize",
+  CAN_USE_TOOL_SUBTYPE: "can_use_tool",
+  SUCCESS_SUBTYPE: "success",
+  ERROR_SUBTYPE: "error",
+  USER_ROLE: "user",
+  DENY_BEHAVIOR: "deny",
+} as const;
+
+/** A silent Qwen initialize would otherwise leave the step waiting indefinitely. */
+export const QWEN_INITIALIZE_TIMEOUT_MS = 10_000;
+
 /**
  * Start of the error Qwen 0.27+ returns, without running the tool, when the
  * model calls a deferred MCP tool before loading its schema with
@@ -71,7 +87,9 @@ export const QWEN_TASK_NOTIFICATION_PATTERN =
 
 /**
  * Terminal `<status>` values. A monitor also sends `running` pulses for each
- * output line; those wake a turn but do not finish the task.
+ * output line; those wake a turn but do not finish the task. A subagent's
+ * `<agent>.meta.json` `status` uses the same terminal values (and `running` /
+ * `paused` otherwise).
  */
 export const QWEN_TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set([
   "completed",
@@ -83,6 +101,16 @@ export const QWEN_AGENT_ARGUMENTS = {
   DESCRIPTION: "description",
   TYPE: "subagent_type",
   PROMPT: "prompt",
+} as const;
+
+/**
+ * File names beside each other in `<project>/subagents/<sessionId>/`: a
+ * subagent's transcript and the lifecycle sidecar Qwen patches to a terminal
+ * `status` only after the transcript's last record is written.
+ */
+export const QWEN_SUBAGENT_FILES = {
+  TRANSCRIPT_SUFFIX: ".jsonl",
+  META_SUFFIX: ".meta.json",
 } as const;
 
 /**

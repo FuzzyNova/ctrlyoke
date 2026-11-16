@@ -219,6 +219,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
       updateCommand: "opencode upgrade",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: false,
     // `opencode run` wraps every positional message argument containing a
     // space in literal quotes (escaping any inner `"`) before sending it to
     // the model, but uses piped stdin verbatim when no message is given.

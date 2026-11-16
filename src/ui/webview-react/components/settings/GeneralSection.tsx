@@ -362,6 +362,14 @@ export function GeneralSection({
           onChange={(v) => onUpdate("execution.autoDeleteTempFiles", v)}
           {...rowProps}
         />
+        <SettingToggleRow
+          settingKey="execution.inlineGeneratedPromptOnStdin"
+          checked={exec.inlineGeneratedPromptOnStdin}
+          onChange={(v) =>
+            onUpdate("execution.inlineGeneratedPromptOnStdin", v)
+          }
+          {...rowProps}
+        />
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">

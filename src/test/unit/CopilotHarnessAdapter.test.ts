@@ -10,6 +10,8 @@ import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { getCopilotHomeDir } from "../../utils/HarnessHome";
+import { HEADLESS_PROMPT_DELIVERIES } from "../../types/DashboardConstants";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 
 function createProperties(
   mcpServers: ResolvedProperties["mcpServers"] = ["ctrlyoke"]
@@ -26,6 +28,46 @@ function createProperties(
 }
 
 suite("CopilotHarnessAdapter", () => {
+  test("uses piped stdin for non-empty headless prompts without --prompt", () => {
+    const provider = new CopilotHarnessAdapter();
+    assert.strictEqual(provider.config.inlinesGeneratedPromptOnStdin, true);
+    assert.strictEqual(
+      provider.config.headlessPromptDelivery,
+      HEADLESS_PROMPT_DELIVERIES.STDIN
+    );
+    assert.deepStrictEqual(
+      provider.buildHeadlessArgs(["--model", "test"], "task"),
+      ["--output-format", "json", "--model", "test"]
+    );
+    assert.throws(
+      () => provider.buildHeadlessArgs([], "  \n"),
+      /stdin prompt cannot be empty/
+    );
+  });
+
+  test("removes the Copilot stdin turn delimiter from the child environment", () => {
+    const original = process.env.COPILOT_PROMPT_TURN_DELIMITER;
+    process.env.COPILOT_PROMPT_TURN_DELIMITER = "parent-value";
+    try {
+      const childEnv = {
+        ...HarnessAdapterUtils.buildProcessEnv(),
+        ...new CopilotHarnessAdapter().getHeadlessSpawnEnv(),
+      };
+      assert.strictEqual(childEnv.COPILOT_PROMPT_TURN_DELIMITER, undefined);
+      assert.strictEqual(
+        new CopilotHarnessAdapter().getHeadlessSpawnEnv()
+          .COPILOT_PROMPT_TURN_DELIMITER,
+        undefined
+      );
+    } finally {
+      if (original === undefined) {
+        delete process.env.COPILOT_PROMPT_TURN_DELIMITER;
+      } else {
+        process.env.COPILOT_PROMPT_TURN_DELIMITER = original;
+      }
+    }
+  });
+
   test("probes Copilot session logs by ID only", async () => {
     const home = await makeTempDir("copilot-probe-");
     const oldHome = process.env.HOME;

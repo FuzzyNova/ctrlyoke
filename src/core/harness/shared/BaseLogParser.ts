@@ -13,7 +13,11 @@ import {
   TextData,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  INLINE_GENERATED_PROMPT_ROOT_TAG,
+  INLINE_GENERATED_PROMPT_USER_SECTION_TAG,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { splitCompleteLines, splitLines } from "../../../utils/TextLines";
@@ -794,7 +798,30 @@ export abstract class BaseLogParser implements ILogParser {
    * ```
    */
   protected normalizePromptForMatching(text: string): string {
-    return text.toLowerCase().trim().replace(/\\/g, "/"); // Convert all backslashes to forward slashes
+    const unwrapped = this.extractInlineUserPrompt(text);
+    return unwrapped.toLowerCase().trim().replace(/\\/g, "/"); // Convert all backslashes to forward slashes
+  }
+
+  /** Remove generated inline context from an echoed prompt before matching it. */
+  protected extractInlineUserPrompt(text: string): string {
+    const rootOpen = `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>`;
+    const rootClose = `</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`;
+    const rootStart = text.toLowerCase().indexOf(rootOpen.toLowerCase());
+    const rootEnd = text.toLowerCase().lastIndexOf(rootClose.toLowerCase());
+    if (rootStart < 0 || rootEnd < rootStart) {
+      return text;
+    }
+    const rootContent = text.slice(rootStart + rootOpen.length, rootEnd);
+    const userOpen = `<${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>`;
+    const userClose = `</${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>`;
+    const userStart = rootContent.toLowerCase().indexOf(userOpen.toLowerCase());
+    const userEnd = rootContent
+      .toLowerCase()
+      .lastIndexOf(userClose.toLowerCase());
+    if (userStart < 0 || userEnd < userStart) {
+      return rootContent;
+    }
+    return rootContent.slice(userStart + userOpen.length, userEnd).trim();
   }
 
   protected isDispatchedPromptEcho(
@@ -807,23 +834,25 @@ export abstract class BaseLogParser implements ILogParser {
     }
 
     const shouldUsePrefix = match !== PROMPT_ECHO_MATCH.FULL_CONTAINS;
-    const normalizedDispatched = this.normalizePromptForMatching(
-      shouldUsePrefix
-        ? dispatchedPromptText.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
-        : dispatchedPromptText
-    );
-    const normalizedLogged = this.normalizePromptForMatching(
-      shouldUsePrefix
-        ? loggedText.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
-        : loggedText
-    );
+    // Strip the generated wrapper before taking a prefix: with inline prompts,
+    // generated sections can fill the first 100 characters before the user's
+    // own prompt appears in the echoed message.
+    const normalizedDispatched =
+      this.normalizePromptForMatching(dispatchedPromptText);
+    const normalizedLogged = this.normalizePromptForMatching(loggedText);
+    const dispatchedToMatch = shouldUsePrefix
+      ? normalizedDispatched.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
+      : normalizedDispatched;
+    const loggedToMatch = shouldUsePrefix
+      ? normalizedLogged.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
+      : normalizedLogged;
 
     switch (match) {
       case PROMPT_ECHO_MATCH.PREFIX_CONTAINS:
       case PROMPT_ECHO_MATCH.FULL_CONTAINS:
-        return normalizedLogged.includes(normalizedDispatched);
+        return loggedToMatch.includes(dispatchedToMatch);
       case PROMPT_ECHO_MATCH.PREFIX_EQUALS:
-        return normalizedLogged === normalizedDispatched;
+        return loggedToMatch === dispatchedToMatch;
     }
 
     return false;

@@ -7,6 +7,7 @@ import type {
 } from "./IToolPermissionMapper";
 import type { ISandboxMapper } from "./ISandboxMapper";
 import type { HarnessAdapterPreparation } from "./PreparedMutation";
+import type { IHeadlessControlChannel } from "../IHeadlessControlChannel";
 export type { HarnessAdapterPreparation } from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type { HarnessVersionPolicy } from "../../../../utils/HarnessVersion";
@@ -94,6 +95,9 @@ export interface HarnessConfig {
    * every argument containing a space) but reads piped stdin verbatim.
    */
   headlessPromptDelivery?: HeadlessPromptDelivery;
+
+  /** Inline ctrlyoke-generated prompt sections for headless stdin delivery. */
+  inlinesGeneratedPromptOnStdin?: boolean;
 
   /**
    * Whether this provider uses notification-based completion detection in interactive mode.
@@ -312,6 +316,12 @@ export interface IHarnessAdapter {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[];
+
+  /** Escape harness syntax in generated content embedded in a headless prompt. */
+  transformInlinedGeneratedPrompt?(text: string): string;
+
+  /** Prefix a safe character when the harness treats a leading slash as a command. */
+  requiresNonSlashInlinePromptPrefix?: boolean;
 
   /**
    * Build CLI arguments for interactive TUI mode
@@ -578,6 +588,11 @@ export interface IHarnessAdapter {
    * at spawn time as well as on the spawned child.
    */
   getHeadlessSpawnEnv?(): NodeJS.ProcessEnv;
+
+  /** Create the optional stdin control protocol for one headless execution. */
+  createHeadlessControlChannel?(
+    promptText: string
+  ): IHeadlessControlChannel | undefined;
 
   /**
    * Receive the sandbox mapper's process environment for the next launch

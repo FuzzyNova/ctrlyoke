@@ -1,13 +1,21 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Not started. Researched 2026-11-15 by live probes and source reading (details
-under "Findings"). Open questions resolved 2026-11-15 (see "Decisions"). Nothing in ctrlyoke
-has changed yet.
+**Status:** Stage 1 is implemented: the shared transport and Qwen's headless control channel
+are covered by unit tests, and the live Qwen approval case that used to hang now passes. The
+Stage 1 follow-up on SDK mode side effects (under "Qwen Code" findings) is done: subagent output
+loss was a ctrlyoke child-follower race, now fixed by completing a child from the parent
+stream's report or its `meta.json` status; SDK mode's empty agent list cannot be restored without copying Qwen's builtin agent
+definitions, so it is documented (`docs/harnesses/qwen-cli.md`, CHANGELOG **Changed**).
+Researched 2026-11-15 by live probes and source reading (details under "Findings"). Open
+questions resolved 2026-11-15 (see "Decisions").
+Deviation from the sketch: the optional provider hook currently receives only prepared prompt
+text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
+before calling `channel.close()` so channel cleanup does not need to own transport EOF.
 **Priority:** P1 (Stage 1 fixes a high-severity hang)
 **Order:** implement this plan's Stage 1 before the stdin inline plan. It fixes the P1 hang and
 builds the transport the inline plan reuses.
 
-**Fixes:** [`qwen-headless-approval-request-hangs.md`](../bugs/backlog/qwen-headless-approval-request-hangs.md)
+**Fixes:** [`qwen-headless-approval-request-hangs.md`](../bugs/implemented/qwen-headless-approval-request-hangs.md)
 (Stage 1).
 **Extends:** [`STEER_MESSAGE_PLAN.md`](../implemented/STEER_MESSAGE_PLAN.md), which scoped
 headless steering out because "there is no PTY".
@@ -109,6 +117,38 @@ Source paths are relative to `C:\dev\qwen-code\packages\cli\src\`.
   `set_model`.
 - Caveat: `initialize` sets SDK mode, which slightly changes plan-mode wording
   (`systemController.ts:193`).
+- **SDK mode side effects found in the Stage 1 review (2026-11-15, Qwen 0.27.4), resolved:**
+  - The review's "subagent turns are not streamed in SDK mode" was a probe artifact: that run's
+    model omitted `run_in_background: false`, so the agent ran in the background, and only a
+    background agent's turns stay off stdout. A foreground subagent streams its records with
+    `parent_tool_use_id` in SDK mode too (re-probed). Headless Qwen does not read them anyway
+    (`headlessSource = LOG`); it follows `<project>/subagents/<session>/*.jsonl`, which both
+    modes write.
+  - The live case failure had two causes. (1) The agent list below made the model pick `fork`,
+    which Qwen always backgrounds in headless mode and which inherits the parent conversation
+    (one fork ran nothing). (2) A ctrlyoke race: Qwen writes a turn's thought and its tool call
+    as two assistant records 0-8 ms apart, and the child follower treated "assistant record
+    without a functionCall" as the end, so a 150 ms poll between them dropped the child's
+    command. `QwenLogParser` now completes a child when the parent stream reports it (the
+    foreground spawn's own result, or the background agent's terminal task notification) or
+    when its `<agent>.meta.json` `status` turns terminal, and keeps the old rule only for a
+    child with no sidecar. Meta alone is not enough: with two parallel foreground agents, Qwen
+    0.27.4 left one finished agent's status at `running`.
+  - The live case now names `subagent_type "general-purpose"` for Qwen (see the next bullet);
+    it passes, as do both Codex escalation cases.
+  - `SubagentManager.listSubagents` returns only `session`-level subagents in SDK mode
+    (`core\src\subagents\subagent-manager.ts:583`), so the agent tool says "No subagents are
+    currently configured". Dispatch still resolves every level (`loadSubagent`): a live probe
+    ran a project agent and the builtin `general-purpose` by name, both foreground. Passing
+    `initialize.agents` would restore the list only by shadowing each agent with a session copy
+    (session wins in `loadSubagent`), which for builtins means copying Qwen's internal system
+    prompts. Not done; documented instead. Revisit if Qwen adds an SDK option to list all levels.
+  - A turn's `result` is held until its background agents finish (`nonInteractiveCli.ts`
+    holdback loop around `:4039`), and stdin EOF aborts every background registry
+    (`session.ts` `drainAndShutdown`), so closing at `result` loses nothing that ran in the turn.
+  - The Qwen `can_use_tool` reply must be
+    `{"type":"control_response","response":{"subtype":"success","request_id","response":{"behavior","message"}}}`
+    (`ControlDispatcher.handleControlResponse`); a flat reply is ignored and times out after 60 s.
 
 ### Codex
 
@@ -332,12 +372,20 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
 
 ## Implementation stages
 
-1. **Control channel + Qwen, `deny` policy.** Writable-stdin spawn, the channel interface,
+1. **[Done] Control channel + Qwen, `deny` policy.** Writable-stdin spawn, the channel interface,
    turn-end completion, and the Qwen implementation. Qwen drops the positional prompt and sends
    `initialize` first. Every approval request gets ctrlyoke's deny message. This fixes the Qwen
-   hang. Move the bug to `dev/bugs/implemented/` in this commit, with the corrected root cause.
-   Add a harness case for the Qwen "unlisted command chained to an allowed one" scenario; it
-   currently times out.
+   hang. The bug is in `dev/bugs/implemented/` with the corrected root cause.
+   The harness case for the Qwen "unlisted command chained to an allowed one" scenario already
+   exists ("an allowed command does not allow an unlisted one chained to it" in
+   `src/test/harness/inline-config.harness.test.ts`); it timed out before Stage 1, and its comments
+   no longer cite the bug as open. Confirmed live on 2026-11-15 (full `npm run test:harness`,
+   then the whole `qwen-cli` set after the follow-up): the case passes in about 18 s. The only
+   Qwen failure left is skill-mode commit generation, filed as
+   `dev/bugs/backlog/qwen-skill-commit-allow-rule-does-not-match.md` (it hung before Stage 1).
+   - **Qwen's `headlessSource` is `LOG`.** Its stdout chunks go to `HeadlessLogTail.onStdoutChunk`,
+     not to `parseStdout`. The channel must see every complete stdout JSONL record whatever the
+     source mode, so split stdout into records for the channel independently of the output path.
    - **Claude is not in Stage 1.** Under `deny`, Claude keeps `dontAsk`, which already refuses
      in-band, so the channel gives Claude nothing until steering. Moving it now would also risk
      losing `@path` expansion (see the inline plan's Claude probe) for no gain.

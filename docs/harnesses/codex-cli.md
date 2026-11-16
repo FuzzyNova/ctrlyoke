@@ -57,6 +57,13 @@ steps:
   - prompt: Review @src/cli.ts and simplify the option parsing where practical.
 ```
 
+## Headless prompts
+
+In headless steps, ctrlyoke passes the prompt to Codex through stdin. Generated sections such as
+agent instructions, skills and prior-step context are included in that first message. Turn off
+[`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
+to use categorized temporary files and references instead.
+
 ## Model selection {#model-selection}
 
 When ctrlyoke starts, it asks the installed Codex which models your account can use, so the

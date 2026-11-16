@@ -14,6 +14,7 @@ import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/Antigr
 import { HarnessSettingsJsonStore } from "../../core/harness/shared/HarnessSettingsJsonStore";
 import { Log } from "../../utils/Log";
 import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
+import { removeTempDir } from "../helpers/tempWorkspace";
 import {
   packageStatuslineDirectory,
   statuslineScriptFileName,
@@ -116,8 +117,8 @@ suite("AntigravityHarnessAdapter", () => {
     } else {
       process.env.USERPROFILE = originalUserProfile;
     }
-    await fs.rm(tempHome, { recursive: true, force: true });
-    await fs.rm(workspaceRoot, { recursive: true, force: true });
+    removeTempDir(tempHome);
+    removeTempDir(workspaceRoot);
   });
 
   /** The unquoted command agy's naive whitespace split requires. */
@@ -327,20 +328,26 @@ suite("AntigravityHarnessAdapter", () => {
     );
   });
 
-  test("uses stream-json only for headless arguments", () => {
+  test("uses stdin print mode for headless arguments and prompt args for interactive mode", () => {
     const provider = new AntigravityHarnessAdapter();
 
     assert.deepStrictEqual(
-      provider.buildHeadlessArgs(["--model", "gemini-3.6-flash-low"], "prompt"),
+      provider.buildHeadlessArgs(
+        ["--model", "gemini-3.6-flash-low", "--conversation", "session-1"],
+        "ignored prompt"
+      ),
       [
-        "--print",
-        "prompt",
         "--output-format",
         "stream-json",
         "--model",
         "gemini-3.6-flash-low",
+        "--conversation",
+        "session-1",
       ]
     );
+    assert.strictEqual(provider.config.headlessPromptDelivery, "stdin");
+    assert.strictEqual(provider.config.inlinesGeneratedPromptOnStdin, true);
+    assert.strictEqual(provider.requiresNonSlashInlinePromptPrefix, true);
     assert.deepStrictEqual(
       provider.buildInteractiveArgs(
         ["--model", "gemini-3.6-flash-low"],

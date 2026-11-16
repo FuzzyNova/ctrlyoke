@@ -58,6 +58,7 @@ import { OPENCODE_EVENT_TYPES } from "../../../core/harness/opencode/OpenCodePro
 import {
   QWEN_CONTENT_PART_TYPES,
   QWEN_EVENT_TYPES,
+  QWEN_USER_RECORD_SUBTYPES,
 } from "../../../core/harness/qwen/QwenProtocolConstants";
 import {
   CODEX_PAYLOAD_TYPES,
@@ -10059,6 +10060,447 @@ suite("QwenLogParser", () => {
       await fs.promises.rm(projectDir, { recursive: true, force: true });
       await fs.promises.rm(workspace, { recursive: true, force: true });
     }
+  });
+
+  test("keeps following a Qwen child past its thought record until meta.json is terminal", async () => {
+    // Records captured from Qwen 0.27.4 (trimmed): the child writes its
+    // thought as one assistant record and the tool call as the next, a few ms
+    // later. A poll between them used to mark the child finished.
+    const workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "qwen-subagent-meta-")
+    );
+    const projectDir = path.join(
+      os.homedir(),
+      ".qwen",
+      "projects",
+      sanitizeQwenProjectPath(workspace)
+    );
+    const sessionId = "qwen-meta-session";
+    const spawnId = "call_3a65d7ca123e430a96025ca2";
+    const sidechainDir = path.join(projectDir, "subagents", sessionId);
+    const transcriptPath = path.join(
+      sidechainDir,
+      `agent-general-purpose-${spawnId}.jsonl`
+    );
+    const metaPath = path.join(
+      sidechainDir,
+      `agent-general-purpose-${spawnId}.meta.json`
+    );
+    const child = {
+      sessionId,
+      agentId: `general-purpose-${spawnId}`,
+      agentName: "general-purpose",
+      isSidechain: true,
+    };
+    const thoughtRecords = [
+      {
+        ...child,
+        uuid: "child-user",
+        type: QWEN_EVENT_TYPES.USER,
+        message: {
+          role: "user",
+          parts: [{ text: "Run exactly: `echo subagent-marker-beta`" }],
+        },
+      },
+      {
+        ...child,
+        uuid: "child-thought",
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        message: {
+          role: "model",
+          parts: [{ text: "Just echo a string.", thought: true }],
+        },
+        usageMetadata: {
+          promptTokenCount: 16069,
+          candidatesTokenCount: 75,
+          thoughtsTokenCount: 24,
+          totalTokenCount: 16144,
+          cachedContentTokenCount: 0,
+        },
+        agentRound: 1,
+      },
+    ];
+    const laterRecords = [
+      {
+        ...child,
+        uuid: "child-call",
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        message: {
+          role: "model",
+          parts: [
+            {
+              functionCall: {
+                id: "call_d0b07de997b94f5e85778db7",
+                name: "run_shell_command",
+                args: {
+                  command: "echo subagent-marker-beta",
+                  description: "Echo the subagent marker string",
+                },
+              },
+            },
+          ],
+        },
+      },
+      {
+        ...child,
+        uuid: "child-result",
+        type: QWEN_EVENT_TYPES.TOOL_RESULT,
+        message: {
+          role: "user",
+          parts: [
+            {
+              functionResponse: {
+                id: "call_d0b07de997b94f5e85778db7",
+                name: "run_shell_command",
+                response: {
+                  output:
+                    "Command: echo subagent-marker-beta\nOutput: subagent-marker-beta\nExit Code: 0",
+                },
+              },
+            },
+          ],
+        },
+        toolCallResult: {
+          callId: "call_d0b07de997b94f5e85778db7",
+          durationMs: 332,
+        },
+      },
+      {
+        ...child,
+        uuid: "child-final",
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        message: {
+          role: "model",
+          parts: [
+            { text: "Report the output.", thought: true },
+            { text: "The command output is: subagent-marker-beta" },
+          ],
+        },
+        agentRound: 2,
+      },
+    ];
+    const jsonl = (records: readonly object[]) =>
+      records.map((record) => JSON.stringify(record)).join("\n") + "\n";
+    const writeMeta = (status: string) =>
+      fs.promises.writeFile(
+        metaPath,
+        JSON.stringify({ agentId: child.agentId, toolUseId: spawnId, status })
+      );
+
+    const parser = new QwenLogParser();
+    const follower = parser.getSubagentFollower();
+    try {
+      await fs.promises.mkdir(sidechainDir, { recursive: true });
+      parser.setWorkspaceRoot(workspace);
+      parser.setSubagentUsageEnabled(false);
+      parser.extractResponse([
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          sessionId,
+          message: {
+            role: "assistant",
+            parts: [
+              {
+                functionCall: {
+                  id: spawnId,
+                  name: "tool_call",
+                  args: {
+                    name: "agent",
+                    arguments: {
+                      description: "Run beta",
+                      prompt: "Run exactly: `echo subagent-marker-beta`",
+                      run_in_background: false,
+                      subagent_type: "general-purpose",
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        } as BaseCliEvent,
+      ]);
+
+      await writeMeta("running");
+      await fs.promises.writeFile(transcriptPath, jsonl(thoughtRecords));
+      let streamed: CliEvent[] = [];
+      follower.start((events) => {
+        streamed = [...streamed, ...events];
+      }, 5);
+      // Let several polls see the transcript ending at the thought record.
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      await fs.promises.appendFile(transcriptPath, jsonl(laterRecords));
+      await writeMeta("completed");
+      const drain = await follower.drainToEof(1000);
+
+      const command = drain.events.find(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.BASH_COMMAND &&
+          JSON.stringify(event.data).includes("subagent-marker-beta")
+      );
+      assert.ok(
+        command,
+        `the child's command was never read; follower events: ${JSON.stringify(drain.events.map((event) => event.type))}`
+      );
+      assert.strictEqual(command.subagent?.parentToolCallId, spawnId);
+      assert.strictEqual(drain.partial, false);
+      assert.ok(
+        streamed.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state ===
+            SUBAGENT_SPAWN_STATES.COMPLETED
+        ),
+        "the spawn card was never marked completed"
+      );
+    } finally {
+      follower.stop();
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("closes a Qwen child whose meta.json turns terminal after its last record was read", async () => {
+    const workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "qwen-subagent-meta-late-")
+    );
+    const projectDir = path.join(
+      os.homedir(),
+      ".qwen",
+      "projects",
+      sanitizeQwenProjectPath(workspace)
+    );
+    const sessionId = "qwen-meta-late";
+    const spawnId = "call_meta_late";
+    const sidechainDir = path.join(projectDir, "subagents", sessionId);
+    const base = path.join(sidechainDir, `agent-general-purpose-${spawnId}`);
+    const parser = new QwenLogParser();
+    const follower = parser.getSubagentFollower();
+    try {
+      await fs.promises.mkdir(sidechainDir, { recursive: true });
+      parser.setWorkspaceRoot(workspace);
+      parser.extractResponse([
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          sessionId,
+          message: {
+            role: "assistant",
+            parts: [
+              {
+                functionCall: {
+                  id: spawnId,
+                  name: "agent",
+                  args: { subagent_type: "general-purpose" },
+                },
+              },
+            ],
+          },
+        } as BaseCliEvent,
+      ]);
+      await fs.promises.writeFile(
+        `${base}.meta.json`,
+        JSON.stringify({ status: "running" })
+      );
+      await fs.promises.writeFile(
+        `${base}.jsonl`,
+        `${JSON.stringify({
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          uuid: "late-final",
+          message: { role: "model", parts: [{ text: "Child done" }] },
+        })}\n`
+      );
+      follower.start(() => undefined, 5);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      await fs.promises.writeFile(
+        `${base}.meta.json`,
+        JSON.stringify({ status: "completed" })
+      );
+
+      const drain = await follower.drainToEof(1000);
+      assert.strictEqual(drain.partial, false);
+      assert.ok(
+        drain.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text === "Child done"
+        )
+      );
+    } finally {
+      follower.stop();
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  suite("Qwen children completed by the parent stream", () => {
+    let workspace: string;
+    let projectDir: string;
+    const sessionId = "qwen-parent-report";
+
+    setup(async () => {
+      workspace = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), "qwen-subagent-parent-")
+      );
+      projectDir = path.join(
+        os.homedir(),
+        ".qwen",
+        "projects",
+        sanitizeQwenProjectPath(workspace)
+      );
+      await fs.promises.mkdir(path.join(projectDir, "subagents", sessionId), {
+        recursive: true,
+      });
+    });
+
+    teardown(async () => {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    });
+
+    /** A finished child whose meta.json stays `running`, as Qwen 0.27.4 left one. */
+    async function writeStuckChild(agentId: string): Promise<void> {
+      const base = path.join(
+        projectDir,
+        "subagents",
+        sessionId,
+        `agent-${agentId}`
+      );
+      await fs.promises.writeFile(
+        `${base}.meta.json`,
+        JSON.stringify({ agentId, status: "running" })
+      );
+      await fs.promises.writeFile(
+        `${base}.jsonl`,
+        `${JSON.stringify({
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          uuid: `${agentId}-final`,
+          message: { role: "model", parts: [{ text: `${agentId} done` }] },
+        })}\n`
+      );
+    }
+
+    function spawnRecord(spawnId: string): BaseCliEvent {
+      return {
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        sessionId,
+        message: {
+          role: "assistant",
+          parts: [
+            {
+              functionCall: {
+                id: spawnId,
+                name: "tool_call",
+                args: {
+                  name: "agent",
+                  arguments: { description: "child", prompt: "child" },
+                },
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent;
+    }
+
+    function spawnResult(spawnId: string, output: string): BaseCliEvent {
+      return {
+        type: QWEN_EVENT_TYPES.TOOL_RESULT,
+        sessionId,
+        message: {
+          role: "user",
+          parts: [
+            {
+              functionResponse: {
+                id: spawnId,
+                name: "tool_call",
+                response: { output },
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent;
+    }
+
+    test("a foreground spawn's own result completes its child", async () => {
+      const spawnId = "call_fg_stuck";
+      // No subagent_type: ctrlyoke names the child `agent-…`, Qwen
+      // `general-purpose-…`; the files are found by the call id either way.
+      await writeStuckChild(`general-purpose-${spawnId}`);
+      const parser = new QwenLogParser();
+      parser.setWorkspaceRoot(workspace);
+      const follower = parser.getSubagentFollower();
+      let streamed: CliEvent[] = [];
+      try {
+        parser.extractStructuredEventsFromEvent(spawnRecord(spawnId));
+        follower.start((events) => {
+          streamed = [...streamed, ...events];
+        }, 5);
+        parser.extractStructuredEventsFromEvent(
+          spawnResult(spawnId, "Output: done")
+        );
+        const drain = await follower.drainToEof(500);
+
+        assert.strictEqual(drain.partial, false);
+        assert.ok(
+          drain.events.some(
+            (event) =>
+              (event.data as TextData).text ===
+              `general-purpose-${spawnId} done`
+          )
+        );
+        assert.ok(
+          [...streamed, ...drain.events].some(
+            (event) =>
+              (event.data as ToolCall).subagentSpawn?.state ===
+              SUBAGENT_SPAWN_STATES.COMPLETED
+          )
+        );
+      } finally {
+        follower.stop();
+      }
+    });
+
+    test("a background launch result waits for the agent's task notification", async () => {
+      const spawnId = "call_bg_stuck";
+      const agentId = `fork-${spawnId}`;
+      await writeStuckChild(agentId);
+      const parser = new QwenLogParser();
+      parser.setWorkspaceRoot(workspace);
+      const follower = parser.getSubagentFollower();
+      try {
+        parser.extractStructuredEventsFromEvent(spawnRecord(spawnId));
+        parser.extractStructuredEventsFromEvent(
+          spawnResult(
+            spawnId,
+            `Background agent launched successfully.\ntask_id: ${agentId} (internal ID)`
+          )
+        );
+        const early = await follower.drainToEof(100, {
+          retainUnfinished: true,
+        });
+        assert.strictEqual(
+          early.partial,
+          true,
+          "a background launch result must not end the child"
+        );
+
+        parser.extractStructuredEventsFromEvent({
+          type: QWEN_EVENT_TYPES.USER,
+          subtype: QWEN_USER_RECORD_SUBTYPES.NOTIFICATION,
+          sessionId,
+          message: {
+            role: "user",
+            parts: [
+              {
+                text: `<task-notification>\n<task-id>${agentId}</task-id>\n<tool-use-id>${spawnId}</tool-use-id>\n<status>completed</status>\n</task-notification>`,
+              },
+            ],
+          },
+        } as BaseCliEvent);
+        const drain = await follower.drainToEof(500);
+        assert.strictEqual(drain.partial, false);
+      } finally {
+        follower.stop();
+      }
+    });
   });
 
   test("does not add sidechain usage to Qwen headless result totals", async () => {

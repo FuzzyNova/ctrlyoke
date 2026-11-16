@@ -155,6 +155,16 @@ suite("QwenHarnessAdapter", () => {
     }
   });
 
+  test("opts into inline stdin prompts and escapes Qwen @ syntax", () => {
+    const provider = new QwenHarnessAdapter();
+    assert.strictEqual(provider.config.inlinesGeneratedPromptOnStdin, true);
+    assert.strictEqual(provider.requiresNonSlashInlinePromptPrefix, true);
+    assert.strictEqual(
+      provider.transformInlinedGeneratedPrompt("literal @mention"),
+      "literal \\@mention"
+    );
+  });
+
   test("requires absolute file references", () => {
     assert.strictEqual(
       new QwenHarnessAdapter().requiresAbsoluteFileReferences,
@@ -651,10 +661,9 @@ suite("QwenHarnessAdapter", () => {
   suite("buildHeadlessArgs", () => {
     const provider = new QwenHarnessAdapter();
 
-    test("includes --input-format stream-json alongside --output-format stream-json", () => {
+    test("uses stream-json input and output without a positional prompt", () => {
       const result = provider.buildHeadlessArgs(["--base"], "do the thing");
       assert.deepStrictEqual(result, [
-        "do the thing",
         "--output-format",
         "stream-json",
         "--input-format",

@@ -170,6 +170,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
       updateCommand: "claude update",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: false,
 
     // Claude uses Stop hook for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,

@@ -16,6 +16,7 @@ import {
   HARNESS_IDS,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
   STATUS_LINE_HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -136,6 +137,8 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       updateCommand: "copilot update",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: true,
+    headlessPromptDelivery: HEADLESS_PROMPT_DELIVERIES.STDIN,
 
     // Copilot uses sessionEnd hook for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
@@ -754,6 +757,9 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       : {};
     return {
       ...env,
+      // This variable makes Copilot split piped stdin into multiple turns.
+      // Explicit undefined overrides a parent value in the shared env merge.
+      COPILOT_PROMPT_TURN_DELIMITER: undefined,
       ...this.buildOtelSpawnEnv(),
       ...this.statuslineRegistration.buildSpawnEnv(),
     };
@@ -1003,18 +1009,20 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
   /**
    * Build CLI arguments for headless mode
    *
-   * Copilot requires --prompt flag to specify prompts.
-   * Format: copilot --output-format json --prompt "..." [other args]
-   *
-   * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
+   * Piped stdin enters prompt mode, so the prompt itself is delivered separately
+   * from argv. Keep JSONL output enabled for reliable response/session parsing.
    *
    * @param baseArgs Base arguments array
    * @param prompt Prompt text or file reference
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+    if (!prompt.trim()) {
+      throw new Error("Copilot headless stdin prompt cannot be empty");
+    }
     // --output-format json enables structured JSONL output for reliable response/session parsing.
-    return ["--output-format", "json", "--prompt", prompt, ...baseArgs];
+    // Piped stdin enters prompt mode; there is no special `-p -` form.
+    return ["--output-format", "json", ...baseArgs];
   }
 
   /**
