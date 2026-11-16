@@ -1,4 +1,5 @@
 import { spawn, ChildProcess } from "child_process";
+import type { Writable } from "stream";
 import kill from "tree-kill";
 import { canonicalizeDriveLetter } from "./PathCasing";
 import { withWorkingDirectoryEnv } from "./SpawnEnvironment";
@@ -32,6 +33,8 @@ export interface SpawnOptions {
    * a headless prompt without putting it on the command line.
    */
   stdinText?: string;
+  /** Keep a piped stdin open and expose it once the child has spawned. */
+  onStdinReady?: (writer: Writable) => void;
   /**
    * Set when `args` is already a cmd.exe-escaped verbatim payload (see
    * `CliResolvedCommand.requiresShellVerbatimArgs` /
@@ -156,7 +159,9 @@ export class CliProcessManager {
         stdio: [
           options.stdinText !== undefined
             ? "pipe"
-            : (options.stdin ?? "ignore"),
+            : options.onStdinReady
+              ? "pipe"
+              : (options.stdin ?? "ignore"),
           "pipe",
           "pipe",
         ],
@@ -171,14 +176,21 @@ export class CliProcessManager {
 
       this.currentProcess = child;
 
-      if (options.stdinText !== undefined && child.stdin) {
+      if (
+        child.stdin &&
+        (options.stdinText !== undefined || options.onStdinReady)
+      ) {
         // A child that exits without reading stdin closes the pipe under us;
         // the resulting EPIPE is not a spawn failure, and the exit code says
         // what happened.
         child.stdin.on("error", (error: Error) => {
           this.logger?.(`⚠️ stdin write failed: ${error.message}`);
         });
-        child.stdin.end(options.stdinText, "utf8");
+        if (options.stdinText !== undefined) {
+          child.stdin.end(options.stdinText, "utf8");
+        } else {
+          options.onStdinReady?.(child.stdin);
+        }
       }
 
       // Handle stdout with streaming support

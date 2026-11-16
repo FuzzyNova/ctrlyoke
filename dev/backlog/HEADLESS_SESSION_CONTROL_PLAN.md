@@ -1,8 +1,12 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Not started. Researched 2026-11-15 by live probes and source reading (details
-under "Findings"). Open questions resolved 2026-11-15 (see "Decisions"). Nothing in ctrlyoke
-has changed yet.
+**Status:** Shared transport landed in `src/core/harness/shared/IHeadlessControlChannel.ts`.
+The harness-agnostic Stage 1 is implemented and covered by unit tests; Qwen's adapter/channel
+and the associated live-case updates remain. Researched 2026-11-15 by live probes and source
+reading (details under "Findings"). Open questions resolved 2026-11-15 (see "Decisions").
+Deviation from the sketch: the optional provider hook currently receives only prepared prompt
+text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
+before calling `channel.close()` so channel cleanup does not need to own transport EOF.
 **Priority:** P1 (Stage 1 fixes a high-severity hang)
 **Order:** implement this plan's Stage 1 before the stdin inline plan. It fixes the P1 hang and
 builds the transport the inline plan reuses.

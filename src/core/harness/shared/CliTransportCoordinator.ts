@@ -4,6 +4,7 @@ import {
   EXECUTION_MODES,
   CLI_EVENT_TYPES,
   HEADLESS_PROMPT_DELIVERIES,
+  HEADLESS_CONTROL_OBSERVATION_KINDS,
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
   SESSION_KINDS,
@@ -48,6 +49,16 @@ import {
 } from "./HeadlessLogTail";
 import { splitCompleteLines } from "../../../utils/TextLines";
 import { StreamingSecretRedactor } from "../../../utils/SecretRedactionService";
+import { AsyncMutex } from "./AsyncMutex";
+import {
+  type ControlWriter,
+  type IHeadlessControlChannel,
+} from "./IHeadlessControlChannel";
+import type { Writable } from "stream";
+import {
+  APPROVAL_DECISIONS,
+  HEADLESS_APPROVAL_DENIAL_MESSAGE,
+} from "../../../types/DashboardConstants";
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -157,6 +168,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
    * execution that keeps working when there is no process to kill yet.
    */
   private activeHeadlessLogTail?: HeadlessLogTail;
+  private activeHeadlessControlChannel?: IHeadlessControlChannel;
+  private activeHeadlessControlClose?: () => Promise<void>;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
 
@@ -400,6 +413,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     keepTempFiles = false
   ): Promise<boolean> {
     this.activeHeadlessLogTail = source?.logTail;
+    let closeControlChannelForRun: (() => Promise<void>) | undefined;
     try {
       if (tempFilePaths.length > 0) {
         Log.info(
@@ -416,14 +430,22 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         (await this.resolveProviderCommand(
           this.deps.provider.buildHeadlessArgs(args, promptArgument)
         ));
+      const controlChannel =
+        this.deps.provider.createHeadlessControlChannel?.(promptArgument);
+      const controlArgs = controlChannel?.spawnShape.args ?? [];
+      const spawnArgs = [...command.args, ...controlArgs];
 
       this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
-        cliCommand: command.displayCommand,
+        cliCommand: controlArgs.length
+          ? `${command.displayCommand} ${controlArgs.join(" ")}`
+          : command.displayCommand,
       });
 
       const shouldStream =
-        this.deps.provider.config.shouldStreamHeadlessOutput || !!source;
+        this.deps.provider.config.shouldStreamHeadlessOutput ||
+        !!source ||
+        !!controlChannel;
       const stdoutEventPump =
         source?.mode === HEADLESS_SOURCE_MODES.STDOUT
           ? new CliLogEventPump({
@@ -434,6 +456,116 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             })
           : undefined;
       let pendingStdout = "";
+      let pendingControlStdout = "";
+      const controlMutex = controlChannel ? new AsyncMutex() : undefined;
+      let controlWriter: ControlWriter | undefined;
+      let controlReady: Promise<void> | undefined;
+      let controlClosed = false;
+      let controlOperations = Promise.resolve();
+
+      const withControlLock = async (operation: () => Promise<void>) => {
+        if (!controlMutex) return;
+        await controlMutex.acquire();
+        try {
+          await operation();
+        } finally {
+          controlMutex.release();
+        }
+      };
+
+      const closeControlChannel = async (): Promise<void> => {
+        if (!controlChannel || controlClosed) return;
+        controlClosed = true;
+        await controlWriter?.end();
+        await withControlLock(async () => {
+          controlChannel.close();
+        });
+        if (this.activeHeadlessControlChannel === controlChannel) {
+          this.activeHeadlessControlChannel = undefined;
+          this.activeHeadlessControlClose = undefined;
+        }
+      };
+      closeControlChannelForRun = closeControlChannel;
+
+      const enqueueControlOperation = (
+        operation: () => Promise<void>
+      ): void => {
+        controlOperations = controlOperations
+          .then(operation)
+          .catch((error: unknown) => {
+            Log.warn(
+              `[CliTransportCoordinator] Headless control operation failed: ${getErrorMessage(error)}`
+            );
+          });
+      };
+
+      const observeControlRecord = (record: string): void => {
+        if (!controlChannel) return;
+        let value: unknown = record;
+        try {
+          value = JSON.parse(record) as unknown;
+        } catch {
+          // Providers may ignore malformed records; still expose each JSONL line.
+        }
+        for (const observation of controlChannel.observe(value)) {
+          if (
+            observation.kind ===
+            HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST
+          ) {
+            enqueueControlOperation(() =>
+              controlChannel.answerApproval(
+                observation.requestId,
+                APPROVAL_DECISIONS.DENY,
+                HEADLESS_APPROVAL_DENIAL_MESSAGE
+              )
+            );
+          } else if (
+            observation.kind === HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END
+          ) {
+            // Seam for queued steering: keep stdin open while a next-turn
+            // message is pending. Stage 1 has no steer queue yet.
+            enqueueControlOperation(closeControlChannel);
+          }
+        }
+      };
+
+      const processControlStdoutChunk = (chunk: string): void => {
+        const result = splitCompleteLines(pendingControlStdout + chunk);
+        pendingControlStdout = result.remainder;
+        for (const record of result.lines) observeControlRecord(record);
+      };
+
+      const flushControlStdout = (): void => {
+        if (!pendingControlStdout) return;
+        const record = pendingControlStdout;
+        pendingControlStdout = "";
+        observeControlRecord(record);
+      };
+
+      const createControlWriter = (writer: Writable): ControlWriter => ({
+        write: (text) =>
+          withControlLock(
+            () =>
+              new Promise<void>((resolve, reject) => {
+                writer.write(text, "utf8", (error?: Error | null) => {
+                  if (error) reject(error);
+                  else resolve();
+                });
+              })
+          ),
+        end: () =>
+          withControlLock(
+            () =>
+              new Promise<void>((resolve) => {
+                writer.end(resolve);
+              })
+          ),
+      });
+
+      if (controlChannel) {
+        this.activeHeadlessControlChannel = controlChannel;
+        this.activeHeadlessControlClose = closeControlChannel;
+      }
 
       const processStdoutRecords = (records: readonly string[]): void => {
         if (!stdoutEventPump || !source?.parseStdout) {
@@ -495,15 +627,32 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
       let result: SpawnResult;
       try {
-        result = await this.spawnProcess(command.command, command.args, {
+        result = await this.spawnProcess(command.command, spawnArgs, {
           timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
-          env,
+          env: {
+            ...env,
+            ...(controlChannel?.spawnShape.env as
+              Record<string, string> | undefined),
+          },
           secretNames,
           stdinText:
+            !controlChannel &&
             this.deps.provider.config.headlessPromptDelivery ===
-            HEADLESS_PROMPT_DELIVERIES.STDIN
+              HEADLESS_PROMPT_DELIVERIES.STDIN
               ? promptArgument
               : undefined,
+          onStdinReady: controlChannel
+            ? (writer) => {
+                controlWriter = createControlWriter(writer);
+                controlReady = (async () => {
+                  await controlChannel.start(controlWriter!);
+                  await controlChannel.sendUserMessage(promptArgument);
+                })().catch(async (error: unknown) => {
+                  await closeControlChannel();
+                  throw error;
+                });
+              }
+            : undefined,
           windowsVerbatimArguments: command.requiresShellVerbatimArgs,
           onStdout: shouldStream
             ? (chunk) => {
@@ -511,6 +660,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                   Log.trace(
                     `[${this.deps.provider.config.displayName} RAW OUTPUT]: ${chunk}`
                   );
+                }
+
+                if (controlChannel) {
+                  processControlStdoutChunk(chunk);
                 }
 
                 if (
@@ -539,6 +692,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
               }
             : undefined,
         });
+        await controlReady;
       } finally {
         const tail = liveOutputRedactor?.flush();
         if (tail) {
@@ -554,6 +708,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       // A process may finish with one valid record that has no trailing line
       // break. Emit it before any completion callback or log-tail finalization.
       flushStdout();
+      flushControlStdout();
+      await controlOperations;
 
       if (source?.logTail) {
         await source.logTail.finish();
@@ -577,6 +733,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           : result
       );
     } catch (error) {
+      await closeControlChannelForRun?.();
       if (source?.logTail) {
         await source.logTail.finish();
       }
@@ -586,6 +743,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       Log.error("[CliTransportCoordinator] Headless execution error", error);
       return false;
     } finally {
+      await closeControlChannelForRun?.();
       this.activeHeadlessLogTail = undefined;
       if (source?.mode === HEADLESS_SOURCE_MODES.STDOUT) {
         source.parser.getSubagentFollower?.()?.stop();
@@ -699,6 +857,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     // still reports only on the process, because the caller uses it to decide
     // whether to wait for a process-exit handler that will never fire here.
     this.activeHeadlessLogTail?.abort();
+    await this.activeHeadlessControlClose?.();
 
     if (this.currentPtySession) {
       const ptyManager = this.resolvePtyManager();
@@ -737,6 +896,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       secretNames?: readonly string[];
       onStdout?: (chunk: string) => void;
       stdinText?: string;
+      onStdinReady?: (writer: Writable) => void;
       windowsVerbatimArguments?: boolean;
     } = {}
   ): Promise<SpawnResult> {
@@ -757,6 +917,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         timeout: options.timeout,
         onStdout: options.onStdout,
         stdinText: options.stdinText,
+        onStdinReady: options.onStdinReady,
         shell: false,
         windowsVerbatimArguments: options.windowsVerbatimArguments,
         env,

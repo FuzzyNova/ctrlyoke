@@ -14,7 +14,10 @@ import {
   CLI_EVENT_TYPES,
   HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
+  HEADLESS_CONTROL_OBSERVATION_KINDS,
   FAILURE_KINDS,
+  APPROVAL_DECISIONS,
+  HEADLESS_APPROVAL_DENIAL_MESSAGE,
   type HeadlessPromptDelivery,
   MESSAGE_TYPES,
   SESSION_KINDS,
@@ -331,6 +334,295 @@ suite("CliTransportCoordinator", () => {
       { args: ["run"], stdinText: 'read "C:\\a b\\x.md"' },
       { args: ["run", 'read "C:\\a b\\x.md"'], stdinText: undefined },
     ]);
+  });
+
+  test("runs the control handshake before the prompt and serializes writes", async () => {
+    const writes: string[] = [];
+    let activeWrites = 0;
+    let maxConcurrentWrites = 0;
+    let closed = false;
+    const calls: string[] = [];
+    let writerHandle:
+      { write(text: string): Promise<void>; end(): Promise<void> } | undefined;
+    const channel = {
+      spawnShape: { args: ["--control"] },
+      steerDelivery: "queue" as const,
+      start: async (writer: { write(text: string): Promise<void> }) => {
+        writerHandle = writer as typeof writerHandle;
+        await writer.write("initialize\n");
+      },
+      sendUserMessage: async (text: string) => {
+        calls.push(`user:${text}`);
+        await writerHandle?.write(`user:${text}\n`);
+      },
+      observe: (record: unknown) => {
+        const kind = (record as { kind?: string }).kind;
+        if (kind === "approval") {
+          return [
+            {
+              kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
+              requestId: "approval-1",
+            },
+          ];
+        }
+        if (kind === "turn-end") {
+          return [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }];
+        }
+        return [];
+      },
+      answerApproval: async (
+        requestId: string,
+        decision: string,
+        message?: string
+      ) => {
+        calls.push(`approval:${requestId}:${decision}:${message}`);
+        await writerHandle?.write(`deny:${requestId}\n`);
+      },
+      close: () => {
+        closed = true;
+      },
+    };
+    const rawWriter = {
+      write: (
+        chunk: string,
+        _encoding: string,
+        callback?: (error?: Error) => void
+      ) => {
+        activeWrites++;
+        maxConcurrentWrites = Math.max(maxConcurrentWrites, activeWrites);
+        setTimeout(() => {
+          writes.push(chunk);
+          activeWrites--;
+          callback?.();
+        }, 1);
+        return true;
+      },
+      end: (callback?: () => void) => callback?.(),
+    };
+    const provider = createHeadlessProvider();
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        ...provider,
+        createHeadlessControlChannel: () => channel,
+      } as any,
+      processManager: {
+        spawn: async (
+          _command: string,
+          args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          assert.deepStrictEqual(args, ["prompt", "--control"]);
+          options.onStdinReady?.(rawWriter);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          options.onStdout?.('{"kind":"approval"}\n{"kind":"turn-end"}\n');
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await coordinator.executeHeadless([], "prompt", [], async () => true);
+
+    assert.deepStrictEqual(writes, [
+      "initialize\n",
+      "user:prompt\n",
+      "deny:approval-1\n",
+    ]);
+    assert.strictEqual(maxConcurrentWrites, 1);
+    assert.deepStrictEqual(calls, [
+      "user:prompt",
+      `approval:approval-1:${APPROVAL_DECISIONS.DENY}:${HEADLESS_APPROVAL_DENIAL_MESSAGE}`,
+    ]);
+    assert.strictEqual(closed, true);
+  });
+
+  test("observes complete stdout records for both streaming source modes", async () => {
+    for (const mode of [
+      HEADLESS_SOURCE_MODES.STDOUT,
+      HEADLESS_SOURCE_MODES.LOG,
+    ]) {
+      const observed: unknown[] = [];
+      let logTailStdout = "";
+      const channel = {
+        spawnShape: {},
+        steerDelivery: "queue" as const,
+        start: async () => {},
+        sendUserMessage: async () => {},
+        observe: (record: unknown) => {
+          observed.push(record);
+          return [];
+        },
+        answerApproval: async () => {},
+        close: () => {},
+      };
+      const provider = createHeadlessProvider();
+      const coordinator = new CliTransportCoordinator({
+        provider: {
+          ...provider,
+          createHeadlessControlChannel: () => channel,
+        } as any,
+        processManager: {
+          spawn: async (
+            _command: string,
+            _args: string[],
+            options: {
+              onStdinReady?: (writer: any) => void;
+              onStdout?: (chunk: string) => void;
+            }
+          ) => {
+            options.onStdinReady?.({
+              write: () => true,
+              end: (callback?: () => void) => callback?.(),
+            });
+            options.onStdout?.('{"id":1}\n{"id":2}\n');
+            return { stdout: "", stderr: "", exitCode: 0 };
+          },
+          isActive: () => false,
+        } as any,
+        resolveCliCommand: resolveCommand,
+        runtimeState: {
+          getWorkspaceRoot: () => process.cwd(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: createHeadlessHostCallbacks(),
+      });
+      const source = {
+        mode,
+        parser: {},
+        logTail:
+          mode === HEADLESS_SOURCE_MODES.LOG
+            ? {
+                start: async () => {},
+                onStdoutChunk: (chunk: string) => (logTailStdout += chunk),
+                finish: async () => {},
+                abort: () => {},
+              }
+            : undefined,
+      } as any;
+
+      await coordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true,
+        undefined,
+        source
+      );
+
+      assert.deepStrictEqual(observed, [{ id: 1 }, { id: 2 }]);
+      if (mode === HEADLESS_SOURCE_MODES.LOG) {
+        assert.strictEqual(logTailStdout, '{"id":1}\n{"id":2}\n');
+      }
+    }
+  });
+
+  test("closes the control channel on cancellation and spawn errors", async () => {
+    let closedOnCancel = false;
+    let spawnEntered!: () => void;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    const spawnEnteredPromise = new Promise<void>(
+      (resolve) => (spawnEntered = resolve)
+    );
+    const heldSpawn = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const channel = {
+      spawnShape: {},
+      steerDelivery: "queue" as const,
+      start: async () => {},
+      sendUserMessage: async () => {},
+      observe: () => [],
+      answerApproval: async () => {},
+      close: () => (closedOnCancel = true),
+    };
+    const provider = createHeadlessProvider();
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        ...provider,
+        createHeadlessControlChannel: () => channel,
+      } as any,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: { onStdinReady?: (writer: any) => void }
+        ) => {
+          options.onStdinReady?.({
+            write: () => true,
+            end: (callback?: () => void) => callback?.(),
+          });
+          spawnEntered();
+          return heldSpawn;
+        },
+        isActive: () => true,
+        cancel: async () => {},
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    const execution = coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => true
+    );
+    await spawnEnteredPromise;
+    await coordinator.cancel();
+    assert.strictEqual(closedOnCancel, true);
+    finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+    await execution;
+
+    let closedOnError = false;
+    const errorCoordinator = new CliTransportCoordinator({
+      provider: {
+        ...provider,
+        createHeadlessControlChannel: () => ({
+          ...channel,
+          close: () => (closedOnError = true),
+        }),
+      } as any,
+      processManager: {
+        spawn: async () => {
+          throw new Error("spawn failed");
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    assert.strictEqual(
+      await errorCoordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true
+      ),
+      false
+    );
+    assert.strictEqual(closedOnError, true);
   });
 
   test("classifies headless prompt expiry as a timeout transport failure", async () => {

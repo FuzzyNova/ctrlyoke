@@ -3259,6 +3259,35 @@ export const HEADLESS_PROMPT_DELIVERIES = {
 export type HeadlessPromptDelivery =
   (typeof HEADLESS_PROMPT_DELIVERIES)[keyof typeof HEADLESS_PROMPT_DELIVERIES];
 
+/** How a message sent during a headless turn is delivered. */
+export const HEADLESS_STEER_DELIVERIES = {
+  INJECT: "inject",
+  QUEUE: "queue",
+} as const;
+
+export type HeadlessSteerDelivery =
+  (typeof HEADLESS_STEER_DELIVERIES)[keyof typeof HEADLESS_STEER_DELIVERIES];
+
+export const APPROVAL_DECISIONS = {
+  ALLOW_ONCE: "allow-once",
+  DENY: "deny",
+} as const;
+
+export type ApprovalDecision =
+  (typeof APPROVAL_DECISIONS)[keyof typeof APPROVAL_DECISIONS];
+
+export const HEADLESS_CONTROL_OBSERVATION_KINDS = {
+  APPROVAL_REQUEST: "approval-request",
+  TURN_END: "turn-end",
+} as const;
+
+export type HeadlessControlObservationKind =
+  (typeof HEADLESS_CONTROL_OBSERVATION_KINDS)[keyof typeof HEADLESS_CONTROL_OBSERVATION_KINDS];
+
+/** User-facing explanation returned when a headless step requests approval. */
+export const HEADLESS_APPROVAL_DENIAL_MESSAGE =
+  "ctrlyoke: this headless step cannot ask for approval. Add an allow rule to `toolPermissions` or run the step interactively.";
+
 export const CONTEXT_RESOLUTION_FAILURE_MODES = {
   WARN: "warn",
   FAIL: "fail",

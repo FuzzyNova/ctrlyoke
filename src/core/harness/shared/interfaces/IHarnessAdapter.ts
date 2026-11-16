@@ -7,6 +7,7 @@ import type {
 } from "./IToolPermissionMapper";
 import type { ISandboxMapper } from "./ISandboxMapper";
 import type { HarnessAdapterPreparation } from "./PreparedMutation";
+import type { IHeadlessControlChannel } from "../IHeadlessControlChannel";
 export type { HarnessAdapterPreparation } from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type { HarnessVersionPolicy } from "../../../../utils/HarnessVersion";
@@ -578,6 +579,11 @@ export interface IHarnessAdapter {
    * at spawn time as well as on the spawned child.
    */
   getHeadlessSpawnEnv?(): NodeJS.ProcessEnv;
+
+  /** Create the optional stdin control protocol for one headless execution. */
+  createHeadlessControlChannel?(
+    promptText: string
+  ): IHeadlessControlChannel | undefined;
 
   /**
    * Receive the sandbox mapper's process environment for the next launch
