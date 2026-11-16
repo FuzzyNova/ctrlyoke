@@ -116,7 +116,8 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
 
 function createPromptPreparer(
   buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
-  workspaceRoot?: string
+  workspaceRoot?: string,
+  inlineGeneratedPromptOnStdin = false
 ): CliPromptPreparer {
   return new CliPromptPreparer({
     shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
@@ -148,17 +149,24 @@ function createPromptPreparer(
       _excerpts,
       prompts
     ) => prompts.join(" "),
+    shouldInlineGeneratedPromptOnStdin: () => inlineGeneratedPromptOnStdin,
   });
 }
 
 function createHarness(
   workspaceRoot?: string,
   buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
-  provider: IHarnessAdapter = new PosixClaudeHarnessAdapter()
+  provider: IHarnessAdapter = new PosixClaudeHarnessAdapter(),
+  inlineGeneratedPromptOnStdin = false
 ): ExecutionPreviewHarness {
+  provider.config.inlinesGeneratedPromptOnStdin = inlineGeneratedPromptOnStdin;
   return {
     provider,
-    promptPreparer: createPromptPreparer(buildPromptSections, workspaceRoot),
+    promptPreparer: createPromptPreparer(
+      buildPromptSections,
+      workspaceRoot,
+      inlineGeneratedPromptOnStdin
+    ),
     executionPlanBuilder: new ExecutionPlanBuilder({
       provider,
       getWorkspaceRoot: () => workspaceRoot,
@@ -858,6 +866,50 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(piped.steps[0].command?.promptOnStdin, true);
     const inline = await buildWith(undefined);
     assert.strictEqual(inline.steps[0].command?.promptOnStdin, undefined);
+  });
+
+  test("Dry Run preview includes inline generated prompt text for an opted-in harness", async () => {
+    const root = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-inline-preview-")
+    );
+    temporaryRoots.push(root);
+    const workflow: PromptFile = { steps: [{ prompt: "inspect the code" }] };
+    const harness = createHarness(
+      root,
+      async (prompt) => ({
+        skillContent: null,
+        agentContent: "Preview agent instructions.",
+        directFileRefs: [],
+        imageFileRefs: [],
+        sourceRuntimeCopies: [],
+        sourceRuntimeReadReferences: [],
+        excerptContent: null,
+        userPromptText: prompt.prompt,
+        skippedReferences: [],
+      }),
+      undefined,
+      true
+    );
+    const preview = await new ExecutionPreviewService({
+      defaults: createDefaults(),
+      capabilities: createCapabilities(),
+      getHarness: () => harness,
+      workspaceRoots: [root],
+      extensionPath: "extension",
+      hostCanProvidePty: false,
+      platform: "linux",
+    }).build({ workflow });
+
+    assert.ok(
+      preview.steps[0].prompt?.sections.some((section) =>
+        section.body?.includes("Preview agent instructions.")
+      )
+    );
+    assert.ok(
+      preview.steps[0].prompt?.sections.some((section) =>
+        section.body?.includes("inspect the code")
+      )
+    );
   });
 
   test("omits MCP environment values while retaining structural key names", async () => {

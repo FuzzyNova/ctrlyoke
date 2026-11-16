@@ -42,6 +42,7 @@ suite("CtrlYokeConfigService", () => {
 
   test("returns all defaults when no backends are set", () => {
     const all = service.getAll();
+    assert.strictEqual(all.execution.inlineGeneratedPromptOnStdin, true);
     assert.strictEqual(
       all.defaults.harness,
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.harness

@@ -3580,6 +3580,14 @@ export const MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES = 32 * 1024 * 1024;
  */
 export const ESTIMATED_CHARS_PER_TOKEN = 4;
 
+/** One root block encloses generated sections in opted-in headless prompts. */
+export const INLINE_GENERATED_PROMPT_ROOT_TAG = "ctrlyokePrompt";
+export const INLINE_GENERATED_PROMPT_USER_SECTION_TAG = "userPrompt";
+
+/** Keep inline prompts below the stdin and practical model-context budgets. */
+export const MAX_INLINE_GENERATED_PROMPT_CHARS =
+  100_000 * ESTIMATED_CHARS_PER_TOKEN;
+
 /** File extensions rendered as inline thumbnails in the output pane. */
 export const IMAGE_REF_EXTENSIONS = [
   "png",

@@ -281,6 +281,7 @@ export interface CtrlYokeGlobalSettings {
     regexTimeoutSec: number; // seconds
     closeTerminalOnComplete: boolean;
     autoDeleteTempFiles: boolean;
+    inlineGeneratedPromptOnStdin: boolean;
     contextResolutionFailure: ContextResolutionFailureMode;
     ctrlyokeMcpMode: CtrlYokeMcpMode;
   };
@@ -631,6 +632,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.NATIVE,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
+    inlineGeneratedPromptOnStdin: true,
     contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
   },
   queue: {

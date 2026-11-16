@@ -96,6 +96,9 @@ export interface HarnessConfig {
    */
   headlessPromptDelivery?: HeadlessPromptDelivery;
 
+  /** Inline ctrlyoke-generated prompt sections for headless stdin delivery. */
+  inlinesGeneratedPromptOnStdin?: boolean;
+
   /**
    * Whether this provider uses notification-based completion detection in interactive mode.
    * When true, CliIntegration will use log file monitoring for completion detection.
@@ -313,6 +316,12 @@ export interface IHarnessAdapter {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[];
+
+  /** Escape harness syntax in generated content embedded in a headless prompt. */
+  transformInlinedGeneratedPrompt?(text: string): string;
+
+  /** Prefix a safe character when the harness treats a leading slash as a command. */
+  requiresNonSlashInlinePromptPrefix?: boolean;
 
   /**
    * Build CLI arguments for interactive TUI mode

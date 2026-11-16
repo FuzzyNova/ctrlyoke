@@ -136,6 +136,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       updateCommand: "copilot update",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: false,
 
     // Copilot uses sessionEnd hook for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,

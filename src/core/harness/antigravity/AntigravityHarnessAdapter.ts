@@ -187,6 +187,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: false,
     usesInteractiveNotificationMonitor: true,
   };
 

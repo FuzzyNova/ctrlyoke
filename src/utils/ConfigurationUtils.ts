@@ -983,6 +983,12 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.EXECUTION).autoDeleteTempFiles;
   },
 
+  /** Whether opted-in headless harnesses inline generated prompt sections. */
+  shouldInlineGeneratedPromptOnStdin(): boolean {
+    return configService.get(CONFIG_KEYS.EXECUTION)
+      .inlineGeneratedPromptOnStdin;
+  },
+
   /**
    * Get maximum prompt execution timeout in milliseconds
    * User configures in seconds, this returns milliseconds

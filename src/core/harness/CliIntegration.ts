@@ -984,6 +984,13 @@ export class CliIntegration extends HarnessIntegration {
         this.buildPriorContextXmlFromItems(items),
       getWorkspaceRoot: () => this.getExecutionRoot(),
       getTempFileSplitConfig: () => this.getTempFileSplitConfig(),
+      shouldInlineGeneratedPromptOnStdin: () =>
+        this.provider.config.inlinesGeneratedPromptOnStdin === true &&
+        ConfigurationUtils.shouldInlineGeneratedPromptOnStdin(),
+      transformInlinedGeneratedPrompt: (text) =>
+        this.provider.transformInlinedGeneratedPrompt?.(text) ?? text,
+      requiresNonSlashInlinePromptPrefix:
+        this.provider.requiresNonSlashInlinePromptPrefix,
       formatDirectFileRef: (absolutePath) =>
         this.formatDirectFileRef(absolutePath),
       formatTempFileRef: (tempMgr, absolutePath, category) =>

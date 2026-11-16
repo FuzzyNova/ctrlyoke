@@ -732,6 +732,13 @@ Automatically close the interactive terminal when execution completes. Turning t
 
 Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging.
 
+### `execution.inlineGeneratedPromptOnStdin` {#execution-inlinegeneratedpromptonstdin}
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Inline generated prompt sections into the first message for headless harnesses that support it. Turn off to use categorized temporary files and references.
+
 ### `execution.contextResolutionFailure` {#execution-contextresolutionfailure}
 
 - **Type:** `"warn" | "fail"`

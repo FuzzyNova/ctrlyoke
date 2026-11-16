@@ -13,7 +13,11 @@ import {
   TextData,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  INLINE_GENERATED_PROMPT_ROOT_TAG,
+  INLINE_GENERATED_PROMPT_USER_SECTION_TAG,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { splitCompleteLines, splitLines } from "../../../utils/TextLines";
@@ -794,7 +798,30 @@ export abstract class BaseLogParser implements ILogParser {
    * ```
    */
   protected normalizePromptForMatching(text: string): string {
-    return text.toLowerCase().trim().replace(/\\/g, "/"); // Convert all backslashes to forward slashes
+    const unwrapped = this.extractInlineUserPrompt(text);
+    return unwrapped.toLowerCase().trim().replace(/\\/g, "/"); // Convert all backslashes to forward slashes
+  }
+
+  /** Remove generated inline context from an echoed prompt before matching it. */
+  protected extractInlineUserPrompt(text: string): string {
+    const rootOpen = `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>`;
+    const rootClose = `</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`;
+    const rootStart = text.toLowerCase().indexOf(rootOpen.toLowerCase());
+    const rootEnd = text.toLowerCase().lastIndexOf(rootClose.toLowerCase());
+    if (rootStart < 0 || rootEnd < rootStart) {
+      return text;
+    }
+    const rootContent = text.slice(rootStart + rootOpen.length, rootEnd);
+    const userOpen = `<${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>`;
+    const userClose = `</${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>`;
+    const userStart = rootContent.toLowerCase().indexOf(userOpen.toLowerCase());
+    const userEnd = rootContent.toLowerCase().lastIndexOf(userClose.toLowerCase());
+    if (userStart < 0 || userEnd < userStart) {
+      return rootContent;
+    }
+    return rootContent
+      .slice(userStart + userOpen.length, userEnd)
+      .trim();
   }
 
   protected isDispatchedPromptEcho(

@@ -345,6 +345,28 @@ suite("ConfigurationUtils — script timeout", () => {
   });
 });
 
+suite("ConfigurationUtils — generated prompt inlining", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+  });
+
+  test("defaults to enabled and honors the opt-out", () => {
+    configService.setUserBackend(makeBackend({}));
+    assert.strictEqual(
+      ConfigurationUtils.shouldInlineGeneratedPromptOnStdin(),
+      true
+    );
+
+    configService.setUserBackend(
+      makeBackend({ execution: { inlineGeneratedPromptOnStdin: false } })
+    );
+    assert.strictEqual(
+      ConfigurationUtils.shouldInlineGeneratedPromptOnStdin(),
+      false
+    );
+  });
+});
+
 suite("ConfigurationUtils — context resolution failure mode", () => {
   teardown(() => {
     configService.setUserBackend(makeBackend({}));

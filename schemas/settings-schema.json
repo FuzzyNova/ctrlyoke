@@ -489,6 +489,11 @@
           "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging.",
           "default": true
         },
+        "inlineGeneratedPromptOnStdin": {
+          "type": "boolean",
+          "description": "Inline generated prompt sections into the first message for headless harnesses that support it. Turn off to use categorized temporary files and references.",
+          "default": true
+        },
         "contextResolutionFailure": {
           "type": "string",
           "enum": ["warn", "fail"],

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Add an opt-out setting for inlining generated prompt sections on opted-in headless harnesses.
+
 ### Added
 
 - The workflow properties panel shows whole-value variable placeholders as read-only chips with their current value and a Clear action. Model, agent and skill dropdown validation leaves unresolved placeholders alone, and step names resolve from the workflow's vars in the run view.

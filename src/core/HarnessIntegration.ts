@@ -946,13 +946,16 @@ export abstract class HarnessIntegration {
       );
     }
 
-    const followClause = `follow the instructions in ${formatRefs(promptRefs)}`;
+    const followClause = promptRefs.length
+      ? `follow the instructions in ${formatRefs(promptRefs)}`
+      : "";
 
     if (clauses.length === 0) {
-      return `Follow instructions in ${formatRefs(promptRefs)} `;
+      return followClause ? `Follow instructions in ${formatRefs(promptRefs)} ` : "";
     }
 
-    return clauses.join(joinSeparator) + `${joinSeparator}${followClause} `;
+    return clauses.join(joinSeparator) +
+      (followClause ? `${joinSeparator}${followClause} ` : "");
   }
 
   /**

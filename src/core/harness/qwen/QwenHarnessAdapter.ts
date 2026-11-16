@@ -230,6 +230,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       updateCommand: "npm install -g @qwen-code/qwen-code@latest",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: false,
 
     // Qwen uses log file monitoring for completion detection in interactive mode
     // Process exit is primary for headless mode

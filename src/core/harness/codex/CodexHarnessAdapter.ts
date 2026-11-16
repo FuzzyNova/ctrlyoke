@@ -297,6 +297,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       updateCommand: "codex update",
     },
     shouldStreamHeadlessOutput: true,
+    inlinesGeneratedPromptOnStdin: false,
 
     // Codex uses hooks system for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
