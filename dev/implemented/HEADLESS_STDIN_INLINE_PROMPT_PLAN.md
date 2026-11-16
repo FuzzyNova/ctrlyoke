@@ -1,8 +1,6 @@
 # Headless Stdin Inline Prompt Delivery
 
-**Status:** Core planning, setting, preview, escaping and echo support implemented. Qwen and Copilot are opted in; remaining harnesses are unchanged. Unit coverage is in place; Nathan should run the live cases listed below before relying on vendor stdin behavior. Researched 2026-11-10 against the vendor sources and
-installed CLIs listed below; nothing here has been checked with a live run.
-Open questions resolved 2026-11-15 (see "Decisions").
+**Status:** Implemented for this plan's current scope: Qwen, Copilot, Codex and Antigravity are opted in, with unit coverage for their prompt plans, arguments and echo handling. Live stdin behavior remains to be confirmed. Claude is deferred to session-control Stage 2. Researched 2026-11-10 against vendor sources and installed CLIs; nothing here has been checked with a live run. Open questions resolved 2026-11-15 (see "Decisions").
 **Priority:** P2
 **Depends on:** Stage 1 of
 [`HEADLESS_SESSION_CONTROL_PLAN.md`](HEADLESS_SESSION_CONTROL_PLAN.md), which
@@ -208,8 +206,9 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 - **Claude is not opted in here.** It keeps today's argv prompt and free `@path` reads until
   session-control Stage 2 moves it onto stream-json input; whether it inlines is decided there by
   the `@path` probe. Step 4's "Claude: drop the prompt" applies only then.
-- **Opted in now:** Qwen (first message on the control channel) and Copilot (plain
-  `STDIN` delivery). Codex and agy remain opted out pending their rounds. OpenCode stays on `--file`.
+- **Opted in now:** Qwen (first message on the control channel) and Copilot, Codex and
+  agy (`STDIN` delivery). Codex uses `exec -` / `exec resume <id> -`; agy drops
+  `--print <prompt>` so stdin selects print mode. OpenCode stays on `--file`.
 - **The setting controls content, not transport.** Moving Copilot, Codex and agy to stdin is
   unconditional, so their args do not fork on a setting. With the setting off, the stdin text
   is today's `follow the instructions in @…` sentence.
@@ -236,7 +235,8 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 4. [x] **Per-provider args for this round.** Qwen already drops its positional
        prompt for the control channel. Copilot now drops `--prompt <text>`, relies
        on piped stdin for prompt mode, and clears `COPILOT_PROMPT_TURN_DELIMITER`.
-       Claude, Codex and agy remain for their respective rounds.
+       Codex and agy use plain stdin until their session-control stages replace
+       this transport; Claude remains deferred to Stage 2.
 5. [x] **Escaping.** Inlined content must not trigger harness syntax. Escape `@`
        for Qwen, and avoid a leading `/` for Qwen and agy. Copilot will tag any
        `@token` that resolves to a real path, which is harmless except for images.
@@ -256,15 +256,27 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
      a literal `@name`, a workspace `@file` reference, and a prompt starting
      with `/`; confirm generated content is not expanded as a mention, the
      workspace file is read, and the echoed first user message matches only
-     the user's prompt section in step output.
+     the user's prompt section in step output. Repeat in a resumed session to
+     confirm the control-channel first message is accepted (inferred).
    - **Copilot:** run a headless step with generated agent/skill content and a
-     workspace `@file` reference; confirm the piped first message is processed
-     as one turn, generated sections are available immediately, and stdout
-     parsing records the echoed prompt without exposing generated context as
-     user text. Repeat with a parent `COPILOT_PROMPT_TURN_DELIMITER` set to
-     confirm it does not split the message.
-   - For both harnesses, set `execution.inlineGeneratedPromptOnStdin: false`
-     once and confirm the categorized-file fallback still runs.
+     workspace `@file` reference; confirm stdin is processed as one turn,
+     generated sections are available immediately, and output parsing does not
+     expose generated context as user text. Repeat with a parent
+     `COPILOT_PROMPT_TURN_DELIMITER` set, and in a resumed session to confirm
+     resume-with-stdin works (inferred from piped-stdin behavior).
+   - **Codex:** run a new headless step and a resumed headless step with generated
+     agent/skill content and a workspace file reference; confirm `exec -` and
+     `exec resume <id> -` consume stdin, and the rollout echo shows only the
+     user's prompt section. Resume-with-stdin is inferred and needs a live check.
+   - **Antigravity:** run a new headless step and a resumed headless step with
+     generated agent/skill content, a workspace file reference, and a prompt
+     starting with `/`; confirm stdin enters print mode without `--print`, the
+     prompt is not treated as a slash command, and output parsing shows only
+     the user's prompt section. Resume-with-stdin is inferred and needs a live
+     check.
+   - For each opted-in harness, set
+     `execution.inlineGeneratedPromptOnStdin: false` once and confirm the
+     categorized-file fallback still runs.
 
 ## Decisions
 
@@ -288,6 +300,9 @@ Resolved 2026-11-15 from the code; the last two are Nathan's calls.
   should only help. Check it in one long live run per harness; do not design
   around it.
 - **OpenCode: not opted in.** It keeps `--file` (see its section).
+- **Codex and Antigravity live stdin behavior:** the CLI findings support the
+  chosen forms, but the new adapter paths have not been exercised against live
+  harnesses. The live cases above are still required.
 - **Claude: probe first.** Before session-control Stage 2 moves Claude to
   stream-json input, send a stream-json `user` message containing an `@path`
   and see whether the file is read in. If it is not, ship Claude's inlining in

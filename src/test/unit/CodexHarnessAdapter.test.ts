@@ -91,6 +91,31 @@ suite("CodexHarnessAdapter", () => {
     });
   });
 
+  test("uses stdin prompt marker after new and resumed headless args", () => {
+    const provider = new CodexHarnessAdapter();
+    assert.deepStrictEqual(
+      provider.buildHeadlessArgs(["--model", "gpt-5.2-codex"], "prompt"),
+      ["--model", "gpt-5.2-codex", "-"]
+    );
+    assert.deepStrictEqual(
+      provider.buildHeadlessArgs(
+        ["--model", "gpt-5.2-codex", "resume", "thread_abc123", "--image", "shot.png"],
+        "prompt"
+      ),
+      [
+        "--model",
+        "gpt-5.2-codex",
+        "resume",
+        "thread_abc123",
+        "-",
+        "--image",
+        "shot.png",
+      ]
+    );
+    assert.strictEqual(provider.config.headlessPromptDelivery, "stdin");
+    assert.strictEqual(provider.config.inlinesGeneratedPromptOnStdin, true);
+  });
+
   test("a denied write tool is reported as not enforced", async () => {
     const result = await new CodexToolPermissionMapper().prepare(
       {

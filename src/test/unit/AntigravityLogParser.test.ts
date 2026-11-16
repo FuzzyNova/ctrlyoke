@@ -161,6 +161,14 @@ suite("AntigravityLogParser", () => {
         expected: "injected-prompt",
       },
       {
+        name: "inline echo matches only the user's prompt section",
+        loggedText:
+          "<ctrlyokePrompt>\n<agentInstructions>generated rules</agentInstructions>\n<userPrompt>\nPlease inspect the workflow parser\n</userPrompt>\n</ctrlyokePrompt>",
+        dispatchedPromptText:
+          "<ctrlyokePrompt>\n<agentInstructions>generated rules</agentInstructions>\n<userPrompt>\nPlease inspect the workflow parser\n</userPrompt>\n</ctrlyokePrompt>",
+        expected: "injected-prompt",
+      },
+      {
         name: "trailing extra text",
         loggedText: `${dispatchedPromptText} [attachment metadata]`,
         dispatchedPromptText,

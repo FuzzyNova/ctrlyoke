@@ -47,6 +47,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
+  HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
   MCP_SERVER_IDS,
@@ -297,7 +298,8 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       updateCommand: "codex update",
     },
     shouldStreamHeadlessOutput: true,
-    inlinesGeneratedPromptOnStdin: false,
+    headlessPromptDelivery: HEADLESS_PROMPT_DELIVERIES.STDIN,
+    inlinesGeneratedPromptOnStdin: true,
 
     // Codex uses hooks system for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
@@ -825,8 +827,11 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
    * @param prompt Prompt text or file reference
    * @returns Complete arguments array
    */
-  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return moveGreedyOptionArgsAfterPrompt(baseArgs, prompt, "--image");
+  buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
+    // `-` tells Codex to read the prompt from stdin. Keep it in the positional
+    // prompt slot (after `resume <session-id>` when present) so greedy --image
+    // values are still moved after it.
+    return moveGreedyOptionArgsAfterPrompt(baseArgs, "-", "--image");
   }
 
   /**

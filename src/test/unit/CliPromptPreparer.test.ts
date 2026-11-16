@@ -10,6 +10,8 @@ import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAda
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
 import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import {
   HarnessIntegration,
@@ -96,6 +98,8 @@ suite("CliPromptPreparer", () => {
   const inlinePromptProviders: Array<[string, IHarnessAdapter, string]> = [
     ["Qwen", new QwenHarnessAdapter(), "\\@generated"],
     ["Copilot", new CopilotHarnessAdapter(), "@generated"],
+    ["Codex", new CodexHarnessAdapter(), "@generated"],
+    ["Antigravity", new AntigravityHarnessAdapter(), "@generated"],
   ];
   for (const [
     name,

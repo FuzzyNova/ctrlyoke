@@ -31,6 +31,7 @@ import {
 } from "./AntigravityProtocolConstants";
 import {
   HARNESS_IDS,
+  HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
   STATUS_LINE_HARNESS_IDS,
   CAPABILITY_FIDELITIES,
@@ -187,9 +188,12 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,
-    inlinesGeneratedPromptOnStdin: false,
+    headlessPromptDelivery: HEADLESS_PROMPT_DELIVERIES.STDIN,
+    inlinesGeneratedPromptOnStdin: true,
     usesInteractiveNotificationMonitor: true,
   };
+
+  readonly requiresNonSlashInlinePromptPrefix = true;
 
   readonly notificationMonitor: INotificationMonitor =
     new AntigravityNotificationMonitor();
@@ -405,8 +409,11 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
     };
   }
 
-  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return ["--print", prompt, "--output-format", "stream-json", ...baseArgs];
+  buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
+    // With no --print prompt value, agy enters print mode from piped stdin.
+    // The inline root block also prevents slash-command parsing, and the
+    // prompt preparer applies the non-slash prefix safeguard as defense in depth.
+    return ["--output-format", "stream-json", ...baseArgs];
   }
 
   /**
