@@ -12,6 +12,46 @@ export const CODEX_STDOUT_EVENT_TYPES = {
   TURN_COMPLETED: "turn.completed",
 } as const;
 
+/** JSON-RPC v2 methods used by Codex's app-server transport. */
+export const CODEX_APP_SERVER_METHODS = {
+  INITIALIZE: "initialize",
+  INITIALIZED: "initialized",
+  CONFIG_READ: "config/read",
+  THREAD_START: "thread/start",
+  THREAD_RESUME: "thread/resume",
+  THREAD_STARTED: "thread/started",
+  TURN_START: "turn/start",
+  TURN_COMPLETED: "turn/completed",
+  COMMAND_APPROVAL: "item/commandExecution/requestApproval",
+  FILE_CHANGE_APPROVAL: "item/fileChange/requestApproval",
+  PERMISSIONS_APPROVAL: "item/permissions/requestApproval",
+  USER_INPUT: "item/tool/requestUserInput",
+} as const;
+
+export const CODEX_APP_SERVER_DECISIONS = {
+  ACCEPT: "accept",
+  DECLINE: "decline",
+} as const;
+
+export const CODEX_EXEC_ARGUMENTS = {
+  RESUME: "resume",
+  JSON: "--json",
+  SKIP_GIT_REPO_CHECK: "--skip-git-repo-check",
+  PROMPT_STDIN: "-",
+  IMAGE: "--image",
+  IMAGE_SHORT: "-i",
+  ADD_DIR: "--add-dir",
+  MODEL: "--model",
+  MODEL_SHORT: "-m",
+  SANDBOX: "--sandbox",
+  SANDBOX_SHORT: "-s",
+  ASK_FOR_APPROVAL: "--ask-for-approval",
+  ASK_FOR_APPROVAL_SHORT: "-a",
+  DANGEROUSLY_BYPASS: "--dangerously-bypass-approvals-and-sandbox",
+  YOLO: "--yolo",
+  CONFIG_OVERRIDE: "-c",
+} as const;
+
 /** Wire-level values from Codex's response-item log protocol. */
 export const CODEX_EVENT_TYPES = {
   RESPONSE_ITEM: "response_item",
@@ -58,6 +98,12 @@ export const CODEX_WEB_SEARCH_STATUSES = {
 
 export const CODEX_ITEM_TYPES = {
   MCP_TOOL_CALL: "McpToolCall",
+  SUBAGENT_ACTIVITY: "SubAgentActivity",
+} as const;
+
+export const CODEX_SUBAGENT_ACTIVITY_KINDS = {
+  STARTED: "started",
+  COMPLETED: "completed",
 } as const;
 
 export const CODEX_MESSAGE_ROLES = {

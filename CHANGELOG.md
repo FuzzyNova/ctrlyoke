@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- Headless Codex 0.146.0 and later now runs through `codex app-server` JSON-RPC, while older versions keep using `codex exec`. The rollout log remains the source of headless Codex output.
 - Claude headless steps wait for tracked background tasks to finish before ending the step.
 - In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Added
 
 - Headless Claude Code and Qwen Code steps can ask the dashboard to approve tool requests with **Allow once** or **Deny**, including an optional denial message. Requests with no connected dashboard or no answer before the timeout are denied.
+- Headless Codex command, file-change and additional-permission approvals now follow `toolPermissions.headlessApprovals`; **Deny** remains the default, and **Ask** routes requests to the dashboard.
 - Send Steer Message now works during headless Claude Code, Qwen Code and Antigravity steps: Claude receives the message in its current turn, while Qwen and Antigravity queue it after their current turns.
 - Interrupt Turn ends a headless Claude or Qwen turn while preserving the partial output and completing the step without stopping the workflow.
 - The workflow properties panel shows whole-value variable placeholders as read-only chips with their current value and a Clear action. Model, agent and skill dropdown validation leaves unresolved placeholders alone, and step names resolve from the workflow's vars in the run view.

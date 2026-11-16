@@ -41,6 +41,13 @@ export interface HeadlessControlChannelOptions {
   approvalPolicy: HeadlessApprovalPolicy;
   approvalTimeoutMs: number;
   useApprovalControl: boolean;
+  context?: HeadlessControlChannelContext;
+}
+
+export interface HeadlessControlChannelContext {
+  sessionId?: string;
+  imageFilePaths?: readonly string[];
+  launchArgs?: readonly string[];
 }
 
 export interface HeadlessApprovalExecutionContext extends HeadlessControlChannelOptions {
@@ -54,6 +61,8 @@ export interface HeadlessApprovalExecutionContext extends HeadlessControlChannel
 export interface IHeadlessControlChannel {
   readonly spawnShape: HeadlessControlSpawnShape;
   readonly steerDelivery: HeadlessSteerDelivery;
+  /** False when the protocol is used for turn delivery/approvals but not steering. */
+  readonly supportsSteering?: boolean;
   /** Keep stdin open after a turn while the provider reports pending background work. */
   readonly holdOpenForBackgroundWork?: boolean;
   start(writer: ControlWriter): Promise<void>;

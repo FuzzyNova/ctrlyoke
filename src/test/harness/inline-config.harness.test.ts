@@ -1222,7 +1222,7 @@ suite("Inline harness configuration regression tests", function () {
 
     // Headless on purpose: since 0.156 interactive Codex will not start in an
     // untrusted folder at all (its trust dialog offers only "Trust" or
-    // "Quit"), while `codex exec` still runs there with project config off.
+    // "Quit"). Headless app-server and legacy exec do not require that dialog.
     test("inline completion works in an untrusted Codex project where the old file path fails", function () {
       const outputPath = path.join(tmpDir, "codex-untrusted-stop.jsonl");
       const legacyOutputPath = path.join(tmpDir, "codex-legacy-stop.jsonl");
@@ -1359,7 +1359,7 @@ suite("Inline harness configuration regression tests", function () {
     // cases other harnesses run prove nothing here (headless `custom` runs any
     // command inside the sandbox, and an in-workspace write never reaches the
     // reviewer). What `auto` changes is the escalation path: headless `custom`
-    // (`codex exec`, approval `never`) has none, while `auto` lets the
+    // (approval `never`) has none, while `auto` lets the
     // reviewer approve a request to run outside the sandbox. These cases run
     // headless with `sandbox: true` (workspace-write).
     test(`${CODEX}: auto lets a sandboxed command write the workspace`, function () {
@@ -1392,8 +1392,8 @@ suite("Inline harness configuration regression tests", function () {
     // "outside" file is created even without an escalation. The write goes
     // through a workspace script so the prompt names no outside path.
     //
-    // `custom` (`codex exec`, approval `never`) is asked to run the command
-    // normally: asking it to escalate under `never` makes the model decline
+    // `custom` (approval `never`) is asked to run the command normally:
+    // asking it to escalate under `never` makes the model decline
     // before making any call. The sandbox then refuses the outside write.
     // `auto` is asked to escalate up front, because a model that first hits
     // the sandbox and then reads "do not retry" never asks at all.

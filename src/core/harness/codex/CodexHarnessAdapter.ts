@@ -16,7 +16,10 @@ import {
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { CliParseUtils } from "../shared/CliParseUtils";
-import { CODEX_STDOUT_EVENT_TYPES } from "./CodexProtocolConstants";
+import {
+  CODEX_APP_SERVER_METHODS,
+  CODEX_STDOUT_EVENT_TYPES,
+} from "./CodexProtocolConstants";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import {
   CODEX_FOLD_EXCLUDED_SERVER_IDS,
@@ -48,6 +51,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
+  HEADLESS_APPROVAL_POLICIES,
   HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
@@ -56,6 +60,7 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import type {
   HookEvent,
   PromptFile,
@@ -77,6 +82,18 @@ import {
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
+import {
+  CODEX_APP_SERVER_ARGS,
+  buildCodexAppServerArgs,
+  getCodexAppServerAdditionalWritableRoots,
+} from "./CodexAppServerArgs";
+import { isCodexAppServerVersionSupported } from "./CodexAppServerClient";
+import { CodexAppServerHeadlessControlChannel } from "./CodexAppServerHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
+
+export interface CodexHarnessAdapterOptions {
+  getVersion?: () => Promise<string | undefined>;
+}
 
 const CODEX_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -214,7 +231,8 @@ function splitCodexHeaders(headers: Record<string, string> | undefined): {
  * - CliMcpConfigGenerator: Generates MCP configuration (shared)
  *
  * Codex CLI-specific features:
- * - Uses JSONL output format (multiple {"type": "..."} events)
+ * - Uses Codex's rollout log for headless events; app-server JSON-RPC is only
+ *   the control and session-ID transport on supported versions
  * - Hook-based completion via --enable hooks + inline config overrides
  * - OpenAI token format in usage metadata
  * - Completion detection via {"type": "turn.completed"} events
@@ -233,6 +251,9 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
   static readonly CLI_HELP_COMMAND = `${CodexHarnessAdapter.CLI_COMMAND} --help`;
 
   readonly logParser: CodexLogParser;
+  private readonly versionProbe?: () => Promise<string | undefined>;
+  private versionPromise?: Promise<string | undefined>;
+  private appServerSupportPromise?: Promise<boolean>;
 
   probeResumableSession(
     sessionId: string,
@@ -250,11 +271,15 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
         : input instanceof Error
           ? input.message
           : `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
-    return /thread [^\s:]+ not found/i.test(message);
+    return /thread (?:[^\s:]+ )?not found\b/i.test(message);
   }
 
-  constructor(onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void) {
+  constructor(
+    onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void,
+    options: CodexHarnessAdapterOptions = {}
+  ) {
     this.logParser = new CodexLogParser(onProviderUsageUpdate);
+    this.versionProbe = options.getVersion;
   }
 
   private buildToolApprovalOverrideArgs(server: McpServerConfig): string[] {
@@ -334,13 +359,29 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
    * so this hook stays pure and stateless.
    */
   extractSessionIdFromStdout(chunk: string): string | undefined {
-    const event = CliParseUtils.parseJsonLines(chunk).find(
-      (candidate) =>
+    for (const candidate of CliParseUtils.parseJsonLines(chunk)) {
+      if (
         candidate.type === CODEX_STDOUT_EVENT_TYPES.THREAD_STARTED &&
         typeof candidate.thread_id === "string" &&
         candidate.thread_id.length > 0
-    );
-    return event?.thread_id as string | undefined;
+      ) {
+        return candidate.thread_id;
+      }
+
+      if (!isRecord(candidate)) continue;
+      const thread =
+        isRecord(candidate.result) && isRecord(candidate.result.thread)
+          ? candidate.result.thread
+          : candidate.method === CODEX_APP_SERVER_METHODS.THREAD_STARTED &&
+              isRecord(candidate.params) &&
+              isRecord(candidate.params.thread)
+            ? candidate.params.thread
+            : undefined;
+      if (typeof thread?.id === "string" && thread.id.length > 0) {
+        return thread.id;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -354,8 +395,22 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
     const events = CliParseUtils.parseJsonLines(stdout);
     for (let i = events.length - 1; i >= 0; i--) {
       const event = events[i];
+      if (
+        isRecord(event) &&
+        event.method === CODEX_APP_SERVER_METHODS.TURN_COMPLETED
+      ) {
+        return undefined;
+      }
       if (event.type === CODEX_STDOUT_EVENT_TYPES.TURN_COMPLETED) {
         return undefined;
+      }
+      if (
+        isRecord(event) &&
+        isRecord(event.error) &&
+        typeof event.error.message === "string" &&
+        event.error.message.trim()
+      ) {
+        return unwrapApiErrorMessage(event.error.message.trim());
       }
       const message =
         event.type === CODEX_STDOUT_EVENT_TYPES.TURN_FAILED
@@ -482,11 +537,15 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       );
     }
 
-    // Headless mode: add exec command and --json flag
+    // Headless mode uses app-server when its control protocol is supported.
     if (!isInteractive) {
-      args.push("exec");
-      args.push("--json");
-      args.push("--skip-git-repo-check"); // Allow headless/CI use outside git repos
+      if (await this.supportsHeadlessAppServer()) {
+        args.push(...CODEX_APP_SERVER_ARGS);
+      } else {
+        args.push("exec");
+        args.push("--json");
+        args.push("--skip-git-repo-check"); // Allow headless/CI use outside git repos
+      }
     }
 
     // Model selection with validation - use resolved property if available
@@ -547,6 +606,19 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       );
     }
 
+    if (!isInteractive && args.includes("app-server")) {
+      const toolPermissions =
+        workflowContext?.resolvedProperties?.toolPermissions;
+      const askForEscalations =
+        toolPermissions?.headlessApprovals === HEADLESS_APPROVAL_POLICIES.ASK &&
+        (toolPermissions.mode === PERMISSION_MODES.CUSTOM ||
+          toolPermissions.mode === PERMISSION_MODES.AUTO);
+      args.push(
+        "-c",
+        `approval_policy=${quoteTomlBasicString(askForEscalations ? "on-request" : "never")}`
+      );
+    }
+
     // Hook setup (interactive notification hooks) is dispatched by
     // CliIntegration.runExecutionSession() via buildNotificationHookArgs() — not here.
     // buildNotificationHookArgs() returns ["--enable", "hooks"] for interactive mode.
@@ -564,8 +636,8 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       Log.info("[CodexHarnessAdapter] Starting new session");
     }
 
-    // Note: Prompt is NOT included here - it's a positional argument
-    // handled by the execution methods (buildHeadlessArgs, etc.).
+    // Note: Prompt is NOT included here; buildHeadlessArgs or the app-server
+    // control channel owns its transport.
     // Note: "resume <session-id>" is NOT added here — it must appear AFTER all global
     // flags (hooks, permissions). See buildCliSuffix().
 
@@ -574,6 +646,21 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       mutations: mcpPreparation.mutations,
       diagnostics: mcpPreparation.diagnostics,
     };
+  }
+
+  async createHeadlessControlChannel(
+    _promptText: string,
+    options: HeadlessControlChannelOptions
+  ): Promise<CodexAppServerHeadlessControlChannel | undefined> {
+    if (!(await this.supportsHeadlessAppServer())) return undefined;
+    return new CodexAppServerHeadlessControlChannel({
+      context: options.context,
+      additionalWritableRoots: getCodexAppServerAdditionalWritableRoots(
+        options.context?.launchArgs ?? []
+      ),
+      isRecoverableSessionError: (message) =>
+        this.isRecoverableSessionError(message),
+    });
   }
 
   /**
@@ -822,8 +909,8 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
   /**
    * Build CLI arguments for headless mode
    *
-   * Codex expects: codex exec [OPTIONS] [PROMPT]
-   * The prompt precedes --image because exec parses it as a greedy array.
+   * Older Codex versions expect: codex exec [OPTIONS] [PROMPT]
+   * App-server versions send the prompt over JSON-RPC instead.
    *
    * Handles both direct prompts and file references (e.g., ".ctrlyoke/temp/prompt.md")
    *
@@ -832,6 +919,9 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
+    if (baseArgs.includes("app-server")) {
+      return buildCodexAppServerArgs(baseArgs);
+    }
     // `-` tells Codex to read the prompt from stdin. Keep it in the positional
     // prompt slot (after `resume <session-id>` when present) so greedy --image
     // values are still moved after it.
@@ -1054,15 +1144,36 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
    * @returns Version string if available
    */
   async getVersion(): Promise<string | undefined> {
-    return HarnessAdapterUtils.getCliVersion(
-      CodexHarnessAdapter.CLI_VERSION_COMMAND,
-      {
-        parseVersion: (stdout) => {
-          // Extract versions from both "codex version 0.1.2" and "codex-cli 0.1.2".
-          const match = stdout.match(/codex(?:-cli)?(?: version)?\s+([\d.]+)/i);
-          return match ? match[1] : stdout;
-        },
-      }
-    );
+    if (!this.versionPromise) {
+      this.versionPromise = this.versionProbe
+        ? this.versionProbe()
+        : HarnessAdapterUtils.getCliVersion(
+            CodexHarnessAdapter.CLI_VERSION_COMMAND,
+            {
+              parseVersion: (stdout) => {
+                // Extract versions from both "codex version 0.1.2" and "codex-cli 0.1.2".
+                const match = stdout.match(
+                  /codex(?:-cli)?(?: version)?\s+([\d.]+)/i
+                );
+                return match ? match[1] : stdout;
+              },
+            }
+          );
+    }
+    return this.versionPromise;
+  }
+
+  private async supportsHeadlessAppServer(): Promise<boolean> {
+    if (!this.appServerSupportPromise) {
+      this.appServerSupportPromise = this.getVersion()
+        .then(isCodexAppServerVersionSupported)
+        .catch((error: unknown) => {
+          Log.warn(
+            `[CodexHarnessAdapter] Could not determine whether app-server is supported; keeping exec mode: ${getErrorMessage(error)}`
+          );
+          return false;
+        });
+    }
+    return this.appServerSupportPromise;
   }
 }

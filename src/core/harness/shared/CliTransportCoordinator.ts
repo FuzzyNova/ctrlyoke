@@ -70,6 +70,7 @@ import {
 import { AsyncMutex } from "./AsyncMutex";
 import {
   type HeadlessApprovalExecutionContext,
+  type HeadlessControlChannelContext,
   type ControlWriter,
   type IHeadlessControlChannel,
 } from "./IHeadlessControlChannel";
@@ -168,7 +169,8 @@ export interface CliExecutionTransportCoordinator {
     secretNames?: readonly string[],
     keepTempFiles?: boolean,
     controlTarget?: HeadlessControlTargetContext,
-    approvalContext?: HeadlessApprovalExecutionContext
+    approvalContext?: HeadlessApprovalExecutionContext,
+    controlContext?: HeadlessControlChannelContext
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -221,7 +223,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   }
 
   sendHeadlessUserMessage(sessionId: string, text: string): Promise<boolean> {
-    if (this.activeHeadlessControlSessionId !== sessionId) {
+    if (
+      this.activeHeadlessControlSessionId !== sessionId ||
+      this.activeHeadlessControlChannel?.supportsSteering === false
+    ) {
       return Promise.resolve(false);
     }
     return this.activeHeadlessControlSend?.(text) ?? Promise.resolve(false);
@@ -474,7 +479,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     secretNames?: readonly string[],
     keepTempFiles = false,
     controlTarget?: HeadlessControlTargetContext,
-    approvalContext?: HeadlessApprovalExecutionContext
+    approvalContext?: HeadlessApprovalExecutionContext,
+    controlContext?: HeadlessControlChannelContext
   ): Promise<boolean> {
     this.activeHeadlessLogTail = source?.logTail;
     let closeControlChannelForRun: (() => Promise<void>) | undefined;
@@ -494,24 +500,33 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         (await this.resolveProviderCommand(
           this.deps.provider.buildHeadlessArgs(args, promptArgument)
         ));
-      const controlChannel = this.deps.provider.createHeadlessControlChannel?.(
-        promptArgument,
-        {
-          approvalPolicy:
-            approvalContext?.approvalPolicy ?? HEADLESS_APPROVAL_POLICIES.DENY,
-          approvalTimeoutMs:
-            approvalContext?.approvalTimeoutMs ??
-            HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC * 1000,
-          useApprovalControl: approvalContext?.useApprovalControl ?? false,
-        }
-      );
+      const controlChannel =
+        await this.deps.provider.createHeadlessControlChannel?.(
+          promptArgument,
+          {
+            approvalPolicy:
+              approvalContext?.approvalPolicy ??
+              HEADLESS_APPROVAL_POLICIES.DENY,
+            approvalTimeoutMs:
+              approvalContext?.approvalTimeoutMs ??
+              HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC * 1000,
+            useApprovalControl: approvalContext?.useApprovalControl ?? false,
+            context: {
+              ...controlContext,
+              launchArgs: args,
+            },
+          }
+        );
       const approvalPolicy: HeadlessApprovalPolicy =
         approvalContext?.useApprovalControl
           ? approvalContext.approvalPolicy
           : HEADLESS_APPROVAL_POLICIES.DENY;
       const controlSessionId = controlChannel ? randomUUID() : undefined;
       const targetBase =
-        controlChannel && controlSessionId && controlTarget
+        controlChannel &&
+        controlChannel.supportsSteering !== false &&
+        controlSessionId &&
+        controlTarget
           ? {
               workflowId: controlTarget.workflowId,
               controlSessionId,
@@ -1135,9 +1150,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     } finally {
       await closeControlChannelForRun?.();
       this.activeHeadlessLogTail = undefined;
-      if (source?.mode === HEADLESS_SOURCE_MODES.STDOUT) {
-        source.parser.getSubagentFollower?.()?.stop();
-      }
+      source?.parser.getSubagentFollower?.()?.stop();
       if (!keepTempFiles) {
         await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
       }

@@ -25,6 +25,7 @@ import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { CliLogMonitor } from "../CliLogMonitor";
 import { CliExecutionSession } from "./CliExecutionSession";
+import { HarnessAdapterUtils } from "./HarnessAdapterUtils";
 import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import {
@@ -560,7 +561,16 @@ export class CliExecutionRunner {
           session.resolvedProperties?.secrets,
           deferTempFileCleanup,
           controlTarget,
-          approvalContext
+          approvalContext,
+          {
+            sessionId: HarnessAdapterUtils.shouldResumeSession(
+              session.resolvedProperties?.resumeSession,
+              session.resolvedSessionId
+            )
+              ? session.resolvedSessionId
+              : undefined,
+            imageFilePaths: session.imageFileRefs,
+          }
         );
       } catch (error) {
         if (
@@ -626,7 +636,11 @@ export class CliExecutionRunner {
             retryPlan.resolvedCommand,
             session.resolvedProperties?.secrets,
             true,
-            controlTarget
+            controlTarget,
+            approvalContext,
+            {
+              imageFilePaths: session.imageFileRefs,
+            }
           );
         }
 
@@ -1327,6 +1341,7 @@ export class CliExecutionRunner {
           onStdoutEnded: this.deps.provider.finishHeadlessStdout?.bind(
             this.deps.provider
           ),
+          deferSubagentFollowerStop: true,
           extractSessionIdFromLogs:
             this.deps.provider.extractSessionIdFromLogs?.bind(
               this.deps.provider

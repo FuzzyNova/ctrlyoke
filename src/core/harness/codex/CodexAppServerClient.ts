@@ -3,6 +3,7 @@ import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import type { CapabilitiesModel } from "../../../types/CapabilitiesTypes";
 import { HARNESS_USAGE_STATUS_CODES } from "../../../types/DashboardConstants";
 import { normalizeCodexAppServerQuota } from "./CodexUsageNormalization";
+import { CODEX_APP_SERVER_ARGS } from "./CodexAppServerArgs";
 import { CTRLYOKE_VERSION } from "../../../utils/BuildConfig";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
 import {
@@ -23,6 +24,26 @@ const CODEX_ACCOUNT_TYPE_CHATGPT = "chatgpt";
  * cap only stops a misbehaving server that keeps handing back a cursor.
  */
 const CODEX_MODEL_LIST_MAX_PAGES = 20;
+
+export const CODEX_APP_SERVER_MIN_VERSION = {
+  major: 0,
+  minor: 146,
+} as const;
+
+export function isCodexAppServerVersionSupported(
+  version: string | undefined
+): boolean {
+  if (!version) return false;
+  const match = version.match(/(?:v)?(\d+)\.(\d+)/i);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return (
+    major > CODEX_APP_SERVER_MIN_VERSION.major ||
+    (major === CODEX_APP_SERVER_MIN_VERSION.major &&
+      minor >= CODEX_APP_SERVER_MIN_VERSION.minor)
+  );
+}
 
 export type CodexAppServerProcess = StdioProbeProcess;
 
@@ -159,7 +180,7 @@ export class CodexAppServerClient {
       {
         label: "Codex app-server",
         commandName: "codex",
-        args: ["app-server", "--listen", "stdio://"],
+        args: [...CODEX_APP_SERVER_ARGS],
         timeoutMs: this.timeoutMs,
         spawnProcess: this.spawnProcess,
         resolveCommand: this.resolveCommand,

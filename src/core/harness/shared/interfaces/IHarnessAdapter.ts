@@ -596,7 +596,10 @@ export interface IHarnessAdapter {
   createHeadlessControlChannel?(
     promptText: string,
     options: HeadlessControlChannelOptions
-  ): IHeadlessControlChannel | undefined;
+  ):
+    | IHeadlessControlChannel
+    | undefined
+    | Promise<IHeadlessControlChannel | undefined>;
   /** Clamp a configured approval timeout to this CLI's protocol limit. */
   resolveHeadlessApprovalTimeoutMs?(
     requestedTimeoutMs: number

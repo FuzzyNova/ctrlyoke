@@ -7,17 +7,12 @@ import { HarnessAdapterUtils } from "../../../shared/HarnessAdapterUtils";
 import type { IHarnessQuotaCollector } from "../IHarnessQuotaCollector";
 import {
   CodexAppServerClient,
+  isCodexAppServerVersionSupported,
   type CodexAppServerClientOptions,
 } from "../../../codex/CodexAppServerClient";
 
 export const CODEX_APP_SERVER_UNSUPPORTED = "codex-app-server-unsupported";
 const CODEX_APP_SERVER_PROBE_FAILED = "codex-app-server-probe-failed";
-
-/** Current documented app-server support is gated to the rechecked CLI line. */
-const CODEX_APP_SERVER_MIN_VERSION = {
-  major: 0,
-  minor: 146,
-} as const;
 
 export interface CodexQuotaCollectorOptions {
   appServer?: CodexAppServerClientOptions;
@@ -32,28 +27,6 @@ function unsupportedQuota(errorCode: string): HarnessQuotaSnapshot {
     windows: [],
     errorCode,
   };
-}
-
-function parseVersion(
-  version: string | undefined
-): { major: number; minor: number } | undefined {
-  if (!version) return undefined;
-  const match = version.match(/(?:v)?(\d+)\.(\d+)/i);
-  return match
-    ? { major: Number(match[1]), minor: Number(match[2]) }
-    : undefined;
-}
-
-function isCodexAppServerVersionSupported(
-  version: string | undefined
-): boolean {
-  const parsed = parseVersion(version);
-  if (!parsed) return false;
-  return (
-    parsed.major > CODEX_APP_SERVER_MIN_VERSION.major ||
-    (parsed.major === CODEX_APP_SERVER_MIN_VERSION.major &&
-      parsed.minor >= CODEX_APP_SERVER_MIN_VERSION.minor)
-  );
 }
 
 function defaultGetVersion(): Promise<string | undefined> {

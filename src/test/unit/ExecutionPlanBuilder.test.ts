@@ -412,16 +412,19 @@ suite("ExecutionPlanBuilder", () => {
     ]);
   });
 
-  test("places Codex image flags after the headless prompt", async () => {
+  test("places legacy Codex image flags after the headless stdin prompt", async () => {
     const session = createSession("headless");
     session.preparePrompt(
       "Describe shots/diagram.png",
       [],
       ["shots/diagram.png"]
     );
-    const plan = await createBuilder(new CodexHarnessAdapter()).plan(session);
-    // Codex reads the prompt from stdin; `-` holds its positional slot, so
-    // the greedy `--image` values must still follow it.
+    const provider = new CodexHarnessAdapter(undefined, {
+      getVersion: async () => "0.145.9",
+    });
+    const plan = await createBuilder(provider).plan(session);
+    // Legacy Codex reads the prompt from stdin; `-` holds its positional slot,
+    // so the greedy `--image` values must still follow it.
     const promptIndex = plan.cliArgs.indexOf("-");
     const imageFlagIndex = plan.cliArgs.indexOf("--image");
 

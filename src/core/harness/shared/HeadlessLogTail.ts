@@ -25,6 +25,8 @@ export interface HeadlessLogTailOptions {
   onStdoutChunkObserved?: (chunk: string) => void;
   /** Called once stdout has ended, so the observer can flush a partial record. */
   onStdoutEnded?: () => void;
+  /** The response collector will drain and stop the follower after this tail finishes. */
+  deferSubagentFollowerStop?: boolean;
   extractSessionIdFromLogs?: (
     promptText: string,
     startTime: Date,
@@ -250,7 +252,9 @@ export class HeadlessLogTail {
       return this.getResult();
     }
     this.finished = true;
-    this.options.parser.getSubagentFollower?.()?.stop();
+    if (!this.options.deferSubagentFollowerStop) {
+      this.options.parser.getSubagentFollower?.()?.stop();
+    }
     if (this.pollHandle) {
       clearInterval(this.pollHandle);
       this.pollHandle = undefined;

@@ -21,7 +21,9 @@ approval registry, dashboard request/response messages, and the output-pane appr
 Claude/Qwen coverage therefore verifies the plain-CLI no-dashboard denial rather than a dashboard
 approval. Stage 4 adds Antigravity stream-json queue steering (probed on agy 1.5.9: one terminal
 `result` per queued message, and clean exit after stdin EOF), with live steering and
-compatibility-matrix coverage.
+compatibility-matrix coverage. Stage 5 adds Codex app-server transport for headless runs on
+0.146.0 and later; the full Codex harness subset passed on 0.169.0 (28 tests), and the
+sandboxed workspace-write case passed after the writable-root merge.
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
 before calling `channel.close()` so channel cleanup does not need to own transport EOF. Claude's
@@ -76,7 +78,7 @@ turn. A **queue** runs it as the next turn. **Cancel-and-replace** aborts the ru
 | --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------- |
 | Claude Code 2.1.325   | `-p --input-format stream-json`; approvals add `--permission-prompt-tool stdio` + `initialize` | **steer** (mid-tool, same turn)                        | `control_request` `can_use_tool`; reply allow (+`updatedInput`) / deny (+`message`)              | probed          |
 | Qwen Code 0.27.1      | stream-json **SDK mode**: `initialize` first, no positional prompt                | **queue** (next turn)                                  | `can_use_tool` (same shape as Claude); 60 s default timeout, up to 600 s                         | probed + source |
-| Codex 0.167.0         | `codex app-server` JSON-RPC v2                                                    | **steer** (`turn/steer`)                               | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/…` | source only     |
+| Codex 0.169.0         | `codex app-server` JSON-RPC v2                                                    | **not exposed by ctrlyoke**; `turn/steer` deferred     | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/…` | probed          |
 | OpenCode 2.2.6        | plugin `permission.hook("evaluate")` + `ctx.session.prompt`, or `opencode serve`  | **steer** (`delivery: "steer"`, default) or queue      | `permission.asked`; reply `once`/`always`/`reject` (+`message`)                                  | source only     |
 | Copilot CLI 1.0.112   | `--acp`                                                                           | **cancel-and-replace** (probed)                        | `session/request_permission` (`allow_once`/`allow_always`/`reject_once`)                         | probed          |
 |                       | hidden `--server --stdio` (copilot-sdk protocol)                                  | **steer** (`session.send` `mode: "immediate"`, probed) | `permission.request` exists, but routing it to the client was not achieved                       | probed          |
@@ -468,21 +470,27 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    queues as a distinct turn/result and EOF after the last result exits cleanly; older versions
    are not gated without evidence they lack the protocol. The shared compatibility matrix declares
    steering support for Claude, Qwen and Antigravity, backed by the live steering suite.
-5. **Codex over app-server.** This replaces the `exec` spawn for headless Codex, reusing
-   `CodexAppServerClient`. Since 2026-03-08 (#14005), `exec` has been a thin client of an
-   in-process app-server, so ctrlyoke would do what exec does, out of process:
-   - Spawn `codex app-server` with the same process-level `-c` args ctrlyoke builds today
-     (hooks, `hooks.state`, sandbox, approval policy). Then `initialize` with
-     `experimentalApi: true`.
-   - Send `thread/start` (or `thread/resume` to continue a session) with exec's own
-     `historyMode: "paginated"` and `bypass_hook_trust` config, then `turn/start` with the prompt.
-   - Answer approval requests, send steers as `turn/steer`, and close at `turn/completed`.
-   - Since the inline plan shipped, `exec` reads the prompt from stdin (`-` positional). The
-     app-server path sends it as `turn/start` input instead, with the same inlined text.
-   - Output is unchanged. Codex headless reads the rollout log (`headlessSource = LOG`), not
-     stdout, so `CodexLogParser` keeps working if the rollout matches exec's. Verify that with a
-     live case, including the `SessionSource` tag (`VSCode` vs `Exec`).
-   - Keep the `exec` path for versions below the app-server gate; it is today's code.
+5. **[Done] Codex over app-server (implemented and live-verified on Codex 0.169.0).** Headless
+   Codex 0.146.0 and later uses `codex app-server`; older versions retain the `codex exec` path.
+   The implementation reuses `CodexAppServerClient`'s version gate:
+   - Spawn `codex app-server` with the process-level `-c` args for hooks, `hooks.state`, model,
+     sandbox and approval policy, then `initialize` with `experimentalApi: true`. Exec-only
+     arguments are translated; `--add-dir` roots are merged with configured writable roots through
+     `config/read` and the thread config override.
+   - Send `thread/start` or `thread/resume`, followed by `turn/start` with the same inlined prompt.
+     Start uses `historyMode: "paginated"` and `bypass_hook_trust`; no explicit `cwd` is sent because
+     Codex treats a requested thread cwd as a project-trust grant. Resume uses the exact session ID;
+     a live `codex exec resume <app-server-thread-id>` probe confirmed compatibility.
+   - Handle command, file-change and permission approval requests. Custom uses Deny by default;
+     `headlessApprovals: ask` routes requests to the dashboard. App-server denials do not support a
+     custom denial message, and Allow once for permissions is scoped to the turn.
+   - Headless steering is deliberately not exposed in this stage. Close the channel after
+     `turn/completed`; later steering work can use `turn/steer` without changing the app-server
+     execution gate.
+   - Output remains sourced from the Codex rollout log (`headlessSource = LOG`), not app-server
+     stdout. The parser promotes rollout `task_complete.error` for failure classification and
+     records app-server `SubAgentActivity`; the shared follower remains alive through the response
+     collector's final drain.
 6. **Copilot, agy, OpenCode approvals.**
    - Copilot and agy over ACP: needs an ACP `session/update` event mapper per harness. To avoid
      ACP's cancel-and-replace, deliver steers as queue (hold the message until `session/prompt`
@@ -524,7 +532,8 @@ Resolved 2026-11-15, with the Claude Stage 2a probes resolved on 2026-11-16. The
 - **OpenCode async `evaluate` hook.** Probe in Stage 6. Try the `opencode serve` route first if
   the hook cannot block on a human: it has documented reply and steer endpoints and needs no
   ctrlyoke→plugin channel.
-- **Codex rollout parity.** A live case in Stage 5 (already listed there). Gate at 0.146 (see
+- **Codex rollout parity.** Resolved in Stage 5: rollout output and session errors are read from
+  Codex's log, and resuming by the app-server thread ID was live-verified. Gate at 0.146 (see
   "Version requirements").
 - **`ask` timeout** (Nathan): deny with a message.
 - **"Interrupt turn".** Yes, as a small follow-up after Stage 2. Claude/Qwen `interrupt` and
