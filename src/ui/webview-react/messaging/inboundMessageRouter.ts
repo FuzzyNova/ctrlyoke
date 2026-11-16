@@ -417,9 +417,14 @@ function isDisplayingNonExecutingRun(
  * reading the executing run's stale "running" summary and stay on Pause/Stop
  * instead of switching to Re-run the instant the workflow finishes.
  */
-function applyExecutionState(state: ExecutionState): void {
+function applyExecutionState(state: ExecutionState, workflowId?: string): void {
   useWorkflowStore.getState().setExecutionState(state);
   if (isExecutionFinished(state)) {
+    const targetWorkflowId =
+      workflowId ?? useUiStore.getState().activeWorkflowId;
+    if (targetWorkflowId) {
+      useTerminalStore.getState().clearHeadlessControlTargets(targetWorkflowId);
+    }
     useUiStore.getState().markExecutionRunFinished(state);
   } else if (state === EXECUTION_STATES.RUNNING) {
     // Mirrors the finished-state sync above: a continuation/append on the
@@ -804,6 +809,7 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.RECONNECT] = () => {
     // Extension host restarted but VS Code retained the old webview context.
     // Reset startup state and re-send READY so the new host can initialize.
+    useTerminalStore.getState().clearHeadlessControlTargets();
     useUiStore.setState({
       devRestarting: false,
       startupReady: false,
@@ -1288,8 +1294,16 @@ export function createMessageHandlers(
   // EXECUTION_STATE_CHANGED - Execution state changed (running/paused/stopped)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_STATE_CHANGED] = (message) => {
-    if (isForInactiveWorkflow(message)) return;
-    applyExecutionState(message.state as ExecutionState);
+    const executionState = message.state as ExecutionState;
+    if (isForInactiveWorkflow(message)) {
+      if (isExecutionFinished(executionState) && message.workflowId) {
+        useTerminalStore
+          .getState()
+          .clearHeadlessControlTargets(message.workflowId);
+      }
+      return;
+    }
+    applyExecutionState(executionState, message.workflowId);
     useWorkflowStore.getState().setStopReason(message.stopReason ?? undefined);
     if (message.activeStepIndices !== undefined) {
       useWorkflowStore
@@ -1301,6 +1315,10 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED] = (message) => {
     if (isForInactiveWorkflow(message)) return;
     useWorkflowStore.getState().setActiveStepIndices(message.activeStepIndices);
+  };
+
+  handlers[MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED] = (message) => {
+    useTerminalStore.getState().updateHeadlessControlTarget(message);
   };
 
   // --------------------------------------------------------------------------
@@ -3252,7 +3270,7 @@ export function createMessageHandlers(
       const workflowStore = useWorkflowStore.getState();
       workflowStore.setCurrentStep(summary.currentStep);
       workflowStore.setTotalSteps(summary.totalSteps);
-      applyExecutionState(summary.executionState);
+      applyExecutionState(summary.executionState, summary.id);
     }
   };
 

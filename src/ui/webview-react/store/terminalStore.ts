@@ -7,6 +7,7 @@ import {
   type SessionKind,
   type ShellKind,
   type ActiveTerminalWorkflowRef,
+  type HeadlessControlTargetMessage,
 } from "../types/messages";
 
 export type { SessionKind };
@@ -66,6 +67,8 @@ interface TerminalState {
    * complete for every workflow on every client, including hosted browser tabs.
    */
   activeTerminalWorkflows: ActiveTerminalWorkflowRef[];
+  /** Open headless channels that can receive steers, keyed by workflow. */
+  headlessControlTargets: Record<string, HeadlessControlTargetMessage[]>;
 }
 
 interface TerminalActions {
@@ -121,12 +124,16 @@ interface TerminalActions {
 
   /** Replace the global active-terminal set (ACTIVE_TERMINAL_WORKFLOWS broadcast) */
   setActiveTerminalWorkflows: (workflows: ActiveTerminalWorkflowRef[]) => void;
+  updateHeadlessControlTarget: (target: HeadlessControlTargetMessage) => void;
+  /** Clear a workflow's targets, or all targets when no workflow is supplied. */
+  clearHeadlessControlTargets: (workflowId?: string) => void;
 }
 
 const initialState: TerminalState = {
   sessions: {},
   activeSessionIds: {},
   activeTerminalWorkflows: [],
+  headlessControlTargets: {},
 };
 
 export const useTerminalStore = create<TerminalState & TerminalActions>()(
@@ -230,6 +237,51 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
 
     setActiveTerminalWorkflows: (workflows) =>
       set({ activeTerminalWorkflows: workflows }),
+
+    updateHeadlessControlTarget: (target) =>
+      set((state) => {
+        const workflowTargets =
+          state.headlessControlTargets[target.workflowId] ?? [];
+        const remainingTargets = workflowTargets.filter(
+          (existing) => existing.controlSessionId !== target.controlSessionId
+        );
+        if (
+          !target.isOpen &&
+          remainingTargets.length === workflowTargets.length
+        ) {
+          return {};
+        }
+
+        const nextTargets = target.isOpen
+          ? [...remainingTargets, target].sort(
+              (a, b) => a.stepIndex - b.stepIndex
+            )
+          : remainingTargets;
+        const headlessControlTargets = {
+          ...state.headlessControlTargets,
+        };
+        if (nextTargets.length > 0) {
+          headlessControlTargets[target.workflowId] = nextTargets;
+        } else {
+          delete headlessControlTargets[target.workflowId];
+        }
+        return { headlessControlTargets };
+      }),
+
+    clearHeadlessControlTargets: (workflowId) =>
+      set((state) => {
+        if (workflowId === undefined) {
+          return { headlessControlTargets: {} };
+        }
+        if (!(workflowId in state.headlessControlTargets)) {
+          return {};
+        }
+        const headlessControlTargets = {
+          ...state.headlessControlTargets,
+        };
+        delete headlessControlTargets[workflowId];
+        return { headlessControlTargets };
+      }),
 
     clearAiCliSessions: (workflowId) =>
       set((state) => {

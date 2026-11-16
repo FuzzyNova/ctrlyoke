@@ -85,6 +85,8 @@ import type { PromptStep } from "@/types/messages";
 import {
   EXECUTION_MODES,
   EXECUTION_PHASES,
+  HEADLESS_STEER_DELIVERIES,
+  HARNESS_IDS,
   SCRIPT_OUTPUT_SOURCES,
   STEP_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -139,7 +141,11 @@ beforeEach(() => {
     executionRunRef: null,
   });
   useEditorStore.getState().resetEditor();
-  useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
+  useTerminalStore.setState({
+    sessions: {},
+    activeSessionIds: {},
+    headlessControlTargets: {},
+  });
   useWorkspaceStatsStore.setState({ snapshot: undefined });
   useHarnessCapabilityStore.getState().resetCapabilitySnapshot();
   handleCompletionNotificationEventMock.mockReset();
@@ -867,6 +873,25 @@ describe("TEMPLATE_VARIABLE_DEFAULTS_SET", () => {
 // ---------------------------------------------------------------------------
 
 describe("restart lifecycle", () => {
+  it("clears headless targets before reconnecting", () => {
+    renderHook(() => useInboundMessageRouter());
+    useTerminalStore.getState().updateHeadlessControlTarget({
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 0,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      isOpen: true,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECONNECT);
+    });
+
+    expect(useTerminalStore.getState().headlessControlTargets).toEqual({});
+  });
+
   it("schedules a handshake retry after DEV_RESTARTING", () => {
     vi.useFakeTimers();
     const retrySpy = vi
@@ -1206,6 +1231,41 @@ describe("STARTUP_COMPLETE", () => {
 // EXECUTION_STATE_CHANGED
 // ---------------------------------------------------------------------------
 
+describe("HEADLESS_CONTROL_TARGET_CHANGED", () => {
+  it("stores open targets and removes them when the channel closes", () => {
+    renderHook(() => useInboundMessageRouter());
+    const target = {
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 2,
+      harnessId: HARNESS_IDS.QWEN_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+    };
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED, {
+        ...target,
+        isOpen: true,
+      });
+    });
+
+    expect(
+      useTerminalStore.getState().headlessControlTargets["workflow-1"]
+    ).toMatchObject([{ ...target, isOpen: true }]);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED, {
+        ...target,
+        isOpen: false,
+      });
+    });
+
+    expect(
+      useTerminalStore.getState().headlessControlTargets["workflow-1"]
+    ).toBeUndefined();
+  });
+});
+
 describe("EXECUTION_STATE_CHANGED", () => {
   it("updates workflowStore executionState to RUNNING", () => {
     renderHook(() => useInboundMessageRouter());
@@ -1236,16 +1296,54 @@ describe("EXECUTION_STATE_CHANGED", () => {
   });
 
   it("updates to STOPPED", () => {
+    useUiStore.setState({ activeWorkflowId: "workflow-1" });
+    useTerminalStore.getState().updateHeadlessControlTarget({
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 0,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      isOpen: true,
+    });
     renderHook(() => useInboundMessageRouter());
 
     act(() => {
       dispatch(MESSAGE_TYPES.EXECUTION_STATE_CHANGED, {
+        workflowId: "workflow-1",
         state: EXECUTION_STATES.STOPPED,
       });
     });
 
     expect(useWorkflowStore.getState().executionState).toBe(
       EXECUTION_STATES.STOPPED
+    );
+    expect(useTerminalStore.getState().headlessControlTargets).toEqual({});
+  });
+
+  it("clears targets when an inactive workflow ends", () => {
+    useUiStore.setState({ activeWorkflowId: "workflow-2" });
+    useTerminalStore.getState().updateHeadlessControlTarget({
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 0,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      isOpen: true,
+    });
+    renderHook(() => useInboundMessageRouter());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STATE_CHANGED, {
+        workflowId: "workflow-1",
+        state: EXECUTION_STATES.STOPPED,
+      });
+    });
+
+    expect(useTerminalStore.getState().headlessControlTargets).toEqual({});
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.IDLE
     );
   });
 });

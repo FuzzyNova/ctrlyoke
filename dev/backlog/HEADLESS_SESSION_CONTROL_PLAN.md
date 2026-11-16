@@ -1,13 +1,13 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Stages 1, 2a and the host-side portion of 2b are implemented. Stage 1's shared
+**Status:** Stages 1, 2a and 2b are implemented. Stage 1's shared
 transport and Qwen channel are covered by unit tests, and the live Qwen approval case that used
 to hang now passes. Stage 2a moves Claude headless prompts to stream-json stdin, inlines
 generated sections, and holds stdin open for tracked background follow-up work; see the Claude
 findings below. Stage 2b adds host-side headless steering for Claude and Qwen; its live cases
 exercise the actual response/queue behavior and passed on 2026-11-16 (Claude 2.1.325, Qwen
-0.27.4). Open questions through the host-side Stage 2b are resolved; the webview gate remains
-the next implementation step. The Stage 1 follow-up
+0.27.4). The webview stores those targets, prefers the rail-active PTY, and enables the editor gate
+with delivery-specific tooltips. The Stage 1 follow-up
 on SDK mode side effects (under "Qwen Code" findings) is done: subagent output loss was a
 ctrlyoke child-follower race, now fixed by completing a child from the parent stream's report or
 its `meta.json` status; SDK mode's empty agent list cannot be restored without copying Qwen's
@@ -423,17 +423,17 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
     parser reports pending background work after `result`, hold stdin open until it clears or
     the prompt timeout expires. `npm run test:harness -- --grep "claude-cli"` passed (20 tests),
     including headless image input and resume.
-2b. **[Done: host side] Headless steer dispatch** for Claude (inject) and Qwen (queue). The
+2b. **[Done] Headless steer dispatch** for Claude (inject) and Qwen (queue). The
     coordinator keeps stdin open for the appropriate result boundary, publishes a uniquely
     identified control target on open/close, prepares steer text inline, and adds one `USER_STEER`
     receipt to the running step after the write succeeds. The existing log pump suppresses an
     echoed copy of a message sent by ctrlyoke.
 
-    The webview target hook, PTY-priority gate and delivery-specific tooltips are intentionally
-    left for the next step. The host message adds an explicit `isOpen` boolean so the next step
-    can clear only the matching control session. Since no webview can send a headless steer yet,
-    this step does not publish a capability claim or add a changelog entry; add both with the
-    webview gate and its live evidence.
+    The webview stores open targets by workflow, clears them on channel close, workflow end and
+    reconnect, and uses the selected PTY ahead of a headless channel. The editor sends the control
+    session id through the existing `SEND_STEER_MESSAGE` payload. Claude and Qwen tooltips describe
+    their different delivery behavior.
+
 3. **`ask` policy.** Settings field, approval card in the output pane, timeout, and the
    CLI-without-dashboard fallback. An MCP tool to list and answer pending approvals is a
    follow-up.
@@ -467,8 +467,8 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    - Re-evaluate Copilot `--server` mode only if it becomes documented.
 
 Each stage that publishes a capability adds its declaration and live-case evidence, so the
-compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Headless steering is not published
-until its webview gate is available.
+compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Headless steering is available for
+Claude and Qwen when their live control channels are open.
 
 ## Version requirements
 

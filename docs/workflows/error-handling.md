@@ -210,18 +210,19 @@ missing harness.
 
 ### Steer
 
-A steer message talks to the model while a step is still working, without
-waiting for it to finish. Type the message in the prompt editor, open the
-**Run** button's menu, and choose **Send Steer Message**. The text goes
-straight to the live harness session; it does not add a step to the queue, and
-any prompt properties you set in the editor are ignored.
+A steer message sends text to a model while its step is still working, without
+adding another step to the queue. Type the message in the prompt editor, open
+the **Run** button's menu, and choose **Send Steer Message**. For an
+interactive step, the text goes to the AI-CLI session selected in the terminal
+rail. Headless Claude receives it in the current turn; headless Qwen queues it
+after the current turn. Prompt properties set in the editor are ignored.
 
 ![The Run menu open in the prompt editor footer during an interactive step, showing Send Steer Message, Run in Parallel and Run in New Workflow](/screenshots/run-menu-steer-1125x231.png)
 
-Steering needs a live interactive session: the step must be running in
-interactive mode with its harness tab open in the terminal. Otherwise the menu
-item is disabled and its tooltip says why, for example _No live harness session
-for this workflow_. Steering is only available for prompt steps.
+Steering needs a live interactive session or an open headless Claude or Qwen
+control channel. Otherwise the menu item is disabled and its tooltip says why,
+for example _No live harness session for this workflow_. Steering is only
+available for prompt steps.
 
 ## See also
 

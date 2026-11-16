@@ -73,6 +73,7 @@ import {
   STEP_COLOR_MODES,
   STEP_TYPES,
   SESSION_KINDS,
+  HEADLESS_STEER_DELIVERIES,
   TERMINAL_SESSION_STATUS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_VALIDATION_WARNING_CODES,
@@ -98,7 +99,11 @@ beforeEach(() => {
     promptPropertiesDrawerOpen: false,
     promptPropertiesActivePage: DRAWER_PAGES.HARNESS,
   });
-  useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
+  useTerminalStore.setState({
+    sessions: {},
+    activeSessionIds: {},
+    headlessControlTargets: {},
+  });
   (
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
   ).postMessage = postMessageSpy;
@@ -964,6 +969,33 @@ describe("StepEditor — Send Steer Message", () => {
       )?.[0]
     ).not.toHaveProperty("mutation");
     expect(useEditorStore.getState().promptText).toBe("");
+  });
+
+  it("uses the control session id when steering a headless step", async () => {
+    useUiStore.setState({ activeWorkflowId: "workflow-1" });
+    useTerminalStore.getState().updateHeadlessControlTarget({
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 0,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      isOpen: true,
+    });
+    useWorkflowStore.setState({
+      executionState: EXECUTION_STATES.RUNNING,
+      activeStepIndices: [0],
+    });
+    useEditorStore.getState().setPromptText("headless follow-up");
+
+    await clickSteer();
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+      workflowId: "workflow-1",
+      sessionId: "control-1",
+      text: "headless follow-up",
+    });
   });
 
   it("restores the draft when the steer dispatch is rejected", async () => {

@@ -3,10 +3,14 @@ import {
   EDITOR_TARGET_KINDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HEADLESS_STEER_DELIVERIES,
   getHarnessDisplayName,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import { useActiveInteractiveSession } from "@hooks/useActiveInteractiveSession";
+import {
+  useActiveSteerTarget,
+  type ActiveSteerTarget,
+} from "@hooks/useActiveSteerTarget";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -23,6 +27,23 @@ const NO_LIVE_HARNESS = "No live harness session for this workflow";
 const STEER_PROMPT_ONLY = "Steering is only available for prompt steps";
 const NEW_WORKFLOW_TITLE =
   "Starts a separate workflow with default settings and this prompt";
+
+function getSteerEnabledTitle(
+  target: ActiveSteerTarget,
+  stepNumber: number
+): string {
+  if (target.steerDelivery === HEADLESS_STEER_DELIVERIES.INJECT) {
+    return `Sends to the live Claude session (step ${stepNumber}). Prompt overrides are ignored.`;
+  }
+  if (target.steerDelivery === HEADLESS_STEER_DELIVERIES.QUEUE) {
+    return `Queues for the live Qwen session after its current turn (step ${stepNumber}). Prompt overrides are ignored.`;
+  }
+
+  const harnessLabel = target.harnessId
+    ? getHarnessDisplayName(target.harnessId)
+    : "harness";
+  return `Sends to the live ${harnessLabel} session (step ${stepNumber}). Prompt overrides are ignored.`;
+}
 
 export interface RunDispatchTarget {
   enabled: boolean;
@@ -45,7 +66,7 @@ export interface RunDispatchTargets {
 export function useRunDispatchTargets(
   workflowId: string | null
 ): RunDispatchTargets {
-  const activeInteractiveSession = useActiveInteractiveSession(workflowId);
+  const activeSteerTarget = useActiveSteerTarget(workflowId);
   const selectionTarget = useEditorStore((state) => state.selectionTarget);
   const promptText = useEditorStore((state) => state.promptText);
   const scriptCommand = useEditorStore((state) => state.scriptCommand);
@@ -78,7 +99,7 @@ export function useRunDispatchTargets(
         ? EXTERNAL_RUN
         : undefined;
     const parallelBaseReason = !isNewPrompt ? NOT_NEW_PROMPT : contentReason;
-    const steerDisabledReason = !activeInteractiveSession
+    const steerDisabledReason = !activeSteerTarget
       ? NO_LIVE_HARNESS
       : !isNewPrompt
         ? NOT_NEW_PROMPT
@@ -96,11 +117,10 @@ export function useRunDispatchTargets(
     const runningStepNumber = runningStepIndex + 1;
     const enabledTitle = `Runs beside step ${runningStepNumber}; prior context resolves from before step ${runningStepNumber}`;
     const steerStepNumber =
-      (activeInteractiveSession?.stepIndex ?? runningStepIndex) + 1;
-    const harnessLabel = activeInteractiveSession?.harnessId
-      ? getHarnessDisplayName(activeInteractiveSession.harnessId)
-      : "harness";
-    const steerEnabledTitle = `Sends to the live ${harnessLabel} session (step ${steerStepNumber}). Prompt overrides are ignored.`;
+      (activeSteerTarget?.stepIndex ?? runningStepIndex) + 1;
+    const steerEnabledTitle = activeSteerTarget
+      ? getSteerEnabledTitle(activeSteerTarget, steerStepNumber)
+      : NO_LIVE_HARNESS;
 
     let parallelDisabledReason = parallelBaseReason;
     if (
@@ -150,7 +170,7 @@ export function useRunDispatchTargets(
       },
     };
   }, [
-    activeInteractiveSession,
+    activeSteerTarget,
     activeStepIndices,
     currentStep,
     effectiveParallelGroupWidth,

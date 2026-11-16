@@ -17,7 +17,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
-import { useActiveInteractiveSession } from "../../hooks/useActiveInteractiveSession";
+import { useActiveSteerTarget } from "../../hooks/useActiveSteerTarget";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -231,8 +231,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   useSettingsStore(); // Keep store initialized for reactive updates
   const { globalSettings, workflowProperties } = useSettingsStore();
   const runDispatchTargets = useRunDispatchTargets(activeWorkflowId);
-  const activeInteractiveSession =
-    useActiveInteractiveSession(activeWorkflowId);
+  const activeSteerTarget = useActiveSteerTarget(activeWorkflowId);
 
   // ── Drawer tab state (lifted from PromptPropertiesDrawer for footer tab bar) ─────
   // Persisted in uiStore so reopening the drawer restores the last-viewed tab.
@@ -1028,7 +1027,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     if (
       !runDispatchTargets.steer.enabled ||
       !activeWorkflowId ||
-      !activeInteractiveSession
+      !activeSteerTarget
     ) {
       return;
     }
@@ -1040,14 +1039,14 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     vscode.postMessage({
       type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
       workflowId: activeWorkflowId,
-      sessionId: activeInteractiveSession.id,
+      sessionId: activeSteerTarget.sessionId,
       text,
     });
     resetEditor();
     markClean();
     vscode.setState(null);
   }, [
-    activeInteractiveSession,
+    activeSteerTarget,
     activeWorkflowId,
     markClean,
     promptText,

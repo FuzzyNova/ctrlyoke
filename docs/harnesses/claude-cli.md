@@ -105,6 +105,10 @@ Workspace `@file` references remain paths for Claude to read on demand; stream-j
 expand them into the first message. Headless steps also wait for Claude's pending background tasks
 and resumed follow-up turn to finish before they complete, subject to the prompt timeout.
 
+While a headless Claude step is running with its control channel open, **Send Steer Message**
+injects text into the current turn, even while Claude is using a tool. The editor's prompt-property
+overrides are ignored.
+
 ## Permissions {#permissions}
 
 The `sandbox` property is separate from approval modes. `true` adds one merged
