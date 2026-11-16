@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compatibility analysis now warns when `auto` permission mode falls back to `custom` for an old or undetected harness CLI version.
 - Continuing a stopped, failed or appended named-worktree run now uses its recorded directory and branch, even after defaults change.
 - Path-form named worktree directories now enforce the placement guards for the source checkout and linked worktrees, including symlinked paths and paths that contain either.
+- The collapsed terminal session rail no longer lets its scrollbar cover the session entries when more terminals are open than fit. It hides the scrollbar and shows up and down chevrons at its edges, like the Settings tab rail.
 - The workflow properties panel and Settings now describe named worktree setup as running at the start of each run, while managed setup remains tied to creating a worktree.
 - A prompt step that recovers from an end-condition error through `onError: retryPhase` keeps its completed AI attempt in run output instead of reporting it as failed.
 - `ctrlyoke run --json` now reports end-condition actions and resolved comparison details.

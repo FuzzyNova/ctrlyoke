@@ -1,6 +1,12 @@
 import React from "react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  waitFor,
+  cleanup,
+  fireEvent,
+  screen,
+} from "@testing-library/react";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -39,6 +45,10 @@ vi.mock("@hooks/useTerminalContextMenu", () => ({
     openContextMenu: vi.fn(),
     terminalContextMenuPortal: null,
   }),
+}));
+
+vi.mock("@components/output/TerminalInstance", () => ({
+  TerminalInstance: () => null,
 }));
 
 import {
@@ -128,5 +138,83 @@ describe("TerminalView empty-pane viewport hint", () => {
         }
       );
     });
+  });
+});
+
+describe("TerminalView session rail overflow", () => {
+  const WORKFLOW_ID = "workflow-rail-overflow";
+
+  beforeEach(() => {
+    cleanup();
+    useUiStore.getState().resetUi();
+    useSettingsStore.getState().resetSettings();
+    useWorkflowStore.getState().resetWorkflow();
+    const sessions = Array.from({ length: 12 }, (_, index) => ({
+      id: `shell-${index}`,
+      workflowId: WORKFLOW_ID,
+      stepName: "zsh",
+      kind: SESSION_KINDS.SHELL,
+      status: TERMINAL_SESSION_STATUS.RUNNING,
+      isController: true,
+    }));
+    useTerminalStore.setState({
+      sessions: { [WORKFLOW_ID]: sessions },
+      activeSessionIds: { [WORKFLOW_ID]: "shell-0" },
+      activeTerminalWorkflows: [],
+    });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class implements Pick<ResizeObserver, "observe" | "disconnect"> {
+        observe() {}
+        disconnect() {}
+      }
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  /** jsdom does no layout, so give the rail's scroller explicit geometry. */
+  function overflowRail(scrollTop: number) {
+    const scroller = screen.getByTestId("terminal-session-rail-scroller");
+    Object.defineProperty(scroller, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: scrollTop,
+    });
+    Object.defineProperty(scroller, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scroller, "scrollHeight", {
+      configurable: true,
+      value: 600,
+    });
+    fireEvent.scroll(scroller);
+    return scroller;
+  }
+
+  it("hides the scrollbar behind edge chevrons while the rail is collapsed", () => {
+    useUiStore.setState({ terminalRailCollapsed: true });
+    render(<TerminalView workflowId={WORKFLOW_ID} />);
+
+    const scroller = overflowRail(100);
+
+    expect(scroller.className).toContain("scrollbar-hide");
+    expect(screen.getByLabelText("Scroll terminals up")).toBeTruthy();
+    expect(screen.getByLabelText("Scroll terminals down")).toBeTruthy();
+  });
+
+  it("keeps the native scrollbar and no chevrons while the rail is expanded", () => {
+    useUiStore.setState({ terminalRailCollapsed: false });
+    render(<TerminalView workflowId={WORKFLOW_ID} />);
+
+    const scroller = overflowRail(100);
+
+    expect(scroller.className).not.toContain("scrollbar-hide");
+    expect(screen.queryByLabelText("Scroll terminals up")).toBeNull();
+    expect(screen.queryByLabelText("Scroll terminals down")).toBeNull();
   });
 });
