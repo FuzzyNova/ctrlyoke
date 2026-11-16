@@ -432,11 +432,13 @@ domain-specific tools. Currently there is no way to configure plugin loading thr
 #### `--acp` (Agent Client Protocol server)
 
 **What it does:** Starts Copilot as an ACP (Agent Client Protocol) server instead of
-running a session. ACP is an emerging standard for agent-to-agent communication.
+running a session. ACP is the editor-to-agent protocol Zed started (JSON-RPC over stdio, like
+LSP for coding agents), not an agent-to-agent protocol. _(Corrected 2026-11-15; see
+[`HARNESS_SDK_AND_ACP_MODES.md`](HARNESS_SDK_AND_ACP_MODES.md).)_
 
 **Automation value:** Not applicable to FlightPath's current execution model. FlightPath
-drives Copilot as a subprocess; ACP is for orchestrating agents from another agent.
-Potentially relevant if FlightPath itself were to become an ACP client in the future.
+drives Copilot as a subprocess. ACP would let it drive Copilot as an ACP client instead,
+which `HEADLESS_SESSION_CONTROL_PLAN.md` later chose for headless approvals.
 
 **Priority: LOW** — architectural mismatch with current model.
 
