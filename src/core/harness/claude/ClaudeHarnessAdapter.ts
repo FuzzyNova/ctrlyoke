@@ -11,6 +11,8 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   STATUS_LINE_HARNESS_IDS,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
@@ -60,6 +62,7 @@ import type {
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -88,6 +91,15 @@ const CLAUDE_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=2.1.17"]),
+} as const;
+
+const CLAUDE_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: CAPABILITY_FIDELITIES.EXACT,
+  mechanism: CAPABILITY_MECHANISMS.NATIVE,
+  verification: capabilitySuiteVerification(
+    [">=2.1.325"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 function mergeClaudeSettings(
@@ -192,6 +204,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: CLAUDE_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: CLAUDE_IMAGE_INPUT_CAPABILITY },
+      headlessControl: { steering: CLAUDE_HEADLESS_STEERING_CAPABILITY },
     };
   }
   readonly logParser = new ClaudeLogParser();

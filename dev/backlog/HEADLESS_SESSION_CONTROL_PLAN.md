@@ -1,6 +1,6 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Stages 1, 2a, 2b and 3 are implemented. Stage 1's shared
+**Status:** Stages 1, 2a, 2b, 3 and 4 are implemented. Stage 1's shared
 transport and Qwen channel are covered by unit tests, and the live Qwen approval case that used
 to hang now passes. Stage 2a moves Claude headless prompts to stream-json stdin, inlines
 generated sections, and holds stdin open for tracked background follow-up work; see the Claude
@@ -19,7 +19,9 @@ on 2026-11-16. The targeted Claude harness subset passed on 2026-11-16 (20 tests
 headless image input and resume). Stage 3 adds the deny/ask policy, timeout settings, a pending
 approval registry, dashboard request/response messages, and the output-pane approval card. Live
 Claude/Qwen coverage therefore verifies the plain-CLI no-dashboard denial rather than a dashboard
-approval.
+approval. Stage 4 adds Antigravity stream-json queue steering (probed on agy 1.5.9: one terminal
+`result` per queued message, and clean exit after stdin EOF), with live steering and
+compatibility-matrix coverage.
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
 before calling `channel.close()` so channel cleanup does not need to own transport EOF. Claude's
@@ -258,6 +260,10 @@ Source paths are relative to `C:\dev\opencode\packages\`.
 - `--input-format stream-json` expects `{"event":"user","message":{"role":"user","content":"…"}}`
   per line. A line without `event` fails the run ("stream input message is missing the "event"
   field"), and `"type":"user"` is not accepted.
+- On agy 1.5.9, a second user record written 250 ms after the first queued behind the running
+  turn. Each turn emitted its own terminal `result` event, and closing stdin after the second
+  `result` exited with code 0. No older version was probed, so Stage 4 does not add a version
+  gate.
 - Messages queue as next turns (probed). The binary has no control vocabulary ("stream input
   message event %q is not supported yet"), so **approvals cannot go over stream-json**.
 - **`agy acp`, probed:**
@@ -454,12 +460,14 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    exercises the store, output-row projection and card. Live Claude/Qwen cases exercise `ask` with
    the no-dashboard fallback because the real-harness runner cannot attach a dashboard approver.
    An MCP tool to list and answer pending approvals remains a follow-up.
-4. **agy steering** over stream-json (queue). This is cheap: the same shape as Qwen with a
-   different message envelope. agy approvals stay `deny` until stage 6. Since the inline plan
-   shipped, agy gets its prompt as plain stdin text (`headlessPromptDelivery: STDIN`, no
-   positional), so this stage moves it to `--input-format stream-json` with the
-   `{"event":"user",…}` envelope. The first prompt then goes through the channel's
-   `sendUserMessage`, and the existing stdin-text path no longer applies to agy.
+4. **[Done] agy steering** over stream-json (queue). agy approvals stay `deny`; its stream-json
+   protocol has no approval vocabulary. Since the inline plan shipped, agy receives generated
+   prompt sections in the first `{"event":"user",…}` record sent on stdin. The adapter now opts
+   into `--input-format stream-json`, observes terminal `result` events, and leaves failure and
+   usage parsing on their existing stream-json paths. The 1.5.9 probe confirmed a second message
+   queues as a distinct turn/result and EOF after the last result exits cleanly; older versions
+   are not gated without evidence they lack the protocol. The shared compatibility matrix declares
+   steering support for Claude, Qwen and Antigravity, backed by the live steering suite.
 5. **Codex over app-server.** This replaces the `exec` spawn for headless Codex, reusing
    `CodexAppServerClient`. Since 2026-03-08 (#14005), `exec` has been a thin client of an
    in-process app-server, so ctrlyoke would do what exec does, out of process:
@@ -485,7 +493,7 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
 
 Each stage that publishes a capability adds its declaration and live-case evidence, so the
 compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Headless steering is available for
-Claude and Qwen when their live control channels are open.
+Claude Code, Qwen Code and Antigravity when their live control channels are open.
 
 ## Version requirements
 

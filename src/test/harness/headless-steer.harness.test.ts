@@ -68,6 +68,7 @@ suite("Headless steering harness tests", function () {
   for (const harness of [
     HARNESS_IDS.CLAUDE_CLI,
     HARNESS_IDS.QWEN_CLI,
+    HARNESS_IDS.ANTIGRAVITY_CLI,
   ] as const) {
     test(`${harness}: headless steering reaches the same step`, async function () {
       const provider = IntegrationFactory.createCapabilityProvider(harness);
@@ -208,8 +209,16 @@ suite("Headless steering harness tests", function () {
             })
           ),
           [
-            { controlSessionId, canInterruptTurn: true, isOpen: true },
-            { controlSessionId, canInterruptTurn: true, isOpen: false },
+            {
+              controlSessionId,
+              canInterruptTurn: harness !== HARNESS_IDS.ANTIGRAVITY_CLI,
+              isOpen: true,
+            },
+            {
+              controlSessionId,
+              canInterruptTurn: harness !== HARNESS_IDS.ANTIGRAVITY_CLI,
+              isOpen: false,
+            },
           ]
         );
       } finally {
@@ -229,6 +238,10 @@ suite("Headless steering harness tests", function () {
     });
 
     test(`${harness}: headless interrupt ends the current turn quickly`, async function () {
+      if (harness === HARNESS_IDS.ANTIGRAVITY_CLI) {
+        this.skip();
+      }
+
       const provider = IntegrationFactory.createCapabilityProvider(harness);
       if (!(await provider.checkAvailability())) {
         this.skip();

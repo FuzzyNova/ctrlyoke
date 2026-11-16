@@ -1,0 +1,11 @@
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
+import { HEADLESS_CONTROL_CAVEAT_CODES } from "../../../types/CompatibilityTypes";
+
+export const UNSUPPORTED_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+  mechanism: CAPABILITY_MECHANISMS.NONE,
+  caveatCode: HEADLESS_CONTROL_CAVEAT_CODES.NO_STEERING_CHANNEL,
+} as const;

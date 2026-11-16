@@ -25,6 +25,8 @@ import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
   HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
   HEADLESS_APPROVAL_MAX_TIMEOUT_MS,
   HEADLESS_APPROVAL_MIN_TIMEOUT_MS,
@@ -85,6 +87,7 @@ import type {
 import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -167,6 +170,15 @@ const QWEN_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=0.15.5"]),
+} as const;
+
+const QWEN_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: CAPABILITY_FIDELITIES.EXACT,
+  mechanism: CAPABILITY_MECHANISMS.NATIVE,
+  verification: capabilitySuiteVerification(
+    [">=0.27.4"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 /**
@@ -287,6 +299,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: QWEN_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: QWEN_IMAGE_INPUT_CAPABILITY },
+      headlessControl: { steering: QWEN_HEADLESS_STEERING_CAPABILITY },
     };
   }
   readonly logParser = new QwenLogParser();

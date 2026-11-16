@@ -102,6 +102,8 @@ suite("CLI provider argument characterization", () => {
       HEADLESS_PROMPT_DELIVERIES.STDIN
     );
     assert.deepStrictEqual(provider.buildHeadlessArgs(baseArgs, prompt), [
+      "--input-format",
+      "stream-json",
       "--output-format",
       "stream-json",
       "--model",

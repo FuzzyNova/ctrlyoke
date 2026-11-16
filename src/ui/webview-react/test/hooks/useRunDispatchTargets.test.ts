@@ -230,12 +230,17 @@ describe("useRunDispatchTargets", () => {
     [
       HARNESS_IDS.CLAUDE_CLI,
       HEADLESS_STEER_DELIVERIES.INJECT,
-      "Sends to the live Claude session (step 3). Prompt overrides are ignored.",
+      "Sends to the live Claude Code session (step 3). Prompt overrides are ignored.",
     ],
     [
       HARNESS_IDS.QWEN_CLI,
       HEADLESS_STEER_DELIVERIES.QUEUE,
-      "Queues for the live Qwen session after its current turn (step 3). Prompt overrides are ignored.",
+      "Queues for the live Qwen Code session after its current turn (step 3). Prompt overrides are ignored.",
+    ],
+    [
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      HEADLESS_STEER_DELIVERIES.QUEUE,
+      "Queues for the live Antigravity CLI session after its current turn (step 3). Prompt overrides are ignored.",
     ],
   ] as const)(
     "enables headless steer with the %s delivery tooltip",

@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  HEADLESS_CONTROL_CAPABILITY_PATHS,
   HARNESS_IDS,
   HARNESS_VERSION_STATUSES,
   type HarnessId,
@@ -155,12 +156,12 @@ suite("HarnessVersion", () => {
           )
           .map(({ path }) => path)
           .filter(
-            (path) => !FEATURES_NEWER_THAN_MINIMUM[harnessId]?.includes(path)
+            (path) => !FEATURES_UNVERIFIED_AT_MINIMUM[harnessId]?.includes(path)
           );
         // A floor above the minimum raises "unverified" warnings for CLIs the
-        // version policy calls supported. Lower the floor once the feature is
-        // checked at the minimum, raise the minimum, or (only for a feature
-        // that genuinely needs a newer CLI) list it below.
+        // version policy calls supported. Test at the minimum when possible;
+        // otherwise list the unverified range explicitly, and add a runtime
+        // version gate only when evidence shows the older CLI lacks the feature.
         assert.deepStrictEqual(uncovered, []);
       });
     }
@@ -168,16 +169,25 @@ suite("HarnessVersion", () => {
 });
 
 /**
- * Features whose evidence legitimately starts above the harness minimum. Keep
- * this short: every entry warns users the version policy calls supported.
+ * Features whose evidence does not cover the harness minimum. Keep this short:
+ * every entry marks support below its verified range as unverified, not gated.
  */
-const FEATURES_NEWER_THAN_MINIMUM: Partial<Record<HarnessId, string[]>> = {
+const FEATURES_UNVERIFIED_AT_MINIMUM: Partial<Record<HarnessId, string[]>> = {
   [HARNESS_IDS.COPILOT_CLI]: ["sandbox.terminal", "permissions.autoMode"],
   [HARNESS_IDS.OPENCODE_CLI]: ["sandbox.terminal"],
-  [HARNESS_IDS.QWEN_CLI]: ["sandbox.terminal", "permissions.autoMode"],
+  [HARNESS_IDS.QWEN_CLI]: [
+    "sandbox.terminal",
+    "permissions.autoMode",
+    HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
+  ],
   // Sandbox terminal evidence exists only at these verified CLI versions,
-  // which are newer than the currently declared harness minimums.
-  [HARNESS_IDS.CLAUDE_CLI]: ["sandbox.terminal", "permissions.autoMode"],
+  // which are newer than the currently declared harness minimums. Headless
+  // steering is only verified on current CLIs; no older-version gate is known.
+  [HARNESS_IDS.CLAUDE_CLI]: [
+    "sandbox.terminal",
+    "permissions.autoMode",
+    HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
+  ],
   [HARNESS_IDS.CODEX_CLI]: ["sandbox.terminal", "permissions.autoMode"],
   // Only 1.4.4 has been tested; the agy changelog implies the agent could
   // view PNG/JPEG by about 1.2.15. Test at the minimum, then remove this.
@@ -185,6 +195,7 @@ const FEATURES_NEWER_THAN_MINIMUM: Partial<Record<HarnessId, string[]>> = {
     "promptInputs.images",
     "sandbox.terminal",
     "permissions.autoMode",
+    HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
   ],
 };
 

@@ -2114,6 +2114,7 @@ export const CAPABILITY_VERIFICATION_BASES = {
 export const CAPABILITY_DOMAINS = {
   PERMISSIONS: "permissions",
   PROMPT_INPUTS: "promptInputs",
+  HEADLESS_CONTROL: "headlessControl",
   HOOKS: "hooks",
   MCP: "mcp",
   SANDBOX: "sandbox",
@@ -2367,6 +2368,14 @@ export const PERMISSION_CAPABILITY_KEYS = {
 
 export const PROMPT_INPUT_CAPABILITY_KEYS = {
   IMAGES: "images",
+} as const;
+
+export const HEADLESS_CONTROL_CAPABILITY_KEYS = {
+  STEERING: "steering",
+} as const;
+
+export const HEADLESS_CONTROL_CAPABILITY_PATHS = {
+  STEERING: `${CAPABILITY_DOMAINS.HEADLESS_CONTROL}.${HEADLESS_CONTROL_CAPABILITY_KEYS.STEERING}`,
 } as const;
 
 export const MCP_CAPABILITY_KEYS = {

@@ -32,6 +32,7 @@ import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
 import { CopilotLogParser } from "./CopilotLogParser";
+import { UNSUPPORTED_HEADLESS_STEERING_CAPABILITY } from "../shared/HeadlessSteeringCapabilities";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import {
   ConfigurationUtils,
@@ -170,6 +171,9 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: COPILOT_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: COPILOT_IMAGE_INPUT_CAPABILITY },
+      headlessControl: {
+        steering: UNSUPPORTED_HEADLESS_STEERING_CAPABILITY,
+      },
     };
   }
   readonly logParser = new CopilotLogParser();

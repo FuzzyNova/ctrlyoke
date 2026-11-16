@@ -27,6 +27,7 @@ import { gitWritableAdminDirs } from "../../../utils/GitUtils";
 import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
+import { UNSUPPORTED_HEADLESS_STEERING_CAPABILITY } from "../shared/HeadlessSteeringCapabilities";
 import {
   CliMcpConfigGenerator,
   sanitizeCodexConfigKeySegment,
@@ -319,6 +320,9 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: CODEX_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: CODEX_IMAGE_INPUT_CAPABILITY },
+      headlessControl: {
+        steering: UNSUPPORTED_HEADLESS_STEERING_CAPABILITY,
+      },
     };
   }
   readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;

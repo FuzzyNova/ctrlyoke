@@ -23,6 +23,7 @@ import type {
 import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
+import { UNSUPPORTED_HEADLESS_STEERING_CAPABILITY } from "../shared/HeadlessSteeringCapabilities";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
@@ -247,6 +248,9 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: OPENCODE_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: OPENCODE_IMAGE_INPUT_CAPABILITY },
+      headlessControl: {
+        steering: UNSUPPORTED_HEADLESS_STEERING_CAPABILITY,
+      },
     };
   }
   readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;

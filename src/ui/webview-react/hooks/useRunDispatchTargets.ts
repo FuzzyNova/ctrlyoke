@@ -35,10 +35,16 @@ function getSteerEnabledTitle(
   stepNumber: number
 ): string {
   if (target.steerDelivery === HEADLESS_STEER_DELIVERIES.INJECT) {
-    return `Sends to the live Claude session (step ${stepNumber}). Prompt overrides are ignored.`;
+    const harnessLabel = target.harnessId
+      ? getHarnessDisplayName(target.harnessId)
+      : "harness";
+    return `Sends to the live ${harnessLabel} session (step ${stepNumber}). Prompt overrides are ignored.`;
   }
   if (target.steerDelivery === HEADLESS_STEER_DELIVERIES.QUEUE) {
-    return `Queues for the live Qwen session after its current turn (step ${stepNumber}). Prompt overrides are ignored.`;
+    const harnessLabel = target.harnessId
+      ? getHarnessDisplayName(target.harnessId)
+      : "harness";
+    return `Queues for the live ${harnessLabel} session after its current turn (step ${stepNumber}). Prompt overrides are ignored.`;
   }
 
   const harnessLabel = target.harnessId
