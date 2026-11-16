@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Headless steps on Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- Claude headless steps wait for tracked background tasks to finish before ending the step.
 - In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Added

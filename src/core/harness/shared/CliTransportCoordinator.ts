@@ -60,6 +60,8 @@ import {
   HEADLESS_APPROVAL_DENIAL_MESSAGE,
 } from "../../../types/DashboardConstants";
 
+const HEADLESS_BACKGROUND_WORK_POLL_INTERVAL_MS = 100;
+
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
   cliCommand: string;
@@ -462,6 +464,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let controlReady: Promise<void> | undefined;
       let controlClosed = false;
       let controlOperations = Promise.resolve();
+      let controlCloseScheduled = false;
+      let promptDeadlineAt = 0;
 
       const withControlLock = async (operation: () => Promise<void>) => {
         if (!controlMutex) return;
@@ -499,6 +503,50 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           });
       };
 
+      const hasPendingBackgroundWork = (): boolean =>
+        source?.parser.hasPendingBackgroundWork?.() === true;
+
+      const closeAfterTurnEnd = (): void => {
+        if (
+          !controlChannel?.holdOpenForBackgroundWork ||
+          !hasPendingBackgroundWork()
+        ) {
+          enqueueControlOperation(closeControlChannel);
+          return;
+        }
+        if (controlCloseScheduled) return;
+        controlCloseScheduled = true;
+
+        // Keep this wait outside the control queue so approvals can still
+        // be answered.
+        void (async () => {
+          try {
+            while (
+              !controlClosed &&
+              !this.deps.runtimeState.isCancelling() &&
+              Date.now() < promptDeadlineAt &&
+              hasPendingBackgroundWork()
+            ) {
+              const remainingMs = promptDeadlineAt - Date.now();
+              await new Promise<void>((resolve) =>
+                setTimeout(
+                  resolve,
+                  Math.min(
+                    HEADLESS_BACKGROUND_WORK_POLL_INTERVAL_MS,
+                    Math.max(0, remainingMs)
+                  )
+                )
+              );
+            }
+          } catch (error) {
+            Log.warn(
+              `[CliTransportCoordinator] Could not inspect pending headless background work: ${getErrorMessage(error)}`
+            );
+          }
+          enqueueControlOperation(closeControlChannel);
+        })();
+      };
+
       const observeControlRecord = (record: string): void => {
         if (!controlChannel) return;
         let value: unknown = record;
@@ -522,9 +570,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           } else if (
             observation.kind === HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END
           ) {
-            // Seam for queued steering: keep stdin open while a next-turn
-            // message is pending. Stage 1 has no steer queue yet.
-            enqueueControlOperation(closeControlChannel);
+            closeAfterTurnEnd();
           }
         }
       };
@@ -627,8 +673,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
       let result: SpawnResult;
       try {
+        const promptTimeoutMs =
+          ConfigurationUtils.getMaxPromptExecutionTimeMs();
+        promptDeadlineAt =
+          promptTimeoutMs === undefined
+            ? Number.POSITIVE_INFINITY
+            : Date.now() + promptTimeoutMs;
         result = await this.spawnProcess(command.command, spawnArgs, {
-          timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
+          timeout: promptTimeoutMs,
           env: {
             ...env,
             ...(controlChannel?.spawnShape.env as

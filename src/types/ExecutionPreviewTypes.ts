@@ -221,8 +221,8 @@ export interface CommandPreview {
    * (the `.cmd`/`.bat` launcher fallback) — re-rendering for another shell
    * would mangle it, so the dashboard must not offer the toggle. */
   requiresShellVerbatimArgs: boolean;
-  /** True when the harness reads the prompt from stdin, so `args` and
-   * `displayCommand` do not contain it (see `HarnessConfig.headlessPromptDelivery`). */
+  /** True when a headless prompt is sent on stdin, so `args` and
+   * `displayCommand` do not contain it. */
   promptOnStdin?: boolean;
   cwd: string;
   environmentKeys: string[];

@@ -7,6 +7,11 @@ import { CliTransportError } from "../../core/harness/shared/CliTransportError";
 import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
 import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { ClaudeHeadlessControlChannel } from "../../core/harness/claude/ClaudeHeadlessControlChannel";
+import {
+  CLAUDE_CONTROL,
+  CLAUDE_EVENT_TYPES,
+} from "../../core/harness/claude/ClaudeProtocolConstants";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import { QwenHeadlessControlChannel } from "../../core/harness/qwen/QwenHeadlessControlChannel";
@@ -725,6 +730,217 @@ suite("CliTransportCoordinator", () => {
       if (mode === HEADLESS_SOURCE_MODES.LOG) {
         assert.strictEqual(logTailStdout, '{"id":1}\n{"id":2}\n');
       }
+    }
+  });
+
+  test("holds the control channel for background work without blocking approvals", async () => {
+    let pendingBackgroundWork = true;
+    let channelClosed = false;
+    let approvalAnswered = false;
+    let onStdout: ((chunk: string) => void) | undefined;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    let promptSent!: () => void;
+    let approvalHandled!: () => void;
+    const promptSentPromise = new Promise<void>(
+      (resolve) => (promptSent = resolve)
+    );
+    const approvalHandledPromise = new Promise<void>(
+      (resolve) => (approvalHandled = resolve)
+    );
+    class TrackedClaudeControlChannel extends ClaudeHeadlessControlChannel {
+      override close(): void {
+        channelClosed = true;
+        super.close();
+      }
+    }
+    const spawnResult = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const channel = new TrackedClaudeControlChannel();
+    const provider = {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          onStdout = options.onStdout;
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              const record = JSON.parse(chunk) as { type: string };
+              if (record.type === CLAUDE_CONTROL.USER_TYPE) {
+                promptSent();
+              } else if (record.type === CLAUDE_CONTROL.RESPONSE_TYPE) {
+                approvalAnswered = true;
+                approvalHandled();
+              }
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => {
+              callback?.();
+              finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+            },
+          });
+          return spawnResult;
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    const source = {
+      mode: HEADLESS_SOURCE_MODES.STDOUT,
+      parser: {
+        hasPendingBackgroundWork: () => pendingBackgroundWork,
+      },
+      parseStdout: () => [],
+    } as unknown as HeadlessStreamingSource;
+
+    const execution = coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => true,
+      undefined,
+      source
+    );
+    await promptSentPromise;
+    onStdout?.(`${JSON.stringify({ type: CLAUDE_EVENT_TYPES.RESULT })}\n`);
+    assert.strictEqual(channelClosed, false);
+
+    onStdout?.(
+      `${JSON.stringify({
+        type: CLAUDE_CONTROL.REQUEST_TYPE,
+        request_id: "approval-1",
+        request: { subtype: CLAUDE_CONTROL.CAN_USE_TOOL_SUBTYPE },
+      })}\n`
+    );
+    await approvalHandledPromise;
+    assert.strictEqual(approvalAnswered, true);
+    assert.strictEqual(channelClosed, false);
+
+    pendingBackgroundWork = false;
+    assert.strictEqual(await execution, true);
+    assert.strictEqual(channelClosed, true);
+  });
+
+  test("bounds a background-work hold by the prompt timeout", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => 30;
+    let channelClosed = false;
+    let onStdout: ((chunk: string) => void) | undefined;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    let promptSent!: () => void;
+    const promptSentPromise = new Promise<void>(
+      (resolve) => (promptSent = resolve)
+    );
+    class TrackedClaudeControlChannel extends ClaudeHeadlessControlChannel {
+      override close(): void {
+        channelClosed = true;
+        super.close();
+      }
+    }
+    const spawnResult = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const channel = new TrackedClaudeControlChannel();
+    const provider = {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          onStdout = options.onStdout;
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              const record = JSON.parse(chunk) as { type: string };
+              if (record.type === CLAUDE_CONTROL.USER_TYPE) {
+                promptSent();
+              }
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => {
+              callback?.();
+              finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+            },
+          });
+          return spawnResult;
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    const source = {
+      mode: HEADLESS_SOURCE_MODES.STDOUT,
+      parser: { hasPendingBackgroundWork: () => true },
+      parseStdout: () => [],
+    } as unknown as HeadlessStreamingSource;
+
+    try {
+      const execution = coordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true,
+        undefined,
+        source
+      );
+      await promptSentPromise;
+      onStdout?.(`${JSON.stringify({ type: CLAUDE_EVENT_TYPES.RESULT })}\n`);
+
+      assert.strictEqual(await execution, true);
+      assert.strictEqual(channelClosed, true);
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
     }
   });
 

@@ -1,11 +1,25 @@
+import { STREAM_JSON_CONTROL } from "../shared/StreamJsonHeadlessControlChannel";
+
 /** Wire-level values shared by Claude's Anthropic message and content blocks. */
 export const CLAUDE_EVENT_TYPES = {
-  USER: "user",
+  USER: STREAM_JSON_CONTROL.USER_TYPE,
   ASSISTANT: "assistant",
   SYSTEM: "system",
-  RESULT: "result",
+  RESULT: STREAM_JSON_CONTROL.RESULT_TYPE,
   PROGRESS: "progress",
   ATTACHMENT: "attachment",
+} as const;
+
+/** Stream-json control protocol values used by Claude's headless channel. */
+export const CLAUDE_CONTROL = {
+  REQUEST_TYPE: STREAM_JSON_CONTROL.REQUEST_TYPE,
+  RESPONSE_TYPE: STREAM_JSON_CONTROL.RESPONSE_TYPE,
+  USER_TYPE: STREAM_JSON_CONTROL.USER_TYPE,
+  RESULT_TYPE: STREAM_JSON_CONTROL.RESULT_TYPE,
+  CAN_USE_TOOL_SUBTYPE: STREAM_JSON_CONTROL.CAN_USE_TOOL_SUBTYPE,
+  SUCCESS_SUBTYPE: STREAM_JSON_CONTROL.SUCCESS_SUBTYPE,
+  USER_ROLE: STREAM_JSON_CONTROL.USER_ROLE,
+  DENY_BEHAVIOR: STREAM_JSON_CONTROL.DENY_BEHAVIOR,
 } as const;
 
 /** `attachment.type` values Claude writes on `attachment` log events. */

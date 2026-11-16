@@ -1,16 +1,24 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Stage 1 is implemented: the shared transport and Qwen's headless control channel
-are covered by unit tests, and the live Qwen approval case that used to hang now passes. The
-Stage 1 follow-up on SDK mode side effects (under "Qwen Code" findings) is done: subagent output
-loss was a ctrlyoke child-follower race, now fixed by completing a child from the parent
-stream's report or its `meta.json` status; SDK mode's empty agent list cannot be restored without copying Qwen's builtin agent
-definitions, so it is documented (`docs/harnesses/qwen-cli.md`, CHANGELOG **Changed**).
-Researched 2026-11-15 by live probes and source reading (details under "Findings"). Open
-questions resolved 2026-11-15 (see "Decisions").
+**Status:** Stages 1 and 2a are implemented. Stage 1's shared transport and Qwen channel are
+covered by unit tests, and the live Qwen approval case that used to hang now passes. Stage 2a
+moves Claude headless prompts to stream-json stdin, inlines generated sections, and holds stdin
+open for tracked background follow-up work; see the Claude findings below. The Stage 1 follow-up
+on SDK mode side effects (under "Qwen Code" findings) is done: subagent output loss was a
+ctrlyoke child-follower race, now fixed by completing a child from the parent stream's report or
+its `meta.json` status; SDK mode's empty agent list cannot be restored without copying Qwen's
+builtin agent definitions, so it is documented (`docs/harnesses/qwen-cli.md`, CHANGELOG
+**Changed**). Researched 2026-11-15 by live probes and source reading, with Claude probes on
+2026-11-16 (details under "Findings"). Open questions through Stage 2a are resolved (see
+"Decisions"). The targeted Claude harness subset passed on 2026-11-16 (20 tests, including
+headless image input and resume).
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
-before calling `channel.close()` so channel cleanup does not need to own transport EOF.
+before calling `channel.close()` so channel cleanup does not need to own transport EOF. Claude's
+Stage 2a channel sends user records without `initialize` or `--permission-prompt-tool stdio`;
+probes confirmed neither is needed for prompt delivery, and custom headless `dontAsk` continues
+to refuse approvals in-band. The channel still explicitly denies any `can_use_tool` request it
+does observe.
 **Priority:** P1 (Stage 1 fixes a high-severity hang)
 **Order:** implement this plan's Stage 1 before the stdin inline plan. It fixes the P1 hang and
 builds the transport the inline plan reuses.
@@ -55,7 +63,7 @@ turn. A **queue** runs it as the next turn. **Cancel-and-replace** aborts the ru
 
 | Harness (version)     | Channel                                                                           | Message while running                                  | Approval requests                                                                                | How verified    |
 | --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------- |
-| Claude Code 2.1.325   | `-p --input-format stream-json` + `--permission-prompt-tool stdio` + `initialize` | **steer** (mid-tool, same turn)                        | `control_request` `can_use_tool`; reply allow (+`updatedInput`) / deny (+`message`)              | probed          |
+| Claude Code 2.1.325   | `-p --input-format stream-json`; approvals add `--permission-prompt-tool stdio` + `initialize` | **steer** (mid-tool, same turn)                        | `control_request` `can_use_tool`; reply allow (+`updatedInput`) / deny (+`message`)              | probed          |
 | Qwen Code 0.27.1      | stream-json **SDK mode**: `initialize` first, no positional prompt                | **queue** (next turn)                                  | `can_use_tool` (same shape as Claude); 60 s default timeout, up to 600 s                         | probed + source |
 | Codex 0.167.0         | `codex app-server` JSON-RPC v2                                                    | **steer** (`turn/steer`)                               | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/…` | source only     |
 | OpenCode 2.2.6        | plugin `permission.hook("evaluate")` + `ctx.session.prompt`, or `opencode serve`  | **steer** (`delivery: "steer"`, default) or queue      | `permission.asked`; reply `once`/`always`/`reject` (+`message`)                                  | source only     |
@@ -89,6 +97,19 @@ until the current `session/prompt` returns.
 - A probe that needs an approval must pass `--setting-sources project`. Otherwise the user's own
   allow rules approve the command before any request is sent; the first probe here did exactly
   that.
+- **Stage 2a probes (Claude Code 2.1.325, 2026-11-16):** A `user` message containing
+  `@somefile` did not expand the file even without `initialize`; Claude reported that no file was
+  attached. Claude is now opted into generated-section inlining for headless stdin, while direct
+  workspace references remain paths the model can read on demand.
+- Two stream-json `user` records without an `initialize` handshake produced two results, so
+  Stage 2a omits both `initialize` and `--permission-prompt-tool stdio`. Custom headless
+  `--permission-mode dontAsk` remains unchanged; the shared coordinator answers any
+  `can_use_tool` request that nevertheless appears with ctrlyoke's deny response.
+- A background Agent emitted `system.task_notification` after the first `result` while stdin
+  remained open, followed by its resumed user/assistant turn and another `result`. Stage 2a
+  reproduced this without `initialize` too, matching its production launch. It holds channel
+  closure while `ClaudeLogParser` reports pending background work, bounded by the configured
+  prompt timeout.
 
 ### Qwen Code
 
@@ -386,15 +407,20 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    - **Qwen's `headlessSource` is `LOG`.** Its stdout chunks go to `HeadlessLogTail.onStdoutChunk`,
      not to `parseStdout`. The channel must see every complete stdout JSONL record whatever the
      source mode, so split stdout into records for the channel independently of the output path.
-   - **Claude is not in Stage 1.** Under `deny`, Claude keeps `dontAsk`, which already refuses
-     in-band, so the channel gives Claude nothing until steering. Moving it now would also risk
-     losing `@path` expansion (see the inline plan's Claude probe) for no gain.
+   - **Claude was deferred from Stage 1.** Under `deny`, Claude keeps `dontAsk`, which already
+     refuses in-band. Stage 2a later moved its prompt transport to stream-json and enabled
+     generated-section inlining after the `@path` probe below.
    - Stdin must stay open until the turn's `result`, because approval answers go on stdin. Stdin
      EOF cancels a pending request, so `close()` at turn end (or on Stop) can never hang.
-2. **Claude channel + headless steer dispatch** for Claude (inject) and Qwen (queue). Move
-   Claude onto the channel here, after the `@path`-in-stream-json probe; if `@path` does not
-   expand, ship Claude's inlining from the inline plan in the same commit. Covers the target
-   registry, webview message, `useActiveSteerTarget`, tooltips and the synthesized receipt.
+2a. **[Done] Claude channel + prompt transport.** Move Claude headless onto stream-json stdin,
+    send the first prompt as a `user` message, and inline generated sections because the
+    `@path` probe showed they are not expanded. Do not initialize host permission prompting:
+    custom stays `dontAsk`, and any `can_use_tool` request is answered with deny. When the
+    parser reports pending background work after `result`, hold stdin open until it clears or
+    the prompt timeout expires. `npm run test:harness -- --grep "claude-cli"` passed (20 tests),
+    including headless image input and resume.
+2b. **Headless steer dispatch** for Claude (inject) and Qwen (queue). Covers the target registry,
+    webview message, `useActiveSteerTarget`, tooltips and the synthesized receipt.
 3. **`ask` policy.** Settings field, approval card in the output pane, timeout, and the
    CLI-without-dashboard fallback. An MCP tool to list and answer pending approvals is a
    follow-up.
@@ -447,14 +473,13 @@ vendor repos' commit history (the local clones have no tags):
 
 ## Decisions
 
-Resolved 2026-11-15. None blocks Stage 1. The ones marked "probe in stage N" are verification
-tasks that belong to that stage, not design questions.
+Resolved 2026-11-15, with the Claude Stage 2a probes resolved on 2026-11-16. The ones marked
+"probe in stage N" are verification tasks that belong to that stage, not design questions.
 
-- **Claude background tasks after `result`.** v1 closes stdin at the first `result` with no
-  queued steer, which is today's behavior, so nothing regresses. Follow-up in Stage 2 (probe):
-  if Claude emits a task-notification turn while stdin stays open, hold `close()` while
-  `ClaudeLogParser`'s `BackgroundFollowUpState` reports pending tasks, bounded by the prompt
-  timeout. That would fix headless background work being lost.
+- **Claude background tasks after `result` (Stage 2a, probed 2026-11-16).** The probe confirmed
+  task-notification turns arrive after the first `result` while stdin is open, including without
+  `initialize`. Stage 2a now holds channel closure while `ClaudeLogParser` reports pending work,
+  bounded by the prompt timeout.
 - **Copilot ACP flags and the judge.** Probe in Stage 6. Not needed earlier.
 - **Copilot server-mode permission opt-in.** Dropped. The flag is hidden; Stage 6 uses ACP.
 - **OpenCode async `evaluate` hook.** Probe in Stage 6. Try the `opencode serve` route first if

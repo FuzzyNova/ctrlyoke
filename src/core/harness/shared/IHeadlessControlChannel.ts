@@ -29,6 +29,8 @@ export interface HeadlessControlSpawnShape {
 export interface IHeadlessControlChannel {
   readonly spawnShape: HeadlessControlSpawnShape;
   readonly steerDelivery: HeadlessSteerDelivery;
+  /** Keep stdin open after a turn while the provider reports pending background work. */
+  readonly holdOpenForBackgroundWork?: boolean;
   start(writer: ControlWriter): Promise<void>;
   sendUserMessage(text: string): Promise<void>;
   observe(record: unknown): ControlObservation[];

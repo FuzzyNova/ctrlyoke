@@ -1244,8 +1244,9 @@ export class ExecutionPreviewService {
     ]);
     const promptOnStdin =
       !isInteractive &&
-      provider.config.headlessPromptDelivery ===
-        HEADLESS_PROMPT_DELIVERIES.STDIN;
+      (provider.config.headlessPromptDelivery ===
+        HEADLESS_PROMPT_DELIVERIES.STDIN ||
+        typeof provider.createHeadlessControlChannel === "function");
     return {
       executable,
       args: redactedArgs,

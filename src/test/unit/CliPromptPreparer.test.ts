@@ -96,6 +96,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 
 suite("CliPromptPreparer", () => {
   const inlinePromptProviders: Array<[string, IHarnessAdapter, string]> = [
+    ["Claude", new ClaudeHarnessAdapter(), "@generated"],
     ["Qwen", new QwenHarnessAdapter(), "\\@generated"],
     ["Copilot", new CopilotHarnessAdapter(), "@generated"],
     ["Codex", new CodexHarnessAdapter(), "@generated"],

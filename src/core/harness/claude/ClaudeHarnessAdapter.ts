@@ -51,6 +51,7 @@ import {
   CLAUDE_HOOK_CONFIG_TYPES,
   CLAUDE_SYSTEM_SUBTYPES,
 } from "./ClaudeProtocolConstants";
+import { ClaudeHeadlessControlChannel } from "./ClaudeHeadlessControlChannel";
 import type {
   CliExecutionSidecar,
   CliExecutionSidecarDeps,
@@ -170,7 +171,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
       updateCommand: "claude update",
     },
     shouldStreamHeadlessOutput: true,
-    inlinesGeneratedPromptOnStdin: false,
+    inlinesGeneratedPromptOnStdin: true,
 
     // Claude uses Stop hook for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
@@ -367,9 +368,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
       }
     }
 
-    // Note: Headless-specific flags (-p, --output-format, --verbose) are added by
-    // buildHeadlessArgs() to ensure correct positioning after the prompt argument.
-    // Don't add them here to avoid duplication.
+    // Headless-specific flags are added by buildHeadlessArgs().
 
     // Model selection with validation - use resolved property if available
     const model = this.validateAndGetModel(resolvedModel);
@@ -757,26 +756,26 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
   /**
    * Build CLI arguments for headless mode
    *
-   * Claude CLI expects the prompt as the FIRST positional argument (right after command name).
-   * This is critical because variadic flags like --disallowedTools will consume any args after them.
-   *
-   * Format: claude "prompt" -p --output-format stream-json --verbose [other args]
-   *
-   * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
+   * Headless prompt text is sent as the first stream-json user message.
    *
    * @param baseArgs Base arguments array
-   * @param prompt Prompt text or file reference
+   * @param _prompt Prompt text is delivered by the control channel
    * @returns Complete arguments array
    */
-  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+  buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
     return [
-      prompt,
       "-p", // Print mode (non-interactive)
+      "--input-format",
+      "stream-json",
       "--output-format",
       "stream-json", // JSON streaming for parsing
       "--verbose", // Include detailed information
       ...baseArgs,
     ];
+  }
+
+  createHeadlessControlChannel(): ClaudeHeadlessControlChannel {
+    return new ClaudeHeadlessControlChannel();
   }
 
   /**

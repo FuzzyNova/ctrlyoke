@@ -832,12 +832,12 @@ suite("ExecutionPreviewService", () => {
       "workflow"
     );
     assert.ok(preview.steps[0].command);
-    assert.ok(
-      preview.steps[0].command?.args.some((argument) =>
-        argument.includes("inspect src/app.ts")
-      )
-    );
     const args = preview.steps[0].command?.args ?? [];
+    assert.strictEqual(preview.steps[0].command?.promptOnStdin, true);
+    assert.ok(
+      !args.some((argument) => argument.includes("inspect src/app.ts"))
+    );
+    assert.strictEqual(args[args.indexOf("--input-format") + 1], "stream-json");
     assert.strictEqual(args[args.indexOf("--model") + 1], "opus");
     assert.ok(
       preview.steps[0].prompt?.sections.some((section) =>
@@ -846,10 +846,20 @@ suite("ExecutionPreviewService", () => {
     );
   });
 
-  test("flags a command whose prompt is piped on stdin", async () => {
+  test("marks standard stdin and control-channel prompt delivery", async () => {
     const workflow: PromptFile = { steps: [{ prompt: "inspect" }] };
-    const buildWith = (delivery: HeadlessPromptDelivery | undefined) => {
+    const buildWith = (
+      delivery: HeadlessPromptDelivery | undefined,
+      hasControlChannel = false
+    ) => {
       const harness = createHarness();
+      if (!hasControlChannel) {
+        Object.defineProperty(
+          harness.provider,
+          "createHeadlessControlChannel",
+          { value: undefined }
+        );
+      }
       harness.provider.config.headlessPromptDelivery = delivery;
       return new ExecutionPreviewService({
         defaults: createDefaults(),
@@ -866,6 +876,11 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(piped.steps[0].command?.promptOnStdin, true);
     const inline = await buildWith(undefined);
     assert.strictEqual(inline.steps[0].command?.promptOnStdin, undefined);
+    const controlChannel = await buildWith(undefined, true);
+    assert.strictEqual(
+      controlChannel.steps[0].command?.promptOnStdin,
+      true
+    );
   });
 
   test("Dry Run preview includes inline generated prompt text for an opted-in harness", async () => {

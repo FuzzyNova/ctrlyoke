@@ -94,6 +94,17 @@ and an older release resolves `sonnet`, `opus` and `haiku` to older models. If a
 missing, or a step fails because the selected model may not exist or you may not have access to it,
 run `claude update` and restart ctrlyoke.
 
+## Headless prompts {#headless-prompts}
+
+Claude headless steps send the first prompt as a stream-json message on stdin. Generated sections,
+such as agent instructions, skills and prior-step context, are included in that message by default.
+Set [`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
+to `false` to use categorized temporary files and references instead.
+
+Workspace `@file` references remain paths for Claude to read on demand; stream-json messages do not
+expand them into the first message. Headless steps also wait for Claude's pending background tasks
+and resumed follow-up turn to finish before they complete, subject to the prompt timeout.
+
 ## Permissions {#permissions}
 
 The `sandbox` property is separate from approval modes. `true` adds one merged
