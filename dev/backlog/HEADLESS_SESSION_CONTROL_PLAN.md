@@ -1,7 +1,9 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Stage 1 is complete: the shared transport and Qwen's headless control channel are
-implemented and covered by unit tests. The live Qwen confirmation remains with Nathan.
+**Status:** Stage 1 is implemented: the shared transport and Qwen's headless control channel
+are covered by unit tests, and the live Qwen approval case that used to hang now passes. Two SDK
+mode side effects (subagent output and subagent discovery, under "Qwen Code" findings) are
+being fixed as a Stage 1 follow-up.
 Researched 2026-11-15 by live probes and source reading (details under "Findings"). Open
 questions resolved 2026-11-15 (see "Decisions").
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
@@ -113,6 +115,21 @@ Source paths are relative to `C:\dev\qwen-code\packages\cli\src\`.
   `set_model`.
 - Caveat: `initialize` sets SDK mode, which slightly changes plan-mode wording
   (`systemController.ts:193`).
+- **SDK mode side effects found in the Stage 1 review (2026-11-15, Qwen 0.27.4):**
+  - Subagent turns are not streamed to stdout. In direct mode a subagent's assistant and
+    tool messages arrive as stdout records with `parent_tool_use_id` set; in SDK mode only the
+    subagent's first `user` record does (probed with the same prompt in both modes). ctrlyoke's
+    headless Qwen output relied on those records, so the live case
+    "qwen-cli: attributes parallel foreground subagent commands" fails after Stage 1.
+  - `SubagentManager.listSubagents` loads only `session`-level subagents in SDK mode
+    (`core\src\subagents\subagent-manager.ts:583`), so user and project subagents may be
+    unavailable to headless Qwen steps unless they are passed in `initialize`.
+  - A turn's `result` is held until its background agents finish (`nonInteractiveCli.ts`
+    holdback loop around `:4039`), and stdin EOF aborts every background registry
+    (`session.ts` `drainAndShutdown`), so closing at `result` loses nothing that ran in the turn.
+  - The Qwen `can_use_tool` reply must be
+    `{"type":"control_response","response":{"subtype":"success","request_id","response":{"behavior","message"}}}`
+    (`ControlDispatcher.handleControlResponse`); a flat reply is ignored and times out after 60 s.
 
 ### Codex
 
