@@ -45,6 +45,18 @@ export interface McpConditionPresetUse {
   maxRetries?: number;
 }
 
+/** One author-declared condition preset, as `workflow_status` reports it. */
+export interface McpConditionPresetSummary {
+  /** The name to pass as `use`. */
+  name: string;
+  /** First line of the preset's script, so a caller can tell what it checks. */
+  script: string;
+  /** Declared params; every one must be supplied when attaching the preset. */
+  params: string[];
+  /** The preset's effective retry budget, and the cap on a caller's `maxRetries`; -1 is unlimited. */
+  maxRetries: number;
+}
+
 export interface McpAppendParallelGroupInput {
   parallel: McpAppendStepInput[];
   failFast?: boolean;
@@ -391,7 +403,8 @@ function conditionPresetUseSchema(
     properties: {
       use: {
         type: "string",
-        description: "Name of a preset in workflow conditions.",
+        description:
+          "Name of a preset the workflow declares; workflow_status lists them under metadata.conditionPresets.",
       },
       params: {
         type: "object",
@@ -433,7 +446,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Finished prompt steps include gitOutcome when the git snapshot succeeded: HEAD at start and end for each repository, plus whether the tree was dirty at the end. This is advisory data, not an execution gate; it is omitted when unavailable. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script.",
+      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Finished prompt steps include gitOutcome when the git snapshot succeeded: HEAD at start and end for each repository, plus whether the tree was dirty at the end. This is advisory data, not an execution gate; it is omitted when unavailable. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. metadata.conditionPresets lists the condition presets you can attach to a step as endCondition or preCondition { use: name }, with each one's script preview, required params, and retry limit; an empty list means the workflow declares none. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script.",
     inputSchema: { type: "object", properties: {} },
   },
   {

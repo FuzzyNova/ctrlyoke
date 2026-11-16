@@ -5,12 +5,73 @@ import type {
   WorkingFile,
 } from "../types/CtrlYokeTypes";
 import { resolveRetryBudgetMaxRetries } from "../core/RetryBudget";
-import type { McpConditionPresetUse } from "./McpToolDefinitions";
+import {
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  type McpConditionPresetSummary,
+  type McpConditionPresetUse,
+} from "./McpToolDefinitions";
+import {
+  promptFirstLinePreview,
+  STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
+} from "./TextUtils";
 
 /** Maximum size of one caller-provided environment value for a preset. */
 const MCP_CONDITION_PARAM_MAX_LENGTH = 4096;
 
 type ConditionField = "endCondition" | "preCondition";
+
+/**
+ * Describe every preset the workflow declares, in declaration order. This is
+ * the only way an MCP caller learns which names `use` accepts, so the
+ * orchestrator can tell "no presets" apart from "presets it has not seen".
+ */
+export function summarizeMcpConditionPresets(
+  workingFile: WorkingFile,
+  defaultMaxRetries: number
+): McpConditionPresetSummary[] {
+  return Object.entries(workingFile.conditions ?? {}).map(([name, preset]) => ({
+    name,
+    script: promptFirstLinePreview(
+      preset.script,
+      STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
+    ),
+    params: [...(preset.params ?? [])],
+    maxRetries: resolveRetryBudgetMaxRetries(preset, defaultMaxRetries),
+  }));
+}
+
+/** "committed, inspect (params: BUG_FILE)", or "none". */
+function formatPresetList(workingFile: WorkingFile): string {
+  const entries = Object.entries(workingFile.conditions ?? {});
+  if (entries.length === 0) return "none";
+  return entries
+    .map(([name, preset]) =>
+      preset.params && preset.params.length > 0
+        ? `${name} (params: ${preset.params.join(", ")})`
+        : name
+    )
+    .join(", ");
+}
+
+/**
+ * Warning for appended steps that run with no end condition at all while the
+ * workflow declares presets one of them could have attached. Returns
+ * undefined when there is nothing to warn about.
+ */
+export function formatUngatedAppendedStepsWarning(
+  workingFile: WorkingFile,
+  ungatedIndices: readonly number[]
+): string | undefined {
+  if (
+    ungatedIndices.length === 0 ||
+    Object.keys(workingFile.conditions ?? {}).length === 0
+  ) {
+    return undefined;
+  }
+  const noun = ungatedIndices.length === 1 ? "Step" : "Steps";
+  return `${noun} ${ungatedIndices.join(", ")} will run with no end condition, but this workflow declares condition presets: ${formatPresetList(workingFile)}. To gate a step, call ${MCP_EDIT_STEP_TOOL_NAME} with updates.endCondition: { "use": "<name>" }; ${MCP_WORKFLOW_STATUS_TOOL_NAME} lists each preset under metadata.conditionPresets.`;
+}
 
 /** Resolve an MCP preset reference into an ordinary, immutable step condition. */
 export function materializeMcpConditionPreset(
@@ -22,9 +83,8 @@ export function materializeMcpConditionPreset(
   const conditions = workingFile.conditions ?? {};
   const preset = conditions[reference.use];
   if (!preset) {
-    const available = Object.keys(conditions);
     throw new Error(
-      `${field}: unknown condition preset '${reference.use}'. Available presets: ${available.length > 0 ? available.join(", ") : "none"}.`
+      `${field}: unknown condition preset '${reference.use}'. Available presets: ${formatPresetList(workingFile)}. ${MCP_WORKFLOW_STATUS_TOOL_NAME} lists each preset under metadata.conditionPresets.`
     );
   }
 
