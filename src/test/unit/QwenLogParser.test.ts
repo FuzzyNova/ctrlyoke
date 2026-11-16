@@ -6,7 +6,11 @@ import { QwenLogParser } from "../../core/harness/qwen/QwenLogParser";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
-import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  INLINE_GENERATED_PROMPT_ROOT_TAG,
+  INLINE_GENERATED_PROMPT_USER_SECTION_TAG,
+} from "../../types/DashboardConstants";
 
 const FIXTURE_ROOT = path.resolve(__dirname, "../../../src/test/fixtures/qwen");
 const HARNESS_ERROR_ROOT = path.resolve(
@@ -71,6 +75,30 @@ suite("Qwen model fallback warning", () => {
     assert.strictEqual(
       parser.extractResponse([answer("qwen3.6-plus")]).metadata.warnings,
       undefined
+    );
+  });
+});
+
+suite("Qwen inline prompt echo", () => {
+  test("classifies the first inline message by its user prompt section", () => {
+    const parser = new QwenLogParser();
+    const root = INLINE_GENERATED_PROMPT_ROOT_TAG;
+    const user = INLINE_GENERATED_PROMPT_USER_SECTION_TAG;
+    const dispatched = `<${root}>\n<agentInstructions>${"Generated @file text.".repeat(10)}</agentInstructions>\n<${user}>\nPlease inspect this file.\n</${user}>\n</${root}>`;
+    const event: BaseCliEvent = {
+      type: "user",
+      message: {
+        parts: [
+          {
+            text: `<${root}>\n<agentInstructions>Different generated @content.</agentInstructions>\n<${user}>\nPlease inspect this file.\n</${user}>\n</${root}>`,
+          },
+        ],
+      },
+    };
+
+    assert.strictEqual(
+      parser.classifyUserEvent(event, { dispatchedPromptText: dispatched }),
+      "injected-prompt"
     );
   });
 });

@@ -57,6 +57,14 @@ steps:
   - prompt: Review @src/ for the highest-priority reliability issue.
 ```
 
+## Headless prompts
+
+In headless steps, ctrlyoke pipes the prompt to Copilot's stdin and requests JSON output.
+Generated sections such as agent instructions, skills and prior-step context are included in
+that first message so Copilot can use them immediately. Turn off
+[`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
+to use categorized temporary files and references instead.
+
 ## Model selection {#model-selection}
 
 The **Model** picker lists the models that `copilot help config` reports. ctrlyoke reads that list

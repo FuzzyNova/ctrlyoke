@@ -1,6 +1,6 @@
 # Headless Stdin Inline Prompt Delivery
 
-**Status:** Core planning, setting, preview, escaping seam and echo support implemented; no harness is opted in. Researched 2026-11-10 against the vendor sources and
+**Status:** Core planning, setting, preview, escaping and echo support implemented. Qwen and Copilot are opted in; remaining harnesses are unchanged. Unit coverage is in place; Nathan should run the live cases listed below before relying on vendor stdin behavior. Researched 2026-11-10 against the vendor sources and
 installed CLIs listed below; nothing here has been checked with a live run.
 Open questions resolved 2026-11-15 (see "Decisions").
 **Priority:** P2
@@ -208,8 +208,8 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 - **Claude is not opted in here.** It keeps today's argv prompt and free `@path` reads until
   session-control Stage 2 moves it onto stream-json input; whether it inlines is decided there by
   the `@path` probe. Step 4's "Claude: drop the prompt" applies only then.
-- **Opted in now:** Qwen (first message on the control channel), Copilot, Codex and agy (plain
-  `STDIN` delivery, interim for Codex and agy). OpenCode stays on `--file`.
+- **Opted in now:** Qwen (first message on the control channel) and Copilot (plain
+  `STDIN` delivery). Codex and agy remain opted out pending their rounds. OpenCode stays on `--file`.
 - **The setting controls content, not transport.** Moving Copilot, Codex and agy to stdin is
   unconditional, so their args do not fork on a setting. With the setting off, the stdin text
   is today's `follow the instructions in @…` sentence.
@@ -217,12 +217,12 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 ## Implementation sketch
 
 1. [x] **Prompt planning.** In `CliPromptPreparer.createCategorizedPromptPlan`,
-   when the provider opts in and the execution is headless, build the inline
-   prompt text instead of temp-file references. Keep writing the temp files
-   only for the fallback path. Workspace file refs still go through
-   `formatDirectFileRef`. Dry Run's prompt preview must show the same thing.
+       when the provider opts in and the execution is headless, build the inline
+       prompt text instead of temp-file references. Keep writing the temp files
+       only for the fallback path. Workspace file refs still go through
+       `formatDirectFileRef`. Dry Run's prompt preview must show the same thing.
 2. [x] **Provider opt-in.** A provider flag (for example
-   `inlinesGeneratedPromptOnStdin`). Transport by harness:
+       `inlinesGeneratedPromptOnStdin`). Transport by harness:
    - With a headless control channel (Qwen after session-control Stage 1,
      Claude after Stage 2, agy after Stage 4, Codex after Stage 5): the inline
      text is the channel's first `sendUserMessage`. No new transport.
@@ -231,29 +231,40 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
      already writes to stdin and closes. These per-harness arg changes (step 4)
      are interim and are replaced when that harness gets its channel.
 3. [x] **No separate stdin encoding hook.** The control channel already owns each
-   harness's envelope (Qwen and Claude `user` lines, agy `{"event":"user",…}`).
-   Plain-stdin harnesses send the text as is.
-4. **Per-provider args.**
-   - Claude: drop the prompt from `buildHeadlessArgs`.
-   - Copilot: drop `--prompt <text>` and clear `COPILOT_PROMPT_TURN_DELIMITER`.
-   - Codex: pass `-` in the prompt's place, after `resume <id>` when resuming.
-   - Qwen: drop the positional prompt.
-   - agy: drop `--print <prompt>`.
+       harness's envelope (Qwen and Claude `user` lines, agy `{"event":"user",…}`).
+       Plain-stdin harnesses send the text as is.
+4. [x] **Per-provider args for this round.** Qwen already drops its positional
+       prompt for the control channel. Copilot now drops `--prompt <text>`, relies
+       on piped stdin for prompt mode, and clears `COPILOT_PROMPT_TURN_DELIMITER`.
+       Claude, Codex and agy remain for their respective rounds.
 5. [x] **Escaping.** Inlined content must not trigger harness syntax. Escape `@`
-   for Qwen, and avoid a leading `/` for Qwen and agy. Copilot will tag any
-   `@token` that resolves to a real path, which is harmless except for images.
+       for Qwen, and avoid a leading `/` for Qwen and agy. Copilot will tag any
+       `@token` that resolves to a real path, which is harmless except for images.
 6. [x] **Echoed prompt.** `BaseLogParser` normalizes the echoed user prompt as
-   `follow instructions in @…`. With inlining, each harness echoes the full
-   content as the first user message. Wrap the whole inlined text in one
-   ctrlyoke root block and have the parser recognize that wrapper, showing only
-   the user's own prompt section in the output pane. The `events.jsonl` prompt
-   record keeps ctrlyoke's own prompt text, not the echo, so nothing is stored
-   twice.
+       `follow instructions in @…`. With inlining, each harness echoes the full
+       content as the first user message. Wrap the whole inlined text in one
+       ctrlyoke root block and have the parser recognize that wrapper, showing only
+       the user's own prompt section in the output pane. The `events.jsonl` prompt
+       record keeps ctrlyoke's own prompt text, not the echo, so nothing is stored
+       twice.
 7. [x] **Setting.** An opt-out setting, default **on** (decided 2026-11-15). Record
-   it under **Changed** in `CHANGELOG.md` in the commit that ships it.
-8. **Tests.** Unit tests for the prompt plan and each adapter's args, and one
-   live harness case per harness. The resume-with-stdin claims above are all
-   inferred and need those live cases to confirm.
+       it under **Changed** in `CHANGELOG.md` in the commit that ships it.
+8. **Tests.** Unit tests cover each adapter's args/env and a prompt-plan path
+   per harness. Live cases remain to confirm vendor stdin behavior; run these
+   manually (do not use the paid `npm run test:harness` gate for this change):
+   - **Qwen:** run a headless step with generated agent/skill content containing
+     a literal `@name`, a workspace `@file` reference, and a prompt starting
+     with `/`; confirm generated content is not expanded as a mention, the
+     workspace file is read, and the echoed first user message matches only
+     the user's prompt section in step output.
+   - **Copilot:** run a headless step with generated agent/skill content and a
+     workspace `@file` reference; confirm the piped first message is processed
+     as one turn, generated sections are available immediately, and stdout
+     parsing records the echoed prompt without exposing generated context as
+     user text. Repeat with a parent `COPILOT_PROMPT_TURN_DELIMITER` set to
+     confirm it does not split the message.
+   - For both harnesses, set `execution.inlineGeneratedPromptOnStdin: false`
+     once and confirm the categorized-file fallback still runs.
 
 ## Decisions
 

@@ -230,7 +230,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
       updateCommand: "npm install -g @qwen-code/qwen-code@latest",
     },
     shouldStreamHeadlessOutput: true,
-    inlinesGeneratedPromptOnStdin: false,
+    inlinesGeneratedPromptOnStdin: true,
 
     // Qwen uses log file monitoring for completion detection in interactive mode
     // Process exit is primary for headless mode
@@ -273,6 +273,13 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * OpenCode and Antigravity.
    */
   readonly requiresAbsoluteFileReferences = true;
+
+  /** Qwen can interpret generated @mentions and a leading slash as commands. */
+  readonly requiresNonSlashInlinePromptPrefix = true;
+
+  transformInlinedGeneratedPrompt(text: string): string {
+    return text.replaceAll("@", "\\@");
+  }
 
   /** Extract Qwen's session ID from any complete JSON object in stdout. */
   extractSessionIdFromStdout(chunk: string): string | undefined {

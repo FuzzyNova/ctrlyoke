@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Add an opt-out setting for inlining generated prompt sections on opted-in headless harnesses.
+- Headless steps on Qwen Code and Copilot CLI now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
 
 ### Added
 

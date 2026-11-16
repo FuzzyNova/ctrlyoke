@@ -58,6 +58,15 @@ steps:
   - prompt: Audit @src/utils/ for duplicated logic and recommend one shared helper.
 ```
 
+## Headless prompts
+
+In headless steps, ctrlyoke sends the prompt as Qwen's first stream-json stdin message.
+Generated sections such as agent instructions, skills and prior-step context are included in
+that message. Qwen's `@path` syntax is escaped in generated content, while workspace file
+references added by ctrlyoke remain available to Qwen. Turn off
+[`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
+to use categorized temporary files and references instead.
+
 ## Model selection {#model-selection}
 
 The **Model** picker lists the model IDs under `modelProviders` in `~/.qwen/settings.json`.

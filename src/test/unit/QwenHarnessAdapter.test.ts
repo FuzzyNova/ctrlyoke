@@ -155,6 +155,16 @@ suite("QwenHarnessAdapter", () => {
     }
   });
 
+  test("opts into inline stdin prompts and escapes Qwen @ syntax", () => {
+    const provider = new QwenHarnessAdapter();
+    assert.strictEqual(provider.config.inlinesGeneratedPromptOnStdin, true);
+    assert.strictEqual(provider.requiresNonSlashInlinePromptPrefix, true);
+    assert.strictEqual(
+      provider.transformInlinedGeneratedPrompt("literal @mention"),
+      "literal \\@mention"
+    );
+  });
+
   test("requires absolute file references", () => {
     assert.strictEqual(
       new QwenHarnessAdapter().requiresAbsoluteFileReferences,

@@ -815,13 +815,13 @@ export abstract class BaseLogParser implements ILogParser {
     const userOpen = `<${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>`;
     const userClose = `</${INLINE_GENERATED_PROMPT_USER_SECTION_TAG}>`;
     const userStart = rootContent.toLowerCase().indexOf(userOpen.toLowerCase());
-    const userEnd = rootContent.toLowerCase().lastIndexOf(userClose.toLowerCase());
+    const userEnd = rootContent
+      .toLowerCase()
+      .lastIndexOf(userClose.toLowerCase());
     if (userStart < 0 || userEnd < userStart) {
       return rootContent;
     }
-    return rootContent
-      .slice(userStart + userOpen.length, userEnd)
-      .trim();
+    return rootContent.slice(userStart + userOpen.length, userEnd).trim();
   }
 
   protected isDispatchedPromptEcho(
@@ -834,23 +834,25 @@ export abstract class BaseLogParser implements ILogParser {
     }
 
     const shouldUsePrefix = match !== PROMPT_ECHO_MATCH.FULL_CONTAINS;
-    const normalizedDispatched = this.normalizePromptForMatching(
-      shouldUsePrefix
-        ? dispatchedPromptText.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
-        : dispatchedPromptText
-    );
-    const normalizedLogged = this.normalizePromptForMatching(
-      shouldUsePrefix
-        ? loggedText.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
-        : loggedText
-    );
+    // Strip the generated wrapper before taking a prefix: with inline prompts,
+    // generated sections can fill the first 100 characters before the user's
+    // own prompt appears in the echoed message.
+    const normalizedDispatched =
+      this.normalizePromptForMatching(dispatchedPromptText);
+    const normalizedLogged = this.normalizePromptForMatching(loggedText);
+    const dispatchedToMatch = shouldUsePrefix
+      ? normalizedDispatched.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
+      : normalizedDispatched;
+    const loggedToMatch = shouldUsePrefix
+      ? normalizedLogged.substring(0, PROMPT_ECHO_PREFIX_LENGTH)
+      : normalizedLogged;
 
     switch (match) {
       case PROMPT_ECHO_MATCH.PREFIX_CONTAINS:
       case PROMPT_ECHO_MATCH.FULL_CONTAINS:
-        return normalizedLogged.includes(normalizedDispatched);
+        return loggedToMatch.includes(dispatchedToMatch);
       case PROMPT_ECHO_MATCH.PREFIX_EQUALS:
-        return normalizedLogged === normalizedDispatched;
+        return loggedToMatch === dispatchedToMatch;
     }
 
     return false;
