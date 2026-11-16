@@ -1,6 +1,6 @@
 # Headless Stdin Inline Prompt Delivery
 
-**Status:** Implemented for this plan's current scope: Qwen, Copilot, Codex and Antigravity are opted in, with unit coverage for their prompt plans, arguments and echo handling. Live stdin behavior remains to be confirmed. Claude is deferred to session-control Stage 2. Researched 2026-11-10 against vendor sources and installed CLIs; nothing here has been checked with a live run. Open questions resolved 2026-11-15 (see "Decisions").
+**Status:** Implemented for this plan's current scope: Qwen, Copilot, Codex and Antigravity are opted in, with unit coverage for their prompt plans, arguments and echo handling. Confirmed live on 2026-11-15 by the full `npm run test:harness` run: new and resumed headless steps ("headless: image input reaches the model and the next step resumes", multi-step and end-condition cases) pass on all four over stdin. Claude is deferred to session-control Stage 2. Researched 2026-11-10 against vendor sources and installed CLIs. Open questions resolved 2026-11-15 (see "Decisions").
 **Priority:** P2
 **Depends on:** Stage 1 of
 [`HEADLESS_SESSION_CONTROL_PLAN.md`](HEADLESS_SESSION_CONTROL_PLAN.md), which

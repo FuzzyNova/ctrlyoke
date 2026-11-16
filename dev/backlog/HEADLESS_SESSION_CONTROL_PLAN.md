@@ -379,8 +379,10 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    The harness case for the Qwen "unlisted command chained to an allowed one" scenario already
    exists ("an allowed command does not allow an unlisted one chained to it" in
    `src/test/harness/inline-config.harness.test.ts`); it timed out before Stage 1, and its comments
-   no longer cite the bug as open. `npm run test:harness` remains unrun; live confirmation is left
-   to Nathan.
+   no longer cite the bug as open. Confirmed live on 2026-11-15 (full `npm run test:harness`,
+   then the whole `qwen-cli` set after the follow-up): the case passes in about 18 s. The only
+   Qwen failure left is skill-mode commit generation, filed as
+   `dev/bugs/backlog/qwen-skill-commit-allow-rule-does-not-match.md` (it hung before Stage 1).
    - **Qwen's `headlessSource` is `LOG`.** Its stdout chunks go to `HeadlessLogTail.onStdoutChunk`,
      not to `parseStdout`. The channel must see every complete stdout JSONL record whatever the
      source mode, so split stdout into records for the channel independently of the output path.
