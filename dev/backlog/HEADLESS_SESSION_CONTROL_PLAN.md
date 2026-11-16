@@ -399,7 +399,11 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    CLI-without-dashboard fallback. An MCP tool to list and answer pending approvals is a
    follow-up.
 4. **agy steering** over stream-json (queue). This is cheap: the same shape as Qwen with a
-   different message envelope. agy approvals stay `deny` until stage 6.
+   different message envelope. agy approvals stay `deny` until stage 6. Since the inline plan
+   shipped, agy gets its prompt as plain stdin text (`headlessPromptDelivery: STDIN`, no
+   positional), so this stage moves it to `--input-format stream-json` with the
+   `{"event":"user",…}` envelope. The first prompt then goes through the channel's
+   `sendUserMessage`, and the existing stdin-text path no longer applies to agy.
 5. **Codex over app-server.** This replaces the `exec` spawn for headless Codex, reusing
    `CodexAppServerClient`. Since 2026-03-08 (#14005), `exec` has been a thin client of an
    in-process app-server, so ctrlyoke would do what exec does, out of process:
@@ -409,6 +413,8 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    - Send `thread/start` (or `thread/resume` to continue a session) with exec's own
      `historyMode: "paginated"` and `bypass_hook_trust` config, then `turn/start` with the prompt.
    - Answer approval requests, send steers as `turn/steer`, and close at `turn/completed`.
+   - Since the inline plan shipped, `exec` reads the prompt from stdin (`-` positional). The
+     app-server path sends it as `turn/start` input instead, with the same inlined text.
    - Output is unchanged. Codex headless reads the rollout log (`headlessSource = LOG`), not
      stdout, so `CodexLogParser` keeps working if the rollout matches exec's. Verify that with a
      live case, including the `SessionSource` tag (`VSCode` vs `Exec`).
