@@ -1,9 +1,9 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Shared transport landed in `src/core/harness/shared/IHeadlessControlChannel.ts`.
-The harness-agnostic Stage 1 is implemented and covered by unit tests; Qwen's adapter/channel
-and the associated live-case updates remain. Researched 2026-11-15 by live probes and source
-reading (details under "Findings"). Open questions resolved 2026-11-15 (see "Decisions").
+**Status:** Stage 1 is complete: the shared transport and Qwen's headless control channel are
+implemented and covered by unit tests. The live Qwen confirmation remains with Nathan.
+Researched 2026-11-15 by live probes and source reading (details under "Findings"). Open
+questions resolved 2026-11-15 (see "Decisions").
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
 before calling `channel.close()` so channel cleanup does not need to own transport EOF.
@@ -11,7 +11,7 @@ before calling `channel.close()` so channel cleanup does not need to own transpo
 **Order:** implement this plan's Stage 1 before the stdin inline plan. It fixes the P1 hang and
 builds the transport the inline plan reuses.
 
-**Fixes:** [`qwen-headless-approval-request-hangs.md`](../bugs/backlog/qwen-headless-approval-request-hangs.md)
+**Fixes:** [`qwen-headless-approval-request-hangs.md`](../bugs/implemented/qwen-headless-approval-request-hangs.md)
 (Stage 1).
 **Extends:** [`STEER_MESSAGE_PLAN.md`](../implemented/STEER_MESSAGE_PLAN.md), which scoped
 headless steering out because "there is no PTY".
@@ -336,15 +336,15 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
 
 ## Implementation stages
 
-1. **Control channel + Qwen, `deny` policy.** Writable-stdin spawn, the channel interface,
+1. **[Done] Control channel + Qwen, `deny` policy.** Writable-stdin spawn, the channel interface,
    turn-end completion, and the Qwen implementation. Qwen drops the positional prompt and sends
    `initialize` first. Every approval request gets ctrlyoke's deny message. This fixes the Qwen
-   hang. Move the bug to `dev/bugs/implemented/` in this commit, with the corrected root cause.
+   hang. The bug is in `dev/bugs/implemented/` with the corrected root cause.
    The harness case for the Qwen "unlisted command chained to an allowed one" scenario already
    exists ("an allowed command does not allow an unlisted one chained to it" in
-   `src/test/harness/inline-config.harness.test.ts`); it currently times out. Update its comments
-   (and `SHELL_PROBE_TIMEOUT_MS`'s) to stop citing the bug as open. Agents do not run
-   `npm run test:harness`; the live confirmation is left to Nathan.
+   `src/test/harness/inline-config.harness.test.ts`); it timed out before Stage 1, and its comments
+   no longer cite the bug as open. `npm run test:harness` remains unrun; live confirmation is left
+   to Nathan.
    - **Qwen's `headlessSource` is `LOG`.** Its stdout chunks go to `HeadlessLogTail.onStdoutChunk`,
      not to `parseStdout`. The channel must see every complete stdout JSONL record whatever the
      source mode, so split stdout into records for the channel independently of the output path.

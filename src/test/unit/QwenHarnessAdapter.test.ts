@@ -651,10 +651,9 @@ suite("QwenHarnessAdapter", () => {
   suite("buildHeadlessArgs", () => {
     const provider = new QwenHarnessAdapter();
 
-    test("includes --input-format stream-json alongside --output-format stream-json", () => {
+    test("uses stream-json input and output without a positional prompt", () => {
       const result = provider.buildHeadlessArgs(["--base"], "do the thing");
       assert.deepStrictEqual(result, [
-        "do the thing",
         "--output-format",
         "stream-json",
         "--input-format",

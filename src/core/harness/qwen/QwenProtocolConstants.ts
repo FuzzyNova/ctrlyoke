@@ -6,6 +6,21 @@ export const QWEN_EVENT_TYPES = {
   RESULT: "result",
 } as const;
 
+/** Stream-json SDK control protocol vocabulary used by Qwen's headless channel. */
+export const QWEN_CONTROL = {
+  REQUEST_TYPE: "control_request",
+  RESPONSE_TYPE: "control_response",
+  USER_TYPE: "user",
+  INITIALIZE_SUBTYPE: "initialize",
+  CAN_USE_TOOL_SUBTYPE: "can_use_tool",
+  ERROR_SUBTYPE: "error",
+  USER_ROLE: "user",
+  DENY_BEHAVIOR: "deny",
+} as const;
+
+/** A silent Qwen initialize would otherwise leave the step waiting indefinitely. */
+export const QWEN_INITIALIZE_TIMEOUT_MS = 10_000;
+
 /**
  * Start of the error Qwen 0.27+ returns, without running the tool, when the
  * model calls a deferred MCP tool before loading its schema with

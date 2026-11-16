@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the new `custom` regression case "an allowed command does not allow an unlisted one chained to it" (`src/test/harness/inline-config.harness.test.ts`), Qwen Code 0.27.2
 - **Area:** `src/core/harness/qwen/QwenHarnessAdapter.ts` (`buildHeadlessArgs`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -22,24 +22,22 @@ Outside ctrlyoke, from an empty directory with a `mark.js` that writes `argv[2]`
 
 ## Root Cause
 
-`buildHeadlessArgs` always passes `--input-format stream-json`. Its comment says this exempts the
-run from Qwen's non-interactive auto-deny gate (which wrongly force-denies some allowed tools
-such as `write_file`), and that stdin being `/dev/null` makes the session drain and exit. But with
-stream-json input, Qwen asks for approval through a `can_use_tool` control request and waits for
-the reply even after stdin reaches EOF. ctrlyoke never answers, so the turn never ends. The
-existing Qwen "deny blocks" case passes only because `--exclude-tools` removes the tool, so no
-approval is ever requested.
+`buildHeadlessArgs` passed both a positional prompt and `--input-format stream-json`. Qwen treated
+that positional prompt as the first stream-json message, selecting "direct mode" and disabling
+the control system (`packages/cli/src/nonInteractive/session.ts:380-412`). No `can_use_tool`
+request was written. The tool waited in `awaiting_approval` with no confirm handler, and after
+stdin EOF the session waited for it without a timeout (`session.ts:931-938`). A probe showed
+stdout ending at the `tool_use`.
 
-`auto` mode is not affected for benign commands (the judge decides in-band), but a command the
-judge escalates to manual approval may hang the same way.
+Opening the session with an `initialize` control request selects SDK mode. Qwen then emits
+`can_use_tool`, accepts a deny response with a message, and cancels a pending request at stdin
+EOF. ctrlyoke now drops the positional prompt, waits for the matching initialize response, sends
+the prompt as a `user` message, and denies approval requests in-band. A bounded initialize wait
+also fails the step if Qwen never answers.
 
-**Correction (2026-11-15, source + probe on 0.27.1):** no `can_use_tool` request is ever written
-in this launch. The positional prompt becomes the first stream-json message, which puts Qwen in
-"direct mode" with its control system off (`packages/cli/src/nonInteractive/session.ts:380-412`).
-The tool then waits in `awaiting_approval` with no confirm handler, and after stdin EOF the session
-waits for it with no timeout. A probe showed stdout ending at the `tool_use`. If the session is
-opened with an `initialize` control request instead, the request arrives, allow and deny both work,
-and stdin EOF cancels a pending request.
+**Correction (2026-11-15, source + probe on 0.27.1):** The hang was not caused by an unanswered
+`can_use_tool` request in the old launch; no such request was sent. The direct-mode transition
+from the positional prompt was the cause.
 
 ## Suggested Fix
 

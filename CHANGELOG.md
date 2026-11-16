@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Qwen Code headless steps no longer hang when an unlisted tool needs approval. They now start stream-json SDK mode with `initialize`, send the prompt over stdin, and deny approval requests with an explanation.
 - The dashboard no longer runs out of memory and turns gray when a long run streams output while its panel is hidden or its window is covered, minimized or on a sleeping display. Before, every VS Code window showing ctrlyoke went gray at once and stayed that way until reloaded.
 - CLI usage errors now keep the documented JSON envelope for rejected option values, invalid choices and missing required options; `run --json` usage failures use the run-result shape.
 - MCP condition presets now cap caller retry overrides at the effective budget authored by the preset, including retry-action defaults.

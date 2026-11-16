@@ -419,10 +419,8 @@ const MARKER_SCRIPT_NAME = "write-notes.js";
 
 /**
  * Wall-clock limit for one shell-probe run. A probe is one trivial command and
- * normally finishes in seconds, so this only bounds a harness that waits for
- * an approval nobody can give (Qwen headless `custom`:
- * dev/bugs/backlog/qwen-headless-approval-request-hangs.md) instead of letting
- * it run to the suite's 2-hour limit. It leaves room for transient retries.
+ * normally finishes in seconds; this leaves room for transient harness retries
+ * while keeping a stalled live CLI from consuming the suite's 2-hour limit.
  */
 const SHELL_PROBE_TIMEOUT_MS = 20 * 60_000;
 

@@ -649,6 +649,11 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                   await controlChannel.sendUserMessage(promptArgument);
                 })().catch(async (error: unknown) => {
                   await closeControlChannel();
+                  if (error instanceof CliTransportError) {
+                    // A failed protocol handshake must fail the step promptly,
+                    // even when the child stays alive waiting for stdin input.
+                    await this.deps.processManager.cancel();
+                  }
                   throw error;
                 });
               }

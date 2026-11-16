@@ -9,6 +9,9 @@ import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarn
 import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
+import { QwenHeadlessControlChannel } from "../../core/harness/qwen/QwenHeadlessControlChannel";
+import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { QWEN_CONTROL, QWEN_EVENT_TYPES } from "../../core/harness/qwen/QwenProtocolConstants";
 import {
   HARNESS_IDS,
   CLI_EVENT_TYPES,
@@ -443,6 +446,173 @@ suite("CliTransportCoordinator", () => {
       `approval:approval-1:${APPROVAL_DECISIONS.DENY}:${HEADLESS_APPROVAL_DENIAL_MESSAGE}`,
     ]);
     assert.strictEqual(closed, true);
+  });
+
+  test("runs Qwen initialize, user message, approval denial, and result through one process", async () => {
+    const writes: string[] = [];
+    let emitResult!: () => void;
+    const resultReceived = new Promise<void>((resolve) => {
+      emitResult = resolve;
+    });
+    const qwen = new QwenHarnessAdapter();
+    const provider = {
+      ...createHeadlessProvider(),
+      config: {
+        ...createHeadlessProvider().config,
+        name: "qwen",
+      },
+      buildHeadlessArgs: (_args: string[], prompt: string) =>
+        qwen.buildHeadlessArgs([], prompt),
+      createHeadlessControlChannel: () => new QwenHeadlessControlChannel(),
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          assert.deepStrictEqual(args, [
+            "--output-format",
+            "stream-json",
+            "--input-format",
+            "stream-json",
+          ]);
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              writes.push(chunk);
+              const message = JSON.parse(chunk) as {
+                type: string;
+                request_id?: string;
+                message?: { content?: string };
+                response?: { behavior?: string };
+              };
+              if (message.type === QWEN_CONTROL.REQUEST_TYPE) {
+                options.onStdout?.(
+                  `${JSON.stringify({
+                    type: QWEN_CONTROL.RESPONSE_TYPE,
+                    response: { request_id: message.request_id },
+                  })}\n`
+                );
+              } else if (message.type === QWEN_CONTROL.USER_TYPE) {
+                options.onStdout?.(
+                  `${JSON.stringify({
+                    type: QWEN_CONTROL.REQUEST_TYPE,
+                    request_id: "qwen-approval-1",
+                    request: { subtype: QWEN_CONTROL.CAN_USE_TOOL_SUBTYPE },
+                  })}\n`
+                );
+              } else if (message.type === QWEN_CONTROL.RESPONSE_TYPE) {
+                assert.strictEqual(message.response?.behavior, QWEN_CONTROL.DENY_BEHAVIOR);
+                options.onStdout?.(
+                  `${JSON.stringify({ type: QWEN_EVENT_TYPES.RESULT })}\n`
+                );
+                emitResult();
+              }
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => callback?.(),
+          });
+          await resultReceived;
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    assert.strictEqual(
+      await coordinator.executeHeadless([], "Qwen prompt", [], async () => true),
+      true
+    );
+    const initialize = JSON.parse(writes[0]) as {
+      type: string;
+      request: { subtype: string };
+    };
+    const userMessage = JSON.parse(writes[1]) as {
+      type: string;
+      message: { content: string };
+    };
+    const denial = JSON.parse(writes[2]) as {
+      type: string;
+      response: { behavior: string; message: string };
+    };
+    assert.deepStrictEqual(
+      [initialize.type, initialize.request.subtype],
+      [QWEN_CONTROL.REQUEST_TYPE, QWEN_CONTROL.INITIALIZE_SUBTYPE]
+    );
+    assert.deepStrictEqual([userMessage.type, userMessage.message.content], [
+      QWEN_CONTROL.USER_TYPE,
+      "Qwen prompt",
+    ]);
+    assert.deepStrictEqual(
+      [denial.type, denial.response.behavior],
+      [QWEN_CONTROL.RESPONSE_TYPE, QWEN_CONTROL.DENY_BEHAVIOR]
+    );
+    assert.ok(denial.response.message.includes("cannot ask for approval"));
+  });
+
+  test("cancels a Qwen process and surfaces initialize timeout as a transport error", async () => {
+    let finishSpawn!: () => void;
+    let cancelled = false;
+    const qwen = new QwenHarnessAdapter();
+    const provider = {
+      ...createHeadlessProvider(),
+      buildHeadlessArgs: (_args: string[], prompt: string) =>
+        qwen.buildHeadlessArgs([], prompt),
+      createHeadlessControlChannel: () => new QwenHeadlessControlChannel(5),
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: { onStdinReady?: (writer: any) => void }
+        ) => {
+          options.onStdinReady?.({
+            write: (_chunk: string, _encoding: string, callback?: () => void) => {
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => callback?.(),
+          });
+          await new Promise<void>((resolve) => (finishSpawn = resolve));
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+        cancel: async () => {
+          cancelled = true;
+          finishSpawn();
+        },
+        isActive: () => true,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await assert.rejects(
+      coordinator.executeHeadless([], "Qwen prompt", [], async () => true),
+      (error: unknown) => error instanceof CliTransportError && error.message.includes("did not answer")
+    );
+    assert.strictEqual(cancelled, true);
   });
 
   test("observes complete stdout records for both streaming source modes", async () => {
