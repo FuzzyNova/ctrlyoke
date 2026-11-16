@@ -108,6 +108,14 @@ async function runShard(
           "qwen-system-defaults.json"
         ),
         TMPDIR: resolvedTmpDir,
+        // Fixture repositories would otherwise inherit the developer's global
+        // `core.autocrlf` (`true` is Git for Windows' installer default), and a
+        // test that commits `\n` content reads it back as `\r\n` after git
+        // checks it out. Git's environment config outranks every config file,
+        // so this covers each `git` the tests and the code under test spawn.
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.autocrlf",
+        GIT_CONFIG_VALUE_0: "false",
         CTRLYOKE_TEST_SHARD_INDEX: String(index),
         CTRLYOKE_TEST_SHARD_COUNT: String(SHARD_COUNT),
         [STALL_REPORT_ENV_VAR]: stallReportPath,

@@ -4,7 +4,7 @@
   machine with `core.autocrlf=true` in `~/.gitconfig`)
 - **Area:** `src/test/unit/HostedWorkspaceViewerService.test.ts` (`discardFile` suite),
   `src/test/unit/WorktreeManager.test.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -31,3 +31,11 @@ already avoids this with `git config core.autocrlf false` in its fixture repo.
 Set `core.autocrlf=false` (and `core.eol=lf`) in every test fixture repository, ideally in the
 shared repository helpers (`runGit`/`configureGitIdentity`, `makeRepository`) so new fixtures
 get it too, rather than per test.
+
+## Fix
+
+`src/test/runTest.ts` passes `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0`
+(`core.autocrlf=false`) in every extension host's environment. Git's environment config
+outranks every config file, so it covers all 42 test files that create fixture repositories,
+any future fixture, and the git processes the code under test spawns, without a per-helper
+change. The per-repository workaround in `RunBundleExporter.test.ts` was removed as redundant.

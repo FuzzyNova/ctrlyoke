@@ -50,7 +50,6 @@ suite("RunBundleExporter secrets", () => {
       cwd: workspace,
     });
     await execGit(["config", "user.name", "Test"], { cwd: workspace });
-    await execGit(["config", "core.autocrlf", "false"], { cwd: workspace });
     await fs.writeFile(path.join(workspace, "base.txt"), "base\n");
     await execGit(["add", "base.txt"], { cwd: workspace });
     await execGit(["commit", "-m", "base"], { cwd: workspace });
