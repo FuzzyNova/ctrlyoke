@@ -130,6 +130,7 @@ function makePrompt(
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  useWorkflowStore.getState().clearHeadlessApprovals();
   useWorkflowStore.getState().resetWorkflow();
   useWorkflowStore.temporal.getState().clear();
   useSettingsStore.getState().resetSettings();
@@ -890,6 +891,39 @@ describe("restart lifecycle", () => {
     });
 
     expect(useTerminalStore.getState().headlessControlTargets).toEqual({});
+  });
+
+  it("clears pending approvals on reconnect and accepts the READY replay", () => {
+    renderHook(() => useInboundMessageRouter());
+    const approval = {
+      type: MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED,
+      approvalId: "approval-1",
+      requestId: "request-1",
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 0,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      toolName: "shell",
+      inputSummary: "npm test",
+      deadline: Date.now() + 60_000,
+      isPending: true,
+    } as const;
+    useWorkflowStore.getState().updateHeadlessApprovalRequest(approval);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECONNECT);
+    });
+
+    expect(useWorkflowStore.getState().headlessApprovalsByWorkflow).toEqual({});
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "panel" });
+      dispatch(MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED, approval);
+    });
+
+    expect(
+      useWorkflowStore.getState().headlessApprovalsByWorkflow["workflow-1"][0]
+    ).toEqual([approval]);
   });
 
   it("schedules a handshake retry after DEV_RESTARTING", () => {

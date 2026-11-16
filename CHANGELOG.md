@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Headless Claude Code and Qwen Code steps can ask the dashboard to approve tool requests with **Allow once** or **Deny**, including an optional denial message. Requests with no connected dashboard or no answer before the timeout are denied.
 - Send Steer Message now works during headless Claude and Qwen steps: Claude receives the message in its current turn, while Qwen queues it after its current turn.
 - Interrupt Turn ends a headless Claude or Qwen turn while preserving the partial output and completing the step without stopping the workflow.
 - The workflow properties panel shows whole-value variable placeholders as read-only chips with their current value and a Clear action. Model, agent and skill dropdown validation leaves unresolved placeholders alone, and step names resolve from the workflow's vars in the run view.

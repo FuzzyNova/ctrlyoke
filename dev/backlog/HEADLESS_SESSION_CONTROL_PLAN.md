@@ -1,6 +1,6 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Stages 1, 2a, 2b and the Stage 3 backend are implemented. Stage 1's shared
+**Status:** Stages 1, 2a, 2b and 3 are implemented. Stage 1's shared
 transport and Qwen channel are covered by unit tests, and the live Qwen approval case that used
 to hang now passes. Stage 2a moves Claude headless prompts to stream-json stdin, inlines
 generated sections, and holds stdin open for tracked background follow-up work; see the Claude
@@ -17,9 +17,9 @@ builtin agent definitions, so it is documented (`docs/harnesses/qwen-cli.md`, CH
 "Decisions"). The "Interrupt Turn" follow-up is implemented and its Claude/Qwen live cases passed
 on 2026-11-16. The targeted Claude harness subset passed on 2026-11-16 (20 tests, including
 headless image input and resume). Stage 3 adds the deny/ask policy, timeout settings, a pending
-approval registry, and dashboard request/response messages. The output-pane approval card is the
-next step; live Claude/Qwen coverage therefore verifies the plain-CLI no-dashboard denial rather
-than a dashboard approval.
+approval registry, dashboard request/response messages, and the output-pane approval card. Live
+Claude/Qwen coverage therefore verifies the plain-CLI no-dashboard denial rather than a dashboard
+approval.
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
 before calling `channel.close()` so channel cleanup does not need to own transport EOF. Claude's
@@ -439,7 +439,7 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
     session id through the existing `SEND_STEER_MESSAGE` payload. Claude and Qwen tooltips describe
     their different delivery behavior.
 
-3. **`ask` policy backend implemented; output-pane card is next.** Added the optional
+3. **[Done] `ask` policy with output-pane approvals.** Added the optional
    `toolPermissions.headlessApprovals` (`deny`/`ask`) and `headlessApprovalTimeoutSec` fields to
    settings and workflow schemas; no schema bump is needed for optional fields. The host policy
    service registers request metadata and deadlines, broadcasts pending/removal messages, accepts
@@ -447,12 +447,13 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    missing dashboard, Stop, abort or close. Claude uses `default`, `--permission-prompt-tool stdio`,
    and `initialize` only for `ask` custom requests and auto-judge escalations; Qwen sets
    `initialize.timeout.canUseTool` with its version-specific cap. Model-question tools are
-   explicitly denied as out of scope. The next step adds the output-pane approval card; until then
-   connected dashboards cannot answer, while plain CLI runs deny immediately. Unit coverage
-   includes policy outcomes, timeout clamping, close, Claude argument mapping, and Qwen timeout
-   initialization. Live Claude/Qwen cases exercise `ask` with the no-dashboard fallback because
-   the real-harness runner cannot attach a dashboard approver. An MCP tool to list and answer
-   pending approvals remains a follow-up.
+   explicitly denied as out of scope. The dashboard stores pending requests by workflow and signed
+   step index and renders an approval card in that step's output, with a deny countdown, Allow once,
+   Deny and an optional denial message. Removal, terminal step status and reconnect clear stale
+   cards; READY replays pending requests, so no additional snapshot is needed. Vitest coverage
+   exercises the store, output-row projection and card. Live Claude/Qwen cases exercise `ask` with
+   the no-dashboard fallback because the real-harness runner cannot attach a dashboard approver.
+   An MCP tool to list and answer pending approvals remains a follow-up.
 4. **agy steering** over stream-json (queue). This is cheap: the same shape as Qwen with a
    different message envelope. agy approvals stay `deny` until stage 6. Since the inline plan
    shipped, agy gets its prompt as plain stdin text (`headlessPromptDelivery: STDIN`, no

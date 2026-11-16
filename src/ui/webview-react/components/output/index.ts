@@ -1,5 +1,6 @@
 export { OutputFindBar } from "./OutputFindBar";
 export { OutputRow } from "./OutputRow";
+export { HeadlessApprovalCard } from "./HeadlessApprovalCard";
 export { AskUserQuestionOutput } from "./AskUserQuestionOutput";
 export {
   RunSummaryBanner,

@@ -5419,6 +5419,7 @@ export const OUTPUT_ROW_KINDS = {
   SCRIPT_OUTPUT: "script-output",
   SCRIPT_VERDICT: "script-verdict",
   STATS: "stats",
+  HEADLESS_APPROVAL: "headless-approval",
 } as const;
 
 export type OutputRowKind =
