@@ -1825,6 +1825,11 @@ export class CliIntegration extends HarnessIntegration {
     }
   }
 
+  override async interruptHeadlessTurn(sessionId?: string): Promise<boolean> {
+    if (!sessionId) return false;
+    return this.transportCoordinator.interruptHeadlessTurn(sessionId);
+  }
+
   // ============================================================
   // OUTPUT LOGGING
   // ============================================================

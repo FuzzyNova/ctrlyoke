@@ -200,13 +200,16 @@ suite("Headless steering harness tests", function () {
             message.type === MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED
         );
         assert.deepStrictEqual(
-          targetMessages.map(({ controlSessionId: id, isOpen }) => ({
-            controlSessionId: id,
-            isOpen,
-          })),
+          targetMessages.map(
+            ({ controlSessionId: id, isOpen, canInterruptTurn }) => ({
+              controlSessionId: id,
+              canInterruptTurn,
+              isOpen,
+            })
+          ),
           [
-            { controlSessionId, isOpen: true },
-            { controlSessionId, isOpen: false },
+            { controlSessionId, canInterruptTurn: true, isOpen: true },
+            { controlSessionId, canInterruptTurn: true, isOpen: false },
           ]
         );
       } finally {
@@ -215,6 +218,124 @@ suite("Headless steering harness tests", function () {
           await execution.catch(() => undefined);
         }
         unsubscribeEvents?.dispose();
+        await instance?.outputHistoryManager.flushPendingIndexRefresh();
+        instance?.dispose();
+        restoreRunState();
+        if (!hadRunHistoryLocation) resetRunHistoryLocationForTests();
+        removeTempDir(workspace, (dir) =>
+          console.log(`  Could not clean up ${dir}`)
+        );
+      }
+    });
+
+    test(`${harness}: headless interrupt ends the current turn quickly`, async function () {
+      const provider = IntegrationFactory.createCapabilityProvider(harness);
+      if (!(await provider.checkAvailability())) {
+        this.skip();
+      }
+
+      const workspace = makeHarnessWorkspaceDir(
+        harness,
+        `ctrlyoke-headless-interrupt-${harness}-`
+      );
+      const restoreRunState = isolateRunState(workspace);
+      const hadRunHistoryLocation = isRunHistoryLocationInitialized();
+      if (!hadRunHistoryLocation) {
+        initializeRunHistoryLocation(
+          configService.get("storage").runHistoryLocation
+        );
+      }
+      let instance: WorkflowInstance | undefined;
+      let execution: Promise<void> | undefined;
+      let executionSettled = false;
+      const dashboardMessages: unknown[] = [];
+
+      try {
+        const prompt: PromptStep = {
+          name: "interruptible sleep",
+          prompt: [
+            "Run this exact command in the foreground and wait for it to finish before replying:",
+            "node -e \"require('fs').writeFileSync('headless-interrupt-ready.txt','ready');setTimeout(()=>console.log('SLEEP_FINISHED'),25000)\"",
+            "Then reply with only DONE.",
+          ].join("\n"),
+        };
+        const workflow: PromptFile = {
+          name: `headless interrupt ${harness}`,
+          harness,
+          model: HARNESS_MODELS[harness],
+          executionMode: EXECUTION_MODES.HEADLESS,
+          resumeSession: false,
+          toolPermissions: {
+            mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+          },
+          steps: [prompt],
+        };
+        const workflowFile = path.join(
+          workspace,
+          `headless-interrupt-${harness}.ctrlyoke.json`
+        );
+        await fs.promises.writeFile(
+          workflowFile,
+          JSON.stringify(workflow, null, 2),
+          "utf8"
+        );
+
+        const platform = new MockPlatform(workspace);
+        const integrationFactory = new SteeringIntegrationFactory(platform);
+        const detector = new MockHarnessIntegration(undefined, false);
+        instance = new WorkflowInstance(
+          platform,
+          new PostMessageDashboardSink((message) =>
+            dashboardMessages.push(message)
+          ),
+          integrationFactory,
+          () => detector,
+          () => {},
+          () => {},
+          workspace
+        );
+
+        assert.strictEqual(await instance.loadPromptFile(workflowFile), true);
+        execution = instance
+          .executeLoadedPromptFile()
+          .finally(() => (executionSettled = true));
+
+        const controlSessionId = await waitFor(
+          () => integrationFactory.integration?.getHeadlessControlSessionId(),
+          `${harness} headless interrupt channel`
+        );
+        await waitFor(
+          () =>
+            fs.existsSync(path.join(workspace, "headless-interrupt-ready.txt"))
+              ? true
+              : undefined,
+          `${harness} interruptible sleep`
+        );
+
+        const interruptStartedAt = Date.now();
+        await instance.interruptHeadlessTurn(controlSessionId);
+        await execution;
+        const interruptElapsedMs = Date.now() - interruptStartedAt;
+
+        assert.ok(
+          interruptElapsedMs < 15_000,
+          `${harness}: interrupted turn took ${interruptElapsedMs}ms instead of stopping the 25-second command`
+        );
+        assert.strictEqual(
+          instance.promptQueue.getState().status,
+          EXECUTION_STATES.COMPLETED,
+          `${harness}: interrupt did not complete the workflow`
+        );
+        assert.strictEqual(
+          instance.promptQueue.getState().results[0]?.status,
+          STEP_STATUS.COMPLETED,
+          `${harness}: interrupted step did not complete with its partial output`
+        );
+      } finally {
+        if (execution && instance && !executionSettled) {
+          await instance.stop();
+          await execution.catch(() => undefined);
+        }
         await instance?.outputHistoryManager.flushPendingIndexRefresh();
         instance?.dispose();
         restoreRunState();

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import {
   APPROVAL_DECISIONS,
   HEADLESS_CONTROL_OBSERVATION_KINDS,
@@ -20,6 +21,7 @@ export const STREAM_JSON_CONTROL = {
   CAN_USE_TOOL_SUBTYPE: "can_use_tool",
   SUCCESS_SUBTYPE: "success",
   ERROR_SUBTYPE: "error",
+  INTERRUPT_SUBTYPE: "interrupt",
   USER_ROLE: "user",
   DENY_BEHAVIOR: "deny",
 } as const;
@@ -34,11 +36,10 @@ export interface StreamJsonControlProtocol {
 }
 
 /** Shared stream-json control messages used by Claude and Qwen. */
-export abstract class StreamJsonHeadlessControlChannel
-  implements IHeadlessControlChannel
-{
+export abstract class StreamJsonHeadlessControlChannel implements IHeadlessControlChannel {
   readonly spawnShape = {};
   protected writer?: ControlWriter;
+  private interruptRequested = false;
 
   constructor(
     private readonly protocol: StreamJsonControlProtocol,
@@ -75,7 +76,12 @@ export abstract class StreamJsonHeadlessControlChannel
     }
 
     if (record.type === this.protocol.resultType) {
-      return [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }];
+      return [
+        {
+          kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
+          ...(this.interruptRequested ? { interrupted: true } : {}),
+        },
+      ];
     }
     return [];
   }
@@ -99,6 +105,20 @@ export abstract class StreamJsonHeadlessControlChannel
         },
       },
     });
+  }
+
+  async interrupt(): Promise<void> {
+    this.interruptRequested = true;
+    try {
+      await this.writeRecord({
+        type: this.protocol.requestType,
+        request_id: randomUUID(),
+        request: { subtype: STREAM_JSON_CONTROL.INTERRUPT_SUBTYPE },
+      });
+    } catch (error) {
+      this.interruptRequested = false;
+      throw error;
+    }
   }
 
   close(): void {

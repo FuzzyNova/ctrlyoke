@@ -1131,6 +1131,7 @@ export class CliExecutionRunner {
 
     return async (result) => {
       if (
+        !result.interrupted &&
         result.exitCode !== 0 &&
         !result.terminationSignal &&
         session.resolvedSessionId !== undefined &&
@@ -1161,6 +1162,7 @@ export class CliExecutionRunner {
         exitCode: result.exitCode,
         terminationSignal: result.terminationSignal,
         terminatedByManager: result.terminatedByManager,
+        interrupted: result.interrupted,
         promptForSessionLog: session.promptForSessionLog,
         executionStartTime: session.executionStartTime,
         resolvedSessionId: session.resolvedSessionId,

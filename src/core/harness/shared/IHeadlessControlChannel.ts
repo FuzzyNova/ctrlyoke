@@ -17,6 +17,7 @@ export type ControlObservation =
     }
   | {
       kind: Extract<HeadlessControlObservationKind, "turn-end">;
+      interrupted?: boolean;
     };
 
 /** Provider-specific spawn adjustments for a control protocol. */
@@ -39,5 +40,6 @@ export interface IHeadlessControlChannel {
     decision: ApprovalDecision,
     message?: string
   ): Promise<void>;
+  interrupt?(): Promise<void>;
   close(): void;
 }

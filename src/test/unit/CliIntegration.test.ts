@@ -2238,6 +2238,32 @@ suite("CliIntegration", () => {
     }
   });
 
+  test("headless turn interruption delegates to the active control channel", async () => {
+    const integration = createHeadlessIntegration();
+    const controlSessionId = "headless-control-session";
+    (integration as any).transportCoordinator.getHeadlessControlSessionId =
+      () => controlSessionId;
+
+    let interruptedSessionId: string | undefined;
+    (integration as any).transportCoordinator.interruptHeadlessTurn = async (
+      sessionId: string
+    ) => {
+      interruptedSessionId = sessionId;
+      return true;
+    };
+
+    try {
+      assert.strictEqual(
+        await integration.interruptHeadlessTurn(controlSessionId),
+        true
+      );
+      assert.strictEqual(interruptedSessionId, controlSessionId);
+      assert.strictEqual(await integration.interruptHeadlessTurn(), false);
+    } finally {
+      integration.dispose();
+    }
+  });
+
   test("should return false and expose the failure reason when execution throws", async () => {
     const integration = createHeadlessIntegration();
 

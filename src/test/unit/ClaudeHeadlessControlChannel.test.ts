@@ -76,12 +76,48 @@ suite("ClaudeHeadlessControlChannel", () => {
         },
       },
     });
-    assert.deepStrictEqual(channel.observe({ type: CLAUDE_EVENT_TYPES.RESULT }), [
-      { kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END },
-    ]);
+    assert.deepStrictEqual(
+      channel.observe({ type: CLAUDE_EVENT_TYPES.RESULT }),
+      [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }]
+    );
     await assert.rejects(
       channel.answerApproval("approval-2", APPROVAL_DECISIONS.ALLOW_ONCE),
       /only support deny/
+    );
+    channel.close();
+  });
+
+  test("sends interrupt and marks the following result as interrupted", async () => {
+    const writes: string[] = [];
+    const channel = new ClaudeHeadlessControlChannel();
+    await channel.start({
+      write: async (text) => {
+        writes.push(text);
+      },
+      end: async () => {},
+    });
+
+    await channel.interrupt();
+
+    const request = JSON.parse(writes[0]) as {
+      type: string;
+      request_id: string;
+      request: { subtype: string };
+    };
+    assert.strictEqual(request.type, CLAUDE_CONTROL.REQUEST_TYPE);
+    assert.strictEqual(
+      request.request.subtype,
+      CLAUDE_CONTROL.INTERRUPT_SUBTYPE
+    );
+    assert.ok(request.request_id);
+    assert.deepStrictEqual(
+      channel.observe({ type: CLAUDE_EVENT_TYPES.RESULT }),
+      [
+        {
+          kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
+          interrupted: true,
+        },
+      ]
     );
     channel.close();
   });

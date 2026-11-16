@@ -198,6 +198,8 @@ class SteerableMockHarnessIntegration extends MockHarnessIntegration {
   private headlessControlSessionId?: string;
   readonly steerMessages: string[] = [];
   readonly steerSessionIds: Array<string | undefined> = [];
+  readonly interruptedSessionIds: Array<string | undefined> = [];
+  interruptResult = false;
 
   setActivitySessionId(sessionId: string): void {
     this.activitySessionId = sessionId;
@@ -226,6 +228,11 @@ class SteerableMockHarnessIntegration extends MockHarnessIntegration {
     this.steerMessages.push(text);
     this.steerSessionIds.push(sessionId);
     return true;
+  }
+
+  override async interruptHeadlessTurn(sessionId?: string): Promise<boolean> {
+    this.interruptedSessionIds.push(sessionId);
+    return this.interruptResult;
   }
 }
 
@@ -772,6 +779,7 @@ suite("WorkflowInstance steer dispatch", () => {
       stepIndex: 2,
       harnessId: HARNESS_IDS.CLAUDE_CLI,
       steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      canInterruptTurn: true,
       isOpen: true,
     };
 
@@ -883,6 +891,54 @@ suite("WorkflowInstance steer dispatch", () => {
     } finally {
       instance.dispose();
       ptyManager.dispose();
+    }
+  });
+
+  test("interrupts a live headless control session through its integration", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const controlSessionId = "interruptible-headless-session";
+    integration.setHeadlessControlSessionId(controlSessionId);
+    integration.interruptResult = true;
+    (instance as any).executionIntegrations.set(
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+      ),
+      integration
+    );
+
+    try {
+      await instance.interruptHeadlessTurn(controlSessionId);
+      assert.deepStrictEqual(integration.interruptedSessionIds, [
+        controlSessionId,
+      ]);
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("rejects ended and unsupported headless turns", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    integration.setHeadlessControlSessionId("open-but-unsupported");
+    (instance as any).executionIntegrations.set(
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+      ),
+      integration
+    );
+
+    try {
+      await assert.rejects(
+        instance.interruptHeadlessTurn("ended-session"),
+        /headless turn has ended/
+      );
+      await assert.rejects(
+        instance.interruptHeadlessTurn("open-but-unsupported"),
+        /does not support turn interruption/
+      );
+    } finally {
+      instance.dispose();
     }
   });
 

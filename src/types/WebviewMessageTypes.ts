@@ -2677,6 +2677,13 @@ export interface SendSteerMessage {
   text: string;
 }
 
+/** Webview → Extension: interrupt a live headless turn without stopping its step. */
+export interface InterruptHeadlessTurnMessage {
+  type: typeof MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN;
+  workflowId: string;
+  sessionId: string;
+}
+
 /** Extension → Webview: a headless channel that can receive steers opened or closed. */
 export interface HeadlessControlTargetMessage {
   type: typeof MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED;
@@ -2685,6 +2692,7 @@ export interface HeadlessControlTargetMessage {
   stepIndex: number;
   harnessId: HarnessId;
   steerDelivery: HeadlessSteerDelivery;
+  canInterruptTurn?: boolean;
   isOpen: boolean;
 }
 

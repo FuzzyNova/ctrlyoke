@@ -1489,6 +1489,10 @@ export class DashboardMessageRouter {
       void this.workflowStepHandlers.handleSendSteerMessage(ctx, message);
     });
 
+    table.set(MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN, (message, ctx) => {
+      void this.workflowStepHandlers.handleInterruptHeadlessTurn(ctx, message);
+    });
+
     table.set(MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW, (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;

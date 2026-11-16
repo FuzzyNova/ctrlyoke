@@ -189,6 +189,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   private activeHeadlessControlClose?: () => Promise<void>;
   private activeHeadlessControlSessionId?: string;
   private activeHeadlessControlSend?: (text: string) => Promise<boolean>;
+  private activeHeadlessControlInterrupt?: () => Promise<boolean>;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
 
@@ -201,6 +202,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       return Promise.resolve(false);
     }
     return this.activeHeadlessControlSend?.(text) ?? Promise.resolve(false);
+  }
+
+  async interruptHeadlessTurn(sessionId: string): Promise<boolean> {
+    if (this.activeHeadlessControlSessionId !== sessionId) {
+      return false;
+    }
+
+    return this.activeHeadlessControlInterrupt?.() ?? false;
   }
 
   /**
@@ -472,6 +481,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
               stepIndex: controlTarget.stepIndex,
               harnessId: controlTarget.harnessId,
               steerDelivery: controlChannel.steerDelivery,
+              canInterruptTurn: controlChannel.interrupt !== undefined,
             }
           : undefined;
       const controlArgs = controlChannel?.spawnShape.args ?? [];
@@ -508,6 +518,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let promptDeadlineAt = 0;
       let publishedControlTarget = false;
       let controlTurnActive = false;
+      let interruptedTurnCompleted = false;
       const injectedSteers = new Set<symbol>();
       const queuedSteersSubmittedDuringTurn: symbol[] = [];
       const queuedSteersAwaitingTurn: symbol[] = [];
@@ -594,6 +605,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           this.activeHeadlessControlClose = undefined;
           this.activeHeadlessControlSessionId = undefined;
           this.activeHeadlessControlSend = undefined;
+          this.activeHeadlessControlInterrupt = undefined;
         }
         if (targetBase && publishedControlTarget) {
           this.deps.hostCallbacks.onHeadlessControlTarget?.({
@@ -693,6 +705,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           } else if (
             observation.kind === HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END
           ) {
+            interruptedTurnCompleted = observation.interrupted === true;
             updateSteerStateAtTurnEnd();
             closeAfterTurnEnd();
           }
@@ -859,6 +872,23 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                     ]);
                     return true;
                   };
+                  const interrupt =
+                    controlChannel.interrupt?.bind(controlChannel);
+                  this.activeHeadlessControlInterrupt = interrupt
+                    ? async () => {
+                        if (
+                          controlClosed ||
+                          this.activeHeadlessControlChannel !==
+                            controlChannel ||
+                          this.activeHeadlessControlSessionId !==
+                            controlSessionId
+                        ) {
+                          return false;
+                        }
+                        await interrupt();
+                        return true;
+                      }
+                    : undefined;
                   if (targetBase) {
                     this.deps.hostCallbacks.onHeadlessControlTarget?.({
                       type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
@@ -949,17 +979,21 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           "[CliTransportCoordinator] Prompt execution cancelled by user"
         );
         await executeCallback(
-          source?.logTail
-            ? { ...result, headlessLogTail: source.logTail }
-            : result
+          this.withHeadlessControlOutcome(
+            result,
+            source?.logTail,
+            interruptedTurnCompleted
+          )
         );
         return false;
       }
 
       return await executeCallback(
-        source?.logTail
-          ? { ...result, headlessLogTail: source.logTail }
-          : result
+        this.withHeadlessControlOutcome(
+          result,
+          source?.logTail,
+          interruptedTurnCompleted
+        )
       );
     } catch (error) {
       await closeControlChannelForRun?.();
@@ -981,6 +1015,18 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
       }
     }
+  }
+
+  private withHeadlessControlOutcome(
+    result: HeadlessProcessResult,
+    logTail: HeadlessLogTail | undefined,
+    interrupted: boolean
+  ): HeadlessProcessResult {
+    return {
+      ...result,
+      ...(logTail ? { headlessLogTail: logTail } : {}),
+      ...(interrupted ? { interrupted: true } : {}),
+    };
   }
 
   /**

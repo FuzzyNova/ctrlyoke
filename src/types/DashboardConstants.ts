@@ -915,6 +915,7 @@ export const MESSAGE_TYPES = {
   // Steer messages — webview → extension: send a categorized prompt to a live
   // AI-CLI PTY or headless control channel. Ignores prompt overrides.
   SEND_STEER_MESSAGE: "sendSteerMessage", // { workflowId, sessionId, text }
+  INTERRUPT_HEADLESS_TURN: "interruptHeadlessTurn", // { workflowId, sessionId }
   HEADLESS_CONTROL_TARGET_CHANGED: "headlessControlTargetChanged",
 
   // Stable run lifecycle controls — Webview → Extension

@@ -1055,6 +1055,27 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     vscode,
   ]);
 
+  const interruptHeadlessTurn = useCallback(() => {
+    if (
+      !runDispatchTargets.interruptTurn.enabled ||
+      !activeWorkflowId ||
+      !activeSteerTarget
+    ) {
+      return;
+    }
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
+      workflowId: activeWorkflowId,
+      sessionId: activeSteerTarget.sessionId,
+    });
+  }, [
+    activeSteerTarget,
+    activeWorkflowId,
+    runDispatchTargets.interruptTurn.enabled,
+    vscode,
+  ]);
+
   const runInNewWorkflow = useCallback(() => {
     const currentWorkflowId = useUiStore.getState().activeWorkflowId;
     const currentWorkflowName = workflowName || fileName || "current workflow";
@@ -1662,9 +1683,11 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         onRunInParallel={runInParallel}
         onRunInNewWorkflow={runInNewWorkflow}
         onSendSteerMessage={sendSteerMessage}
+        onInterruptHeadlessTurn={interruptHeadlessTurn}
         runInParallelTarget={runDispatchTargets.parallel}
         newWorkflowTarget={runDispatchTargets.newWorkflow}
         steerTarget={runDispatchTargets.steer}
+        interruptTurnTarget={runDispatchTargets.interruptTurn}
         onQueue={() => executePrompt(ACTION_TYPES.QUEUE)}
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}

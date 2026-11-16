@@ -8,6 +8,7 @@ export interface ActiveSteerTarget {
   stepIndex?: number;
   harnessId?: string;
   steerDelivery?: HeadlessSteerDelivery;
+  canInterruptTurn?: boolean;
 }
 
 /**
@@ -38,6 +39,9 @@ export function useActiveSteerTarget(
           stepIndex: target.stepIndex,
           harnessId: target.harnessId,
           steerDelivery: target.steerDelivery,
+          ...(target.canInterruptTurn !== undefined
+            ? { canInterruptTurn: target.canInterruptTurn }
+            : {}),
         }
       : undefined;
   }, [activeInteractiveSession, headlessControlTargets]);

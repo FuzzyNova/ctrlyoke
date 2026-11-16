@@ -19,6 +19,7 @@ import type {
   ReorderPromptsMessage,
   SeedNewRunMessage,
   PrepareNewRunMessage,
+  InterruptHeadlessTurnMessage,
   SendSteerMessage,
   SetStartPositionMessage,
   StartNewRunInsteadMessage,
@@ -117,6 +118,36 @@ export class WorkflowStepHandlers {
       ctx.emit({
         type: MESSAGE_TYPES.USER_FEEDBACK,
         id: `steer-message-error-${Date.now()}`,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: diagnostic,
+      });
+    }
+  }
+
+  async handleInterruptHeadlessTurn(
+    ctx: DashboardClientContext,
+    message: InterruptHeadlessTurnMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    try {
+      await orchestrator.interruptHeadlessTurn(
+        message.workflowId,
+        message.sessionId
+      );
+    } catch (error) {
+      const diagnostic = getErrorMessage(error);
+      Log.error(
+        "[WorkflowStepHandlers] Failed to interrupt headless turn:",
+        error
+      );
+      ctx.emit({
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: `interrupt-turn-error-${Date.now()}`,
         severity: USER_FEEDBACK_SEVERITY.WARNING,
         message: diagnostic,
       });

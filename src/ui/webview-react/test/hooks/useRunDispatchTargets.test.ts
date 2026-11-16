@@ -146,6 +146,28 @@ describe("useRunDispatchTargets", () => {
     }
   );
 
+  it("enables Interrupt Turn only for an open headless target that advertises support", () => {
+    setRunningState([2]);
+    useTerminalStore.getState().updateHeadlessControlTarget({
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 2,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      canInterruptTurn: true,
+      isOpen: true,
+    });
+
+    const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
+
+    expect(result.current.interruptTurn).toEqual({
+      enabled: true,
+      title:
+        "Interrupts the current turn on the live Claude Code headless session (step 3) without stopping the session.",
+    });
+  });
+
   it("reports pausing before other running-state reasons", () => {
     useWorkflowStore.setState({
       executionState: EXECUTION_STATES.PAUSING,

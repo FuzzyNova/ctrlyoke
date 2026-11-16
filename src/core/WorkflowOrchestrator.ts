@@ -4903,6 +4903,17 @@ export class WorkflowOrchestrator {
     await instance.sendSteerMessage(sessionId, text);
   }
 
+  async interruptHeadlessTurn(
+    workflowId: string,
+    sessionId: string
+  ): Promise<void> {
+    const instance = this.findInstance(workflowId);
+    if (!instance) {
+      throw new Error(`Workflow "${workflowId}" was not found.`);
+    }
+    await instance.interruptHeadlessTurn(sessionId);
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,

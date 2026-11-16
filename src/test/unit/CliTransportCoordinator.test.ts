@@ -4,7 +4,10 @@ import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
 import { PtyProcessManager } from "../../core/harness/PtyProcessManager";
 import { CliTransportError } from "../../core/harness/shared/CliTransportError";
-import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
+import type {
+  HeadlessProcessResult,
+  HeadlessStreamingSource,
+} from "../../core/harness/shared/HeadlessLogTail";
 import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
 import { ClaudeHeadlessControlChannel } from "../../core/harness/claude/ClaudeHeadlessControlChannel";
@@ -463,7 +466,7 @@ suite("CliTransportCoordinator", () => {
     assert.strictEqual(closed, true);
   });
 
-  test("inject steering emits one receipt and keeps the channel open through its result", async () => {
+  test("serializes headless steering and interrupt through the turn result", async () => {
     const writes: string[] = [];
     const events: Array<{
       type: string;
@@ -478,6 +481,7 @@ suite("CliTransportCoordinator", () => {
       exitCode: number;
     }) => void;
     let endCalled = false;
+    let capturedResult: HeadlessProcessResult | undefined;
     let resolveTargetOpen!: (target: HeadlessControlTargetMessage) => void;
     const targetOpened = new Promise<HeadlessControlTargetMessage>(
       (resolve) => (resolveTargetOpen = resolve)
@@ -550,7 +554,10 @@ suite("CliTransportCoordinator", () => {
       [],
       "initial prompt",
       [],
-      async () => true,
+      async (result) => {
+        capturedResult = result;
+        return true;
+      },
       undefined,
       undefined,
       undefined,
@@ -564,6 +571,7 @@ suite("CliTransportCoordinator", () => {
     );
     const openedTarget = await targetOpened;
     assert.strictEqual(openedTarget.isOpen, true);
+    assert.strictEqual(openedTarget.canInterruptTurn, true);
 
     const sending = coordinator.sendHeadlessUserMessage(
       openedTarget.controlSessionId,
@@ -585,8 +593,25 @@ suite("CliTransportCoordinator", () => {
       attribution: USER_STEER_ATTRIBUTIONS.USER,
     });
 
+    assert.strictEqual(
+      await coordinator.interruptHeadlessTurn(openedTarget.controlSessionId),
+      true
+    );
+    const interruptRequest = JSON.parse(writes.at(-1) ?? "{}") as {
+      type: string;
+      request_id: string;
+      request: { subtype: string };
+    };
+    assert.strictEqual(interruptRequest.type, CLAUDE_CONTROL.REQUEST_TYPE);
+    assert.ok(interruptRequest.request_id);
+    assert.strictEqual(
+      interruptRequest.request.subtype,
+      CLAUDE_CONTROL.INTERRUPT_SUBTYPE
+    );
+
     emitStdout?.(`${JSON.stringify({ type: CLAUDE_EVENT_TYPES.RESULT })}\n`);
     assert.strictEqual(await execution, true);
+    assert.strictEqual(capturedResult?.interrupted, true);
     assert.strictEqual(endCalled, true);
     assert.deepStrictEqual(
       targets.map(({ controlSessionId, isOpen }) => ({

@@ -4386,6 +4386,28 @@ export class WorkflowInstance
     }
   }
 
+  async interruptHeadlessTurn(sessionId: string): Promise<void> {
+    const integration =
+      this.findIntegrationForHeadlessControlSession(sessionId);
+    if (!integration) {
+      throw new Error(
+        "That headless turn has ended. The interrupt was not sent."
+      );
+    }
+
+    const interrupted = await integration.interruptHeadlessTurn(sessionId);
+    if (interrupted) return;
+
+    if (integration.getHeadlessControlSessionId() !== sessionId) {
+      throw new Error(
+        "That headless turn has ended. The interrupt was not sent."
+      );
+    }
+    throw new Error(
+      "This headless harness session does not support turn interruption."
+    );
+  }
+
   private createIntegrationForMode(
     harnessOverride?: HarnessId,
     target?: WorkflowAttemptTarget,

@@ -67,6 +67,8 @@ export interface HeadlessProcessResult {
   terminationSignal?: NodeJS.Signals;
   /** Whether ctrlyoke requested the termination. */
   terminatedByManager?: boolean;
+  /** The harness reported a turn end after ctrlyoke requested an interrupt. */
+  interrupted?: boolean;
   headlessLogTail?: HeadlessLogTail;
 }
 

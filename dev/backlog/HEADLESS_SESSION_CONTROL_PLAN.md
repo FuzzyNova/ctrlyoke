@@ -14,7 +14,8 @@ its `meta.json` status; SDK mode's empty agent list cannot be restored without c
 builtin agent definitions, so it is documented (`docs/harnesses/qwen-cli.md`, CHANGELOG
 **Changed**). Researched 2026-11-15 by live probes and source reading, with Claude probes on
 2026-11-16 (details under "Findings"). Open questions through Stage 2a are resolved (see
-"Decisions"). The targeted Claude harness subset passed on 2026-11-16 (20 tests, including
+"Decisions"). The "Interrupt Turn" follow-up is implemented and its Claude/Qwen live cases passed
+on 2026-11-16. The targeted Claude harness subset passed on 2026-11-16 (20 tests, including
 headless image input and resume).
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
@@ -504,3 +505,13 @@ Resolved 2026-11-15, with the Claude Stage 2a probes resolved on 2026-11-16. The
 - **`ask` timeout** (Nathan): deny with a message.
 - **"Interrupt turn".** Yes, as a small follow-up after Stage 2. Claude/Qwen `interrupt` and
   Codex `turn/interrupt` keep the process and session, which is gentler than Stop.
+- **Interrupt-turn outcome (probed and implemented 2026-11-16).** Both stream-json CLIs accept
+  `{"type":"control_request","request_id":"…","request":{"subtype":"interrupt"}}`. Claude
+  acknowledges with `control_response.response.subtype: "success"` and
+  `control_response.response.response.still_queued: []`; Qwen acknowledges with the same outer
+  success and `control_response.response.response.subtype: "interrupt"`. Both then emit a `result`
+  marking the cancelled tool as an error; Claude exits 1 and Qwen exits 0 after stdin closes.
+  ctrlyoke treats that result as a successful partial step (retaining the cancellation
+  event/output) because the user ended the turn, not the workflow. The normal turn-end path closes
+  stdin and lets the queue continue. Live harness cases interrupt the same 25-second Node sleep
+  and both complete the step/workflow well before it ends (Claude 2.1.325, Qwen 0.27.4).

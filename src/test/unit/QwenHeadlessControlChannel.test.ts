@@ -115,6 +115,45 @@ suite("QwenHeadlessControlChannel", () => {
     channel.close();
   });
 
+  test("sends interrupt and marks the following result as interrupted", async () => {
+    const writes: string[] = [];
+    const channel = new QwenHeadlessControlChannel();
+    await channel.start({
+      write: async (text) => {
+        writes.push(text);
+        const request = JSON.parse(text) as {
+          request_id: string;
+          request: { subtype: string };
+        };
+        if (request.request.subtype === QWEN_CONTROL.INITIALIZE_SUBTYPE) {
+          channel.observe({
+            type: QWEN_CONTROL.RESPONSE_TYPE,
+            response: { request_id: request.request_id },
+          });
+        }
+      },
+      end: async () => {},
+    });
+
+    await channel.interrupt();
+
+    const request = JSON.parse(writes[1]) as {
+      type: string;
+      request_id: string;
+      request: { subtype: string };
+    };
+    assert.strictEqual(request.type, QWEN_CONTROL.REQUEST_TYPE);
+    assert.ok(request.request_id);
+    assert.strictEqual(request.request.subtype, QWEN_CONTROL.INTERRUPT_SUBTYPE);
+    assert.deepStrictEqual(channel.observe({ type: QWEN_EVENT_TYPES.RESULT }), [
+      {
+        kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
+        interrupted: true,
+      },
+    ]);
+    channel.close();
+  });
+
   test("fails a missing initialize response with a transport error", async () => {
     const channel = new QwenHeadlessControlChannel(5);
     await assert.rejects(

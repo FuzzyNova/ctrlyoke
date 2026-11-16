@@ -753,6 +753,11 @@ export abstract class HarnessIntegration {
     return false;
   }
 
+  /** Interrupt the named headless turn without terminating its process. */
+  async interruptHeadlessTurn(_sessionId?: string): Promise<boolean> {
+    return false;
+  }
+
   /**
    * Get the current status of the integration
    * Must be implemented by subclasses

@@ -174,7 +174,10 @@ export class CliResponseCollector {
     const statistics = CliOutputFormatter.formatStatistics(
       parsedOutput.metadata
     );
-    const failure = this.getHeadlessFailure(params, parsedOutput);
+    const failure =
+      params.interrupted && !params.terminationSignal
+        ? undefined
+        : this.getHeadlessFailure(params, parsedOutput);
     const succeeded = failure === undefined;
     const resultResponse = responseText || failure?.message || "";
 
