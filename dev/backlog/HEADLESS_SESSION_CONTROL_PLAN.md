@@ -1,8 +1,11 @@
 # Headless Session Control: Steering and Approvals
 
 **Status:** Not started. Researched 2026-11-15 by live probes and source reading (details
-under "Findings"). Nothing in ctrlyoke has changed yet.
+under "Findings"). Open questions resolved 2026-11-15 (see "Decisions"). Nothing in ctrlyoke
+has changed yet.
 **Priority:** P1 (Stage 1 fixes a high-severity hang)
+**Order:** implement this plan's Stage 1 before the stdin inline plan. It fixes the P1 hang and
+builds the transport the inline plan reuses.
 
 **Fixes:** [`qwen-headless-approval-request-hangs.md`](../bugs/backlog/qwen-headless-approval-request-hangs.md)
 (Stage 1).
@@ -257,7 +260,8 @@ One host-side policy answers every request:
   it can never hang.
 - **`ask`**: show the request in the step's output with Allow once / Deny buttons and an
   optional deny message. Any dashboard client may answer, by the same reasoning as the steer
-  plan's viewer decision. If nobody answers within a timeout, deny with a message saying so.
+  plan's viewer decision. If nobody answers within a timeout, deny with a message saying so
+  (decided 2026-11-15: deny, not pause, so unattended runs keep moving).
   Clamp the timeout to the harness's own limit (Qwen at most 600 s). With no dashboard attached
   (plain CLI runs), `ask` behaves like `deny`.
 - Applies to `custom` (unlisted tools) and to `auto` escalations the judge hands to a human.
@@ -317,19 +321,32 @@ plan decide only _what text_ goes in that first message:
 - today's `follow the instructions in @…` sentence.
 
 The inline plan's per-harness notes still apply. For Qwen, escape `@` and avoid a leading `/`.
-For Claude, do not add `--input-format stream-json`; this plan supersedes that note, because
-stream-json input is required for the control channel.
+The inline plan's old "do not add `--input-format stream-json`" note for Claude is superseded,
+because stream-json input is required for the control channel. Before moving Claude (Stage 2),
+probe whether `@path` still expands inside a stream-json `user` message; if not, Claude's
+inlining ships with its channel.
+
+Recommended order: this plan's Stage 1 (Qwen), then the inline plan's prompt-text work for Qwen
+and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg changes), then Stage 2
+(Claude channel, with inlining if the probe needs it), then Stages 3–6.
 
 ## Implementation stages
 
-1. **Control channel + Claude + Qwen, `deny` policy.** Writable-stdin spawn, the channel
-   interface, turn-end completion, and Claude/Qwen implementations. Qwen drops the positional
-   prompt and sends `initialize` first. Every approval request gets ctrlyoke's deny message.
-   This fixes the Qwen hang. Move the bug to `dev/bugs/implemented/` in this commit, with the
-   corrected root cause. Add a harness case for the Qwen "unlisted command chained to an allowed
-   one" scenario; it currently times out.
-2. **Headless steer dispatch** for Claude (inject) and Qwen (queue). Covers the target registry,
-   webview message, `useActiveSteerTarget`, tooltips and the synthesized receipt.
+1. **Control channel + Qwen, `deny` policy.** Writable-stdin spawn, the channel interface,
+   turn-end completion, and the Qwen implementation. Qwen drops the positional prompt and sends
+   `initialize` first. Every approval request gets ctrlyoke's deny message. This fixes the Qwen
+   hang. Move the bug to `dev/bugs/implemented/` in this commit, with the corrected root cause.
+   Add a harness case for the Qwen "unlisted command chained to an allowed one" scenario; it
+   currently times out.
+   - **Claude is not in Stage 1.** Under `deny`, Claude keeps `dontAsk`, which already refuses
+     in-band, so the channel gives Claude nothing until steering. Moving it now would also risk
+     losing `@path` expansion (see the inline plan's Claude probe) for no gain.
+   - Stdin must stay open until the turn's `result`, because approval answers go on stdin. Stdin
+     EOF cancels a pending request, so `close()` at turn end (or on Stop) can never hang.
+2. **Claude channel + headless steer dispatch** for Claude (inject) and Qwen (queue). Move
+   Claude onto the channel here, after the `@path`-in-stream-json probe; if `@path` does not
+   expand, ship Claude's inlining from the inline plan in the same commit. Covers the target
+   registry, webview message, `useActiveSteerTarget`, tooltips and the synthesized receipt.
 3. **`ask` policy.** Settings field, approval card in the output pane, timeout, and the
    CLI-without-dashboard fallback. An MCP tool to list and answer pending approvals is a
    follow-up.
@@ -365,28 +382,32 @@ No stage needs a minimum-version bump. Gate each capability on the version that 
 `autoModeMinimumVersion` already does; older CLIs keep today's behavior. Dates come from the
 vendor repos' commit history (the local clones have no tags):
 
-| Harness     | ctrlyoke minimum    | What the plan needs and when it landed                                                                                                                                                                                                                                                                        |
-| ----------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude      | 2.1.94              | stream-json input, the control protocol and `--permission-prompt-tool stdio` are the Agent SDK's transport and predate 2.1. Whether a mid-turn message is injected or queued was only probed on 2.1.325; it changes the tooltip, not support.                                                                 |
-| Qwen        | 0.15.5              | Stream-json SDK mode and `can_use_tool` date from 2025-11-21 (#926), before the minimum. `initialize.timeout.canUseTool` is honored only from 2026-05-26 (#4491, about 0.16); before that the timeout is a fixed 60 s, so `ask` caps its wait there.                                                          |
-| Codex       | 0.129.0             | v2 approvals (2025-11-18), `turn/steer` (2026-02-06), exec on the in-process app-server (2026-03-08) and the hook-trust bypass (2026-05-13) all landed by about the minimum. `CodexQuotaCollector` only trusts app-server from 0.146 (`CODEX_APP_SERVER_MIN_VERSION`); find out why before choosing the gate. |
-| OpenCode    | 1.3.16 (OpenCode 1) | The plugin `evaluate` hook (2026-08-25, #45003) and steer delivery (2026-08-12, #42109) are recent OpenCode 2 only. OpenCode 1 and early 2.x keep auto-reject.                                                                                                                                                |
-| Copilot     | 1.0.19              | ACP predates 1.0, but `session/request_permission` was not checked on 1.0.19 (closed source).                                                                                                                                                                                                                 |
-| Antigravity | 1.4.10              | Not dated: `--input-format stream-json` and `agy acp` were only checked on 1.5.9.                                                                                                                                                                                                                             |
+| Harness     | ctrlyoke minimum    | What the plan needs and when it landed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude      | 2.1.94              | stream-json input, the control protocol and `--permission-prompt-tool stdio` are the Agent SDK's transport and predate 2.1. Whether a mid-turn message is injected or queued was only probed on 2.1.325; it changes the tooltip, not support.                                                                                                                                                                                                                                                                                                                                                                                     |
+| Qwen        | 0.15.5              | Stream-json SDK mode and `can_use_tool` date from 2025-11-21 (#926), before the minimum. `initialize.timeout.canUseTool` is honored only from 2026-05-26 (#4491, about 0.16); before that the timeout is a fixed 60 s, so `ask` caps its wait there.                                                                                                                                                                                                                                                                                                                                                                              |
+| Codex       | 0.129.0             | v2 approvals (2025-11-18), `turn/steer` (2026-02-06), exec on the in-process app-server (2026-03-08) and the hook-trust bypass (2026-05-13) all landed by about the minimum. `CodexQuotaCollector`'s 0.146 gate (`CODEX_APP_SERVER_MIN_VERSION`, from ~2b39311) is not a protocol limit: its comment says it is "gated to the rechecked CLI line", i.e. the version the quota methods were verified on. 0.146.0 is also the version the inline hooks and pinned harness tests were verified on. **Gate headless app-server at 0.146** and keep `exec` below it; lower the gate only with a passing live case on an older version. |
+| OpenCode    | 1.3.16 (OpenCode 1) | The plugin `evaluate` hook (2026-08-25, #45003) and steer delivery (2026-08-12, #42109) are recent OpenCode 2 only. OpenCode 1 and early 2.x keep auto-reject.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Copilot     | 1.0.19              | ACP predates 1.0, but `session/request_permission` was not checked on 1.0.19 (closed source).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Antigravity | 1.4.10              | Not dated: `--input-format stream-json` and `agy acp` were only checked on 1.5.9.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
-## Open questions
+## Decisions
 
-- Does Claude keep the process alive while background tasks run after a `result` when stdin
-  stays open, and should the channel wait for them before `close()`? Today `claude -p` ends the
-  process tree when the turn ends, so headless background work is lost.
-- Copilot ACP: do `--allow-tool`, `--deny-tool` and `--assisted-approval` apply, and does the
-  judge treat the ACP prompt as the user's message? If yes, ACP also fixes the Copilot auto-judge
-  bug without inlining.
-- Copilot server mode: where is the opt-in that routes `permission.request` to the client?
-- OpenCode: can an async `evaluate` hook wait minutes for a human, and what is the simplest
-  ctrlyoke→plugin channel?
-- Codex: does an app-server thread's rollout read the same as an exec rollout for ctrlyoke's
-  log parser (`historyMode` paginated vs legacy)?
-- Should `ask` time out to deny, or pause the workflow? Deny keeps unattended runs moving.
-- Should the dashboard also offer "Interrupt turn" (Claude/Qwen `interrupt`, Codex
-  `turn/interrupt`) once the channel exists?
+Resolved 2026-11-15. None blocks Stage 1. The ones marked "probe in stage N" are verification
+tasks that belong to that stage, not design questions.
+
+- **Claude background tasks after `result`.** v1 closes stdin at the first `result` with no
+  queued steer, which is today's behavior, so nothing regresses. Follow-up in Stage 2 (probe):
+  if Claude emits a task-notification turn while stdin stays open, hold `close()` while
+  `ClaudeLogParser`'s `BackgroundFollowUpState` reports pending tasks, bounded by the prompt
+  timeout. That would fix headless background work being lost.
+- **Copilot ACP flags and the judge.** Probe in Stage 6. Not needed earlier.
+- **Copilot server-mode permission opt-in.** Dropped. The flag is hidden; Stage 6 uses ACP.
+- **OpenCode async `evaluate` hook.** Probe in Stage 6. Try the `opencode serve` route first if
+  the hook cannot block on a human: it has documented reply and steer endpoints and needs no
+  ctrlyoke→plugin channel.
+- **Codex rollout parity.** A live case in Stage 5 (already listed there). Gate at 0.146 (see
+  "Version requirements").
+- **`ask` timeout** (Nathan): deny with a message.
+- **"Interrupt turn".** Yes, as a small follow-up after Stage 2. Claude/Qwen `interrupt` and
+  Codex `turn/interrupt` keep the process and session, which is gentler than Stop.

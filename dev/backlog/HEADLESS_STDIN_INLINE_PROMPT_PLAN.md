@@ -2,7 +2,12 @@
 
 **Status:** Not started. Researched 2026-11-10 against the vendor sources and
 installed CLIs listed below; nothing here has been checked with a live run.
+Open questions resolved 2026-11-15 (see "Decisions").
 **Priority:** P2
+**Depends on:** Stage 1 of
+[`HEADLESS_SESSION_CONTROL_PLAN.md`](HEADLESS_SESSION_CONTROL_PLAN.md), which
+builds the writable-stdin transport. Implement that first; this plan then only
+decides _what text_ the first user message carries.
 
 ## Problem
 
@@ -115,16 +120,21 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 
 - `claude -p` reads plain-text stdin when stdin is not a TTY, joining it to the
   positional prompt with a newline. `--output-format stream-json` only affects
-  output. Do **not** add `--input-format stream-json`.
-- Stdin is merged into the same string as an argv prompt before any other
-  processing, so `@path` references in it should still be expanded (inferred).
+  output. The earlier note "do not add `--input-format stream-json`" is
+  superseded: the session-control channel needs stream-json input.
+- Plain-text stdin is merged into the same string as an argv prompt before any
+  other processing, so `@path` references in it should still be expanded
+  (inferred). **Whether `@path` is expanded in a stream-json `user` message is
+  unknown** (Agent SDK messages may skip it). If it is not, moving Claude onto
+  the control channel without inlining would silently turn today's free
+  `@path` reads into Read tool calls. Probe this first (see "Decisions").
 - 10 MB stdin cap: the CLI exits with "piped stdin input exceeds 10MB". If no
   data arrives within 3 s it proceeds without stdin; ctrlyoke writes and closes
   stdin immediately, so this does not apply.
-- **Benefit is smaller here.** Claude already inlines `@path` files without a
-  tool call. Moving it would mainly remove the Read caps and the argv-ordering
-  workaround. It is reasonable to leave Claude on `@` references and do it
-  last, or never.
+- **Benefit is smaller here** while Claude stays on argv: it already inlines
+  `@path` files without a tool call. Once Claude moves to the control channel
+  (session-control Stage 2), inlining becomes the default way to keep that
+  benefit unless the probe shows `@path` still expands in stream-json.
 
 ### Copilot CLI (1.0.107, read from the bundle, `--help`, the changelog)
 
@@ -157,19 +167,20 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 - Headless prompts already go on stdin (`headlessPromptDelivery: STDIN`).
 - Headless runs now also attach the generated prompt files with `--file`
   (`buildPromptFileAttachmentArgs`). OpenCode reads each one into the first
-  message, so OpenCode already gets most of this proposal's benefit. If this
-  plan ships, pick one channel for OpenCode: inline text, or keep `--file` and
-  skip inlining there.
+  message, so OpenCode already gets most of this proposal's benefit.
+  **Decision:** keep `--file` and do not opt OpenCode in. It already avoids the
+  tool calls, and inlining would only change a path that works.
 
 ### Qwen Code (0.27.1, source in `C:\dev\qwen-code`)
 
 - Keep `--output-format stream-json --input-format stream-json`. The
   non-interactive auto-deny exemption is keyed on the input format only, so
   text-mode stdin would lose it (and text mode is capped at 8 MB).
-- Drop the positional prompt and write one JSON line, then close stdin:
-  `{"type":"user","session_id":"<any>","message":{"role":"user","content":"<text>"},"parent_tool_use_id":null}`.
-  That is the same message Qwen builds from the positional prompt, and stdin
-  EOF drains the turn exactly as today.
+- The positional prompt is dropped by session-control Stage 1, which opens the
+  session with `initialize` and sends the prompt as a `user` message
+  (`{"type":"user","session_id":"<any>","message":{"role":"user","content":"<text>"},"parent_tool_use_id":null}`).
+  This plan only changes that message's text. The earlier "write one line and
+  close stdin" form is superseded: it is direct mode, which is what hangs.
 - `@` processing still runs on that text, so any `@token` that matches a real
   path gets inlined, and a read error is fatal. Escape literal `@` in inlined
   content as `\@`, and never start the text with `/` (slash command).
@@ -200,13 +211,17 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
    only for the fallback path. Workspace file refs still go through
    `formatDirectFileRef`. Dry Run's prompt preview must show the same thing.
 2. **Provider opt-in.** A provider flag (for example
-   `inlinesGeneratedPromptOnStdin`), reusing `headlessPromptDelivery: STDIN` for
-   the transport. `CliTransportCoordinator` already writes `promptArgument` to
-   stdin and closes it.
-3. **Stdin encoding hook.** Qwen needs the text wrapped in a stream-json user
-   message. Add an optional provider hook that turns the prompt text into the
-   stdin payload, used by `CliTransportCoordinator`. Every other provider sends
-   the text as is.
+   `inlinesGeneratedPromptOnStdin`). Transport by harness:
+   - With a headless control channel (Qwen after session-control Stage 1,
+     Claude after Stage 2, agy after Stage 4, Codex after Stage 5): the inline
+     text is the channel's first `sendUserMessage`. No new transport.
+   - Without one yet (Copilot, and Codex/agy if this lands before their
+     stages): `headlessPromptDelivery: STDIN`, which `CliTransportCoordinator`
+     already writes to stdin and closes. These per-harness arg changes (step 4)
+     are interim and are replaced when that harness gets its channel.
+3. **No separate stdin encoding hook.** The control channel already owns each
+   harness's envelope (Qwen and Claude `user` lines, agy `{"event":"user",…}`).
+   Plain-stdin harnesses send the text as is.
 4. **Per-provider args.**
    - Claude: drop the prompt from `buildHeadlessArgs`.
    - Copilot: drop `--prompt <text>` and clear `COPILOT_PROMPT_TURN_DELIMITER`.
@@ -218,20 +233,41 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
    `@token` that resolves to a real path, which is harmless except for images.
 6. **Echoed prompt.** `BaseLogParser` normalizes the echoed user prompt as
    `follow instructions in @…`. With inlining, each harness echoes the full
-   content as the first user message, so check the output pane and the
-   `events.jsonl` prompt record show something sensible and not the whole
-   inlined text twice.
-7. **Tests.** Unit tests for the prompt plan and each adapter's args, and one
+   content as the first user message. Wrap the whole inlined text in one
+   ctrlyoke root block and have the parser recognize that wrapper, showing only
+   the user's own prompt section in the output pane. The `events.jsonl` prompt
+   record keeps ctrlyoke's own prompt text, not the echo, so nothing is stored
+   twice.
+7. **Setting.** An opt-out setting, default **on** (decided 2026-11-15). Record
+   it under **Changed** in `CHANGELOG.md` in the commit that ships it.
+8. **Tests.** Unit tests for the prompt plan and each adapter's args, and one
    live harness case per harness. The resume-with-stdin claims above are all
    inferred and need those live cases to confirm.
 
-## Open questions
+## Decisions
 
-- Inline budget: one number, or one per harness derived from its stdin cap and
-  the model's context window?
-- Should a resumed session that already received the same agent and skills
-  content (`shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume`) skip
-  inlining them again? It does today for references.
-- Does inlining change how harness context compaction treats the content? agy's
-  changelog notes compaction no longer cuts a long first instruction to a
-  fixed slice; the others are unknown.
+Resolved 2026-11-15 from the code; the last two are Nathan's calls.
+
+- **Inline budget: one global number.** Every stdin cap found is at least
+  1M characters (Claude 10 MB, Codex 1M chars), so the binding limit is the
+  model's context, not stdin. Use one constant character budget (start around
+  400k characters, about 100k tokens at `ESTIMATED_CHARS_PER_TOKEN`). Add an
+  optional per-provider `maxInlinePromptChars` only if a harness turns out to
+  need a lower one. Over budget, fall back to split-file references for the
+  largest sections first.
+- **Resume: inherit today's omission.** `CliPromptPreparer` decides
+  `shouldFilterResumeAttachments` and runs `ResumeAttachmentResolver` before
+  the prompt is formatted, so the inline path gets the same filtered set for
+  free. Do not add a second check. This holds when the earlier step was
+  interactive and used file references: the model read that content then.
+- **Compaction: not a blocker.** Content the model reads today arrives as a
+  tool result, which harnesses truncate (Codex at 10,000 tokens) and prune
+  first. User text is not truncated (Codex) or is kept longer, so inlining
+  should only help. Check it in one long live run per harness; do not design
+  around it.
+- **OpenCode: not opted in.** It keeps `--file` (see its section).
+- **Claude: probe first.** Before session-control Stage 2 moves Claude to
+  stream-json input, send a stream-json `user` message containing an `@path`
+  and see whether the file is read in. If it is not, ship Claude's inlining in
+  the same commit as its control channel.
+- **Default** (Nathan, 2026-11-15): the setting defaults on, with an opt-out.
