@@ -8,6 +8,7 @@ import {
   type PriorContext,
   type ExecutionMode,
   type ToolPermissionMode,
+  type HeadlessApprovalPolicy,
   type ServerPortFallbackInfo,
   type BindAddressFallbackInfo,
   type LicenseAccessState,
@@ -22,6 +23,8 @@ import {
   DEFAULT_MODELS,
   HARNESS_DISPLAY_ORDER,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_POLICIES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
   COMPARE_SOURCES,
   TOAST_LEVEL_MODES,
   SETTING_SCOPES,
@@ -128,9 +131,11 @@ export interface GlobalSettings {
   hooks: UserHookConfig[];
   autoFocusOutputOnExecution: boolean;
   toolPermissions: {
-    mode: string;
+    mode: ToolPermissionMode;
     allowedTools: string[];
     deniedTools: string[];
+    headlessApprovals?: HeadlessApprovalPolicy;
+    headlessApprovalTimeoutSec?: number;
   };
   sandbox: SandboxRequest;
   sandboxMode: SandboxMode;
@@ -202,6 +207,8 @@ export interface WorkflowProperties {
     mode?: ToolPermissionMode;
     allowedTools?: string[];
     deniedTools?: string[];
+    headlessApprovals?: HeadlessApprovalPolicy;
+    headlessApprovalTimeoutSec?: number;
   } | null;
   sandbox?: SandboxRequest;
   sandboxMode?: SandboxMode;
@@ -452,6 +459,12 @@ const initialGlobalSettings: GlobalSettings = {
     mode: PERMISSION_MODES.ALLOW_ALL,
     allowedTools: [],
     deniedTools: [],
+    headlessApprovals:
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.headlessApprovals ??
+      HEADLESS_APPROVAL_POLICIES.DENY,
+    headlessApprovalTimeoutSec:
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions
+        ?.headlessApprovalTimeoutSec ?? HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
   },
   sandbox: CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandbox,
   sandboxMode: CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandboxMode,

@@ -5,6 +5,7 @@ import type { ControlWriter } from "../../core/harness/shared/IHeadlessControlCh
 import {
   APPROVAL_DECISIONS,
   HEADLESS_CONTROL_OBSERVATION_KINDS,
+  HEADLESS_APPROVAL_POLICIES,
   HEADLESS_STEER_DELIVERIES,
 } from "../../types/DashboardConstants";
 import {
@@ -37,6 +38,38 @@ suite("ClaudeHeadlessControlChannel", () => {
     channel.close();
   });
 
+  test("initializes Claude's stdio approval protocol when ask is enabled", async () => {
+    const writes: string[] = [];
+    const channel = new ClaudeHeadlessControlChannel({
+      approvalPolicy: HEADLESS_APPROVAL_POLICIES.ASK,
+      approvalTimeoutMs: 30_000,
+      useApprovalControl: true,
+    });
+    await channel.start({
+      write: async (text) => {
+        writes.push(text);
+        const request = JSON.parse(text) as {
+          request_id: string;
+          request: { subtype: string };
+        };
+        if (request.request.subtype === CLAUDE_CONTROL.INITIALIZE_SUBTYPE) {
+          channel.observe({
+            type: CLAUDE_CONTROL.RESPONSE_TYPE,
+            response: { request_id: request.request_id },
+          });
+        }
+      },
+      end: async () => {},
+    });
+
+    assert.deepStrictEqual(JSON.parse(writes[0]), {
+      type: CLAUDE_CONTROL.REQUEST_TYPE,
+      request_id: (JSON.parse(writes[0]) as { request_id: string }).request_id,
+      request: { subtype: CLAUDE_CONTROL.INITIALIZE_SUBTYPE },
+    });
+    channel.close();
+  });
+
   test("answers can_use_tool with deny and observes result as turn end", async () => {
     const writes: string[] = [];
     const channel = new ClaudeHeadlessControlChannel();
@@ -57,6 +90,8 @@ suite("ClaudeHeadlessControlChannel", () => {
         {
           kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
           requestId: "approval-1",
+          toolName: "Unknown tool",
+          input: undefined,
         },
       ]
     );
@@ -80,9 +115,48 @@ suite("ClaudeHeadlessControlChannel", () => {
       channel.observe({ type: CLAUDE_EVENT_TYPES.RESULT }),
       [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }]
     );
-    await assert.rejects(
-      channel.answerApproval("approval-2", APPROVAL_DECISIONS.ALLOW_ONCE),
-      /only support deny/
+    const allowInput = { command: "echo hello" };
+    channel.observe({
+      type: CLAUDE_CONTROL.REQUEST_TYPE,
+      request_id: "approval-2",
+      request: {
+        subtype: CLAUDE_CONTROL.CAN_USE_TOOL_SUBTYPE,
+        tool_name: "Bash",
+        input: allowInput,
+      },
+    });
+    await channel.answerApproval("approval-2", APPROVAL_DECISIONS.ALLOW_ONCE);
+    assert.deepStrictEqual(JSON.parse(writes[1]), {
+      type: CLAUDE_CONTROL.RESPONSE_TYPE,
+      response: {
+        subtype: CLAUDE_CONTROL.SUCCESS_SUBTYPE,
+        request_id: "approval-2",
+        response: {
+          behavior: CLAUDE_CONTROL.ALLOW_BEHAVIOR,
+          updatedInput: allowInput,
+        },
+      },
+    });
+    channel.close();
+  });
+
+  test("classifies AskUserQuestion separately from tool approvals", () => {
+    const channel = new ClaudeHeadlessControlChannel();
+    assert.deepStrictEqual(
+      channel.observe({
+        type: CLAUDE_CONTROL.REQUEST_TYPE,
+        request_id: "question-1",
+        request: {
+          subtype: CLAUDE_CONTROL.CAN_USE_TOOL_SUBTYPE,
+          tool_name: CLAUDE_CONTROL.ASK_USER_QUESTION_TOOL,
+        },
+      }),
+      [
+        {
+          kind: HEADLESS_CONTROL_OBSERVATION_KINDS.MODEL_QUESTION,
+          requestId: "question-1",
+        },
+      ]
     );
     channel.close();
   });

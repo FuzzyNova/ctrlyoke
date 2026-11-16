@@ -31,6 +31,7 @@ import {
   STEP_TYPES,
   PREVIEW_SCOPES,
   type TokenTotalConfidence,
+  type ApprovalDecision,
   type ScriptOutputSource,
   type ExecutionPhase,
   type UndoFileAction,
@@ -2696,6 +2697,31 @@ export interface HeadlessControlTargetMessage {
   isOpen: boolean;
 }
 
+/** Extension → Webview: a pending headless tool-approval request or its removal. */
+export interface HeadlessApprovalRequestMessage {
+  type: typeof MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED;
+  approvalId: string;
+  requestId: string;
+  workflowId: string;
+  controlSessionId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
+  toolName: string;
+  inputSummary: string;
+  deadline: number;
+  isPending: boolean;
+}
+
+/** Webview → Extension: allow one tool call or deny it with an optional message. */
+export interface HeadlessApprovalResponseMessage {
+  type: typeof MESSAGE_TYPES.RESPOND_TO_HEADLESS_APPROVAL;
+  workflowId: string;
+  controlSessionId: string;
+  approvalId: string;
+  decision: ApprovalDecision;
+  message?: string;
+}
+
 /**
  * Update an existing queue step. When a completed nonzero step is edited,
  * `rewindCompletedStep` asks the backend to begin the same durable pending
@@ -3684,6 +3710,7 @@ export type IncomingMessage =
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
   | HeadlessControlTargetMessage
+  | HeadlessApprovalRequestMessage
   | ContextWindowUpdateMessage
   | FinalStepContextWindowUpdateMessage
   | StatusMessageMessage

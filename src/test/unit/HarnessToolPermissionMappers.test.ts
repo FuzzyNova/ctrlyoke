@@ -25,6 +25,7 @@ import type {
 } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  HEADLESS_APPROVAL_POLICIES,
   PERMISSION_MODES,
   type PermissionMode,
 } from "../../types/DashboardConstants";
@@ -991,6 +992,42 @@ suite("HarnessToolPermissionMappers", () => {
           { isInteractive: false }
         );
         assert.deepStrictEqual(args, ["--permission-mode", "dontAsk"]);
+      });
+
+      test("headless custom ask uses stdio permission prompts", async () => {
+        const args = await mapperArgs(
+          mapper,
+          {
+            ...cfg(PERMISSION_MODES.CUSTOM, ["write"], []),
+            headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          },
+          { isInteractive: false }
+        );
+
+        assert.deepStrictEqual(args.slice(0, 4), [
+          "--permission-mode",
+          "default",
+          "--permission-prompt-tool",
+          "stdio",
+        ]);
+      });
+
+      test("headless auto ask routes judge escalations to stdio", async () => {
+        const args = await mapperArgs(
+          mapper,
+          {
+            ...cfg(PERMISSION_MODES.AUTO),
+            headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          },
+          { isInteractive: false, cliVersion: "2.1.325" }
+        );
+
+        assert.deepStrictEqual(args.slice(0, 4), [
+          "--permission-mode",
+          "auto",
+          "--permission-prompt-tool",
+          "stdio",
+        ]);
       });
 
       test("interactive custom mode with no tools overrides the user's default mode", async () => {

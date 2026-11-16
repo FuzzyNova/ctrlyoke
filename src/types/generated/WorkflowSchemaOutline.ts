@@ -951,6 +951,18 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "deniedTools": {
         "valueKind": "array",
         "description": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns."
+      },
+      "headlessApprovals": {
+        "valueKind": "string",
+        "enum": [
+          "deny",
+          "ask"
+        ],
+        "description": "How a headless Claude Code or Qwen Code step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude `custom` requests and `auto` judge escalations, and to Qwen approval requests. No allow-always option is offered."
+      },
+      "headlessApprovalTimeoutSec": {
+        "valueKind": "number",
+        "description": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions."
       }
     },
     "forbiddenKeys": []

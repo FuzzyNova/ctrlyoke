@@ -3,6 +3,7 @@ import type { CtrlYokeNotificationEvent } from "./notifications/NotificationEven
 import type {
   CliEvent,
   HeadlessControlTargetMessage,
+  HeadlessApprovalRequestMessage,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type {
@@ -272,6 +273,17 @@ export class WorkflowTaggedSink implements IDashboardSink {
       ...target,
       workflowId: this.workflowId,
     });
+  }
+
+  updateHeadlessApprovalRequest(
+    request: HeadlessApprovalRequestMessage
+  ): boolean {
+    return (
+      this.inner.updateHeadlessApprovalRequest?.({
+        ...request,
+        workflowId: this.workflowId,
+      }) ?? false
+    );
   }
 
   updateContextWindow(stepIndex: number, used: number, size: number): void {

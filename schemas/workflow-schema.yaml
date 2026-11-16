@@ -2660,6 +2660,25 @@ $defs:
               servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT
               ENFORCE shell or other tool patterns.
             title: Denied Tools
+          headlessApprovals:
+            type: string
+            enum:
+              - deny
+              - ask
+            description: >-
+              How a headless Claude Code or Qwen Code step handles a tool approval request. `deny`
+              answers immediately; `ask` publishes a request to connected dashboards and denies if
+              no dashboard can answer. Applies to Claude `custom` requests and `auto` judge
+              escalations, and to Qwen approval requests. No allow-always option is offered.
+            title: Headless Approvals
+          headlessApprovalTimeoutSec:
+            type: integer
+            minimum: 1
+            maximum: 600
+            description: >-
+              Maximum time in seconds to wait for a dashboard response to a headless approval
+              request. Qwen Code may impose a lower limit on older versions.
+            title: Headless Approval Timeout Sec
         additionalProperties: false
       - type: 'null'
   priorContext:

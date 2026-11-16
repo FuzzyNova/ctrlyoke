@@ -5,6 +5,11 @@ import type {
   WorkflowStep,
   WorktreeResolution,
 } from "./CtrlYokeTypes";
+import type {
+  ApprovalDecision,
+  HarnessId,
+  HeadlessApprovalPolicy,
+} from "./DashboardConstants";
 import type { ResolvedProperties } from "../utils/SettingsPropertyResolver";
 import type {
   HarnessIntegration,
@@ -76,6 +81,25 @@ export interface WorkflowWorkingFilePersistence {
   updateWorkingFile(skipMerge?: boolean): Promise<void>;
   /** Persist a newly discovered harness session before the prompt completes. */
   persistSessionId?(promptIndex: number, sessionId: string): Promise<void>;
+}
+
+/** Approval request metadata passed from the headless transport to the host. */
+export interface HeadlessApprovalRequestContext {
+  policy: HeadlessApprovalPolicy;
+  workflowId: string;
+  controlSessionId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
+  requestId: string;
+  toolName: string;
+  inputSummary: string;
+  timeoutMs: number;
+}
+
+/** Host decision returned to the harness control channel. */
+export interface HeadlessApprovalResolution {
+  decision: ApprovalDecision;
+  message?: string;
 }
 
 /**
@@ -164,6 +188,11 @@ export interface WorkflowContext {
     message: string,
     severity: import("./DashboardConstants").StatusMessageSeverity
   ) => void;
+  /** Resolve one harness approval request through the host-side policy service. */
+  requestHeadlessApproval?: (
+    request: HeadlessApprovalRequestContext,
+    signal: AbortSignal
+  ) => Promise<HeadlessApprovalResolution>;
   /** Settle an interactive prompt whose input did not start a harness turn. */
   markNoTurnStarted?: () => Promise<void>;
   /** Analyze resolved prompt attachments at the final execution boundary. */

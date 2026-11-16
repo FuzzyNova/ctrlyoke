@@ -17,6 +17,7 @@ import {
   HOOK_EVENT_NAMES,
   NOTIFICATION_EVENT_MODES,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_POLICIES,
   PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_SELECTION_MODES,
@@ -48,6 +49,7 @@ import {
   type HookEvent,
   type NotificationEventMode,
   type PermissionMode,
+  type HeadlessApprovalPolicy,
   type RerunConfirmationMode,
   type OutputAnnouncementMode,
   type ServerThemeMode,
@@ -164,6 +166,28 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     visual: {
       codicon: "workspace-trusted",
       color: "text-description-fg",
+    },
+  },
+};
+
+export const HEADLESS_APPROVAL_POLICY_OPTIONS_META: Record<
+  HeadlessApprovalPolicy,
+  SchemaOptionMeta<HeadlessApprovalPolicy>
+> = {
+  [HEADLESS_APPROVAL_POLICIES.DENY]: {
+    value: HEADLESS_APPROVAL_POLICIES.DENY,
+    label: "Deny",
+    description:
+      "Answer approval requests with a denial. This is also the fallback when no dashboard is connected.",
+  },
+  [HEADLESS_APPROVAL_POLICIES.ASK]: {
+    value: HEADLESS_APPROVAL_POLICIES.ASK,
+    label: "Ask in dashboard",
+    description:
+      "Ask a connected dashboard client to allow this tool once or deny it.",
+    alias: {
+      reason:
+        "The label names where the user sees the request rather than the serialized policy value.",
     },
   },
 };

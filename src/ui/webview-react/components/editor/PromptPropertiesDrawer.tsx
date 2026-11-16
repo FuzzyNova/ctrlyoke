@@ -1,5 +1,5 @@
 import { WorkflowVariableValue } from "@components/shared/WorkflowVariableValue";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
@@ -17,6 +17,7 @@ import {
   type HarnessId,
   type ToolPermissionsOverride,
   type ToolPermissionMode,
+  type HeadlessApprovalPolicy,
   type PriorContext,
 } from "../../types/messages";
 import {
@@ -27,6 +28,8 @@ import {
   RESUME_SESSION_SELECTIONS,
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_POLICIES,
   SANDBOX_UI_LABELS,
   resolveSandboxRequest,
   sandboxModeApplies,
@@ -86,6 +89,7 @@ import {
   ERROR_BEHAVIOR_ACTION_OPTIONS_META,
   EXECUTION_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
+  HEADLESS_APPROVAL_POLICY_OPTIONS_META,
   PRIOR_CONTEXT_DETAIL_OPTIONS_META,
   RESUME_SESSION_OPTIONS_META,
   toSelectOptions,
@@ -411,6 +415,24 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
     workflowProperties.toolPermissions,
     globalSettings.toolPermissions as ToolPermissionsOverride
   );
+  const inheritedHeadlessApprovalPolicy =
+    workflowProperties.toolPermissions?.headlessApprovals ??
+    globalSettings.toolPermissions.headlessApprovals ??
+    HEADLESS_APPROVAL_POLICIES.DENY;
+  const inheritedHeadlessApprovalTimeoutSec =
+    workflowProperties.toolPermissions?.headlessApprovalTimeoutSec ??
+    globalSettings.toolPermissions.headlessApprovalTimeoutSec ??
+    HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC;
+  const displayedHeadlessApprovalTimeoutSec =
+    displayedProperties.toolPermissions?.headlessApprovalTimeoutSec ??
+    inheritedHeadlessApprovalTimeoutSec;
+  const [headlessApprovalTimeoutDraft, setHeadlessApprovalTimeoutDraft] =
+    useState(String(displayedHeadlessApprovalTimeoutSec));
+  useEffect(() => {
+    setHeadlessApprovalTimeoutDraft(
+      String(displayedHeadlessApprovalTimeoutSec)
+    );
+  }, [displayedHeadlessApprovalTimeoutSec]);
   const compatibility = useCompatibilityDiagnostics({
     promptProperties: properties,
     promptTarget: selectionTarget,
@@ -473,6 +495,41 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
         ? PERMISSION_MODES.NONE
         : (displayedProperties.toolPermissions.mode ??
           PERMISSION_MODES.ALLOW_ALL);
+
+  const buildHeadlessApprovalPermissionOverride =
+    (): ToolPermissionsOverride => {
+      const current =
+        displayedProperties.toolPermissions &&
+        typeof displayedProperties.toolPermissions === "object"
+          ? displayedProperties.toolPermissions
+          : {};
+      return {
+        ...current,
+        mode: current.mode ?? resolvedPermMode,
+        allowedTools:
+          current.allowedTools ??
+          workflowProperties.toolPermissions?.allowedTools ??
+          globalSettings.toolPermissions.allowedTools ??
+          [],
+        deniedTools:
+          current.deniedTools ??
+          workflowProperties.toolPermissions?.deniedTools ??
+          globalSettings.toolPermissions.deniedTools ??
+          [],
+      };
+    };
+  const clearHeadlessApprovalPermissionField = (
+    field: "headlessApprovals" | "headlessApprovalTimeoutSec"
+  ) => {
+    const current = displayedProperties.toolPermissions;
+    if (!current || typeof current !== "object") return;
+    const next = { ...current };
+    delete next[field];
+    setProperty(
+      PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+      Object.keys(next).length > 0 ? next : undefined
+    );
+  };
 
   // ── Hooks page derived values ───────────────────────────────────────────
   const resolvedHooks = useMemo(() => {
@@ -1510,6 +1567,116 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                     triggerTitle={
                       harnessScopedTooltip ?? bulkEditDisabledReason
                     }
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="prop-headless-approvals"
+                    className="text-xs font-semibold uppercase text-description-fg"
+                    title="How headless Claude Code and Qwen Code handle human approval requests."
+                  >
+                    Headless Approval Requests
+                  </label>
+                  <CustomSelect
+                    id="prop-headless-approvals"
+                    schemaPath="toolPermissions.headlessApprovals"
+                    triggerAriaLabel="Headless Approval Requests"
+                    value={
+                      displayedProperties.toolPermissions === undefined
+                        ? INHERIT_DEFAULT_OPTION
+                        : (displayedProperties.toolPermissions
+                            ?.headlessApprovals ?? INHERIT_DEFAULT_OPTION)
+                    }
+                    onChange={(value) => {
+                      if (value === INHERIT_DEFAULT_OPTION) {
+                        clearHeadlessApprovalPermissionField(
+                          "headlessApprovals"
+                        );
+                      } else {
+                        setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
+                          ...buildHeadlessApprovalPermissionOverride(),
+                          headlessApprovals: value as HeadlessApprovalPolicy,
+                        });
+                      }
+                    }}
+                    options={[
+                      {
+                        value: INHERIT_DEFAULT_OPTION,
+                        label: `Inherit (${inheritedHeadlessApprovalPolicy})`,
+                        pseudo: { omit: true },
+                      },
+                      ...toSelectOptions(
+                        HEADLESS_APPROVAL_POLICY_OPTIONS_META,
+                        "toolPermissions.headlessApprovals"
+                      ),
+                    ]}
+                    disabled={
+                      displayedProperties.toolPermissions === null ||
+                      fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
+                      harnessScopedOptionsDisabled
+                    }
+                    triggerTitle={
+                      harnessScopedTooltip ?? bulkEditDisabledReason
+                    }
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="prop-headless-approval-timeout"
+                      className="text-xs font-semibold uppercase text-description-fg"
+                      title="Maximum time to wait for an answer to a headless approval request."
+                    >
+                      Approval Timeout (seconds)
+                    </label>
+                    {displayedProperties.toolPermissions &&
+                      typeof displayedProperties.toolPermissions === "object" &&
+                      displayedProperties.toolPermissions
+                        .headlessApprovalTimeoutSec !== undefined && (
+                        <button
+                          type="button"
+                          className="text-xs text-description-fg underline hover:text-foreground"
+                          onClick={() =>
+                            clearHeadlessApprovalPermissionField(
+                              "headlessApprovalTimeoutSec"
+                            )
+                          }
+                        >
+                          Inherit
+                        </button>
+                      )}
+                  </div>
+                  <input
+                    id="prop-headless-approval-timeout"
+                    type="number"
+                    min={1}
+                    max={600}
+                    step={1}
+                    value={headlessApprovalTimeoutDraft}
+                    aria-label="Headless approval timeout in seconds"
+                    disabled={
+                      displayedProperties.toolPermissions === null ||
+                      fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
+                      harnessScopedOptionsDisabled
+                    }
+                    title={harnessScopedTooltip ?? bulkEditDisabledReason}
+                    onChange={(event) =>
+                      setHeadlessApprovalTimeoutDraft(event.target.value)
+                    }
+                    onBlur={() => {
+                      const parsed = Number(headlessApprovalTimeoutDraft);
+                      const value = Number.isFinite(parsed)
+                        ? Math.max(1, Math.min(600, Math.round(parsed)))
+                        : inheritedHeadlessApprovalTimeoutSec;
+                      setHeadlessApprovalTimeoutDraft(String(value));
+                      setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
+                        ...buildHeadlessApprovalPermissionOverride(),
+                        headlessApprovalTimeoutSec: value,
+                      });
+                    }}
+                    className="w-full max-w-32 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
 

@@ -52,6 +52,7 @@ import {
   CLAUDE_SYSTEM_SUBTYPES,
 } from "./ClaudeProtocolConstants";
 import { ClaudeHeadlessControlChannel } from "./ClaudeHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
 import type {
   CliExecutionSidecar,
   CliExecutionSidecarDeps,
@@ -774,8 +775,11 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     ];
   }
 
-  createHeadlessControlChannel(): ClaudeHeadlessControlChannel {
-    return new ClaudeHeadlessControlChannel();
+  createHeadlessControlChannel(
+    _promptText: string,
+    options: HeadlessControlChannelOptions
+  ): ClaudeHeadlessControlChannel {
+    return new ClaudeHeadlessControlChannel(options);
   }
 
   /**

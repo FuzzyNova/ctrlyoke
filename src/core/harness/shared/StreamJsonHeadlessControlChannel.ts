@@ -23,6 +23,7 @@ export const STREAM_JSON_CONTROL = {
   ERROR_SUBTYPE: "error",
   INTERRUPT_SUBTYPE: "interrupt",
   USER_ROLE: "user",
+  ALLOW_BEHAVIOR: "allow",
   DENY_BEHAVIOR: "deny",
 } as const;
 
@@ -33,6 +34,7 @@ export interface StreamJsonControlProtocol {
   successSubtype: string;
   denyBehavior: string;
   resultType: string;
+  modelQuestionToolNames: readonly string[];
 }
 
 /** Shared stream-json control messages used by Claude and Qwen. */
@@ -40,6 +42,7 @@ export abstract class StreamJsonHeadlessControlChannel implements IHeadlessContr
   readonly spawnShape = {};
   protected writer?: ControlWriter;
   private interruptRequested = false;
+  private readonly pendingToolInputs = new Map<string, unknown>();
 
   constructor(
     private readonly protocol: StreamJsonControlProtocol,
@@ -67,10 +70,26 @@ export abstract class StreamJsonHeadlessControlChannel implements IHeadlessContr
       record.request.subtype === this.protocol.canUseToolSubtype &&
       typeof record.request_id === "string"
     ) {
+      const toolName =
+        typeof record.request.tool_name === "string"
+          ? record.request.tool_name
+          : "Unknown tool";
+      if (this.protocol.modelQuestionToolNames.includes(toolName)) {
+        return [
+          {
+            kind: HEADLESS_CONTROL_OBSERVATION_KINDS.MODEL_QUESTION,
+            requestId: record.request_id,
+          },
+        ];
+      }
+      const input = record.request.input;
+      this.pendingToolInputs.set(record.request_id, input);
       return [
         {
           kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
           requestId: record.request_id,
+          toolName,
+          input,
         },
       ];
     }
@@ -91,20 +110,29 @@ export abstract class StreamJsonHeadlessControlChannel implements IHeadlessContr
     decision: ApprovalDecision,
     message?: string
   ): Promise<void> {
-    if (decision !== APPROVAL_DECISIONS.DENY) {
-      throw new Error("Headless stream-json approvals only support deny");
-    }
-    await this.writeRecord({
-      type: this.protocol.responseType,
-      response: {
-        subtype: this.protocol.successSubtype,
-        request_id: requestId,
+    const pendingInput = this.pendingToolInputs.get(requestId);
+    const response =
+      decision === APPROVAL_DECISIONS.ALLOW_ONCE
+        ? {
+            behavior: STREAM_JSON_CONTROL.ALLOW_BEHAVIOR,
+            updatedInput: isRecord(pendingInput) ? pendingInput : {},
+          }
+        : {
+            behavior: this.protocol.denyBehavior,
+            ...(message ? { message } : {}),
+          };
+    try {
+      await this.writeRecord({
+        type: this.protocol.responseType,
         response: {
-          behavior: this.protocol.denyBehavior,
-          message,
+          subtype: this.protocol.successSubtype,
+          request_id: requestId,
+          response,
         },
-      },
-    });
+      });
+    } finally {
+      this.pendingToolInputs.delete(requestId);
+    }
   }
 
   async interrupt(): Promise<void> {
@@ -123,6 +151,7 @@ export abstract class StreamJsonHeadlessControlChannel implements IHeadlessContr
 
   close(): void {
     this.writer = undefined;
+    this.pendingToolInputs.clear();
   }
 
   protected async writeRecord(record: Record<string, unknown>): Promise<void> {

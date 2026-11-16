@@ -58,6 +58,7 @@ import {
   WORKTREE_BRANCH_STATES,
   WORKTREE_MODES,
   type EndConditionScriptType,
+  type ApprovalDecision,
   type HarnessId,
   type QueuePosition,
   type ActionType,
@@ -1140,6 +1141,7 @@ export class WorkflowOrchestrator {
           clientId
         );
       }
+      instance.replayPendingHeadlessApprovals(send);
       return;
     }
 
@@ -4912,6 +4914,24 @@ export class WorkflowOrchestrator {
       throw new Error(`Workflow "${workflowId}" was not found.`);
     }
     await instance.interruptHeadlessTurn(sessionId);
+  }
+
+  respondToHeadlessApproval(
+    workflowId: string,
+    controlSessionId: string,
+    approvalId: string,
+    decision: ApprovalDecision,
+    message?: string
+  ): boolean {
+    const instance = this.findInstance(workflowId);
+    return (
+      instance?.respondToHeadlessApproval(
+        controlSessionId,
+        approvalId,
+        decision,
+        message
+      ) ?? false
+    );
   }
 
   async executeEphemeralPrompt(

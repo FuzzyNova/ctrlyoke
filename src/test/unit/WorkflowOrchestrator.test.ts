@@ -883,6 +883,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         _sink: unknown,
         options?: { asReplacement?: boolean }
       ) => replayCalls.push(options),
+      replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
     internal.retiredInstances = new Map();
@@ -912,6 +913,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         sink.updateCliOutput(0, { text: "a" });
         sink.updateCliOutput(1, { text: "b" });
       },
+      replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
     internal.retiredInstances = new Map();
@@ -2904,6 +2906,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayPendingHeadlessApprovals: () => {},
         },
       ],
     ]);
@@ -2964,6 +2967,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayPendingHeadlessApprovals: () => {},
         },
       ],
     ]);
@@ -3113,6 +3117,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           replayFullStateTo: () => {
             sent.push({ type: MESSAGE_TYPES.SESSION_RESTORED });
           },
+          replayPendingHeadlessApprovals: () => {},
         },
       ],
     ]);

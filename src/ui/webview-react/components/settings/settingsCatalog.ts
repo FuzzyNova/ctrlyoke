@@ -8,6 +8,7 @@ import {
   WORKTREE_DIRECTORY_FIELD,
   WORKTREE_MODES,
   WORKTREE_KEEP_HELP_TEXT,
+  SETTING_PATHS,
   type HarnessId,
   type StatusLineHarnessId,
   type HookEvent,
@@ -1023,6 +1024,20 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "permissions",
     label: "Denied tools (one per line)",
+  },
+  [SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS]: {
+    id: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS,
+    path: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS,
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Headless approval requests",
+  },
+  [SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC]: {
+    id: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC,
+    path: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC,
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Headless approval timeout (seconds)",
   },
   "landmark:mcp-manager:servers": {
     id: "landmark:mcp-manager:servers",

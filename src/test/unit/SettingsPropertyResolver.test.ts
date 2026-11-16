@@ -10,6 +10,7 @@ import { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import {
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_POLICIES,
   HARNESS_IDS,
   EXECUTION_MODES,
   PROMPT_PROPERTIES,
@@ -291,6 +292,75 @@ suite("SettingsPropertyResolver Tests", () => {
   });
 
   suite("execution property precedence contracts", () => {
+    test("resolves headless approval policy and timeout at each precedence tier", () => {
+      const context = SettingsPropertyResolver.createContext();
+      context.defaults.toolPermissions = {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["shell(echo:*)"],
+        deniedTools: [],
+        headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+        headlessApprovalTimeoutSec: 240,
+      };
+      const workflow: PromptFile = {
+        steps: [],
+        toolPermissions: {
+          mode: PERMISSION_MODES.CUSTOM,
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 90,
+        },
+      };
+
+      const fromWorkflow = resolveExecutionProperties(
+        { prompt: "prompt" },
+        workflow,
+        context
+      );
+      assert.strictEqual(
+        fromWorkflow.properties.toolPermissions?.headlessApprovals,
+        HEADLESS_APPROVAL_POLICIES.ASK
+      );
+      assert.strictEqual(
+        fromWorkflow.properties.toolPermissions?.headlessApprovalTimeoutSec,
+        90
+      );
+
+      const fromPrompt = resolveExecutionProperties(
+        {
+          prompt: "prompt",
+          toolPermissions: {
+            mode: PERMISSION_MODES.CUSTOM,
+            headlessApprovals: HEADLESS_APPROVAL_POLICIES.DENY,
+            headlessApprovalTimeoutSec: 30,
+          },
+        },
+        workflow,
+        context
+      );
+      assert.strictEqual(
+        fromPrompt.properties.toolPermissions?.headlessApprovals ??
+          HEADLESS_APPROVAL_POLICIES.DENY,
+        HEADLESS_APPROVAL_POLICIES.DENY
+      );
+      assert.strictEqual(
+        fromPrompt.properties.toolPermissions?.headlessApprovalTimeoutSec,
+        30
+      );
+
+      const fromDefaults = resolveExecutionProperties(
+        { prompt: "prompt" },
+        { steps: [] },
+        context
+      );
+      assert.strictEqual(
+        fromDefaults.properties.toolPermissions?.headlessApprovals,
+        HEADLESS_APPROVAL_POLICIES.ASK
+      );
+      assert.strictEqual(
+        fromDefaults.properties.toolPermissions?.headlessApprovalTimeoutSec,
+        240
+      );
+    });
+
     test("resolves secrets with replacement and null-clearing semantics", () => {
       const context = SettingsPropertyResolver.createContext();
       context.defaults.secrets = ["DEFAULT_SECRET"];

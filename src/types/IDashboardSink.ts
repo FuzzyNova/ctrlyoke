@@ -1,5 +1,6 @@
 import type {
   CliEvent,
+  HeadlessApprovalRequestMessage,
   HeadlessControlTargetMessage,
   UndoExecutionTarget,
 } from "./WebviewMessageTypes";
@@ -151,6 +152,9 @@ export interface IDashboardSink {
   ): void;
 
   updateHeadlessControlTarget?(target: HeadlessControlTargetMessage): void;
+  updateHeadlessApprovalRequest?(
+    request: HeadlessApprovalRequestMessage
+  ): boolean;
 
   updateContextWindow(
     stepIndex: number,

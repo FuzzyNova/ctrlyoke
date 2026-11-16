@@ -11,12 +11,20 @@ import {
   HEADLESS_STEER_DELIVERIES,
   HEADLESS_CONTROL_OBSERVATION_KINDS,
   HEADLESS_SOURCE_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_DENIAL_MESSAGE,
+  HEADLESS_APPROVAL_NO_DASHBOARD_MESSAGE,
+  HEADLESS_APPROVAL_POLICIES,
+  HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+  HEADLESS_MODEL_QUESTION_DENIAL_MESSAGE,
   MESSAGE_TYPES,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
   type TerminalEndReason,
   type HarnessId,
+  type ApprovalDecision,
+  type HeadlessApprovalPolicy,
   USER_STEER_ATTRIBUTIONS,
   NODE_ERROR_CODES,
   FAILURE_SOURCES,
@@ -55,19 +63,33 @@ import {
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
 import { splitCompleteLines } from "../../../utils/TextLines";
-import { StreamingSecretRedactor } from "../../../utils/SecretRedactionService";
+import {
+  secretRedactionService,
+  StreamingSecretRedactor,
+} from "../../../utils/SecretRedactionService";
 import { AsyncMutex } from "./AsyncMutex";
 import {
+  type HeadlessApprovalExecutionContext,
   type ControlWriter,
   type IHeadlessControlChannel,
 } from "./IHeadlessControlChannel";
 import type { Writable } from "stream";
-import {
-  APPROVAL_DECISIONS,
-  HEADLESS_APPROVAL_DENIAL_MESSAGE,
-} from "../../../types/DashboardConstants";
+import { APPROVAL_DECISIONS } from "../../../types/DashboardConstants";
 
 const HEADLESS_BACKGROUND_WORK_POLL_INTERVAL_MS = 100;
+const MAX_HEADLESS_APPROVAL_INPUT_SUMMARY_LENGTH = 2_000;
+
+function summarizeHeadlessApprovalInput(input: unknown): string {
+  const serialized =
+    typeof input === "string"
+      ? input
+      : (JSON.stringify(input) ?? String(input));
+  const redacted = secretRedactionService.redactText(serialized);
+  if (redacted.length <= MAX_HEADLESS_APPROVAL_INPUT_SUMMARY_LENGTH) {
+    return redacted;
+  }
+  return `${redacted.slice(0, MAX_HEADLESS_APPROVAL_INPUT_SUMMARY_LENGTH - 1)}…`;
+}
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -145,7 +167,8 @@ export interface CliExecutionTransportCoordinator {
     resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[],
     keepTempFiles?: boolean,
-    controlTarget?: HeadlessControlTargetContext
+    controlTarget?: HeadlessControlTargetContext,
+    approvalContext?: HeadlessApprovalExecutionContext
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -450,7 +473,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[],
     keepTempFiles = false,
-    controlTarget?: HeadlessControlTargetContext
+    controlTarget?: HeadlessControlTargetContext,
+    approvalContext?: HeadlessApprovalExecutionContext
   ): Promise<boolean> {
     this.activeHeadlessLogTail = source?.logTail;
     let closeControlChannelForRun: (() => Promise<void>) | undefined;
@@ -470,8 +494,21 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         (await this.resolveProviderCommand(
           this.deps.provider.buildHeadlessArgs(args, promptArgument)
         ));
-      const controlChannel =
-        this.deps.provider.createHeadlessControlChannel?.(promptArgument);
+      const controlChannel = this.deps.provider.createHeadlessControlChannel?.(
+        promptArgument,
+        {
+          approvalPolicy:
+            approvalContext?.approvalPolicy ?? HEADLESS_APPROVAL_POLICIES.DENY,
+          approvalTimeoutMs:
+            approvalContext?.approvalTimeoutMs ??
+            HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC * 1000,
+          useApprovalControl: approvalContext?.useApprovalControl ?? false,
+        }
+      );
+      const approvalPolicy: HeadlessApprovalPolicy =
+        approvalContext?.useApprovalControl
+          ? approvalContext.approvalPolicy
+          : HEADLESS_APPROVAL_POLICIES.DENY;
       const controlSessionId = controlChannel ? randomUUID() : undefined;
       const targetBase =
         controlChannel && controlSessionId && controlTarget
@@ -513,12 +550,16 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let controlWriter: ControlWriter | undefined;
       let controlReady: Promise<void> | undefined;
       let controlClosed = false;
+      let controlClosing = false;
+      let controlClosePromise: Promise<void> | undefined;
       let controlOperations = Promise.resolve();
       let controlCloseScheduled = false;
       let promptDeadlineAt = 0;
       let publishedControlTarget = false;
       let controlTurnActive = false;
       let interruptedTurnCompleted = false;
+      const approvalAbortController = new AbortController();
+      const pendingApprovalResponses = new Set<Promise<void>>();
       const injectedSteers = new Set<symbol>();
       const queuedSteersSubmittedDuringTurn: symbol[] = [];
       const queuedSteersAwaitingTurn: symbol[] = [];
@@ -593,27 +634,36 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         }
       };
 
-      const closeControlChannel = async (): Promise<void> => {
-        if (!controlChannel || controlClosed) return;
-        controlClosed = true;
-        await controlWriter?.end();
-        await withControlLock(async () => {
-          controlChannel.close();
-        });
-        if (this.activeHeadlessControlChannel === controlChannel) {
-          this.activeHeadlessControlChannel = undefined;
-          this.activeHeadlessControlClose = undefined;
-          this.activeHeadlessControlSessionId = undefined;
-          this.activeHeadlessControlSend = undefined;
-          this.activeHeadlessControlInterrupt = undefined;
-        }
-        if (targetBase && publishedControlTarget) {
-          this.deps.hostCallbacks.onHeadlessControlTarget?.({
-            type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
-            ...targetBase,
-            isOpen: false,
+      const closeControlChannel = (): Promise<void> => {
+        if (controlClosePromise) return controlClosePromise;
+        if (!controlChannel || controlClosed) return Promise.resolve();
+        controlClosing = true;
+        controlClosePromise = (async () => {
+          approvalAbortController.abort();
+          while (pendingApprovalResponses.size > 0) {
+            await Promise.allSettled([...pendingApprovalResponses]);
+          }
+          controlClosed = true;
+          await controlWriter?.end();
+          await withControlLock(async () => {
+            controlChannel.close();
           });
-        }
+          if (this.activeHeadlessControlChannel === controlChannel) {
+            this.activeHeadlessControlChannel = undefined;
+            this.activeHeadlessControlClose = undefined;
+            this.activeHeadlessControlSessionId = undefined;
+            this.activeHeadlessControlSend = undefined;
+            this.activeHeadlessControlInterrupt = undefined;
+          }
+          if (targetBase && publishedControlTarget) {
+            this.deps.hostCallbacks.onHeadlessControlTarget?.({
+              type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+              ...targetBase,
+              isOpen: false,
+            });
+          }
+        })();
+        return controlClosePromise;
       };
       closeControlChannelForRun = closeControlChannel;
 
@@ -695,12 +745,89 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             observation.kind ===
             HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST
           ) {
-            enqueueControlOperation(() =>
-              controlChannel.answerApproval(
+            const response = (async (): Promise<void> => {
+              let resolution: { decision: ApprovalDecision; message?: string };
+              if (controlClosing) {
+                resolution = {
+                  decision: APPROVAL_DECISIONS.DENY,
+                  message: HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+                };
+              } else if (
+                !controlTarget ||
+                !controlSessionId ||
+                !approvalContext?.requestApproval
+              ) {
+                resolution = {
+                  decision: APPROVAL_DECISIONS.DENY,
+                  message:
+                    approvalPolicy === HEADLESS_APPROVAL_POLICIES.ASK
+                      ? HEADLESS_APPROVAL_NO_DASHBOARD_MESSAGE
+                      : HEADLESS_APPROVAL_DENIAL_MESSAGE,
+                };
+              } else {
+                try {
+                  resolution = await approvalContext.requestApproval(
+                    {
+                      policy: approvalPolicy,
+                      workflowId: controlTarget.workflowId,
+                      controlSessionId,
+                      stepIndex: controlTarget.stepIndex,
+                      harnessId: controlTarget.harnessId,
+                      requestId: observation.requestId,
+                      toolName: observation.toolName,
+                      inputSummary: summarizeHeadlessApprovalInput(
+                        observation.input
+                      ),
+                      timeoutMs:
+                        approvalContext.approvalTimeoutMs ??
+                        HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC * 1000,
+                    },
+                    approvalAbortController.signal
+                  );
+                } catch (error) {
+                  Log.warn(
+                    `[CliTransportCoordinator] Headless approval policy failed: ${getErrorMessage(error)}`
+                  );
+                  resolution = {
+                    decision: APPROVAL_DECISIONS.DENY,
+                    message: HEADLESS_APPROVAL_DENIAL_MESSAGE,
+                  };
+                }
+              }
+              await controlChannel.answerApproval(
                 observation.requestId,
-                APPROVAL_DECISIONS.DENY,
-                HEADLESS_APPROVAL_DENIAL_MESSAGE
-              )
+                resolution.decision,
+                resolution.message
+              );
+            })();
+            pendingApprovalResponses.add(response);
+            void response.then(
+              () => pendingApprovalResponses.delete(response),
+              (error: unknown) => {
+                pendingApprovalResponses.delete(response);
+                Log.warn(
+                  `[CliTransportCoordinator] Could not answer headless approval: ${getErrorMessage(error)}`
+                );
+              }
+            );
+          } else if (
+            observation.kind ===
+            HEADLESS_CONTROL_OBSERVATION_KINDS.MODEL_QUESTION
+          ) {
+            const response = controlChannel.answerApproval(
+              observation.requestId,
+              APPROVAL_DECISIONS.DENY,
+              HEADLESS_MODEL_QUESTION_DENIAL_MESSAGE
+            );
+            pendingApprovalResponses.add(response);
+            void response.then(
+              () => pendingApprovalResponses.delete(response),
+              (error: unknown) => {
+                pendingApprovalResponses.delete(response);
+                Log.warn(
+                  `[CliTransportCoordinator] Could not reject headless model question: ${getErrorMessage(error)}`
+                );
+              }
             );
           } else if (
             observation.kind === HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END

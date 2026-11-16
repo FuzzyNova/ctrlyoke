@@ -12,6 +12,7 @@ import {
   QWEN_CONTROL,
   QWEN_EVENT_TYPES,
   QWEN_INITIALIZE_TIMEOUT_MS,
+  QWEN_TOOL_NAMES,
 } from "./QwenProtocolConstants";
 
 /** Qwen Code's stream-json SDK channel for one headless step. */
@@ -23,7 +24,8 @@ export class QwenHeadlessControlChannel extends StreamJsonHeadlessControlChannel
   private readonly userSessionId = randomUUID();
 
   constructor(
-    private readonly initializeTimeoutMs = QWEN_INITIALIZE_TIMEOUT_MS
+    private readonly initializeTimeoutMs = QWEN_INITIALIZE_TIMEOUT_MS,
+    private readonly canUseToolTimeoutMs?: number
   ) {
     super(
       {
@@ -33,6 +35,7 @@ export class QwenHeadlessControlChannel extends StreamJsonHeadlessControlChannel
         successSubtype: QWEN_CONTROL.SUCCESS_SUBTYPE,
         denyBehavior: QWEN_CONTROL.DENY_BEHAVIOR,
         resultType: QWEN_EVENT_TYPES.RESULT,
+        modelQuestionToolNames: [QWEN_TOOL_NAMES.ASK_USER_QUESTION],
       },
       HEADLESS_STEER_DELIVERIES.QUEUE
     );
@@ -62,7 +65,12 @@ export class QwenHeadlessControlChannel extends StreamJsonHeadlessControlChannel
       await this.writeRecord({
         type: QWEN_CONTROL.REQUEST_TYPE,
         request_id: requestId,
-        request: { subtype: QWEN_CONTROL.INITIALIZE_SUBTYPE },
+        request: {
+          subtype: QWEN_CONTROL.INITIALIZE_SUBTYPE,
+          ...(this.canUseToolTimeoutMs !== undefined
+            ? { timeout: { canUseTool: this.canUseToolTimeoutMs } }
+            : {}),
+        },
       });
       await initialized;
     } catch (error) {
@@ -110,7 +118,14 @@ export class QwenHeadlessControlChannel extends StreamJsonHeadlessControlChannel
   }
 
   override close(): void {
-    this.clearInitializeWait();
+    this.finishInitialize(
+      new CliTransportError(
+        "Qwen Code headless initialize was interrupted",
+        FAILURE_KINDS.USER_CANCELLED,
+        undefined,
+        FAILURE_SOURCES.HEADLESS_PARSE
+      )
+    );
     super.close();
   }
 

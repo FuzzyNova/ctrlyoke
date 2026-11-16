@@ -7,7 +7,10 @@ import type {
 } from "./IToolPermissionMapper";
 import type { ISandboxMapper } from "./ISandboxMapper";
 import type { HarnessAdapterPreparation } from "./PreparedMutation";
-import type { IHeadlessControlChannel } from "../IHeadlessControlChannel";
+import type {
+  HeadlessControlChannelOptions,
+  IHeadlessControlChannel,
+} from "../IHeadlessControlChannel";
 export type { HarnessAdapterPreparation } from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type { HarnessVersionPolicy } from "../../../../utils/HarnessVersion";
@@ -591,8 +594,13 @@ export interface IHarnessAdapter {
 
   /** Create the optional stdin control protocol for one headless execution. */
   createHeadlessControlChannel?(
-    promptText: string
+    promptText: string,
+    options: HeadlessControlChannelOptions
   ): IHeadlessControlChannel | undefined;
+  /** Clamp a configured approval timeout to this CLI's protocol limit. */
+  resolveHeadlessApprovalTimeoutMs?(
+    requestedTimeoutMs: number
+  ): Promise<number>;
 
   /**
    * Receive the sandbox mapper's process environment for the next launch

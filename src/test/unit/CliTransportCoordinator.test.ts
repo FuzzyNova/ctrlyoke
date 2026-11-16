@@ -33,6 +33,8 @@ import {
   FAILURE_KINDS,
   APPROVAL_DECISIONS,
   HEADLESS_APPROVAL_DENIAL_MESSAGE,
+  HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+  HEADLESS_APPROVAL_POLICIES,
   type HeadlessPromptDelivery,
   MESSAGE_TYPES,
   SESSION_KINDS,
@@ -54,6 +56,7 @@ import type {
 } from "../../utils/CliProcessManager";
 import type {
   ControlWriter,
+  HeadlessApprovalExecutionContext,
   IHeadlessControlChannel,
 } from "../../core/harness/shared/IHeadlessControlChannel";
 import type { HeadlessControlTargetMessage } from "../../types/WebviewMessageTypes";
@@ -464,6 +467,144 @@ suite("CliTransportCoordinator", () => {
       `approval:approval-1:${APPROVAL_DECISIONS.DENY}:${HEADLESS_APPROVAL_DENIAL_MESSAGE}`,
     ]);
     assert.strictEqual(closed, true);
+  });
+
+  test("denies a pending approval before closing stdin on Stop", async () => {
+    const writes: string[] = [];
+    let active = true;
+    let resolveSpawn!: () => void;
+    let notifyApproval!: () => void;
+    const spawnWait = new Promise<void>((resolve) => (resolveSpawn = resolve));
+    const approvalRequested = new Promise<void>(
+      (resolve) => (notifyApproval = resolve)
+    );
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      async start(writer) {
+        await writer.write("initialize\n");
+      },
+      async sendUserMessage(text) {
+        writes.push(`user:${text}`);
+      },
+      observe(record) {
+        if (
+          typeof record === "object" &&
+          record !== null &&
+          "kind" in record &&
+          record.kind === "approval"
+        ) {
+          return [
+            {
+              kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
+              requestId: "pending-on-stop",
+              toolName: "Bash",
+              input: { command: "node script.js" },
+            },
+          ];
+        }
+        return [];
+      },
+      async answerApproval(_requestId, decision, message) {
+        writes.push(`answer:${decision}:${message}`);
+      },
+      close() {
+        writes.push("channel-close");
+      },
+    };
+    const provider = {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              writes.push(chunk);
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => {
+              writes.push("stdin-end");
+              callback?.();
+            },
+          });
+          options.onStdout?.('{"kind":"approval"}\n');
+          await spawnWait;
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+        isActive: () => active,
+        cancel: async () => {
+          active = false;
+          resolveSpawn();
+        },
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    const approvalContext: HeadlessApprovalExecutionContext = {
+      approvalPolicy: HEADLESS_APPROVAL_POLICIES.ASK,
+      approvalTimeoutMs: 30_000,
+      useApprovalControl: true,
+      requestApproval: (_request, signal) => {
+        notifyApproval();
+        return new Promise((resolve) => {
+          const onAbort = () =>
+            resolve({
+              decision: APPROVAL_DECISIONS.DENY,
+              message: HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+            });
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    };
+
+    const run = coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        workflowId: "workflow-1",
+        stepIndex: 0,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+      },
+      approvalContext
+    );
+    await approvalRequested;
+    await coordinator.cancel();
+    await run;
+
+    const answerIndex = writes.findIndex((entry) =>
+      entry.startsWith(`answer:${APPROVAL_DECISIONS.DENY}:`)
+    );
+    const endIndex = writes.indexOf("stdin-end");
+    assert.ok(answerIndex >= 0, `approval was not answered: ${writes}`);
+    assert.ok(endIndex > answerIndex, `stdin closed before denial: ${writes}`);
+    assert.strictEqual(writes.includes("channel-close"), true);
   });
 
   test("serializes headless steering and interrupt through the turn result", async () => {

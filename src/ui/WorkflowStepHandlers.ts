@@ -1,5 +1,6 @@
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import {
+  APPROVAL_DECISIONS,
   MESSAGE_TYPES,
   RUN_DEFINITION_DECISIONS,
   USER_FEEDBACK_SEVERITY,
@@ -20,6 +21,7 @@ import type {
   SeedNewRunMessage,
   PrepareNewRunMessage,
   InterruptHeadlessTurnMessage,
+  HeadlessApprovalResponseMessage,
   SendSteerMessage,
   SetStartPositionMessage,
   StartNewRunInsteadMessage,
@@ -150,6 +152,40 @@ export class WorkflowStepHandlers {
         id: `interrupt-turn-error-${Date.now()}`,
         severity: USER_FEEDBACK_SEVERITY.WARNING,
         message: diagnostic,
+      });
+    }
+  }
+
+  async handleHeadlessApprovalResponse(
+    ctx: DashboardClientContext,
+    message: HeadlessApprovalResponseMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    if (
+      message.decision !== APPROVAL_DECISIONS.ALLOW_ONCE &&
+      message.decision !== APPROVAL_DECISIONS.DENY
+    ) {
+      return;
+    }
+
+    const answered = orchestrator.respondToHeadlessApproval(
+      message.workflowId,
+      message.controlSessionId,
+      message.approvalId,
+      message.decision,
+      message.message
+    );
+    if (!answered) {
+      ctx.emit({
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: `headless-approval-error-${Date.now()}`,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: "That headless approval request is no longer pending.",
       });
     }
   }

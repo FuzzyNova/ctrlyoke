@@ -1,8 +1,13 @@
 import type {
   ApprovalDecision,
+  HeadlessApprovalPolicy,
   HeadlessControlObservationKind,
   HeadlessSteerDelivery,
 } from "../../../types/DashboardConstants";
+import type {
+  HeadlessApprovalRequestContext,
+  HeadlessApprovalResolution,
+} from "../../../types/WorkflowContextTypes";
 
 /** Serialized transport writer supplied once the child stdin is available. */
 export interface ControlWriter {
@@ -14,6 +19,12 @@ export type ControlObservation =
   | {
       kind: Extract<HeadlessControlObservationKind, "approval-request">;
       requestId: string;
+      toolName: string;
+      input: unknown;
+    }
+  | {
+      kind: Extract<HeadlessControlObservationKind, "model-question">;
+      requestId: string;
     }
   | {
       kind: Extract<HeadlessControlObservationKind, "turn-end">;
@@ -24,6 +35,19 @@ export type ControlObservation =
 export interface HeadlessControlSpawnShape {
   args?: readonly string[];
   env?: NodeJS.ProcessEnv;
+}
+
+export interface HeadlessControlChannelOptions {
+  approvalPolicy: HeadlessApprovalPolicy;
+  approvalTimeoutMs: number;
+  useApprovalControl: boolean;
+}
+
+export interface HeadlessApprovalExecutionContext extends HeadlessControlChannelOptions {
+  requestApproval?: (
+    request: HeadlessApprovalRequestContext,
+    signal: AbortSignal
+  ) => Promise<HeadlessApprovalResolution>;
 }
 
 /** Provider-owned protocol over a headless process's stdin/stdout. */

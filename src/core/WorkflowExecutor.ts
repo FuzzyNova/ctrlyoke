@@ -237,6 +237,7 @@ export interface WorkflowExecutionContext {
   statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
+  requestHeadlessApproval?: WorkflowContext["requestHeadlessApproval"];
   analyzeCompatibilityForPrompt?: WorkflowContext["analyzeCompatibilityForPrompt"];
   shouldShowCliCommand: boolean;
   dynamicQueueConfig: DynamicQueueConfig;
@@ -2744,6 +2745,7 @@ export class WorkflowExecutor {
           // this unset keeps first-attempt prompt text deterministic.
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
+          requestHeadlessApproval: context.requestHeadlessApproval,
           reportStatusMessage: (message, severity) =>
             void this.trackStatusMessage(context, target, message, severity),
           markNoTurnStarted: () => this.markNoTurnStarted(target),
@@ -5306,6 +5308,7 @@ export class WorkflowExecutor {
             endConditionResult: this.promptQueue.getEndConditionSummary(target),
             reportCompatibilityDiagnostics:
               context.reportCompatibilityDiagnostics,
+            requestHeadlessApproval: context.requestHeadlessApproval,
             reportStatusMessage: (message, severity) =>
               void this.trackStatusMessage(context, target, message, severity),
             markNoTurnStarted: () => this.markNoTurnStarted(target),

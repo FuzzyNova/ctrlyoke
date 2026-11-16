@@ -25,6 +25,7 @@ import type {
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
+  HEADLESS_APPROVAL_POLICIES,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import { normalizeAntigravityMcpServerId } from "../../utils/ToolPermissionUtils";
@@ -764,6 +765,46 @@ suite("Inline harness configuration regression tests", function () {
     defineShellProbeTests(CLAUDE, permissionModeShellCases(), () => tmpDir, {
       additionalArgs: "--setting-sources project",
     });
+
+    test(`${CLAUDE}: headless approval ask denies when no dashboard is connected`, function () {
+      const markerName = `${CLAUDE}-approval-not-run.txt`;
+      const markerPath = path.join(tmpDir, markerName);
+      const workflow = shellProbeWorkflow(
+        CLAUDE,
+        `${CLAUDE}-headless-approval`,
+        {
+          mode: "custom",
+          allowedTools: ["shell(echo:*)"],
+          deniedTools: ["write"],
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 5,
+        },
+        chainedCommand(
+          normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+          normalizedPath(markerPath)
+        ),
+        { additionalArgs: "--setting-sources project" }
+      );
+      const { result, toolEvents } = runToolProbe(
+        workflow,
+        tmpDir,
+        `${CLAUDE}-headless-approval`,
+        SHELL_PROBE_TIMEOUT_MS
+      );
+      const label = `${CLAUDE} (headless approval without dashboard)`;
+      if (logAndMaybeSkip(label, result)) return;
+      assertSuccessfulRun(label, result);
+      assert.ok(
+        toolEvents.includes(markerName),
+        `Claude never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+      );
+      assert.ok(
+        toolEvents.toLowerCase().includes("no dashboard"),
+        `the approval request did not receive the no-dashboard denial\n${toolEvents}`
+      );
+      assert.ok(!toolEvents.includes(SHELL_PROBE_RAN), toolEvents);
+      assert.ok(!fs.existsSync(markerPath), "the denied command ran");
+    });
   });
 
   // Headless only: Copilot has no per-run flag for interactive assisted
@@ -1490,6 +1531,45 @@ suite("Inline harness configuration regression tests", function () {
     // Headless `auto` also passes a bare `ShellTool` allow, or Qwen drops its
     // shell tool from the session; the judge still reviews each command.
     defineShellProbeTests(QWEN, permissionModeShellCases(), () => tmpDir);
+
+    test(`${QWEN}: headless approval ask denies when no dashboard is connected`, function () {
+      const markerName = `${QWEN}-approval-not-run.txt`;
+      const markerPath = path.join(tmpDir, markerName);
+      const workflow = shellProbeWorkflow(
+        QWEN,
+        `${QWEN}-headless-approval`,
+        {
+          mode: "custom",
+          allowedTools: ["shell(echo:*)"],
+          deniedTools: ["write"],
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 5,
+        },
+        chainedCommand(
+          normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+          normalizedPath(markerPath)
+        )
+      );
+      const { result, toolEvents } = runToolProbe(
+        workflow,
+        tmpDir,
+        `${QWEN}-headless-approval`,
+        SHELL_PROBE_TIMEOUT_MS
+      );
+      const label = `${QWEN} (headless approval without dashboard)`;
+      if (logAndMaybeSkip(label, result)) return;
+      assertSuccessfulRun(label, result);
+      assert.ok(
+        toolEvents.includes(markerName),
+        `Qwen never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+      );
+      assert.ok(
+        toolEvents.toLowerCase().includes("no dashboard"),
+        `the approval request did not receive the no-dashboard denial\n${toolEvents}`
+      );
+      assert.ok(!toolEvents.includes(SHELL_PROBE_RAN), toolEvents);
+      assert.ok(!fs.existsSync(markerPath), "the denied command ran");
+    });
 
     for (const permissionCase of [
       {

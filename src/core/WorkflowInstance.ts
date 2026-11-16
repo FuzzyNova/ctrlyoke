@@ -37,6 +37,7 @@ import {
   type TargetStreamingChunkData,
   type TargetStreamingEventsData,
 } from "./WorkflowExecutor";
+import { HeadlessApprovalPolicyService } from "./HeadlessApprovalPolicyService";
 import {
   PromptFile,
   PromptStep,
@@ -104,10 +105,15 @@ import {
   type QueuePosition,
   type TerminalEndReason,
   type WorkflowTelemetryOutcome,
+  type ApprovalDecision,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
-import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
+import type {
+  CliEvent,
+  CliOutput,
+  HeadlessApprovalRequestMessage,
+} from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import {
   reportWorkflowStarted,
@@ -138,6 +144,8 @@ import {
 import {
   getExecutionWorkspaceIdentity,
   type ExecutionWorkspace,
+  type HeadlessApprovalRequestContext,
+  type HeadlessApprovalResolution,
   type McpToolSkillRunContext,
 } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
@@ -389,6 +397,7 @@ export class WorkflowInstance
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
+  private readonly headlessApprovalPolicyService: HeadlessApprovalPolicyService;
   private readonly sessionActivityRecorder: SessionActivityRecorder;
   private readonly statusMessageReporter: StatusMessageReporter;
 
@@ -641,6 +650,10 @@ export class WorkflowInstance
     this.dashboardSink = dashboardSink
       ? new WorkflowTaggedSink(dashboardSink, this.id)
       : undefined;
+    this.headlessApprovalPolicyService = new HeadlessApprovalPolicyService(
+      (message) =>
+        this.dashboardSink?.updateHeadlessApprovalRequest?.(message) ?? false
+    );
 
     // Per-workflow dependencies
     this.promptFileParser = new PromptFileParser(
@@ -1251,6 +1264,7 @@ export class WorkflowInstance
     this.stopStopRequestPolling();
     this.promptFileWatcher.dispose();
     this.endConditionEvaluator.dispose();
+    this.headlessApprovalPolicyService.dispose();
     // Close any lingering terminals from the last run and release references.
     for (const prev of this.lastRunIntegrations) {
       prev.closeTerminal(TERMINAL_END_REASONS.CLOSED);
@@ -2173,6 +2187,15 @@ export class WorkflowInstance
       statusReporter: this.statusMessageReporter,
       reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
         this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
+      requestHeadlessApproval: (
+        request: HeadlessApprovalRequestContext,
+        signal: AbortSignal
+      ): Promise<HeadlessApprovalResolution> =>
+        this.headlessApprovalPolicyService.requestApproval(
+          request.policy,
+          request,
+          signal
+        ),
       analyzeCompatibilityForPrompt: (
         promptIndex,
         prompt,
@@ -4406,6 +4429,26 @@ export class WorkflowInstance
     throw new Error(
       "This headless harness session does not support turn interruption."
     );
+  }
+
+  respondToHeadlessApproval(
+    controlSessionId: string,
+    approvalId: string,
+    decision: ApprovalDecision,
+    message?: string
+  ): boolean {
+    return this.headlessApprovalPolicyService.respond(
+      controlSessionId,
+      approvalId,
+      decision,
+      message
+    );
+  }
+
+  replayPendingHeadlessApprovals(
+    send: (message: HeadlessApprovalRequestMessage) => void
+  ): void {
+    this.headlessApprovalPolicyService.replayPendingRequests(send);
   }
 
   private createIntegrationForMode(

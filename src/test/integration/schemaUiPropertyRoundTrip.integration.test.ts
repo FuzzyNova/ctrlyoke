@@ -15,6 +15,7 @@ import {
   COMPARE_SOURCE_OPTIONS_META,
   EXECUTION_MODE_OPTIONS_META,
   HARNESS_OPTIONS_META,
+  HEADLESS_APPROVAL_POLICY_OPTIONS_META,
   HOOK_EVENT_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
   PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
@@ -206,6 +207,8 @@ const SAMPLES: Record<string, unknown> = {
     mode: "custom",
     allowedTools: ["Bash"],
     deniedTools: ["Write"],
+    headlessApprovals: "ask",
+    headlessApprovalTimeoutSec: 120,
   },
   trustedExternalRoots: ["C:\\trusted\\workflow"],
   vars: { region: "us-east-1" },
@@ -446,7 +449,16 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["shell", ["${idPrefix}-shell"]],
   ["skills", ["settings-skills"]],
   ["timeoutSec", ["${idPrefix}-timeout"]],
-  ["toolPermissions", ["settings-permission-mode"]],
+  [
+    "toolPermissions",
+    [
+      "settings-permission-mode",
+      "settings-headless-approvals",
+      "settings-headless-approval-timeout",
+      "prop-headless-approvals",
+      "prop-headless-approval-timeout",
+    ],
+  ],
   ["trustedExternalRoots", ["settings-trusted-external-roots-mode"]],
   ["vars", ["settings-vars"]],
   ["worktree", ["settings-worktree-mode"]],
@@ -456,6 +468,10 @@ const UI_CONTROL_OPTOUTS = new Map<string, string>();
 
 const UI_ENUM_META = [
   { path: "toolPermissions.mode", meta: PERMISSION_MODE_OPTIONS_META },
+  {
+    path: "toolPermissions.headlessApprovals",
+    meta: HEADLESS_APPROVAL_POLICY_OPTIONS_META,
+  },
   { path: "executionMode", meta: EXECUTION_MODE_OPTIONS_META },
   { path: "harness", meta: HARNESS_OPTIONS_META },
   { path: "priorContext", meta: PRIOR_CONTEXT_KEYWORD_OPTIONS_META },
