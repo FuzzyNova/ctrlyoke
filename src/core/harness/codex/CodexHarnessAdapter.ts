@@ -30,7 +30,6 @@ import { gitWritableAdminDirs } from "../../../utils/GitUtils";
 import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
-import { UNSUPPORTED_HEADLESS_STEERING_CAPABILITY } from "../shared/HeadlessSteeringCapabilities";
 import {
   CliMcpConfigGenerator,
   sanitizeCodexConfigKeySegment,
@@ -72,6 +71,7 @@ import type {
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
@@ -105,6 +105,15 @@ const CODEX_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=0.129.0"]),
+} as const;
+
+const CODEX_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: capabilitySuiteVerification(
+    [">=0.146.0"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 /**
@@ -346,7 +355,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       },
       promptInputs: { images: CODEX_IMAGE_INPUT_CAPABILITY },
       headlessControl: {
-        steering: UNSUPPORTED_HEADLESS_STEERING_CAPABILITY,
+        steering: CODEX_HEADLESS_STEERING_CAPABILITY,
       },
     };
   }

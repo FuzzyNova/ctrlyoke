@@ -68,6 +68,7 @@ suite("Headless steering harness tests", function () {
   for (const harness of [
     HARNESS_IDS.CLAUDE_CLI,
     HARNESS_IDS.QWEN_CLI,
+    HARNESS_IDS.CODEX_CLI,
     HARNESS_IDS.ANTIGRAVITY_CLI,
   ] as const) {
     test(`${harness}: headless steering reaches the same step`, async function () {

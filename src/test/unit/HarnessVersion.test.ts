@@ -188,7 +188,11 @@ const FEATURES_UNVERIFIED_AT_MINIMUM: Partial<Record<HarnessId, string[]>> = {
     "permissions.autoMode",
     HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
   ],
-  [HARNESS_IDS.CODEX_CLI]: ["sandbox.terminal", "permissions.autoMode"],
+  [HARNESS_IDS.CODEX_CLI]: [
+    "sandbox.terminal",
+    "permissions.autoMode",
+    HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
+  ],
   // Only 1.4.4 has been tested; the agy changelog implies the agent could
   // view PNG/JPEG by about 1.2.15. Test at the minimum, then remove this.
   [HARNESS_IDS.ANTIGRAVITY_CLI]: [

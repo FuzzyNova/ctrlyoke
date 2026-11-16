@@ -80,14 +80,15 @@ function approvalToolName(method: string): string {
 /** JSON-RPC control transport for a single Codex app-server thread and turn. */
 export class CodexAppServerHeadlessControlChannel implements IHeadlessControlChannel {
   readonly spawnShape = {};
-  readonly steerDelivery = HEADLESS_STEER_DELIVERIES.QUEUE;
-  readonly supportsSteering = false;
+  readonly steerDelivery = HEADLESS_STEER_DELIVERIES.INJECT;
 
   private writer?: ControlWriter;
   private nextRequestId = 1;
   private threadId?: string;
+  private activeTurnId?: string;
   private initialPromptSent = false;
   private turnCompleted = false;
+  private interruptRequested = false;
   private readonly pendingRpc = new Map<string, PendingRpcRequest>();
   private readonly pendingServerRequests = new Map<
     string,
@@ -149,21 +150,41 @@ export class CodexAppServerHeadlessControlChannel implements IHeadlessControlCha
     if (!this.threadId) {
       throw new Error("Codex app-server thread has not started");
     }
-    if (this.initialPromptSent) {
-      throw new Error("Codex app-server headless steering is not enabled");
+    if (!this.initialPromptSent) {
+      this.initialPromptSent = true;
+      this.turnCompleted = false;
+      const result = await this.request(CODEX_APP_SERVER_METHODS.TURN_START, {
+        threadId: this.threadId,
+        input: [
+          { type: "text", text, textElements: [] },
+          ...(this.options.context?.imageFilePaths ?? []).map((path) => ({
+            type: "localImage",
+            path,
+          })),
+        ],
+      });
+      this.captureTurnId(result);
+      return;
     }
-    this.initialPromptSent = true;
-    const input: Record<string, unknown>[] = [
-      { type: "text", text, textElements: [] },
-      ...(this.options.context?.imageFilePaths ?? []).map((path) => ({
-        type: "localImage",
-        path,
-      })),
-    ];
-    await this.request(CODEX_APP_SERVER_METHODS.TURN_START, {
-      threadId: this.threadId,
-      input,
-    });
+
+    const turnId = this.activeTurnId;
+    if (this.turnCompleted || !turnId) {
+      throw new Error(
+        "Codex turn completed before the steer could be sent; the message was not queued. Start a new step to send it."
+      );
+    }
+
+    try {
+      await this.request(CODEX_APP_SERVER_METHODS.TURN_STEER, {
+        threadId: this.threadId,
+        input: [{ type: "text", text, textElements: [] }],
+        expectedTurnId: turnId,
+      });
+    } catch (error) {
+      throw new Error(
+        `Codex could not steer the running turn; it may have just completed, and the message was not queued. Start a new step to send it. (${getErrorMessage(error)})`
+      );
+    }
   }
 
   observe(record: unknown): ControlObservation[] {
@@ -185,10 +206,25 @@ export class CodexAppServerHeadlessControlChannel implements IHeadlessControlCha
             )
           );
         } else {
+          if (pending.method === CODEX_APP_SERVER_METHODS.TURN_START) {
+            this.captureTurnId(record.result);
+          }
           pending.resolve(record.result);
         }
         return [];
       }
+    }
+
+    if (
+      record.method === CODEX_APP_SERVER_METHODS.TURN_STARTED &&
+      isRecord(record.params) &&
+      record.params.threadId === this.threadId &&
+      isRecord(record.params.turn) &&
+      typeof record.params.turn.id === "string" &&
+      !this.turnCompleted
+    ) {
+      this.activeTurnId = record.params.turn.id;
+      return [];
     }
 
     if (
@@ -198,10 +234,37 @@ export class CodexAppServerHeadlessControlChannel implements IHeadlessControlCha
       !this.turnCompleted
     ) {
       this.turnCompleted = true;
-      return [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }];
+      this.activeTurnId = undefined;
+      const interrupted = this.interruptRequested;
+      this.interruptRequested = false;
+      return [
+        {
+          kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
+          ...(interrupted ? { interrupted: true } : {}),
+        },
+      ];
     }
 
     return [];
+  }
+
+  async interrupt(): Promise<void> {
+    const threadId = this.threadId;
+    const turnId = this.activeTurnId;
+    if (!threadId || !turnId || this.turnCompleted) {
+      throw new Error("There is no running Codex turn to interrupt");
+    }
+
+    this.interruptRequested = true;
+    try {
+      await this.request(CODEX_APP_SERVER_METHODS.TURN_INTERRUPT, {
+        threadId,
+        turnId,
+      });
+    } catch (error) {
+      this.interruptRequested = false;
+      throw error;
+    }
   }
 
   async answerApproval(
@@ -262,11 +325,21 @@ export class CodexAppServerHeadlessControlChannel implements IHeadlessControlCha
 
   close(): void {
     this.writer = undefined;
+    this.activeTurnId = undefined;
     for (const pending of this.pendingRpc.values()) {
       pending.reject(new Error("Codex app-server control channel closed"));
     }
     this.pendingRpc.clear();
     this.pendingServerRequests.clear();
+  }
+
+  private captureTurnId(result: unknown): void {
+    if (this.turnCompleted || !isRecord(result) || !isRecord(result.turn)) {
+      return;
+    }
+    if (typeof result.turn.id === "string" && result.turn.id.length > 0) {
+      this.activeTurnId = result.turn.id;
+    }
   }
 
   private observeServerRequest(

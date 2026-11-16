@@ -3,6 +3,7 @@ import { suite, test } from "mocha";
 import {
   APPROVAL_DECISIONS,
   HEADLESS_CONTROL_OBSERVATION_KINDS,
+  HEADLESS_STEER_DELIVERIES,
 } from "../../types/DashboardConstants";
 import { CTRLYOKE_VERSION } from "../../utils/BuildConfig";
 import type { ControlWriter } from "../../core/harness/shared/IHeadlessControlChannel";
@@ -101,13 +102,15 @@ suite("CodexAppServerHeadlessControlChannel", () => {
         { type: "localImage", path: "/workspace/image.png" },
       ],
     });
-    await settlePendingRequest(channel, writer, 3, {});
+    await settlePendingRequest(channel, writer, 3, {
+      turn: { id: "turn-new" },
+    });
     await sending;
 
     assert.deepStrictEqual(
       channel.observe({
         method: CODEX_APP_SERVER_METHODS.TURN_COMPLETED,
-        params: { threadId: "thread-new" },
+        params: { threadId: "thread-new", turn: { id: "turn-new" } },
       }),
       [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }]
     );
@@ -118,6 +121,72 @@ suite("CodexAppServerHeadlessControlChannel", () => {
       }),
       []
     );
+    channel.close();
+  });
+
+  test("steers and interrupts the active turn, and rejects a late steer", async () => {
+    const writer = new RecordingControlWriter();
+    const channel = new CodexAppServerHeadlessControlChannel();
+    const starting = channel.start(writer);
+
+    await settlePendingRequest(channel, writer, 0, {});
+    await waitForWriteCount(writer, 3);
+    await settlePendingRequest(channel, writer, 2, {
+      thread: { id: "thread-control" },
+    });
+    await starting;
+    assert.strictEqual(channel.steerDelivery, HEADLESS_STEER_DELIVERIES.INJECT);
+
+    const initialPrompt = channel.sendUserMessage("initial prompt");
+    const turnStart = writer.read(3);
+    assert.strictEqual(turnStart.method, CODEX_APP_SERVER_METHODS.TURN_START);
+    await settlePendingRequest(channel, writer, 3, {
+      turn: { id: "turn-running" },
+    });
+    await initialPrompt;
+
+    const steering = channel.sendUserMessage("steer text");
+    const turnSteer = writer.read(4);
+    assert.strictEqual(turnSteer.method, CODEX_APP_SERVER_METHODS.TURN_STEER);
+    assert.deepStrictEqual(turnSteer.params, {
+      threadId: "thread-control",
+      input: [{ type: "text", text: "steer text", textElements: [] }],
+      expectedTurnId: "turn-running",
+    });
+    await settlePendingRequest(channel, writer, 4, {});
+    await steering;
+
+    const interrupting = channel.interrupt();
+    const turnInterrupt = writer.read(5);
+    assert.strictEqual(
+      turnInterrupt.method,
+      CODEX_APP_SERVER_METHODS.TURN_INTERRUPT
+    );
+    assert.deepStrictEqual(turnInterrupt.params, {
+      threadId: "thread-control",
+      turnId: "turn-running",
+    });
+    await settlePendingRequest(channel, writer, 5, {});
+    await interrupting;
+
+    assert.deepStrictEqual(
+      channel.observe({
+        method: CODEX_APP_SERVER_METHODS.TURN_COMPLETED,
+        params: { threadId: "thread-control", turn: { id: "turn-running" } },
+      }),
+      [
+        {
+          kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
+          interrupted: true,
+        },
+      ]
+    );
+    const writeCountAfterCompletion = writer.writes.length;
+    await assert.rejects(
+      channel.sendUserMessage("too late"),
+      /turn completed before the steer.*not queued/
+    );
+    assert.strictEqual(writer.writes.length, writeCountAfterCompletion);
     channel.close();
   });
 
@@ -187,7 +256,7 @@ suite("CodexAppServerHeadlessControlChannel", () => {
     channel.close();
   });
 
-  test("answers command, file-change, and permission requests with scoped decisions", async () => {
+  test("answers Codex approvals once or declines without a session-wide grant", async () => {
     const writer = new RecordingControlWriter();
     const channel = new CodexAppServerHeadlessControlChannel();
     const requests = [
@@ -195,19 +264,52 @@ suite("CodexAppServerHeadlessControlChannel", () => {
         id: 11,
         method: CODEX_APP_SERVER_METHODS.COMMAND_APPROVAL,
         params: { command: "node script.js" },
+        decision: APPROVAL_DECISIONS.ALLOW_ONCE,
+        expectedResponse: { decision: "accept" },
       },
       {
         id: 12,
-        method: CODEX_APP_SERVER_METHODS.FILE_CHANGE_APPROVAL,
-        params: { reason: "write outside the workspace" },
+        method: CODEX_APP_SERVER_METHODS.COMMAND_APPROVAL,
+        params: { command: "node denied.js" },
+        decision: APPROVAL_DECISIONS.DENY,
+        expectedResponse: { decision: "decline" },
       },
       {
         id: 13,
+        method: CODEX_APP_SERVER_METHODS.FILE_CHANGE_APPROVAL,
+        params: { reason: "write outside the workspace" },
+        decision: APPROVAL_DECISIONS.ALLOW_ONCE,
+        expectedResponse: { decision: "accept" },
+      },
+      {
+        id: 14,
+        method: CODEX_APP_SERVER_METHODS.FILE_CHANGE_APPROVAL,
+        params: { reason: "denied file change" },
+        decision: APPROVAL_DECISIONS.DENY,
+        expectedResponse: { decision: "decline" },
+      },
+      {
+        id: 15,
         method: CODEX_APP_SERVER_METHODS.PERMISSIONS_APPROVAL,
         params: {
           reason: "temporary write access",
           permissions: { fileSystem: { write: ["/workspace"] } },
         },
+        decision: APPROVAL_DECISIONS.ALLOW_ONCE,
+        expectedResponse: {
+          permissions: { fileSystem: { write: ["/workspace"] } },
+          scope: "turn",
+        },
+      },
+      {
+        id: 16,
+        method: CODEX_APP_SERVER_METHODS.PERMISSIONS_APPROVAL,
+        params: {
+          reason: "denied temporary write access",
+          permissions: { fileSystem: { write: ["/workspace"] } },
+        },
+        decision: APPROVAL_DECISIONS.DENY,
+        expectedResponse: { permissions: {}, scope: "turn" },
       },
     ];
 
@@ -215,6 +317,9 @@ suite("CodexAppServerHeadlessControlChannel", () => {
     assert.deepStrictEqual(
       observations.map((items) => items[0]?.kind),
       [
+        HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
+        HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
+        HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
         HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
         HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
         HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
@@ -239,19 +344,12 @@ suite("CodexAppServerHeadlessControlChannel", () => {
       }
       await channel.answerApproval(
         observation.requestId,
-        index === 2 ? APPROVAL_DECISIONS.ALLOW_ONCE : APPROVAL_DECISIONS.DENY,
+        request.decision,
         "ctrlyoke denied this request"
       );
       const response = writer.read(writer.writes.length - 1);
       assert.strictEqual(response.id, request.id);
-      if (index < 2) {
-        assert.deepStrictEqual(response.result, { decision: "decline" });
-      } else {
-        assert.deepStrictEqual(response.result, {
-          permissions: { fileSystem: { write: ["/workspace"] } },
-          scope: "turn",
-        });
-      }
+      assert.deepStrictEqual(response.result, request.expectedResponse);
     }
     channel.close();
   });

@@ -366,6 +366,10 @@ suite("CliTransportCoordinator", () => {
     let maxConcurrentWrites = 0;
     let closed = false;
     const calls: string[] = [];
+    let resolvePromptWrite!: () => void;
+    const promptWrite = new Promise<void>(
+      (resolve) => (resolvePromptWrite = resolve)
+    );
     let writerHandle:
       { write(text: string): Promise<void>; end(): Promise<void> } | undefined;
     const channel = {
@@ -417,6 +421,7 @@ suite("CliTransportCoordinator", () => {
         setTimeout(() => {
           writes.push(chunk);
           activeWrites--;
+          if (chunk === "user:prompt\n") resolvePromptWrite();
           callback?.();
         }, 1);
         return true;
@@ -440,7 +445,7 @@ suite("CliTransportCoordinator", () => {
         ) => {
           assert.deepStrictEqual(args, ["prompt", "--control"]);
           options.onStdinReady?.(rawWriter);
-          await new Promise((resolve) => setTimeout(resolve, 5));
+          await promptWrite;
           options.onStdout?.('{"kind":"approval"}\n{"kind":"turn-end"}\n');
           return { stdout: "", stderr: "", exitCode: 0 };
         },
@@ -627,6 +632,11 @@ suite("CliTransportCoordinator", () => {
     const targetOpened = new Promise<HeadlessControlTargetMessage>(
       (resolve) => (resolveTargetOpen = resolve)
     );
+    let resolveSteerWriteStarted!: () => void;
+    const steerWriteStarted = new Promise<void>(
+      (resolve) => (resolveSteerWriteStarted = resolve)
+    );
+    let finishSteerWrite!: () => void;
     const spawnResult = new Promise<{
       stdout: string;
       stderr: string;
@@ -660,7 +670,8 @@ suite("CliTransportCoordinator", () => {
             ) => {
               writes.push(chunk);
               if (chunk.includes("steer text")) {
-                setTimeout(() => callback?.(), 5);
+                finishSteerWrite = () => callback?.();
+                resolveSteerWriteStarted();
               } else {
                 callback?.();
               }
@@ -718,11 +729,12 @@ suite("CliTransportCoordinator", () => {
       openedTarget.controlSessionId,
       "steer text"
     );
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await steerWriteStarted;
     assert.deepStrictEqual(
       events.filter((event) => event.type === CLI_EVENT_TYPES.USER_STEER),
       []
     );
+    finishSteerWrite();
     assert.strictEqual(await sending, true);
     const receipts = events.filter(
       (event) => event.type === CLI_EVENT_TYPES.USER_STEER

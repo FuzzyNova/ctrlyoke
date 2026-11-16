@@ -78,7 +78,7 @@ turn. A **queue** runs it as the next turn. **Cancel-and-replace** aborts the ru
 | --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------- |
 | Claude Code 2.1.325   | `-p --input-format stream-json`; approvals add `--permission-prompt-tool stdio` + `initialize` | **steer** (mid-tool, same turn)                        | `control_request` `can_use_tool`; reply allow (+`updatedInput`) / deny (+`message`)              | probed          |
 | Qwen Code 0.27.1      | stream-json **SDK mode**: `initialize` first, no positional prompt                | **queue** (next turn)                                  | `can_use_tool` (same shape as Claude); 60 s default timeout, up to 600 s                         | probed + source |
-| Codex 0.169.0         | `codex app-server` JSON-RPC v2                                                    | **not exposed by ctrlyoke**; `turn/steer` deferred     | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/…` | probed          |
+| Codex 0.169.0         | `codex app-server` JSON-RPC v2                                                    | **steer** (`turn/steer`)                               | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/…` | probed          |
 | OpenCode 2.2.6        | plugin `permission.hook("evaluate")` + `ctx.session.prompt`, or `opencode serve`  | **steer** (`delivery: "steer"`, default) or queue      | `permission.asked`; reply `once`/`always`/`reject` (+`message`)                                  | source only     |
 | Copilot CLI 1.0.112   | `--acp`                                                                           | **cancel-and-replace** (probed)                        | `session/request_permission` (`allow_once`/`allow_always`/`reject_once`)                         | probed          |
 |                       | hidden `--server --stdio` (copilot-sdk protocol)                                  | **steer** (`session.send` `mode: "immediate"`, probed) | `permission.request` exists, but routing it to the client was not achieved                       | probed          |
@@ -470,8 +470,8 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    queues as a distinct turn/result and EOF after the last result exits cleanly; older versions
    are not gated without evidence they lack the protocol. The shared compatibility matrix declares
    steering support for Claude, Qwen and Antigravity, backed by the live steering suite.
-5. **[Done] Codex over app-server (implemented and live-verified on Codex 0.169.0).** Headless
-   Codex 0.146.0 and later uses `codex app-server`; older versions retain the `codex exec` path.
+5. **[Done] Codex over app-server, steering, interrupt and `ask` approvals (live-verified on Codex 0.169.0).**
+   Headless Codex 0.146.0 and later uses `codex app-server`; older versions retain the `codex exec` path.
    The implementation reuses `CodexAppServerClient`'s version gate:
    - Spawn `codex app-server` with the process-level `-c` args for hooks, `hooks.state`, model,
      sandbox and approval policy, then `initialize` with `experimentalApi: true`. Exec-only
@@ -482,11 +482,14 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
      Codex treats a requested thread cwd as a project-trust grant. Resume uses the exact session ID;
      a live `codex exec resume <app-server-thread-id>` probe confirmed compatibility.
    - Handle command, file-change and permission approval requests. Custom uses Deny by default;
-     `headlessApprovals: ask` routes requests to the dashboard. App-server denials do not support a
-     custom denial message, and Allow once for permissions is scoped to the turn.
-   - Headless steering is deliberately not exposed in this stage. Close the channel after
-     `turn/completed`; later steering work can use `turn/steer` without changing the app-server
-     execution gate.
+     `headlessApprovals: ask` routes requests to the dashboard. The configured policy timeout
+     applies directly because Codex has no client-side approval timeout. Allow once for
+     permissions is scoped to the turn. App-server denials cannot carry a custom message, so the
+     optional denial message remains in the dashboard approval card and is not sent to Codex.
+   - Expose in-turn steering through `turn/steer` with the active `expectedTurnId` and `INJECT`
+     delivery, and interruption through `turn/interrupt`. If the turn completes before a steer is
+     accepted, report a clear error that the message was not queued; do not silently start a
+     follow-up turn.
    - Output remains sourced from the Codex rollout log (`headlessSource = LOG`), not app-server
      stdout. The parser promotes rollout `task_complete.error` for failure classification and
      records app-server `SubAgentActivity`; the shared follower remains alive through the response
@@ -501,7 +504,7 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
 
 Each stage that publishes a capability adds its declaration and live-case evidence, so the
 compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Headless steering is available for
-Claude Code, Qwen Code and Antigravity when their live control channels are open.
+Claude Code, Codex CLI, Qwen Code and Antigravity when their live control channels are open.
 
 ## Version requirements
 
@@ -535,6 +538,8 @@ Resolved 2026-11-15, with the Claude Stage 2a probes resolved on 2026-11-16. The
 - **Codex rollout parity.** Resolved in Stage 5: rollout output and session errors are read from
   Codex's log, and resuming by the app-server thread ID was live-verified. Gate at 0.146 (see
   "Version requirements").
+- **Codex steer/completion race (Stage 5).** If the active turn completes before `turn/steer` is
+  accepted, report that the message was not queued; do not fall back to a later `turn/start`.
 - **`ask` timeout** (Nathan): deny with a message.
 - **"Interrupt turn".** Yes, as a small follow-up after Stage 2. Claude/Qwen `interrupt` and
   Codex `turn/interrupt` keep the process and session, which is gentler than Stop.

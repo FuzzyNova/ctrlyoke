@@ -37,6 +37,7 @@ import {
 } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { detectOpenCodeV2 } from "../../core/harness/opencode/OpenCodeVersion";
 import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
+import { isCodexAppServerVersionSupported } from "../../core/harness/codex/CodexAppServerClient";
 import { detectHarness } from "../../core/harness/shared/HarnessDetection";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { versionSatisfies } from "../../utils/HarnessVersion";
@@ -1201,6 +1202,70 @@ suite("Inline harness configuration regression tests", function () {
   });
 
   suite(CODEX, function () {
+    test(`${CODEX}: headless approval ask denies when no dashboard is connected`, async function () {
+      const detection = await detectHarness(
+        IntegrationFactory.createCapabilityProvider(CODEX)
+      );
+      if (!detection.available) this.skip();
+      if (!isCodexAppServerVersionSupported(detection.rawVersion)) {
+        console.log(
+          `  ⚠  ${CODEX} (headless approval ask) — SKIPPED (app-server requires 0.146.0; installed ${detection.rawVersion ?? "unknown"})`
+        );
+        this.skip();
+      }
+
+      const outsideDir = fs.mkdtempSync(
+        path.join(os.homedir(), ".cy-codex-ask-")
+      );
+      const outsidePath = path.join(outsideDir, "codex-ask-denied.txt");
+      fs.writeFileSync(
+        path.join(tmpDir, OUTSIDE_WRITE_SCRIPT),
+        `require("fs").writeFileSync(${JSON.stringify(outsidePath)}, "approval-marker");\n`
+      );
+      const label = "codex-headless-approval-ask";
+      try {
+        const { result, toolEvents } = runToolProbe(
+          {
+            harness: CODEX,
+            model: HARNESS_MODELS[CODEX],
+            sandbox: true,
+            toolPermissions: {
+              mode: "custom",
+              allowedTools: [],
+              deniedTools: [],
+              headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+              headlessApprovalTimeoutSec: 5,
+            },
+            steps: [
+              {
+                name: label,
+                prompt: `Run exactly this shell command once and request approval to run it outside the sandbox: node ${OUTSIDE_WRITE_SCRIPT}. If approval is denied, stop and do not retry or create the file another way.`,
+              },
+            ],
+          },
+          tmpDir,
+          label,
+          SHELL_PROBE_TIMEOUT_MS
+        );
+        if (logAndMaybeSkip(`${CODEX} (${label})`, result)) return;
+        assertSuccessfulRun(`${CODEX} (${label})`, result);
+        assert.ok(
+          toolEvents.includes(OUTSIDE_WRITE_SCRIPT),
+          `Codex never attempted the escalated command, so the case proves nothing\nstdout: ${result.stdout}`
+        );
+        assert.ok(
+          !fs.existsSync(outsidePath),
+          "the command ran without an approval"
+        );
+      } finally {
+        fs.rmSync(outsideDir, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+        });
+      }
+    });
+
     test("interactive completion uses inline hooks without .codex/hooks.json", async function () {
       const outputPath = path.join(tmpDir, "codex-inline-stop.jsonl");
       const result = await withIsolatedCodexHome([tmpDir], () =>

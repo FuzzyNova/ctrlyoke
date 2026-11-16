@@ -19,6 +19,7 @@ import {
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
 import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
 import {
+  HEADLESS_APPROVAL_POLICIES,
   PERMISSION_MODES,
   SANDBOX_MODES,
   type SandboxMode,
@@ -92,6 +93,44 @@ suite("CodexHarnessAdapter", () => {
     const legacyArgs = await buildArgs("0.145.9");
     assert.ok(legacyArgs.includes("exec"));
     assert.ok(legacyArgs.includes("--json"));
+  });
+
+  test("declares in-turn headless steering for app-server Codex", () => {
+    const steering = new CodexHarnessAdapter().capabilities.headlessControl
+      ?.steering;
+    assert.strictEqual(steering?.fidelity, "exact");
+    assert.strictEqual(steering?.mechanism, "native");
+    assert.deepStrictEqual(steering?.verification?.verifiedVersions, [
+      ">=0.146.0",
+    ]);
+  });
+
+  test("headless Ask uses app-server on-request approvals", async () => {
+    const provider = new CodexHarnessAdapter(undefined, {
+      getVersion: async () => "0.169.0",
+    });
+    const args = await provider.buildCliArgs(
+      {} as any,
+      false,
+      "/extension",
+      undefined,
+      undefined,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: {
+          toolPermissions: {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: [],
+            deniedTools: [],
+            headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          },
+        },
+      } as any
+    );
+
+    assert.ok(args.includes("app-server"));
+    assert.ok(args.includes('approval_policy="on-request"'));
   });
 
   test("translates exec launch flags into app-server config overrides", () => {

@@ -228,6 +228,11 @@ describe("useRunDispatchTargets", () => {
 
   it.each([
     [
+      HARNESS_IDS.CODEX_CLI,
+      HEADLESS_STEER_DELIVERIES.INJECT,
+      "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
+    ],
+    [
       HARNESS_IDS.CLAUDE_CLI,
       HEADLESS_STEER_DELIVERIES.INJECT,
       "Sends to the live Claude Code session (step 3). Prompt overrides are ignored.",
