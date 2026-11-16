@@ -420,7 +420,9 @@ suite("ExecutionPlanBuilder", () => {
       ["shots/diagram.png"]
     );
     const plan = await createBuilder(new CodexHarnessAdapter()).plan(session);
-    const promptIndex = plan.cliArgs.indexOf("Describe shots/diagram.png");
+    // Codex reads the prompt from stdin; `-` holds its positional slot, so
+    // the greedy `--image` values must still follow it.
+    const promptIndex = plan.cliArgs.indexOf("-");
     const imageFlagIndex = plan.cliArgs.indexOf("--image");
 
     assert.ok(promptIndex >= 0 && promptIndex < imageFlagIndex);

@@ -29,27 +29,35 @@ suite("CLI provider argument characterization", () => {
     );
   });
 
-  test("preserves Copilot headless argument order", () => {
-    assert.deepStrictEqual(
-      new CopilotHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
-      [
-        "--output-format",
-        "json",
-        "--prompt",
-        "prompt text",
-        "--model",
-        "model-x",
-        "--add-dir",
-        "/workspace",
-      ]
+  test("keeps the Copilot headless prompt out of argv for stdin delivery", () => {
+    const provider = new CopilotHarnessAdapter();
+    assert.strictEqual(
+      provider.config.headlessPromptDelivery,
+      HEADLESS_PROMPT_DELIVERIES.STDIN
     );
+    assert.deepStrictEqual(provider.buildHeadlessArgs(baseArgs, prompt), [
+      "--output-format",
+      "json",
+      "--model",
+      "model-x",
+      "--add-dir",
+      "/workspace",
+    ]);
   });
 
-  test("preserves Codex headless argument order", () => {
-    assert.deepStrictEqual(
-      new CodexHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
-      ["--model", "model-x", "--add-dir", "/workspace", "prompt text"]
+  test("reads the Codex headless prompt from stdin with `-`", () => {
+    const provider = new CodexHarnessAdapter();
+    assert.strictEqual(
+      provider.config.headlessPromptDelivery,
+      HEADLESS_PROMPT_DELIVERIES.STDIN
     );
+    assert.deepStrictEqual(provider.buildHeadlessArgs(baseArgs, prompt), [
+      "--model",
+      "model-x",
+      "--add-dir",
+      "/workspace",
+      "-",
+    ]);
   });
 
   test("keeps the OpenCode headless prompt out of argv for stdin delivery", () => {
@@ -68,11 +76,10 @@ suite("CLI provider argument characterization", () => {
     ]);
   });
 
-  test("preserves Qwen headless argument order", () => {
+  test("keeps the Qwen headless prompt out of argv for its control channel", () => {
     assert.deepStrictEqual(
       new QwenHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
       [
-        "prompt text",
         "--output-format",
         "stream-json",
         "--input-format",
@@ -85,19 +92,19 @@ suite("CLI provider argument characterization", () => {
     );
   });
 
-  test("preserves Antigravity headless argument order", () => {
-    assert.deepStrictEqual(
-      new AntigravityHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
-      [
-        "--print",
-        "prompt text",
-        "--output-format",
-        "stream-json",
-        "--model",
-        "model-x",
-        "--add-dir",
-        "/workspace",
-      ]
+  test("keeps the Antigravity headless prompt out of argv for stdin delivery", () => {
+    const provider = new AntigravityHarnessAdapter();
+    assert.strictEqual(
+      provider.config.headlessPromptDelivery,
+      HEADLESS_PROMPT_DELIVERIES.STDIN
     );
+    assert.deepStrictEqual(provider.buildHeadlessArgs(baseArgs, prompt), [
+      "--output-format",
+      "stream-json",
+      "--model",
+      "model-x",
+      "--add-dir",
+      "/workspace",
+    ]);
   });
 });

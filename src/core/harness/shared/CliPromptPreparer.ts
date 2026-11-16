@@ -183,7 +183,8 @@ export class CliPromptPreparer {
     const harnessId =
       resolvedProperties?.harness ?? ConfigurationUtils.getIntegrationMode();
     const executionMode =
-      resolvedProperties?.executionMode ?? ConfigurationUtils.getCliExecutionMode();
+      resolvedProperties?.executionMode ??
+      ConfigurationUtils.getCliExecutionMode();
     const ctrlyokeMcpModeDiagnostics =
       resolvedProperties?.ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL &&
       resolvedProperties !== undefined &&
@@ -1084,7 +1085,10 @@ export class CliPromptPreparer {
     const transform = (text: string) =>
       this.deps.transformInlinedGeneratedPrompt?.(text) ?? text;
     const transformedContent = new Map(
-      sectionsToInline.map((section) => [section.category, transform(section.content)])
+      sectionsToInline.map((section) => [
+        section.category,
+        transform(section.content),
+      ])
     );
     const selectedForFallback = new Set<InlineSection>();
     const getInlineLength = () => {
@@ -1092,7 +1096,8 @@ export class CliPromptPreparer {
         .filter((section) => !selectedForFallback.has(section))
         .map((section) => transformedContent.get(section.category) ?? "")
         .join("\n\n");
-      return `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n${inlineContent}\n</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`.length;
+      return `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n${inlineContent}\n</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`
+        .length;
     };
     if (getInlineLength() > MAX_INLINE_GENERATED_PROMPT_CHARS) {
       for (const section of [...sectionsToInline].sort((left, right) => {
@@ -1211,7 +1216,9 @@ export class CliPromptPreparer {
 
     const inlineBody = sectionsToInline
       .filter((section) => !selectedForFallback.has(section))
-      .map((section) => transformedContent.get(section.category) ?? section.content)
+      .map(
+        (section) => transformedContent.get(section.category) ?? section.content
+      )
       .join("\n\n");
     let rootContent = inlineBody;
     if (

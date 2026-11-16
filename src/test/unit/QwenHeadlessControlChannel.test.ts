@@ -31,7 +31,10 @@ suite("QwenHeadlessControlChannel", () => {
       request: { subtype: string };
     };
     assert.strictEqual(initialize.type, QWEN_CONTROL.REQUEST_TYPE);
-    assert.strictEqual(initialize.request.subtype, QWEN_CONTROL.INITIALIZE_SUBTYPE);
+    assert.strictEqual(
+      initialize.request.subtype,
+      QWEN_CONTROL.INITIALIZE_SUBTYPE
+    );
     assert.strictEqual(channel.steerDelivery, HEADLESS_STEER_DELIVERIES.QUEUE);
 
     channel.observe({
@@ -92,12 +95,18 @@ suite("QwenHeadlessControlChannel", () => {
       APPROVAL_DECISIONS.DENY,
       "ctrlyoke denied this request"
     );
+    // Qwen's ControlDispatcher.handleControlResponse reads the request id and
+    // subtype from `response`, and the permission payload from
+    // `response.response`; any other shape is dropped and times out.
     assert.deepStrictEqual(JSON.parse(writes[1]), {
       type: QWEN_CONTROL.RESPONSE_TYPE,
-      request_id: "approval-7",
       response: {
-        behavior: QWEN_CONTROL.DENY_BEHAVIOR,
-        message: "ctrlyoke denied this request",
+        subtype: QWEN_CONTROL.SUCCESS_SUBTYPE,
+        request_id: "approval-7",
+        response: {
+          behavior: QWEN_CONTROL.DENY_BEHAVIOR,
+          message: "ctrlyoke denied this request",
+        },
       },
     });
     assert.deepStrictEqual(channel.observe({ type: QWEN_EVENT_TYPES.RESULT }), [

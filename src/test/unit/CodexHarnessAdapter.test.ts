@@ -99,7 +99,14 @@ suite("CodexHarnessAdapter", () => {
     );
     assert.deepStrictEqual(
       provider.buildHeadlessArgs(
-        ["--model", "gpt-5.2-codex", "resume", "thread_abc123", "--image", "shot.png"],
+        [
+          "--model",
+          "gpt-5.2-codex",
+          "resume",
+          "thread_abc123",
+          "--image",
+          "shot.png",
+        ],
         "prompt"
       ),
       [

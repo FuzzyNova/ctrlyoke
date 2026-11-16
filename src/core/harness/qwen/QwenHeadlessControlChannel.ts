@@ -147,10 +147,13 @@ export class QwenHeadlessControlChannel implements IHeadlessControlChannel {
     await this.writer.write(
       `${JSON.stringify({
         type: QWEN_CONTROL.RESPONSE_TYPE,
-        request_id: requestId,
         response: {
-          behavior: QWEN_CONTROL.DENY_BEHAVIOR,
-          message,
+          subtype: QWEN_CONTROL.SUCCESS_SUBTYPE,
+          request_id: requestId,
+          response: {
+            behavior: QWEN_CONTROL.DENY_BEHAVIOR,
+            message,
+          },
         },
       })}\n`
     );

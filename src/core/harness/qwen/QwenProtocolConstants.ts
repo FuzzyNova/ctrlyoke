@@ -13,6 +13,7 @@ export const QWEN_CONTROL = {
   USER_TYPE: "user",
   INITIALIZE_SUBTYPE: "initialize",
   CAN_USE_TOOL_SUBTYPE: "can_use_tool",
+  SUCCESS_SUBTYPE: "success",
   ERROR_SUBTYPE: "error",
   USER_ROLE: "user",
   DENY_BEHAVIOR: "deny",

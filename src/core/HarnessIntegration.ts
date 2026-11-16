@@ -951,11 +951,15 @@ export abstract class HarnessIntegration {
       : "";
 
     if (clauses.length === 0) {
-      return followClause ? `Follow instructions in ${formatRefs(promptRefs)} ` : "";
+      return followClause
+        ? `Follow instructions in ${formatRefs(promptRefs)} `
+        : "";
     }
 
-    return clauses.join(joinSeparator) +
-      (followClause ? `${joinSeparator}${followClause} ` : "");
+    return (
+      clauses.join(joinSeparator) +
+      (followClause ? `${joinSeparator}${followClause} ` : "")
+    );
   }
 
   /**

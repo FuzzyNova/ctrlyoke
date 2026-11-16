@@ -656,6 +656,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                   }
                   throw error;
                 });
+                // Awaited after the process exits; mark it handled now so a
+                // handshake failure is not reported as an unhandled rejection
+                // while the spawn is still settling.
+                controlReady.catch(() => undefined);
               }
             : undefined,
           windowsVerbatimArguments: command.requiresShellVerbatimArgs,

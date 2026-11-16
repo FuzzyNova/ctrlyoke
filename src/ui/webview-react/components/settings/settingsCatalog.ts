@@ -294,6 +294,15 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "Automatically delete prompt temp files after execution. Disable to retain files in .ctrlyoke/temp/ for debugging.",
   },
+  "execution.inlineGeneratedPromptOnStdin": {
+    id: "execution.inlineGeneratedPromptOnStdin",
+    path: "execution.inlineGeneratedPromptOnStdin",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Inline generated prompt sections (headless)",
+    description:
+      "Send agent instructions, skills, prior context and the prompt inline on stdin for headless Qwen, Copilot, Codex and Antigravity steps. Disable to reference temp files instead.",
+    keywords: ["stdin", "headless", "temp files", "inline"],
+  },
   "runs.maxRuns": {
     id: "runs.maxRuns",
     path: "runs.maxRuns",
