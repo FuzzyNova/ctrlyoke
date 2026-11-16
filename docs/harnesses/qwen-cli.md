@@ -67,6 +67,16 @@ references added by ctrlyoke remain available to Qwen. Turn off
 [`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
 to use categorized temporary files and references instead.
 
+### Subagents in headless steps {#headless-subagents}
+
+Headless steps run Qwen in its SDK mode, which lets ctrlyoke answer approval requests instead
+of hanging. In that mode Qwen's agent tool does not list any subagent types, including the
+built-in `general-purpose` and your user and project agents in `.qwen/agents/`. They all still
+run when a step names them, so name the agent in the prompt, for example "use the agent tool
+with subagent_type general-purpose". If no type is named, the model often picks `fork`, which
+Qwen always runs in the background in headless mode and which starts from a copy of the whole
+conversation. Interactive steps list every agent as before.
+
 ## Model selection {#model-selection}
 
 The **Model** picker lists the model IDs under `modelProviders` in `~/.qwen/settings.json`.

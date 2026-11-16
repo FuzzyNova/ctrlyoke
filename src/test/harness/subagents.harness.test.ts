@@ -29,6 +29,18 @@ const HARNESSES: HarnessId[] = [
   "antigravity-cli",
 ];
 
+/**
+ * Agent types named in the prompt where the harness would otherwise not offer
+ * one. Headless Qwen runs in SDK mode, whose agent tool lists no types
+ * (docs/harnesses/qwen-cli.md#headless-subagents); unprompted, the model
+ * picks `fork`, which Qwen always backgrounds headless and which inherits the
+ * parent conversation, so a fork often does something other than its command.
+ * This suite checks attribution, not agent discovery.
+ */
+const AGENT_TYPE_HINTS: Partial<Record<HarnessId, string>> = {
+  "qwen-cli": ` (agent tool, subagent_type "general-purpose", run_in_background false)`,
+};
+
 suite("Foreground subagent attribution harness tests", function () {
   this.timeout(HARNESS_TIMEOUT_MS);
 
@@ -57,7 +69,7 @@ suite("Foreground subagent attribution harness tests", function () {
         steps: [
           {
             name: "parallel-subagents",
-            prompt: `Launch TWO foreground subagents in parallel. The first must run exactly \`echo ${markers[0]}\`; the second must run exactly \`echo ${markers[1]}\`. Wait for both to finish. Do not run either command yourself.`,
+            prompt: `Launch TWO foreground subagents in parallel${AGENT_TYPE_HINTS[harness] ?? ""}. The first must run exactly \`echo ${markers[0]}\`; the second must run exactly \`echo ${markers[1]}\`. Wait for both to finish. Do not run either command yourself.`,
           },
         ],
       };

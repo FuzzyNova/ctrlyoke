@@ -40,6 +40,7 @@ import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import { describeQwenModelFallback } from "./QwenModelProviders";
@@ -50,6 +51,7 @@ import {
   QWEN_EVENT_TYPES,
   QWEN_MONITOR_STOPPED_RESULT,
   QWEN_REAL_USER_PROVENANCE,
+  QWEN_SUBAGENT_FILES,
   QWEN_API_ERROR_FALLBACK,
   QWEN_FAIL_FAST_HTTP_STATUSES,
   QWEN_MAIN_TURN_PROMPT_ID_PATTERN,
@@ -212,6 +214,25 @@ function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
 }
 
 /**
+ * A subagent's meta sidecar, reduced to its `status`; undefined when the
+ * sidecar is missing or unreadable. Qwen replaces it whole (temp file and
+ * rename), so a read never sees half a file; a failed parse counts as missing.
+ */
+async function readQwenSubagentMeta(
+  metaFile: string
+): Promise<{ status?: string } | undefined> {
+  try {
+    const meta: unknown = JSON.parse(
+      await fs.promises.readFile(metaFile, "utf8")
+    );
+    if (!isRecord(meta)) return undefined;
+    return typeof meta.status === "string" ? { status: meta.status } : {};
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Whether a telemetry `prompt_id` belongs to the user's own turn. A record
  * without one (older captures) is treated as the user's turn.
  */
@@ -320,6 +341,8 @@ export class QwenLogParser extends BaseLogParser {
   /** Project folder of the session found by the last `discoverSessionLog`. */
   private discoveredProjectDirectory: string | undefined;
   private readonly subagentFollower = new SubagentSourceFollower();
+  /** Spawn call id -> the follower's agent id for that child. */
+  private readonly subagentIdsBySpawn = new Map<string, string>();
   private subagentUsageEnabled = true;
 
   getSubagentFollower(): SubagentSourceFollower {
@@ -328,6 +351,7 @@ export class QwenLogParser extends BaseLogParser {
 
   setSubagentUsageEnabled(enabled: boolean): void {
     this.subagentFollower.reset();
+    this.subagentIdsBySpawn.clear();
     this.subagentUsageEnabled = enabled;
   }
 
@@ -1104,7 +1128,49 @@ export class QwenLogParser extends BaseLogParser {
       );
     }
 
+    this.reportSubagentCompletions(e);
     return cliEvents;
+  }
+
+  /**
+   * Tell the child follower when the parent stream says a subagent is done:
+   * a foreground spawn's own tool result (its inline answer), or a background
+   * agent's terminal `<task-notification>`. A child's `meta.json` is not
+   * enough on its own: with two foreground agents running in parallel, Qwen
+   * 0.27.4 left one finished agent's status at `running`.
+   */
+  private reportSubagentCompletions(e: QwenProviderEvent): void {
+    if (e.type === QWEN_EVENT_TYPES.TOOL_RESULT) {
+      for (const part of e.message?.parts ?? []) {
+        const response = part.functionResponse;
+        const agentId = response && this.subagentIdsBySpawn.get(response.id);
+        if (!agentId) continue;
+        const output = response.response?.output;
+        const launchedInBackground =
+          typeof output === "string" &&
+          !!QWEN_BACKGROUND_LAUNCH_RESULTS.get(QWEN_TOOL_NAMES.AGENT)?.test(
+            output
+          );
+        if (!launchedInBackground) {
+          this.subagentFollower.markChildComplete(agentId);
+        }
+      }
+      return;
+    }
+    if (
+      e.type === QWEN_EVENT_TYPES.USER &&
+      e.subtype === QWEN_USER_RECORD_SUBTYPES.NOTIFICATION
+    ) {
+      // A background agent's task id is `<type>-<spawn call id>`. Match on
+      // the call id: a spawn that named no type is registered as `agent-…`.
+      for (const taskId of this.extractTerminalNotificationTaskIds(e)) {
+        for (const [spawnId, agentId] of this.subagentIdsBySpawn) {
+          if (taskId.endsWith(`-${spawnId}`)) {
+            this.subagentFollower.markChildComplete(agentId);
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -1361,14 +1427,26 @@ export class QwenLogParser extends BaseLogParser {
       "subagents",
       sessionId
     );
-    const filenameSuffix = `-${parentToolCallId}.jsonl`;
+    const filenameSuffix = `-${parentToolCallId}${QWEN_SUBAGENT_FILES.TRANSCRIPT_SUFFIX}`;
+    const agentId = `${agentType}-${parentToolCallId}`;
+    this.subagentIdsBySpawn.set(parentToolCallId, agentId);
     let childFile: string | undefined;
+    let metaFile: string | undefined;
+    /**
+     * Whether this child has a lifecycle sidecar. Qwen writes a turn's
+     * thought as its own assistant record and the tool call as the next one
+     * (0-8 ms apart), so "an assistant record without a functionCall" also
+     * matches a turn that is about to call a tool. A poll landing between the
+     * two then stopped following the child before its command. With a
+     * sidecar, the child ends when the sidecar's status turns terminal
+     * (written after the transcript's last record) or when the parent stream
+     * reports it done (`reportSubagentCompletions`), whichever comes first.
+     */
+    let hasMeta = false;
+    const finalRecords = new WeakSet<QwenProviderEvent>();
     const source: SubagentChildSource<QwenProviderEvent> = {
       key: `${sessionId}:${parentToolCallId}`,
-      attribution: {
-        parentToolCallId,
-        agentId: `${agentType}-${parentToolCallId}`,
-      },
+      attribution: { parentToolCallId, agentId },
       read: async (fromOffset) => {
         if (!childFile) {
           try {
@@ -1379,15 +1457,31 @@ export class QwenLogParser extends BaseLogParser {
               return { records: [], nextOffset: fromOffset, complete: false };
             }
             childFile = path.join(directory, filename);
+            metaFile =
+              childFile.slice(
+                0,
+                -QWEN_SUBAGENT_FILES.TRANSCRIPT_SUFFIX.length
+              ) + QWEN_SUBAGENT_FILES.META_SUFFIX;
           } catch {
             return { records: [], nextOffset: fromOffset, complete: false };
           }
         }
+        // Read the status before the transcript: a terminal status seen here
+        // means every record is already on disk for the read below.
+        const meta = await readQwenSubagentMeta(metaFile!);
+        if (meta) hasMeta = true;
         const result = await readIncrementalJsonl(
           childFile,
           fromOffset,
           isQwenProviderEvent
         );
+        if (meta?.status && QWEN_TERMINAL_TASK_STATUSES.has(meta.status)) {
+          const last = result.records.at(-1);
+          if (last) finalRecords.add(last);
+          // Nothing new to mark: report completion the way a parent stream
+          // would, and the follower makes one more read to close the source.
+          else this.subagentFollower.markChildComplete(agentId);
+        }
         return { ...result, complete: false };
       },
       map: (record) => this.extractStructuredEventsFromEvent(record),
@@ -1407,8 +1501,11 @@ export class QwenLogParser extends BaseLogParser {
           }
         : {}),
       isComplete: (record) =>
-        record.type === QWEN_EVENT_TYPES.ASSISTANT &&
-        !record.message?.parts?.some((part) => part.functionCall),
+        hasMeta
+          ? finalRecords.has(record)
+          : // No sidecar for this child (Qwen added them in 2026-04, #3471).
+            record.type === QWEN_EVENT_TYPES.ASSISTANT &&
+            !record.message?.parts?.some((part) => part.functionCall),
     };
     this.subagentFollower.register(source);
   }

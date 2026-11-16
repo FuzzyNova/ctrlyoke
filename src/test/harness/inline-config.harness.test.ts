@@ -35,6 +35,10 @@ import {
   OPENCODE_V2_MESSAGE_TYPES,
 } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { detectOpenCodeV2 } from "../../core/harness/opencode/OpenCodeVersion";
+import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
+import { detectHarness } from "../../core/harness/shared/HarnessDetection";
+import { IntegrationFactory } from "../../core/IntegrationFactory";
+import { versionSatisfies } from "../../utils/HarnessVersion";
 import { getAntigravitySettingsPath } from "../../core/harness/shared/StatuslineManager";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -416,6 +420,9 @@ try {
 
 /** File name of `MARKER_SCRIPT` in each case's workspace. */
 const MARKER_SCRIPT_NAME = "write-notes.js";
+
+/** Workspace script that writes a Codex escalation case's outside file. */
+const OUTSIDE_WRITE_SCRIPT = "write-outside.js";
 
 /**
  * Wall-clock limit for one shell-probe run. A probe is one trivial command and
@@ -1339,14 +1346,59 @@ suite("Inline harness configuration regression tests", function () {
       );
     });
 
+    // The outside target is a throwaway home-directory folder, not a temp
+    // path: workspace-write keeps the OS temp directory writable, so a temp
+    // "outside" file is created even without an escalation. The write goes
+    // through a workspace script so the prompt names no outside path.
+    //
+    // `custom` (`codex exec`, approval `never`) is asked to run the command
+    // normally: asking it to escalate under `never` makes the model decline
+    // before making any call. The sandbox then refuses the outside write.
+    // `auto` is asked to escalate up front, because a model that first hits
+    // the sandbox and then reads "do not retry" never asks at all.
     for (const escalationCase of [
-      { mode: "auto", reviewed: true },
-      { mode: "custom", reviewed: false },
+      {
+        mode: "auto",
+        reviewed: true,
+        prompt: `Run exactly one shell command, with escalated permissions (request approval to run it outside the sandbox, because it writes a scratch file outside the workspace): node ${OUTSIDE_WRITE_SCRIPT}. Do not run it inside the sandbox first. If approval is refused, stop and do not create the file another way.`,
+      },
+      {
+        mode: "custom",
+        reviewed: false,
+        prompt: `Run exactly this shell command once: node ${OUTSIDE_WRITE_SCRIPT}. If it fails, report the error and stop; do not retry it and do not create the file another way.`,
+      },
     ] as const) {
-      test(`${CODEX}: ${escalationCase.reviewed ? "auto's reviewer approves" : "custom refuses"} an escalation to write outside the sandbox`, function () {
+      test(`${CODEX}: ${escalationCase.reviewed ? "auto's reviewer approves" : "custom refuses"} an escalation to write outside the sandbox`, async function () {
+        if (escalationCase.mode === "auto") {
+          const minimum =
+            CODEX_PERMISSION_CAPABILITIES.autoMode.autoModeMinimumVersion;
+          const detection = await detectHarness(
+            IntegrationFactory.createCapabilityProvider(CODEX)
+          );
+          const installed = detection.rawVersion;
+          if (
+            detection.available &&
+            minimum &&
+            (!installed || !versionSatisfies(installed, minimum))
+          ) {
+            // ctrlyoke runs `auto` as `custom` below the gate, so there is no
+            // reviewer to approve anything: the case would only measure that.
+            console.log(
+              `  ⚠  ${CODEX} (auto escalation) — SKIPPED (auto needs ${minimum}, installed ${installed ?? "unknown"})`
+            );
+            this.skip();
+          }
+        }
+        const outsideDir = fs.mkdtempSync(
+          path.join(os.homedir(), ".cy-codex-escalation-")
+        );
         const outsidePath = path.join(
-          os.tmpdir(),
-          `${path.basename(tmpDir)}-codex-${escalationCase.mode}-escalation.txt`
+          outsideDir,
+          `codex-${escalationCase.mode}-escalation.txt`
+        );
+        fs.writeFileSync(
+          path.join(tmpDir, OUTSIDE_WRITE_SCRIPT),
+          `require("fs").writeFileSync(${JSON.stringify(outsidePath)}, "escalation-marker");\n`
         );
         const label = `codex-${escalationCase.mode}-escalation`;
         try {
@@ -1363,9 +1415,7 @@ suite("Inline harness configuration regression tests", function () {
               steps: [
                 {
                   name: label,
-                  // Ask for escalation up front: a model that first hits the
-                  // sandbox and then reads "do not retry" never asks at all.
-                  prompt: `Run exactly one shell command, with escalated permissions (request approval to run it outside the sandbox, because it writes a scratch file outside the workspace): node ${normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME))} ${normalizedPath(outsidePath)}. Do not run it inside the sandbox first. If approval is refused, stop and do not create the file another way.`,
+                  prompt: escalationCase.prompt,
                 },
               ],
             },
@@ -1375,7 +1425,7 @@ suite("Inline harness configuration regression tests", function () {
           if (logAndMaybeSkip(`${CODEX} (${label})`, result)) return;
           assertSuccessfulRun(`${CODEX} (${label})`, result);
           assert.ok(
-            toolEvents.includes(path.basename(outsidePath)),
+            toolEvents.includes(OUTSIDE_WRITE_SCRIPT),
             `codex never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
           );
           assert.strictEqual(
@@ -1384,7 +1434,11 @@ suite("Inline harness configuration regression tests", function () {
             `outside write ${escalationCase.reviewed ? "missing" : "created"}\ntool events: ${toolEvents}`
           );
         } finally {
-          fs.rmSync(outsidePath, { force: true });
+          fs.rmSync(outsideDir, {
+            recursive: true,
+            force: true,
+            maxRetries: 3,
+          });
         }
       });
     }

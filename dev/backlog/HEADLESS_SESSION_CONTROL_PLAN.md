@@ -1,9 +1,11 @@
 # Headless Session Control: Steering and Approvals
 
 **Status:** Stage 1 is implemented: the shared transport and Qwen's headless control channel
-are covered by unit tests, and the live Qwen approval case that used to hang now passes. Two SDK
-mode side effects (subagent output and subagent discovery, under "Qwen Code" findings) are
-being fixed as a Stage 1 follow-up.
+are covered by unit tests, and the live Qwen approval case that used to hang now passes. The
+Stage 1 follow-up on SDK mode side effects (under "Qwen Code" findings) is done: subagent output
+loss was a ctrlyoke child-follower race, now fixed by completing a child from the parent
+stream's report or its `meta.json` status; SDK mode's empty agent list cannot be restored without copying Qwen's builtin agent
+definitions, so it is documented (`docs/harnesses/qwen-cli.md`, CHANGELOG **Changed**).
 Researched 2026-11-15 by live probes and source reading (details under "Findings"). Open
 questions resolved 2026-11-15 (see "Decisions").
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
@@ -115,15 +117,32 @@ Source paths are relative to `C:\dev\qwen-code\packages\cli\src\`.
   `set_model`.
 - Caveat: `initialize` sets SDK mode, which slightly changes plan-mode wording
   (`systemController.ts:193`).
-- **SDK mode side effects found in the Stage 1 review (2026-11-15, Qwen 0.27.4):**
-  - Subagent turns are not streamed to stdout. In direct mode a subagent's assistant and
-    tool messages arrive as stdout records with `parent_tool_use_id` set; in SDK mode only the
-    subagent's first `user` record does (probed with the same prompt in both modes). ctrlyoke's
-    headless Qwen output relied on those records, so the live case
-    "qwen-cli: attributes parallel foreground subagent commands" fails after Stage 1.
-  - `SubagentManager.listSubagents` loads only `session`-level subagents in SDK mode
-    (`core\src\subagents\subagent-manager.ts:583`), so user and project subagents may be
-    unavailable to headless Qwen steps unless they are passed in `initialize`.
+- **SDK mode side effects found in the Stage 1 review (2026-11-15, Qwen 0.27.4), resolved:**
+  - The review's "subagent turns are not streamed in SDK mode" was a probe artifact: that run's
+    model omitted `run_in_background: false`, so the agent ran in the background, and only a
+    background agent's turns stay off stdout. A foreground subagent streams its records with
+    `parent_tool_use_id` in SDK mode too (re-probed). Headless Qwen does not read them anyway
+    (`headlessSource = LOG`); it follows `<project>/subagents/<session>/*.jsonl`, which both
+    modes write.
+  - The live case failure had two causes. (1) The agent list below made the model pick `fork`,
+    which Qwen always backgrounds in headless mode and which inherits the parent conversation
+    (one fork ran nothing). (2) A ctrlyoke race: Qwen writes a turn's thought and its tool call
+    as two assistant records 0-8 ms apart, and the child follower treated "assistant record
+    without a functionCall" as the end, so a 150 ms poll between them dropped the child's
+    command. `QwenLogParser` now completes a child when the parent stream reports it (the
+    foreground spawn's own result, or the background agent's terminal task notification) or
+    when its `<agent>.meta.json` `status` turns terminal, and keeps the old rule only for a
+    child with no sidecar. Meta alone is not enough: with two parallel foreground agents, Qwen
+    0.27.4 left one finished agent's status at `running`.
+  - The live case now names `subagent_type "general-purpose"` for Qwen (see the next bullet);
+    it passes, as do both Codex escalation cases.
+  - `SubagentManager.listSubagents` returns only `session`-level subagents in SDK mode
+    (`core\src\subagents\subagent-manager.ts:583`), so the agent tool says "No subagents are
+    currently configured". Dispatch still resolves every level (`loadSubagent`): a live probe
+    ran a project agent and the builtin `general-purpose` by name, both foreground. Passing
+    `initialize.agents` would restore the list only by shadowing each agent with a session copy
+    (session wins in `loadSubagent`), which for builtins means copying Qwen's internal system
+    prompts. Not done; documented instead. Revisit if Qwen adds an SDK option to list all levels.
   - A turn's `result` is held until its background agents finish (`nonInteractiveCli.ts`
     holdback loop around `:4039`), and stdin EOF aborts every background registry
     (`session.ts` `drainAndShutdown`), so closing at `result` loses nothing that ran in the turn.

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Headless steps on Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Added
 
@@ -44,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Qwen Code headless steps no longer hang when an unlisted tool needs approval. They now start stream-json SDK mode with `initialize`, send the prompt over stdin, and deny approval requests with an explanation.
+- Qwen Code subagent output no longer stops early. ctrlyoke sometimes stopped reading a subagent at the record holding its reasoning, just before its tool call, so the subagent's commands and later output were missing from the step. It now waits for Qwen to mark the subagent finished.
 - The dashboard no longer runs out of memory and turns gray when a long run streams output while its panel is hidden or its window is covered, minimized or on a sleeping display. Before, every VS Code window showing ctrlyoke went gray at once and stayed that way until reloaded.
 - CLI usage errors now keep the documented JSON envelope for rejected option values, invalid choices and missing required options; `run --json` usage failures use the run-result shape.
 - MCP condition presets now cap caller retry overrides at the effective budget authored by the preset, including retry-action defaults.
