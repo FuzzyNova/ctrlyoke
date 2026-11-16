@@ -163,6 +163,14 @@ export class HeadlessLogTail {
     options.parser.getSubagentFollower?.()?.start(options.onStreamingEvents);
   }
 
+  registerDispatchedUserMessage(text: string): void {
+    this.pump.registerDispatchedUserMessage(text);
+  }
+
+  discardDispatchedUserMessage(text: string): void {
+    this.pump.discardDispatchedUserMessage(text);
+  }
+
   /** Start idle polling and perform an initial discovery/read attempt. */
   async start(): Promise<void> {
     if (this.started || this.finished) {

@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliLogEventPump } from "../../core/harness/shared/CliLogEventPump";
+import { USER_EVENT_CLASSIFICATIONS } from "../../core/harness/shared/interfaces/ILogParser";
 import type {
   BaseCliEvent,
   ILogParser,
@@ -132,6 +133,42 @@ suite("CliLogEventPump", () => {
       [
         { text: "human-steer", attribution: USER_STEER_ATTRIBUTIONS.USER },
         { text: "system-message", attribution: USER_STEER_ATTRIBUTIONS.SYSTEM },
+      ]
+    );
+  });
+
+  test("does not echo a coordinator-dispatched user message twice", () => {
+    const streamedEvents: CliEvent[] = [];
+    const parser = {
+      extractStructuredEventsFromEvent: () => [],
+      classifyUserEvent: () => USER_EVENT_CLASSIFICATIONS.HUMAN_STEER,
+      extractUserSteerText: (event: BaseCliEvent) => event.text as string,
+    } as unknown as ILogParser;
+    const pump = new CliLogEventPump({
+      parser,
+      model: "test-model",
+      onStreamingEvents: (events) => streamedEvents.push(...events),
+    });
+
+    pump.registerDispatchedUserMessage("sent by ctrlyoke");
+    pump.processEvent({
+      type: "user",
+      text: "sent by ctrlyoke",
+    });
+
+    assert.strictEqual(streamedEvents.length, 0);
+
+    pump.processEvent({
+      type: "user",
+      text: "a different human message",
+    });
+    assert.deepStrictEqual(
+      streamedEvents.map((event) => event.data as UserSteerData),
+      [
+        {
+          text: "a different human message",
+          attribution: USER_STEER_ATTRIBUTIONS.USER,
+        },
       ]
     );
   });

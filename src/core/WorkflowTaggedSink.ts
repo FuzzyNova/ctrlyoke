@@ -2,6 +2,7 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { CtrlYokeNotificationEvent } from "./notifications/NotificationEventFactory";
 import type {
   CliEvent,
+  HeadlessControlTargetMessage,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type {
@@ -264,6 +265,13 @@ export class WorkflowTaggedSink implements IDashboardSink {
       timestampMs,
       sequence
     );
+  }
+
+  updateHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    this.inner.updateHeadlessControlTarget?.({
+      ...target,
+      workflowId: this.workflowId,
+    });
   }
 
   updateContextWindow(stepIndex: number, used: number, size: number): void {

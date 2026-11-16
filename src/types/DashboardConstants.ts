@@ -912,10 +912,10 @@ export const MESSAGE_TYPES = {
   GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]
   SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
   RUN_IN_NEW_WORKFLOW: "runInNewWorkflow",
-  // Steer messages — webview → extension: send a categorized prompt directly
-  // into an already-running interactive PTY session. Never queued; ignores all
-  // prompt overrides (harness/model/agent/skills/permissions).
+  // Steer messages — webview → extension: send a categorized prompt to a live
+  // AI-CLI PTY or headless control channel. Ignores prompt overrides.
   SEND_STEER_MESSAGE: "sendSteerMessage", // { workflowId, sessionId, text }
+  HEADLESS_CONTROL_TARGET_CHANGED: "headlessControlTargetChanged",
 
   // Stable run lifecycle controls — Webview → Extension
   EXECUTE_DRAFT: "executeDraft",

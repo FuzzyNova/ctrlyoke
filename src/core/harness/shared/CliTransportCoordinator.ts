@@ -1,9 +1,14 @@
+import { randomUUID } from "crypto";
 import type { CliEvent } from "../../../types/CliOutputTypes";
-import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes";
+import type {
+  HeadlessControlTargetMessage,
+  TerminalStartedMessage,
+} from "../../../types/WebviewMessageTypes";
 import {
   EXECUTION_MODES,
   CLI_EVENT_TYPES,
   HEADLESS_PROMPT_DELIVERIES,
+  HEADLESS_STEER_DELIVERIES,
   HEADLESS_CONTROL_OBSERVATION_KINDS,
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
@@ -11,6 +16,8 @@ import {
   TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
   type TerminalEndReason,
+  type HarnessId,
+  USER_STEER_ATTRIBUTIONS,
   NODE_ERROR_CODES,
   FAILURE_SOURCES,
 } from "../../../types/DashboardConstants";
@@ -81,6 +88,7 @@ interface CliTransportCoordinatorHostCallbacks {
   onResponseComplete: () => void;
   onPtyExit: (session: PtySession, exitCode: number) => void;
   cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
+  onHeadlessControlTarget?: (target: HeadlessControlTargetMessage) => void;
 }
 
 export interface CliTransportCoordinatorDeps {
@@ -136,7 +144,8 @@ export interface CliExecutionTransportCoordinator {
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[],
-    keepTempFiles?: boolean
+    keepTempFiles?: boolean,
+    controlTarget?: HeadlessControlTargetContext
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -150,6 +159,12 @@ export interface CliExecutionTransportCoordinator {
     reason: string,
     options?: TerminatePtySessionOptions
   ): Promise<string | undefined>;
+}
+
+export interface HeadlessControlTargetContext {
+  workflowId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
 }
 
 export interface TerminatePtySessionOptions {
@@ -172,8 +187,21 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   private activeHeadlessLogTail?: HeadlessLogTail;
   private activeHeadlessControlChannel?: IHeadlessControlChannel;
   private activeHeadlessControlClose?: () => Promise<void>;
+  private activeHeadlessControlSessionId?: string;
+  private activeHeadlessControlSend?: (text: string) => Promise<boolean>;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
+
+  getHeadlessControlSessionId(): string | undefined {
+    return this.activeHeadlessControlSessionId;
+  }
+
+  sendHeadlessUserMessage(sessionId: string, text: string): Promise<boolean> {
+    if (this.activeHeadlessControlSessionId !== sessionId) {
+      return Promise.resolve(false);
+    }
+    return this.activeHeadlessControlSend?.(text) ?? Promise.resolve(false);
+  }
 
   /**
    * Launch the harness TUI on the user's own terminal (`stdio: "inherit"`) and
@@ -412,7 +440,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[],
-    keepTempFiles = false
+    keepTempFiles = false,
+    controlTarget?: HeadlessControlTargetContext
   ): Promise<boolean> {
     this.activeHeadlessLogTail = source?.logTail;
     let closeControlChannelForRun: (() => Promise<void>) | undefined;
@@ -434,6 +463,17 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         ));
       const controlChannel =
         this.deps.provider.createHeadlessControlChannel?.(promptArgument);
+      const controlSessionId = controlChannel ? randomUUID() : undefined;
+      const targetBase =
+        controlChannel && controlSessionId && controlTarget
+          ? {
+              workflowId: controlTarget.workflowId,
+              controlSessionId,
+              stepIndex: controlTarget.stepIndex,
+              harnessId: controlTarget.harnessId,
+              steerDelivery: controlChannel.steerDelivery,
+            }
+          : undefined;
       const controlArgs = controlChannel?.spawnShape.args ?? [];
       const spawnArgs = [...command.args, ...controlArgs];
 
@@ -466,6 +506,71 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let controlOperations = Promise.resolve();
       let controlCloseScheduled = false;
       let promptDeadlineAt = 0;
+      let publishedControlTarget = false;
+      let controlTurnActive = false;
+      const injectedSteers = new Set<symbol>();
+      const queuedSteersSubmittedDuringTurn: symbol[] = [];
+      const queuedSteersAwaitingTurn: symbol[] = [];
+
+      const hasOutstandingSteers = (): boolean =>
+        injectedSteers.size > 0 ||
+        queuedSteersSubmittedDuringTurn.length > 0 ||
+        queuedSteersAwaitingTurn.length > 0;
+
+      const reserveSteer = (): (() => void) => {
+        if (
+          controlChannel?.steerDelivery === HEADLESS_STEER_DELIVERIES.INJECT
+        ) {
+          const reservation = Symbol("injected-steer");
+          injectedSteers.add(reservation);
+          const wasTurnActive = controlTurnActive;
+          if (!controlTurnActive) controlTurnActive = true;
+          return () => {
+            injectedSteers.delete(reservation);
+            if (!wasTurnActive && injectedSteers.size === 0) {
+              controlTurnActive = false;
+            }
+          };
+        }
+
+        const reservation = Symbol("queued-steer");
+        if (controlTurnActive) {
+          queuedSteersSubmittedDuringTurn.push(reservation);
+        } else {
+          queuedSteersAwaitingTurn.push(reservation);
+          controlTurnActive = true;
+        }
+        return () => {
+          const submittedIndex =
+            queuedSteersSubmittedDuringTurn.indexOf(reservation);
+          if (submittedIndex !== -1) {
+            queuedSteersSubmittedDuringTurn.splice(submittedIndex, 1);
+          }
+          const queuedIndex = queuedSteersAwaitingTurn.indexOf(reservation);
+          if (queuedIndex !== -1) {
+            queuedSteersAwaitingTurn.splice(queuedIndex, 1);
+            controlTurnActive =
+              queuedSteersAwaitingTurn.length > 0 ||
+              queuedSteersSubmittedDuringTurn.length > 0;
+          }
+        };
+      };
+
+      const updateSteerStateAtTurnEnd = (): void => {
+        if (
+          controlChannel?.steerDelivery === HEADLESS_STEER_DELIVERIES.INJECT
+        ) {
+          injectedSteers.clear();
+          controlTurnActive = false;
+          return;
+        }
+
+        queuedSteersAwaitingTurn.shift();
+        queuedSteersAwaitingTurn.push(
+          ...queuedSteersSubmittedDuringTurn.splice(0)
+        );
+        controlTurnActive = queuedSteersAwaitingTurn.length > 0;
+      };
 
       const withControlLock = async (operation: () => Promise<void>) => {
         if (!controlMutex) return;
@@ -487,6 +592,15 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         if (this.activeHeadlessControlChannel === controlChannel) {
           this.activeHeadlessControlChannel = undefined;
           this.activeHeadlessControlClose = undefined;
+          this.activeHeadlessControlSessionId = undefined;
+          this.activeHeadlessControlSend = undefined;
+        }
+        if (targetBase && publishedControlTarget) {
+          this.deps.hostCallbacks.onHeadlessControlTarget?.({
+            type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+            ...targetBase,
+            isOpen: false,
+          });
         }
       };
       closeControlChannelForRun = closeControlChannel;
@@ -507,6 +621,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         source?.parser.hasPendingBackgroundWork?.() === true;
 
       const closeAfterTurnEnd = (): void => {
+        if (hasOutstandingSteers()) return;
         if (
           !controlChannel?.holdOpenForBackgroundWork ||
           !hasPendingBackgroundWork()
@@ -543,7 +658,15 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
               `[CliTransportCoordinator] Could not inspect pending headless background work: ${getErrorMessage(error)}`
             );
           }
-          enqueueControlOperation(closeControlChannel);
+          if (
+            this.deps.runtimeState.isCancelling() ||
+            Date.now() >= promptDeadlineAt
+          ) {
+            enqueueControlOperation(closeControlChannel);
+            return;
+          }
+          controlCloseScheduled = false;
+          closeAfterTurnEnd();
         })();
       };
 
@@ -570,6 +693,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           } else if (
             observation.kind === HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END
           ) {
+            updateSteerStateAtTurnEnd();
             closeAfterTurnEnd();
           }
         }
@@ -697,8 +821,52 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             ? (writer) => {
                 controlWriter = createControlWriter(writer);
                 controlReady = (async () => {
+                  if (controlClosed) return;
                   await controlChannel.start(controlWriter!);
+                  if (controlClosed) return;
+                  controlTurnActive = true;
                   await controlChannel.sendUserMessage(promptArgument);
+                  if (controlClosed || !controlSessionId) return;
+                  this.activeHeadlessControlSessionId = controlSessionId;
+                  this.activeHeadlessControlSend = async (text) => {
+                    if (
+                      controlClosed ||
+                      this.activeHeadlessControlChannel !== controlChannel ||
+                      this.activeHeadlessControlSessionId !== controlSessionId
+                    ) {
+                      return false;
+                    }
+                    const releaseReservation = reserveSteer();
+                    source?.logTail?.registerDispatchedUserMessage(text);
+                    stdoutEventPump?.registerDispatchedUserMessage(text);
+                    try {
+                      await controlChannel.sendUserMessage(text);
+                    } catch (error) {
+                      releaseReservation();
+                      source?.logTail?.discardDispatchedUserMessage(text);
+                      stdoutEventPump?.discardDispatchedUserMessage(text);
+                      throw error;
+                    }
+                    this.deps.hostCallbacks.onStreamingEvents([
+                      {
+                        type: CLI_EVENT_TYPES.USER_STEER,
+                        timestamp: Date.now(),
+                        data: {
+                          text,
+                          attribution: USER_STEER_ATTRIBUTIONS.USER,
+                        },
+                      },
+                    ]);
+                    return true;
+                  };
+                  if (targetBase) {
+                    this.deps.hostCallbacks.onHeadlessControlTarget?.({
+                      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+                      ...targetBase,
+                      isOpen: true,
+                    });
+                    publishedControlTarget = true;
+                  }
                 })().catch(async (error: unknown) => {
                   await closeControlChannel();
                   if (error instanceof CliTransportError) {

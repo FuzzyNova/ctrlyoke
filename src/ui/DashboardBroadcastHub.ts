@@ -17,6 +17,7 @@ import type {
 import type {
   CliEvent,
   CliOutput,
+  HeadlessControlTargetMessage,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
@@ -342,6 +343,12 @@ export class DashboardBroadcastHub
         timestampMs,
         sequence
       );
+    }
+  }
+
+  updateHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    for (const client of this.clients) {
+      client.updateHeadlessControlTarget?.(target);
     }
   }
 

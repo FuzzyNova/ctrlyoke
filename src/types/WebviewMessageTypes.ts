@@ -69,6 +69,7 @@ import {
   type RunDefinitionDecision,
   type SandboxMode,
   type SandboxRequest,
+  type HeadlessSteerDelivery,
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
@@ -2668,12 +2669,23 @@ export interface AppendFileMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
-/** Webview → Extension: send a prompt to a live interactive PTY session. */
+/** Webview → Extension: `sessionId` names a PTY session or headless control channel. */
 export interface SendSteerMessage {
   type: typeof MESSAGE_TYPES.SEND_STEER_MESSAGE;
   workflowId: string;
   sessionId: string;
   text: string;
+}
+
+/** Extension → Webview: a headless channel that can receive steers opened or closed. */
+export interface HeadlessControlTargetMessage {
+  type: typeof MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED;
+  workflowId: string;
+  controlSessionId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
+  steerDelivery: HeadlessSteerDelivery;
+  isOpen: boolean;
 }
 
 /**
@@ -3663,6 +3675,7 @@ export type IncomingMessage =
   | CliOutputMessage
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
+  | HeadlessControlTargetMessage
   | ContextWindowUpdateMessage
   | FinalStepContextWindowUpdateMessage
   | StatusMessageMessage

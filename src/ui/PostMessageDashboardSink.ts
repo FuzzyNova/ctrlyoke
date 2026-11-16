@@ -10,6 +10,7 @@ import {
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type {
   CliEvent,
+  HeadlessControlTargetMessage,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type {
@@ -292,6 +293,13 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(timestampMs !== undefined ? { timestampMs } : {}),
       ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
+    });
+  }
+
+  updateHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    this.send({
+      ...target,
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
     });
   }
 

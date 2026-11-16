@@ -4,9 +4,12 @@ import { WorkflowTaggedSink } from "../../core/WorkflowTaggedSink";
 import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import {
   FINAL_STEP_PHASES,
+  HEADLESS_STEER_DELIVERIES,
+  HARNESS_IDS,
   MESSAGE_TYPES,
 } from "../../types/DashboardConstants";
 import type {
+  HeadlessControlTargetMessage,
   PromptDeletedMessage,
   StepUndoDataUpdatedMessage,
 } from "../../types/WebviewMessageTypes";
@@ -47,6 +50,30 @@ suite("WorkflowTaggedSink", () => {
       workspaceSnapshot,
       workflowId: "wf-a",
     } satisfies StepUndoDataUpdatedMessage);
+  });
+
+  test("headless control target uses the tagged workflow and preserves lifecycle", () => {
+    const messages: unknown[] = [];
+    const sink = new WorkflowTaggedSink(
+      new PostMessageDashboardSink((message) => messages.push(message)),
+      "wf-a"
+    );
+    const target: HeadlessControlTargetMessage = {
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "untrusted-workflow",
+      controlSessionId: "control-1",
+      stepIndex: 2,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      isOpen: true,
+    };
+
+    sink.updateHeadlessControlTarget(target);
+
+    assert.deepStrictEqual(messages[0], {
+      ...target,
+      workflowId: "wf-a",
+    });
   });
 
   test("updateExecutionState forwards structured guardrail stop reasons", () => {

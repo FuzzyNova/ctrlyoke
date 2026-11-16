@@ -4282,14 +4282,26 @@ export class WorkflowInstance
    * `ActiveTargetResources.ptySessionId`: that field is only ever populated by
    * `registerTargetPtySession`, which the executor calls for interactive
    * *script* PTYs. An AI-CLI TUI is spawned by `CliTransportCoordinator`, which
-   * reports its session through `getActivitySessionId()` — so a mid-run steer
-   * resolves here and nowhere else.
+   * reports its session through `getActivitySessionId()` — so a mid-run PTY
+   * steer resolves here and nowhere else.
    */
   private findIntegrationForPtySession(
     sessionId: string
   ): HarnessIntegration | undefined {
     for (const integration of this.getLivePtyIntegrationCandidates()) {
       if (integration.getActivitySessionId() === sessionId) {
+        return integration;
+      }
+    }
+
+    return undefined;
+  }
+
+  private findIntegrationForHeadlessControlSession(
+    sessionId: string
+  ): HarnessIntegration | undefined {
+    for (const integration of this.getLivePtyIntegrationCandidates()) {
+      if (integration.getHeadlessControlSessionId() === sessionId) {
         return integration;
       }
     }
@@ -4338,26 +4350,35 @@ export class WorkflowInstance
     }
   }
 
-  /** Send a steer message directly to a live AI-CLI PTY session. */
+  /** Send a steer message directly to a live AI-CLI PTY or headless session. */
   async sendSteerMessage(sessionId: string, text: string): Promise<void> {
     const session = getPtyProcessManager()?.getSession(sessionId);
-    if (
-      !session ||
-      session.workflowId !== this.id ||
-      session.kind !== SESSION_KINDS.AI_CLI ||
-      session.status !== TERMINAL_SESSION_STATUS.RUNNING
-    ) {
-      throw new Error(
-        "That harness session has ended. The steer message was not sent."
-      );
+    let integration: HarnessIntegration | undefined;
+    if (session) {
+      if (
+        session.workflowId !== this.id ||
+        session.kind !== SESSION_KINDS.AI_CLI ||
+        session.status !== TERMINAL_SESSION_STATUS.RUNNING
+      ) {
+        throw new Error(
+          "That harness session has ended. The steer message was not sent."
+        );
+      }
+      integration = this.findIntegrationForPtySession(sessionId);
+    } else {
+      integration = this.findIntegrationForHeadlessControlSession(sessionId);
     }
 
-    const integration = this.findIntegrationForPtySession(sessionId);
     if (!integration) {
+      if (!session) {
+        throw new Error(
+          "That harness session has ended. The steer message was not sent."
+        );
+      }
       throw new Error("No live harness session for this workflow.");
     }
 
-    const sent = await integration.sendSteerMessage(text);
+    const sent = await integration.sendSteerMessage(text, sessionId);
     if (!sent) {
       throw new Error(
         "That harness session has ended. The steer message was not sent."
@@ -4641,6 +4662,9 @@ export class WorkflowInstance
     integration.setSourceDefinitionPath(this.sourceDefinitionPath);
     integration.onStreamingEvents((events) =>
       this._streamingEventsEmitter.fire(events)
+    );
+    integration.onHeadlessControlTarget((target) =>
+      this.dashboardSink?.updateHeadlessControlTarget?.(target)
     );
     integration.onStreamingChunk((chunk) =>
       this._streamingChunkEmitter.fire(chunk)

@@ -24,6 +24,7 @@ import {
   EXECUTION_PHASES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HEADLESS_STEER_DELIVERIES,
   MESSAGE_TYPES,
   PARALLEL_GROUP_ADMISSION,
   STEP_STATUS,
@@ -43,6 +44,9 @@ import type {
 } from "../../core/UserFeedbackSink";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
+import type { IDashboardSink } from "../../types/IDashboardSink";
+import type { HeadlessControlTargetMessage } from "../../types/WebviewMessageTypes";
+import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { parseAtReferences } from "../../utils/FileReferenceParser";
@@ -191,7 +195,9 @@ class MockHarnessIntegration extends HarnessIntegration {
 
 class SteerableMockHarnessIntegration extends MockHarnessIntegration {
   private activitySessionId?: string;
+  private headlessControlSessionId?: string;
   readonly steerMessages: string[] = [];
+  readonly steerSessionIds: Array<string | undefined> = [];
 
   setActivitySessionId(sessionId: string): void {
     this.activitySessionId = sessionId;
@@ -201,8 +207,24 @@ class SteerableMockHarnessIntegration extends MockHarnessIntegration {
     return this.activitySessionId;
   }
 
-  override async sendSteerMessage(text: string): Promise<boolean> {
+  setHeadlessControlSessionId(sessionId: string): void {
+    this.headlessControlSessionId = sessionId;
+  }
+
+  override getHeadlessControlSessionId(): string | undefined {
+    return this.headlessControlSessionId;
+  }
+
+  publishHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    this.headlessControlTargetEmitter.fire(target);
+  }
+
+  override async sendSteerMessage(
+    text: string,
+    sessionId?: string
+  ): Promise<boolean> {
     this.steerMessages.push(text);
+    this.steerSessionIds.push(sessionId);
     return true;
   }
 }
@@ -723,11 +745,11 @@ suite("WorkflowInstance target resources", () => {
 });
 
 suite("WorkflowInstance steer dispatch", () => {
-  function createInstance(): WorkflowInstance {
+  function createInstance(dashboardSink?: IDashboardSink): WorkflowInstance {
     const platform = new MockPlatform();
     return new WorkflowInstance(
       platform,
-      undefined,
+      dashboardSink,
       new MockIntegrationFactory(platform),
       () => new MockHarnessIntegration(undefined, false),
       () => {},
@@ -735,6 +757,39 @@ suite("WorkflowInstance steer dispatch", () => {
       process.cwd()
     );
   }
+
+  test("publishes and clears an open headless target through the tagged sink", () => {
+    const messages: unknown[] = [];
+    const instance = createInstance(
+      new PostMessageDashboardSink((message) => messages.push(message))
+    );
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    (instance as any).configureExecutionIntegration(integration);
+    const target: HeadlessControlTargetMessage = {
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "untrusted-workflow",
+      controlSessionId: "control-1",
+      stepIndex: 2,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      isOpen: true,
+    };
+
+    try {
+      integration.publishHeadlessControlTarget(target);
+      integration.publishHeadlessControlTarget({
+        ...target,
+        isOpen: false,
+      });
+
+      assert.deepStrictEqual(messages, [
+        { ...target, workflowId: instance.id },
+        { ...target, workflowId: instance.id, isOpen: false },
+      ]);
+    } finally {
+      instance.dispose();
+    }
+  });
 
   // `ptySessionId` is only populated for interactive *script* PTYs, so a
   // mid-run AI-CLI steer has to resolve through the integration's own activity
@@ -801,6 +856,30 @@ suite("WorkflowInstance steer dispatch", () => {
     try {
       await instance.sendSteerMessage(session.id, "retained steer");
       assert.deepStrictEqual(integration.steerMessages, ["retained steer"]);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
+    }
+  });
+
+  test("resolves an open headless control channel without a PTY", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const controlSessionId = "headless-control-session";
+    integration.setHeadlessControlSessionId(controlSessionId);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    ptyManager.getSession = () => undefined;
+    (instance as any).executionIntegrations.set(
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+      ),
+      integration
+    );
+
+    try {
+      await instance.sendSteerMessage(controlSessionId, "headless steer");
+      assert.deepStrictEqual(integration.steerMessages, ["headless steer"]);
+      assert.deepStrictEqual(integration.steerSessionIds, [controlSessionId]);
     } finally {
       instance.dispose();
       ptyManager.dispose();

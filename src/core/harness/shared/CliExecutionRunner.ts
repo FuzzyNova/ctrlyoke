@@ -39,6 +39,7 @@ import {
 } from "./HookNotificationPlan";
 import type {
   CliExecutionTransportCoordinator,
+  HeadlessControlTargetContext,
   StandaloneInteractiveProcess,
 } from "./CliTransportCoordinator";
 import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
@@ -488,6 +489,17 @@ export class CliExecutionRunner {
 
     const deferTempFileCleanup =
       this.deps.provider.isRecoverableSessionError !== undefined;
+    const workflowContext = session.workflowContext;
+    const harnessId = this.deps.provider.config.harnessId;
+    const controlTarget: HeadlessControlTargetContext | undefined =
+      workflowContext?.instanceId && harnessId
+        ? {
+            workflowId: workflowContext.instanceId,
+            stepIndex:
+              workflowContext.terminalStepIndex ?? workflowContext.promptIndex,
+            harnessId,
+          }
+        : undefined;
     const executeWithRecovery = async (
       args: string[],
       activeSource: HeadlessStreamingSource | undefined,
@@ -509,7 +521,8 @@ export class CliExecutionRunner {
           activeSource,
           command,
           session.resolvedProperties?.secrets,
-          deferTempFileCleanup
+          deferTempFileCleanup,
+          controlTarget
         );
       } catch (error) {
         if (
@@ -574,7 +587,8 @@ export class CliExecutionRunner {
             undefined,
             retryPlan.resolvedCommand,
             session.resolvedProperties?.secrets,
-            true
+            true,
+            controlTarget
           );
         }
 

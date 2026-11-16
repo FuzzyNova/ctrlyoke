@@ -2179,6 +2179,65 @@ suite("CliIntegration", () => {
     assert.strictEqual(promptPreparationArguments[4], false);
   });
 
+  test("headless steering uses inline prompt preparation and the active channel", async () => {
+    const integration = createHeadlessIntegration();
+    const prompt: PromptStep = { prompt: "initial prompt" };
+    const controlSessionId = "headless-control-session";
+    const workflowContext = {
+      promptIndex: 0,
+      allPrompts: [prompt],
+    };
+    const properties = createResolvedProperties({
+      executionMode: EXECUTION_MODES.HEADLESS,
+    });
+    (integration as any).activeSession = (
+      integration as any
+    ).createExecutionSession(prompt, workflowContext, properties, undefined);
+    (integration as any).transportCoordinator.getHeadlessControlSessionId =
+      () => controlSessionId;
+
+    let preparedArguments: unknown[] = [];
+    (integration as any).promptPreparer.preparePrompt = async (
+      ...args: unknown[]
+    ) => {
+      preparedArguments = args;
+      return {
+        promptWithInstruction: "prepared steer",
+        tempFilePaths: [],
+        diagnostics: [],
+      };
+    };
+
+    let sent: { sessionId: string; text: string } | undefined;
+    (integration as any).transportCoordinator.sendHeadlessUserMessage = async (
+      sessionId: string,
+      text: string
+    ) => {
+      sent = { sessionId, text };
+      return true;
+    };
+
+    try {
+      assert.strictEqual(
+        await integration.sendSteerMessage(
+          "multi-line\nsteer",
+          controlSessionId
+        ),
+        true
+      );
+      assert.deepStrictEqual(preparedArguments[0], {
+        prompt: "multi-line\nsteer",
+      });
+      assert.strictEqual(preparedArguments[4], false);
+      assert.deepStrictEqual(sent, {
+        sessionId: controlSessionId,
+        text: "prepared steer",
+      });
+    } finally {
+      integration.dispose();
+    }
+  });
+
   test("should return false and expose the failure reason when execution throws", async () => {
     const integration = createHeadlessIntegration();
 

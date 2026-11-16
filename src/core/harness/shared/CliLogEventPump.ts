@@ -42,8 +42,23 @@ export interface CliLogEventPumpDeps {
  */
 export class CliLogEventPump {
   private readonly skillEventRewriter = new McpSkillEventRewriter();
+  private readonly dispatchedUserMessages = new Map<string, number>();
 
   constructor(private readonly deps: CliLogEventPumpDeps) {}
+
+  registerDispatchedUserMessage(text: string): void {
+    this.dispatchedUserMessages.set(
+      text,
+      (this.dispatchedUserMessages.get(text) ?? 0) + 1
+    );
+  }
+
+  discardDispatchedUserMessage(text: string): void {
+    const count = this.dispatchedUserMessages.get(text);
+    if (count === undefined) return;
+    if (count <= 1) this.dispatchedUserMessages.delete(text);
+    else this.dispatchedUserMessages.set(text, count - 1);
+  }
 
   /**
    * Process a single log event: stream its structured CliEvents, update the
@@ -130,6 +145,12 @@ export class CliLogEventPump {
     if (!text) {
       return undefined;
     }
+    if (
+      attribution === USER_STEER_ATTRIBUTIONS.USER &&
+      this.consumeDispatchedUserMessage(text)
+    ) {
+      return undefined;
+    }
 
     const timestamp =
       this.deps.parser.extractTimestamp?.(event)?.getTime() ??
@@ -140,5 +161,13 @@ export class CliLogEventPump {
       timestamp,
       data: { text, attribution } satisfies UserSteerData,
     };
+  }
+
+  private consumeDispatchedUserMessage(text: string): boolean {
+    const count = this.dispatchedUserMessages.get(text);
+    if (count === undefined) return false;
+    if (count <= 1) this.dispatchedUserMessages.delete(text);
+    else this.dispatchedUserMessages.set(text, count - 1);
+    return true;
   }
 }
