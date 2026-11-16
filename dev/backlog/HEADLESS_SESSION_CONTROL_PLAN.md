@@ -336,8 +336,14 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    turn-end completion, and the Qwen implementation. Qwen drops the positional prompt and sends
    `initialize` first. Every approval request gets ctrlyoke's deny message. This fixes the Qwen
    hang. Move the bug to `dev/bugs/implemented/` in this commit, with the corrected root cause.
-   Add a harness case for the Qwen "unlisted command chained to an allowed one" scenario; it
-   currently times out.
+   The harness case for the Qwen "unlisted command chained to an allowed one" scenario already
+   exists ("an allowed command does not allow an unlisted one chained to it" in
+   `src/test/harness/inline-config.harness.test.ts`); it currently times out. Update its comments
+   (and `SHELL_PROBE_TIMEOUT_MS`'s) to stop citing the bug as open. Agents do not run
+   `npm run test:harness`; the live confirmation is left to Nathan.
+   - **Qwen's `headlessSource` is `LOG`.** Its stdout chunks go to `HeadlessLogTail.onStdoutChunk`,
+     not to `parseStdout`. The channel must see every complete stdout JSONL record whatever the
+     source mode, so split stdout into records for the channel independently of the output path.
    - **Claude is not in Stage 1.** Under `deny`, Claude keeps `dontAsk`, which already refuses
      in-band, so the channel gives Claude nothing until steering. Moving it now would also risk
      losing `@path` expansion (see the inline plan's Claude probe) for no gain.

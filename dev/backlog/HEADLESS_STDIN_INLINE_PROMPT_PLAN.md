@@ -203,6 +203,17 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 - Older versions lost output or hung when stdout was not a terminal (upstream
   issues #76, #318); later changelog entries say pipes are fixed.
 
+## Scope of this round (2026-11-15)
+
+- **Claude is not opted in here.** It keeps today's argv prompt and free `@path` reads until
+  session-control Stage 2 moves it onto stream-json input; whether it inlines is decided there by
+  the `@path` probe. Step 4's "Claude: drop the prompt" applies only then.
+- **Opted in now:** Qwen (first message on the control channel), Copilot, Codex and agy (plain
+  `STDIN` delivery, interim for Codex and agy). OpenCode stays on `--file`.
+- **The setting controls content, not transport.** Moving Copilot, Codex and agy to stdin is
+  unconditional, so their args do not fork on a setting. With the setting off, the stdin text
+  is today's `follow the instructions in @…` sentence.
+
 ## Implementation sketch
 
 1. **Prompt planning.** In `CliPromptPreparer.createCategorizedPromptPlan`,
