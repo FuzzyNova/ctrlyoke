@@ -12,6 +12,7 @@ import {
   HARNESS_IDS,
   APPROVAL_DECISIONS,
   CLI_EVENT_TYPES,
+  HEADLESS_APPROVAL_TIMEOUT_MESSAGE,
   HEADLESS_APPROVAL_POLICIES,
   HEADLESS_STEER_DELIVERIES,
   MESSAGE_TYPES,
@@ -35,6 +36,7 @@ import {
 } from "../../utils/RunHistoryStoragePolicy";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { COPILOT_ACP_MIN_VERSION } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { OPENCODE_HEADLESS_CONTROL_MIN_VERSION } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { versionSatisfies } from "../../utils/HarnessVersion";
 import {
   HARNESS_MODELS,
@@ -70,6 +72,163 @@ async function waitFor<T>(
   throw new Error(`Timed out waiting for ${description}`);
 }
 
+function findPendingApproval(
+  messages: readonly unknown[]
+): HeadlessApprovalRequestMessage | undefined {
+  return messages.find(
+    (message): message is HeadlessApprovalRequestMessage =>
+      typeof message === "object" &&
+      message !== null &&
+      "type" in message &&
+      message.type === MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED &&
+      "isPending" in message &&
+      message.isPending === true
+  );
+}
+
+async function runOpenCodeApprovalCase(
+  scenario: "allow" | "deny" | "timeout",
+  waitBeforeDecisionMs = 0
+): Promise<void> {
+  const harness = HARNESS_IDS.OPENCODE_CLI;
+  const workspace = makeHarnessWorkspaceDir(
+    harness,
+    `ctrlyoke-headless-approval-opencode-${scenario}-`
+  );
+  const restoreRunState = isolateRunState(workspace);
+  const hadRunHistoryLocation = isRunHistoryLocationInitialized();
+  if (!hadRunHistoryLocation) {
+    initializeRunHistoryLocation(
+      configService.get("storage").runHistoryLocation
+    );
+  }
+  let instance: WorkflowInstance | undefined;
+  let execution: Promise<void> | undefined;
+  let executionSettled = false;
+  const dashboardMessages: unknown[] = [];
+  const events: CliEvent[] = [];
+
+  try {
+    const markerPath = path.join(workspace, "open-code-approved-once.txt");
+    const command = `node -e "require('fs').writeFileSync('${markerPath.replace(/\\/g, "/")}','allowed')"`;
+    const workflow: PromptFile = {
+      name: `OpenCode headless approval ${scenario}`,
+      harness,
+      model: HARNESS_MODELS[harness],
+      executionMode: EXECUTION_MODES.HEADLESS,
+      resumeSession: false,
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [],
+        deniedTools: [],
+        headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+        headlessApprovalTimeoutSec: scenario === "timeout" ? 1 : 60,
+      },
+      steps: [
+        {
+          name: "approval-required command",
+          prompt: [
+            "Run this exact command once:",
+            command,
+            "If it is denied, do not retry or use another tool.",
+            "Reply only with the result and the exact permission message.",
+          ].join("\n"),
+        },
+      ],
+    };
+    const workflowFile = path.join(
+      workspace,
+      `opencode-headless-approval-${scenario}.ctrlyoke.json`
+    );
+    await fs.promises.writeFile(
+      workflowFile,
+      JSON.stringify(workflow, null, 2),
+      "utf8"
+    );
+
+    const platform = new MockPlatform(workspace);
+    const integrationFactory = new SteeringIntegrationFactory(platform);
+    instance = new WorkflowInstance(
+      platform,
+      new PostMessageDashboardSink((message) =>
+        dashboardMessages.push(message)
+      ),
+      integrationFactory,
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      workspace
+    );
+    instance.onStreamingEvents((next) => events.push(...next));
+    assert.strictEqual(await instance.loadPromptFile(workflowFile), true);
+    execution = instance
+      .executeLoadedPromptFile()
+      .finally(() => (executionSettled = true));
+
+    const approval = await waitFor(
+      () => findPendingApproval(dashboardMessages),
+      `OpenCode ${scenario} approval request`
+    );
+    if (scenario !== "timeout") {
+      if (waitBeforeDecisionMs > 0) {
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, waitBeforeDecisionMs)
+        );
+      }
+      assert.strictEqual(
+        instance.respondToHeadlessApproval(
+          approval.controlSessionId,
+          approval.approvalId,
+          scenario === "allow"
+            ? APPROVAL_DECISIONS.ALLOW_ONCE
+            : APPROVAL_DECISIONS.DENY,
+          scenario === "deny" ? "ctrlyoke test denial" : undefined
+        ),
+        true
+      );
+    }
+
+    await execution;
+    const eventText = JSON.stringify(events);
+    if (scenario === "allow") {
+      assert.strictEqual(
+        await fs.promises.readFile(markerPath, "utf8"),
+        "allowed"
+      );
+    } else {
+      assert.strictEqual(fs.existsSync(markerPath), false);
+      assert.ok(
+        eventText.includes(
+          scenario === "deny"
+            ? "ctrlyoke test denial"
+            : HEADLESS_APPROVAL_TIMEOUT_MESSAGE
+        ),
+        `OpenCode did not receive the ${scenario} reason`
+      );
+    }
+    assert.ok(
+      events.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND),
+      "OpenCode JSONL parser did not preserve the command event"
+    );
+    assert.strictEqual(
+      instance.promptQueue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+  } finally {
+    if (execution && instance && !executionSettled) {
+      await instance.stop();
+      await execution.catch(() => undefined);
+    }
+    await instance?.outputHistoryManager.flushPendingIndexRefresh();
+    instance?.dispose();
+    restoreRunState();
+    if (!hadRunHistoryLocation) resetRunHistoryLocationForTests();
+    removeTempDir(workspace, (dir) =>
+      console.log(`  Could not clean up ${dir}`)
+    );
+  }
+}
+
 suite("Headless steering harness tests", function () {
   this.timeout(HARNESS_TIMEOUT_MS);
 
@@ -77,6 +236,7 @@ suite("Headless steering harness tests", function () {
     HARNESS_IDS.CLAUDE_CLI,
     HARNESS_IDS.QWEN_CLI,
     HARNESS_IDS.CODEX_CLI,
+    HARNESS_IDS.OPENCODE_CLI,
     HARNESS_IDS.ANTIGRAVITY_CLI,
     HARNESS_IDS.COPILOT_CLI,
   ] as const) {
@@ -90,6 +250,18 @@ suite("Headless steering harness tests", function () {
         if (
           !version ||
           !versionSatisfies(version, `>=${COPILOT_ACP_MIN_VERSION}`)
+        ) {
+          this.skip();
+        }
+      }
+      if (harness === HARNESS_IDS.OPENCODE_CLI) {
+        const version = await provider.getVersion?.();
+        if (
+          !version ||
+          !versionSatisfies(
+            version,
+            `>=${OPENCODE_HEADLESS_CONTROL_MIN_VERSION}`
+          )
         ) {
           this.skip();
         }
@@ -238,7 +410,8 @@ suite("Headless steering harness tests", function () {
               controlSessionId,
               canInterruptTurn:
                 harness !== HARNESS_IDS.ANTIGRAVITY_CLI &&
-                harness !== HARNESS_IDS.COPILOT_CLI,
+                harness !== HARNESS_IDS.COPILOT_CLI &&
+                harness !== HARNESS_IDS.OPENCODE_CLI,
               isOpen: true,
               steerDelivery:
                 harness === HARNESS_IDS.COPILOT_CLI ||
@@ -251,7 +424,8 @@ suite("Headless steering harness tests", function () {
               controlSessionId,
               canInterruptTurn:
                 harness !== HARNESS_IDS.ANTIGRAVITY_CLI &&
-                harness !== HARNESS_IDS.COPILOT_CLI,
+                harness !== HARNESS_IDS.COPILOT_CLI &&
+                harness !== HARNESS_IDS.OPENCODE_CLI,
               isOpen: false,
               steerDelivery:
                 harness === HARNESS_IDS.COPILOT_CLI ||
@@ -429,7 +603,8 @@ suite("Headless steering harness tests", function () {
     test(`${harness}: headless interrupt ends the current turn quickly`, async function () {
       if (
         harness === HARNESS_IDS.ANTIGRAVITY_CLI ||
-        harness === HARNESS_IDS.COPILOT_CLI
+        harness === HARNESS_IDS.COPILOT_CLI ||
+        harness === HARNESS_IDS.OPENCODE_CLI
       ) {
         this.skip();
       }
@@ -549,6 +724,29 @@ suite("Headless steering harness tests", function () {
           console.log(`  Could not clean up ${dir}`)
         );
       }
+    });
+  }
+
+  for (const scenario of ["allow", "deny", "timeout"] as const) {
+    test(`opencode-cli: headless approval ${scenario}`, async function () {
+      const provider = IntegrationFactory.createCapabilityProvider(
+        HARNESS_IDS.OPENCODE_CLI
+      );
+      if (!(await provider.checkAvailability())) {
+        this.skip();
+      }
+      const version = await provider.getVersion?.();
+      if (
+        !version ||
+        !versionSatisfies(version, `>=${OPENCODE_HEADLESS_CONTROL_MIN_VERSION}`)
+      ) {
+        this.skip();
+      }
+
+      await runOpenCodeApprovalCase(
+        scenario,
+        scenario === "allow" ? 32_000 : 0
+      );
     });
   }
 });

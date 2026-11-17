@@ -56,8 +56,10 @@ that is not on the allow list, and an `auto` judge escalation is also denied.
 
 #### Asking for headless tool approvals
 
-Headless Claude Code, Qwen Code, and Copilot CLI 1.0.112+ `custom` steps can show an approval
-card in the dashboard instead. Set `toolPermissions.headlessApprovals` to `ask` on the workflow, step or
+Headless Claude Code, Qwen Code, Copilot CLI 1.0.112+, and OpenCode 2.3.0+ `custom` steps can
+show an approval card in the dashboard instead. OpenCode requires its private standalone server;
+OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests. Set
+`toolPermissions.headlessApprovals` to `ask` on the workflow, step or
 [`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions):
 
 ```yaml
@@ -69,11 +71,13 @@ toolPermissions:
 The card shows the tool and its input, and offers **Allow once** or **Deny** with an optional
 message. An unanswered request is denied when the timeout expires; with no dashboard connected,
 ctrlyoke denies it immediately. Claude and Qwen also apply this to human escalations from their
-`auto` judges. Copilot `auto` stays on `--assisted-approval` and does not use ACP. It does not add
-an allow-always option. Copilot ACP cannot forward a custom denial message to the model, so that
-note remains in the dashboard.
+`auto` judges. OpenCode resolves an approval as a one-request `once` or `reject`, never `always`.
+Copilot `auto` stays on `--assisted-approval` and does not use ACP. It does not add an allow-always
+option. Copilot ACP cannot forward a custom denial message to the model, so that note remains in
+the dashboard.
 
-Other headless harnesses, and Copilot versions before 1.0.112, continue to deny approval requests.
+Other headless harnesses, OpenCode versions before 2.3.0, and Copilot versions before 1.0.112
+continue to deny approval requests.
 ctrlyoke warns once when a headless step starts with a mode other than `allowAll` or
 `dangerouslyAllowAll`. That includes `auto`, because its judge can refuse a request. Turn the warning off with
 [`ui.showHeadlessPermissionWarning`](/reference/settings#ui-showheadlesspermissionwarning).

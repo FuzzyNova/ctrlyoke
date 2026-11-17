@@ -143,8 +143,41 @@ export const OPENCODE_V2_CONTENT_TYPES = {
 /** First OpenCode release with the V2 CLI, plugin API and server. */
 const OPENCODE_V2_MIN_VERSION = "2.0.0";
 
+/** First OpenCode release with the awaited permission evaluate hook and steer delivery. */
+export const OPENCODE_HEADLESS_CONTROL_MIN_VERSION = "2.3.0";
+
 /** `opencode --version`: `1.19.5` on OpenCode 1, `opencode v2.2.5` on OpenCode 2. */
 export const OPENCODE_VERSION_COMMAND = "opencode --version";
+
+/**
+ * Process-local bridge values read by the OpenCode 2.3+ plugin. Keep the
+ * matching names in ctrlyoke-opencode-plugin-v2/index.ts in sync.
+ */
+export const OPENCODE_HEADLESS_CONTROL_ENV = {
+  URL: "CTRLYOKE_OPENCODE_CONTROL_URL",
+  TOKEN: "CTRLYOKE_OPENCODE_CONTROL_TOKEN",
+} as const;
+
+/** HTTP paths used by the OpenCode 2.3+ plugin's loopback control bridge. */
+export const OPENCODE_HEADLESS_CONTROL_ROUTES = {
+  PERMISSION: "/permission",
+  SESSION_EVENT: "/session-event",
+  STEER: "/steer",
+} as const;
+
+/** OpenCode 2 execution lifecycle events relevant to the headless bridge. */
+export const OPENCODE_HEADLESS_CONTROL_EVENTS = {
+  EXECUTION_STARTED: "session.execution.started",
+  EXECUTION_SUCCEEDED: "session.execution.succeeded",
+  EXECUTION_FAILED: "session.execution.failed",
+  EXECUTION_INTERRUPTED: "session.execution.interrupted",
+} as const;
+
+/** One-request permission decisions returned to the OpenCode plugin. */
+export const OPENCODE_HEADLESS_PERMISSION_DECISIONS = {
+  ONCE: "once",
+  REJECT: "reject",
+} as const;
 
 /**
  * Model discovery commands. OpenCode 1 prints each model ID followed by a JSON
@@ -168,6 +201,16 @@ export function isOpenCodeV2Version(rawVersion: string | undefined): boolean {
   return (
     rawVersion !== undefined &&
     versionSatisfies(rawVersion, `>=${OPENCODE_V2_MIN_VERSION}`)
+  );
+}
+
+/** Whether the installed CLI supports OpenCode's headless control plugin hooks. */
+export function isOpenCodeHeadlessControlVersion(
+  rawVersion: string | undefined
+): boolean {
+  return (
+    rawVersion !== undefined &&
+    versionSatisfies(rawVersion, `>=${OPENCODE_HEADLESS_CONTROL_MIN_VERSION}`)
   );
 }
 

@@ -23,7 +23,8 @@ import type {
 import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
-import { UNSUPPORTED_HEADLESS_STEERING_CAPABILITY } from "../shared/HeadlessSteeringCapabilities";
+import { OpenCodeHeadlessControlChannel } from "./OpenCodeHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
@@ -33,6 +34,7 @@ import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -64,7 +66,11 @@ import {
   OPENCODE_RESUMED_PROMPT_DELIVERIES,
   type OpenCodeResumedPromptDelivery,
 } from "./OpenCodeProtocolConstants";
-import { detectOpenCodeV2, OPENCODE_VERSION_COMMAND } from "./OpenCodeVersion";
+import {
+  detectOpenCodeHeadlessControl,
+  detectOpenCodeV2,
+  OPENCODE_VERSION_COMMAND,
+} from "./OpenCodeVersion";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
 import { HARNESS_SHELL_ESCAPE_PREFIX } from "../../../utils/HarnessShellEscape";
 
@@ -132,6 +138,15 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=1.3.16"]),
+} as const;
+
+const OPENCODE_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: capabilitySuiteVerification(
+    [">=2.3.0"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 /**
@@ -249,7 +264,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
       },
       promptInputs: { images: OPENCODE_IMAGE_INPUT_CAPABILITY },
       headlessControl: {
-        steering: UNSUPPORTED_HEADLESS_STEERING_CAPABILITY,
+        steering: OPENCODE_HEADLESS_STEERING_CAPABILITY,
       },
     };
   }
@@ -375,6 +390,21 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
       (candidate) => typeof candidate.sessionID === "string"
     );
     return event?.sessionID as string | undefined;
+  }
+
+  async createHeadlessControlChannel(
+    _promptText: string,
+    options: HeadlessControlChannelOptions
+  ): Promise<OpenCodeHeadlessControlChannel | undefined> {
+    const launchArgs = options.context?.launchArgs ?? [];
+    if (
+      !launchArgs.includes(OPENCODE_CLI_FLAGS.STANDALONE) ||
+      launchArgs.includes(OPENCODE_V2_SERVER_FLAG) ||
+      !(await detectOpenCodeHeadlessControl())
+    ) {
+      return undefined;
+    }
+    return OpenCodeHeadlessControlChannel.create();
   }
 
   /**

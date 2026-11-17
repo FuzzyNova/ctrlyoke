@@ -179,15 +179,19 @@ const FEATURES_UNVERIFIED_AT_MINIMUM: Partial<Record<HarnessId, string[]>> = {
     "permissions.autoMode",
     HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
   ],
-  [HARNESS_IDS.OPENCODE_CLI]: ["sandbox.terminal"],
+  [HARNESS_IDS.OPENCODE_CLI]: [
+    "sandbox.terminal",
+    HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
+  ],
   [HARNESS_IDS.QWEN_CLI]: [
     "sandbox.terminal",
     "permissions.autoMode",
     HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
   ],
   // Sandbox terminal evidence exists only at these verified CLI versions,
-  // which are newer than the currently declared harness minimums. Headless
-  // steering is only verified on current CLIs; no older-version gate is known.
+  // which are newer than the currently declared harness minimums. Claude's
+  // headless steering is only verified on current CLIs; no older-version gate
+  // is known. OpenCode's older-version gap has a runtime >=2.3.0 gate.
   [HARNESS_IDS.CLAUDE_CLI]: [
     "sandbox.terminal",
     "permissions.autoMode",

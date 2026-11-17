@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Headless Claude Code and Qwen Code steps can ask the dashboard to approve tool requests with **Allow once** or **Deny**, including an optional denial message. Requests with no connected dashboard or no answer before the timeout are denied.
 - Headless Codex command, file-change and additional-permission approvals now follow `toolPermissions.headlessApprovals`; **Deny** remains the default, and **Ask** routes requests to the dashboard.
+- Headless OpenCode 2.3.0+ steps can route one-shot tool approvals to the dashboard and inject **Send Steer Message** into the active turn. OpenCode 1 and earlier OpenCode 2 versions keep auto-rejecting headless approval requests.
 - Send Steer Message now works during headless Claude Code, Codex CLI, Qwen Code and Antigravity steps: Claude and Codex receive the message in their current turns, while Qwen and Antigravity queue it after their current turns.
 - Interrupt Turn ends a headless Claude, Codex or Qwen turn while preserving the partial output and completing the step without stopping the workflow.
 - Codex headless approval requests use the configured timeout directly because app-server has no client-side timeout. Optional denial messages remain in the dashboard approval card because Codex's approval responses cannot carry them to the model.

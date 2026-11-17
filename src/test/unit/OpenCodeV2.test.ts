@@ -12,6 +12,7 @@ import {
   OPENCODE_RESUME_PROMPT_ENV,
 } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import {
+  isOpenCodeHeadlessControlVersion,
   isOpenCodeV2Version,
   setOpenCodeVersionProbe,
 } from "../../core/harness/opencode/OpenCodeVersion";
@@ -26,6 +27,7 @@ import type {
 } from "../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  HEADLESS_APPROVAL_POLICIES,
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
 
@@ -84,6 +86,9 @@ suite("OpenCode 2 support", () => {
     assert.strictEqual(isOpenCodeV2Version("2.0.0"), true);
     assert.strictEqual(isOpenCodeV2Version("1.19.5"), false);
     assert.strictEqual(isOpenCodeV2Version(undefined), false);
+    assert.strictEqual(isOpenCodeHeadlessControlVersion("2.3.0"), true);
+    assert.strictEqual(isOpenCodeHeadlessControlVersion("2.2.9"), false);
+    assert.strictEqual(isOpenCodeHeadlessControlVersion("1.19.5"), false);
   });
 
   test("maps `run --format json` tool parts, tokens and session", () => {
@@ -263,6 +268,47 @@ suite("OpenCode 2 support", () => {
       ]);
       assert.strictEqual(config.plugin, undefined);
       assert.strictEqual(config.model, undefined);
+    });
+
+    test("enables headless control only on standalone OpenCode 2.3+", async () => {
+      const provider = new OpenCodeHarnessAdapter();
+      const options = {
+        approvalPolicy: HEADLESS_APPROVAL_POLICIES.ASK,
+        approvalTimeoutMs: 1_000,
+        useApprovalControl: true,
+        context: { launchArgs: ["run", OPENCODE_CLI_FLAGS.STANDALONE] },
+      } as const;
+      const restoreV22 = setOpenCodeVersionProbe(async () => "opencode v2.2.9");
+      try {
+        assert.strictEqual(
+          await provider.createHeadlessControlChannel("prompt", options),
+          undefined
+        );
+      } finally {
+        restoreV22();
+      }
+
+      const restoreV23 = setOpenCodeVersionProbe(async () => "opencode v2.3.0");
+      try {
+        const channel = await provider.createHeadlessControlChannel(
+          "prompt",
+          options
+        );
+        assert.ok(channel);
+        channel.close();
+
+        assert.strictEqual(
+          await provider.createHeadlessControlChannel("prompt", {
+            ...options,
+            context: {
+              launchArgs: ["run", "--server", "http://127.0.0.1:4096"],
+            },
+          }),
+          undefined
+        );
+      } finally {
+        restoreV23();
+      }
     });
 
     test("moves the interactive model into config, since the TUI has no -m", async () => {

@@ -31,6 +31,10 @@ export type ControlObservation =
       interrupted?: boolean;
     };
 
+export type ControlObservationHandler = (
+  observations: readonly ControlObservation[]
+) => void;
+
 /** Provider-specific spawn adjustments for a control protocol. */
 export interface HeadlessControlSpawnShape {
   args?: readonly string[];
@@ -71,7 +75,10 @@ export interface IHeadlessControlChannel {
   readonly holdOpenForBackgroundWork?: boolean;
   /** Defer log-tail startup until `start()` has resolved a control session ID. */
   readonly startLogTailAfterChannelStart?: boolean;
-  start(writer: ControlWriter): Promise<void>;
+  start(
+    writer: ControlWriter,
+    onObservations?: ControlObservationHandler
+  ): Promise<void>;
   sendUserMessage(text: string): Promise<void>;
   observe(record: unknown): ControlObservation[];
   /** Optional protocol-owned stdout framing for transports such as ACP JSONL. */

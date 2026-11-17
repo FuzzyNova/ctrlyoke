@@ -895,25 +895,29 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         observeControlRecord(record);
       };
 
-      const createControlWriter = (writer: Writable): ControlWriter => ({
-        write: (text) =>
-          withControlLock(
-            () =>
-              new Promise<void>((resolve, reject) => {
-                writer.write(text, "utf8", (error?: Error | null) => {
-                  if (error) reject(error);
-                  else resolve();
-                });
-              })
-          ),
-        end: () =>
-          withControlLock(
-            () =>
-              new Promise<void>((resolve) => {
+      const createControlWriter = (writer: Writable): ControlWriter => {
+        let stdinEnded = false;
+        return {
+          write: (text) =>
+            withControlLock(
+              () =>
+                new Promise<void>((resolve, reject) => {
+                  writer.write(text, "utf8", (error?: Error | null) => {
+                    if (error) reject(error);
+                    else resolve();
+                  });
+                })
+            ),
+          end: () =>
+            withControlLock(() => {
+              if (stdinEnded) return Promise.resolve();
+              stdinEnded = true;
+              return new Promise<void>((resolve) => {
                 writer.end(resolve);
-              })
-          ),
-      });
+              });
+            }),
+        };
+      };
 
       if (controlChannel) {
         this.activeHeadlessControlChannel = controlChannel;
@@ -1008,7 +1012,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                 controlWriter = createControlWriter(writer);
                 controlReady = (async () => {
                   if (controlClosed) return;
-                  await controlChannel.start(controlWriter!);
+                  await controlChannel.start(
+                    controlWriter!,
+                    processControlObservations
+                  );
                   if (controlClosed) return;
                   if (
                     controlChannel.startLogTailAfterChannelStart &&

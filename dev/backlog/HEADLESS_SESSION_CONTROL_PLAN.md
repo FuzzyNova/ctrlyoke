@@ -1,6 +1,6 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Stages 1, 2a, 2b, 3, 4 and 5 are implemented. Stage 1's shared
+**Status:** Stages 1–5, 6a and 6c are implemented; 6b remains deferred. Stage 1's shared
 transport and Qwen channel are covered by unit tests, and the live Qwen approval case that used
 to hang now passes. Stage 2a moves Claude headless prompts to stream-json stdin, inlines
 generated sections, and holds stdin open for tracked background follow-up work; see the Claude
@@ -27,8 +27,12 @@ sandboxed workspace-write case passed after the writable-root merge.
 Stage 6a Copilot ACP is implemented and live verified on Copilot CLI 1.0.112: the shared ACP
 client, session create/load, native log parsing, queued steering, and one-shot dashboard approvals
 are in place; `auto` keeps its existing JSONL/assisted-approval path. The Copilot harness subset
-passed with 35 tests and one unsupported interrupt case pending. The OpenCode V2 plugin path is
-designed, while Antigravity ACP is deferred until it preserves the existing permission rules.
+passed with 35 tests and one unsupported interrupt case pending. Stage 6c's OpenCode 2 plugin is
+implemented and live verified on OpenCode 2.3.0: the private loopback bridge provides one-shot
+dashboard approvals and injected steering, and all 6c approval/steer cases passed. OpenCode 1 and
+OpenCode 2 before 2.3.0 keep their existing auto-reject path. The broader OpenCode harness subset
+also has a foreground-subagent attribution failure that was observed on 2026-11-16, before this
+implementation; Antigravity ACP remains deferred until it preserves the existing permission rules.
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args by default, while Copilot ACP replaces
 the provider-built CLI args and re-resolves the launcher prefix; the coordinator ends stdin before
@@ -631,7 +635,7 @@ acp`. Put `--model` before `acp`; `agy acp --model ...` is rejected. Use the sam
      must follow the first prompt response; and the existing transcript parser must produce
      tool, diff, and completion events.
 
-   **6c. OpenCode 2 plugin — planned.**
+   **6c. OpenCode 2 plugin — implemented and live verified on OpenCode 2.3.0.**
    - **Gate:** OpenCode >= 2.3.0, the first version live-probed for both the V2 plugin path and
      the blocking `evaluate` hook. OpenCode 1 and earlier 2.x retain today's path.
    - **Launch:** keep `opencode run --standalone --format json -m <model>` and stdin prompt
@@ -642,10 +646,13 @@ acp`. Put `--model` before `acp`; `agy acp --model ...` is rejected. Use the sam
    - **Approval wire/channel:** register
      `ctx.permission.hook("evaluate", async event => ...)`. The event includes `sessionID`,
      `agent`, `action`, `resources`, `source`, and the current `effect`. The plugin posts the
-     request to the host's loopback endpoint and awaits its decision, then sets `event.effect`
-     to `allow` or `deny` and `event.message` to the host's reason. The same bridge can
-     long-poll for host-queued steer messages; bind only to `127.0.0.1` and authenticate each
-     request with the per-process token.
+     request to the host's loopback endpoint and awaits its decision. The bridge replies with
+     the one-request decision `once` or `reject` (never `always`); the plugin maps that to
+     `event.effect: "allow"` or `"deny"` and forwards the host's denial message. It also emits
+     the existing `permissionRequest` notification before resolving the hook. The same bridge
+     long-polls for host-queued steer messages; it binds only to `127.0.0.1` and authenticates
+     each request with the per-process token, which the plugin removes from its environment
+     before any tool can inherit it.
    - **Output:** leave `headlessSource = STDOUT` and `OpenCodeLogParser` unchanged. The plugin
      owns control traffic; the existing `opencode run --format json` stream remains the only
      output source.
@@ -657,16 +664,21 @@ acp`. Put `--model` before `acp`; `agy acp --model ...` is rejected. Use the sam
      then returned the denial to the model, so the plugin path works without a second
      server lifecycle, `OPENCODE_PASSWORD`, or the `/api/session/.../permission/.../reply`
      route. Reconsider `serve` only if a supported V2 version stops awaiting this hook.
-   - **Live cases:** allow and deny from the dashboard; hold the hook beyond 30 s before
-     resolving it; deny on the configured timeout; prove the denied tool never ran and the
-     denial reason reached the model; steer during a long tool and confirm it is injected into
-     the current session; and keep text/tool/diff events on the existing JSONL parser.
+   - **Live cases (passed 2026-11-17 on OpenCode 2.3.0):** dashboard allow after 32 s, dashboard
+     deny with a message, timeout denial, and steering during a long tool. The cases verify that
+     the allowed command ran, denied/timed-out commands did not, the denial message reached the
+     model, and the steer reached the active turn. The live cases also retain the streamed command
+     event; `OpenCodeV2.test.ts` continues to cover text, tool, write and edit-diff parsing.
+     `npm run test:harness -- --grep "opencode-cli"` finished with 34 passing, one pending
+     unsupported interrupt case, and one foreground-subagent attribution failure. That same
+     attribution case failed in the 2026-11-16 OpenCode report before 6c; it is unrelated to the
+     control bridge.
 
 Each shipped sub-stage must add its capability declaration and passing live-case evidence, so
 the compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Current headless steering is
-available for Claude Code, Codex CLI, Qwen Code, and Antigravity. Copilot supports steering on
-1.0.112 and later except in `auto` mode; OpenCode remains behind 6c's V2 gate, and 6b adds no
-capability until its permission parity gap is closed.
+available for Claude Code, Codex CLI, Qwen Code, Antigravity, and OpenCode 2.3.0+. Copilot
+supports steering on 1.0.112 and later except in `auto` mode; OpenCode 1 and OpenCode 2 before
+2.3.0 keep the existing path, and 6b adds no capability until its permission parity gap is closed.
 
 ## Version requirements
 
@@ -680,7 +692,7 @@ conservative first-probed gates are Copilot 1.0.112, Antigravity 1.5.9 (deferred
 | Claude      | 2.1.94              | stream-json input, the control protocol and `--permission-prompt-tool stdio` are the Agent SDK's transport and predate 2.1. Whether a mid-turn message is injected or queued was only probed on 2.1.325; it changes the tooltip, not support.                                                                                                                                                                                                                                                                                                                                                                                     |
 | Qwen        | 0.15.5              | Stream-json SDK mode and `can_use_tool` date from 2025-11-21 (#926), before the minimum. `initialize.timeout.canUseTool` is honored only from 2026-05-26 (#4491, about 0.16); before that the timeout is a fixed 60 s, so `ask` caps its wait there.                                                                                                                                                                                                                                                                                                                                                                              |
 | Codex       | 0.129.0             | v2 approvals (2025-11-18), `turn/steer` (2026-02-06), exec on the in-process app-server (2026-03-08) and the hook-trust bypass (2026-05-13) all landed by about the minimum. `CodexQuotaCollector`'s 0.146 gate (`CODEX_APP_SERVER_MIN_VERSION`, from ~2b39311) is not a protocol limit: its comment says it is "gated to the rechecked CLI line", i.e. the version the quota methods were verified on. 0.146.0 is also the version the inline hooks and pinned harness tests were verified on. **Gate headless app-server at 0.146** and keep `exec` below it; lower the gate only with a passing live case on an older version. |
-| OpenCode    | 1.3.16 (OpenCode 1) | The plugin `evaluate` hook (2026-08-25, #45003) and steer delivery (2026-08-12, #42109) are recent OpenCode 2 only. OpenCode 1 and early 2.x keep auto-reject.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| OpenCode    | 1.3.16 (OpenCode 1) | The plugin `evaluate` hook (2026-08-25, #45003) and steer delivery (2026-08-12, #42109) are recent OpenCode 2 only. Gate headless control at 2.3.0; OpenCode 1 and OpenCode 2 before 2.3.0 keep auto-reject.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Copilot     | 1.0.19              | ACP predates 1.0, but `session/request_permission` was not checked on 1.0.19 (closed source).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Antigravity | 1.4.10              | Not dated: `--input-format stream-json` and `agy acp` were only checked on 1.5.9.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -703,10 +715,10 @@ questions.
   did not enforce the tested deny rule, and a direct file edit did not raise an ACP permission
   request. Keep Stage 4's stream-json path until ACP or a host-side policy preserves these
   restrictions.
-- **OpenCode async `evaluate` hook (Stage 6, probed 2026-11-16).** V2.3.0 awaited a
-  loopback-host decision for 32 s and returned its denial message to the model. Use the plugin
-  hook plus a per-process loopback HTTP bridge; `opencode serve` is unnecessary unless this
-  await behavior changes in a supported version.
+- **OpenCode async `evaluate` hook (Stage 6, probed 2026-11-16 and implemented in 6c).** V2.3.0
+  awaited a loopback-host decision for 32 s and returned its denial message to the model. The
+  plugin hook and per-process loopback HTTP bridge are live verified; `opencode serve` is
+  unnecessary unless this await behavior changes in a supported version.
 - **Codex rollout parity.** Resolved in Stage 5: rollout output and session errors are read from
   Codex's log, and resuming by the app-server thread ID was live-verified. Gate at 0.146 (see
   "Version requirements").
