@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-15
 **Status:** Research. Nothing implemented. The headless approvals and steering work that uses
-these channels is planned in [`HEADLESS_SESSION_CONTROL_PLAN.md`](../backlog/HEADLESS_SESSION_CONTROL_PLAN.md).
+these channels is planned in [`HEADLESS_SESSION_CONTROL_PLAN.md`](../implemented/HEADLESS_SESSION_CONTROL_PLAN.md).
 **Sources:** that plan's live probes; the local vendor clones (`C:\dev\qwen-code`,
 `C:\dev\codex`, `C:\dev\opencode`); `--help` output of the installed CLIs (Claude Code 2.1.325,
 Qwen Code 0.27.1, Codex 0.167.0, OpenCode 2.2.6, Copilot CLI 1.0.112, agy 1.5.9). Each claim
