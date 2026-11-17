@@ -1,6 +1,6 @@
 # Headless Session Control: Steering and Approvals
 
-**Status:** Stages 1, 2a, 2b, 3 and 4 are implemented. Stage 1's shared
+**Status:** Stages 1, 2a, 2b, 3, 4 and 5 are implemented. Stage 1's shared
 transport and Qwen channel are covered by unit tests, and the live Qwen approval case that used
 to hang now passes. Stage 2a moves Claude headless prompts to stream-json stdin, inlines
 generated sections, and holds stdin open for tracked background follow-up work; see the Claude
@@ -12,9 +12,9 @@ on SDK mode side effects (under "Qwen Code" findings) is done: subagent output l
 ctrlyoke child-follower race, now fixed by completing a child from the parent stream's report or
 its `meta.json` status; SDK mode's empty agent list cannot be restored without copying Qwen's
 builtin agent definitions, so it is documented (`docs/harnesses/qwen-cli.md`, CHANGELOG
-**Changed**). Researched 2026-11-15 by live probes and source reading, with Claude probes on
-2026-11-16 (details under "Findings"). Open questions through Stage 2a are resolved (see
-"Decisions"). The "Interrupt Turn" follow-up is implemented and its Claude/Qwen live cases passed
+**Changed**). Researched 2026-11-15 by live probes and source reading, with Claude and Stage 6
+probes on 2026-11-16 (details under "Findings"). Open questions through Stage 6 have been
+probed or explicitly deferred (see "Decisions"). The "Interrupt Turn" follow-up is implemented and its Claude/Qwen live cases passed
 on 2026-11-16. The targeted Claude harness subset passed on 2026-11-16 (20 tests, including
 headless image input and resume). Stage 3 adds the deny/ask policy, timeout settings, a pending
 approval registry, dashboard request/response messages, and the output-pane approval card. Live
@@ -24,6 +24,8 @@ approval. Stage 4 adds Antigravity stream-json queue steering (probed on agy 1.5
 compatibility-matrix coverage. Stage 5 adds Codex app-server transport for headless runs on
 0.146.0 and later; the full Codex harness subset passed on 0.169.0 (28 tests), and the
 sandboxed workspace-write case passed after the writable-root merge.
+Stage 6 was probed on 2026-11-16: Copilot ACP and the OpenCode V2 plugin path are designed,
+while Antigravity ACP is deferred until it preserves the existing permission rules.
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
 text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
 before calling `channel.close()` so channel cleanup does not need to own transport EOF. Claude's
@@ -74,22 +76,25 @@ probe:
 A **steer** puts the message into the running turn: the model answers PINEAPPLE in that same
 turn. A **queue** runs it as the next turn. **Cancel-and-replace** aborts the running turn.
 
-| Harness (version)     | Channel                                                                           | Message while running                                  | Approval requests                                                                                | How verified    |
-| --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------- |
-| Claude Code 2.1.325   | `-p --input-format stream-json`; approvals add `--permission-prompt-tool stdio` + `initialize` | **steer** (mid-tool, same turn)                        | `control_request` `can_use_tool`; reply allow (+`updatedInput`) / deny (+`message`)              | probed          |
-| Qwen Code 0.27.1      | stream-json **SDK mode**: `initialize` first, no positional prompt                | **queue** (next turn)                                  | `can_use_tool` (same shape as Claude); 60 s default timeout, up to 600 s                         | probed + source |
-| Codex 0.169.0         | `codex app-server` JSON-RPC v2                                                    | **steer** (`turn/steer`)                               | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/…` | probed          |
-| OpenCode 2.2.6        | plugin `permission.hook("evaluate")` + `ctx.session.prompt`, or `opencode serve`  | **steer** (`delivery: "steer"`, default) or queue      | `permission.asked`; reply `once`/`always`/`reject` (+`message`)                                  | source only     |
-| Copilot CLI 1.0.112   | `--acp`                                                                           | **cancel-and-replace** (probed)                        | `session/request_permission` (`allow_once`/`allow_always`/`reject_once`)                         | probed          |
-|                       | hidden `--server --stdio` (copilot-sdk protocol)                                  | **steer** (`session.send` `mode: "immediate"`, probed) | `permission.request` exists, but routing it to the client was not achieved                       | probed          |
-| Antigravity agy 1.5.9 | `--input-format stream-json` (`{"event":"user",…}`)                               | **queue** (probed)                                     | **none** (no control vocabulary in the binary)                                                   | probed          |
-|                       | `agy acp`                                                                         | **cancel-and-replace** (probed)                        | `session/request_permission` (`allow`/`deny`)                                                    | probed          |
+| Harness (version)     | Channel                                                                                        | Message while running                                  | Approval requests                                                                                 | How verified                                |
+| --------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Claude Code 2.1.325   | `-p --input-format stream-json`; approvals add `--permission-prompt-tool stdio` + `initialize` | **steer** (mid-tool, same turn)                        | `control_request` `can_use_tool`; reply allow (+`updatedInput`) / deny (+`message`)               | probed                                      |
+| Qwen Code 0.27.1      | stream-json **SDK mode**: `initialize` first, no positional prompt                             | **queue** (next turn)                                  | `can_use_tool` (same shape as Claude); 60 s default timeout, up to 600 s                          | probed + source                             |
+| Codex 0.169.0         | `codex app-server` JSON-RPC v2                                                                 | **steer** (`turn/steer`)                               | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/…`  | probed                                      |
+| OpenCode 2.3.0        | plugin `permission.hook("evaluate")` + `ctx.session.prompt`, or `opencode serve`               | **steer** (`delivery: "steer"`, default) or queue      | plugin `evaluate` effect `allow`/`deny`; server `permission.asked` reply `once`/`always`/`reject` | async hook probed; steer/server source only |
+| Copilot CLI 1.0.112   | `--acp`                                                                                        | **cancel-and-replace** (probed)                        | `session/request_permission` (`allow_once`/`allow_always`/`reject_once`)                          | probed                                      |
+|                       | hidden `--server --stdio` (copilot-sdk protocol)                                               | **steer** (`session.send` `mode: "immediate"`, probed) | `permission.request` exists, but routing it to the client was not achieved                        | probed                                      |
+| Antigravity agy 1.5.9 | `--input-format stream-json` (`{"event":"user",…}`)                                            | **queue** (probed)                                     | **none** (no control vocabulary in the binary)                                                    | probed                                      |
+|                       | `agy acp`                                                                                      | **cancel-and-replace** (probed)                        | `session/request_permission` (`allow`/`deny`)                                                     | probed                                      |
 
-So **approvals are answerable on every harness** (agy and Copilot only over ACP), and **every
-harness accepts more input on a live session**. True mid-turn steering exists on Claude, Codex,
-OpenCode and Copilot (server mode). Qwen and agy queue the message as the next turn. ACP's
-cancel-and-replace is not a steer; ctrlyoke can turn it into a queue by holding the message
-until the current `session/prompt` returns.
+Every harness has a channel that can answer the approval requests it actually emits (agy and
+Copilot only over ACP), and every harness accepts more input on a live session. True mid-turn
+steering exists on Claude, Codex, OpenCode and Copilot (server mode). Qwen and agy queue the
+message as the next turn. ACP's cancel-and-replace is not a steer; ctrlyoke can turn it into a
+queue by holding the message until the current `session/prompt` returns. The Stage 6
+Antigravity probe below found that ACP did not request approval for direct file edits and did
+not enforce ctrlyoke's per-run permission settings, so that sub-stage is deferred rather than
+widening permissions.
 
 ### Claude Code
 
@@ -220,8 +225,16 @@ Source paths are relative to `C:\dev\opencode\packages\`.
     `core\src\permission.ts:190-201`), so it decides before `run` can auto-reject.
   - `ctx.session.prompt({…, delivery: "steer"})` injects at the next step boundary.
   - ctrlyoke's plugin (`src/scripts/ctrlyoke-opencode-plugin-v2/index.ts`) uses neither today.
-  - It needs a ctrlyoke→plugin channel. Whether an async hook may block on a human decision is
-    inferred, not verified.
+  - It needs a ctrlyoke→plugin channel. The Stage 6 probe verified that an async hook can await
+    a host decision for over 30 s; a per-process loopback HTTP bridge is the proposed channel.
+- **Stage 6 probe (OpenCode 2.3.0, 2026-11-16):** a V2 plugin loaded through
+  `OPENCODE_CONFIG_CONTENT` with `plugins:[<directory>]` registered
+  `ctx.permission.hook("evaluate", async ...)`. Its event included `sessionID`, `agent`,
+  `action`, `resources`, `source`, and `effect`. The plugin posted the event to a host loopback
+  endpoint and awaited the response; the host replied with a denial after 32 s, the hook
+  completed after 32.022 s, and `opencode run --standalone --format json` returned the denial
+  reason to the model without running the command. This proves the permission half of the
+  proposed bridge; host-to-plugin steering delivery still needs its live case in Stage 6c.
 - **Server route:**
   - `opencode serve` with `OPENCODE_PASSWORD`.
   - `POST /api/session/:id/prompt {text, delivery}` sends a message.
@@ -255,7 +268,27 @@ Source paths are relative to `C:\dev\opencode\packages\`.
     request permission from user" itself. The `session.create` handler does not forward a
     `requestPermission` option, so the opt-in is somewhere else; this is unresolved.
   - The flag is hidden and undocumented, so treat it as unstable.
-- Whether `--assisted-approval` and `--allow-tool` apply under `--acp` is untested.
+- **Stage 6 ACP probe (Copilot CLI 1.0.112, 2026-11-16):** `--allow-tool shell(echo)` ran the
+  command without a permission request; `--deny-tool shell(echo)` returned a failed tool call
+  with the matching rule; `--allow-all-tools` and `--yolo` also launched and allowed the
+  harmless echo case. `--assisted-approval` fails before ACP initialization with
+  "`--assisted-approval` is only supported in non-interactive prompt mode or direct workflow
+  mode." The ACP Autopilot mode is not a replacement: its advertised behavior is allow-all,
+  not the assisted-approval judge.
+- ACP `session/new` returns the session ID used for
+  `~/.copilot/session-state/<sessionId>/events.jsonl`; ACP runs wrote the same native event
+  types (`session.start`, `user.message`, `assistant.message`, `tool.execution_start`,
+  `tool.execution_complete`, and others) consumed by `CopilotLogParser`. A second process
+  successfully used `session/load` with that ID and continued the same history. Thus output
+  can stay on the existing log parser; no ACP output-event mapper is needed. The observed
+  `session/update` values were `user_message_chunk`, `agent_message_chunk`,
+  `agent_thought_chunk`, `tool_call`, `tool_call_update`, `available_commands_update`,
+  `session_info_update`, and `usage_update`. Opting into
+  `github.com/copilot/sessionEvent` also produced `assistant.turn_start`, `assistant.idle`,
+  and `session.idle`.
+- The existing ACP probe confirmed that a second `session/prompt` cancels the active one.
+  Stage 6 must therefore queue steers in ctrlyoke and send them only after the outstanding
+  prompt request resolves.
 
 ### Antigravity (agy)
 
@@ -273,6 +306,23 @@ Source paths are relative to `C:\dev\opencode\packages\`.
   - Modes: `default`, `accept-edits`, `auto`, `plan`.
   - A second prompt ended the first (`end_turn`) and ran the new one, so it is
     cancel-and-replace.
+- **Stage 6 ACP probe (agy 1.5.9, 2026-11-16):** `agy --model gemini-3.8-flash-low acp`
+  started successfully (the model flag must precede `acp`). `session/new` and `session/load`
+  worked, and `session/prompt` emitted `user_message_chunk`, `agent_message_chunk`,
+  `tool_call`, `tool_call_update`, `usage_update`, and `session_info_update`. For a terminal
+  command, `session/request_permission` offered `{optionId:"allow", kind:"allow_once"}` and
+  `{optionId:"deny", kind:"reject_once"}`; selecting either worked. Its prompt result was
+  `stopReason:"end_turn"`.
+- ACP does not emit Antigravity's stream-json records, but it writes the ordinary
+  `transcript_full.jsonl` under the ACP session ID. The probe's transcript contained the
+  existing `USER_INPUT`, `PLANNER_RESPONSE`, `GENERIC`, and `SYSTEM_MESSAGE` entry types, so
+  `AntigravityLogParser` can remain the output source if the ACP session ID is supplied
+  directly. However, the ACP run created a file through `write_to_file` without any
+  `session/request_permission`, even with `toolPermission:"request-review"`. A run with
+  `--settings` containing `permissions.deny:["command(*)"]` also executed the denied echo
+  command. ACP therefore does not currently preserve ctrlyoke's per-run permission rules or
+  approval coverage; Stage 6b is deferred until both are fixed or proven to have an equivalent
+  host-side enforcement path.
 
 ## Is it worth doing?
 
@@ -429,25 +479,25 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
      generated-section inlining after the `@path` probe below.
    - Stdin must stay open until the turn's `result`, because approval answers go on stdin. Stdin
      EOF cancels a pending request, so `close()` at turn end (or on Stop) can never hang.
-2a. **[Done] Claude channel + prompt transport.** Move Claude headless onto stream-json stdin,
-    send the first prompt as a `user` message, and inline generated sections because the
-    `@path` probe showed they are not expanded. Do not initialize host permission prompting:
-    custom stays `dontAsk`, and any `can_use_tool` request is answered with deny. When the
-    parser reports pending background work after `result`, hold stdin open until it clears or
-    the prompt timeout expires. `npm run test:harness -- --grep "claude-cli"` passed (20 tests),
-    including headless image input and resume.
-2b. **[Done] Headless steer dispatch** for Claude (inject) and Qwen (queue). The
-    coordinator keeps stdin open for the appropriate result boundary, publishes a uniquely
-    identified control target on open/close, prepares steer text inline, and adds one `USER_STEER`
-    receipt to the running step after the write succeeds. The existing log pump suppresses an
-    echoed copy of a message sent by ctrlyoke.
+     2a. **[Done] Claude channel + prompt transport.** Move Claude headless onto stream-json stdin,
+     send the first prompt as a `user` message, and inline generated sections because the
+     `@path` probe showed they are not expanded. Do not initialize host permission prompting:
+     custom stays `dontAsk`, and any `can_use_tool` request is answered with deny. When the
+     parser reports pending background work after `result`, hold stdin open until it clears or
+     the prompt timeout expires. `npm run test:harness -- --grep "claude-cli"` passed (20 tests),
+     including headless image input and resume.
+     2b. **[Done] Headless steer dispatch** for Claude (inject) and Qwen (queue). The
+     coordinator keeps stdin open for the appropriate result boundary, publishes a uniquely
+     identified control target on open/close, prepares steer text inline, and adds one `USER_STEER`
+     receipt to the running step after the write succeeds. The existing log pump suppresses an
+     echoed copy of a message sent by ctrlyoke.
 
-    The webview stores open targets by workflow, clears them on channel close, workflow end and
-    reconnect, and uses the selected PTY ahead of a headless channel. The editor sends the control
-    session id through the existing `SEND_STEER_MESSAGE` payload. Claude and Qwen tooltips describe
-    their different delivery behavior.
+   The webview stores open targets by workflow, clears them on channel close, workflow end and
+   reconnect, and uses the selected PTY ahead of a headless channel. The editor sends the control
+   session id through the existing `SEND_STEER_MESSAGE` payload. Claude and Qwen tooltips describe
+   their different delivery behavior.
 
-3. **[Done] `ask` policy with output-pane approvals.** Added the optional
+2. **[Done] `ask` policy with output-pane approvals.** Added the optional
    `toolPermissions.headlessApprovals` (`deny`/`ask`) and `headlessApprovalTimeoutSec` fields to
    settings and workflow schemas; no schema bump is needed for optional fields. The host policy
    service registers request metadata and deadlines, broadcasts pending/removal messages, accepts
@@ -462,7 +512,7 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    exercises the store, output-row projection and card. Live Claude/Qwen cases exercise `ask` with
    the no-dashboard fallback because the real-harness runner cannot attach a dashboard approver.
    An MCP tool to list and answer pending approvals remains a follow-up.
-4. **[Done] agy steering** over stream-json (queue). agy approvals stay `deny`; its stream-json
+3. **[Done] agy steering** over stream-json (queue). agy approvals stay `deny`; its stream-json
    protocol has no approval vocabulary. Since the inline plan shipped, agy receives generated
    prompt sections in the first `{"event":"user",…}` record sent on stdin. The adapter now opts
    into `--input-format stream-json`, observes terminal `result` events, and leaves failure and
@@ -470,7 +520,7 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    queues as a distinct turn/result and EOF after the last result exits cleanly; older versions
    are not gated without evidence they lack the protocol. The shared compatibility matrix declares
    steering support for Claude, Qwen and Antigravity, backed by the live steering suite.
-5. **[Done] Codex over app-server, steering, interrupt and `ask` approvals (live-verified on Codex 0.169.0).**
+4. **[Done] Codex over app-server, steering, interrupt and `ask` approvals (live-verified on Codex 0.169.0).**
    Headless Codex 0.146.0 and later uses `codex app-server`; older versions retain the `codex exec` path.
    The implementation reuses `CodexAppServerClient`'s version gate:
    - Spawn `codex app-server` with the process-level `-c` args for hooks, `hooks.state`, model,
@@ -494,23 +544,124 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
      stdout. The parser promotes rollout `task_complete.error` for failure classification and
      records app-server `SubAgentActivity`; the shared follower remains alive through the response
      collector's final drain.
-6. **Copilot, agy, OpenCode approvals.**
-   - Copilot and agy over ACP: needs an ACP `session/update` event mapper per harness. To avoid
-     ACP's cancel-and-replace, deliver steers as queue (hold the message until `session/prompt`
-     returns).
-   - OpenCode through the plugin's `evaluate` hook and `ctx.session.prompt({delivery: "steer"})`.
-     Needs a ctrlyoke→plugin channel.
-   - Re-evaluate Copilot `--server` mode only if it becomes documented.
+5. **Copilot, agy, OpenCode approvals and steering.** Split into these sub-stages:
 
-Each stage that publishes a capability adds its declaration and live-case evidence, so the
-compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Headless steering is available for
-Claude Code, Codex CLI, Qwen Code and Antigravity when their live control channels are open.
+   - **Shared ACP transport:** put JSONL framing, request correlation, notification dispatch,
+     and replies to server-initiated requests in
+     `src/core/harness/shared/AcpJsonRpcClient.ts`. Copilot and a future agy channel reuse
+     this transport; each provider owns its session parameters, approval-option mapping, and
+     output-source choice. Do not treat ACP as a passive `observe(record)` stream: the client
+     must answer `session/request_permission` while a `session/prompt` request is outstanding.
+
+   **6a. Copilot ACP — planned, except `auto` mode.**
+   - **Gate:** `copilot` >= 1.0.112, the first version probed for the permission requests and
+     session-load path used here. Older versions keep today's headless launch.
+   - **Launch:** `copilot --acp` plus the existing model, workspace, hook, MCP, and permission
+     arguments. Do not pass `-p`, `--output-format json`, or the prompt as an argument; send the
+     prompt through ACP. Use `session/load` instead of `--resume`.
+   - **Wire:** send JSON-RPC `initialize` with
+     `protocolVersion: 1`, then `session/new {cwd, mcpServers}` or
+     `session/load {sessionId, cwd, mcpServers}`, then
+     `session/prompt {sessionId, prompt:[{type:"text", text}]}`. The session response supplies
+     the session ID. Answer `session/request_permission` by selecting `allow_once` or
+     `reject_once` from the request's `options` and returning its `optionId`. To receive
+     background/foreground state, opt into `github.com/copilot/sessionEvent` events
+     `assistant.turn_start`, `assistant.idle`, and `session.idle` in
+     `initialize.clientCapabilities._meta`.
+   - **Output:** keep `CopilotLogParser` as the output parser, not an ACP output mapper. ACP
+     created the normal `~/.copilot/session-state/<sessionId>/events.jsonl` with the native
+     events the parser already consumes. Seed the session ID from `session/new`/`session/load`
+     and tail that file (`headlessSource = LOG`). Use `session/prompt`'s response as the
+     completion boundary; ACP `session/update` is control/notification input, not a second
+     source of output events.
+   - **Steering:** ACP cancels an active prompt if another `session/prompt` is sent. Keep one
+     prompt request in flight and hold queued steer messages until its response arrives; then
+     send each as the next `session/prompt` on the same session.
+   - **Permission-mode exception:** `--allow-tool`, `--deny-tool`, `--allow-all-tools`, and
+     `--yolo` work under ACP. `--assisted-approval` is rejected by ACP, and ACP Autopilot is
+     allow-all rather than judge-based. Keep ctrlyoke `auto` on today's non-ACP JSONL/stdin path
+     with `--assisted-approval`; do not claim ACP approvals or steering in that mode.
+   - **Live cases:** verify one-shot allow and deny requests; each of the accepted permission
+     argument families above; `session/new` then a fresh-process `session/load`; native log
+     parsing for text, tool calls/results, usage, and session ID; and a long-running prompt
+     where a queued steer is not submitted until the first `session/prompt` resolves. Include a
+     negative launch case for `--assisted-approval`.
+
+   **6b. Antigravity ACP — deferred.**
+   - **Proposed launch if unblocked:** `agy --model <model> --settings <managed-settings.json>
+acp`. Put `--model` before `acp`; `agy acp --model ...` is rejected. Use the same
+     run-scoped permission settings as the current adapter, plus other supported top-level
+     arguments.
+   - **Wire:** use `initialize`, `session/new`/`session/load`, and
+     `session/prompt {sessionId, prompt:[{type:"text", text}]}`. For
+     `session/request_permission`, map option ID `allow` / kind `allow_once` to allow and
+     option ID `deny` / kind `reject_once` to deny. The reply is
+     `{outcome:{outcome:"selected", optionId}}`; ACP exposes no custom denial-message field.
+   - **Output:** ACP itself is not stream-json, but the ACP session writes the usual
+     `transcript_full.jsonl` under the session ID. Reuse `AntigravityLogParser` and its
+     transcript reader, seeded with the ACP session ID; do not add a competing ACP output
+     mapper. The ACP `session/update` stream remains useful for control and turn progress.
+   - **Steering:** use QUEUE. A second `session/prompt` cancels the active one, so retain steer
+     text in ctrlyoke until the current `session/prompt` returns, then submit it as the next
+     prompt.
+   - **Gate if reopened:** >= 1.5.9, the first ACP version probed. Keep the existing Stage 4
+     stream-json queue steering unchanged while this sub-stage is deferred.
+   - **Reason and unblock criteria:** live ACP runs executed a terminal command despite
+     `--settings` containing `toolPermission:"request-review"` and
+     `permissions.deny:["command(*)"]`; a direct `write_to_file` also completed without
+     `session/request_permission`, even with `toolPermission:"request-review"`. Do not switch
+     production launches to ACP or advertise approvals until either ACP is proven to enforce
+     the existing per-run allow/deny rules and requests file-edit approval, or a host-side
+     equivalent preserves those rules without widening access.
+   - **Live cases required to unblock:** the deny rule must prevent the command from executing;
+     `request-review` must produce an answerable file-edit request; allow and deny must each
+     produce the expected result; `session/load` must continue the same session; queued steering
+     must follow the first prompt response; and the existing transcript parser must produce
+     tool, diff, and completion events.
+
+   **6c. OpenCode 2 plugin — planned.**
+   - **Gate:** OpenCode >= 2.3.0, the first version live-probed for both the V2 plugin path and
+     the blocking `evaluate` hook. OpenCode 1 and earlier 2.x retain today's path.
+   - **Launch:** keep `opencode run --standalone --format json -m <model>` and stdin prompt
+     delivery. Inject the V2 plugin directory through `OPENCODE_CONFIG_CONTENT` as
+     `plugins:[<directory>]` and pass a per-process loopback control URL and random token in
+     the spawn environment. `--standalone` is required so the plugin, environment, and session
+     belong only to this run.
+   - **Approval wire/channel:** register
+     `ctx.permission.hook("evaluate", async event => ...)`. The event includes `sessionID`,
+     `agent`, `action`, `resources`, `source`, and the current `effect`. The plugin posts the
+     request to the host's loopback endpoint and awaits its decision, then sets `event.effect`
+     to `allow` or `deny` and `event.message` to the host's reason. The same bridge can
+     long-poll for host-queued steer messages; bind only to `127.0.0.1` and authenticate each
+     request with the per-process token.
+   - **Output:** leave `headlessSource = STDOUT` and `OpenCodeLogParser` unchanged. The plugin
+     owns control traffic; the existing `opencode run --format json` stream remains the only
+     output source.
+   - **Steering:** for a message returned by the bridge, the plugin calls
+     `ctx.session.prompt({sessionID, text, delivery:"steer"})`; this is true OpenCode steering,
+     not an ACP cancel-and-replace queue. Keep the current session ID from plugin events and
+     report a clear error if the session has already ended.
+   - **Why not `opencode serve`:** the V2 `evaluate` hook awaited a host response for 32 s and
+     then returned the denial to the model, so the plugin path works without a second
+     server lifecycle, `OPENCODE_PASSWORD`, or the `/api/session/.../permission/.../reply`
+     route. Reconsider `serve` only if a supported V2 version stops awaiting this hook.
+   - **Live cases:** allow and deny from the dashboard; hold the hook beyond 30 s before
+     resolving it; deny on the configured timeout; prove the denied tool never ran and the
+     denial reason reached the model; steer during a long tool and confirm it is injected into
+     the current session; and keep text/tool/diff events on the existing JSONL parser.
+
+Each shipped sub-stage must add its capability declaration and passing live-case evidence, so
+the compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Current headless steering is
+available for Claude Code, Codex CLI, Qwen Code, and Antigravity. Copilot is planned behind
+6a's ACP gate (except `auto` mode), OpenCode behind 6c's V2 gate, and 6b adds no capability
+until its permission parity gap is closed.
 
 ## Version requirements
 
-No stage needs a minimum-version bump. Gate each capability on the version that has it, as
-`autoModeMinimumVersion` already does; older CLIs keep today's behavior. Dates come from the
-vendor repos' commit history (the local clones have no tags):
+No stage needs a global minimum-version bump. Gate each capability on the version that has it,
+as `autoModeMinimumVersion` already does; older CLIs keep today's behavior. Stage 6's
+conservative first-probed gates are Copilot 1.0.112, Antigravity 1.5.9 (deferred), and OpenCode
+2.3.0. Dates come from the vendor repos' commit history (the local clones have no tags):
 
 | Harness     | ctrlyoke minimum    | What the plan needs and when it landed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ----------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -523,18 +674,27 @@ vendor repos' commit history (the local clones have no tags):
 
 ## Decisions
 
-Resolved 2026-11-15, with the Claude Stage 2a probes resolved on 2026-11-16. The ones marked
-"probe in stage N" are verification tasks that belong to that stage, not design questions.
+Resolved 2026-11-15, with the Claude Stage 2a and Stage 6 probes resolved on 2026-11-16. The
+ones marked "probe in stage N" are verification tasks that belong to that stage, not design
+questions.
 
 - **Claude background tasks after `result` (Stage 2a, probed 2026-11-16).** The probe confirmed
   task-notification turns arrive after the first `result` while stdin is open, including without
   `initialize`. Stage 2a now holds channel closure while `ClaudeLogParser` reports pending work,
   bounded by the prompt timeout.
-- **Copilot ACP flags and the judge.** Probe in Stage 6. Not needed earlier.
+- **Copilot ACP flags and the judge (Stage 6, probed 2026-11-16).** `--allow-tool`,
+  `--deny-tool`, `--allow-all-tools`, and `--yolo` work under ACP. `--assisted-approval` is
+  rejected, and ACP Autopilot is allow-all, not judge-based. Stage 6a uses ACP except for
+  ctrlyoke `auto`, which stays on the existing assisted-approval launch.
 - **Copilot server-mode permission opt-in.** Dropped. The flag is hidden; Stage 6 uses ACP.
-- **OpenCode async `evaluate` hook.** Probe in Stage 6. Try the `opencode serve` route first if
-  the hook cannot block on a human: it has documented reply and steer endpoints and needs no
-  ctrlyoke→plugin channel.
+- **Antigravity ACP permission parity (Stage 6, probed 2026-11-16).** Deferred: `--settings`
+  did not enforce the tested deny rule, and a direct file edit did not raise an ACP permission
+  request. Keep Stage 4's stream-json path until ACP or a host-side policy preserves these
+  restrictions.
+- **OpenCode async `evaluate` hook (Stage 6, probed 2026-11-16).** V2.3.0 awaited a
+  loopback-host decision for 32 s and returned its denial message to the model. Use the plugin
+  hook plus a per-process loopback HTTP bridge; `opencode serve` is unnecessary unless this
+  await behavior changes in a supported version.
 - **Codex rollout parity.** Resolved in Stage 5: rollout output and session errors are read from
   Codex's log, and resuming by the app-server thread ID was live-verified. Gate at 0.146 (see
   "Version requirements").
