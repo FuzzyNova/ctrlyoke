@@ -513,6 +513,11 @@ export abstract class HarnessIntegration {
     return undefined;
   }
 
+  /** The open headless steer target, replayed to dashboards that (re)connect. */
+  getOpenHeadlessControlTarget(): HeadlessControlTargetMessage | undefined {
+    return undefined;
+  }
+
   /**
    * True when this integration still holds a live harness process that owns the
    * given *AI* session (not the PTY session id `getActivitySessionId` reports).

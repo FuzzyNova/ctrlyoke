@@ -6,13 +6,22 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from "vitest";
 import { Header } from "@components/layout/Header";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { usePauseRequestStore } from "@store/pauseRequestStore";
+import { useTerminalStore } from "@store/terminalStore";
 import {
   HEADER_RUN_SLOT_FIT_CLASSES,
   PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS,
@@ -24,6 +33,8 @@ import {
   type ExecutionState,
 } from "@/types/messages";
 import {
+  HARNESS_IDS,
+  HEADLESS_STEER_DELIVERIES,
   RERUN_CONFIRMATION_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
   type RerunConfirmationMode,
@@ -37,6 +48,7 @@ describe("Header execution controls", () => {
     useWorkflowStore.getState().resetWorkflow();
     useUiStore.getState().resetUi();
     useExecutionPreviewStore.getState().reset();
+    useTerminalStore.getState().clearHeadlessControlTargets();
     postMessage.mockReset();
     Object.defineProperty(window, "vscodeApi", {
       configurable: true,
@@ -688,6 +700,70 @@ describe("Header execution controls", () => {
       .getByRole("group", { name: "Workflow execution controls" })
       .querySelectorAll(".cy-button-group-divider");
     expect(dividers[1].className).not.toContain("hidden");
+  });
+
+  it("offers Interrupt Turn on Stop's context menu without stopping the run", () => {
+    // resetUi() leaves activeWorkflowId alone, so restore it for later tests.
+    const previousActiveWorkflowId = useUiStore.getState().activeWorkflowId;
+    onTestFinished(() => {
+      useUiStore.setState({ activeWorkflowId: previousActiveWorkflowId });
+    });
+    useUiStore.setState({
+      activeWorkflowId: "workflow-1",
+      executionRunRef: runRef,
+      pendingRewind: null,
+      runSummaries: [
+        {
+          workflowKey: "workflow-a" as never,
+          runRef,
+          runDirectory: "/runs/workflow-a/run",
+          runId: 4,
+          startedAt: 1,
+          executionState: EXECUTION_STATES.RUNNING,
+          stepCount: 2,
+          definitionRevision: 3,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+    render(<Header />);
+    const stopButton = () =>
+      within(
+        screen.getByRole("group", { name: "Workflow execution controls" })
+      ).getByRole("button", { name: "Stop" });
+
+    act(() => {
+      useTerminalStore.getState().updateHeadlessControlTarget({
+        type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+        workflowId: "workflow-1",
+        controlSessionId: "control-1",
+        stepIndex: 1,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+        canInterruptTurn: true,
+        isOpen: true,
+      });
+    });
+    fireEvent.contextMenu(stopButton(), {
+      clientX: 120,
+      clientY: 80,
+    });
+    fireEvent.click(
+      within(screen.getByRole("menu")).getByRole("menuitem", {
+        name: "Interrupt Turn",
+      })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
+      workflowId: "workflow-1",
+      sessionId: "control-1",
+    });
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.STOP_RUN })
+    );
   });
 
   it("switches from active controls to Re-run as soon as execution completes", () => {

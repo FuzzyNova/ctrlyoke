@@ -113,6 +113,7 @@ import type {
   CliEvent,
   CliOutput,
   HeadlessApprovalRequestMessage,
+  HeadlessControlTargetMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import {
@@ -4449,6 +4450,26 @@ export class WorkflowInstance
     send: (message: HeadlessApprovalRequestMessage) => void
   ): void {
     this.headlessApprovalPolicyService.replayPendingRequests(send);
+  }
+
+  /**
+   * Re-announce every open headless steer target. A dashboard that connects or
+   * reloads mid-step starts with an empty target list, and the channel only
+   * publishes on open and close, so without this the step cannot be steered
+   * from that client until its next turn opens a new channel.
+   */
+  replayOpenHeadlessControlTargets(
+    send: (message: HeadlessControlTargetMessage) => void
+  ): void {
+    const seen = new Set<HarnessIntegration>();
+    for (const integration of this.getLivePtyIntegrationCandidates()) {
+      if (seen.has(integration)) continue;
+      seen.add(integration);
+      const target = integration.getOpenHeadlessControlTarget();
+      if (target) {
+        send({ ...target, workflowId: this.id });
+      }
+    }
   }
 
   private createIntegrationForMode(

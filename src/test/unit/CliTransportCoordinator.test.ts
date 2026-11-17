@@ -814,6 +814,11 @@ suite("CliTransportCoordinator", () => {
     const openedTarget = await targetOpened;
     assert.strictEqual(openedTarget.isOpen, true);
     assert.strictEqual(openedTarget.canInterruptTurn, true);
+    // Reconnecting dashboards replay this open target.
+    assert.deepStrictEqual(
+      coordinator.getOpenHeadlessControlTarget(),
+      openedTarget
+    );
 
     const sending = coordinator.sendHeadlessUserMessage(
       openedTarget.controlSessionId,
@@ -856,6 +861,7 @@ suite("CliTransportCoordinator", () => {
     assert.strictEqual(await execution, true);
     assert.strictEqual(capturedResult?.interrupted, true);
     assert.strictEqual(endCalled, true);
+    assert.strictEqual(coordinator.getOpenHeadlessControlTarget(), undefined);
     assert.deepStrictEqual(
       targets.map(({ controlSessionId, isOpen }) => ({
         controlSessionId,

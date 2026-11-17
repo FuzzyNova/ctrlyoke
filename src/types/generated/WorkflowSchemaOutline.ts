@@ -958,7 +958,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "deny",
           "ask"
         ],
-        "description": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered."
+        "description": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered."
       },
       "headlessApprovalTimeoutSec": {
         "valueKind": "number",

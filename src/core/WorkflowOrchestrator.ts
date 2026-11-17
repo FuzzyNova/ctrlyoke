@@ -1131,6 +1131,9 @@ export class WorkflowOrchestrator {
             asReplacement: true,
           })
         );
+        // The addressed branch replays these through RunViewPublisher.
+        instance.replayOpenHeadlessControlTargets(send);
+        instance.replayPendingHeadlessApprovals(send);
       }
       // Replay against the instance the client ended up bound to: the lineage
       // bind can move it to the lineage's executing owner.
@@ -1141,7 +1144,6 @@ export class WorkflowOrchestrator {
           clientId
         );
       }
-      instance.replayPendingHeadlessApprovals(send);
       return;
     }
 

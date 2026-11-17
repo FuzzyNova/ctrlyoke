@@ -6,7 +6,8 @@ import { MESSAGE_TYPES, RUNNER_IDS } from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
-import { useLongPress } from "@hooks/useLongPress";
+import { isTouchContextMenuEvent, useLongPress } from "@hooks/useLongPress";
+import { useInterruptTurnTarget } from "@hooks/useInterruptTurnTarget";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useIsDisplayedWorkflowFavorite } from "@hooks/useIsDisplayedWorkflowFavorite";
@@ -296,6 +297,40 @@ export const Header: React.FC<{
     });
   }, []);
   const runSlotLongPressHandlers = useLongPress(openRunDryRunMenu);
+
+  // Interrupt Turn controls the running step, so it lives on Stop's context
+  // menu (right-click or long press) rather than the editor's send menu.
+  const interruptTurnTarget = useInterruptTurnTarget(activeWorkflowId);
+  const stopMenuOpenedAtRef = React.useRef(0);
+  const [stopContextMenu, setStopContextMenu] =
+    React.useState<ContextMenuState | null>(null);
+  const openStopInterruptMenu = useCallback(
+    (x: number, y: number) => {
+      stopMenuOpenedAtRef.current = Date.now();
+      const { enabled, sessionId, title } = interruptTurnTarget;
+      setStopContextMenu({
+        x,
+        y,
+        items: [
+          {
+            label: "Interrupt Turn",
+            icon: "codicon-debug-stop",
+            disabled: !enabled,
+            title,
+            onClick: () => {
+              if (!enabled || !sessionId || !activeWorkflowId) return;
+              sendMessage(MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN, {
+                workflowId: activeWorkflowId,
+                sessionId,
+              });
+            },
+          },
+        ],
+      });
+    },
+    [activeWorkflowId, interruptTurnTarget]
+  );
+  const stopSlotLongPressHandlers = useLongPress(openStopInterruptMenu);
 
   // Handlers
   const postViewedRunAction = useCallback(
@@ -596,11 +631,22 @@ export const Header: React.FC<{
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               : `${HIDDEN_UNTIL_FITS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
-          onClick={
-            isExternallyManaged
-              ? handleStopExternallyManagedRun
-              : () => handleSlotAction(slot3.action)
-          }
+          onClick={() => {
+            // A touch long press that opened the Interrupt menu must not
+            // also stop the workflow when the finger lifts.
+            if (Date.now() - stopMenuOpenedAtRef.current < 800) return;
+            if (isExternallyManaged) {
+              handleStopExternallyManagedRun();
+            } else {
+              handleSlotAction(slot3.action);
+            }
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            if (isTouchContextMenuEvent(event.nativeEvent)) return;
+            openStopInterruptMenu(event.clientX, event.clientY);
+          }}
+          {...stopSlotLongPressHandlers}
           disabled={
             (!slot3.enabled && !isExternallyManaged) || isLineageReadOnly
           }
@@ -624,6 +670,12 @@ export const Header: React.FC<{
         <ContextMenu
           {...runContextMenu}
           onClose={() => setRunContextMenu(null)}
+        />
+      )}
+      {stopContextMenu && (
+        <ContextMenu
+          {...stopContextMenu}
+          onClose={() => setStopContextMenu(null)}
         />
       )}
     </div>

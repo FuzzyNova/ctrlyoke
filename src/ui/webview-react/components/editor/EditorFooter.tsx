@@ -45,11 +45,9 @@ interface EditorFooterProps {
   onRunInParallel: () => void;
   onRunInNewWorkflow: () => void;
   onSendSteerMessage: () => void;
-  onInterruptHeadlessTurn: () => void;
   runInParallelTarget: RunDispatchTarget;
   newWorkflowTarget: RunDispatchTarget;
   steerTarget: RunDispatchTarget;
-  interruptTurnTarget: RunDispatchTarget;
   onQueue: () => void;
   onUpdate: () => void;
   onDelete: () => void;
@@ -98,11 +96,9 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   onRunInParallel,
   onRunInNewWorkflow,
   onSendSteerMessage,
-  onInterruptHeadlessTurn,
   runInParallelTarget,
   newWorkflowTarget,
   steerTarget,
-  interruptTurnTarget,
   onQueue,
   onUpdate,
   onDelete,
@@ -365,15 +361,13 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : runButtonTooltip
               }
-              disabled={isExternallyManaged || isBulkMode}
+              disabled={isExternallyManaged || isBulkMode || !hasContent}
               mainClassName="btn-editor-run"
               dropdownClassName="btn-editor-run-menu"
               size="compact"
               menuPlacement="top"
               portal
               hideMenuButton={isSmallWidth}
-              mainDisabled={!hasContent}
-              dropdownDisabled={!hasContent && !interruptTurnTarget.enabled}
               options={[
                 {
                   label: "Send Steer Message",
@@ -387,14 +381,6 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                       ? "Enter a prompt first"
                       : steerTarget.title,
                   icon: <Icon name="arrow-up" />,
-                },
-                {
-                  label: "Interrupt Turn",
-                  value: "interruptHeadlessTurn",
-                  onClick: onInterruptHeadlessTurn,
-                  disabled: !interruptTurnTarget.enabled,
-                  title: interruptTurnTarget.title,
-                  icon: <Icon name="debug-stop" />,
                 },
                 {
                   label: "Run in Parallel",

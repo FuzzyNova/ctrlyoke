@@ -9,6 +9,7 @@ import { PromptQueue } from "../../core/PromptQueue";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
+  HEADLESS_APPROVAL_POLICIES,
   PERMISSION_MODES,
   EXECUTION_STATES,
   PROMPT_FILE_RELOAD_MODES,
@@ -624,6 +625,28 @@ suite("PromptFileLoader Tests", () => {
         undefined,
         "toolPermissions should not be overwritten when explicitly set"
       );
+    });
+
+    test("keeps authored headless approval fields when filling missing sub-fields", () => {
+      const explicitValues: Record<string, unknown> = {
+        harness: "claude-cli",
+        toolPermissions: {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: ["Bash(node:*)"],
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 120,
+        },
+      };
+
+      const defaults =
+        PromptFileLoader.populateSettingsDefaults(explicitValues);
+
+      const tp = defaults.toolPermissions as Record<string, unknown>;
+      assert.strictEqual(tp.mode, PERMISSION_MODES.CUSTOM);
+      assert.deepStrictEqual(tp.allowedTools, ["Bash(node:*)"]);
+      assert.ok(Array.isArray(tp.deniedTools));
+      assert.strictEqual(tp.headlessApprovals, HEADLESS_APPROVAL_POLICIES.ASK);
+      assert.strictEqual(tp.headlessApprovalTimeoutSec, 120);
     });
 
     test("should preserve toolPermissions null (explicit none)", () => {

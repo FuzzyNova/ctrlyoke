@@ -92,7 +92,10 @@ workflow you're viewing.
 - **Stop** ends the current step immediately and stops the workflow.
 
 Right-click (or long-press) the first button for a [Dry Run](/guide/dry-run) of
-the whole workflow.
+the whole workflow. Right-click (or long-press) **Stop** for **Interrupt Turn**,
+which ends the current turn of a running headless Claude Code, Codex or Qwen
+step without stopping the workflow. The step finishes with the output collected
+so far, and its session stays available to resume later.
 
 If a run belongs to the CLI or to another VS Code window, the dashboard shows it
 read-only with a lock banner. Its Stop button still works: it stops the run in
@@ -144,12 +147,11 @@ The arrow beside **Run** opens more ways to send the prompt:
 
 ![The Run menu open in the prompt editor footer during an interactive step, showing Send Steer Message, Run in Parallel and Run in New Workflow](/screenshots/run-menu-steer-1125x231.png)
 
-| Option                  | What it does                                                                                                                                                                                                                                                                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Send Steer Message**  | Sends text to the live session for a running step without adding a queue step. Available for the rail-active interactive AI-CLI PTY and open headless Claude, Qwen, or Copilot CLI 1.0.112+ channels; Claude receives it in the current turn, while Qwen and Copilot queue it after the current prompt. Step overrides are ignored. |
-| **Interrupt Turn**      | Ends the current turn on an open headless Claude or Qwen channel without stopping the workflow. The step finishes with the output collected so far, and its session remains available to resume later.                                                                                                                              |
-| **Run in Parallel**     | Starts the prompt beside the running step as a [parallel group](/workflows/parallel-steps). Its prior context resolves from before that step. Needs a running step, and `queue.maxParallelSteps` of 2 or more.                                                                                                                      |
-| **Run in New Workflow** | Starts a separate workflow with default settings and just this prompt.                                                                                                                                                                                                                                                              |
+| Option                  | What it does                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Send Steer Message**  | Sends text to the live session for a running step without adding a queue step. Available for the rail-active interactive AI-CLI terminal and for running headless steps on every harness (Copilot CLI 1.0.112+ outside `auto` mode, OpenCode 2.3.0+). Claude, Codex and OpenCode receive it in the current turn; Qwen, Antigravity and Copilot queue it after the current turn. Step overrides are ignored. |
+| **Run in Parallel**     | Starts the prompt beside the running step as a [parallel group](/workflows/parallel-steps). Its prior context resolves from before that step. Needs a running step, and `queue.maxParallelSteps` of 2 or more.                                                                                                                                                                                              |
+| **Run in New Workflow** | Starts a separate workflow with default settings and just this prompt.                                                                                                                                                                                                                                                                                                                                      |
 
 Hover a disabled option to see why it's unavailable.
 

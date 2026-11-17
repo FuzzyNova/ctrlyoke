@@ -216,11 +216,17 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   private activeHeadlessControlSessionId?: string;
   private activeHeadlessControlSend?: (text: string) => Promise<boolean>;
   private activeHeadlessControlInterrupt?: () => Promise<boolean>;
+  /** The open steer target last published to dashboards, for reconnect replay. */
+  private activeHeadlessControlTarget?: HeadlessControlTargetMessage;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
 
   getHeadlessControlSessionId(): string | undefined {
     return this.activeHeadlessControlSessionId;
+  }
+
+  getOpenHeadlessControlTarget(): HeadlessControlTargetMessage | undefined {
+    return this.activeHeadlessControlTarget;
   }
 
   sendHeadlessUserMessage(sessionId: string, text: string): Promise<boolean> {
@@ -684,6 +690,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             this.activeHeadlessControlSend = undefined;
             this.activeHeadlessControlInterrupt = undefined;
           }
+          if (
+            this.activeHeadlessControlTarget?.controlSessionId ===
+            controlSessionId
+          ) {
+            this.activeHeadlessControlTarget = undefined;
+          }
           if (targetBase && publishedControlTarget) {
             this.deps.hostCallbacks.onHeadlessControlTarget?.({
               type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
@@ -1077,11 +1089,15 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                       }
                     : undefined;
                   if (targetBase) {
-                    this.deps.hostCallbacks.onHeadlessControlTarget?.({
+                    const openTarget: HeadlessControlTargetMessage = {
                       type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
                       ...targetBase,
                       isOpen: true,
-                    });
+                    };
+                    this.activeHeadlessControlTarget = openTarget;
+                    this.deps.hostCallbacks.onHeadlessControlTarget?.(
+                      openTarget
+                    );
                     publishedControlTarget = true;
                   }
                 })().catch(async (error: unknown) => {

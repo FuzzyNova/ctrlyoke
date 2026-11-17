@@ -883,6 +883,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         _sink: unknown,
         options?: { asReplacement?: boolean }
       ) => replayCalls.push(options),
+      replayOpenHeadlessControlTargets: () => {},
       replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
@@ -913,6 +914,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         sink.updateCliOutput(0, { text: "a" });
         sink.updateCliOutput(1, { text: "b" });
       },
+      replayOpenHeadlessControlTargets: () => {},
       replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
@@ -1555,6 +1557,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       }),
       getExecutionRunRef: () => runRef,
       replayBufferedOutputTo: () => undefined,
+      replayOpenHeadlessControlTargets: () => undefined,
+      replayPendingHeadlessApprovals: () => undefined,
       getActiveStepIndices: () => [],
       getRunViewLiveState: () => ({
         executionState: EXECUTION_STATES.RUNNING,
@@ -2906,6 +2910,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayOpenHeadlessControlTargets: () => {},
           replayPendingHeadlessApprovals: () => {},
         },
       ],
@@ -2967,6 +2972,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayOpenHeadlessControlTargets: () => {},
           replayPendingHeadlessApprovals: () => {},
         },
       ],
@@ -3117,6 +3123,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           replayFullStateTo: () => {
             sent.push({ type: MESSAGE_TYPES.SESSION_RESTORED });
           },
+          replayOpenHeadlessControlTargets: () => {},
           replayPendingHeadlessApprovals: () => {},
         },
       ],

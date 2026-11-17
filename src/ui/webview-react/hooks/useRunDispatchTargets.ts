@@ -24,8 +24,6 @@ const NO_CONTENT = "Enter a prompt first";
 const NOT_NEW_PROMPT = "Only available for a new prompt";
 const EXTERNAL_RUN = "Read-only — external run";
 const NO_LIVE_HARNESS = "No live harness session for this workflow";
-const NO_INTERRUPTIBLE_HEADLESS_TURN =
-  "No live headless turn supports interruption";
 const STEER_PROMPT_ONLY = "Steering is only available for prompt steps";
 const NEW_WORKFLOW_TITLE =
   "Starts a separate workflow with default settings and this prompt";
@@ -53,16 +51,6 @@ function getSteerEnabledTitle(
   return `Sends to the live ${harnessLabel} session (step ${stepNumber}). Prompt overrides are ignored.`;
 }
 
-function getInterruptTurnTitle(
-  target: ActiveSteerTarget,
-  stepNumber: number
-): string {
-  const harnessLabel = target.harnessId
-    ? getHarnessDisplayName(target.harnessId)
-    : "harness";
-  return `Interrupts the current turn on the live ${harnessLabel} headless session (step ${stepNumber}) without stopping the session.`;
-}
-
 export interface RunDispatchTarget {
   enabled: boolean;
   disabledReason?: string;
@@ -73,7 +61,6 @@ export interface RunDispatchTargets {
   parallel: RunDispatchTarget;
   newWorkflow: RunDispatchTarget;
   steer: RunDispatchTarget;
-  interruptTurn: RunDispatchTarget;
 }
 
 /**
@@ -125,11 +112,6 @@ export function useRunDispatchTargets(
         : stepType !== STEP_TYPES.PROMPT
           ? STEER_PROMPT_ONLY
           : contentReason;
-    const interruptTurnDisabledReason = isExternallyManaged
-      ? EXTERNAL_RUN
-      : !activeSteerTarget?.canInterruptTurn
-        ? NO_INTERRUPTIBLE_HEADLESS_TURN
-        : undefined;
 
     const activeGroup = parallelGroups.find((group) =>
       activeStepIndices.some(
@@ -145,9 +127,6 @@ export function useRunDispatchTargets(
     const steerEnabledTitle = activeSteerTarget
       ? getSteerEnabledTitle(activeSteerTarget, steerStepNumber)
       : NO_LIVE_HARNESS;
-    const interruptTurnEnabledTitle = activeSteerTarget?.canInterruptTurn
-      ? getInterruptTurnTitle(activeSteerTarget, steerStepNumber)
-      : NO_INTERRUPTIBLE_HEADLESS_TURN;
 
     let parallelDisabledReason = parallelBaseReason;
     if (
@@ -194,13 +173,6 @@ export function useRunDispatchTargets(
         enabled: steerDisabledReason === undefined,
         ...(steerDisabledReason ? { disabledReason: steerDisabledReason } : {}),
         title: steerDisabledReason ?? steerEnabledTitle,
-      },
-      interruptTurn: {
-        enabled: interruptTurnDisabledReason === undefined,
-        ...(interruptTurnDisabledReason
-          ? { disabledReason: interruptTurnDisabledReason }
-          : {}),
-        title: interruptTurnDisabledReason ?? interruptTurnEnabledTitle,
       },
     };
   }, [
