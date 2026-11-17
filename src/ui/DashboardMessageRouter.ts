@@ -108,6 +108,7 @@ import type {
   DeleteSecretMessage,
   SetSecretMessage,
   BatchApprovalResponseMessage,
+  HeadlessApprovalResponseMessage,
   ChoiceResponseMessage,
   ServerPortFallbackInfo,
   BindAddressFallbackInfo,
@@ -625,7 +626,8 @@ export class DashboardMessageRouter {
     }
     if (
       message?.type === MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE ||
-      message?.type === MESSAGE_TYPES.CHOICE_RESPONSE
+      message?.type === MESSAGE_TYPES.CHOICE_RESPONSE ||
+      message?.type === MESSAGE_TYPES.RESPOND_TO_HEADLESS_APPROVAL
     ) {
       await this.routeSingleMessage(message, ctx);
       return;
@@ -1487,6 +1489,17 @@ export class DashboardMessageRouter {
 
     table.set(MESSAGE_TYPES.SEND_STEER_MESSAGE, (message, ctx) => {
       void this.workflowStepHandlers.handleSendSteerMessage(ctx, message);
+    });
+
+    table.set(MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN, (message, ctx) => {
+      void this.workflowStepHandlers.handleInterruptHeadlessTurn(ctx, message);
+    });
+
+    table.set(MESSAGE_TYPES.RESPOND_TO_HEADLESS_APPROVAL, (message, ctx) => {
+      void this.workflowStepHandlers.handleHeadlessApprovalResponse(
+        ctx,
+        message as HeadlessApprovalResponseMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW, (message, ctx) => {

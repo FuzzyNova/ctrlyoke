@@ -59,10 +59,24 @@ steps:
 
 ## Headless prompts
 
-In headless steps, ctrlyoke passes the prompt to Codex through stdin. Generated sections such as
-agent instructions, skills and prior-step context are included in that first message. Turn off
+In headless steps, ctrlyoke includes generated sections such as agent instructions, skills and
+prior-step context in the first message. Codex 0.146.0 and later receive that message through
+`codex app-server`'s `turn/start` JSON-RPC request; older versions keep using `codex exec` and
+stdin. Turn off
 [`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
 to use categorized temporary files and references instead.
+
+Headless app-server steps answer Codex command, file-change and additional-permission approval
+requests through the headless approval policy. The default is **Deny**; set
+`toolPermissions.headlessApprovals: ask` to show requests in the dashboard. The configured
+approval timeout applies directly because Codex does not expire unanswered requests. An optional
+denial message stays in the dashboard approval card; Codex's approval responses cannot carry it
+back to the model.
+
+On Codex 0.146.0 and later, **Send Steer Message** injects a message into the current headless
+turn, and **Interrupt Turn** ends that turn without stopping the workflow. If a turn completes
+before Codex accepts a steer, ctrlyoke reports that the message was not queued; start a new step
+to send it.
 
 ## Model selection {#model-selection}
 
@@ -103,8 +117,8 @@ separate harness policy and does not reduce that declaration.
   - A denied `write` or `shell` is reported as not enforced; it does not make the sandbox read-only. Use `sandboxMode: read-only`.
 - Under `sandbox: null`, ctrlyoke still passes approved external roots with `--add-dir`. If your `config.toml` sets `sandbox_mode = "read-only"`, interactive Codex exits at launch with "Error adding directories" (`codex exec` ignores the roots instead; checked with Codex 0.166.0), so use `sandbox: true` with `sandboxMode: read-only` instead. See [External roots and the sandbox](/workflows/permissions#external-roots-and-the-sandbox).
 - With containment on, network access is off unless `sandbox_workspace_write.network_access` in your Codex `config.toml` turns it on. **On Windows it stays on regardless**: Codex's Windows sandbox blocks writes outside the writable roots, but does not block network access, even with `network_access = false` (checked with Codex 0.167.0). The writable roots include the workspace and approved external roots, temp directories, harness caches, the Git common directory, and for linked worktrees their own Git directory. Granting both Git directories lets contained steps stage and commit changes.
-- Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
-- In a headless run, ctrlyoke reads the step's output, including file diffs, from Codex's session log under `~/.codex/sessions` (or `$CODEX_HOME/sessions`). `codex exec --json` reports a changed file without its contents, so stdout supplies only the session ID and request errors such as an unknown model.
+- Headless runs on Codex 0.146.0 and later use `codex app-server`; earlier versions keep using `codex exec`. Both receive ctrlyoke's model, sandbox, approval, MCP and hook configuration without editing Codex's config files.
+- In a headless run, ctrlyoke reads the step's output, including file diffs, from Codex's session log under `~/.codex/sessions` (or `$CODEX_HOME/sessions`). App-server stdout carries JSON-RPC control traffic, not the user-facing event stream; it supplies the session ID and request errors while `CodexLogParser` reads the rollout.
 - An interactive turn that fails with an API error fails the step with Codex's error text, read from the session log, although Codex fires no Stop hook for it.
 - Before resuming, ctrlyoke checks the local rollout store by thread ID. If the
   rollout is missing, or Codex reports `thread <id> not found`, it starts a new

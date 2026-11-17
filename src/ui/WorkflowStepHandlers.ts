@@ -1,5 +1,6 @@
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import {
+  APPROVAL_DECISIONS,
   MESSAGE_TYPES,
   RUN_DEFINITION_DECISIONS,
   USER_FEEDBACK_SEVERITY,
@@ -19,6 +20,8 @@ import type {
   ReorderPromptsMessage,
   SeedNewRunMessage,
   PrepareNewRunMessage,
+  InterruptHeadlessTurnMessage,
+  HeadlessApprovalResponseMessage,
   SendSteerMessage,
   SetStartPositionMessage,
   StartNewRunInsteadMessage,
@@ -119,6 +122,70 @@ export class WorkflowStepHandlers {
         id: `steer-message-error-${Date.now()}`,
         severity: USER_FEEDBACK_SEVERITY.WARNING,
         message: diagnostic,
+      });
+    }
+  }
+
+  async handleInterruptHeadlessTurn(
+    ctx: DashboardClientContext,
+    message: InterruptHeadlessTurnMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    try {
+      await orchestrator.interruptHeadlessTurn(
+        message.workflowId,
+        message.sessionId
+      );
+    } catch (error) {
+      const diagnostic = getErrorMessage(error);
+      Log.error(
+        "[WorkflowStepHandlers] Failed to interrupt headless turn:",
+        error
+      );
+      ctx.emit({
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: `interrupt-turn-error-${Date.now()}`,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: diagnostic,
+      });
+    }
+  }
+
+  async handleHeadlessApprovalResponse(
+    ctx: DashboardClientContext,
+    message: HeadlessApprovalResponseMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    if (
+      message.decision !== APPROVAL_DECISIONS.ALLOW_ONCE &&
+      message.decision !== APPROVAL_DECISIONS.DENY
+    ) {
+      return;
+    }
+
+    const answered = orchestrator.respondToHeadlessApproval(
+      message.workflowId,
+      message.controlSessionId,
+      message.approvalId,
+      message.decision,
+      message.message
+    );
+    if (!answered) {
+      ctx.emit({
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: `headless-approval-error-${Date.now()}`,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: "That headless approval request is no longer pending.",
       });
     }
   }

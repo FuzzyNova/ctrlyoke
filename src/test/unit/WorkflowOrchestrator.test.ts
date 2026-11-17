@@ -573,6 +573,27 @@ suite("WorkflowOrchestrator steer dispatch", () => {
 
     assert.deepStrictEqual(calls, [["session-1", "steer text"]]);
   });
+
+  test("resolves the workflow instance and delegates the headless interrupt", async () => {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    const calls: unknown[] = [];
+    internal.instances = new Map([
+      [
+        "workflow-1",
+        {
+          interruptHeadlessTurn: async (...args: unknown[]) => {
+            calls.push(args);
+          },
+        },
+      ],
+    ]);
+    internal.retiredInstances = new Map();
+
+    await orchestrator.interruptHeadlessTurn("workflow-1", "control-1");
+
+    assert.deepStrictEqual(calls, [["control-1"]]);
+  });
 });
 
 suite("WorkflowOrchestrator startup auto-load gating", () => {
@@ -862,6 +883,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         _sink: unknown,
         options?: { asReplacement?: boolean }
       ) => replayCalls.push(options),
+      replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
     internal.retiredInstances = new Map();
@@ -891,6 +913,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         sink.updateCliOutput(0, { text: "a" });
         sink.updateCliOutput(1, { text: "b" });
       },
+      replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
     internal.retiredInstances = new Map();
@@ -2883,6 +2906,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayPendingHeadlessApprovals: () => {},
         },
       ],
     ]);
@@ -2943,6 +2967,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayPendingHeadlessApprovals: () => {},
         },
       ],
     ]);
@@ -3092,6 +3117,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           replayFullStateTo: () => {
             sent.push({ type: MESSAGE_TYPES.SESSION_RESTORED });
           },
+          replayPendingHeadlessApprovals: () => {},
         },
       ],
     ]);

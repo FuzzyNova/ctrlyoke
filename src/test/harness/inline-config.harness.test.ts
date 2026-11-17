@@ -25,6 +25,7 @@ import type {
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
+  HEADLESS_APPROVAL_POLICIES,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import { normalizeAntigravityMcpServerId } from "../../utils/ToolPermissionUtils";
@@ -36,9 +37,11 @@ import {
 } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { detectOpenCodeV2 } from "../../core/harness/opencode/OpenCodeVersion";
 import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
+import { isCodexAppServerVersionSupported } from "../../core/harness/codex/CodexAppServerClient";
 import { detectHarness } from "../../core/harness/shared/HarnessDetection";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { versionSatisfies } from "../../utils/HarnessVersion";
+import { COPILOT_ACP_MIN_VERSION } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { getAntigravitySettingsPath } from "../../core/harness/shared/StatuslineManager";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -764,12 +767,102 @@ suite("Inline harness configuration regression tests", function () {
     defineShellProbeTests(CLAUDE, permissionModeShellCases(), () => tmpDir, {
       additionalArgs: "--setting-sources project",
     });
+
+    test(`${CLAUDE}: headless approval ask denies when no dashboard is connected`, function () {
+      const markerName = `${CLAUDE}-approval-not-run.txt`;
+      const markerPath = path.join(tmpDir, markerName);
+      const workflow = shellProbeWorkflow(
+        CLAUDE,
+        `${CLAUDE}-headless-approval`,
+        {
+          mode: "custom",
+          allowedTools: ["shell(echo:*)"],
+          deniedTools: ["write"],
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 5,
+        },
+        chainedCommand(
+          normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+          normalizedPath(markerPath)
+        ),
+        { additionalArgs: "--setting-sources project" }
+      );
+      const { result, toolEvents } = runToolProbe(
+        workflow,
+        tmpDir,
+        `${CLAUDE}-headless-approval`,
+        SHELL_PROBE_TIMEOUT_MS
+      );
+      const label = `${CLAUDE} (headless approval without dashboard)`;
+      if (logAndMaybeSkip(label, result)) return;
+      assertSuccessfulRun(label, result);
+      assert.ok(
+        toolEvents.includes(markerName),
+        `Claude never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+      );
+      assert.ok(
+        toolEvents.toLowerCase().includes("no dashboard"),
+        `the approval request did not receive the no-dashboard denial\n${toolEvents}`
+      );
+      assert.ok(!toolEvents.includes(SHELL_PROBE_RAN), toolEvents);
+      assert.ok(!fs.existsSync(markerPath), "the denied command ran");
+    });
   });
 
   // Headless only: Copilot has no per-run flag for interactive assisted
   // approval, so ctrlyoke runs interactive `auto` as `custom`.
   suite(COPILOT, function () {
     defineShellProbeTests(COPILOT, permissionModeShellCases(), () => tmpDir);
+
+    test(`${COPILOT}: headless approval ask denies when no dashboard is connected`, async function () {
+      const provider = IntegrationFactory.createCapabilityProvider(COPILOT);
+      const version = await provider.getVersion?.();
+      if (
+        !version ||
+        !versionSatisfies(version, `>=${COPILOT_ACP_MIN_VERSION}`)
+      ) {
+        this.skip();
+      }
+
+      const markerName = `${COPILOT}-approval-not-run.txt`;
+      const markerPath = path.join(tmpDir, markerName);
+      const workflow = shellProbeWorkflow(
+        COPILOT,
+        `${COPILOT}-headless-approval`,
+        {
+          mode: "custom",
+          allowedTools: ["shell(echo:*)"],
+          deniedTools: ["write"],
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 5,
+        },
+        chainedCommand(
+          normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+          normalizedPath(markerPath)
+        )
+      );
+      const { result, toolEvents } = runToolProbe(
+        workflow,
+        tmpDir,
+        `${COPILOT}-headless-approval`,
+        SHELL_PROBE_TIMEOUT_MS
+      );
+      const label = `${COPILOT} (headless approval without dashboard)`;
+      if (logAndMaybeSkip(label, result)) return;
+      assertSuccessfulRun(label, result);
+      assert.ok(
+        toolEvents.includes(markerName),
+        `Copilot never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+      );
+      // ACP replies with the selected option only, so it cannot carry the
+      // host's "no dashboard" denial message back into Copilot's tool result.
+      assert.ok(
+        toolEvents.toLowerCase().includes("rejected this tool call"),
+        `the ACP approval request was not rejected\n${toolEvents}`
+      );
+      assert.ok(!toolEvents.includes(SHELL_PROBE_RAN), toolEvents);
+      assert.ok(!fs.existsSync(markerPath), "the denied command ran");
+    });
   });
 
   suite(OPENCODE, function () {
@@ -1160,6 +1253,70 @@ suite("Inline harness configuration regression tests", function () {
   });
 
   suite(CODEX, function () {
+    test(`${CODEX}: headless approval ask denies when no dashboard is connected`, async function () {
+      const detection = await detectHarness(
+        IntegrationFactory.createCapabilityProvider(CODEX)
+      );
+      if (!detection.available) this.skip();
+      if (!isCodexAppServerVersionSupported(detection.rawVersion)) {
+        console.log(
+          `  ⚠  ${CODEX} (headless approval ask) — SKIPPED (app-server requires 0.146.0; installed ${detection.rawVersion ?? "unknown"})`
+        );
+        this.skip();
+      }
+
+      const outsideDir = fs.mkdtempSync(
+        path.join(os.homedir(), ".cy-codex-ask-")
+      );
+      const outsidePath = path.join(outsideDir, "codex-ask-denied.txt");
+      fs.writeFileSync(
+        path.join(tmpDir, OUTSIDE_WRITE_SCRIPT),
+        `require("fs").writeFileSync(${JSON.stringify(outsidePath)}, "approval-marker");\n`
+      );
+      const label = "codex-headless-approval-ask";
+      try {
+        const { result, toolEvents } = runToolProbe(
+          {
+            harness: CODEX,
+            model: HARNESS_MODELS[CODEX],
+            sandbox: true,
+            toolPermissions: {
+              mode: "custom",
+              allowedTools: [],
+              deniedTools: [],
+              headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+              headlessApprovalTimeoutSec: 5,
+            },
+            steps: [
+              {
+                name: label,
+                prompt: `Run exactly this shell command once and request approval to run it outside the sandbox: node ${OUTSIDE_WRITE_SCRIPT}. If approval is denied, stop and do not retry or create the file another way.`,
+              },
+            ],
+          },
+          tmpDir,
+          label,
+          SHELL_PROBE_TIMEOUT_MS
+        );
+        if (logAndMaybeSkip(`${CODEX} (${label})`, result)) return;
+        assertSuccessfulRun(`${CODEX} (${label})`, result);
+        assert.ok(
+          toolEvents.includes(OUTSIDE_WRITE_SCRIPT),
+          `Codex never attempted the escalated command, so the case proves nothing\nstdout: ${result.stdout}`
+        );
+        assert.ok(
+          !fs.existsSync(outsidePath),
+          "the command ran without an approval"
+        );
+      } finally {
+        fs.rmSync(outsideDir, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+        });
+      }
+    });
+
     test("interactive completion uses inline hooks without .codex/hooks.json", async function () {
       const outputPath = path.join(tmpDir, "codex-inline-stop.jsonl");
       const result = await withIsolatedCodexHome([tmpDir], () =>
@@ -1181,7 +1338,7 @@ suite("Inline harness configuration regression tests", function () {
 
     // Headless on purpose: since 0.156 interactive Codex will not start in an
     // untrusted folder at all (its trust dialog offers only "Trust" or
-    // "Quit"), while `codex exec` still runs there with project config off.
+    // "Quit"). Headless app-server and legacy exec do not require that dialog.
     test("inline completion works in an untrusted Codex project where the old file path fails", function () {
       const outputPath = path.join(tmpDir, "codex-untrusted-stop.jsonl");
       const legacyOutputPath = path.join(tmpDir, "codex-legacy-stop.jsonl");
@@ -1318,7 +1475,7 @@ suite("Inline harness configuration regression tests", function () {
     // cases other harnesses run prove nothing here (headless `custom` runs any
     // command inside the sandbox, and an in-workspace write never reaches the
     // reviewer). What `auto` changes is the escalation path: headless `custom`
-    // (`codex exec`, approval `never`) has none, while `auto` lets the
+    // (approval `never`) has none, while `auto` lets the
     // reviewer approve a request to run outside the sandbox. These cases run
     // headless with `sandbox: true` (workspace-write).
     test(`${CODEX}: auto lets a sandboxed command write the workspace`, function () {
@@ -1351,8 +1508,8 @@ suite("Inline harness configuration regression tests", function () {
     // "outside" file is created even without an escalation. The write goes
     // through a workspace script so the prompt names no outside path.
     //
-    // `custom` (`codex exec`, approval `never`) is asked to run the command
-    // normally: asking it to escalate under `never` makes the model decline
+    // `custom` (approval `never`) is asked to run the command normally:
+    // asking it to escalate under `never` makes the model decline
     // before making any call. The sandbox then refuses the outside write.
     // `auto` is asked to escalate up front, because a model that first hits
     // the sandbox and then reads "do not retry" never asks at all.
@@ -1490,6 +1647,45 @@ suite("Inline harness configuration regression tests", function () {
     // Headless `auto` also passes a bare `ShellTool` allow, or Qwen drops its
     // shell tool from the session; the judge still reviews each command.
     defineShellProbeTests(QWEN, permissionModeShellCases(), () => tmpDir);
+
+    test(`${QWEN}: headless approval ask denies when no dashboard is connected`, function () {
+      const markerName = `${QWEN}-approval-not-run.txt`;
+      const markerPath = path.join(tmpDir, markerName);
+      const workflow = shellProbeWorkflow(
+        QWEN,
+        `${QWEN}-headless-approval`,
+        {
+          mode: "custom",
+          allowedTools: ["shell(echo:*)"],
+          deniedTools: ["write"],
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 5,
+        },
+        chainedCommand(
+          normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+          normalizedPath(markerPath)
+        )
+      );
+      const { result, toolEvents } = runToolProbe(
+        workflow,
+        tmpDir,
+        `${QWEN}-headless-approval`,
+        SHELL_PROBE_TIMEOUT_MS
+      );
+      const label = `${QWEN} (headless approval without dashboard)`;
+      if (logAndMaybeSkip(label, result)) return;
+      assertSuccessfulRun(label, result);
+      assert.ok(
+        toolEvents.includes(markerName),
+        `Qwen never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+      );
+      assert.ok(
+        toolEvents.toLowerCase().includes("no dashboard"),
+        `the approval request did not receive the no-dashboard denial\n${toolEvents}`
+      );
+      assert.ok(!toolEvents.includes(SHELL_PROBE_RAN), toolEvents);
+      assert.ok(!fs.existsSync(markerPath), "the denied command ran");
+    });
 
     for (const permissionCase of [
       {

@@ -10,6 +10,8 @@ import {
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type {
   CliEvent,
+  HeadlessControlTargetMessage,
+  HeadlessApprovalRequestMessage,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type {
@@ -293,6 +295,23 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
+  }
+
+  updateHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    this.send({
+      ...target,
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+    });
+  }
+
+  updateHeadlessApprovalRequest(
+    request: HeadlessApprovalRequestMessage
+  ): boolean {
+    this.send({
+      ...request,
+      type: MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED,
+    });
+    return true;
   }
 
   updateContextWindow(

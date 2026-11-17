@@ -1,26 +1,32 @@
+import { STREAM_JSON_CONTROL } from "../shared/StreamJsonHeadlessControlChannel";
+
 /** Wire-level message event types from Qwen's Gemini-style log protocol. */
 export const QWEN_EVENT_TYPES = {
-  USER: "user",
+  USER: STREAM_JSON_CONTROL.USER_TYPE,
   ASSISTANT: "assistant",
   TOOL_RESULT: "tool_result",
-  RESULT: "result",
+  RESULT: STREAM_JSON_CONTROL.RESULT_TYPE,
 } as const;
 
 /** Stream-json SDK control protocol vocabulary used by Qwen's headless channel. */
 export const QWEN_CONTROL = {
-  REQUEST_TYPE: "control_request",
-  RESPONSE_TYPE: "control_response",
-  USER_TYPE: "user",
-  INITIALIZE_SUBTYPE: "initialize",
-  CAN_USE_TOOL_SUBTYPE: "can_use_tool",
-  SUCCESS_SUBTYPE: "success",
-  ERROR_SUBTYPE: "error",
-  USER_ROLE: "user",
-  DENY_BEHAVIOR: "deny",
+  REQUEST_TYPE: STREAM_JSON_CONTROL.REQUEST_TYPE,
+  RESPONSE_TYPE: STREAM_JSON_CONTROL.RESPONSE_TYPE,
+  USER_TYPE: STREAM_JSON_CONTROL.USER_TYPE,
+  INITIALIZE_SUBTYPE: STREAM_JSON_CONTROL.INITIALIZE_SUBTYPE,
+  CAN_USE_TOOL_SUBTYPE: STREAM_JSON_CONTROL.CAN_USE_TOOL_SUBTYPE,
+  INTERRUPT_SUBTYPE: STREAM_JSON_CONTROL.INTERRUPT_SUBTYPE,
+  SUCCESS_SUBTYPE: STREAM_JSON_CONTROL.SUCCESS_SUBTYPE,
+  ERROR_SUBTYPE: STREAM_JSON_CONTROL.ERROR_SUBTYPE,
+  USER_ROLE: STREAM_JSON_CONTROL.USER_ROLE,
+  DENY_BEHAVIOR: STREAM_JSON_CONTROL.DENY_BEHAVIOR,
+  ALLOW_BEHAVIOR: STREAM_JSON_CONTROL.ALLOW_BEHAVIOR,
 } as const;
 
 /** A silent Qwen initialize would otherwise leave the step waiting indefinitely. */
 export const QWEN_INITIALIZE_TIMEOUT_MS = 10_000;
+export const QWEN_CAN_USE_TOOL_TIMEOUT_MIN_VERSION = ">=0.16.0";
+export const QWEN_LEGACY_CAN_USE_TOOL_TIMEOUT_MS = 60_000;
 
 /**
  * Start of the error Qwen 0.27+ returns, without running the tool, when the
@@ -57,6 +63,7 @@ export const QWEN_TOOL_NAMES = {
   SHELL: "run_shell_command",
   MONITOR: "monitor",
   TASK_STOP: "task_stop",
+  ASK_USER_QUESTION: "ask_user_question",
 } as const;
 
 /**

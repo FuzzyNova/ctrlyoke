@@ -296,14 +296,14 @@ Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke cont
 
 ### `toolPermissions` {#execution-properties-toolpermissions}
 
-- **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`
+- **Type:** `{ mode?, allowedTools?, deniedTools?, … }` or `null`
 - **Settings default:** [`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions)
 
 Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.
 
 Accepted forms:
 
-- `{ mode?, allowedTools?, deniedTools? }` — Per-workflow/prompt tool permission overrides. Follows three-tier precedence: prompt > workflow > the `defaults.toolPermissions` setting.
+- `{ mode?, allowedTools?, deniedTools?, … }` — Per-workflow/prompt tool permission overrides. Follows three-tier precedence: prompt > workflow > the `defaults.toolPermissions` setting.
 - `null`
 
 ### `toolPermissions.mode` {#execution-properties-toolpermissions-mode}
@@ -323,6 +323,19 @@ Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI
 - **Type:** `string[]`
 
 Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.
+
+### `toolPermissions.headlessApprovals` {#execution-properties-toolpermissions-headlessapprovals}
+
+- **Type:** `"deny" | "ask"`
+
+How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.
+
+### `toolPermissions.headlessApprovalTimeoutSec` {#execution-properties-toolpermissions-headlessapprovaltimeoutsec}
+
+- **Type:** `integer`
+- **Constraints:** minimum 1 · maximum 600
+
+Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.
 
 ### `sandbox` {#execution-properties-sandbox}
 

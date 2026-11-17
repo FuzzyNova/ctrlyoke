@@ -66,16 +66,17 @@ export const CODEX_FOLD_EXCLUDED_SERVER_IDS: ReadonlySet<string> = new Set([
  * Converts ctrlyoke's permission mode into Codex's approval flag. Containment
  * (`-s`) is a separate axis owned by `CodexSandboxMapper`.
  *
- * | Mode                | Interactive     | Headless (`codex exec`) |
- * | ------------------- | --------------- | ----------------------- |
- * | allowAll            | `-a on-request` | nothing                 |
- * | dangerouslyAllowAll | `-a never`      | nothing                 |
- * | custom              | `-a on-request` | nothing                 |
- * | auto                | `-a on-request` + reviewer | reviewer config |
- * | none / null         | nothing         | nothing                 |
+ * | Mode                | Interactive                 | Headless |
+ * | ------------------- | --------------------------- | -------- |
+ * | allowAll            | `-a on-request`             | `never` |
+ * | dangerouslyAllowAll | `-a never`                  | `never` |
+ * | custom              | `-a on-request`             | `never`, or `on-request` for headless `ask` |
+ * | auto                | `-a on-request` + reviewer  | reviewer config |
+ * | none / null         | nothing                     | `never` |
  *
- * `codex exec` has no `-a` flag and never asks for approval, so headless
- * Codex is governed by its sandbox alone.
+ * The legacy `codex exec` path has no `-a` flag and defaults to `never`.
+ * Headless app-server receives an equivalent `approval_policy` config override;
+ * it can surface supported requests through ctrlyoke's shared approval policy.
  *
  * Codex does not expose ctrlyoke's general tool-pattern contract. Denied
  * `mcp__<server>__<tool>` patterns for servers the workflow attaches become

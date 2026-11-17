@@ -17,6 +17,8 @@ import type {
 import type {
   CliEvent,
   CliOutput,
+  HeadlessControlTargetMessage,
+  HeadlessApprovalRequestMessage,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
@@ -343,6 +345,24 @@ export class DashboardBroadcastHub
         sequence
       );
     }
+  }
+
+  updateHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    for (const client of this.clients) {
+      client.updateHeadlessControlTarget?.(target);
+    }
+  }
+
+  updateHeadlessApprovalRequest(
+    request: HeadlessApprovalRequestMessage
+  ): boolean {
+    let delivered = false;
+    for (const client of this.clients) {
+      if (!client.updateHeadlessApprovalRequest) continue;
+      client.updateHeadlessApprovalRequest(request);
+      delivered = true;
+    }
+    return delivered;
   }
 
   updateContextWindow(

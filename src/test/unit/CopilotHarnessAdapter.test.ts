@@ -5,12 +5,17 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
-import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  HARNESS_IDS,
+  HEADLESS_PROMPT_DELIVERIES,
+  HEADLESS_SOURCE_MODES,
+  PERMISSION_MODES,
+} from "../../types/DashboardConstants";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { getCopilotHomeDir } from "../../utils/HarnessHome";
-import { HEADLESS_PROMPT_DELIVERIES } from "../../types/DashboardConstants";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 
 function createProperties(
@@ -42,6 +47,64 @@ suite("CopilotHarnessAdapter", () => {
     assert.throws(
       () => provider.buildHeadlessArgs([], "  \n"),
       /stdin prompt cannot be empty/
+    );
+  });
+
+  test("gates Copilot ACP by version and keeps auto permission mode on JSONL", async () => {
+    const supported = new CopilotHarnessAdapter();
+    supported.getVersion = async () => "GitHub Copilot CLI 1.0.112";
+    assert.strictEqual(
+      await supported.getHeadlessSourceMode(PERMISSION_MODES.CUSTOM),
+      HEADLESS_SOURCE_MODES.LOG
+    );
+    const channel = await supported.createHeadlessControlChannel!("prompt", {
+      approvalPolicy: "deny",
+      approvalTimeoutMs: 1_000,
+      useApprovalControl: false,
+      context: {
+        launchArgs: [
+          "--resume",
+          "session-1",
+          "--output-format",
+          "json",
+          "--model",
+          "test-model",
+        ],
+      },
+    });
+    assert.ok(channel);
+    assert.deepStrictEqual(channel.spawnShape, {
+      args: ["--acp", "--model", "test-model"],
+      replaceArgs: true,
+    });
+    assert.strictEqual(
+      await supported.getHeadlessSourceMode(PERMISSION_MODES.AUTO),
+      HEADLESS_SOURCE_MODES.STDOUT
+    );
+    assert.strictEqual(
+      await supported.createHeadlessControlChannel!("prompt", {
+        approvalPolicy: "deny",
+        approvalTimeoutMs: 1_000,
+        useApprovalControl: false,
+        context: { launchArgs: ["--assisted-approval"] },
+      }),
+      undefined
+    );
+
+    const older = new CopilotHarnessAdapter();
+    older.getVersion = async () => "1.0.111";
+    assert.strictEqual(
+      await older.getHeadlessSourceMode(PERMISSION_MODES.CUSTOM),
+      HEADLESS_SOURCE_MODES.STDOUT
+    );
+    assert.strictEqual(
+      await older.createHeadlessControlChannel!("prompt", {
+        approvalPolicy: "deny",
+        approvalTimeoutMs: 1_000,
+        useApprovalControl: false,
+        context: { launchArgs: ["--model", "test-model"] },
+      }),
+      undefined
     );
   });
 

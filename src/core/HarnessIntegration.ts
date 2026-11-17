@@ -60,6 +60,7 @@ import {
 import type { CtrlYokeNotificationEvent } from "./notifications/NotificationEventFactory";
 import { HarnessAdapterUtils } from "./harness/shared/HarnessAdapterUtils";
 import type { DisposableRegistry } from "./HostPorts";
+import type { HeadlessControlTargetMessage } from "../types/WebviewMessageTypes";
 
 /** Match a complete leading harness slash-command token. */
 export const SLASH_COMMAND_TOKEN_PATTERN = /^\/[^\s]+(?=\s|$)/;
@@ -464,6 +465,11 @@ export abstract class HarnessIntegration {
   protected streamingEventsEmitter = new TypedEmitter<CliEvent[]>();
   public readonly onStreamingEvents = this.streamingEventsEmitter.event;
 
+  protected readonly headlessControlTargetEmitter =
+    new TypedEmitter<HeadlessControlTargetMessage>();
+  public readonly onHeadlessControlTarget =
+    this.headlessControlTargetEmitter.event;
+
   // Event emitter for live context window updates (fires during streaming as events arrive)
   protected contextWindowUpdateEmitter = new TypedEmitter<{
     used: number;
@@ -499,6 +505,11 @@ export abstract class HarnessIntegration {
 
   /** Stable transport session identity used for post-completion attribution. */
   getActivitySessionId(): string | undefined {
+    return undefined;
+  }
+
+  /** Stable transport identity for a currently open headless control channel. */
+  getHeadlessControlSessionId(): string | undefined {
     return undefined;
   }
 
@@ -540,6 +551,7 @@ export abstract class HarnessIntegration {
       disposableRegistry.add(this.responseCompleteEmitter);
       disposableRegistry.add(this.streamingChunkEmitter);
       disposableRegistry.add(this.streamingEventsEmitter);
+      disposableRegistry.add(this.headlessControlTargetEmitter);
       disposableRegistry.add(this.contextWindowUpdateEmitter);
       disposableRegistry.add(this.promptReadyEmitter);
       disposableRegistry.add(this.notificationEventEmitter);
@@ -557,6 +569,7 @@ export abstract class HarnessIntegration {
     this.responseCompleteEmitter.dispose();
     this.streamingChunkEmitter.dispose();
     this.streamingEventsEmitter.dispose();
+    this.headlessControlTargetEmitter.dispose();
     this.contextWindowUpdateEmitter.dispose();
     this.promptReadyEmitter.dispose();
     this.notificationEventEmitter.dispose();
@@ -734,10 +747,14 @@ export abstract class HarnessIntegration {
   ): Promise<boolean>;
 
   /**
-   * Send a fully prepared steer message to a live interactive session.
-   * Integrations without a live PTY do not support steering.
+   * Send a fully prepared steer message to the named live transport session.
    */
-  async sendSteerMessage(_text: string): Promise<boolean> {
+  async sendSteerMessage(_text: string, _sessionId?: string): Promise<boolean> {
+    return false;
+  }
+
+  /** Interrupt the named headless turn without terminating its process. */
+  async interruptHeadlessTurn(_sessionId?: string): Promise<boolean> {
     return false;
   }
 

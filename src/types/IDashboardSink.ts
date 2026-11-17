@@ -1,4 +1,9 @@
-import type { CliEvent, UndoExecutionTarget } from "./WebviewMessageTypes";
+import type {
+  CliEvent,
+  HeadlessApprovalRequestMessage,
+  HeadlessControlTargetMessage,
+  UndoExecutionTarget,
+} from "./WebviewMessageTypes";
 import type {
   WorkflowStep,
   WorkflowViewAddress,
@@ -145,6 +150,11 @@ export interface IDashboardSink {
     timestampMs?: number,
     sequence?: number
   ): void;
+
+  updateHeadlessControlTarget?(target: HeadlessControlTargetMessage): void;
+  updateHeadlessApprovalRequest?(
+    request: HeadlessApprovalRequestMessage
+  ): boolean;
 
   updateContextWindow(
     stepIndex: number,

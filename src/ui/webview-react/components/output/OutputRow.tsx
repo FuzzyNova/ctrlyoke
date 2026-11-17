@@ -25,6 +25,7 @@ import {
 import {
   AskUserQuestionOutput,
   BashOutput,
+  HeadlessApprovalCard,
   FileDeleteOutput,
   FileEditOutput,
   FileReadOutput,
@@ -2035,6 +2036,15 @@ function OutputRowComponent({
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       content = <div className="h-px" aria-hidden="true" />;
+      break;
+    case OUTPUT_ROW_KINDS.HEADLESS_APPROVAL:
+      content = (
+        <HeadlessApprovalCard
+          approval={row.approval}
+          stepLabel={row.stepLabel}
+          stepName={row.stepName}
+        />
+      );
       break;
     case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
       content = <ParallelGroupHeaderRowView row={row} onView={onPromptView} />;

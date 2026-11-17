@@ -2,6 +2,8 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { CtrlYokeNotificationEvent } from "./notifications/NotificationEventFactory";
 import type {
   CliEvent,
+  HeadlessControlTargetMessage,
+  HeadlessApprovalRequestMessage,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type {
@@ -263,6 +265,24 @@ export class WorkflowTaggedSink implements IDashboardSink {
       phase,
       timestampMs,
       sequence
+    );
+  }
+
+  updateHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    this.inner.updateHeadlessControlTarget?.({
+      ...target,
+      workflowId: this.workflowId,
+    });
+  }
+
+  updateHeadlessApprovalRequest(
+    request: HeadlessApprovalRequestMessage
+  ): boolean {
+    return (
+      this.inner.updateHeadlessApprovalRequest?.({
+        ...request,
+        workflowId: this.workflowId,
+      }) ?? false
     );
   }
 

@@ -24,7 +24,7 @@ import {
   type BashOutputExpansionSection,
   type BashOutputExpansionState,
 } from "@components/output/BashOutput";
-import type { WorkflowStep } from "@store/workflowStore";
+import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type {
   DiffViewType,
@@ -44,6 +44,7 @@ import type {
   WorkflowRunMetadata,
   WorkspaceSnapshot,
 } from "@root/types/OutputHistoryTypes";
+import type { HeadlessApprovalRequestMessage } from "@root/types/WebviewMessageTypes";
 import {
   IMPORTED_OUTPUT_READ_ONLY_MESSAGE,
   isPreImportOutput,
@@ -94,6 +95,11 @@ interface UseOutputRowsModelInput {
 }
 
 const SHELL_WORKFLOW_ID = "_shell";
+const EMPTY_HEADLESS_APPROVALS_BY_STEP: Record<
+  number,
+  HeadlessApprovalRequestMessage[]
+> = {};
+const EMPTY_HEADLESS_APPROVALS: HeadlessApprovalRequestMessage[] = [];
 
 /**
  * Owns the projection from live/history entries to chronologically sorted
@@ -136,6 +142,17 @@ export function useOutputRowsModel({
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
   );
+  const activeWorkflowId = useUiStore((state) => state.activeWorkflowId);
+  const pendingHeadlessApprovalsByStep = useWorkflowStore((state) =>
+    activeWorkflowId
+      ? (state.headlessApprovalsByWorkflow[activeWorkflowId] ??
+        EMPTY_HEADLESS_APPROVALS_BY_STEP)
+      : EMPTY_HEADLESS_APPROVALS_BY_STEP
+  );
+  const pendingHeadlessApprovals = useMemo(() => {
+    if (isViewingHistory) return EMPTY_HEADLESS_APPROVALS;
+    return Object.values(pendingHeadlessApprovalsByStep).flat();
+  }, [isViewingHistory, pendingHeadlessApprovalsByStep]);
   const hiddenOutputTargets = useUiStore((state) => state.hiddenOutputTargets);
   const hiddenOutputAddressKey = useMemo(
     () =>
@@ -241,6 +258,7 @@ export function useOutputRowsModel({
             finalStep,
             parallelGroups,
             activeStepIndices,
+            pendingHeadlessApprovals,
             effectiveHarness,
             stepColorMode,
             harnessColorSettings,
@@ -292,6 +310,7 @@ export function useOutputRowsModel({
       finalStep,
       parallelGroups,
       activeStepIndices,
+      pendingHeadlessApprovals,
       effectiveHarness,
       stepColorMode,
       harnessColorSettings,

@@ -10,7 +10,9 @@ import {
   EDITOR_TARGET_KINDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HEADLESS_STEER_DELIVERIES,
   HARNESS_IDS,
+  MESSAGE_TYPES,
   SESSION_KINDS,
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
@@ -32,7 +34,11 @@ beforeEach(() => {
     },
   }));
   useUiStore.setState({ activeWorkflowId: "workflow-1", loadedWorkflows: [] });
-  useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
+  useTerminalStore.setState({
+    sessions: {},
+    activeSessionIds: {},
+    headlessControlTargets: {},
+  });
   useEditorStore.setState({
     selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
     promptText: "draft",
@@ -140,6 +146,28 @@ describe("useRunDispatchTargets", () => {
     }
   );
 
+  it("enables Interrupt Turn only for an open headless target that advertises support", () => {
+    setRunningState([2]);
+    useTerminalStore.getState().updateHeadlessControlTarget({
+      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex: 2,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+      canInterruptTurn: true,
+      isOpen: true,
+    });
+
+    const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
+
+    expect(result.current.interruptTurn).toEqual({
+      enabled: true,
+      title:
+        "Interrupts the current turn on the live Claude Code headless session (step 3) without stopping the session.",
+    });
+  });
+
   it("reports pausing before other running-state reasons", () => {
     useWorkflowStore.setState({
       executionState: EXECUTION_STATES.PAUSING,
@@ -197,6 +225,47 @@ describe("useRunDispatchTargets", () => {
         "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
     });
   });
+
+  it.each([
+    [
+      HARNESS_IDS.CODEX_CLI,
+      HEADLESS_STEER_DELIVERIES.INJECT,
+      "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
+    ],
+    [
+      HARNESS_IDS.CLAUDE_CLI,
+      HEADLESS_STEER_DELIVERIES.INJECT,
+      "Sends to the live Claude Code session (step 3). Prompt overrides are ignored.",
+    ],
+    [
+      HARNESS_IDS.QWEN_CLI,
+      HEADLESS_STEER_DELIVERIES.QUEUE,
+      "Queues for the live Qwen Code session after its current turn (step 3). Prompt overrides are ignored.",
+    ],
+    [
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      HEADLESS_STEER_DELIVERIES.QUEUE,
+      "Queues for the live Antigravity CLI session after its current turn (step 3). Prompt overrides are ignored.",
+    ],
+  ] as const)(
+    "enables headless steer with the %s delivery tooltip",
+    (harnessId, steerDelivery, title) => {
+      setRunningState([2]);
+      useTerminalStore.getState().updateHeadlessControlTarget({
+        type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+        workflowId: "workflow-1",
+        controlSessionId: "control-1",
+        stepIndex: 2,
+        harnessId,
+        steerDelivery,
+        isOpen: true,
+      });
+
+      const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
+
+      expect(result.current.steer).toEqual({ enabled: true, title });
+    }
+  );
 
   it.each([
     [

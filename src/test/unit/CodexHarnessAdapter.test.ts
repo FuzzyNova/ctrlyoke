@@ -8,9 +8,18 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { parse } from "smol-toml";
 import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
+import {
+  buildCodexAppServerArgs,
+  getCodexAppServerAdditionalWritableRoots,
+} from "../../core/harness/codex/CodexAppServerArgs";
+import {
+  CODEX_APP_SERVER_MIN_VERSION,
+  isCodexAppServerVersionSupported,
+} from "../../core/harness/codex/CodexAppServerClient";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
 import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
 import {
+  HEADLESS_APPROVAL_POLICIES,
   PERMISSION_MODES,
   SANDBOX_MODES,
   type SandboxMode,
@@ -36,6 +45,143 @@ function makeWorkflowContext(resumeSession?: boolean): {
 // ============================================================================
 
 suite("CodexHarnessAdapter", () => {
+  test("gates headless app-server at the supported minimum version", () => {
+    assert.deepStrictEqual(CODEX_APP_SERVER_MIN_VERSION, {
+      major: 0,
+      minor: 146,
+    });
+    assert.strictEqual(isCodexAppServerVersionSupported(undefined), false);
+    assert.strictEqual(isCodexAppServerVersionSupported("unknown"), false);
+    assert.strictEqual(isCodexAppServerVersionSupported("0.145.99"), false);
+    assert.strictEqual(isCodexAppServerVersionSupported("0.146.0"), true);
+    assert.strictEqual(
+      isCodexAppServerVersionSupported("codex-cli 0.169.0"),
+      true
+    );
+  });
+
+  test("recognizes missing Codex sessions from exec and app-server errors", () => {
+    const provider = new CodexHarnessAdapter();
+    assert.strictEqual(
+      provider.isRecoverableSessionError("thread abc not found"),
+      true
+    );
+    assert.strictEqual(
+      provider.isRecoverableSessionError("thread not found: abc"),
+      true
+    );
+    assert.strictEqual(
+      provider.isRecoverableSessionError("a different error"),
+      false
+    );
+  });
+
+  test("selects app-server at the gate and keeps exec below it", async () => {
+    const buildArgs = async (version: string) =>
+      new CodexHarnessAdapter(undefined, {
+        getVersion: async () => version,
+      }).buildCliArgs({} as any, false, "/extension", undefined, undefined, {
+        promptIndex: 0,
+        allPrompts: [],
+      } as any);
+
+    const appServerArgs = await buildArgs("0.146.0");
+    assert.ok(appServerArgs.includes("app-server"));
+    assert.ok(!appServerArgs.includes("exec"));
+    assert.ok(appServerArgs.includes('approval_policy="never"'));
+
+    const legacyArgs = await buildArgs("0.145.9");
+    assert.ok(legacyArgs.includes("exec"));
+    assert.ok(legacyArgs.includes("--json"));
+  });
+
+  test("declares in-turn headless steering for app-server Codex", () => {
+    const steering = new CodexHarnessAdapter().capabilities.headlessControl
+      ?.steering;
+    assert.strictEqual(steering?.fidelity, "exact");
+    assert.strictEqual(steering?.mechanism, "native");
+    assert.deepStrictEqual(steering?.verification?.verifiedVersions, [
+      ">=0.146.0",
+    ]);
+  });
+
+  test("headless Ask uses app-server on-request approvals", async () => {
+    const provider = new CodexHarnessAdapter(undefined, {
+      getVersion: async () => "0.169.0",
+    });
+    const args = await provider.buildCliArgs(
+      {} as any,
+      false,
+      "/extension",
+      undefined,
+      undefined,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: {
+          toolPermissions: {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: [],
+            deniedTools: [],
+            headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          },
+        },
+      } as any
+    );
+
+    assert.ok(args.includes("app-server"));
+    assert.ok(args.includes('approval_policy="on-request"'));
+  });
+
+  test("translates exec launch flags into app-server config overrides", () => {
+    assert.deepStrictEqual(
+      buildCodexAppServerArgs([
+        "app-server",
+        "--listen",
+        "stdio://",
+        "--json",
+        "--skip-git-repo-check",
+        "--model",
+        "gpt-5.2-codex",
+        "--sandbox",
+        "workspace-write",
+        "--add-dir",
+        "/workspace/.git",
+        "--add-dir=/workspace-extra",
+        "--image",
+        "image.png",
+        "resume",
+        "thread_abc123",
+        "-",
+        "--enable",
+        "hooks",
+        "-c",
+        "hooks.state={trusted_hash='abc'}",
+      ]),
+      [
+        "app-server",
+        "--listen",
+        "stdio://",
+        "-c",
+        'model="gpt-5.2-codex"',
+        "-c",
+        'sandbox_mode="workspace-write"',
+        "--enable",
+        "hooks",
+        "-c",
+        "hooks.state={trusted_hash='abc'}",
+      ]
+    );
+    assert.deepStrictEqual(
+      getCodexAppServerAdditionalWritableRoots([
+        "--add-dir",
+        "/workspace/.git",
+        "--add-dir=/workspace-extra",
+      ]),
+      ["/workspace/.git", "/workspace-extra"]
+    );
+  });
+
   test("approval flags follow the permission mode alone, and only interactively", () => {
     const mapper = new CodexToolPermissionMapper();
     const cases = [
@@ -829,6 +975,21 @@ suite("CodexHarnessAdapter", () => {
       );
     });
 
+    test("captures the app-server thread ID from responses and notifications", () => {
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout?.(
+          '{"id":2,"result":{"thread":{"id":"thread_rpc"}}}\n'
+        ),
+        "thread_rpc"
+      );
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout?.(
+          '{"method":"thread/started","params":{"thread":{"id":"thread_notice"}}}\n'
+        ),
+        "thread_notice"
+      );
+    });
+
     test("reads a rejected request's reason from turn.failed on stdout", () => {
       // Captured from codex 0.162.1 with an unknown --model.
       const apiError = JSON.stringify({
@@ -877,6 +1038,12 @@ suite("CodexHarnessAdapter", () => {
           ].join("\n")
         ),
         undefined
+      );
+      assert.strictEqual(
+        provider.extractErrorFromStdout?.(
+          '{"id":2,"error":{"code":-32602,"message":"invalid model"}}\n'
+        ),
+        "invalid model"
       );
     });
   });

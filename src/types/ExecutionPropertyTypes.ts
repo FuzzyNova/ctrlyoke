@@ -11,6 +11,7 @@ import type {
   HarnessId,
   CtrlYokeMcpMode,
   PermissionMode,
+  HeadlessApprovalPolicy,
 } from "./DashboardConstants";
 import type {
   PriorContextDetail,
@@ -26,6 +27,8 @@ export interface ToolPermissionConfig {
   mode: ToolPermissionMode;
   allowedTools: string[];
   deniedTools: string[];
+  headlessApprovals?: HeadlessApprovalPolicy;
+  headlessApprovalTimeoutSec?: number;
 }
 
 /** Execution properties after prompt/workflow/default resolution. */

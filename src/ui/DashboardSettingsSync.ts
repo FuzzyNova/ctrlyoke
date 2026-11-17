@@ -939,6 +939,10 @@ export class DashboardSettingsSync {
         mode: ConfigurationUtils.getCliToolPermissions(),
         allowedTools: ConfigurationUtils.getCliAllowedTools(),
         deniedTools: ConfigurationUtils.getCliDeniedTools(),
+        headlessApprovals:
+          ConfigurationUtils.getDefaultHeadlessApprovalPolicy(),
+        headlessApprovalTimeoutSec:
+          ConfigurationUtils.getDefaultHeadlessApprovalTimeoutSec(),
       },
       sandbox: ConfigurationUtils.getDefaultSandbox(),
       sandboxMode: ConfigurationUtils.getDefaultSandboxMode(),

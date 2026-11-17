@@ -35,6 +35,8 @@ import {
   CAPABILITIES_FILE,
   SETTING_PATHS,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_POLICIES,
   HARNESS_DISPLAY_ORDER,
   SETTING_SCOPES,
   TEMPLATE_IDS,
@@ -49,6 +51,7 @@ import {
   type HarnessId,
   type ContextResolutionFailureMode,
   type PermissionMode,
+  type HeadlessApprovalPolicy,
   type CtrlYokeMcpMode,
   type StepColorMode,
   type SettingWriteScope,
@@ -88,12 +91,22 @@ function getDefaultCliToolPermissionConfig(): ToolPermissionConfig | null {
 function normalizeToolPermissionConfig(
   config: ToolPermissionConfig | null
 ): ToolPermissionConfig | null {
+  const headlessApprovals =
+    config?.headlessApprovals ?? HEADLESS_APPROVAL_POLICIES.DENY;
+  const headlessApprovalTimeoutSec =
+    config?.headlessApprovalTimeoutSec ?? HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC;
   return config === null
     ? null
     : {
         ...config,
         allowedTools: config.allowedTools ?? [],
         deniedTools: config.deniedTools ?? [],
+        ...(headlessApprovals !== HEADLESS_APPROVAL_POLICIES.DENY
+          ? { headlessApprovals }
+          : {}),
+        ...(headlessApprovalTimeoutSec !== HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC
+          ? { headlessApprovalTimeoutSec }
+          : {}),
       };
 }
 
@@ -898,6 +911,20 @@ export const ConfigurationUtils = {
    */
   getCliToolPermissions(): PermissionMode {
     return getDefaultCliToolPermissionConfig()?.mode ?? PERMISSION_MODES.NONE;
+  },
+
+  getDefaultHeadlessApprovalPolicy(): HeadlessApprovalPolicy {
+    return (
+      configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions
+        ?.headlessApprovals ?? HEADLESS_APPROVAL_POLICIES.DENY
+    );
+  },
+
+  getDefaultHeadlessApprovalTimeoutSec(): number {
+    return (
+      configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions
+        ?.headlessApprovalTimeoutSec ?? HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC
+    );
   },
 
   /**

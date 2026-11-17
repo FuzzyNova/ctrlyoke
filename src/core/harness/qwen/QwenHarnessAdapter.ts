@@ -7,6 +7,8 @@ import {
   QWEN_EVENT_TYPES,
   QWEN_MODEL_FLAGS,
   QWEN_SANDBOX_ENV,
+  QWEN_CAN_USE_TOOL_TIMEOUT_MIN_VERSION,
+  QWEN_LEGACY_CAN_USE_TOOL_TIMEOUT_MS,
 } from "./QwenProtocolConstants";
 import {
   describeUnconfiguredQwenModel,
@@ -23,6 +25,11 @@ import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_MAX_TIMEOUT_MS,
+  HEADLESS_APPROVAL_MIN_TIMEOUT_MS,
   HOOK_EVENT_NAMES,
   PERMISSION_MODES,
   STATUS_LINE_HARNESS_IDS,
@@ -52,6 +59,8 @@ import {
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
 import { QwenHeadlessControlChannel } from "./QwenHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
 import { resolveCliModelFlag } from "../shared/CliModelSelection";
 import {
   ConfigurationUtils,
@@ -78,6 +87,7 @@ import type {
 import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -107,6 +117,24 @@ export function getRequestedQwenModel(
     }
   });
   return model?.trim() || undefined;
+}
+
+export function clampQwenApprovalTimeoutMs(
+  requestedTimeoutMs: number,
+  cliVersion: string | undefined
+): number {
+  const maximumTimeoutMs =
+    cliVersion &&
+    versionSatisfies(cliVersion, QWEN_CAN_USE_TOOL_TIMEOUT_MIN_VERSION)
+      ? HEADLESS_APPROVAL_MAX_TIMEOUT_MS
+      : QWEN_LEGACY_CAN_USE_TOOL_TIMEOUT_MS;
+  const requested = Number.isFinite(requestedTimeoutMs)
+    ? Math.round(requestedTimeoutMs)
+    : HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC * 1000;
+  return Math.max(
+    HEADLESS_APPROVAL_MIN_TIMEOUT_MS,
+    Math.min(requested, maximumTimeoutMs)
+  );
 }
 
 /**
@@ -142,6 +170,15 @@ const QWEN_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=0.15.5"]),
+} as const;
+
+const QWEN_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: CAPABILITY_FIDELITIES.EXACT,
+  mechanism: CAPABILITY_MECHANISMS.NATIVE,
+  verification: capabilitySuiteVerification(
+    [">=0.27.4"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 /**
@@ -262,6 +299,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: QWEN_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: QWEN_IMAGE_INPUT_CAPABILITY },
+      headlessControl: { steering: QWEN_HEADLESS_STEERING_CAPABILITY },
     };
   }
   readonly logParser = new QwenLogParser();
@@ -842,8 +880,23 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     ];
   }
 
-  createHeadlessControlChannel(): QwenHeadlessControlChannel {
-    return new QwenHeadlessControlChannel();
+  createHeadlessControlChannel(
+    _promptText: string,
+    options: HeadlessControlChannelOptions
+  ): QwenHeadlessControlChannel {
+    return new QwenHeadlessControlChannel(
+      undefined,
+      options.useApprovalControl ? options.approvalTimeoutMs : undefined
+    );
+  }
+
+  async resolveHeadlessApprovalTimeoutMs(
+    requestedTimeoutMs: number
+  ): Promise<number> {
+    return clampQwenApprovalTimeoutMs(
+      requestedTimeoutMs,
+      await this.getVersion()
+    );
   }
 
   /**

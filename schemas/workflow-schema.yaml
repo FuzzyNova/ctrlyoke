@@ -2660,6 +2660,30 @@ $defs:
               servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT
               ENFORCE shell or other tool patterns.
             title: Denied Tools
+          headlessApprovals:
+            type: string
+            enum:
+              - deny
+              - ask
+            description: >-
+              How a headless step handles a tool approval request. `deny` answers immediately; `ask`
+              publishes a request to connected dashboards and denies if no dashboard can answer.
+              Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code
+              approval requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode
+              2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and
+              OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an
+              explicit `--server` also disables the per-process control channel. Copilot `auto`
+              stays on its assisted-approval path and does not use this ACP channel. No allow-always
+              option is offered.
+            title: Headless Approvals
+          headlessApprovalTimeoutSec:
+            type: integer
+            minimum: 1
+            maximum: 600
+            description: >-
+              Maximum time in seconds to wait for a dashboard response to a headless approval
+              request. Qwen Code may impose a lower limit on older versions.
+            title: Headless Approval Timeout Sec
         additionalProperties: false
       - type: 'null'
   priorContext:

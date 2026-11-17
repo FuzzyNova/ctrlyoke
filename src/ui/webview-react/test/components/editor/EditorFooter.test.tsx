@@ -51,6 +51,7 @@ const defaultProps: React.ComponentProps<typeof EditorFooter> = {
   onRunInParallel: vi.fn(),
   onRunInNewWorkflow: vi.fn(),
   onSendSteerMessage: vi.fn(),
+  onInterruptHeadlessTurn: vi.fn(),
   runInParallelTarget: {
     enabled: false,
     disabledReason: "No step is running",
@@ -64,6 +65,11 @@ const defaultProps: React.ComponentProps<typeof EditorFooter> = {
     enabled: false,
     disabledReason: "No live harness session for this workflow",
     title: "No live harness session for this workflow",
+  } satisfies RunDispatchTarget,
+  interruptTurnTarget: {
+    enabled: false,
+    disabledReason: "No live headless turn supports interruption",
+    title: "No live headless turn supports interruption",
   } satisfies RunDispatchTarget,
   onQueue: vi.fn(),
   onUpdate: vi.fn(),
@@ -98,12 +104,20 @@ describe("EditorFooter run menu", () => {
 
     expect(
       screen.getAllByRole("option").map((option) => option.textContent)
-    ).toEqual(["Send Steer Message", "Run in Parallel", "Run in New Workflow"]);
+    ).toEqual([
+      "Send Steer Message",
+      "Interrupt Turn",
+      "Run in Parallel",
+      "Run in New Workflow",
+    ]);
     expect(
       screen.getByRole("option", { name: "Send Steer Message" })
     ).toBeDisabled();
     expect(
       screen.getByRole("option", { name: "Run in Parallel" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("option", { name: "Interrupt Turn" })
     ).toBeDisabled();
     expect(
       screen.getByRole("option", { name: "Send Steer Message" })
@@ -182,6 +196,28 @@ describe("EditorFooter run menu", () => {
     );
     await user.click(steer);
     expect(defaultProps.onSendSteerMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables Interrupt Turn without prompt text for a capable headless target", async () => {
+    const user = userEvent.setup();
+    renderFooter({
+      hasContent: false,
+      interruptTurnTarget: {
+        enabled: true,
+        title:
+          "Interrupts the current turn on the live Claude Code headless session (step 3) without stopping the session.",
+      },
+    });
+
+    expect(
+      document.querySelector<HTMLButtonElement>(".btn-editor-run")
+    ).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    const interrupt = screen.getByRole("option", { name: "Interrupt Turn" });
+    expect(interrupt).toBeEnabled();
+    await user.click(interrupt);
+    expect(defaultProps.onInterruptHeadlessTurn).toHaveBeenCalledTimes(1);
   });
 
   it.each([

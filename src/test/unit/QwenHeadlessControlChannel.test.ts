@@ -11,6 +11,7 @@ import {
 import {
   QWEN_CONTROL,
   QWEN_EVENT_TYPES,
+  QWEN_TOOL_NAMES,
 } from "../../core/harness/qwen/QwenProtocolConstants";
 
 suite("QwenHeadlessControlChannel", () => {
@@ -62,6 +63,30 @@ suite("QwenHeadlessControlChannel", () => {
     channel.close();
   });
 
+  test("sets Qwen's can-use-tool timeout in the initialize request", async () => {
+    const writes: string[] = [];
+    const writer: ControlWriter = {
+      write: async (text) => {
+        writes.push(text);
+      },
+      end: async () => {},
+    };
+    const channel = new QwenHeadlessControlChannel(undefined, 60_000);
+    const starting = channel.start(writer);
+    const initialize = JSON.parse(writes[0]) as {
+      request_id: string;
+      request: { timeout?: { canUseTool?: number } };
+    };
+
+    assert.strictEqual(initialize.request.timeout?.canUseTool, 60_000);
+    channel.observe({
+      type: QWEN_CONTROL.RESPONSE_TYPE,
+      response: { request_id: initialize.request_id },
+    });
+    await starting;
+    channel.close();
+  });
+
   test("maps can_use_tool to a deny response and result to turn end", async () => {
     const writes: string[] = [];
     const channel = new QwenHeadlessControlChannel();
@@ -88,6 +113,8 @@ suite("QwenHeadlessControlChannel", () => {
       {
         kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
         requestId: "approval-7",
+        toolName: "Unknown tool",
+        input: undefined,
       },
     ]);
     await channel.answerApproval(
@@ -111,6 +138,111 @@ suite("QwenHeadlessControlChannel", () => {
     });
     assert.deepStrictEqual(channel.observe({ type: QWEN_EVENT_TYPES.RESULT }), [
       { kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END },
+    ]);
+    channel.close();
+  });
+
+  test("allows one request with its original input", async () => {
+    const writes: string[] = [];
+    const channel = new QwenHeadlessControlChannel();
+    await channel.start({
+      write: async (text) => {
+        writes.push(text);
+        if (text.includes(QWEN_CONTROL.INITIALIZE_SUBTYPE)) {
+          const request = JSON.parse(text) as { request_id: string };
+          channel.observe({
+            type: QWEN_CONTROL.RESPONSE_TYPE,
+            response: { request_id: request.request_id },
+          });
+        }
+      },
+      end: async () => {},
+    });
+    const input = { command: "echo hello" };
+    channel.observe({
+      type: QWEN_CONTROL.REQUEST_TYPE,
+      request_id: "approval-allow",
+      request: {
+        subtype: QWEN_CONTROL.CAN_USE_TOOL_SUBTYPE,
+        tool_name: "run_shell_command",
+        input,
+      },
+    });
+
+    await channel.answerApproval(
+      "approval-allow",
+      APPROVAL_DECISIONS.ALLOW_ONCE
+    );
+
+    assert.deepStrictEqual(JSON.parse(writes[1]), {
+      type: QWEN_CONTROL.RESPONSE_TYPE,
+      response: {
+        subtype: QWEN_CONTROL.SUCCESS_SUBTYPE,
+        request_id: "approval-allow",
+        response: {
+          behavior: QWEN_CONTROL.ALLOW_BEHAVIOR,
+          updatedInput: input,
+        },
+      },
+    });
+    channel.close();
+  });
+
+  test("classifies Qwen model questions separately from tool approvals", () => {
+    const channel = new QwenHeadlessControlChannel();
+    const observation = channel.observe({
+      type: QWEN_CONTROL.REQUEST_TYPE,
+      request_id: "question-1",
+      request: {
+        subtype: QWEN_CONTROL.CAN_USE_TOOL_SUBTYPE,
+        tool_name: QWEN_TOOL_NAMES.ASK_USER_QUESTION,
+      },
+    });
+
+    assert.deepStrictEqual(observation, [
+      {
+        kind: HEADLESS_CONTROL_OBSERVATION_KINDS.MODEL_QUESTION,
+        requestId: "question-1",
+      },
+    ]);
+    channel.close();
+  });
+
+  test("sends interrupt and marks the following result as interrupted", async () => {
+    const writes: string[] = [];
+    const channel = new QwenHeadlessControlChannel();
+    await channel.start({
+      write: async (text) => {
+        writes.push(text);
+        const request = JSON.parse(text) as {
+          request_id: string;
+          request: { subtype: string };
+        };
+        if (request.request.subtype === QWEN_CONTROL.INITIALIZE_SUBTYPE) {
+          channel.observe({
+            type: QWEN_CONTROL.RESPONSE_TYPE,
+            response: { request_id: request.request_id },
+          });
+        }
+      },
+      end: async () => {},
+    });
+
+    await channel.interrupt();
+
+    const request = JSON.parse(writes[1]) as {
+      type: string;
+      request_id: string;
+      request: { subtype: string };
+    };
+    assert.strictEqual(request.type, QWEN_CONTROL.REQUEST_TYPE);
+    assert.ok(request.request_id);
+    assert.strictEqual(request.request.subtype, QWEN_CONTROL.INTERRUPT_SUBTYPE);
+    assert.deepStrictEqual(channel.observe({ type: QWEN_EVENT_TYPES.RESULT }), [
+      {
+        kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
+        interrupted: true,
+      },
     ]);
     channel.close();
   });

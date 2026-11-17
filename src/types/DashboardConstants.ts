@@ -912,10 +912,13 @@ export const MESSAGE_TYPES = {
   GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]
   SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
   RUN_IN_NEW_WORKFLOW: "runInNewWorkflow",
-  // Steer messages — webview → extension: send a categorized prompt directly
-  // into an already-running interactive PTY session. Never queued; ignores all
-  // prompt overrides (harness/model/agent/skills/permissions).
+  // Steer messages — webview → extension: send a categorized prompt to a live
+  // AI-CLI PTY or headless control channel. Ignores prompt overrides.
   SEND_STEER_MESSAGE: "sendSteerMessage", // { workflowId, sessionId, text }
+  INTERRUPT_HEADLESS_TURN: "interruptHeadlessTurn", // { workflowId, sessionId }
+  HEADLESS_CONTROL_TARGET_CHANGED: "headlessControlTargetChanged",
+  HEADLESS_APPROVAL_REQUEST_CHANGED: "headlessApprovalRequestChanged",
+  RESPOND_TO_HEADLESS_APPROVAL: "respondToHeadlessApproval",
 
   // Stable run lifecycle controls — Webview → Extension
   EXECUTE_DRAFT: "executeDraft",
@@ -2111,6 +2114,7 @@ export const CAPABILITY_VERIFICATION_BASES = {
 export const CAPABILITY_DOMAINS = {
   PERMISSIONS: "permissions",
   PROMPT_INPUTS: "promptInputs",
+  HEADLESS_CONTROL: "headlessControl",
   HOOKS: "hooks",
   MCP: "mcp",
   SANDBOX: "sandbox",
@@ -2366,6 +2370,14 @@ export const PROMPT_INPUT_CAPABILITY_KEYS = {
   IMAGES: "images",
 } as const;
 
+export const HEADLESS_CONTROL_CAPABILITY_KEYS = {
+  STEERING: "steering",
+} as const;
+
+export const HEADLESS_CONTROL_CAPABILITY_PATHS = {
+  STEERING: `${CAPABILITY_DOMAINS.HEADLESS_CONTROL}.${HEADLESS_CONTROL_CAPABILITY_KEYS.STEERING}`,
+} as const;
+
 export const MCP_CAPABILITY_KEYS = {
   PER_SERVER_TOOL_FILTERING: "perServerToolFiltering",
 } as const;
@@ -2589,6 +2601,10 @@ export const SETTING_PATHS = {
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
+  DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS:
+    "defaults.toolPermissions.headlessApprovals",
+  DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC:
+    "defaults.toolPermissions.headlessApprovalTimeoutSec",
   DEFAULTS_SANDBOX: "defaults.sandbox",
   DEFAULTS_SANDBOX_MODE: "defaults.sandboxMode",
   DEFAULTS_WORKTREE: "defaults.worktree",
@@ -3276,8 +3292,23 @@ export const APPROVAL_DECISIONS = {
 export type ApprovalDecision =
   (typeof APPROVAL_DECISIONS)[keyof typeof APPROVAL_DECISIONS];
 
+export const HEADLESS_APPROVAL_POLICIES = {
+  DENY: "deny",
+  ASK: "ask",
+} as const;
+
+export type HeadlessApprovalPolicy =
+  (typeof HEADLESS_APPROVAL_POLICIES)[keyof typeof HEADLESS_APPROVAL_POLICIES];
+
+export const HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC = 60;
+export const HEADLESS_APPROVAL_MIN_TIMEOUT_MS = 1_000;
+export const HEADLESS_APPROVAL_MAX_TIMEOUT_SEC = 600;
+export const HEADLESS_APPROVAL_MAX_TIMEOUT_MS =
+  HEADLESS_APPROVAL_MAX_TIMEOUT_SEC * 1_000;
+
 export const HEADLESS_CONTROL_OBSERVATION_KINDS = {
   APPROVAL_REQUEST: "approval-request",
+  MODEL_QUESTION: "model-question",
   TURN_END: "turn-end",
 } as const;
 
@@ -3287,6 +3318,16 @@ export type HeadlessControlObservationKind =
 /** User-facing explanation returned when a headless step requests approval. */
 export const HEADLESS_APPROVAL_DENIAL_MESSAGE =
   "ctrlyoke: this headless step cannot ask for approval. Add an allow rule to `toolPermissions` or run the step interactively.";
+export const HEADLESS_APPROVAL_NO_DASHBOARD_MESSAGE =
+  "ctrlyoke: no dashboard is connected to approve this tool, so it was denied.";
+export const HEADLESS_APPROVAL_PUBLISH_FAILURE_MESSAGE =
+  "ctrlyoke: the dashboard could not display this approval request, so the tool was denied.";
+export const HEADLESS_APPROVAL_TIMEOUT_MESSAGE =
+  "ctrlyoke: nobody answered this approval request before it timed out, so the tool was denied.";
+export const HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE =
+  "ctrlyoke: the headless session ended before this approval request was answered, so the tool was denied.";
+export const HEADLESS_MODEL_QUESTION_DENIAL_MESSAGE =
+  "ctrlyoke: model questions are not supported in headless approval requests; answer the question in the prompt and run the step again.";
 
 export const CONTEXT_RESOLUTION_FAILURE_MODES = {
   WARN: "warn",
@@ -5387,6 +5428,7 @@ export const OUTPUT_ROW_KINDS = {
   SCRIPT_OUTPUT: "script-output",
   SCRIPT_VERDICT: "script-verdict",
   STATS: "stats",
+  HEADLESS_APPROVAL: "headless-approval",
 } as const;
 
 export type OutputRowKind =

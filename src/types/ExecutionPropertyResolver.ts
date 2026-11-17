@@ -4,6 +4,8 @@ import {
   MCP_SERVER_IDS,
   MCP_SKILL_NAMES,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_POLICIES,
   PRIOR_CONTEXT_KEYWORDS,
   type ExecutionMode,
   type HarnessId,
@@ -424,11 +426,27 @@ function resolveToolPermissions(
   ) {
     return { value: null, source: selected.source };
   }
+  const headlessApprovals =
+    prompt.toolPermissions?.headlessApprovals ??
+    workflow.toolPermissions?.headlessApprovals ??
+    defaults.toolPermissions?.headlessApprovals ??
+    HEADLESS_APPROVAL_POLICIES.DENY;
+  const headlessApprovalTimeoutSec =
+    prompt.toolPermissions?.headlessApprovalTimeoutSec ??
+    workflow.toolPermissions?.headlessApprovalTimeoutSec ??
+    defaults.toolPermissions?.headlessApprovalTimeoutSec ??
+    HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC;
   return {
     value: {
       mode: effective.mode ?? PERMISSION_MODES.ALLOW_ALL,
       allowedTools: effective.allowedTools ?? [],
       deniedTools: effective.deniedTools ?? [],
+      ...(headlessApprovals !== HEADLESS_APPROVAL_POLICIES.DENY
+        ? { headlessApprovals }
+        : {}),
+      ...(headlessApprovalTimeoutSec !== HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC
+        ? { headlessApprovalTimeoutSec }
+        : {}),
     },
     source: selected.source,
   };

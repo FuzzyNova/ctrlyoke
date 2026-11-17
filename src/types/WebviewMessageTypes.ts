@@ -31,6 +31,7 @@ import {
   STEP_TYPES,
   PREVIEW_SCOPES,
   type TokenTotalConfidence,
+  type ApprovalDecision,
   type ScriptOutputSource,
   type ExecutionPhase,
   type UndoFileAction,
@@ -69,6 +70,7 @@ import {
   type RunDefinitionDecision,
   type SandboxMode,
   type SandboxRequest,
+  type HeadlessSteerDelivery,
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
@@ -2668,12 +2670,56 @@ export interface AppendFileMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
-/** Webview → Extension: send a prompt to a live interactive PTY session. */
+/** Webview → Extension: `sessionId` names a PTY session or headless control channel. */
 export interface SendSteerMessage {
   type: typeof MESSAGE_TYPES.SEND_STEER_MESSAGE;
   workflowId: string;
   sessionId: string;
   text: string;
+}
+
+/** Webview → Extension: interrupt a live headless turn without stopping its step. */
+export interface InterruptHeadlessTurnMessage {
+  type: typeof MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN;
+  workflowId: string;
+  sessionId: string;
+}
+
+/** Extension → Webview: a headless channel that can receive steers opened or closed. */
+export interface HeadlessControlTargetMessage {
+  type: typeof MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED;
+  workflowId: string;
+  controlSessionId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
+  steerDelivery: HeadlessSteerDelivery;
+  canInterruptTurn?: boolean;
+  isOpen: boolean;
+}
+
+/** Extension → Webview: a pending headless tool-approval request or its removal. */
+export interface HeadlessApprovalRequestMessage {
+  type: typeof MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED;
+  approvalId: string;
+  requestId: string;
+  workflowId: string;
+  controlSessionId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
+  toolName: string;
+  inputSummary: string;
+  deadline: number;
+  isPending: boolean;
+}
+
+/** Webview → Extension: allow one tool call or deny it with an optional message. */
+export interface HeadlessApprovalResponseMessage {
+  type: typeof MESSAGE_TYPES.RESPOND_TO_HEADLESS_APPROVAL;
+  workflowId: string;
+  controlSessionId: string;
+  approvalId: string;
+  decision: ApprovalDecision;
+  message?: string;
 }
 
 /**
@@ -3663,6 +3709,8 @@ export type IncomingMessage =
   | CliOutputMessage
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
+  | HeadlessControlTargetMessage
+  | HeadlessApprovalRequestMessage
   | ContextWindowUpdateMessage
   | FinalStepContextWindowUpdateMessage
   | StatusMessageMessage

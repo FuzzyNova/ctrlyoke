@@ -12,12 +12,15 @@ suite("CLI provider argument characterization", () => {
   const baseArgs = ["--model", "model-x", "--add-dir", "/workspace"];
   const prompt = "prompt text";
 
-  test("preserves Claude headless argument order", () => {
+  test("sends Claude headless prompts through stream-json stdin", () => {
+    const provider = new ClaudeHarnessAdapter();
+    assert.strictEqual(provider.config.inlinesGeneratedPromptOnStdin, true);
     assert.deepStrictEqual(
-      new ClaudeHarnessAdapter().buildHeadlessArgs(baseArgs, prompt),
+      provider.buildHeadlessArgs(baseArgs, prompt),
       [
-        "prompt text",
         "-p",
+        "--input-format",
+        "stream-json",
         "--output-format",
         "stream-json",
         "--verbose",
@@ -99,6 +102,8 @@ suite("CLI provider argument characterization", () => {
       HEADLESS_PROMPT_DELIVERIES.STDIN
     );
     assert.deepStrictEqual(provider.buildHeadlessArgs(baseArgs, prompt), [
+      "--input-format",
+      "stream-json",
       "--output-format",
       "stream-json",
       "--model",

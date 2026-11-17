@@ -787,6 +787,10 @@ export class CliIntegration extends HarnessIntegration {
     return this.transportCoordinator.getLastPtySessionId();
   }
 
+  override getHeadlessControlSessionId(): string | undefined {
+    return this.transportCoordinator.getHeadlessControlSessionId();
+  }
+
   /**
    * Start (or resume) the Layer 1 session-activity watcher after an interactive
    * prompt has finished and the PTY is still alive. Reuses the same `ILogParser`
@@ -1060,6 +1064,8 @@ export class CliIntegration extends HarnessIntegration {
         onPtyExit: (session, exitCode) => this.handlePtyExit(session, exitCode),
         cleanupTempFiles: (tempFilePaths) =>
           this.cleanupTempFiles(tempFilePaths),
+        onHeadlessControlTarget: (target) =>
+          this.headlessControlTargetEmitter.fire(target),
       },
       resolveSecretEnvironment: async (names) => {
         const values = await resolveSecretEnvironment(names, {
@@ -1729,9 +1735,50 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * Prepare and write a steer turn without entering the workflow execution
-   * pipeline. The PTY writer owns serialization with ordinary sent turns.
+   * pipeline. The active transport owns serialization with ordinary turns.
    */
-  override async sendSteerMessage(text: string): Promise<boolean> {
+  override async sendSteerMessage(
+    text: string,
+    sessionId?: string
+  ): Promise<boolean> {
+    const controlSessionId = this.getHeadlessControlSessionId();
+    if (
+      controlSessionId &&
+      (sessionId === undefined || sessionId === controlSessionId)
+    ) {
+      const activeSession = this.activeSession;
+      const workflowContext = activeSession?.workflowContext;
+      const liveProperties = activeSession?.resolvedProperties;
+      if (!activeSession || !workflowContext || !liveProperties) {
+        return false;
+      }
+
+      const reducedResolvedProperties: ResolvedProperties = {
+        ...liveProperties,
+        agent: undefined,
+        skills: [],
+        priorContext: PRIOR_CONTEXT_KEYWORDS.NONE,
+      };
+      const prepared = await this.promptPreparer.preparePrompt(
+        { prompt: text },
+        workflowContext,
+        reducedResolvedProperties,
+        activeSession.effectiveSessionId,
+        false
+      );
+      if (this.getHeadlessControlSessionId() !== controlSessionId) {
+        return false;
+      }
+      return this.transportCoordinator.sendHeadlessUserMessage(
+        controlSessionId,
+        prepared.promptWithInstruction
+      );
+    }
+
+    if (sessionId && sessionId !== this.getActivitySessionId()) {
+      return false;
+    }
+
     // During a monitored prompt, CliLogMonitor already owns the parser. Only
     // pause the activity watcher for the between-runs case; resuming it while
     // the prompt monitor is active would violate the one-reader rule.
@@ -1776,6 +1823,11 @@ export class CliIntegration extends HarnessIntegration {
         this.sessionActivityWatcher?.resume();
       }
     }
+  }
+
+  override async interruptHeadlessTurn(sessionId?: string): Promise<boolean> {
+    if (!sessionId) return false;
+    return this.transportCoordinator.interruptHeadlessTurn(sessionId);
   }
 
   // ============================================================

@@ -67,6 +67,9 @@ references added by ctrlyoke remain available to Qwen. Turn off
 [`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
 to use categorized temporary files and references instead.
 
+While a headless Qwen step is running with its control channel open, **Send Steer Message** queues
+text for Qwen's next turn after the current one. The editor's prompt-property overrides are ignored.
+
 ### Subagents in headless steps {#headless-subagents}
 
 Headless steps run Qwen in its SDK mode, which lets ctrlyoke answer approval requests instead

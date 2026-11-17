@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from "mocha";
 import {
+  clampQwenApprovalTimeoutMs,
   getRequestedQwenModel,
   QwenHarnessAdapter,
 } from "../../core/harness/qwen/QwenHarnessAdapter";
@@ -90,6 +91,13 @@ suite("QwenHarnessAdapter", () => {
       provider.isRecoverableSessionError({ stdout: "Another Qwen error" }),
       false
     );
+  });
+
+  test("caps approval waits to the Qwen version's can-use-tool limit", () => {
+    assert.strictEqual(clampQwenApprovalTimeoutMs(300_000, "0.15.5"), 60_000);
+    assert.strictEqual(clampQwenApprovalTimeoutMs(300_000, "0.16.0"), 300_000);
+    assert.strictEqual(clampQwenApprovalTimeoutMs(900_000, "0.27.4"), 600_000);
+    assert.strictEqual(clampQwenApprovalTimeoutMs(300_000, undefined), 60_000);
   });
 
   test("formats file references with spaces for the current platform", () => {

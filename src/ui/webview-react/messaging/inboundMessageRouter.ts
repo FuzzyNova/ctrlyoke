@@ -417,9 +417,14 @@ function isDisplayingNonExecutingRun(
  * reading the executing run's stale "running" summary and stay on Pause/Stop
  * instead of switching to Re-run the instant the workflow finishes.
  */
-function applyExecutionState(state: ExecutionState): void {
+function applyExecutionState(state: ExecutionState, workflowId?: string): void {
   useWorkflowStore.getState().setExecutionState(state);
   if (isExecutionFinished(state)) {
+    const targetWorkflowId =
+      workflowId ?? useUiStore.getState().activeWorkflowId;
+    if (targetWorkflowId) {
+      useTerminalStore.getState().clearHeadlessControlTargets(targetWorkflowId);
+    }
     useUiStore.getState().markExecutionRunFinished(state);
   } else if (state === EXECUTION_STATES.RUNNING) {
     // Mirrors the finished-state sync above: a continuation/append on the
@@ -804,6 +809,8 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.RECONNECT] = () => {
     // Extension host restarted but VS Code retained the old webview context.
     // Reset startup state and re-send READY so the new host can initialize.
+    useTerminalStore.getState().clearHeadlessControlTargets();
+    useWorkflowStore.getState().clearHeadlessApprovals();
     useUiStore.setState({
       devRestarting: false,
       startupReady: false,
@@ -1131,6 +1138,11 @@ export function createMessageHandlers(
   // EXECUTION_STARTED - Workflow execution has started
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_STARTED] = (message) => {
+    if (message.workflowId) {
+      useWorkflowStore
+        .getState()
+        .clearHeadlessApprovalsForWorkflow(message.workflowId);
+    }
     if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
@@ -1288,8 +1300,21 @@ export function createMessageHandlers(
   // EXECUTION_STATE_CHANGED - Execution state changed (running/paused/stopped)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_STATE_CHANGED] = (message) => {
-    if (isForInactiveWorkflow(message)) return;
-    applyExecutionState(message.state as ExecutionState);
+    const executionState = message.state as ExecutionState;
+    if (isExecutionFinished(executionState) && message.workflowId) {
+      useWorkflowStore
+        .getState()
+        .clearHeadlessApprovalsForWorkflow(message.workflowId);
+    }
+    if (isForInactiveWorkflow(message)) {
+      if (isExecutionFinished(executionState) && message.workflowId) {
+        useTerminalStore
+          .getState()
+          .clearHeadlessControlTargets(message.workflowId);
+      }
+      return;
+    }
+    applyExecutionState(executionState, message.workflowId);
     useWorkflowStore.getState().setStopReason(message.stopReason ?? undefined);
     if (message.activeStepIndices !== undefined) {
       useWorkflowStore
@@ -1301,6 +1326,14 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED] = (message) => {
     if (isForInactiveWorkflow(message)) return;
     useWorkflowStore.getState().setActiveStepIndices(message.activeStepIndices);
+  };
+
+  handlers[MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED] = (message) => {
+    useTerminalStore.getState().updateHeadlessControlTarget(message);
+  };
+
+  handlers[MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED] = (message) => {
+    useWorkflowStore.getState().updateHeadlessApprovalRequest(message);
   };
 
   // --------------------------------------------------------------------------
@@ -1320,9 +1353,16 @@ export function createMessageHandlers(
   // STEP_STATUS_CHANGED - Individual step status changed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STEP_STATUS_CHANGED] = (message) => {
+    const { stepIndex, status } = message;
+    const resolvedStatus = status?.state || status;
+    if (message.workflowId && isTerminalStepStatus(resolvedStatus)) {
+      useWorkflowStore
+        .getState()
+        .clearHeadlessApprovalsForStep(message.workflowId, stepIndex);
+    }
     if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
-    const { stepIndex, status, details } = message;
+    const { details } = message;
     if (message.activeStepIndices !== undefined) {
       workflowStore.setActiveStepIndices(message.activeStepIndices);
     }
@@ -1350,14 +1390,7 @@ export function createMessageHandlers(
     // advance currentStep before the durable CLI token payload arrives, and
     // clearing here makes the just-finished row lose its context bar. Live
     // telemetry is cleared once CLI output persists token metadata.
-    const terminalStatuses = [
-      STEP_STATUS.COMPLETED,
-      STEP_STATUS.FAILED,
-      STEP_STATUS.CANCELLED,
-      STEP_STATUS.NO_TURN_STARTED,
-    ];
-    const resolvedStatus = status?.state || status;
-    if (terminalStatuses.includes(resolvedStatus)) {
+    if (isTerminalStepStatus(resolvedStatus)) {
       return;
     }
   };
@@ -1379,6 +1412,11 @@ export function createMessageHandlers(
   // EXECUTION_COMPLETED - Workflow execution finished
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_COMPLETED] = (message) => {
+    if (message.workflowId) {
+      useWorkflowStore
+        .getState()
+        .clearHeadlessApprovalsForWorkflow(message.workflowId);
+    }
     if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     const steps = workflowStore.steps;
@@ -1455,6 +1493,14 @@ export function createMessageHandlers(
   // FINAL_PROMPT_STATUS_CHANGED - Runtime status updates for finalStep phase
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED] = (message) => {
+    if (message.workflowId && isTerminalStepStatus(message.status)) {
+      useWorkflowStore
+        .getState()
+        .clearHeadlessApprovalsForStep(
+          message.workflowId,
+          -(message.loopCount + 1)
+        );
+    }
     if (isForInactiveWorkflow(message)) return;
     useWorkflowStore
       .getState()
@@ -2285,9 +2331,13 @@ export function createMessageHandlers(
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
     const vscode = getVsCodeApi();
+    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
 
     settingsStore.setWorkflowLoaded(false);
     settingsStore.clearWorkflowProperties();
+    if (activeWorkflowId) {
+      workflowStore.clearHeadlessApprovalsForWorkflow(activeWorkflowId);
+    }
     // No addressed lineage remains after unload. Clear metadata owned by the
     // previously viewed run so a later workflow cannot inherit its lockdown.
     useUiStore.setState({ viewedLineageIsSystemGenerated: false });
@@ -3252,7 +3302,7 @@ export function createMessageHandlers(
       const workflowStore = useWorkflowStore.getState();
       workflowStore.setCurrentStep(summary.currentStep);
       workflowStore.setTotalSteps(summary.totalSteps);
-      applyExecutionState(summary.executionState);
+      applyExecutionState(summary.executionState, summary.id);
     }
   };
 
@@ -3444,6 +3494,11 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.CLIENT_ID_ASSIGNED] = (message: any) => {
     const { clientId } = message;
     if (!clientId) return;
+
+    // READY replays pending requests for the client's addressed workflow.
+    // Drop cached requests first so removals missed during reconnect cannot
+    // leave stale approval cards behind.
+    useWorkflowStore.getState().clearHeadlessApprovals();
 
     // Signal the HTML-level handshake watchdog that the extension connection
     // succeeded so it does not retry the handshake unnecessarily.

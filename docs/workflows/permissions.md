@@ -51,11 +51,35 @@ Permissions quick picker in the prompt editor's footer.
 ### Headless runs
 
 A [headless](/reference/settings#defaults-executionmode) step has no terminal, so an approval
-prompt can never be answered. With `custom` mode, a tool that is not on the
-allow list is refused and the step may not make progress. ctrlyoke warns once
-when a headless step starts with a mode other than `allowAll` or
-`dangerouslyAllowAll`. That includes `auto`, because its judge can refuse a
-request and there is no one to ask instead. Turn the warning off with
+prompt needs a connected dashboard to be answered. By default, `custom` mode denies a tool
+that is not on the allow list, and an `auto` judge escalation is also denied.
+
+#### Asking for headless tool approvals
+
+Headless Claude Code, Qwen Code, Copilot CLI 1.0.112+, and OpenCode 2.3.0+ `custom` steps can
+show an approval card in the dashboard instead. OpenCode requires its private standalone server;
+OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests. Set
+`toolPermissions.headlessApprovals` to `ask` on the workflow, step or
+[`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions):
+
+```yaml
+toolPermissions:
+  headlessApprovals: ask
+  headlessApprovalTimeoutSec: 60
+```
+
+The card shows the tool and its input, and offers **Allow once** or **Deny** with an optional
+message. An unanswered request is denied when the timeout expires; with no dashboard connected,
+ctrlyoke denies it immediately. Claude and Qwen also apply this to human escalations from their
+`auto` judges. OpenCode resolves an approval as a one-request `once` or `reject`, never `always`.
+Copilot `auto` stays on `--assisted-approval` and does not use ACP. It does not add an allow-always
+option. Copilot ACP cannot forward a custom denial message to the model, so that note remains in
+the dashboard.
+
+Other headless harnesses, OpenCode versions before 2.3.0, and Copilot versions before 1.0.112
+continue to deny approval requests.
+ctrlyoke warns once when a headless step starts with a mode other than `allowAll` or
+`dangerouslyAllowAll`. That includes `auto`, because its judge can refuse a request. Turn the warning off with
 [`ui.showHeadlessPermissionWarning`](/reference/settings#ui-showheadlesspermissionwarning).
 
 For CI, see [Tool permissions on CI](/cli/ci#tool-permissions).

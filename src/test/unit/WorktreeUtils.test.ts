@@ -317,7 +317,11 @@ suite("WorktreeUtils", function () {
     });
 
     const symlinkParent = path.join(parent, "checkout-link");
-    await fs.symlink(source, symlinkParent, "dir");
+    await fs.symlink(
+      source,
+      symlinkParent,
+      process.platform === "win32" ? "junction" : "dir"
+    );
     await assert.rejects(
       resolve(path.join(symlinkParent, "nested")),
       /inside the source checkout/

@@ -59,9 +59,11 @@ steps:
 
 ## Headless prompts
 
-In headless steps, ctrlyoke pipes the prompt to Antigravity's stdin and requests stream-json output.
-Generated sections such as agent instructions, skills and prior-step context are included in that
-first message. Turn off
+In headless steps, ctrlyoke sends the prompt to Antigravity's stdin as a stream-json user message
+and requests stream-json output. Generated sections such as agent instructions, skills and
+prior-step context are included in that first message. **Send Steer Message** queues a new
+Antigravity turn after the current turn; each queued turn has its own terminal result, and ctrlyoke
+keeps the step open until the queued turn finishes. Turn off
 [`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
 to use categorized temporary files and references instead.
 

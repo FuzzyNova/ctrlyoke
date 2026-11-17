@@ -8,12 +8,14 @@
  */
 
 import {
+  HEADLESS_STEERING_SUITE_REFERENCE,
   INLINE_CONFIG_SUITE_REFERENCE,
   type CapabilityDeclaration,
   type HarnessCapabilityFacts,
 } from "../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
+  HEADLESS_CONTROL_CAPABILITY_PATHS,
   type HarnessId,
 } from "../../types/DashboardConstants";
 
@@ -75,6 +77,8 @@ export const UNPROVEN_CLAIMS: Partial<
  */
 export const OTHER_SUITE_CLAIMS: Readonly<Record<CapabilityPath, string>> = {
   "sandbox.terminal": "src/test/harness/sandbox.harness.test.ts",
+  [HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING]:
+    HEADLESS_STEERING_SUITE_REFERENCE,
   // Deny still blocks and an unlisted chained command runs under the judge;
   // Codex's cases prove the reviewer-approved sandbox escalation instead.
   "permissions.autoMode": INLINE_CONFIG_SUITE_REFERENCE,

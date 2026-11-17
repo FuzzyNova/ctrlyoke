@@ -9,11 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Headless steps on Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- Headless Copilot CLI 1.0.112 and later now uses ACP for queued steering and dashboard tool approvals. `auto` permission mode stays on Copilot's existing assisted-approval path.
+- Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- Headless Codex 0.146.0 and later now runs through `codex app-server` JSON-RPC, while older versions keep using `codex exec`. The rollout log remains the source of headless Codex output.
+- Claude headless steps wait for tracked background tasks to finish before ending the step.
 - In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Added
 
+- Headless Claude Code and Qwen Code steps can ask the dashboard to approve tool requests with **Allow once** or **Deny**, including an optional denial message. Requests with no connected dashboard or no answer before the timeout are denied.
+- Headless Codex command, file-change and additional-permission approvals now follow `toolPermissions.headlessApprovals`; **Deny** remains the default, and **Ask** routes requests to the dashboard.
+- Headless OpenCode 2.3.0+ steps can route one-shot tool approvals to the dashboard and inject **Send Steer Message** into the active turn. OpenCode 1 and earlier OpenCode 2 versions keep auto-rejecting headless approval requests.
+- Send Steer Message now works during headless Claude Code, Codex CLI, Qwen Code and Antigravity steps: Claude and Codex receive the message in their current turns, while Qwen and Antigravity queue it after their current turns.
+- Interrupt Turn ends a headless Claude, Codex or Qwen turn while preserving the partial output and completing the step without stopping the workflow.
+- Codex headless approval requests use the configured timeout directly because app-server has no client-side timeout. Optional denial messages remain in the dashboard approval card because Codex's approval responses cannot carry them to the model.
 - The `workflow_status` MCP tool lists the workflow's condition presets under `metadata.conditionPresets`, with each preset's name, script preview, required params and retry limit. Before this, an orchestrator agent had no way to see which presets it could attach, and could queue steps without the `committed` gate a loop template declares. `append_step` now warns when it adds a sequential step with no end condition while the workflow declares presets, and its unknown-preset error lists each preset's params.
 - The workflow properties panel shows whole-value variable placeholders as read-only chips with their current value and a Clear action. Model, agent and skill dropdown validation leaves unresolved placeholders alone, and step names resolve from the workflow's vars in the run view.
 - Every dashboard picker and checkbox for a typed variable field—harness, model, execution mode, resume session, prior-context detail, compare source, operator, ignore case, condition and script-step On Pass/On Fail, On Error and step enabled—shows a whole-value placeholder as a read-only `{{name}} → value` chip with Clear, in the workflow properties panel, the prompt properties drawer and the script step editor. Timeout, Max Retries, Retry Delay and Max Steps inputs accept a typed `{{name}}`, and saving a step keeps an authored `enabled` or `ignoreCase` placeholder instead of rewriting it.

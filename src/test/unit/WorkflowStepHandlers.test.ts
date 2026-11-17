@@ -129,6 +129,62 @@ suite("WorkflowStepHandlers — steer messages", () => {
   });
 });
 
+suite("WorkflowStepHandlers — headless turn interruption", () => {
+  test("dispatches the workflow and control-session id", async () => {
+    const calls: unknown[] = [];
+    const orchestrator = makeOrchestrator({
+      interruptHeadlessTurn: async (...args: unknown[]) => {
+        calls.push(args);
+      },
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as DashboardSettingsSync,
+      new RecordingMutationCoordinator()
+    );
+
+    await handlers.handleInterruptHeadlessTurn(makeCtx(), {
+      type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
+      workflowId: "workflow-1",
+      sessionId: "control-1",
+    });
+
+    assert.deepStrictEqual(calls, [["workflow-1", "control-1"]]);
+  });
+
+  test("reports a liveness rejection as user feedback", async () => {
+    const emitted: unknown[] = [];
+    const orchestrator = makeOrchestrator({
+      interruptHeadlessTurn: async () => {
+        throw new Error("That headless turn has ended.");
+      },
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as DashboardSettingsSync,
+      new RecordingMutationCoordinator()
+    );
+
+    await handlers.handleInterruptHeadlessTurn(
+      makeCtx((message) => emitted.push(message)),
+      {
+        type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
+        workflowId: "workflow-1",
+        sessionId: "control-1",
+      }
+    );
+
+    assert.deepStrictEqual(emitted, [
+      {
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: emitted[0] && (emitted[0] as { id: string }).id,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: "That headless turn has ended.",
+      },
+    ]);
+  });
+});
+
 suite("WorkflowStepHandlers — bulk step updates", () => {
   test("routes one UPDATE_STEPS mutation and publishes the identity", async () => {
     const coordinator = new RecordingMutationCoordinator();

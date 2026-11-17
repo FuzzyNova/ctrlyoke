@@ -1,16 +1,31 @@
+import { randomUUID } from "crypto";
 import type { CliEvent } from "../../../types/CliOutputTypes";
-import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes";
+import type {
+  HeadlessControlTargetMessage,
+  TerminalStartedMessage,
+} from "../../../types/WebviewMessageTypes";
 import {
   EXECUTION_MODES,
   CLI_EVENT_TYPES,
   HEADLESS_PROMPT_DELIVERIES,
+  HEADLESS_STEER_DELIVERIES,
   HEADLESS_CONTROL_OBSERVATION_KINDS,
   HEADLESS_SOURCE_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_DENIAL_MESSAGE,
+  HEADLESS_APPROVAL_NO_DASHBOARD_MESSAGE,
+  HEADLESS_APPROVAL_POLICIES,
+  HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+  HEADLESS_MODEL_QUESTION_DENIAL_MESSAGE,
   MESSAGE_TYPES,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
   type TerminalEndReason,
+  type HarnessId,
+  type ApprovalDecision,
+  type HeadlessApprovalPolicy,
+  USER_STEER_ATTRIBUTIONS,
   NODE_ERROR_CODES,
   FAILURE_SOURCES,
 } from "../../../types/DashboardConstants";
@@ -48,17 +63,35 @@ import {
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
 import { splitCompleteLines } from "../../../utils/TextLines";
-import { StreamingSecretRedactor } from "../../../utils/SecretRedactionService";
+import {
+  secretRedactionService,
+  StreamingSecretRedactor,
+} from "../../../utils/SecretRedactionService";
 import { AsyncMutex } from "./AsyncMutex";
 import {
+  type ControlObservation,
+  type HeadlessApprovalExecutionContext,
+  type HeadlessControlChannelContext,
   type ControlWriter,
   type IHeadlessControlChannel,
 } from "./IHeadlessControlChannel";
 import type { Writable } from "stream";
-import {
-  APPROVAL_DECISIONS,
-  HEADLESS_APPROVAL_DENIAL_MESSAGE,
-} from "../../../types/DashboardConstants";
+import { APPROVAL_DECISIONS } from "../../../types/DashboardConstants";
+
+const HEADLESS_BACKGROUND_WORK_POLL_INTERVAL_MS = 100;
+const MAX_HEADLESS_APPROVAL_INPUT_SUMMARY_LENGTH = 2_000;
+
+function summarizeHeadlessApprovalInput(input: unknown): string {
+  const serialized =
+    typeof input === "string"
+      ? input
+      : (JSON.stringify(input) ?? String(input));
+  const redacted = secretRedactionService.redactText(serialized);
+  if (redacted.length <= MAX_HEADLESS_APPROVAL_INPUT_SUMMARY_LENGTH) {
+    return redacted;
+  }
+  return `${redacted.slice(0, MAX_HEADLESS_APPROVAL_INPUT_SUMMARY_LENGTH - 1)}…`;
+}
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -79,6 +112,7 @@ interface CliTransportCoordinatorHostCallbacks {
   onResponseComplete: () => void;
   onPtyExit: (session: PtySession, exitCode: number) => void;
   cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
+  onHeadlessControlTarget?: (target: HeadlessControlTargetMessage) => void;
 }
 
 export interface CliTransportCoordinatorDeps {
@@ -134,7 +168,10 @@ export interface CliExecutionTransportCoordinator {
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[],
-    keepTempFiles?: boolean
+    keepTempFiles?: boolean,
+    controlTarget?: HeadlessControlTargetContext,
+    approvalContext?: HeadlessApprovalExecutionContext,
+    controlContext?: HeadlessControlChannelContext
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -148,6 +185,12 @@ export interface CliExecutionTransportCoordinator {
     reason: string,
     options?: TerminatePtySessionOptions
   ): Promise<string | undefined>;
+}
+
+export interface HeadlessControlTargetContext {
+  workflowId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
 }
 
 export interface TerminatePtySessionOptions {
@@ -170,8 +213,33 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   private activeHeadlessLogTail?: HeadlessLogTail;
   private activeHeadlessControlChannel?: IHeadlessControlChannel;
   private activeHeadlessControlClose?: () => Promise<void>;
+  private activeHeadlessControlSessionId?: string;
+  private activeHeadlessControlSend?: (text: string) => Promise<boolean>;
+  private activeHeadlessControlInterrupt?: () => Promise<boolean>;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
+
+  getHeadlessControlSessionId(): string | undefined {
+    return this.activeHeadlessControlSessionId;
+  }
+
+  sendHeadlessUserMessage(sessionId: string, text: string): Promise<boolean> {
+    if (
+      this.activeHeadlessControlSessionId !== sessionId ||
+      this.activeHeadlessControlChannel?.supportsSteering === false
+    ) {
+      return Promise.resolve(false);
+    }
+    return this.activeHeadlessControlSend?.(text) ?? Promise.resolve(false);
+  }
+
+  async interruptHeadlessTurn(sessionId: string): Promise<boolean> {
+    if (this.activeHeadlessControlSessionId !== sessionId) {
+      return false;
+    }
+
+    return this.activeHeadlessControlInterrupt?.() ?? false;
+  }
 
   /**
    * Launch the harness TUI on the user's own terminal (`stdio: "inherit"`) and
@@ -410,7 +478,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[],
-    keepTempFiles = false
+    keepTempFiles = false,
+    controlTarget?: HeadlessControlTargetContext,
+    approvalContext?: HeadlessApprovalExecutionContext,
+    controlContext?: HeadlessControlChannelContext
   ): Promise<boolean> {
     this.activeHeadlessLogTail = source?.logTail;
     let closeControlChannelForRun: (() => Promise<void>) | undefined;
@@ -431,15 +502,62 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           this.deps.provider.buildHeadlessArgs(args, promptArgument)
         ));
       const controlChannel =
-        this.deps.provider.createHeadlessControlChannel?.(promptArgument);
+        await this.deps.provider.createHeadlessControlChannel?.(
+          promptArgument,
+          {
+            approvalPolicy:
+              approvalContext?.approvalPolicy ??
+              HEADLESS_APPROVAL_POLICIES.DENY,
+            approvalTimeoutMs:
+              approvalContext?.approvalTimeoutMs ??
+              HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC * 1000,
+            useApprovalControl: approvalContext?.useApprovalControl ?? false,
+            context: {
+              ...controlContext,
+              launchArgs: args,
+              workspaceRoot:
+                controlContext?.workspaceRoot ??
+                this.deps.runtimeState.getWorkspaceRoot(),
+              onSessionId: (sessionId) =>
+                source?.logTail?.setResolvedSessionId(sessionId),
+            },
+          }
+        );
+      const approvalPolicy: HeadlessApprovalPolicy =
+        approvalContext?.useApprovalControl
+          ? approvalContext.approvalPolicy
+          : HEADLESS_APPROVAL_POLICIES.DENY;
+      const controlSessionId = controlChannel ? randomUUID() : undefined;
+      const targetBase =
+        controlChannel &&
+        controlChannel.supportsSteering !== false &&
+        controlSessionId &&
+        controlTarget
+          ? {
+              workflowId: controlTarget.workflowId,
+              controlSessionId,
+              stepIndex: controlTarget.stepIndex,
+              harnessId: controlTarget.harnessId,
+              steerDelivery: controlChannel.steerDelivery,
+              canInterruptTurn: controlChannel.interrupt !== undefined,
+            }
+          : undefined;
       const controlArgs = controlChannel?.spawnShape.args ?? [];
-      const spawnArgs = [...command.args, ...controlArgs];
+      const replaceSpawnArgs = controlChannel?.spawnShape.replaceArgs === true;
+      const spawnCommand = replaceSpawnArgs
+        ? await this.resolveProviderCommand([...controlArgs])
+        : command;
+      const spawnArgs = replaceSpawnArgs
+        ? [...spawnCommand.args]
+        : [...command.args, ...controlArgs];
 
       this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
-        cliCommand: controlArgs.length
-          ? `${command.displayCommand} ${controlArgs.join(" ")}`
-          : command.displayCommand,
+        cliCommand: replaceSpawnArgs
+          ? spawnCommand.displayCommand
+          : controlArgs.length
+            ? `${command.displayCommand} ${controlArgs.join(" ")}`
+            : command.displayCommand,
       });
 
       const shouldStream =
@@ -461,7 +579,79 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let controlWriter: ControlWriter | undefined;
       let controlReady: Promise<void> | undefined;
       let controlClosed = false;
+      let controlClosing = false;
+      let controlClosePromise: Promise<void> | undefined;
       let controlOperations = Promise.resolve();
+      let controlCloseScheduled = false;
+      let promptDeadlineAt = 0;
+      let publishedControlTarget = false;
+      let controlTurnActive = false;
+      let interruptedTurnCompleted = false;
+      const approvalAbortController = new AbortController();
+      const pendingApprovalResponses = new Set<Promise<void>>();
+      const injectedSteers = new Set<symbol>();
+      const queuedSteersSubmittedDuringTurn: symbol[] = [];
+      const queuedSteersAwaitingTurn: symbol[] = [];
+
+      const hasOutstandingSteers = (): boolean =>
+        injectedSteers.size > 0 ||
+        queuedSteersSubmittedDuringTurn.length > 0 ||
+        queuedSteersAwaitingTurn.length > 0;
+
+      const reserveSteer = (): (() => void) => {
+        if (
+          controlChannel?.steerDelivery === HEADLESS_STEER_DELIVERIES.INJECT
+        ) {
+          const reservation = Symbol("injected-steer");
+          injectedSteers.add(reservation);
+          const wasTurnActive = controlTurnActive;
+          if (!controlTurnActive) controlTurnActive = true;
+          return () => {
+            injectedSteers.delete(reservation);
+            if (!wasTurnActive && injectedSteers.size === 0) {
+              controlTurnActive = false;
+            }
+          };
+        }
+
+        const reservation = Symbol("queued-steer");
+        if (controlTurnActive) {
+          queuedSteersSubmittedDuringTurn.push(reservation);
+        } else {
+          queuedSteersAwaitingTurn.push(reservation);
+          controlTurnActive = true;
+        }
+        return () => {
+          const submittedIndex =
+            queuedSteersSubmittedDuringTurn.indexOf(reservation);
+          if (submittedIndex !== -1) {
+            queuedSteersSubmittedDuringTurn.splice(submittedIndex, 1);
+          }
+          const queuedIndex = queuedSteersAwaitingTurn.indexOf(reservation);
+          if (queuedIndex !== -1) {
+            queuedSteersAwaitingTurn.splice(queuedIndex, 1);
+            controlTurnActive =
+              queuedSteersAwaitingTurn.length > 0 ||
+              queuedSteersSubmittedDuringTurn.length > 0;
+          }
+        };
+      };
+
+      const updateSteerStateAtTurnEnd = (): void => {
+        if (
+          controlChannel?.steerDelivery === HEADLESS_STEER_DELIVERIES.INJECT
+        ) {
+          injectedSteers.clear();
+          controlTurnActive = false;
+          return;
+        }
+
+        queuedSteersAwaitingTurn.shift();
+        queuedSteersAwaitingTurn.push(
+          ...queuedSteersSubmittedDuringTurn.splice(0)
+        );
+        controlTurnActive = queuedSteersAwaitingTurn.length > 0;
+      };
 
       const withControlLock = async (operation: () => Promise<void>) => {
         if (!controlMutex) return;
@@ -473,17 +663,36 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         }
       };
 
-      const closeControlChannel = async (): Promise<void> => {
-        if (!controlChannel || controlClosed) return;
-        controlClosed = true;
-        await controlWriter?.end();
-        await withControlLock(async () => {
-          controlChannel.close();
-        });
-        if (this.activeHeadlessControlChannel === controlChannel) {
-          this.activeHeadlessControlChannel = undefined;
-          this.activeHeadlessControlClose = undefined;
-        }
+      const closeControlChannel = (): Promise<void> => {
+        if (controlClosePromise) return controlClosePromise;
+        if (!controlChannel || controlClosed) return Promise.resolve();
+        controlClosing = true;
+        controlClosePromise = (async () => {
+          approvalAbortController.abort();
+          while (pendingApprovalResponses.size > 0) {
+            await Promise.allSettled([...pendingApprovalResponses]);
+          }
+          controlClosed = true;
+          await controlWriter?.end();
+          await withControlLock(async () => {
+            controlChannel.close();
+          });
+          if (this.activeHeadlessControlChannel === controlChannel) {
+            this.activeHeadlessControlChannel = undefined;
+            this.activeHeadlessControlClose = undefined;
+            this.activeHeadlessControlSessionId = undefined;
+            this.activeHeadlessControlSend = undefined;
+            this.activeHeadlessControlInterrupt = undefined;
+          }
+          if (targetBase && publishedControlTarget) {
+            this.deps.hostCallbacks.onHeadlessControlTarget?.({
+              type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+              ...targetBase,
+              isOpen: false,
+            });
+          }
+        })();
+        return controlClosePromise;
       };
       closeControlChannelForRun = closeControlChannel;
 
@@ -499,6 +708,162 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           });
       };
 
+      const hasPendingBackgroundWork = (): boolean =>
+        source?.parser.hasPendingBackgroundWork?.() === true;
+
+      const closeAfterTurnEnd = (): void => {
+        if (hasOutstandingSteers()) return;
+        if (
+          !controlChannel?.holdOpenForBackgroundWork ||
+          !hasPendingBackgroundWork()
+        ) {
+          enqueueControlOperation(closeControlChannel);
+          return;
+        }
+        if (controlCloseScheduled) return;
+        controlCloseScheduled = true;
+
+        // Keep this wait outside the control queue so approvals can still
+        // be answered.
+        void (async () => {
+          try {
+            while (
+              !controlClosed &&
+              !this.deps.runtimeState.isCancelling() &&
+              Date.now() < promptDeadlineAt &&
+              hasPendingBackgroundWork()
+            ) {
+              const remainingMs = promptDeadlineAt - Date.now();
+              await new Promise<void>((resolve) =>
+                setTimeout(
+                  resolve,
+                  Math.min(
+                    HEADLESS_BACKGROUND_WORK_POLL_INTERVAL_MS,
+                    Math.max(0, remainingMs)
+                  )
+                )
+              );
+            }
+          } catch (error) {
+            Log.warn(
+              `[CliTransportCoordinator] Could not inspect pending headless background work: ${getErrorMessage(error)}`
+            );
+          }
+          if (
+            this.deps.runtimeState.isCancelling() ||
+            Date.now() >= promptDeadlineAt
+          ) {
+            enqueueControlOperation(closeControlChannel);
+            return;
+          }
+          controlCloseScheduled = false;
+          closeAfterTurnEnd();
+        })();
+      };
+
+      const processControlObservations = (
+        observations: readonly ControlObservation[]
+      ): void => {
+        if (!controlChannel) return;
+        for (const observation of observations) {
+          if (
+            observation.kind ===
+            HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST
+          ) {
+            const response = (async (): Promise<void> => {
+              let resolution: { decision: ApprovalDecision; message?: string };
+              if (controlClosing) {
+                resolution = {
+                  decision: APPROVAL_DECISIONS.DENY,
+                  message: HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+                };
+              } else if (
+                !controlTarget ||
+                !controlSessionId ||
+                !approvalContext?.requestApproval
+              ) {
+                resolution = {
+                  decision: APPROVAL_DECISIONS.DENY,
+                  message:
+                    approvalPolicy === HEADLESS_APPROVAL_POLICIES.ASK
+                      ? HEADLESS_APPROVAL_NO_DASHBOARD_MESSAGE
+                      : HEADLESS_APPROVAL_DENIAL_MESSAGE,
+                };
+              } else {
+                try {
+                  resolution = await approvalContext.requestApproval(
+                    {
+                      policy: approvalPolicy,
+                      workflowId: controlTarget.workflowId,
+                      controlSessionId,
+                      stepIndex: controlTarget.stepIndex,
+                      harnessId: controlTarget.harnessId,
+                      requestId: observation.requestId,
+                      toolName: observation.toolName,
+                      inputSummary: summarizeHeadlessApprovalInput(
+                        observation.input
+                      ),
+                      timeoutMs:
+                        approvalContext.approvalTimeoutMs ??
+                        HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC * 1000,
+                    },
+                    approvalAbortController.signal
+                  );
+                } catch (error) {
+                  Log.warn(
+                    `[CliTransportCoordinator] Headless approval policy failed: ${getErrorMessage(error)}`
+                  );
+                  resolution = {
+                    decision: APPROVAL_DECISIONS.DENY,
+                    message: HEADLESS_APPROVAL_DENIAL_MESSAGE,
+                  };
+                }
+              }
+              await controlChannel.answerApproval(
+                observation.requestId,
+                resolution.decision,
+                resolution.message
+              );
+            })();
+            pendingApprovalResponses.add(response);
+            void response.then(
+              () => pendingApprovalResponses.delete(response),
+              (error: unknown) => {
+                pendingApprovalResponses.delete(response);
+                Log.warn(
+                  `[CliTransportCoordinator] Could not answer headless approval: ${getErrorMessage(error)}`
+                );
+              }
+            );
+          } else if (
+            observation.kind ===
+            HEADLESS_CONTROL_OBSERVATION_KINDS.MODEL_QUESTION
+          ) {
+            const response = controlChannel.answerApproval(
+              observation.requestId,
+              APPROVAL_DECISIONS.DENY,
+              HEADLESS_MODEL_QUESTION_DENIAL_MESSAGE
+            );
+            pendingApprovalResponses.add(response);
+            void response.then(
+              () => pendingApprovalResponses.delete(response),
+              (error: unknown) => {
+                pendingApprovalResponses.delete(response);
+                Log.warn(
+                  `[CliTransportCoordinator] Could not reject headless model question: ${getErrorMessage(error)}`
+                );
+              }
+            );
+          } else if (
+            observation.kind === HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END
+          ) {
+            interruptedTurnCompleted = observation.interrupted === true;
+            updateSteerStateAtTurnEnd();
+            closeAfterTurnEnd();
+          }
+        }
+      };
+
       const observeControlRecord = (record: string): void => {
         if (!controlChannel) return;
         let value: unknown = record;
@@ -507,60 +872,52 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         } catch {
           // Providers may ignore malformed records; still expose each JSONL line.
         }
-        for (const observation of controlChannel.observe(value)) {
-          if (
-            observation.kind ===
-            HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST
-          ) {
-            enqueueControlOperation(() =>
-              controlChannel.answerApproval(
-                observation.requestId,
-                APPROVAL_DECISIONS.DENY,
-                HEADLESS_APPROVAL_DENIAL_MESSAGE
-              )
-            );
-          } else if (
-            observation.kind === HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END
-          ) {
-            // Seam for queued steering: keep stdin open while a next-turn
-            // message is pending. Stage 1 has no steer queue yet.
-            enqueueControlOperation(closeControlChannel);
-          }
-        }
+        processControlObservations(controlChannel.observe(value));
       };
 
       const processControlStdoutChunk = (chunk: string): void => {
+        if (controlChannel?.observeStdoutChunk) {
+          processControlObservations(controlChannel.observeStdoutChunk(chunk));
+          return;
+        }
         const result = splitCompleteLines(pendingControlStdout + chunk);
         pendingControlStdout = result.remainder;
         for (const record of result.lines) observeControlRecord(record);
       };
 
       const flushControlStdout = (): void => {
+        if (controlChannel?.flushStdout) {
+          processControlObservations(controlChannel.flushStdout());
+        }
         if (!pendingControlStdout) return;
         const record = pendingControlStdout;
         pendingControlStdout = "";
         observeControlRecord(record);
       };
 
-      const createControlWriter = (writer: Writable): ControlWriter => ({
-        write: (text) =>
-          withControlLock(
-            () =>
-              new Promise<void>((resolve, reject) => {
-                writer.write(text, "utf8", (error?: Error | null) => {
-                  if (error) reject(error);
-                  else resolve();
-                });
-              })
-          ),
-        end: () =>
-          withControlLock(
-            () =>
-              new Promise<void>((resolve) => {
+      const createControlWriter = (writer: Writable): ControlWriter => {
+        let stdinEnded = false;
+        return {
+          write: (text) =>
+            withControlLock(
+              () =>
+                new Promise<void>((resolve, reject) => {
+                  writer.write(text, "utf8", (error?: Error | null) => {
+                    if (error) reject(error);
+                    else resolve();
+                  });
+                })
+            ),
+          end: () =>
+            withControlLock(() => {
+              if (stdinEnded) return Promise.resolve();
+              stdinEnded = true;
+              return new Promise<void>((resolve) => {
                 writer.end(resolve);
-              })
-          ),
-      });
+              });
+            }),
+        };
+      };
 
       if (controlChannel) {
         this.activeHeadlessControlChannel = controlChannel;
@@ -603,7 +960,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           ? new StreamingSecretRedactor()
           : undefined;
 
-      if (source?.logTail) {
+      if (
+        source?.logTail &&
+        controlChannel?.startLogTailAfterChannelStart !== true
+      ) {
         await source.logTail.start();
       } else if (source?.mode === HEADLESS_SOURCE_MODES.STDOUT) {
         source.parser
@@ -627,8 +987,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
       let result: SpawnResult;
       try {
-        result = await this.spawnProcess(command.command, spawnArgs, {
-          timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
+        const promptTimeoutMs =
+          ConfigurationUtils.getMaxPromptExecutionTimeMs();
+        promptDeadlineAt =
+          promptTimeoutMs === undefined
+            ? Number.POSITIVE_INFINITY
+            : Date.now() + promptTimeoutMs;
+        result = await this.spawnProcess(spawnCommand.command, spawnArgs, {
+          timeout: promptTimeoutMs,
           env: {
             ...env,
             ...(controlChannel?.spawnShape.env as
@@ -645,8 +1011,79 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             ? (writer) => {
                 controlWriter = createControlWriter(writer);
                 controlReady = (async () => {
-                  await controlChannel.start(controlWriter!);
+                  if (controlClosed) return;
+                  await controlChannel.start(
+                    controlWriter!,
+                    processControlObservations
+                  );
+                  if (controlClosed) return;
+                  if (
+                    controlChannel.startLogTailAfterChannelStart &&
+                    source?.logTail
+                  ) {
+                    await source.logTail.start();
+                  }
+                  if (controlClosed) return;
+                  controlTurnActive = true;
                   await controlChannel.sendUserMessage(promptArgument);
+                  if (controlClosed || !controlSessionId) return;
+                  this.activeHeadlessControlSessionId = controlSessionId;
+                  this.activeHeadlessControlSend = async (text) => {
+                    if (
+                      controlClosed ||
+                      this.activeHeadlessControlChannel !== controlChannel ||
+                      this.activeHeadlessControlSessionId !== controlSessionId
+                    ) {
+                      return false;
+                    }
+                    const releaseReservation = reserveSteer();
+                    source?.logTail?.registerDispatchedUserMessage(text);
+                    stdoutEventPump?.registerDispatchedUserMessage(text);
+                    try {
+                      await controlChannel.sendUserMessage(text);
+                    } catch (error) {
+                      releaseReservation();
+                      source?.logTail?.discardDispatchedUserMessage(text);
+                      stdoutEventPump?.discardDispatchedUserMessage(text);
+                      throw error;
+                    }
+                    this.deps.hostCallbacks.onStreamingEvents([
+                      {
+                        type: CLI_EVENT_TYPES.USER_STEER,
+                        timestamp: Date.now(),
+                        data: {
+                          text,
+                          attribution: USER_STEER_ATTRIBUTIONS.USER,
+                        },
+                      },
+                    ]);
+                    return true;
+                  };
+                  const interrupt =
+                    controlChannel.interrupt?.bind(controlChannel);
+                  this.activeHeadlessControlInterrupt = interrupt
+                    ? async () => {
+                        if (
+                          controlClosed ||
+                          this.activeHeadlessControlChannel !==
+                            controlChannel ||
+                          this.activeHeadlessControlSessionId !==
+                            controlSessionId
+                        ) {
+                          return false;
+                        }
+                        await interrupt();
+                        return true;
+                      }
+                    : undefined;
+                  if (targetBase) {
+                    this.deps.hostCallbacks.onHeadlessControlTarget?.({
+                      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+                      ...targetBase,
+                      isOpen: true,
+                    });
+                    publishedControlTarget = true;
+                  }
                 })().catch(async (error: unknown) => {
                   await closeControlChannel();
                   if (error instanceof CliTransportError) {
@@ -662,7 +1099,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                 controlReady.catch(() => undefined);
               }
             : undefined,
-          windowsVerbatimArguments: command.requiresShellVerbatimArgs,
+          windowsVerbatimArguments: spawnCommand.requiresShellVerbatimArgs,
           onStdout: shouldStream
             ? (chunk) => {
                 if (ConfigurationUtils.shouldLogRawCliOutput()) {
@@ -729,17 +1166,21 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           "[CliTransportCoordinator] Prompt execution cancelled by user"
         );
         await executeCallback(
-          source?.logTail
-            ? { ...result, headlessLogTail: source.logTail }
-            : result
+          this.withHeadlessControlOutcome(
+            result,
+            source?.logTail,
+            interruptedTurnCompleted
+          )
         );
         return false;
       }
 
       return await executeCallback(
-        source?.logTail
-          ? { ...result, headlessLogTail: source.logTail }
-          : result
+        this.withHeadlessControlOutcome(
+          result,
+          source?.logTail,
+          interruptedTurnCompleted
+        )
       );
     } catch (error) {
       await closeControlChannelForRun?.();
@@ -754,13 +1195,23 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     } finally {
       await closeControlChannelForRun?.();
       this.activeHeadlessLogTail = undefined;
-      if (source?.mode === HEADLESS_SOURCE_MODES.STDOUT) {
-        source.parser.getSubagentFollower?.()?.stop();
-      }
+      source?.parser.getSubagentFollower?.()?.stop();
       if (!keepTempFiles) {
         await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
       }
     }
+  }
+
+  private withHeadlessControlOutcome(
+    result: HeadlessProcessResult,
+    logTail: HeadlessLogTail | undefined,
+    interrupted: boolean
+  ): HeadlessProcessResult {
+    return {
+      ...result,
+      ...(logTail ? { headlessLogTail: logTail } : {}),
+      ...(interrupted ? { interrupted: true } : {}),
+    };
   }
 
   /**

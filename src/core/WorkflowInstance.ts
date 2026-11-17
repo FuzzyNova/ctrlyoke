@@ -37,6 +37,7 @@ import {
   type TargetStreamingChunkData,
   type TargetStreamingEventsData,
 } from "./WorkflowExecutor";
+import { HeadlessApprovalPolicyService } from "./HeadlessApprovalPolicyService";
 import {
   PromptFile,
   PromptStep,
@@ -104,10 +105,15 @@ import {
   type QueuePosition,
   type TerminalEndReason,
   type WorkflowTelemetryOutcome,
+  type ApprovalDecision,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
-import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
+import type {
+  CliEvent,
+  CliOutput,
+  HeadlessApprovalRequestMessage,
+} from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import {
   reportWorkflowStarted,
@@ -138,6 +144,8 @@ import {
 import {
   getExecutionWorkspaceIdentity,
   type ExecutionWorkspace,
+  type HeadlessApprovalRequestContext,
+  type HeadlessApprovalResolution,
   type McpToolSkillRunContext,
 } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
@@ -389,6 +397,7 @@ export class WorkflowInstance
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
+  private readonly headlessApprovalPolicyService: HeadlessApprovalPolicyService;
   private readonly sessionActivityRecorder: SessionActivityRecorder;
   private readonly statusMessageReporter: StatusMessageReporter;
 
@@ -641,6 +650,10 @@ export class WorkflowInstance
     this.dashboardSink = dashboardSink
       ? new WorkflowTaggedSink(dashboardSink, this.id)
       : undefined;
+    this.headlessApprovalPolicyService = new HeadlessApprovalPolicyService(
+      (message) =>
+        this.dashboardSink?.updateHeadlessApprovalRequest?.(message) ?? false
+    );
 
     // Per-workflow dependencies
     this.promptFileParser = new PromptFileParser(
@@ -1251,6 +1264,7 @@ export class WorkflowInstance
     this.stopStopRequestPolling();
     this.promptFileWatcher.dispose();
     this.endConditionEvaluator.dispose();
+    this.headlessApprovalPolicyService.dispose();
     // Close any lingering terminals from the last run and release references.
     for (const prev of this.lastRunIntegrations) {
       prev.closeTerminal(TERMINAL_END_REASONS.CLOSED);
@@ -2173,6 +2187,15 @@ export class WorkflowInstance
       statusReporter: this.statusMessageReporter,
       reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
         this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
+      requestHeadlessApproval: (
+        request: HeadlessApprovalRequestContext,
+        signal: AbortSignal
+      ): Promise<HeadlessApprovalResolution> =>
+        this.headlessApprovalPolicyService.requestApproval(
+          request.policy,
+          request,
+          signal
+        ),
       analyzeCompatibilityForPrompt: (
         promptIndex,
         prompt,
@@ -4282,14 +4305,26 @@ export class WorkflowInstance
    * `ActiveTargetResources.ptySessionId`: that field is only ever populated by
    * `registerTargetPtySession`, which the executor calls for interactive
    * *script* PTYs. An AI-CLI TUI is spawned by `CliTransportCoordinator`, which
-   * reports its session through `getActivitySessionId()` — so a mid-run steer
-   * resolves here and nowhere else.
+   * reports its session through `getActivitySessionId()` — so a mid-run PTY
+   * steer resolves here and nowhere else.
    */
   private findIntegrationForPtySession(
     sessionId: string
   ): HarnessIntegration | undefined {
     for (const integration of this.getLivePtyIntegrationCandidates()) {
       if (integration.getActivitySessionId() === sessionId) {
+        return integration;
+      }
+    }
+
+    return undefined;
+  }
+
+  private findIntegrationForHeadlessControlSession(
+    sessionId: string
+  ): HarnessIntegration | undefined {
+    for (const integration of this.getLivePtyIntegrationCandidates()) {
+      if (integration.getHeadlessControlSessionId() === sessionId) {
         return integration;
       }
     }
@@ -4338,31 +4373,82 @@ export class WorkflowInstance
     }
   }
 
-  /** Send a steer message directly to a live AI-CLI PTY session. */
+  /** Send a steer message directly to a live AI-CLI PTY or headless session. */
   async sendSteerMessage(sessionId: string, text: string): Promise<void> {
     const session = getPtyProcessManager()?.getSession(sessionId);
-    if (
-      !session ||
-      session.workflowId !== this.id ||
-      session.kind !== SESSION_KINDS.AI_CLI ||
-      session.status !== TERMINAL_SESSION_STATUS.RUNNING
-    ) {
-      throw new Error(
-        "That harness session has ended. The steer message was not sent."
-      );
+    let integration: HarnessIntegration | undefined;
+    if (session) {
+      if (
+        session.workflowId !== this.id ||
+        session.kind !== SESSION_KINDS.AI_CLI ||
+        session.status !== TERMINAL_SESSION_STATUS.RUNNING
+      ) {
+        throw new Error(
+          "That harness session has ended. The steer message was not sent."
+        );
+      }
+      integration = this.findIntegrationForPtySession(sessionId);
+    } else {
+      integration = this.findIntegrationForHeadlessControlSession(sessionId);
     }
 
-    const integration = this.findIntegrationForPtySession(sessionId);
     if (!integration) {
+      if (!session) {
+        throw new Error(
+          "That harness session has ended. The steer message was not sent."
+        );
+      }
       throw new Error("No live harness session for this workflow.");
     }
 
-    const sent = await integration.sendSteerMessage(text);
+    const sent = await integration.sendSteerMessage(text, sessionId);
     if (!sent) {
       throw new Error(
         "That harness session has ended. The steer message was not sent."
       );
     }
+  }
+
+  async interruptHeadlessTurn(sessionId: string): Promise<void> {
+    const integration =
+      this.findIntegrationForHeadlessControlSession(sessionId);
+    if (!integration) {
+      throw new Error(
+        "That headless turn has ended. The interrupt was not sent."
+      );
+    }
+
+    const interrupted = await integration.interruptHeadlessTurn(sessionId);
+    if (interrupted) return;
+
+    if (integration.getHeadlessControlSessionId() !== sessionId) {
+      throw new Error(
+        "That headless turn has ended. The interrupt was not sent."
+      );
+    }
+    throw new Error(
+      "This headless harness session does not support turn interruption."
+    );
+  }
+
+  respondToHeadlessApproval(
+    controlSessionId: string,
+    approvalId: string,
+    decision: ApprovalDecision,
+    message?: string
+  ): boolean {
+    return this.headlessApprovalPolicyService.respond(
+      controlSessionId,
+      approvalId,
+      decision,
+      message
+    );
+  }
+
+  replayPendingHeadlessApprovals(
+    send: (message: HeadlessApprovalRequestMessage) => void
+  ): void {
+    this.headlessApprovalPolicyService.replayPendingRequests(send);
   }
 
   private createIntegrationForMode(
@@ -4641,6 +4727,9 @@ export class WorkflowInstance
     integration.setSourceDefinitionPath(this.sourceDefinitionPath);
     integration.onStreamingEvents((events) =>
       this._streamingEventsEmitter.fire(events)
+    );
+    integration.onHeadlessControlTarget((target) =>
+      this.dashboardSink?.updateHeadlessControlTarget?.(target)
     );
     integration.onStreamingChunk((chunk) =>
       this._streamingChunkEmitter.fire(chunk)

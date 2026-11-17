@@ -41,6 +41,7 @@ import {
   type PriorContext,
   type HarnessId,
   type ToolPermissionMode,
+  type HeadlessApprovalPolicy,
 } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
@@ -96,6 +97,9 @@ import {
   WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_POLICIES,
+  INHERIT_DEFAULT_OPTION,
   SANDBOX_UI_LABELS,
   resolveSandboxRequest,
   workflowSandboxModeVisible,
@@ -119,6 +123,7 @@ import { isUnlimited } from "../../../../utils/LimitUtils";
 import {
   EXECUTION_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
+  HEADLESS_APPROVAL_POLICY_OPTIONS_META,
   TRUSTED_ROOTS_SELECTION_OPTIONS_META,
   WORKFLOW_AGENT_SELECTION_OPTIONS_META,
   WORKTREE_SELECTION_OPTIONS_META,
@@ -1603,6 +1608,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
     toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
   const effectiveDeniedTools =
     toolPerms?.deniedTools ?? globalSettings.toolPermissions.deniedTools;
+  const inheritedHeadlessApprovalPolicy =
+    globalSettings.toolPermissions.headlessApprovals ??
+    HEADLESS_APPROVAL_POLICIES.DENY;
+  const effectiveHeadlessApprovalPolicy =
+    toolPerms?.headlessApprovals ?? inheritedHeadlessApprovalPolicy;
+  const effectiveHeadlessApprovalTimeoutSec =
+    toolPerms?.headlessApprovalTimeoutSec ??
+    globalSettings.toolPermissions.headlessApprovalTimeoutSec ??
+    HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC;
 
   // PermissionListEditor echoes lossless text on every edit so CodeMirror can
   // keep blank lines/cursor state intact. Keep that draft local and persist the
@@ -1613,6 +1627,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [deniedToolsInput, setDeniedToolsInput] = useState<string[]>(
     () => effectiveDeniedTools ?? []
   );
+  const [headlessApprovalTimeoutInput, setHeadlessApprovalTimeoutInput] =
+    useState(String(effectiveHeadlessApprovalTimeoutSec));
 
   useEffect(() => {
     setAllowedToolsInput(effectiveAllowedTools ?? []);
@@ -1621,6 +1637,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
   useEffect(() => {
     setDeniedToolsInput(effectiveDeniedTools ?? []);
   }, [effectiveDeniedTools]);
+
+  useEffect(() => {
+    setHeadlessApprovalTimeoutInput(
+      String(effectiveHeadlessApprovalTimeoutSec)
+    );
+  }, [effectiveHeadlessApprovalTimeoutSec]);
 
   // ============================================================================
   // RENDER
@@ -2803,6 +2825,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       value={permMode}
                       onChange={(mode) => {
                         handleToolPermissionsChange({
+                          ...(workflowProperties.toolPermissions ?? {}),
                           mode: mode as ToolPermissionMode,
                           allowedTools: allowedToolsInput,
                           deniedTools: deniedToolsInput,
@@ -2821,6 +2844,142 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       }
                       warningId="settings-permission-mode-diagnostic"
                     />
+                  </FormField>
+
+                  <FormField
+                    label="Headless Approval Requests"
+                    schemaPath="toolPermissions.headlessApprovals"
+                    htmlFor="settings-headless-approvals"
+                    description="Used by headless Claude Code and Qwen Code steps when a tool request needs human approval."
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property="toolPermissions.headlessApprovals"
+                        show={
+                          toolPerms?.headlessApprovals !== undefined &&
+                          toolPerms.headlessApprovals !==
+                            inheritedHeadlessApprovalPolicy
+                        }
+                        onSetDefault={() =>
+                          handleSetAsDefault(
+                            "toolPermissions.headlessApprovals",
+                            effectiveHeadlessApprovalPolicy
+                          )
+                        }
+                      />
+                    }
+                  >
+                    <CustomSelect
+                      id="settings-headless-approvals"
+                      schemaPath="toolPermissions.headlessApprovals"
+                      triggerAriaLabel="Headless Approval Requests"
+                      value={
+                        toolPerms?.headlessApprovals ?? INHERIT_DEFAULT_OPTION
+                      }
+                      onChange={(value) => {
+                        const current = workflowProperties.toolPermissions;
+                        if (current === null) return;
+                        const next = {
+                          ...(current ?? {}),
+                          mode: current?.mode ?? permMode,
+                          allowedTools:
+                            current?.allowedTools ??
+                            effectiveAllowedTools ??
+                            [],
+                          deniedTools:
+                            current?.deniedTools ?? effectiveDeniedTools ?? [],
+                        };
+                        if (value === INHERIT_DEFAULT_OPTION) {
+                          delete next.headlessApprovals;
+                          handleToolPermissionsChange(
+                            Object.keys(next).length > 0 ? next : undefined
+                          );
+                        } else {
+                          handleToolPermissionsChange({
+                            ...next,
+                            headlessApprovals: value as HeadlessApprovalPolicy,
+                          });
+                        }
+                      }}
+                      options={[
+                        {
+                          value: INHERIT_DEFAULT_OPTION,
+                          label: `Inherit (${inheritedHeadlessApprovalPolicy})`,
+                          pseudo: { omit: true },
+                        },
+                        ...toSelectOptions(
+                          HEADLESS_APPROVAL_POLICY_OPTIONS_META,
+                          "toolPermissions.headlessApprovals"
+                        ),
+                      ]}
+                      disabled={permMode === PERMISSION_MODES.NONE}
+                    />
+                  </FormField>
+
+                  <FormField
+                    label="Headless Approval Timeout (seconds)"
+                    schemaPath="toolPermissions.headlessApprovalTimeoutSec"
+                    htmlFor="settings-headless-approval-timeout"
+                    description="Maximum time a connected dashboard has to answer a headless approval request."
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="settings-headless-approval-timeout"
+                        type="number"
+                        min={1}
+                        max={600}
+                        step={1}
+                        value={headlessApprovalTimeoutInput}
+                        disabled={permMode === PERMISSION_MODES.NONE}
+                        aria-label="Headless approval timeout in seconds"
+                        onChange={(event) =>
+                          setHeadlessApprovalTimeoutInput(event.target.value)
+                        }
+                        onBlur={() => {
+                          const parsed = Number(headlessApprovalTimeoutInput);
+                          const value = Number.isFinite(parsed)
+                            ? Math.max(1, Math.min(600, Math.round(parsed)))
+                            : (globalSettings.toolPermissions
+                                .headlessApprovalTimeoutSec ??
+                              HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC);
+                          setHeadlessApprovalTimeoutInput(String(value));
+                          const current = workflowProperties.toolPermissions;
+                          if (current === null) return;
+                          handleToolPermissionsChange({
+                            ...(current ?? {}),
+                            mode: current?.mode ?? permMode,
+                            allowedTools:
+                              current?.allowedTools ??
+                              effectiveAllowedTools ??
+                              [],
+                            deniedTools:
+                              current?.deniedTools ??
+                              effectiveDeniedTools ??
+                              [],
+                            headlessApprovalTimeoutSec: value,
+                          });
+                        }}
+                        className="w-full max-w-32 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-sm text-input-fg focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                      {toolPerms?.headlessApprovalTimeoutSec !== undefined && (
+                        <button
+                          type="button"
+                          className="text-xs text-description-fg underline hover:text-foreground"
+                          onClick={() => {
+                            const current = workflowProperties.toolPermissions;
+                            if (!current) return;
+                            const {
+                              headlessApprovalTimeoutSec: _timeout,
+                              ...next
+                            } = current;
+                            handleToolPermissionsChange(
+                              Object.keys(next).length > 0 ? next : undefined
+                            );
+                          }}
+                        >
+                          Use default
+                        </button>
+                      )}
+                    </div>
                   </FormField>
 
                   {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}

@@ -61,6 +61,8 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return "Parallel group";
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return row.label;
+    case OUTPUT_ROW_KINDS.HEADLESS_APPROVAL:
+      return "Tool approval";
   }
 }
 
@@ -71,6 +73,8 @@ export function shouldRenderScrollSeekPlaceholder(
     case OUTPUT_ROW_KINDS.PLAIN_RESPONSE:
     case OUTPUT_ROW_KINDS.SCRIPT_OUTPUT:
       return row.text.length >= OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS;
+    case OUTPUT_ROW_KINDS.HEADLESS_APPROVAL:
+      return false;
     case OUTPUT_ROW_KINDS.STRUCTURED_EVENT:
       if (row.diff || row.toolCall) {
         return true;
