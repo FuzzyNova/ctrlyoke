@@ -98,12 +98,16 @@ export type HeadlessSourceModeAdapter = Pick<
  *
  * Single source of truth for the mode decision: the live streaming path and the
  * final-output path must agree, or a harness would stream one mapping and
- * report another. An explicit `headlessSource` always wins so a provider that
- * implements both hooks can still pin itself to the log.
+ * report another. A per-execution override wins first; otherwise an explicit
+ * `headlessSource` can pin a provider that implements both hooks to the log.
  */
 export function resolveHeadlessSourceMode(
-  provider: HeadlessSourceModeAdapter
+  provider: HeadlessSourceModeAdapter,
+  executionMode?: HeadlessSourceMode
 ): HeadlessSourceMode | undefined {
+  if (executionMode) {
+    return executionMode;
+  }
   if (provider.headlessSource) {
     return provider.headlessSource;
   }
@@ -231,7 +235,7 @@ export class HeadlessLogTail {
 
   /** Queue a stdout clock tick. Safe to call from a synchronous stream callback. */
   onStdoutChunk(chunk: string): void {
-    if (this.finished) {
+    if (!this.started || this.finished) {
       return;
     }
 
@@ -301,6 +305,17 @@ export class HeadlessLogTail {
 
   getSessionId(): string | undefined {
     return this.sessionId;
+  }
+
+  setResolvedSessionId(sessionId: string): void {
+    if (!sessionId) return;
+    if (this.sessionId && this.sessionId !== sessionId) {
+      Log.warn(
+        "[HeadlessLogTail] Ignored a control-channel session ID that conflicts with the resolved session"
+      );
+      return;
+    }
+    this.sessionId = sessionId;
   }
 
   getResult(): HeadlessLogTailResult {

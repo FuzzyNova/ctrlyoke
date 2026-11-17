@@ -34,6 +34,8 @@ export type ControlObservation =
 /** Provider-specific spawn adjustments for a control protocol. */
 export interface HeadlessControlSpawnShape {
   args?: readonly string[];
+  /** Use `args` as the complete spawn argument list instead of appending them. */
+  replaceArgs?: true;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -48,6 +50,8 @@ export interface HeadlessControlChannelContext {
   sessionId?: string;
   imageFilePaths?: readonly string[];
   launchArgs?: readonly string[];
+  workspaceRoot?: string;
+  onSessionId?: (sessionId: string) => void;
 }
 
 export interface HeadlessApprovalExecutionContext extends HeadlessControlChannelOptions {
@@ -65,9 +69,15 @@ export interface IHeadlessControlChannel {
   readonly supportsSteering?: boolean;
   /** Keep stdin open after a turn while the provider reports pending background work. */
   readonly holdOpenForBackgroundWork?: boolean;
+  /** Defer log-tail startup until `start()` has resolved a control session ID. */
+  readonly startLogTailAfterChannelStart?: boolean;
   start(writer: ControlWriter): Promise<void>;
   sendUserMessage(text: string): Promise<void>;
   observe(record: unknown): ControlObservation[];
+  /** Optional protocol-owned stdout framing for transports such as ACP JSONL. */
+  observeStdoutChunk?(chunk: string): ControlObservation[];
+  /** Flush protocol-owned stdout framing after the child exits. */
+  flushStdout?(): ControlObservation[];
   answerApproval(
     requestId: string,
     decision: ApprovalDecision,

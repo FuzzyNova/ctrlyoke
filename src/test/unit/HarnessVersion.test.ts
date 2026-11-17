@@ -170,10 +170,15 @@ suite("HarnessVersion", () => {
 
 /**
  * Features whose evidence does not cover the harness minimum. Keep this short:
- * every entry marks support below its verified range as unverified, not gated.
+ * every entry marks support at the minimum as unverified; any runtime gate is
+ * declared separately by the harness adapter.
  */
 const FEATURES_UNVERIFIED_AT_MINIMUM: Partial<Record<HarnessId, string[]>> = {
-  [HARNESS_IDS.COPILOT_CLI]: ["sandbox.terminal", "permissions.autoMode"],
+  [HARNESS_IDS.COPILOT_CLI]: [
+    "sandbox.terminal",
+    "permissions.autoMode",
+    HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING,
+  ],
   [HARNESS_IDS.OPENCODE_CLI]: ["sandbox.terminal"],
   [HARNESS_IDS.QWEN_CLI]: [
     "sandbox.terminal",

@@ -17,6 +17,7 @@ import {
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
+import { COPILOT_CLI_FLAGS } from "./CopilotProtocolConstants";
 
 const COPILOT_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.0.384",
@@ -161,7 +162,7 @@ export class CopilotToolPermissionMapper
     const args: string[] = [];
     const filteredTools: string[] = [];
 
-    if (isAuto) args.push("--assisted-approval");
+    if (isAuto) args.push(COPILOT_CLI_FLAGS.ASSISTED_APPROVAL);
 
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       args.push("--yolo");

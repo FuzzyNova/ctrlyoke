@@ -69,6 +69,7 @@ import {
 } from "../../../utils/SecretRedactionService";
 import { AsyncMutex } from "./AsyncMutex";
 import {
+  type ControlObservation,
   type HeadlessApprovalExecutionContext,
   type HeadlessControlChannelContext,
   type ControlWriter,
@@ -514,6 +515,11 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             context: {
               ...controlContext,
               launchArgs: args,
+              workspaceRoot:
+                controlContext?.workspaceRoot ??
+                this.deps.runtimeState.getWorkspaceRoot(),
+              onSessionId: (sessionId) =>
+                source?.logTail?.setResolvedSessionId(sessionId),
             },
           }
         );
@@ -537,13 +543,21 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             }
           : undefined;
       const controlArgs = controlChannel?.spawnShape.args ?? [];
-      const spawnArgs = [...command.args, ...controlArgs];
+      const replaceSpawnArgs = controlChannel?.spawnShape.replaceArgs === true;
+      const spawnCommand = replaceSpawnArgs
+        ? await this.resolveProviderCommand([...controlArgs])
+        : command;
+      const spawnArgs = replaceSpawnArgs
+        ? [...spawnCommand.args]
+        : [...command.args, ...controlArgs];
 
       this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
-        cliCommand: controlArgs.length
-          ? `${command.displayCommand} ${controlArgs.join(" ")}`
-          : command.displayCommand,
+        cliCommand: replaceSpawnArgs
+          ? spawnCommand.displayCommand
+          : controlArgs.length
+            ? `${command.displayCommand} ${controlArgs.join(" ")}`
+            : command.displayCommand,
       });
 
       const shouldStream =
@@ -747,15 +761,11 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         })();
       };
 
-      const observeControlRecord = (record: string): void => {
+      const processControlObservations = (
+        observations: readonly ControlObservation[]
+      ): void => {
         if (!controlChannel) return;
-        let value: unknown = record;
-        try {
-          value = JSON.parse(record) as unknown;
-        } catch {
-          // Providers may ignore malformed records; still expose each JSONL line.
-        }
-        for (const observation of controlChannel.observe(value)) {
+        for (const observation of observations) {
           if (
             observation.kind ===
             HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST
@@ -854,13 +864,31 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         }
       };
 
+      const observeControlRecord = (record: string): void => {
+        if (!controlChannel) return;
+        let value: unknown = record;
+        try {
+          value = JSON.parse(record) as unknown;
+        } catch {
+          // Providers may ignore malformed records; still expose each JSONL line.
+        }
+        processControlObservations(controlChannel.observe(value));
+      };
+
       const processControlStdoutChunk = (chunk: string): void => {
+        if (controlChannel?.observeStdoutChunk) {
+          processControlObservations(controlChannel.observeStdoutChunk(chunk));
+          return;
+        }
         const result = splitCompleteLines(pendingControlStdout + chunk);
         pendingControlStdout = result.remainder;
         for (const record of result.lines) observeControlRecord(record);
       };
 
       const flushControlStdout = (): void => {
+        if (controlChannel?.flushStdout) {
+          processControlObservations(controlChannel.flushStdout());
+        }
         if (!pendingControlStdout) return;
         const record = pendingControlStdout;
         pendingControlStdout = "";
@@ -928,7 +956,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           ? new StreamingSecretRedactor()
           : undefined;
 
-      if (source?.logTail) {
+      if (
+        source?.logTail &&
+        controlChannel?.startLogTailAfterChannelStart !== true
+      ) {
         await source.logTail.start();
       } else if (source?.mode === HEADLESS_SOURCE_MODES.STDOUT) {
         source.parser
@@ -958,7 +989,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           promptTimeoutMs === undefined
             ? Number.POSITIVE_INFINITY
             : Date.now() + promptTimeoutMs;
-        result = await this.spawnProcess(command.command, spawnArgs, {
+        result = await this.spawnProcess(spawnCommand.command, spawnArgs, {
           timeout: promptTimeoutMs,
           env: {
             ...env,
@@ -978,6 +1009,13 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                 controlReady = (async () => {
                   if (controlClosed) return;
                   await controlChannel.start(controlWriter!);
+                  if (controlClosed) return;
+                  if (
+                    controlChannel.startLogTailAfterChannelStart &&
+                    source?.logTail
+                  ) {
+                    await source.logTail.start();
+                  }
                   if (controlClosed) return;
                   controlTurnActive = true;
                   await controlChannel.sendUserMessage(promptArgument);
@@ -1054,7 +1092,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                 controlReady.catch(() => undefined);
               }
             : undefined,
-          windowsVerbatimArguments: command.requiresShellVerbatimArgs,
+          windowsVerbatimArguments: spawnCommand.requiresShellVerbatimArgs,
           onStdout: shouldStream
             ? (chunk) => {
                 if (ConfigurationUtils.shouldLogRawCliOutput()) {

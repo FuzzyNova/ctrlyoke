@@ -184,6 +184,14 @@ export interface IHarnessAdapter {
   readonly headlessSource?: HeadlessSourceMode;
 
   /**
+   * Select the headless source for one permission mode when protocol choice
+   * changes the CLI output channel (for example Copilot ACP versus JSONL).
+   */
+  getHeadlessSourceMode?(
+    permissionMode?: ToolPermissionConfig["mode"]
+  ): HeadlessSourceMode | undefined | Promise<HeadlessSourceMode | undefined>;
+
+  /**
    * Convert one complete headless stdout record into the event vocabulary
    * understood by this provider's log parser. CliTransportCoordinator buffers
    * raw transport chunks, so this pure hook is never given a partial record.

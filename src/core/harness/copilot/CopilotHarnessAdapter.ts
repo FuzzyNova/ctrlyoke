@@ -13,11 +13,14 @@ import {
 } from "../shared/interfaces/IHarnessAdapter";
 import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
   HARNESS_IDS,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
+  PERMISSION_MODES,
   STATUS_LINE_HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
@@ -32,7 +35,6 @@ import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
 import { CopilotLogParser } from "./CopilotLogParser";
-import { UNSUPPORTED_HEADLESS_STEERING_CAPABILITY } from "../shared/HeadlessSteeringCapabilities";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import {
   ConfigurationUtils,
@@ -40,6 +42,7 @@ import {
 } from "../../../utils/ConfigurationUtils";
 import { isCliModelSupported } from "../../../utils/ModelRegistry";
 import { resolveCliModelFlag } from "../shared/CliModelSelection";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
 import { repoToplevel } from "../../../utils/GitUtils";
 import { isPathWithinDirectory } from "../../../utils/PathSecurity";
@@ -56,6 +59,7 @@ import { ProviderStatuslineRegistration } from "../shared/ProviderStatuslineRegi
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
@@ -78,8 +82,16 @@ import {
   type HarnessAdapterPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
-import { COPILOT_EVENT_TYPES } from "./CopilotProtocolConstants";
+import {
+  COPILOT_CLI_FLAGS,
+  COPILOT_EVENT_TYPES,
+} from "./CopilotProtocolConstants";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
+import { CopilotHeadlessControlChannel } from "./CopilotHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
+
+export const COPILOT_ACP_MIN_VERSION = "1.0.112";
 
 const COPILOT_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -91,6 +103,15 @@ const COPILOT_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=0.0.384"]),
+} as const;
+
+const COPILOT_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: CAPABILITY_FIDELITIES.EXACT,
+  mechanism: CAPABILITY_MECHANISMS.NATIVE,
+  verification: capabilitySuiteVerification(
+    [`>=${COPILOT_ACP_MIN_VERSION}`],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 /**
@@ -121,6 +142,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
 
   private static readonly statuslineManager =
     StatuslineManager.forStatusLineHarness(STATUS_LINE_HARNESS_IDS.COPILOT);
+  private headlessAcpSupportPromise?: Promise<boolean>;
 
   readonly config: HarnessConfig = {
     name: "copilot",
@@ -134,7 +156,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     npmPackage: "@github/copilot",
     versionPolicy: {
       minimum: "1.0.19",
-      testedWith: "1.0.110",
+      testedWith: COPILOT_ACP_MIN_VERSION,
       updateCommand: "copilot update",
     },
     shouldStreamHeadlessOutput: true,
@@ -172,7 +194,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       },
       promptInputs: { images: COPILOT_IMAGE_INPUT_CAPABILITY },
       headlessControl: {
-        steering: UNSUPPORTED_HEADLESS_STEERING_CAPABILITY,
+        steering: COPILOT_HEADLESS_STEERING_CAPABILITY,
       },
     };
   }
@@ -185,6 +207,38 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     return this.logParser.probeSessionId(sessionId);
   }
   readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
+
+  async getHeadlessSourceMode(
+    permissionMode?: ToolPermissionConfig["mode"]
+  ): Promise<
+    (typeof HEADLESS_SOURCE_MODES)[keyof typeof HEADLESS_SOURCE_MODES]
+  > {
+    if (
+      permissionMode === PERMISSION_MODES.AUTO ||
+      !(await this.supportsHeadlessAcp())
+    ) {
+      return this.headlessSource;
+    }
+    return HEADLESS_SOURCE_MODES.LOG;
+  }
+
+  async createHeadlessControlChannel(
+    _promptText: string,
+    options: HeadlessControlChannelOptions
+  ): Promise<CopilotHeadlessControlChannel | undefined> {
+    const launchArgs = options.context?.launchArgs ?? [];
+    if (
+      launchArgs.some(
+        (argument) =>
+          argument === COPILOT_CLI_FLAGS.ASSISTED_APPROVAL ||
+          argument.startsWith(`${COPILOT_CLI_FLAGS.ASSISTED_APPROVAL}=`)
+      ) ||
+      !(await this.supportsHeadlessAcp())
+    ) {
+      return undefined;
+    }
+    return new CopilotHeadlessControlChannel(options, launchArgs);
+  }
 
   /** Convert Copilot's JSONL stdout into the event vocabulary of CopilotLogParser. */
   parseHeadlessStdout(stdout: string): BaseCliEvent[] {
@@ -199,6 +253,24 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
         typeof event.sessionId === "string"
     );
     return result?.sessionId as string | undefined;
+  }
+
+  private async supportsHeadlessAcp(): Promise<boolean> {
+    if (!this.headlessAcpSupportPromise) {
+      this.headlessAcpSupportPromise = this.getVersion()
+        .then((version) =>
+          version
+            ? versionSatisfies(version, `>=${COPILOT_ACP_MIN_VERSION}`)
+            : false
+        )
+        .catch((error: unknown) => {
+          Log.warn(
+            `[CopilotHarnessAdapter] Could not determine whether ACP headless control is supported; keeping JSONL mode: ${getErrorMessage(error)}`
+          );
+          return false;
+        });
+    }
+    return this.headlessAcpSupportPromise;
   }
 
   /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
@@ -471,7 +543,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       sessionId
     );
     if (shouldResume) {
-      args.push("--resume", sessionId!);
+      args.push(COPILOT_CLI_FLAGS.RESUME, sessionId!);
       Log.info(`[CopilotHarnessAdapter] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.warn(
@@ -1026,7 +1098,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     }
     // --output-format json enables structured JSONL output for reliable response/session parsing.
     // Piped stdin enters prompt mode; there is no special `-p -` form.
-    return ["--output-format", "json", ...baseArgs];
+    return [COPILOT_CLI_FLAGS.OUTPUT_FORMAT, "json", ...baseArgs];
   }
 
   /**

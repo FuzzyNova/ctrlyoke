@@ -59,11 +59,22 @@ steps:
 
 ## Headless prompts
 
-In headless steps, ctrlyoke pipes the prompt to Copilot's stdin and requests JSON output.
-Generated sections such as agent instructions, skills and prior-step context are included in
-that first message so Copilot can use them immediately. Turn off
+On Copilot CLI 1.0.112 and later, headless steps use ACP to send the prompt and keep the session
+open for queued steering and tool approvals. Resumed steps use ACP `session/load`; output still
+comes from Copilot's native session log. Older versions, and steps using `auto` permissions, keep
+the JSONL/stdin launch. Generated sections such as agent instructions, skills and prior-step
+context are included in the first message so Copilot can use them immediately. Turn off
 [`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inlinegeneratedpromptonstdin)
 to use categorized temporary files and references instead.
+
+Headless steering queues a message until Copilot finishes its current prompt, then sends it as the
+next prompt in the same ACP session. In `custom` mode, set `toolPermissions.headlessApprovals` to
+`ask` to show an approval request in the dashboard; see
+[Asking for headless tool approvals](/workflows/permissions#asking-for-headless-tool-approvals).
+Copilot receives only **Allow once** or **Deny**; unanswered requests and requests without a
+connected dashboard are denied. The `auto` permission mode remains on Copilot's
+`--assisted-approval` JSONL path because that option is not supported with ACP.
+ACP cannot forward a custom denial message to the model, so that note remains in the dashboard.
 
 ## Model selection {#model-selection}
 

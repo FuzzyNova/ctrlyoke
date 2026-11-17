@@ -328,7 +328,7 @@ Tool patterns to deny (takes precedence over allow list). Currently supported by
 
 - **Type:** `"deny" | "ask"`
 
-How a headless Claude Code or Qwen Code step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude `custom` requests and `auto` judge escalations, and to Qwen approval requests. No allow-always option is offered.
+How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, and Copilot CLI 1.0.112+ ACP requests in `custom` mode. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.
 
 ### `toolPermissions.headlessApprovalTimeoutSec` {#execution-properties-toolpermissions-headlessapprovaltimeoutsec}
 

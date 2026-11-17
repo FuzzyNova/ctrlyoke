@@ -271,6 +271,96 @@ async function createCoordinatorWithLivePty(
 }
 
 suite("CliTransportCoordinator", () => {
+  test("re-resolves replacement control arguments with the CLI launcher prefix", async () => {
+    const resolveArgs: string[][] = [];
+    let spawnedArgs: string[] = [];
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {
+        args: ["--acp", "--model", "test-model"],
+        replaceArgs: true,
+      },
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      async start() {},
+      async sendUserMessage() {},
+      observe() {
+        return [];
+      },
+      async answerApproval() {},
+      close() {},
+    };
+    const provider = {
+      ...createHeadlessProvider(),
+      buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+        "--output-format",
+        "json",
+        ...baseArgs,
+        prompt,
+      ],
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            stdinText?: string;
+          }
+        ) => {
+          spawnedArgs = args;
+          assert.strictEqual(options.stdinText, undefined);
+          options.onStdinReady?.({
+            write: (
+              _chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => callback?.(),
+          });
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: async (command, args) => {
+        resolveArgs.push([...args]);
+        return {
+          command,
+          args: ["npm-loader.js", ...args],
+          displayCommand: [command, "npm-loader.js", ...args].join(" "),
+          launcherKind: "node-shim",
+        };
+      },
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await coordinator.executeHeadless(
+      ["--resume", "old-session"],
+      "prompt",
+      [],
+      async () => true
+    );
+
+    assert.deepStrictEqual(resolveArgs, [
+      ["--output-format", "json", "--resume", "old-session", "prompt"],
+      ["--acp", "--model", "test-model"],
+    ]);
+    assert.deepStrictEqual(spawnedArgs, [
+      "npm-loader.js",
+      "--acp",
+      "--model",
+      "test-model",
+    ]);
+  });
+
   test("passes the configured prompt limit to headless spawn", async () => {
     const originalTimeoutReader =
       ConfigurationUtils.getMaxPromptExecutionTimeMs;

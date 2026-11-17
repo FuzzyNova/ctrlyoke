@@ -24,11 +24,15 @@ approval. Stage 4 adds Antigravity stream-json queue steering (probed on agy 1.5
 compatibility-matrix coverage. Stage 5 adds Codex app-server transport for headless runs on
 0.146.0 and later; the full Codex harness subset passed on 0.169.0 (28 tests), and the
 sandboxed workspace-write case passed after the writable-root merge.
-Stage 6 was probed on 2026-11-16: Copilot ACP and the OpenCode V2 plugin path are designed,
-while Antigravity ACP is deferred until it preserves the existing permission rules.
+Stage 6a Copilot ACP is implemented and live verified on Copilot CLI 1.0.112: the shared ACP
+client, session create/load, native log parsing, queued steering, and one-shot dashboard approvals
+are in place; `auto` keeps its existing JSONL/assisted-approval path. The Copilot harness subset
+passed with 35 tests and one unsupported interrupt case pending. The OpenCode V2 plugin path is
+designed, while Antigravity ACP is deferred until it preserves the existing permission rules.
 Deviation from the sketch: the optional provider hook currently receives only prepared prompt
-text; `HeadlessControlSpawnShape.args` appends protocol args, and the coordinator ends stdin
-before calling `channel.close()` so channel cleanup does not need to own transport EOF. Claude's
+text; `HeadlessControlSpawnShape.args` appends protocol args by default, while Copilot ACP replaces
+the provider-built CLI args and re-resolves the launcher prefix; the coordinator ends stdin before
+calling `channel.close()` so channel cleanup does not need to own transport EOF. Claude's
 Stage 2a channel sends user records without `initialize` or `--permission-prompt-tool stdio`;
 probes confirmed neither is needed for prompt delivery. Stage 3 opts Claude into the initialize/
 stdio permission handshake only under `ask`; `deny` keeps headless `dontAsk` and the existing
@@ -553,7 +557,7 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
      output-source choice. Do not treat ACP as a passive `observe(record)` stream: the client
      must answer `session/request_permission` while a `session/prompt` request is outstanding.
 
-   **6a. Copilot ACP — planned, except `auto` mode.**
+   **6a. [Done] Copilot ACP — except `auto` mode.**
    - **Gate:** `copilot` >= 1.0.112, the first version probed for the permission requests and
      session-load path used here. Older versions keep today's headless launch.
    - **Launch:** `copilot --acp` plus the existing model, workspace, hook, MCP, and permission
@@ -562,16 +566,19 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    - **Wire:** send JSON-RPC `initialize` with
      `protocolVersion: 1`, then `session/new {cwd, mcpServers}` or
      `session/load {sessionId, cwd, mcpServers}`, then
-     `session/prompt {sessionId, prompt:[{type:"text", text}]}`. The session response supplies
-     the session ID. Answer `session/request_permission` by selecting `allow_once` or
-     `reject_once` from the request's `options` and returning its `optionId`. To receive
+     `session/prompt {sessionId, prompt:[{type:"text", text}, …]}`; the first prompt also sends
+     ACP image blocks for prepared image attachments. `session/new` returns the session ID;
+     `session/load` may omit it, in which case retain the requested ID. Answer
+     `session/request_permission` by selecting `allow_once` or `reject_once` from the request's
+     `options` and returning its `optionId`. To receive
      background/foreground state, opt into `github.com/copilot/sessionEvent` events
      `assistant.turn_start`, `assistant.idle`, and `session.idle` in
      `initialize.clientCapabilities._meta`.
    - **Output:** keep `CopilotLogParser` as the output parser, not an ACP output mapper. ACP
-     created the normal `~/.copilot/session-state/<sessionId>/events.jsonl` with the native
-     events the parser already consumes. Seed the session ID from `session/new`/`session/load`
-     and tail that file (`headlessSource = LOG`). Use `session/prompt`'s response as the
+     creates the normal `~/.copilot/session-state/<sessionId>/events.jsonl` with the native
+     events the parser already consumes. Select `LOG` for ACP runs and seed the tail from
+     `session/new`/`session/load` before the first prompt; `auto` and older versions retain
+     `STDOUT`. Use `session/prompt`'s response as the
      completion boundary; ACP `session/update` is control/notification input, not a second
      source of output events.
    - **Steering:** ACP cancels an active prompt if another `session/prompt` is sent. Keep one
@@ -580,12 +587,17 @@ and the plain-stdin harnesses (Copilot, plus Codex and agy as interim arg change
    - **Permission-mode exception:** `--allow-tool`, `--deny-tool`, `--allow-all-tools`, and
      `--yolo` work under ACP. `--assisted-approval` is rejected by ACP, and ACP Autopilot is
      allow-all rather than judge-based. Keep ctrlyoke `auto` on today's non-ACP JSONL/stdin path
-     with `--assisted-approval`; do not claim ACP approvals or steering in that mode.
-   - **Live cases:** verify one-shot allow and deny requests; each of the accepted permission
-     argument families above; `session/new` then a fresh-process `session/load`; native log
-     parsing for text, tool calls/results, usage, and session ID; and a long-running prompt
-     where a queued steer is not submitted until the first `session/prompt` resolves. Include a
-     negative launch case for `--assisted-approval`.
+     with `--assisted-approval`; do not claim ACP approvals or steering in that mode. ACP's
+     selected-option response cannot carry a custom denial message to the model.
+   - **Live cases (Copilot CLI 1.0.112):** the Copilot subset passed with 35 tests and one pending
+     interrupt case (ACP has no interrupt request in this stage). Existing capability cases cover
+     `--allow-tool`, `--deny-tool`, `--allow-all-tools`, and `--yolo`; the no-dashboard ask case
+     rejects the request, and a dashboard-backed case approves one tool call once. The image-and-
+     resume case creates a session and resumes it in a fresh process with `session/load`; MCP,
+     hooks, and text/tool output remain on the native Copilot log parser, with session IDs seeded
+     from ACP. The live steering case confirms a queued steer is delivered after the first
+     `session/prompt` resolves. Adapter gate tests verify that `--assisted-approval` stays on the
+     legacy JSONL/stdin path and is not launched with ACP.
 
    **6b. Antigravity ACP — deferred.**
    - **Proposed launch if unblocked:** `agy --model <model> --settings <managed-settings.json>
@@ -652,9 +664,9 @@ acp`. Put `--model` before `acp`; `agy acp --model ...` is rejected. Use the sam
 
 Each shipped sub-stage must add its capability declaration and passing live-case evidence, so
 the compatibility docs and `KNOWN_BROKEN_CLAIMS` stay honest. Current headless steering is
-available for Claude Code, Codex CLI, Qwen Code, and Antigravity. Copilot is planned behind
-6a's ACP gate (except `auto` mode), OpenCode behind 6c's V2 gate, and 6b adds no capability
-until its permission parity gap is closed.
+available for Claude Code, Codex CLI, Qwen Code, and Antigravity. Copilot supports steering on
+1.0.112 and later except in `auto` mode; OpenCode remains behind 6c's V2 gate, and 6b adds no
+capability until its permission parity gap is closed.
 
 ## Version requirements
 

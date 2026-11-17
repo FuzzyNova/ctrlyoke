@@ -10,7 +10,10 @@ import {
   EXECUTION_MODES,
   EXECUTION_STATES,
   HARNESS_IDS,
+  APPROVAL_DECISIONS,
   CLI_EVENT_TYPES,
+  HEADLESS_APPROVAL_POLICIES,
+  HEADLESS_STEER_DELIVERIES,
   MESSAGE_TYPES,
   PERMISSION_MODES,
   STEP_STATUS,
@@ -19,7 +22,10 @@ import {
 import type { CliEvent } from "../../types/CliOutputTypes";
 import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
-import type { HeadlessControlTargetMessage } from "../../types/WebviewMessageTypes";
+import type {
+  HeadlessApprovalRequestMessage,
+  HeadlessControlTargetMessage,
+} from "../../types/WebviewMessageTypes";
 import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -28,6 +34,8 @@ import {
   resetRunHistoryLocationForTests,
 } from "../../utils/RunHistoryStoragePolicy";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { COPILOT_ACP_MIN_VERSION } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { versionSatisfies } from "../../utils/HarnessVersion";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
@@ -70,11 +78,21 @@ suite("Headless steering harness tests", function () {
     HARNESS_IDS.QWEN_CLI,
     HARNESS_IDS.CODEX_CLI,
     HARNESS_IDS.ANTIGRAVITY_CLI,
+    HARNESS_IDS.COPILOT_CLI,
   ] as const) {
     test(`${harness}: headless steering reaches the same step`, async function () {
       const provider = IntegrationFactory.createCapabilityProvider(harness);
       if (!(await provider.checkAvailability())) {
         this.skip();
+      }
+      if (harness === HARNESS_IDS.COPILOT_CLI) {
+        const version = await provider.getVersion?.();
+        if (
+          !version ||
+          !versionSatisfies(version, `>=${COPILOT_ACP_MIN_VERSION}`)
+        ) {
+          this.skip();
+        }
       }
 
       const workspace = makeHarnessWorkspaceDir(
@@ -203,22 +221,44 @@ suite("Headless steering harness tests", function () {
         );
         assert.deepStrictEqual(
           targetMessages.map(
-            ({ controlSessionId: id, isOpen, canInterruptTurn }) => ({
+            ({
+              controlSessionId: id,
+              isOpen,
+              canInterruptTurn,
+              steerDelivery,
+            }) => ({
               controlSessionId: id,
               canInterruptTurn,
               isOpen,
+              steerDelivery,
             })
           ),
           [
             {
               controlSessionId,
-              canInterruptTurn: harness !== HARNESS_IDS.ANTIGRAVITY_CLI,
+              canInterruptTurn:
+                harness !== HARNESS_IDS.ANTIGRAVITY_CLI &&
+                harness !== HARNESS_IDS.COPILOT_CLI,
               isOpen: true,
+              steerDelivery:
+                harness === HARNESS_IDS.COPILOT_CLI ||
+                harness === HARNESS_IDS.QWEN_CLI ||
+                harness === HARNESS_IDS.ANTIGRAVITY_CLI
+                  ? HEADLESS_STEER_DELIVERIES.QUEUE
+                  : HEADLESS_STEER_DELIVERIES.INJECT,
             },
             {
               controlSessionId,
-              canInterruptTurn: harness !== HARNESS_IDS.ANTIGRAVITY_CLI,
+              canInterruptTurn:
+                harness !== HARNESS_IDS.ANTIGRAVITY_CLI &&
+                harness !== HARNESS_IDS.COPILOT_CLI,
               isOpen: false,
+              steerDelivery:
+                harness === HARNESS_IDS.COPILOT_CLI ||
+                harness === HARNESS_IDS.QWEN_CLI ||
+                harness === HARNESS_IDS.ANTIGRAVITY_CLI
+                  ? HEADLESS_STEER_DELIVERIES.QUEUE
+                  : HEADLESS_STEER_DELIVERIES.INJECT,
             },
           ]
         );
@@ -238,8 +278,159 @@ suite("Headless steering harness tests", function () {
       }
     });
 
+    if (harness === HARNESS_IDS.COPILOT_CLI) {
+      test(`${harness}: headless approval ask allows one requested tool call`, async function () {
+        const provider = IntegrationFactory.createCapabilityProvider(harness);
+        if (!(await provider.checkAvailability())) {
+          this.skip();
+        }
+        const version = await provider.getVersion?.();
+        if (
+          !version ||
+          !versionSatisfies(version, `>=${COPILOT_ACP_MIN_VERSION}`)
+        ) {
+          this.skip();
+        }
+
+        const workspace = makeHarnessWorkspaceDir(
+          harness,
+          `ctrlyoke-headless-approval-${harness}-`
+        );
+        const restoreRunState = isolateRunState(workspace);
+        const hadRunHistoryLocation = isRunHistoryLocationInitialized();
+        if (!hadRunHistoryLocation) {
+          initializeRunHistoryLocation(
+            configService.get("storage").runHistoryLocation
+          );
+        }
+        let instance: WorkflowInstance | undefined;
+        let execution: Promise<void> | undefined;
+        let executionSettled = false;
+        const dashboardMessages: unknown[] = [];
+
+        try {
+          const markerPath = path.join(workspace, "approved-once.txt");
+          const command = `node -e "require('fs').writeFileSync('${markerPath.replace(/\\/g, "/")}','allowed')"`;
+          const workflow: PromptFile = {
+            name: "Copilot headless approval",
+            harness,
+            model: HARNESS_MODELS[harness],
+            executionMode: EXECUTION_MODES.HEADLESS,
+            resumeSession: false,
+            toolPermissions: {
+              mode: PERMISSION_MODES.CUSTOM,
+              allowedTools: ["shell(echo:*)"],
+              deniedTools: ["write"],
+              headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+              headlessApprovalTimeoutSec: 30,
+            },
+            steps: [
+              {
+                name: "approval-required command",
+                prompt: [
+                  "Run exactly this command once, then reply with only DONE:",
+                  command,
+                  "Do not retry or use another tool if it is denied.",
+                ].join("\n"),
+              },
+            ],
+          };
+          const workflowFile = path.join(
+            workspace,
+            "copilot-headless-approval.ctrlyoke.json"
+          );
+          await fs.promises.writeFile(
+            workflowFile,
+            JSON.stringify(workflow, null, 2),
+            "utf8"
+          );
+
+          const platform = new MockPlatform(workspace);
+          const integrationFactory = new SteeringIntegrationFactory(platform);
+          instance = new WorkflowInstance(
+            platform,
+            new PostMessageDashboardSink((message) =>
+              dashboardMessages.push(message)
+            ),
+            integrationFactory,
+            () => new MockHarnessIntegration(undefined, false),
+            () => {},
+            () => {},
+            workspace
+          );
+          assert.strictEqual(await instance.loadPromptFile(workflowFile), true);
+          execution = instance
+            .executeLoadedPromptFile()
+            .finally(() => (executionSettled = true));
+
+          const approval = await waitFor(
+            () =>
+              dashboardMessages.find(
+                (message): message is HeadlessApprovalRequestMessage =>
+                  typeof message === "object" &&
+                  message !== null &&
+                  "type" in message &&
+                  message.type ===
+                    MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED &&
+                  "isPending" in message &&
+                  message.isPending === true
+              ),
+            "Copilot headless approval request"
+          );
+          assert.strictEqual(
+            instance.respondToHeadlessApproval(
+              approval.controlSessionId,
+              approval.approvalId,
+              APPROVAL_DECISIONS.ALLOW_ONCE
+            ),
+            true
+          );
+          await execution;
+
+          assert.strictEqual(
+            await fs.promises.readFile(markerPath, "utf8"),
+            "allowed"
+          );
+          assert.ok(
+            dashboardMessages.some(
+              (message): message is HeadlessApprovalRequestMessage =>
+                typeof message === "object" &&
+                message !== null &&
+                "type" in message &&
+                message.type ===
+                  MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED &&
+                "approvalId" in message &&
+                message.approvalId === approval.approvalId &&
+                "isPending" in message &&
+                message.isPending === false
+            ),
+            "Copilot approval request was not cleared after the response"
+          );
+          assert.strictEqual(
+            instance.promptQueue.getState().results[0]?.status,
+            STEP_STATUS.COMPLETED
+          );
+        } finally {
+          if (execution && instance && !executionSettled) {
+            await instance.stop();
+            await execution.catch(() => undefined);
+          }
+          await instance?.outputHistoryManager.flushPendingIndexRefresh();
+          instance?.dispose();
+          restoreRunState();
+          if (!hadRunHistoryLocation) resetRunHistoryLocationForTests();
+          removeTempDir(workspace, (dir) =>
+            console.log(`  Could not clean up ${dir}`)
+          );
+        }
+      });
+    }
+
     test(`${harness}: headless interrupt ends the current turn quickly`, async function () {
-      if (harness === HARNESS_IDS.ANTIGRAVITY_CLI) {
+      if (
+        harness === HARNESS_IDS.ANTIGRAVITY_CLI ||
+        harness === HARNESS_IDS.COPILOT_CLI
+      ) {
         this.skip();
       }
 

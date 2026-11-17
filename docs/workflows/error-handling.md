@@ -214,15 +214,17 @@ A steer message sends text to a model while its step is still working, without
 adding another step to the queue. Type the message in the prompt editor, open
 the **Run** button's menu, and choose **Send Steer Message**. For an
 interactive step, the text goes to the AI-CLI session selected in the terminal
-rail. Headless Claude receives it in the current turn; headless Qwen queues it
-after the current turn. Prompt properties set in the editor are ignored.
+rail. Headless Claude receives it in the current turn; headless Qwen and
+Copilot CLI 1.0.112+ queue it after the current prompt. Prompt properties set
+in the editor are ignored.
 
 ![The Run menu open in the prompt editor footer during an interactive step, showing Send Steer Message, Run in Parallel and Run in New Workflow](/screenshots/run-menu-steer-1125x231.png)
 
-Steering needs a live interactive session or an open headless Claude or Qwen
-control channel. Otherwise the menu item is disabled and its tooltip says why,
-for example _No live harness session for this workflow_. Steering is only
-available for prompt steps.
+Steering needs a live interactive session or an open headless Claude, Qwen, or
+Copilot control channel. Copilot uses ACP on 1.0.112 and later, except in
+`auto` permission mode. Otherwise the menu item is disabled and its tooltip
+says why, for example _No live harness session for this workflow_. Steering
+is only available for prompt steps.
 
 ## See also
 

@@ -470,7 +470,7 @@ export class CliExecutionRunner {
     baseArgs: string[],
     resolvedCommand?: CliResolvedCommand
   ): Promise<boolean> {
-    const source = this.createHeadlessStreamingSource(session);
+    const source = await this.createHeadlessStreamingSource(session);
     const responseCallback = this.buildHeadlessResponseCallback(
       session,
       "",
@@ -570,6 +570,7 @@ export class CliExecutionRunner {
               ? session.resolvedSessionId
               : undefined,
             imageFilePaths: session.imageFileRefs,
+            workspaceRoot: this.deps.runtimeState.getWorkspaceRoot(),
           }
         );
       } catch (error) {
@@ -1295,11 +1296,14 @@ export class CliExecutionRunner {
     };
   }
 
-  private createHeadlessStreamingSource(
+  private async createHeadlessStreamingSource(
     session: CliExecutionSession
-  ): HeadlessStreamingSource | undefined {
+  ): Promise<HeadlessStreamingSource | undefined> {
     const parser = this.deps.provider.logParser;
-    const mode = resolveHeadlessSourceMode(this.deps.provider);
+    const executionMode = await this.deps.provider.getHeadlessSourceMode?.(
+      session.resolvedProperties?.toolPermissions?.mode
+    );
+    const mode = resolveHeadlessSourceMode(this.deps.provider, executionMode);
     if (!parser || !mode) {
       return undefined;
     }

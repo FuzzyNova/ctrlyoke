@@ -41,6 +41,7 @@ import { isCodexAppServerVersionSupported } from "../../core/harness/codex/Codex
 import { detectHarness } from "../../core/harness/shared/HarnessDetection";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { versionSatisfies } from "../../utils/HarnessVersion";
+import { COPILOT_ACP_MIN_VERSION } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { getAntigravitySettingsPath } from "../../core/harness/shared/StatuslineManager";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -812,6 +813,56 @@ suite("Inline harness configuration regression tests", function () {
   // approval, so ctrlyoke runs interactive `auto` as `custom`.
   suite(COPILOT, function () {
     defineShellProbeTests(COPILOT, permissionModeShellCases(), () => tmpDir);
+
+    test(`${COPILOT}: headless approval ask denies when no dashboard is connected`, async function () {
+      const provider = IntegrationFactory.createCapabilityProvider(COPILOT);
+      const version = await provider.getVersion?.();
+      if (
+        !version ||
+        !versionSatisfies(version, `>=${COPILOT_ACP_MIN_VERSION}`)
+      ) {
+        this.skip();
+      }
+
+      const markerName = `${COPILOT}-approval-not-run.txt`;
+      const markerPath = path.join(tmpDir, markerName);
+      const workflow = shellProbeWorkflow(
+        COPILOT,
+        `${COPILOT}-headless-approval`,
+        {
+          mode: "custom",
+          allowedTools: ["shell(echo:*)"],
+          deniedTools: ["write"],
+          headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          headlessApprovalTimeoutSec: 5,
+        },
+        chainedCommand(
+          normalizedPath(path.join(tmpDir, MARKER_SCRIPT_NAME)),
+          normalizedPath(markerPath)
+        )
+      );
+      const { result, toolEvents } = runToolProbe(
+        workflow,
+        tmpDir,
+        `${COPILOT}-headless-approval`,
+        SHELL_PROBE_TIMEOUT_MS
+      );
+      const label = `${COPILOT} (headless approval without dashboard)`;
+      if (logAndMaybeSkip(label, result)) return;
+      assertSuccessfulRun(label, result);
+      assert.ok(
+        toolEvents.includes(markerName),
+        `Copilot never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+      );
+      // ACP replies with the selected option only, so it cannot carry the
+      // host's "no dashboard" denial message back into Copilot's tool result.
+      assert.ok(
+        toolEvents.toLowerCase().includes("rejected this tool call"),
+        `the ACP approval request was not rejected\n${toolEvents}`
+      );
+      assert.ok(!toolEvents.includes(SHELL_PROBE_RAN), toolEvents);
+      assert.ok(!fs.existsSync(markerPath), "the denied command ran");
+    });
   });
 
   suite(OPENCODE, function () {
