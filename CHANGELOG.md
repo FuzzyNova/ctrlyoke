@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Headless Copilot CLI 1.0.112 and later now uses ACP for queued steering and dashboard tool approvals. `auto` permission mode stays on Copilot's existing assisted-approval path.
 - Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
 - Headless Codex 0.146.0 and later now runs through `codex app-server` JSON-RPC, while older versions keep using `codex exec`. The rollout log remains the source of headless Codex output.
-- Claude headless steps wait for tracked background tasks to finish before ending the step.
+- A headless step ends when its turn ends, even if the model left background tasks running. Ending the turn closes the harness process, which stops those tasks, and the step's output notes any task that had not finished.
 - In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Added

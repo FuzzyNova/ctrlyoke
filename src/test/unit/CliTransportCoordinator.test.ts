@@ -1283,124 +1283,13 @@ suite("CliTransportCoordinator", () => {
     }
   });
 
-  test("holds the control channel for background work without blocking approvals", async () => {
-    let pendingBackgroundWork = true;
-    let channelClosed = false;
-    let approvalAnswered = false;
-    let onStdout: ((chunk: string) => void) | undefined;
-    let finishSpawn!: (result: {
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-    }) => void;
-    let promptSent!: () => void;
-    let approvalHandled!: () => void;
-    const promptSentPromise = new Promise<void>(
-      (resolve) => (promptSent = resolve)
-    );
-    const approvalHandledPromise = new Promise<void>(
-      (resolve) => (approvalHandled = resolve)
-    );
-    class TrackedClaudeControlChannel extends ClaudeHeadlessControlChannel {
-      override close(): void {
-        channelClosed = true;
-        super.close();
-      }
-    }
-    const spawnResult = new Promise<{
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-    }>((resolve) => (finishSpawn = resolve));
-    const channel = new TrackedClaudeControlChannel();
-    const provider = {
-      ...createHeadlessProvider(),
-      createHeadlessControlChannel: () => channel,
-    } as unknown as IHarnessAdapter;
-    const coordinator = new CliTransportCoordinator({
-      provider,
-      processManager: {
-        spawn: async (
-          _command: string,
-          _args: string[],
-          options: {
-            onStdinReady?: (writer: any) => void;
-            onStdout?: (chunk: string) => void;
-          }
-        ) => {
-          onStdout = options.onStdout;
-          options.onStdinReady?.({
-            write: (
-              chunk: string,
-              _encoding: string,
-              callback?: (error?: Error | null) => void
-            ) => {
-              const record = JSON.parse(chunk) as { type: string };
-              if (record.type === CLAUDE_CONTROL.USER_TYPE) {
-                promptSent();
-              } else if (record.type === CLAUDE_CONTROL.RESPONSE_TYPE) {
-                approvalAnswered = true;
-                approvalHandled();
-              }
-              callback?.();
-              return true;
-            },
-            end: (callback?: () => void) => {
-              callback?.();
-              finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
-            },
-          });
-          return spawnResult;
-        },
-        isActive: () => false,
-      } as any,
-      resolveCliCommand: resolveCommand,
-      runtimeState: {
-        getWorkspaceRoot: () => process.cwd(),
-        isCancelling: () => false,
-      },
-      hostCallbacks: createHeadlessHostCallbacks(),
-    });
-    const source = {
-      mode: HEADLESS_SOURCE_MODES.STDOUT,
-      parser: {
-        hasPendingBackgroundWork: () => pendingBackgroundWork,
-      },
-      parseStdout: () => [],
-    } as unknown as HeadlessStreamingSource;
-
-    const execution = coordinator.executeHeadless(
-      [],
-      "prompt",
-      [],
-      async () => true,
-      undefined,
-      source
-    );
-    await promptSentPromise;
-    onStdout?.(`${JSON.stringify({ type: CLAUDE_EVENT_TYPES.RESULT })}\n`);
-    assert.strictEqual(channelClosed, false);
-
-    onStdout?.(
-      `${JSON.stringify({
-        type: CLAUDE_CONTROL.REQUEST_TYPE,
-        request_id: "approval-1",
-        request: { subtype: CLAUDE_CONTROL.CAN_USE_TOOL_SUBTYPE },
-      })}\n`
-    );
-    await approvalHandledPromise;
-    assert.strictEqual(approvalAnswered, true);
-    assert.strictEqual(channelClosed, false);
-
-    pendingBackgroundWork = false;
-    assert.strictEqual(await execution, true);
-    assert.strictEqual(channelClosed, true);
-  });
-
-  test("bounds a background-work hold by the prompt timeout", async () => {
+  test("closes the control channel at the turn result even with background work pending", async () => {
+    // A headless step ends at its turn boundary; background work the model
+    // left running is abandoned, not awaited. The long prompt timeout makes a
+    // regression that holds stdin open hang this test instead of passing.
     const originalTimeoutReader =
       ConfigurationUtils.getMaxPromptExecutionTimeMs;
-    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => 30;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => 60 * 60 * 1000;
     let channelClosed = false;
     let onStdout: ((chunk: string) => void) | undefined;
     let finishSpawn!: (result: {

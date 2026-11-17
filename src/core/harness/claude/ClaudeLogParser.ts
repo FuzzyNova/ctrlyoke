@@ -1224,6 +1224,33 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
     this.trackAsyncLaunchResult(e);
 
+    // Headless stream-json stdout reports a finished task as a `system`
+    // `task_notification` record instead of the session log's
+    // `<task-notification>` user/attachment text. Clear the launch without
+    // latching a resumed turn: a headless step ends at its turn boundary, so
+    // no follow-up turn is awaited.
+    if (
+      e.type === CLAUDE_EVENT_TYPES.SYSTEM &&
+      e.subtype === CLAUDE_SYSTEM_SUBTYPES.TASK_NOTIFICATION
+    ) {
+      const notifiedToolUseId = (e as { tool_use_id?: unknown }).tool_use_id;
+      const notifiedTaskId = (e as { task_id?: unknown }).task_id;
+      const launchToolUseId =
+        typeof notifiedToolUseId === "string"
+          ? notifiedToolUseId
+          : typeof notifiedTaskId === "string"
+            ? this.backgroundTaskLaunchToolUseIds.get(notifiedTaskId)
+            : undefined;
+      if (launchToolUseId) {
+        this.backgroundFollowUpState.remove(launchToolUseId);
+        this.finishFollowedWorkflowRun(launchToolUseId);
+      }
+      if (typeof notifiedTaskId === "string") {
+        this.backgroundTaskLaunchToolUseIds.delete(notifiedTaskId);
+      }
+      return;
+    }
+
     const text = this.extractTaskNotificationText(e);
     if (text.includes("<task-notification>")) {
       const toolUseIdMatch = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);

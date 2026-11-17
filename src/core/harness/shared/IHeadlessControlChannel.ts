@@ -71,8 +71,6 @@ export interface IHeadlessControlChannel {
   readonly steerDelivery: HeadlessSteerDelivery;
   /** False when the protocol is used for turn delivery/approvals but not steering. */
   readonly supportsSteering?: boolean;
-  /** Keep stdin open after a turn while the provider reports pending background work. */
-  readonly holdOpenForBackgroundWork?: boolean;
   /** Defer log-tail startup until `start()` has resolved a control session ID. */
   readonly startLogTailAfterChannelStart?: boolean;
   start(
