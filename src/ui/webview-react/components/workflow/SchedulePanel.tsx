@@ -5,6 +5,7 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import {
   nextScheduleOccurrence,
+  ownerScheduleCalendar,
   validateWorkflowSchedule,
 } from "@root/utils/WorkflowSchedule";
 import {
@@ -42,6 +43,20 @@ const localDateTimeValue = (date: CalendarDate) =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 const localTimeValue = (date: CalendarDate) =>
   `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+
+function convertLocalDateTime(
+  value: string,
+  from: ScheduleCalendar,
+  to: ScheduleCalendar
+): string {
+  const [date, time] = value.split("T");
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute, second = 0] = time.split(":").map(Number);
+  const instant = from
+    .fromFields(year, month - 1, day, hour, minute, second)
+    .getTime();
+  return localDateTimeValue(to.fromEpoch(instant));
+}
 
 /** Everything the pickers edit. A cron trigger stores no start date, so recurring pickers edit a time, not a datetime. */
 interface PickerState {
@@ -171,11 +186,30 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
   // Schedule times are the host's wall clock, whatever zone this browser is in.
   const hostTimeZone = useUiStore((s) => s.hostTimeZone);
   const calendar = scheduleCalendar(hostTimeZone);
-  const initial = useMemo(
-    () => pickerFor(calendar, schedule),
-    [calendar, schedule]
+  const crossHostZone = Boolean(
+    scheduleOnOtherHost &&
+      schedule?.timeZone &&
+      schedule.timeZone !== hostTimeZone
   );
+  const ownerCalendar = crossHostZone
+    ? ownerScheduleCalendar(schedule!, hostTimeZone)
+    : calendar;
+  const initial = useMemo(() => {
+    const picker = pickerFor(calendar, schedule);
+    if (crossHostZone && schedule && "at" in schedule.trigger) {
+      return {
+        ...picker,
+        onceAt: convertLocalDateTime(
+          schedule.trigger.at,
+          ownerCalendar,
+          calendar
+        ),
+      };
+    }
+    return picker;
+  }, [calendar, crossHostZone, ownerCalendar, schedule]);
   const [picker, setPicker] = useState<PickerState>(initial);
+  const [pickerEdited, setPickerEdited] = useState(false);
   const [until, setUntil] = useState(schedule?.until?.slice(0, 16) ?? "");
   // A new schedule is always created active: pressing Schedule is the opt-in.
   // Pausing only exists for a schedule that is already saved.
@@ -186,8 +220,10 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
     return () => window.clearInterval(id);
   }, []);
 
-  const update = (patch: Partial<PickerState>) =>
+  const update = (patch: Partial<PickerState>) => {
+    setPickerEdited(true);
     setPicker((prev) => ({ ...prev, ...patch }));
+  };
   const { frequency } = picker;
   const isRecurring = frequency !== FREQUENCY.once;
   const trigger =
@@ -201,22 +237,32 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
     ...untilField,
     hostId: schedule?.hostId ?? WORKFLOW_SCHEDULE_PREVIEW_HOST_ID,
   } as WorkflowSchedule;
+  const validationCalendar =
+    crossHostZone && !pickerEdited && isRecurring ? ownerCalendar : calendar;
   const shapeError =
     frequency === FREQUENCY.weekly && picker.weekdays.length === 0
       ? LABELS.noWeekdays
-      : validateWorkflowSchedule(previewSchedule, calendar);
+      : validateWorkflowSchedule(previewSchedule, validationCalendar);
   // A cron trigger stores no start date, so the backend fires the first
   // occurrence after now. Preview exactly that.
-  const next =
+  const nextForValidation =
     typeof shapeError === "string"
       ? null
-      : nextScheduleOccurrence(previewSchedule, now, calendar);
+      : nextScheduleOccurrence(previewSchedule, now, validationCalendar);
+  const next =
+    crossHostZone && !pickerEdited && schedule
+      ? nextScheduleOccurrence(
+          { ...schedule, enabled: true },
+          now,
+          ownerCalendar
+        )
+      : nextForValidation;
   // A one-shot in the past (or an Until already behind every occurrence)
   // saves fine but never fires, so refuse it unless the schedule is paused.
   const validationError =
     typeof shapeError === "string"
       ? shapeError
-      : next === null && !paused
+      : nextForValidation === null && !paused
         ? LABELS.neverRuns
         : undefined;
   const hasError = validationError !== undefined;
@@ -424,7 +470,18 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
             {validationError}
           </p>
         )}
-        {scheduleOnOtherHost && <p>{LABELS.otherHostNote}</p>}
+        {scheduleOnOtherHost && (
+          <p>
+            {LABELS.otherHostNote}
+            {isRecurring && crossHostZone && (
+              <>
+                {" "}
+                {LABELS.recurringOtherHostNote} {schedule?.timeZone};{" "}
+                {LABELS.recurringSaveZoneNote} {hostTimeZone}.
+              </>
+            )}
+          </p>
+        )}
         {scheduleLastMissedAt !== undefined && (
           <p className="text-description-fg">{LABELS.missedRunNote}</p>
         )}

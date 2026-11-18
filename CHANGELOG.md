@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Schedule view now previews schedules from another machine in the same timezone-aware way as the workflow list. Once schedules keep their instant when opened and saved unchanged; recurring schedules explain that saving reinterprets their times in this machine's timezone.
 - Unresolved variable placeholders now warn even when a workflow has no `vars`; agent-supplied condition-preset parameter values remain literal instead of expanding as workflow variables; Dry Run secret grants now match the real run by scanning authored prompt text.
 - The `--var` help, workflow schema and variables guide now list the fields supported by variable substitution. Dry Run shows the resolved worktree setup command.
 - Variable placeholders in script, environment, hook command and worktree setup text now substitute even inside fenced code blocks; prompt text remains protected inside fences.
