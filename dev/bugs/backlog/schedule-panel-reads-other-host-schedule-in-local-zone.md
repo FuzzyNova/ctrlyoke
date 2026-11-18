@@ -53,8 +53,21 @@ machine's time", so the preview arguably shows the result after saving.
   Asia/Tokyo"), with an explicit action to switch the schedule to this machine's zone.
   Switching reinterprets the wall-clock values in the new zone; say so.
 - Change the cron hint from "in this machine's time" to name the schedule's zone.
-- Check what the runner uses at fire time: it must evaluate the schedule in its recorded
-  `timeZone`, not the runner's local zone, or keeping the zone on save is only cosmetic.
+- The runner must evaluate the schedule in its recorded `timeZone`. **Checked 2026-11-18:
+  today it does not, and it actively undoes the zone.** `WorkflowScheduler` calls
+  `nextScheduleOccurrence(schedule, …)` with the default `LOCAL_CALENDAR`, and
+  `recordOwnerTimeZone` (called from `armFromDescriptor`) overwrites an owned schedule's
+  `timeZone` with this host's zone whenever they differ. So a schedule saved here with
+  Tokyo's zone would be rewritten to New York's and fire at New York wall-clock times. The
+  fix therefore includes:
+  - `WorkflowScheduler` computes every occurrence (`armFromDescriptor`,
+    `nextOccurrenceFromNow`, `onWake`) with `ownerScheduleCalendar(schedule, <this host's
+    zone>)`.
+  - `recordOwnerTimeZone` only fills a **missing** `timeZone` (schedules saved before the
+    field existed); it no longer overwrites a recorded one. A host whose own zone changed
+    keeps firing in the recorded zone, which matches what the panel displays; the panel's
+    "switch to this machine's zone" action is the way to move it. Update that method's doc
+    comment and the scheduler tests that assert the overwrite.
 - Update `docs/guide/dashboard.md` and record the change under **Changed** in
   `CHANGELOG.md`. Vitest cases: unedited save from another zone keeps times and zone; a
   Once time in this host's DST gap but valid in the owner's zone saves; the switch action
