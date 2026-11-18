@@ -63,12 +63,20 @@ export interface HeadlessApprovalExecutionContext extends HeadlessControlChannel
     request: HeadlessApprovalRequestContext,
     signal: AbortSignal
   ) => Promise<HeadlessApprovalResolution>;
+  onPermissionWarning?: (
+    channelAnswersApprovalRequests: boolean,
+    hasApprovalDashboard: boolean,
+    suppressWarning: boolean
+  ) => void;
+  suppressPermissionWarning?: boolean;
 }
 
 /** Provider-owned protocol over a headless process's stdin/stdout. */
 export interface IHeadlessControlChannel {
   readonly spawnShape: HeadlessControlSpawnShape;
   readonly steerDelivery: HeadlessSteerDelivery;
+  /** Whether this protocol can observe and answer tool approval requests. */
+  readonly answersApprovalRequests?: boolean;
   /** False when the protocol is used for turn delivery/approvals but not steering. */
   readonly supportsSteering?: boolean;
   /** Defer log-tail startup until `start()` has resolved a control session ID. */

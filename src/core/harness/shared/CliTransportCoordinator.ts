@@ -528,6 +528,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             },
           }
         );
+      approvalContext?.onPermissionWarning?.(
+        approvalContext.useApprovalControl === true &&
+          controlChannel?.answersApprovalRequests === true,
+        approvalContext.requestApproval !== undefined,
+        approvalContext.suppressPermissionWarning === true
+      );
       const approvalPolicy: HeadlessApprovalPolicy =
         approvalContext?.useApprovalControl
           ? approvalContext.approvalPolicy

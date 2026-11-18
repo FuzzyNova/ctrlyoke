@@ -19,6 +19,7 @@ import type {
 export class AntigravityHeadlessControlChannel implements IHeadlessControlChannel {
   readonly spawnShape = {};
   readonly steerDelivery = HEADLESS_STEER_DELIVERIES.QUEUE;
+  readonly answersApprovalRequests = false;
   private writer?: ControlWriter;
 
   async start(writer: ControlWriter): Promise<void> {

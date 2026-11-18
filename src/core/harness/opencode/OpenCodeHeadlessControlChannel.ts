@@ -104,6 +104,7 @@ function bridgeError(statusCode: number, message: string): BridgeError {
 /** Per-process loopback control bridge for OpenCode 2.3+ headless runs. */
 export class OpenCodeHeadlessControlChannel implements IHeadlessControlChannel {
   readonly steerDelivery = HEADLESS_STEER_DELIVERIES.INJECT;
+  readonly answersApprovalRequests = true;
   private readonly token = randomBytes(32).toString("hex");
   private readonly server: Server;
   private baseUrl?: string;

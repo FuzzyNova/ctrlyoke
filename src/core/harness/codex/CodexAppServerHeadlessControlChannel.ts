@@ -81,6 +81,7 @@ function approvalToolName(method: string): string {
 export class CodexAppServerHeadlessControlChannel implements IHeadlessControlChannel {
   readonly spawnShape = {};
   readonly steerDelivery = HEADLESS_STEER_DELIVERIES.INJECT;
+  readonly answersApprovalRequests = true;
 
   private writer?: ControlWriter;
   private nextRequestId = 1;

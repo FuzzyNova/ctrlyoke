@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Headless permission warnings now account for dashboard approval requests, and steering a headless step no longer repeats the execution note in the user's message receipt.
 - A harness error while sending an end-condition retry prompt now follows `errorBehavior`: `retry` restarts the whole step from its pre-condition in a fresh session, while `retryPhase` retries the prompt in its existing session when available.
 - Dashboard terminals now use VS Code's terminal font (`terminal.integrated.fontFamily`), falling back to the editor font when that setting is empty, as VS Code's own terminal does. Browsers connected to the ctrlyoke server get the same font. The size still comes from ctrlyoke's `terminal.fontSize` setting.
 - Every device showing a workflow, such as VS Code and a browser, now shows the same terminal tabs. Closing a terminal on any device closes it on all of them; before, the other devices kept it open as an ended terminal. An ended terminal stays open on every device until someone closes it, and a device that opens the workflow later gets the ended terminals too, with their recent output.
