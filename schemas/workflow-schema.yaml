@@ -1794,23 +1794,29 @@ $defs:
             description: >-
               What to do when a step phase cannot run or otherwise encounters an internal error.
               'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the
-              whole step from its pre-condition, starting a fresh harness session. 'retryPhase':
-              re-run only the phase that errored — an errored end-condition re-runs just its script
-              against the existing response without another AI call, and a failed prompt is re-sent
-              in a fresh harness session without re-running the pre-condition; for pre-conditions
-              and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not
+              whole step from its pre-condition, starting a fresh harness session; a harness error
+              while sending an end-condition retry prompt also restarts the whole step.
+              'retryPhase': re-run only the phase that errored — an errored end-condition re-runs
+              just its script against the existing response without another AI call, and a failed
+              prompt is re-sent in a fresh harness session without re-running the pre-condition; if
+              an end-condition retry prompt send fails, that retry prompt is resent in the existing
+              session when available, otherwise a fresh session. For pre-conditions and script
+              steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not
               errored and record a warning. Each phase keeps its own retry count.
           - $ref: '#/$defs/varPlaceholder'
         description: >-
           What to do when a step phase cannot run or otherwise encounters an internal error.
           'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole
-          step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only
-          the phase that errored — an errored end-condition re-runs just its script against the
+          step from its pre-condition, starting a fresh harness session; a harness error while
+          sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run
+          only the phase that errored — an errored end-condition re-runs just its script against the
           existing response without another AI call, and a failed prompt is re-sent in a fresh
-          harness session without re-running the pre-condition; for pre-conditions and script steps
-          it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a
-          warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is
-          coerced and validated before dispatch.
+          harness session without re-running the pre-condition; if an end-condition retry prompt
+          send fails, that retry prompt is resent in the existing session when available, otherwise
+          a fresh session. For pre-conditions and script steps, retryPhase behaves like retry.
+          'continue': proceed as if the phase had not errored and record a warning. Each phase keeps
+          its own retry count. A whole-value {{name}} placeholder is coerced and validated before
+          dispatch.
         title: On Error
       maxRetries:
         oneOf:

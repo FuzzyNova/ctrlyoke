@@ -11,6 +11,7 @@ import {
   DEFAULT_SCRIPT_OPERATOR,
   FINAL_STEP_PHASES,
   RETRY_KINDS,
+  RETRY_PROMPT_SEND_DISPOSITIONS,
   type RetryKind,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
@@ -74,12 +75,22 @@ export interface RetryContext {
  * Callback for sending retry prompts to Copilot.
  * Returns the attempt index on success, null on failure.
  */
+export type RetryPromptSendDisposition = {
+  disposition: typeof RETRY_PROMPT_SEND_DISPOSITIONS.RETRY_WHOLE_STEP;
+  nextAttemptIndex: number;
+  nextErrorRetryCount: number;
+};
+
+export type SendRetryPromptResult =
+  | { attemptIndex: number }
+  | RetryPromptSendDisposition;
+
 export type SendRetryPromptCallback = (
   retryPromptStep: PromptStep,
   currentIndex: number,
   attemptIndex: number,
   promptSource: RetryPromptSource
-) => Promise<{ attemptIndex: number } | null>;
+) => Promise<SendRetryPromptResult | null>;
 
 /**
  * Result of handling an end condition evaluation.
@@ -94,6 +105,8 @@ export interface EndConditionHandlerResult {
   errorResult?: EvaluationResult;
   /** Attempt index at which errorResult occurred. */
   errorAttemptIndex?: number;
+  /** A retry-prompt send failure routed to the outer whole-step loop. */
+  retryPromptDisposition?: RetryPromptSendDisposition;
 }
 
 /**
@@ -430,6 +443,16 @@ export class EndConditionHandler {
       );
       this.promptQueue.resetRetryCount(retryContext.attemptTarget);
       return { handlerResult: { shouldContinue: false, failureReason } };
+    }
+
+    if ("disposition" in retrySendResult) {
+      this.promptQueue.resetRetryCount(retryContext.attemptTarget);
+      return {
+        handlerResult: {
+          shouldContinue: false,
+          retryPromptDisposition: retrySendResult,
+        },
+      };
     }
 
     const retryAttemptIndex = retrySendResult.attemptIndex;

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing a1f660730
 - **Area:** `src/core/WorkflowExecutor.ts` (`createSendRetryPromptCallback`)
-- **Severity:** low (needs a design decision)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

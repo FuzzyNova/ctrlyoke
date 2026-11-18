@@ -4464,6 +4464,11 @@ export const WORKFLOW_EXECUTION_OUTCOMES = {
   STOP: "stop",
 } as const;
 
+/** Typed callback dispositions when an end-condition retry prompt cannot send. */
+export const RETRY_PROMPT_SEND_DISPOSITIONS = {
+  RETRY_WHOLE_STEP: "retryWholeStep",
+} as const;
+
 export type WorkflowExecutionOutcome =
   (typeof WORKFLOW_EXECUTION_OUTCOMES)[keyof typeof WORKFLOW_EXECUTION_OUTCOMES];
 

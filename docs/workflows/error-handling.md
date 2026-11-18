@@ -34,8 +34,8 @@ steps:
 | `onError`      | Dashboard label    | What happens                                                                                                           |
 | -------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | `stopWorkflow` | Stop Workflow      | The step is marked failed and the workflow stops. This is the default.                                                 |
-| `retry`        | Retry Step         | The whole step runs again from its pre-condition, in a fresh harness session, up to `maxRetries` times. Then it stops. |
-| `retryPhase`   | Retry Failed Phase | Only the phase that errored runs again, up to `maxRetries` times. Then it stops.                                       |
+| `retry`        | Retry Step         | The whole step runs again from its pre-condition, in a fresh harness session, up to `maxRetries` times. A harness error while sending an end-condition retry prompt also restarts the whole step. Then it stops. |
+| `retryPhase`   | Retry Failed Phase | Only the phase that errored runs again, up to `maxRetries` times. A failed retry-prompt send is retried in the existing session when available, otherwise in a fresh session. Then it stops. |
 | `continue`     | Continue           | A warning is recorded and the step carries on. See below for what that means for each phase.                           |
 
 With `continue`, what happens next depends on the phase that errored:
@@ -58,7 +58,7 @@ The two differ only for a step that has more than one phase:
 | Phase that errored | `retry`                                                  | `retryPhase`                                                                   |
 | ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Pre-condition      | Runs the pre-condition again                             | Same as `retry`                                                                |
-| Prompt / harness   | Runs the pre-condition again, then sends the prompt      | Sends the prompt again in a fresh harness session, without the pre-condition   |
+| Prompt / harness   | Runs the pre-condition again, then sends the prompt      | Sends the prompt again, resuming its session when available, without the pre-condition |
 | End condition      | Runs the pre-condition and the prompt again, then checks | Runs only the end condition again, against the files already there; no AI call |
 | Script step        | Runs the script again                                    | Same as `retry`                                                                |
 
