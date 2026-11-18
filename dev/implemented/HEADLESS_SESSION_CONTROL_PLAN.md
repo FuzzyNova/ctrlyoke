@@ -746,3 +746,21 @@ questions.
   event/output) because the user ended the turn, not the workflow. The normal turn-end path closes
   stdin and lets the queue continue. Live harness cases interrupt the same 25-second Node sleep
   and both complete the step/workflow well before it ends (Claude 2.1.325, Qwen 0.27.4).
+- **End Step Early (decided 2026-11-17, Nathan; not yet built).** Keep the interrupt
+  capability, but rename the user-facing action from "Interrupt Turn" to **End Step Early**.
+  It does not leave the step waiting for input: the interrupted turn ends, the channel closes
+  unless a queued steer is outstanding, and the step completes as a successful partial step
+  while the queue continues. It is "this step is good enough, move on" for one step, which
+  Stop (halts the whole workflow and every parallel sibling) and Pause (lets the step finish)
+  do not offer. The TUI meaning of "interrupt" (stop and wait for me) is the opposite, so the
+  old name invited the wrong expectation. The action moves from the header Stop button's
+  context menu to the running step's context menu, which also makes the target unambiguous in
+  parallel groups. Plans:
+  [`parallel-headless-steer-always-targets-lowest-step.md`](../bugs/backlog/parallel-headless-steer-always-targets-lowest-step.md)
+  and
+  [`header-control-buttons-have-context-menus.md`](../bugs/backlog/header-control-buttons-have-context-menus.md).
+- **Steering a retained, finished step's terminal stays supported (decided 2026-11-17).**
+  It was designed in `STEER_MESSAGE_PLAN.md` ("between runs"), and it keeps follow-up
+  questions out of the saved workflow, unlike Reply to Step plus Run in Parallel. The send
+  menu lists every live destination, including idle retained terminals, instead of inferring
+  one; see the parallel-steer bug above.
