@@ -22,10 +22,26 @@ dashboard does offer an approval prompt, so the warning is wrong.
 `warnIfHeadlessWithoutPermissions` checks only the execution mode and
 `hasFullPermissions(toolPermissions)`. It does not consider `headlessApprovals`.
 
+There is no static gate to consult. Whether `ask` can work is decided at spawn time:
+`CliExecutionRunner` computes `useApprovalControl` (policy `ask` and mode `custom`/`auto`),
+then each adapter's `createHeadlessControlChannel` returns a channel or `undefined` on its
+own version and mode checks (Copilot returns none under `--assisted-approval` or before
+1.0.112, Codex below 0.146, OpenCode below 2.3.0). The warning runs in `CliIntegration`
+before any of that.
+
 ## Suggested Fix
 
-Skip or reword the warning when `headlessApprovals` is `ask` and the active channel supports
-approvals for this harness, version and mode. Decide that from the same capability gate the
-channel uses rather than a harness list in `CliIntegration`. Antigravity and other unsupported
-cases keep the current wording. Without a connected dashboard, `ask` still denies, so the
-reworded text could say requests are denied unless a dashboard answers them.
+Move the decision to where the answer is known: after `createHeadlessControlChannel` in
+`CliTransportCoordinator`.
+
+- Add an optional `answersApprovalRequests?: boolean` to `IHeadlessControlChannel`
+  (`false` for Antigravity's stream-json channel, which has no approval vocabulary; true for
+  the others). Do not keep a harness list in `CliIntegration`.
+- If `useApprovalControl` is true, a channel exists, and it answers approval requests: no
+  warning when `workflowContext.requestHeadlessApproval` is present; otherwise a reworded
+  warning that approval requests are denied because no dashboard is connected to answer them.
+- Otherwise keep today's text.
+- Keep the once-per-integration flag and the `suppressHeadlessPermissionWarning` opt-out, so
+  `CliIntegration` passes a callback or the coordinator reports a result for it to warn on.
+- Tests: coordinator cases for channel+ask (no warning), ask without dashboard (reworded),
+  no channel (current text), and Antigravity's channel (current text).

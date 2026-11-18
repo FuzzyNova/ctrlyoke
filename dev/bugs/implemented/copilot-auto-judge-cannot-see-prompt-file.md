@@ -2,7 +2,10 @@
 
 - **Found:** 2026-11-13 by the `auto` permission-mode harness cases (step 5 of `dev/implemented/AUTO_PERMISSION_MODE_PLAN.md`), Copilot CLI 1.0.111, `gpt-6-luna`
 - **Area:** `src/core/harness/CliIntegration.ts` (prompt delivery), `src/core/harness/copilot/CopilotToolPermissionMapper.ts`
-- **Severity:** medium
+- **Resolution:** fixed by the headless stdin inline prompt work: Copilot headless prompts
+  now carry the step text inline on stdin, and `auto` is headless-only. The live case
+  passed on Copilot 1.0.112 (2026-11-16 full harness run); this commit drops the
+  `KNOWN_BROKEN_CLAIMS` entry and backs the claim with the suite.
 
 ## Symptom
 
@@ -41,7 +44,7 @@ treat what the agent read from that file as the user's intent, which is a reason
 prompt-injection defence. So the user's authority for the action is "unavailable".
 
 **Confirmed 2026-11-15 (Copilot 1.0.112, `gpt-6-luna`)** with the prompt piped on stdin, which is
-the transport in [`HEADLESS_STDIN_INLINE_PROMPT_PLAN.md`](../../backlog/HEADLESS_STDIN_INLINE_PROMPT_PLAN.md):
+the transport in [`HEADLESS_STDIN_INLINE_PROMPT_PLAN.md`](../../implemented/HEADLESS_STDIN_INLINE_PROMPT_PLAN.md):
 
 - Full instruction text on stdin: the command ran in **4 of 4** runs.
 - `follow the instructions in @task.prompt.md ` on stdin: refused in **3 of 4** runs.
@@ -60,5 +63,14 @@ Options, roughly in order of preference:
    `custom` with the existing diagnostic, instead of advertising a judge that refuses the
    step's own instructions.
 
-Until then, `copilot-cli` `permissions.autoMode` is listed in `KNOWN_BROKEN_CLAIMS`
-(`src/test/harness/capabilityEvidence.ts`) and its declaration's verification is `manual`.
+## Fix
+
+Option 1 shipped in a better form through
+[`HEADLESS_STDIN_INLINE_PROMPT_PLAN.md`](../../implemented/HEADLESS_STDIN_INLINE_PROMPT_PLAN.md):
+headless Copilot (including `auto`, which stays off ACP) receives every generated section,
+the step prompt among them, inline on stdin, with no argv length or quoting limits.
+
+Residual exposure: the judge still sees only a file reference when inlining is off
+(`execution.inlineGeneratedPromptOnStdin: false`) or when the prompt section itself is moved
+to a split-file reference by the inline size budget. Both are opt-out or edge paths, so they
+are documented here rather than gated.

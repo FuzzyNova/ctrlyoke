@@ -40,17 +40,35 @@ Not yet probed live. Expected reproduction:
 The mappers rely on the harness default being manual approval, so a user-level
 config that turns the judge on is inherited by `custom` runs.
 
+### Update 2026-11-18: headless Codex is now exposed too
+
+Since session-control Stage 5, headless Codex runs on `codex app-server`, and
+`custom` (or `auto`) with `headlessApprovals: ask` passes
+`-c approval_policy="on-request"` (`CodexHarnessAdapter`, app-server branch) with no
+reviewer pin. A user-level `approvals_reviewer = "auto_review"` would then send those
+escalations to Codex's auto reviewer instead of to ctrlyoke's dashboard approval card,
+so `ask` silently becomes "judge decides". Headless `deny` is unaffected
+(`approval_policy="never"`).
+
 ## Suggested Fix
 
-Probe both cases first.
-
-- Codex: if confirmed, emit an explicit reviewer pin for `custom` and
-  `allowAll` (`-c approvals_reviewer=<manual value>`, after checking the value
-  name against the Codex CLI).
+- **Codex: pin without a probe.** The value is confirmed from source:
+  `ApprovalsReviewer` serializes as `"user"` or `"auto_review"`
+  (`codex-rs/app-server-protocol/src/protocol/v2/shared.rs`), and `user` is the default
+  (`config_tests.rs`, `approvals_reviewer_defaults_to_manual_only…`). Pinning the default is
+  harmless when the user has not changed it. In `CodexToolPermissionMapper.buildCodexSpecificArgs`
+  emit `-c approvals_reviewer="user"` for every non-`auto` mode that can reach an approval
+  (interactive `custom` and `allowAll`), and in the app-server branch whenever
+  `approval_policy` is `on-request` and the mode is `custom`. Keep the value in
+  `CodexProtocolConstants`. Mapper and adapter tests assert the pin. The live probe is then
+  only a confirmation, not a gate.
 - Copilot: look for a flag that forces manual approval for the session. If
   none exists, change the caveat and docs to warn that
   `defaultPermissionMode: "assisted"` also affects `custom` steps, and
-  recommend `/permissions assisted` per session instead.
+  recommend `/permissions assisted` per session instead. Still needs the probe. Since
+  Stage 6a, headless `custom` on 1.0.112+ runs over ACP, so probe that launch too: if
+  `defaultPermissionMode: "assisted"` applies there, `session/request_permission` may never
+  reach ctrlyoke's `deny`/`ask` policy.
 
 Add mapper tests asserting the pin, and a harness-suite case for "custom
 refuses an unlisted command with a user-configured judge".

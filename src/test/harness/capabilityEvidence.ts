@@ -96,8 +96,4 @@ export const KNOWN_BROKEN_CLAIMS: Partial<
     "mcp.perServerToolFiltering":
       "dev/bugs/backlog/opencode-mcp-tool-deny-rules-never-match.md",
   },
-  "copilot-cli": {
-    "permissions.autoMode":
-      "dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md",
-  },
 };

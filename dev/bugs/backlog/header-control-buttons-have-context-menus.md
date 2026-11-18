@@ -27,7 +27,9 @@ nearest related button instead of to the object they act on. Dry Run acts on the
 and Interrupt Turn acts on one step.
 
 **Status:** the Stop half is done (Interrupt Turn moved to End Step Early on the step menu,
-and Stop has no context menu). The Run button's Dry Run menu remains.
+and Stop has no context menu). The Run button's Dry Run menu remains. Fix it together with
+[`hosted-header-context-menus-open-twice.md`](hosted-header-context-menus-open-twice.md),
+whose root cause is a second mount of the same run controls in this file.
 
 ## Suggested Fix
 
