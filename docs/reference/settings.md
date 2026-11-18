@@ -840,7 +840,7 @@ Embedded terminal settings.
 - **Default:** `14`
 - **Constraints:** minimum 8 · maximum 24
 
-Terminal font size in pixels.
+Terminal font size in pixels. The font family is VS Code's `terminal.integrated.fontFamily`, or the editor font when that is empty; this size applies either way.
 
 ### `terminal.lineHeight` {#terminal-lineheight}
 

@@ -346,3 +346,61 @@ describe("terminalRegistry screen-reader mode", () => {
     expect(after.term.options.screenReaderMode).toBe(false);
   });
 });
+
+describe("terminalRegistry host theme and font", () => {
+  const root = document.documentElement;
+
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    terminalConstructCount = 0;
+    root.style.removeProperty("--vscode-terminal-background");
+    root.style.removeProperty("--vscode-editor-font-family");
+  });
+
+  /** Let the MutationObserver callback run, with rAF made synchronous. */
+  async function flushStyleObserver(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("re-themes live terminals when the host rewrites its theme variables", async () => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    root.style.setProperty("--vscode-terminal-background", "#1e1e1e");
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const entry = await terminalRegistry.create("wf-theme", "sess-1");
+    expect(entry.term.options.theme?.background).toBe("#1e1e1e");
+
+    root.style.setProperty("--vscode-terminal-background", "#ffffff");
+    await flushStyleObserver();
+
+    expect(entry.term.options.theme?.background).toBe("#ffffff");
+  });
+
+  it("prefers the host terminal font and falls back to the editor font", async () => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    root.style.setProperty("--vscode-editor-font-family", "Consolas");
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const entry = await terminalRegistry.create("wf-font", "sess-1");
+    expect(entry.term.options.fontFamily).toBe("Consolas");
+
+    terminalRegistry.setHostTerminalFontFamily(" MesloLGM Nerd Font ");
+    expect(entry.term.options.fontFamily).toBe("MesloLGM Nerd Font");
+
+    // An editor-font change does not override the host terminal font.
+    root.style.setProperty("--vscode-editor-font-family", "Fira Code");
+    await flushStyleObserver();
+    expect(entry.term.options.fontFamily).toBe("MesloLGM Nerd Font");
+
+    terminalRegistry.setHostTerminalFontFamily("");
+    expect(entry.term.options.fontFamily).toBe("Fira Code");
+
+    const later = await terminalRegistry.create("wf-font", "sess-2");
+    expect(later.term.options.fontFamily).toBe("Fira Code");
+  });
+});

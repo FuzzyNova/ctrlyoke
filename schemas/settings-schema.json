@@ -601,7 +601,7 @@
           "type": "number",
           "minimum": 8,
           "maximum": 24,
-          "description": "Terminal font size in pixels.",
+          "description": "Terminal font size in pixels. The font family is VS Code's `terminal.integrated.fontFamily`, or the editor font when that is empty; this size applies either way.",
           "default": 14
         },
         "lineHeight": {

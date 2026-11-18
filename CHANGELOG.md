@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Dashboard terminals now use VS Code's terminal font (`terminal.integrated.fontFamily`), falling back to the editor font when that setting is empty, as VS Code's own terminal does. Browsers connected to the ctrlyoke server get the same font. The size still comes from ctrlyoke's `terminal.fontSize` setting.
 - Every device showing a workflow, such as VS Code and a browser, now shows the same terminal tabs. Closing a terminal on any device closes it on all of them; before, the other devices kept it open as an ended terminal. An ended terminal stays open on every device until someone closes it, and a device that opens the workflow later gets the ended terminals too, with their recent output.
 - Headless Copilot CLI 1.0.112 and later now uses ACP for queued steering and dashboard tool approvals. `auto` permission mode stays on Copilot's existing assisted-approval path.
 - Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
@@ -57,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dashboard terminals that are already open now switch to a new VS Code color theme or editor font when you change it, instead of keeping the old one until a new terminal opens.
+- In VS Code 1.147 and later, dashboard terminals no longer draw tiny, widely spaced text without bold. A Chromium change in that release made the terminal's GPU renderer fall back to a 10px sans-serif font.
 - A dashboard that reconnects, such as a browser tab returning from the background, no longer shows terminals as running after they ended while it was disconnected, or keeps terminals that were closed meanwhile. Ended terminals now show as ended and stop accepting input, and closed ones disappear.
 - A shell terminal that ends now shows the same "Process closed" banner as an AI terminal, and a terminal in the collapsed rail is dimmed once it ends.
 - Qwen Code headless steps no longer hang when an unlisted tool needs approval. They now start stream-json SDK mode with `initialize`, send the prompt over stdin, and deny approval requests with an explanation.

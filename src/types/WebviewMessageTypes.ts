@@ -600,6 +600,8 @@ export interface InitMessageData {
     isMultiRoot: boolean;
     terminal?: TerminalSettings;
   };
+  /** The host terminal's font family; "" means use the editor font. */
+  terminalFontFamily?: string;
   workflowProperties: Record<string, any>;
   modelOptions: Record<HarnessId, CapabilitiesModel[]>;
   harnessStatus: Record<string, HarnessStatusInfo>;
@@ -2011,6 +2013,8 @@ export interface GlobalSettingsUpdatedMessage {
     externalFileRootsByScope?: ExternalFileRootsByScope;
     terminal?: TerminalSettings;
   };
+  /** The host terminal's font family; "" means use the editor font. */
+  terminalFontFamily?: string;
   licenseAccess?: LicenseAccessState;
 }
 

@@ -990,7 +990,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "terminal": "Embedded terminal settings.",
   "terminal.cursorBlink": "Blink the terminal cursor.",
   "terminal.cursorStyle": "Terminal cursor shape.",
-  "terminal.fontSize": "Terminal font size in pixels.",
+  "terminal.fontSize": "Terminal font size in pixels. The font family is VS Code's `terminal.integrated.fontFamily`, or the editor font when that is empty; this size applies either way.",
   "terminal.lineHeight": "Terminal line height multiplier.",
   "terminal.macOptionIsMeta": "Treat the macOS Option key as Meta.",
   "terminal.mobileBarLayout": "Which keys the mobile terminal control bar shows: 'bar' keys are always visible, 'popup' keys sit behind the More menu, and 'hidden' keys are not shown. Each entry is a key ID: `modifier:ctrl` (a one-shot Ctrl toggle); `key:esc`, `key:tab`, `key:up`, `key:down`, `key:left`, `key:right`, or `key:enter`; `shortcut:shift-tab`, `shortcut:ctrl-c`, `shortcut:ctrl-z`, `shortcut:ctrl-l`, `shortcut:ctrl-r`, or `shortcut:ctrl-a`; or the `id` of an entry in `terminal.mobileCustomShortcuts`. Unknown IDs are dropped, and a known key missing from all three lists is added to 'popup'.",

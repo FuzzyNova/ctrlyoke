@@ -33,6 +33,7 @@ import type {
   DashboardHostActions,
   HostedServerControl,
   NamedRoot,
+  TerminalFontFamilySource,
 } from "../core/HostPorts";
 import type {
   CapabilitiesFile,
@@ -113,6 +114,7 @@ export interface DashboardSettingsSyncHost {
   readonly selectWorkspacePath?: DashboardHostActions["selectWorkspacePath"];
   readonly serverControl?: HostedServerControl;
   readonly actions?: DashboardHostActions;
+  readonly terminalFontFamily?: TerminalFontFamilySource;
 }
 
 const REMOTE_TLS_SETTING_KEYS = [
@@ -299,6 +301,7 @@ export class DashboardSettingsSync {
             clientId
           ),
           globalSettings,
+          terminalFontFamily: this.getTerminalFontFamily(),
           workflowProperties: {},
           modelOptions,
           harnessStatus: this.harnessStatus,
@@ -325,11 +328,17 @@ export class DashboardSettingsSync {
       {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
         globalSettings: this.buildGlobalSettings(),
+        terminalFontFamily: this.getTerminalFontFamily(),
         modelOptions: this.buildModelOptions(),
         licenseAccess: this.licenseAccess,
       },
       postMessage
     );
+  }
+
+  /** The host terminal's font family, or "" to use the editor font. */
+  private getTerminalFontFamily(): string {
+    return this.host.terminalFontFamily?.get() ?? "";
   }
 
   /** Refresh the extension-owned Pro/trial state for every dashboard client. */
@@ -341,6 +350,7 @@ export class DashboardSettingsSync {
       {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
         globalSettings: this.buildGlobalSettings(),
+        terminalFontFamily: this.getTerminalFontFamily(),
         modelOptions: this.buildModelOptions(),
         licenseAccess: this.licenseAccess,
       },
