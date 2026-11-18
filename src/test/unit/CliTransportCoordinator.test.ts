@@ -201,7 +201,8 @@ const stdoutProviderFactories: ReadonlyArray<{
 /** A coordinator holding one live PTY for workflow-1, for termination tests. */
 async function createCoordinatorWithLivePty(
   onKill: (sessionId: string, reason: TerminalEndReason) => Promise<void>,
-  postTerminalMessage: (message: unknown) => void = () => {}
+  postTerminalMessage: (message: unknown) => void = () => {},
+  onForgetTab: (sessionId: string) => void = () => {}
 ): Promise<CliTransportCoordinator> {
   const coordinator = new CliTransportCoordinator({
     provider: {
@@ -253,6 +254,7 @@ async function createCoordinatorWithLivePty(
       ({
         getExpectedController: () => undefined,
         gracefulKillAiCliSession: onKill,
+        forgetTab: onForgetTab,
         spawnPty: (config: { sessionId: string; workflowId: string }) => ({
           id: config.sessionId,
           workflowId: config.workflowId,
@@ -2407,9 +2409,11 @@ line two`,
 
   test("drops the terminated PTY's tab when asked", async () => {
     const posted: { type?: string }[] = [];
+    const forgotten: string[] = [];
     const coordinator = await createCoordinatorWithLivePty(
       async () => {},
-      (message) => posted.push(message as { type?: string })
+      (message) => posted.push(message as { type?: string }),
+      (sessionId) => forgotten.push(sessionId)
     );
     posted.length = 0;
 
@@ -2425,6 +2429,8 @@ line two`,
         sessionId: terminatedSessionId,
       },
     ]);
+    // The extension forgets the tab too, so replay never brings it back.
+    assert.deepStrictEqual(forgotten, [terminatedSessionId]);
   });
 
   test("should honor closeTerminalOnComplete for active PTY sessions", async () => {

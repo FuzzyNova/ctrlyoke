@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Every device showing a workflow, such as VS Code and a browser, now shows the same terminal tabs. Closing a terminal on any device closes it on all of them; before, the other devices kept it open as an ended terminal. An ended terminal stays open on every device until someone closes it, and a device that opens the workflow later gets the ended terminals too, with their recent output.
 - Headless Copilot CLI 1.0.112 and later now uses ACP for queued steering and dashboard tool approvals. `auto` permission mode stays on Copilot's existing assisted-approval path.
 - Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
 - Headless Codex 0.146.0 and later now runs through `codex app-server` JSON-RPC, while older versions keep using `codex exec`. The rollout log remains the source of headless Codex output.
@@ -56,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A dashboard that reconnects, such as a browser tab returning from the background, no longer shows terminals as running after they ended while it was disconnected, or keeps terminals that were closed meanwhile. Ended terminals now show as ended and stop accepting input, and closed ones disappear.
+- A shell terminal that ends now shows the same "Process closed" banner as an AI terminal, and a terminal in the collapsed rail is dimmed once it ends.
 - Qwen Code headless steps no longer hang when an unlisted tool needs approval. They now start stream-json SDK mode with `initialize`, send the prompt over stdin, and deny approval requests with an explanation.
 - Qwen Code subagent output no longer stops early. ctrlyoke sometimes stopped reading a subagent at the record holding its reasoning, just before its tool call, so the subagent's commands and later output were missing from the step. It now waits for Qwen to mark the subagent finished.
 - The dashboard no longer runs out of memory and turns gray when a long run streams output while its panel is hidden or its window is covered, minimized or on a sleeping display. Before, every VS Code window showing ctrlyoke went gray at once and stayed that way until reloaded.

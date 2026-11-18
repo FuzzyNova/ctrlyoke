@@ -5445,6 +5445,112 @@ describe("TERMINAL_STARTED", () => {
     ).toEqual(["retained-session"]);
   });
 
+  // Broadcasts sent while a backgrounded browser tab's socket was down are
+  // lost; replay re-announces every open tab and then lists them all.
+  describe("terminal tab replay", () => {
+    const startTab = (
+      workflowId: string,
+      sessionId: string,
+      extra: Record<string, unknown> = {}
+    ) =>
+      act(() => {
+        dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+          workflowId,
+          sessionId,
+          stepName: "Claude step",
+          kind: SESSION_KINDS.AI_CLI,
+          harnessId: "claude-cli",
+          controllerClientId: "controller-1",
+          ...extra,
+        });
+      });
+
+    it("drops tabs missing from a workflow's open-tab list", () => {
+      renderHook(() => useInboundMessageRouter());
+      startTab("workflow-1", "open-tab");
+      startTab("workflow-1", "closed-elsewhere");
+
+      act(() => {
+        dispatch(MESSAGE_TYPES.TERMINAL_OPEN_TABS, {
+          workflowId: "workflow-1",
+          sessionIds: ["open-tab"],
+        });
+      });
+
+      expect(
+        useTerminalStore.getState().sessions["workflow-1"].map((s) => s.id)
+      ).toEqual(["open-tab"]);
+    });
+
+    it("reconciles every workflow when the open-tab list is unscoped", () => {
+      renderHook(() => useInboundMessageRouter());
+      startTab("workflow-1", "workflow-1-tab");
+      startTab("workflow-2", "workflow-2-tab");
+
+      act(() => {
+        dispatch(MESSAGE_TYPES.TERMINAL_OPEN_TABS, {
+          sessionIds: ["workflow-2-tab"],
+        });
+      });
+
+      const { sessions } = useTerminalStore.getState();
+      expect(sessions["workflow-1"]).toEqual([]);
+      expect(sessions["workflow-2"].map((s) => s.id)).toEqual([
+        "workflow-2-tab",
+      ]);
+    });
+
+    it("opens a tab replayed with an end status as ended", () => {
+      renderHook(() => useInboundMessageRouter());
+      startTab("workflow-1", "ended-tab", {
+        status: TERMINAL_SESSION_STATUS.STOPPED,
+        endReason: TERMINAL_END_REASONS.STEP_COMPLETE,
+      });
+
+      const [session] = useTerminalStore.getState().sessions["workflow-1"];
+      expect(session.status).toBe(TERMINAL_SESSION_STATUS.STOPPED);
+      expect(session.endReason).toBe(TERMINAL_END_REASONS.STEP_COMPLETE);
+    });
+
+    it("ends a running tab whose replay says it already exited", () => {
+      renderHook(() => useInboundMessageRouter());
+      startTab("workflow-1", "session-1");
+
+      // Its TERMINAL_ENDED was lost while this client was disconnected.
+      startTab("workflow-1", "session-1", {
+        status: TERMINAL_SESSION_STATUS.STOPPED,
+        endReason: TERMINAL_END_REASONS.CLOSED,
+      });
+
+      const [session] = useTerminalStore.getState().sessions["workflow-1"];
+      expect(session.status).toBe(TERMINAL_SESSION_STATUS.STOPPED);
+      expect(session.endReason).toBe(TERMINAL_END_REASONS.CLOSED);
+    });
+
+    it("ignores TERMINAL_ENDED for a tab that was already removed", () => {
+      renderHook(() => useInboundMessageRouter());
+      startTab("workflow-1", "closed-tab");
+      act(() => {
+        dispatch(MESSAGE_TYPES.TERMINAL_REMOVED, {
+          workflowId: "workflow-1",
+          sessionId: "closed-tab",
+        });
+      });
+      act(() => {
+        dispatch(MESSAGE_TYPES.TERMINAL_ENDED, {
+          workflowId: "workflow-1",
+          sessionId: "closed-tab",
+          kind: SESSION_KINDS.AI_CLI,
+          exitCode: 1,
+          status: TERMINAL_SESSION_STATUS.STOPPED,
+          endReason: TERMINAL_END_REASONS.CLOSED,
+        });
+      });
+
+      expect(useTerminalStore.getState().sessions["workflow-1"]).toEqual([]);
+    });
+  });
+
   it("preserves same-harness parallel sessions as separate labeled tabs", () => {
     renderHook(() => useInboundMessageRouter());
 

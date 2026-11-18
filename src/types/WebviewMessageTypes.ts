@@ -905,6 +905,10 @@ export interface FinalStepContextWindowUpdateMessage {
  * `stepIndex` is zero-based for queue steps, signed negative for final-step
  * attempts, and -1 for standalone shell sessions. A parallel group id keeps
  * same-harness sibling sessions distinct during webview reconciliation.
+ *
+ * Replay also uses it for a tab whose process has already exited: `status` is
+ * then that session's end status (with its `endReason`), so the client opens
+ * the tab ended instead of running. Omitted for a running session.
  */
 export interface TerminalStartedMessage {
   type: typeof MESSAGE_TYPES.TERMINAL_STARTED;
@@ -918,6 +922,8 @@ export interface TerminalStartedMessage {
   shellKind?: ShellKind;
   parallelGroupId?: string;
   controllerClientId?: string;
+  status?: TerminalSessionStatus;
+  endReason?: TerminalEndReason;
 }
 
 /**
@@ -938,14 +944,28 @@ export interface TerminalEndedMessage {
 }
 
 /**
- * PTY session retired and its tab dropped (extension -> webview). Sent when a
- * newly spawned process continues the AI session this terminal held, so the
- * same conversation is not shown in two tabs.
+ * Terminal tab closed for every client (extension -> webview). Sent when any
+ * client closes a tab, and when a newly spawned process continues the AI
+ * session this terminal held, so the same conversation is not shown twice.
  */
 export interface TerminalRemovedMessage {
   type: typeof MESSAGE_TYPES.TERMINAL_REMOVED;
   workflowId: string;
   sessionId: string;
+}
+
+/**
+ * Every terminal tab still open (extension -> one webview), running or ended.
+ * Sent at the end of each terminal replay, after the TERMINAL_STARTED messages,
+ * so a client that missed a TERMINAL_REMOVED while its connection was down (a
+ * backgrounded browser tab) drops the tabs it should no longer show.
+ *
+ * Scoped to `workflowId` when set; otherwise it covers every workflow.
+ */
+export interface TerminalOpenTabsMessage {
+  type: typeof MESSAGE_TYPES.TERMINAL_OPEN_TABS;
+  workflowId?: string;
+  sessionIds: string[];
 }
 
 /**

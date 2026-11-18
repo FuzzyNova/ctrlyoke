@@ -1,11 +1,11 @@
 import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
-  TERMINAL_END_REASONS,
   USER_FEEDBACK_SEVERITY,
 } from "../types/DashboardConstants";
 import {
   buildTerminalEndedMessage,
+  buildTerminalOpenTabsMessage,
   buildTerminalStartedMessage,
   claimTerminalsOnReplay,
   getPtyProcessManager,
@@ -59,7 +59,8 @@ export class TerminalMessageHandlers {
     const ptyManager = this.getPtyManager();
     if (!ptyManager) return;
 
-    const sessions = ptyManager.getAllSessions();
+    // Open tabs, not just live PTYs: an ended tab nobody closed replays ended.
+    const sessions = ptyManager.getAllTabs();
     // Claim unowned sessions (or ones awaiting this client's return) before
     // replaying, so each TERMINAL_STARTED below names the right controller.
     for (const workflowId of new Set(sessions.map((s) => s.workflowId))) {
@@ -77,6 +78,8 @@ export class TerminalMessageHandlers {
         });
       }
     }
+    // Every workflow's tabs were replayed, so the open-tab set is global.
+    ctx.emit(buildTerminalOpenTabsMessage(sessions));
   }
 
   handleInput(ctx: DashboardClientContext, message: any): void {
@@ -184,22 +187,20 @@ export class TerminalMessageHandlers {
     }
   }
 
-  handleCloseShell(message: any): void {
+  /**
+   * A tab closed on any client — controller or viewer — closes it for all of
+   * them: the PTY is killed if still running and every client is told to drop
+   * the tab, including for a session that already exited. Both close messages
+   * mean the same thing; closeTab picks the shutdown that suits the kind.
+   */
+  async handleCloseTab(message: any): Promise<void> {
     const ptyManager = this.getPtyManager();
-    if (ptyManager && message.sessionId) {
-      ptyManager.killSession(
-        message.sessionId as string,
-        TERMINAL_END_REASONS.CLOSED
-      );
-    }
-  }
-
-  async handleCloseAiCli(message: any): Promise<void> {
-    const ptyManager = this.getPtyManager();
-    if (!ptyManager || !message.sessionId) return;
-    await ptyManager.gracefulKillAiCliSession(
-      message.sessionId as string,
-      TERMINAL_END_REASONS.CLOSED
+    if (!ptyManager || !message.sessionId || !message.workflowId) return;
+    ptyPostMessage(
+      await ptyManager.closeTab(
+        message.workflowId as string,
+        message.sessionId as string
+      )
     );
   }
 

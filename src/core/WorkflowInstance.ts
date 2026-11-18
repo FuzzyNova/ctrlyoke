@@ -1292,6 +1292,9 @@ export class WorkflowInstance
     }
     this.targetScriptProcessRunners.clear();
     this.activeTargetResources.clear();
+    // The AI terminals closed above would otherwise stay open as ended tabs
+    // for a workflow instance no client can reach again.
+    getPtyProcessManager()?.forgetWorkflowTabs(this.id, SESSION_KINDS.AI_CLI);
     if (this.activeWorktree) {
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
       this.activeWorktree = undefined;
@@ -4369,6 +4372,7 @@ export class WorkflowInstance
         `[inst:${this.id.slice(0, 8)}] Retired terminal ${ptySessionId?.slice(0, 8) ?? "(none)"} — its AI session ${aiSessionId} is being resumed by a new process`
       );
       if (ptySessionId) {
+        getPtyProcessManager()?.forgetTab(ptySessionId);
         ptyPostMessage(buildTerminalRemovedMessage(this.id, ptySessionId));
       }
     }

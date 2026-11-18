@@ -27,6 +27,7 @@ import type {
   TerminalStartedMessage,
   TerminalEndedMessage,
   TerminalRemovedMessage,
+  TerminalOpenTabsMessage,
 } from "../../types/WebviewMessageTypes";
 import type { KeyValueStore } from "../HostPorts";
 
@@ -290,6 +291,9 @@ export function createPtyDimensionsPersistence(
 
 const DEFAULT_COLS = 220;
 const DEFAULT_ROWS = 50;
+/** Ended tabs kept for replay across all workflows; see retireSession. */
+const MAX_ENDED_TABS = 50;
+let nextPtySessionSeq = 0;
 
 /**
  * Status of an exited PTY. A recorded end reason means ctrlyoke ended the
@@ -337,6 +341,21 @@ export function buildTerminalRemovedMessage(
 }
 
 /**
+ * Single builder for every TERMINAL_OPEN_TABS payload: the ids of the given
+ * open tabs. Omit `workflowId` when `tabs` spans every workflow.
+ */
+export function buildTerminalOpenTabsMessage(
+  tabs: readonly Pick<PtySession, "id">[],
+  workflowId?: string
+): TerminalOpenTabsMessage {
+  return {
+    type: MESSAGE_TYPES.TERMINAL_OPEN_TABS,
+    ...(workflowId !== undefined ? { workflowId } : {}),
+    sessionIds: tabs.map((tab) => tab.id),
+  };
+}
+
+/**
  * A single node-pty session (AI CLI or user shell).
  */
 export class PtySession {
@@ -371,6 +390,8 @@ export class PtySession {
    * that first-render line-wrap race visible.
    */
   readonly spawnedAt = Date.now();
+  /** Creation order; tabs replay in it (parallel spawns share a millisecond). */
+  readonly spawnSeq = ++nextPtySessionSeq;
   /** Most recent dimensions we told the PTY (SIGWINCH), for resize diff logging. */
   lastReportedCols = DEFAULT_COLS;
   lastReportedRows = DEFAULT_ROWS;
@@ -449,6 +470,13 @@ export function buildTerminalStartedMessage(
     parallelGroupId: session.parallelGroupId,
     shellKind: session.shellKind,
     controllerClientId: session.controllerClientId,
+    // A replayed tab whose process already exited opens ended, not running.
+    ...(session.status !== TERMINAL_SESSION_STATUS.RUNNING
+      ? {
+          status: session.status,
+          ...(session.endReason ? { endReason: session.endReason } : {}),
+        }
+      : {}),
   };
 }
 
@@ -503,7 +531,17 @@ export interface SpawnPtyOptions {
  * - User shell sessions (kind: 'shell'): spawned by user clicking "+" in the terminal rail
  */
 export class PtyProcessManager {
+  /** Live PTYs only — input, resize, claims and steering all read this map. */
   private sessions = new Map<string, PtySession>();
+  /**
+   * Exited sessions whose terminal tab is still open, so every client shows the
+   * same tabs: replay re-sends them with their end status and scrollback until
+   * a client closes the tab (`closeTab`) or the extension drops it. A tab's
+   * lifetime outlasts its process; this map is the extension's record of it.
+   */
+  private endedTabs = new Map<string, PtySession>();
+  /** Live sessions whose tab is already gone; their exit must not re-open it. */
+  private droppedTabIds = new Set<string>();
   private streamingFlushes = new Map<string, () => void>();
   /**
    * workflowId → clientId that should become the controller for the next PTY session
@@ -888,7 +926,7 @@ export class PtyProcessManager {
     ptyInstance.onExit(({ exitCode }: { exitCode: number }) => {
       flushStream();
       session.status = resolveEndedTerminalStatus(exitCode, session.endReason);
-      this.sessions.delete(sessionId);
+      this.retireSession(sessionId);
       logMemoryUsage("PTY session exited", {
         sessionId,
         kind: options.kind,
@@ -1008,8 +1046,95 @@ export class PtyProcessManager {
       } finally {
         session.pty.kill();
       }
-      this.sessions.delete(sessionId);
+      this.retireSession(sessionId);
     }
+  }
+
+  /**
+   * Move a session out of the live map once its process is ending. Its tab
+   * stays open in `endedTabs` unless the tab was already dropped. Idempotent:
+   * `killSession` retires before node-pty's onExit retires again.
+   */
+  private retireSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    this.sessions.delete(sessionId);
+    if (this.droppedTabIds.delete(sessionId)) return;
+    this.endedTabs.set(sessionId, session);
+    // Bounded: a tab nobody closes must not hold its scrollback forever. The
+    // oldest goes first; a client still showing it drops it on its next replay.
+    while (this.endedTabs.size > MAX_ENDED_TABS) {
+      const oldest = this.endedTabs.keys().next().value as string;
+      this.endedTabs.delete(oldest);
+    }
+  }
+
+  /**
+   * Close a terminal tab for every client: kill the PTY if it is still running,
+   * then forget the tab. Returns the TERMINAL_REMOVED to broadcast, which is
+   * built even when the extension no longer knows the session, so a client
+   * holding a stale tab still drops it.
+   */
+  async closeTab(
+    workflowId: string,
+    sessionId: string
+  ): Promise<TerminalRemovedMessage> {
+    const live = this.sessions.get(sessionId);
+    if (live?.kind === SESSION_KINDS.AI_CLI) {
+      await this.gracefulKillAiCliSession(
+        sessionId,
+        TERMINAL_END_REASONS.CLOSED
+      );
+    } else if (live) {
+      this.killSession(sessionId, TERMINAL_END_REASONS.CLOSED);
+    }
+    this.forgetTab(sessionId);
+    return buildTerminalRemovedMessage(workflowId, sessionId);
+  }
+
+  /**
+   * Forget a tab without broadcasting — for callers that post their own
+   * TERMINAL_REMOVED. A still-running session keeps running, but its tab will
+   * not reappear in replay or come back when it exits.
+   */
+  forgetTab(sessionId: string): void {
+    this.endedTabs.delete(sessionId);
+    if (this.sessions.has(sessionId)) {
+      this.droppedTabIds.add(sessionId);
+    }
+  }
+
+  /**
+   * Forget a workflow's tabs of `kind` (every kind when omitted), mirroring a
+   * client clearing them: a fresh run start drops the previous run's AI tabs,
+   * and a disposed workflow drops all of its tabs.
+   */
+  forgetWorkflowTabs(workflowId: string, kind?: SessionKind): void {
+    for (const session of this.getTabsForWorkflow(workflowId)) {
+      if (kind === undefined || session.kind === kind) {
+        this.forgetTab(session.id);
+      }
+    }
+  }
+
+  /**
+   * Every open terminal tab of a workflow — live sessions and ended ones
+   * nobody has closed — in spawn order, which is the clients' rail order.
+   */
+  getTabsForWorkflow(workflowId: string): PtySession[] {
+    return this.getAllTabs().filter(
+      (session) => session.workflowId === workflowId
+    );
+  }
+
+  /** Every open terminal tab across all workflows, in spawn order. */
+  getAllTabs(): PtySession[] {
+    const live = [...this.sessions.values()].filter(
+      (session) => !this.droppedTabIds.has(session.id)
+    );
+    return [...live, ...this.endedTabs.values()].sort(
+      (a, b) => a.spawnSeq - b.spawnSeq
+    );
   }
 
   /**
@@ -1054,7 +1179,7 @@ export class PtyProcessManager {
     const workflowId = session.workflowId;
     session.markEnding(TERMINAL_END_REASONS.SUPERSEDED);
     session.pty.kill();
-    this.sessions.delete(sessionId);
+    this.retireSession(sessionId);
 
     return this.spawnShell({
       workflowId,
@@ -1154,6 +1279,8 @@ export class PtyProcessManager {
       }
     }
     this.sessions.clear();
+    this.endedTabs.clear();
+    this.droppedTabIds.clear();
     this.streamingFlushes.clear();
     this.workflowRunControllers.clear();
     this.disconnectedControllers.clear();

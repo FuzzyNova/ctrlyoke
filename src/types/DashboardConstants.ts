@@ -1032,7 +1032,8 @@ export const MESSAGE_TYPES = {
   TERMINAL_RESIZE: "terminalResize", // webview → extension: { workflowId, sessionId, cols, rows }
   TERMINAL_STARTED: "terminalStarted", // extension → webview: TerminalStartedMessage (also refreshes existing session metadata)
   TERMINAL_ENDED: "terminalEnded", // extension → webview: { workflowId, sessionId, kind, exitCode }
-  TERMINAL_REMOVED: "terminalRemoved", // extension → webview: { workflowId, sessionId } — drop the tab entirely; sent when the extension retires a terminal whose AI session a newly spawned process is taking over, so the conversation is not shown twice
+  TERMINAL_REMOVED: "terminalRemoved", // extension → webview: { workflowId, sessionId } — drop the tab entirely; sent when any client closes a tab, and when the extension retires a terminal whose AI session a newly spawned process is taking over
+  TERMINAL_OPEN_TABS: "terminalOpenTabs", // extension → one webview: TerminalOpenTabsMessage — sent at the end of every terminal replay so a client that missed TERMINAL_REMOVED while disconnected drops its stale tabs
   TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId } — the host starts the shell in the workflow's execution root (its worktree, if any)
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
   TERMINAL_CLOSE_SHELL: "terminalCloseShell", // webview → extension: { workflowId, sessionId }

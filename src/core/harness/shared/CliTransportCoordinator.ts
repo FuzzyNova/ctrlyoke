@@ -1246,6 +1246,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       ptySession.pty.kill();
     }
     if (options.removeTerminalTab) {
+      ptyManager?.forgetTab(sessionId);
       const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
       postMessage(
         buildTerminalRemovedMessage(ptySession.workflowId, sessionId)

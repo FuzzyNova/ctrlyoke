@@ -3,11 +3,7 @@ import { sendMessage } from "@messaging/sendMessage";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
-import {
-  MESSAGE_TYPES,
-  TERMINAL_SESSION_STATUS,
-  SESSION_KINDS,
-} from "../../types/messages";
+import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS } from "../../types/messages";
 import "@xterm/xterm/css/xterm.css";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { WebviewLog } from "@/utils/logger";
@@ -447,6 +443,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const currentSession = useTerminalStore
         .getState()
         .sessions[workflowId]?.find((s) => s.id === sessionId);
+      // A tab replayed already ended had no xterm to freeze when its status
+      // arrived; freeze it now so its input never routes to a dead PTY.
+      if (
+        currentSession &&
+        currentSession.status !== TERMINAL_SESSION_STATUS.RUNNING
+      ) {
+        terminalRegistry.freeze(workflowId, sessionId);
+      }
       if (
         !entry.frozen &&
         !entry.onDataDisposable &&
@@ -769,8 +773,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 };
 
 /**
- * Dim overlay shown when an ai-cli session has ended, naming why when ctrlyoke
- * ended it deliberately. Purely decorative — does not block scrollback.
+ * Dim overlay shown when a session (ai-cli or shell) has ended, naming why
+ * when ctrlyoke ended it deliberately. Purely decorative — does not block
+ * scrollback.
  */
 const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
   workflowId,
@@ -780,10 +785,7 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
     (s) => s.sessions[workflowId] ?? EMPTY_SESSIONS
   );
   const session = sessions.find((s) => s.id === sessionId);
-  const label =
-    session?.kind === SESSION_KINDS.AI_CLI
-      ? getTerminalEndedLabel(session)
-      : undefined;
+  const label = session ? getTerminalEndedLabel(session) : undefined;
 
   if (!label) return null;
 

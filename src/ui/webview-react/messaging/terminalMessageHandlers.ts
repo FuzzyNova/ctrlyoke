@@ -9,6 +9,8 @@ import {
   MESSAGE_TYPES,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
+  type TerminalEndReason,
+  type TerminalSessionStatus,
 } from "../types/messages";
 import { OUTPUT_TABS } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@utils/logger";
@@ -19,6 +21,7 @@ import { sendMessage } from "@messaging/sendMessage";
 import type { MessageHandlerMap } from "./inboundMessageRouter";
 import type {
   TerminalEndedMessage,
+  TerminalOpenTabsMessage,
   TerminalStartedMessage,
 } from "@root/types/WebviewMessageTypes";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
@@ -91,6 +94,64 @@ function requestTerminalControlClaim(
 }
 
 /**
+ * Mark a session ended and freeze its xterm so keystrokes stop routing to a
+ * dead PTY (shells too — a restarted shell is a new session). Unknown sessions
+ * are ignored: a closed tab's TERMINAL_ENDED can land after TERMINAL_REMOVED.
+ *
+ * When this ends the workflow's last running session, the terminal-active flag
+ * clears and, with no shell tab to keep the terminal pane useful, Output is
+ * shown again. Re-ending an already-ended tab (a replay) never moves the user.
+ */
+function endTerminalSession(
+  workflowId: string,
+  sessionId: string,
+  status: TerminalSessionStatus,
+  endReason: TerminalEndReason | undefined
+): void {
+  const termStore = useTerminalStore.getState();
+  const session = (termStore.sessions[workflowId] ?? []).find(
+    (s) => s.id === sessionId
+  );
+  if (!session) return;
+  const wasRunning = session.status === TERMINAL_SESSION_STATUS.RUNNING;
+  termStore.endSession(workflowId, sessionId, status, endReason);
+  clearPendingAutoClaim(workflowId, sessionId, "terminal ended");
+  terminalRegistry.freeze(workflowId, sessionId);
+  if (!wasRunning) return;
+
+  const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
+  const hasRunningSessions = sessions.some(
+    (s) => s.status === TERMINAL_SESSION_STATUS.RUNNING
+  );
+  if (hasRunningSessions) return;
+
+  useUiStore.getState().setTerminalSessionActive(workflowId, false);
+  const hasShellSessions = sessions.some((s) => s.kind === SESSION_KINDS.SHELL);
+  if (!hasShellSessions) {
+    useUiStore.getState().setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
+  }
+}
+
+/**
+ * Drop a terminal tab: dispose its xterm and remove it from the rail. When no
+ * running session is left the terminal-active flag clears, and when no tab is
+ * left at all Output is shown again.
+ */
+function removeTerminalTab(workflowId: string, sessionId: string): void {
+  clearPendingAutoClaim(workflowId, sessionId, "terminal removed");
+  terminalRegistry.clearSession(workflowId, sessionId);
+  useTerminalStore.getState().removeSession(workflowId, sessionId);
+
+  const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
+  if (!sessions.some((s) => s.status === TERMINAL_SESSION_STATUS.RUNNING)) {
+    useUiStore.getState().setTerminalSessionActive(workflowId, false);
+  }
+  if (sessions.length === 0) {
+    useUiStore.getState().setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
+  }
+}
+
+/**
  * Register all terminal-related message handlers into the provided handler map.
  */
 export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
@@ -104,7 +165,11 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     // Write directly to the xterm instance (no Zustand, no re-renders)
     const entry = terminalRegistry.get(workflowId, sessionId);
     if (entry) {
-      entry.term.write(data as string);
+      // A frozen xterm belongs to an ended session and already shows all its
+      // output; this is replayed scrollback, and writing it would repeat it.
+      if (!entry.frozen) {
+        entry.term.write(data as string);
+      }
       return;
     }
     // No entry yet — the PTY can emit its first chunks before create() runs.
@@ -140,6 +205,12 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       controllerClientId,
     } = message;
     if (!workflowId || !sessionId) return;
+    // Set only when replay re-announces a tab whose process already exited.
+    const endedStatus =
+      message.status !== undefined &&
+      message.status !== TERMINAL_SESSION_STATUS.RUNNING
+        ? message.status
+        : undefined;
 
     const uiState = useUiStore.getState();
     const activeWorkflowId = uiState.activeWorkflowId;
@@ -197,11 +268,24 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         ...(harnessId !== undefined ? { harnessId } : {}),
         parallelGroupId,
         ...(shellKind !== undefined ? { shellKind } : {}),
+      });
+      termStore.setSessionController(workflowId, sessionId, isController);
+      if (endedStatus !== undefined) {
+        // It exited while this client was not listening (TERMINAL_ENDED lost).
+        endTerminalSession(
+          workflowId,
+          sessionId,
+          endedStatus,
+          message.endReason
+        );
+        return;
+      }
+      termStore.updateSessionMetadata(workflowId, sessionId, {
         status: TERMINAL_SESSION_STATUS.RUNNING,
         // Live again — a previous end reason would mislabel the next exit.
         endReason: undefined,
       });
-      termStore.setSessionController(workflowId, sessionId, isController);
+      terminalRegistry.unfreeze(workflowId, sessionId);
       if (willAutoClaim) {
         requestTerminalControlClaim(
           workflowId,
@@ -224,9 +308,17 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       harnessId,
       parallelGroupId,
       shellKind,
-      status: TERMINAL_SESSION_STATUS.RUNNING,
+      status: endedStatus ?? TERMINAL_SESSION_STATUS.RUNNING,
+      ...(endedStatus !== undefined ? { endReason: message.endReason } : {}),
       isController,
     });
+
+    if (endedStatus !== undefined) {
+      // An ended tab replayed to a client that never saw it: its scrollback
+      // follows, and TerminalInstance mounts it frozen (no input routing).
+      clearPendingAutoClaim(workflowId, sessionId, "ended tab replayed");
+      return;
+    }
 
     useUiStore.getState().setTerminalSessionActive(workflowId, true);
 
@@ -362,65 +454,61 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // TERMINAL_ENDED - PTY session exited; freeze registry entry, update rail
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_ENDED] = (message: TerminalEndedMessage) => {
-    const { workflowId, sessionId, kind, status, endReason } = message;
+    const { workflowId, sessionId, status, endReason } = message;
     if (!workflowId || !sessionId) return;
+    endTerminalSession(workflowId, sessionId, status, endReason);
+  };
 
-    const termStore = useTerminalStore.getState();
-    termStore.endSession(workflowId, sessionId, status, endReason);
-    clearPendingAutoClaim(workflowId, sessionId, "terminal ended");
-
-    // Freeze ai-cli sessions in the registry so onData is disabled
-    if (kind === SESSION_KINDS.AI_CLI) {
-      terminalRegistry.freeze(workflowId, sessionId);
-    }
-
-    // Check if all sessions for this workflow have ended
-    const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
-    const hasRunningSessions = sessions.some(
-      (s) => s.status === TERMINAL_SESSION_STATUS.RUNNING
-    );
-
-    if (!hasRunningSessions) {
-      useUiStore.getState().setTerminalSessionActive(workflowId, false);
-
-      // Auto-switch back to Output tab when all ai-cli sessions are done,
-      // but only if no shell sessions remain open
-      const hasShellSessions = sessions.some(
-        (s) => s.kind === SESSION_KINDS.SHELL
+  // --------------------------------------------------------------------------
+  // TERMINAL_OPEN_TABS - End of a terminal replay; drop tabs no longer open
+  //
+  // The extension keeps every open tab, ended ones included, until a client
+  // closes it, and replay re-announces each one. A TERMINAL_REMOVED broadcast
+  // while this client's socket was down (a backgrounded browser tab) is lost,
+  // so any tab here that is missing from this list was closed elsewhere — or
+  // belongs to a run the extension has since moved past — and goes too.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.TERMINAL_OPEN_TABS] = (
+    message: TerminalOpenTabsMessage
+  ) => {
+    if (!Array.isArray(message?.sessionIds)) return;
+    const openIds = new Set(message.sessionIds);
+    const allSessions = useTerminalStore.getState().sessions;
+    const workflowIds =
+      message.workflowId !== undefined
+        ? [message.workflowId]
+        : Object.keys(allSessions);
+    for (const workflowId of workflowIds) {
+      const staleIds = (allSessions[workflowId] ?? [])
+        .filter((s) => !openIds.has(s.id))
+        .map((s) => s.id);
+      if (staleIds.length === 0) continue;
+      WebviewLog.debug(
+        `[TERMINAL_OPEN_TABS] dropping ${staleIds.length} closed tab(s) wf=${workflowId.slice(0, 8)}: ` +
+          staleIds.map((id) => id.slice(0, 8)).join(", ")
       );
-      if (!hasShellSessions) {
-        useUiStore
-          .getState()
-          .setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
+      for (const sessionId of staleIds) {
+        removeTerminalTab(workflowId, sessionId);
       }
     }
   };
 
   // --------------------------------------------------------------------------
-  // TERMINAL_REMOVED - Extension retired this terminal; drop the tab entirely
+  // TERMINAL_REMOVED - A tab was closed for every client; drop it entirely
   //
-  // The extension is the sole authority on terminal lifetime — this handler is
-  // how it says "that tab is gone", the same way an explicit user close does.
-  // Sent when a newly spawned process takes over the AI session this terminal
-  // was holding open, so the conversation continues in the new tab instead of
+  // The extension is the sole authority on terminal lifetime. It sends this
+  // when any client closes a tab (the closer already dropped it locally), and
+  // when a newly spawned process takes over the AI session this terminal was
+  // holding open, so the conversation continues in the new tab instead of
   // being shown twice. Arrives around the session's own TERMINAL_ENDED in
   // either order; both the store and the registry no-op on an unknown session.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_REMOVED] = (message: any) => {
     const { workflowId, sessionId } = message;
     if (!workflowId || !sessionId) return;
-
     WebviewLog.debug(
       `[TERMINAL_REMOVED] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
     );
-    clearPendingAutoClaim(workflowId, sessionId, "terminal removed");
-    terminalRegistry.clearSession(workflowId, sessionId);
-    useTerminalStore.getState().removeSession(workflowId, sessionId);
-
-    const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
-    if (sessions.length === 0) {
-      useUiStore.getState().setTerminalSessionActive(workflowId, false);
-      useUiStore.getState().setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
-    }
+    removeTerminalTab(workflowId, sessionId);
   };
 }
