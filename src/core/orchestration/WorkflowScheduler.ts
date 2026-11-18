@@ -5,7 +5,10 @@ import type {
   WorkflowSchedule,
 } from "../../types/CtrlYokeTypes";
 import { WORKFLOW_LOCK_LIVENESS } from "../../types/DashboardConstants";
-import { nextScheduleOccurrence } from "../../utils/WorkflowSchedule";
+import {
+  nextScheduleOccurrence,
+  ownerScheduleCalendar,
+} from "../../utils/WorkflowSchedule";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { Log } from "../../utils/Log";
@@ -138,21 +141,20 @@ export class WorkflowScheduler {
   }
 
   /**
-   * Keeps an owned schedule's `timeZone` equal to this host's zone, so other
-   * machines sharing the state home read its times as this host fires them.
-   * Covers schedules saved before the field existed and a host whose zone
-   * changed; runs for paused schedules too, which other machines still list.
+   * Fills the time zone on an owned schedule saved before the field existed.
+   * A recorded zone remains the schedule's clock even if this host's zone
+   * changes; runs for paused schedules too, which other machines still list.
    */
   private async recordOwnerTimeZone(
     workflowKey: WorkflowKey,
     schedule: WorkflowSchedule
   ): Promise<void> {
     const timeZone = this.options.getTimeZone();
-    if (schedule.timeZone === timeZone) return;
+    if (schedule.timeZone !== undefined) return;
     const hostId = this.options.getHostId();
     await this.writeMetadata(workflowKey, (current) =>
       current.schedule?.hostId === hostId &&
-      current.schedule.timeZone !== timeZone
+      current.schedule.timeZone === undefined
         ? { ...current, schedule: { ...current.schedule, timeZone } }
         : current
     );
@@ -198,7 +200,11 @@ export class WorkflowScheduler {
       const late = now - scheduledAt > 60_000;
       const nextAt = late
         ? this.nextOccurrenceFromNow(workflowKey, schedule, now)
-        : nextScheduleOccurrence(schedule, scheduledAt);
+        : nextScheduleOccurrence(
+            schedule,
+            scheduledAt,
+            ownerScheduleCalendar(schedule, this.options.getTimeZone())
+          );
       if (late) {
         await this.writeMetadata(workflowKey, (current) => {
           const updated = { ...current, scheduleLastMissedAt: scheduledAt };
@@ -276,7 +282,11 @@ export class WorkflowScheduler {
     schedule: WorkflowSchedule,
     now: number
   ): number | null {
-    const nextAt = nextScheduleOccurrence(schedule, now);
+    const nextAt = nextScheduleOccurrence(
+      schedule,
+      now,
+      ownerScheduleCalendar(schedule, this.options.getTimeZone())
+    );
     if (nextAt === null || nextAt > now) return nextAt;
     Log.warn(
       `[WorkflowScheduler] Ignoring past next occurrence for ${workflowKey}`

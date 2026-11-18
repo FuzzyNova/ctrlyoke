@@ -1381,6 +1381,7 @@ export class WorkflowLibraryHandlers {
       enabled: boolean;
       trigger: WorkflowSchedule["trigger"];
       until?: string;
+      timeZone?: string;
     },
     postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
@@ -1389,7 +1390,7 @@ export class WorkflowLibraryHandlers {
     const validation = validateWorkflowSchedule({
       ...input,
       hostId: currentScheduleHostId(),
-      timeZone: localTimeZone(),
+      timeZone: input.timeZone ?? localTimeZone(),
     });
     if (typeof validation === "string") {
       this.sendActionFailure(postMessage, "set workflow schedule", validation);

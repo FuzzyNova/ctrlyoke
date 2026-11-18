@@ -1299,6 +1299,8 @@ export interface SetScheduleMessage {
   enabled: boolean;
   trigger: WorkflowSchedule["trigger"];
   until?: string;
+  /** Preserve the schedule's wall-clock zone when another host edits it. */
+  timeZone?: string;
 }
 
 export interface ClearScheduleMessage {

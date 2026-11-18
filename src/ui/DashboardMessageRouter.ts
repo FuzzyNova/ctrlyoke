@@ -2662,6 +2662,7 @@ export class DashboardMessageRouter {
           enabled: message.enabled,
           trigger: message.trigger,
           until: message.until,
+          timeZone: message.timeZone,
         },
         ctx.postMessage
       )

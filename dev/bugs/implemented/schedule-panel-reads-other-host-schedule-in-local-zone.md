@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing 2bee7ffff and c1ee66dac
 - **Area:** `src/ui/webview-react/components/workflow/SchedulePanel.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
