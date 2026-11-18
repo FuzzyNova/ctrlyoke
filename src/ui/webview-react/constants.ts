@@ -238,8 +238,6 @@ export const WORKFLOW_SCHEDULE_LABELS = {
   hostRunningNote:
     "Runs start unattended, and only while VS Code with ctrlyoke or ctrlyoke server is running. Runs missed while it is closed are skipped.",
   otherHostNote: "Scheduled on another machine; saving here moves it.",
-  recurringOtherHostNote: "It currently runs in",
-  recurringSaveZoneNote: "saving reinterprets its times in this machine's timezone",
   hostTimeZoneNote: "Times are in the host's timezone,",
   missedRunNote: "A scheduled run was missed while ctrlyoke was not running.",
   cancel: "Cancel",

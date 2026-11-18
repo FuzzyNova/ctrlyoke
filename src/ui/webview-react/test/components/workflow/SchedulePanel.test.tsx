@@ -1,12 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowSchedule } from "@root/types/CtrlYokeTypes";
-import {
-  localTimeZone,
-  scheduleCalendar,
-} from "@root/utils/ScheduleCalendar";
-import { ownerScheduleCalendar } from "@root/utils/WorkflowSchedule";
-import { upcomingScheduleRunLabel } from "@utils/workflowScheduleDisplay";
+import { localTimeZone } from "@root/utils/ScheduleCalendar";
 import { useUiStore } from "@store/uiStore";
 
 const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
@@ -15,17 +10,12 @@ import { SchedulePanel } from "@components/workflow/SchedulePanel";
 
 const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
 
-function renderPanel(
-  schedule?: WorkflowSchedule,
-  onBack = vi.fn(),
-  scheduleOnOtherHost = false
-) {
+function renderPanel(schedule?: WorkflowSchedule, onBack = vi.fn()) {
   render(
     <SchedulePanel
       address={address}
       workflowName="Build"
       schedule={schedule}
-      scheduleOnOtherHost={scheduleOnOtherHost}
       backLabel="Back to workflow list"
       onBack={onBack}
     />
@@ -38,7 +28,6 @@ describe("SchedulePanel", () => {
     cleanup();
     sendMessage.mockClear();
     vi.useRealTimers();
-    vi.restoreAllMocks();
     useUiStore.setState({ hostTimeZone: undefined });
   });
 
@@ -229,98 +218,6 @@ describe("SchedulePanel", () => {
       address,
       enabled: false,
       trigger: { cron: "0 9 * * *" },
-    });
-  });
-
-  describe("a schedule owned in another timezone", () => {
-    const HOST_ZONE = "America/New_York";
-    const OWNER_ZONE = "Asia/Tokyo";
-    const NOW = Date.parse("2026-03-07T00:00:00Z");
-
-    function useZones() {
-      vi.spyOn(Date, "now").mockReturnValue(NOW);
-      useUiStore.setState({ hostTimeZone: HOST_ZONE });
-    }
-
-    const onceSchedule: WorkflowSchedule = {
-      enabled: true,
-      trigger: { at: "2026-03-08T02:30" },
-      hostId: "owner",
-      timeZone: OWNER_ZONE,
-    };
-
-    it("shows the same next run as the workflow list", () => {
-      useZones();
-      const schedule: WorkflowSchedule = {
-        enabled: true,
-        trigger: { cron: "0 9 * * *" },
-        hostId: "owner",
-        timeZone: OWNER_ZONE,
-      };
-      renderPanel(schedule, vi.fn(), true);
-      const listLabel = upcomingScheduleRunLabel(
-        { schedule },
-        NOW,
-        HOST_ZONE
-      );
-      expect(screen.getByText(/^Next run:/).closest("p")).toHaveTextContent(
-        listLabel!
-      );
-    });
-
-    it("converts an untouched Once time and keeps its instant on a Pause-only save", () => {
-      useZones();
-      renderPanel(onceSchedule, vi.fn(), true);
-      expect(screen.getByLabelText("Date and time")).toHaveValue(
-        "2026-03-07T12:30"
-      );
-      fireEvent.click(
-        screen.getByRole("checkbox", { name: "Pause this schedule" })
-      );
-      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-      expect(sendMessage).toHaveBeenCalledWith("setSchedule", {
-        address,
-        enabled: false,
-        trigger: { at: "2026-03-07T12:30" },
-      });
-      expect(
-        scheduleCalendar(HOST_ZONE)
-          .fromFields(2026, 2, 7, 12, 30, 0)
-          .getTime()
-      ).toBe(
-        ownerScheduleCalendar(onceSchedule, HOST_ZONE)
-          .fromFields(2026, 2, 8, 2, 30, 0)
-          .getTime()
-      );
-    });
-
-    it("does not report a false DST-gap validation error for an untouched Once time", () => {
-      useZones();
-      renderPanel(onceSchedule, vi.fn(), true);
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: "Save changes" })
-      ).toBeEnabled();
-    });
-
-    it("explains the timezone reinterpretation for recurring schedules", () => {
-      useZones();
-      renderPanel(
-        {
-          enabled: true,
-          trigger: { cron: "0 9 * * *" },
-          hostId: "owner",
-          timeZone: OWNER_ZONE,
-        },
-        vi.fn(),
-        true
-      );
-      expect(screen.getByText(/Scheduled on another machine/)).toHaveTextContent(
-        `It currently runs in ${OWNER_ZONE}`
-      );
-      expect(screen.getByText(/Scheduled on another machine/)).toHaveTextContent(
-        `saving reinterprets its times in this machine's timezone ${HOST_ZONE}`
-      );
     });
   });
 
