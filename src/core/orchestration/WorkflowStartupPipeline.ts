@@ -23,11 +23,13 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  SESSION_KINDS,
   STATUS_MESSAGE_SEVERITY,
   STEP_STATUS,
   WORKTREE_MODES,
   type ExecutionMode,
 } from "../../types/DashboardConstants";
+import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ReplayableAttemptOutput } from "../OutputCaptureBuffer";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
@@ -759,8 +761,8 @@ export class WorkflowStartupPipeline {
     );
     const preflightStepCount = this.port.queue.getState().steps.length;
     if (this.port.dashboardSink && preflightStepCount > 0) {
-      this.port.dashboardSink.updateExecutionStarted(
-        this.port.id,
+      this.announceExecutionStarted(
+        this.port.dashboardSink,
         fileName,
         preflightStepCount
       );
@@ -991,8 +993,8 @@ export class WorkflowStartupPipeline {
         `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${startup.totalSteps}, skippedPrefix=${skippedPrefix}`
       );
       this.port.execution.clearOutputBuffers();
-      this.port.dashboardSink.updateExecutionStarted(
-        this.port.id,
+      this.announceExecutionStarted(
+        this.port.dashboardSink,
         fileName,
         startup.totalSteps,
         skippedPrefix > 0 ? true : undefined,
@@ -1020,8 +1022,8 @@ export class WorkflowStartupPipeline {
       Log.debug(
         `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${continuationPreserveStepCount}, totalSteps=${startup.totalSteps}, reusesRunningTerminal=${reusesRunningTerminal}`
       );
-      this.port.dashboardSink.updateExecutionStarted(
-        this.port.id,
+      this.announceExecutionStarted(
+        this.port.dashboardSink,
         fileName,
         startup.totalSteps,
         true,
@@ -1301,6 +1303,38 @@ export class WorkflowStartupPipeline {
       `Can't start — "${ownerName}" is still holding the lease on ${target} ` +
       `(started ${ageLabel} ago). Close its live harness session or wait ` +
       `for it to finish, then run this workflow again.`
+    );
+  }
+
+  /**
+   * Send EXECUTION_STARTED. On a fresh start (not a continuation, not reusing
+   * a live terminal) every client drops the workflow's AI terminal tabs, so
+   * the extension forgets them too — otherwise a client that reconnects later
+   * would have the previous run's terminals replayed back to it.
+   */
+  private announceExecutionStarted(
+    sink: IDashboardSink,
+    fileName: string,
+    totalSteps: number,
+    isContinuation?: boolean,
+    preserveStepCount?: number,
+    reusesRunningTerminal?: boolean,
+    executionMode?: ExecutionMode
+  ): void {
+    if (!isContinuation && !reusesRunningTerminal) {
+      getPtyProcessManager()?.forgetWorkflowTabs(
+        this.port.id,
+        SESSION_KINDS.AI_CLI
+      );
+    }
+    sink.updateExecutionStarted(
+      this.port.id,
+      fileName,
+      totalSteps,
+      isContinuation,
+      preserveStepCount,
+      reusesRunningTerminal,
+      executionMode
     );
   }
 

@@ -102,8 +102,9 @@ Set [`execution.inlineGeneratedPromptOnStdin`](/reference/settings#execution-inl
 to `false` to use categorized temporary files and references instead.
 
 Workspace `@file` references remain paths for Claude to read on demand; stream-json messages do not
-expand them into the first message. Headless steps also wait for Claude's pending background tasks
-and resumed follow-up turn to finish before they complete, subject to the prompt timeout.
+expand them into the first message. A headless step ends when Claude ends its turn: background tasks
+still running then are stopped with the process, and the step's output notes them. Run long commands
+in the foreground in headless steps.
 
 While a headless Claude step is running with its control channel open, **Send Steer Message**
 injects text into the current turn, even while Claude is using a tool. The editor's prompt-property

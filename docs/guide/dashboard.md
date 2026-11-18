@@ -92,7 +92,8 @@ workflow you're viewing.
 - **Stop** ends the current step immediately and stops the workflow.
 
 Right-click (or long-press) the first button for a [Dry Run](/guide/dry-run) of
-the whole workflow.
+the whole workflow. To end one running step without stopping the workflow, use
+**End Step Early** on that step's [menu](#step-menu).
 
 If a run belongs to the CLI or to another VS Code window, the dashboard shows it
 read-only with a lock banner. Its Stop button still works: it stops the run in
@@ -144,12 +145,11 @@ The arrow beside **Run** opens more ways to send the prompt:
 
 ![The Run menu open in the prompt editor footer during an interactive step, showing Send Steer Message, Run in Parallel and Run in New Workflow](/screenshots/run-menu-steer-1125x231.png)
 
-| Option                  | What it does                                                                                                                                                                                                                                                                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Send Steer Message**  | Sends text to the live session for a running step without adding a queue step. Available for the rail-active interactive AI-CLI PTY and open headless Claude, Qwen, or Copilot CLI 1.0.112+ channels; Claude receives it in the current turn, while Qwen and Copilot queue it after the current prompt. Step overrides are ignored. |
-| **Interrupt Turn**      | Ends the current turn on an open headless Claude or Qwen channel without stopping the workflow. The step finishes with the output collected so far, and its session remains available to resume later.                                                                                                                              |
-| **Run in Parallel**     | Starts the prompt beside the running step as a [parallel group](/workflows/parallel-steps). Its prior context resolves from before that step. Needs a running step, and `queue.maxParallelSteps` of 2 or more.                                                                                                                      |
-| **Run in New Workflow** | Starts a separate workflow with default settings and just this prompt.                                                                                                                                                                                                                                                              |
+| Option                  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Send Steer Message**  | Sends text to the live session for a running step without adding a queue step. Available for open interactive AI-CLI terminals (including a finished step's terminal that is still open) and for running headless steps on every harness (Copilot CLI 1.0.112+ outside `auto` mode, OpenCode 2.3.0+). Claude, Codex and OpenCode receive it in the current turn; Qwen, Antigravity and Copilot queue it after the current turn. Step overrides are ignored. With several live sessions, for example in a parallel group, the menu lists one **Steer Step N · Harness** item per session instead; **(after turn)** marks a queued delivery and **(finished)** a finished step's terminal. |
+| **Run in Parallel**     | Starts the prompt beside the running step as a [parallel group](/workflows/parallel-steps). Its prior context resolves from before that step. Needs a running step, and `queue.maxParallelSteps` of 2 or more.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Run in New Workflow** | Starts a separate workflow with default settings and just this prompt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 Hover a disabled option to see why it's unavailable.
 
@@ -195,6 +195,8 @@ Right-click a step (or long-press it on a touch screen) for:
 | **Copy Prompt** / **Copy Script**                                                  | Copies just the prompt text or script.                                                                                                                                                                           |
 | **Copy Response**, **Copy Transcript**, **Copy Metadata**                          | Copies the assistant's text, the complete step transcript (thinking, tool calls, diffs and terminal output), or the step's resolved execution properties (harness, model, agent, skills, MCP servers and so on). |
 | **Reply to Step**                                                                  | Starts a new prompt that resumes this step's session.                                                                                                                                                            |
+| **Send Steer to Step**                                                             | Sends the prompt editor's text as a [steer message](#the-run-menu) to this step's live session. Shown on a running step, and on a finished step whose terminal is still open.                                    |
+| **End Step Early**                                                                 | On a running headless Claude Code, Codex or Qwen step: ends its current turn, keeps the output so far, marks the step succeeded and continues the workflow. Its session stays available to resume later.         |
 | **Hide output**, **Show only this step's output**                                  | Filters the output pane.                                                                                                                                                                                         |
 | **Dry Run Step**                                                                   | Previews just this step.                                                                                                                                                                                         |
 | **Paste Step**                                                                     | Inserts a copied step after this one.                                                                                                                                                                            |
@@ -206,6 +208,10 @@ Right-click a step (or long-press it on a touch screen) for:
 
 With several steps selected, the last items become **Enable N steps**,
 **Disable N steps** and **Delete N steps**.
+
+The final step's menu also has **Send Steer to Step** and **End Step Early**.
+They act on the pass that is running, or on the latest pass whose terminal is
+still open.
 
 ## The workflow menu {#the-workflow-menu}
 

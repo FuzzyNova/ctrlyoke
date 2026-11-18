@@ -633,7 +633,10 @@ export class PromptFileLoader {
       const needsAllowed = base.allowedTools === undefined;
       const needsDenied = base.deniedTools === undefined;
       if (needsMode || needsAllowed || needsDenied) {
+        // Spread the authored object first so sub-fields this seeding does
+        // not fill in (headlessApprovals, headlessApprovalTimeoutSec) survive.
         defaults.toolPermissions = {
+          ...base,
           mode: needsMode
             ? ConfigurationUtils.getCliToolPermissions()
             : base.mode,

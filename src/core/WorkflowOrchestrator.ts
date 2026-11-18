@@ -127,6 +127,7 @@ import { HarnessUsageService } from "./harness/shared/usage/HarnessUsageService"
 import { WorkspaceStatsService } from "./harness/shared/usage/WorkspaceStatsService";
 import type { WorkspaceStatsSnapshot } from "../types/UsageTypes";
 import {
+  buildTerminalOpenTabsMessage,
   buildTerminalStartedMessage,
   claimTerminalsOnReplay,
   getPtyProcessManager,
@@ -1131,6 +1132,9 @@ export class WorkflowOrchestrator {
             asReplacement: true,
           })
         );
+        // The addressed branch replays these through RunViewPublisher.
+        instance.replayOpenHeadlessControlTargets(send);
+        instance.replayPendingHeadlessApprovals(send);
       }
       // Replay against the instance the client ended up bound to: the lineage
       // bind can move it to the lineage's executing owner.
@@ -1141,7 +1145,6 @@ export class WorkflowOrchestrator {
           clientId
         );
       }
-      instance.replayPendingHeadlessApprovals(send);
       return;
     }
 
@@ -1176,18 +1179,20 @@ export class WorkflowOrchestrator {
     const ptyManager = getPtyProcessManager();
     if (!ptyManager) return;
 
-    const sessionsForWorkflow = ptyManager.getSessionsForWorkflow(workflowId);
+    // Every open tab, including ended ones nobody has closed, so this client
+    // shows exactly the tabs every other client shows.
+    const tabs = ptyManager.getTabsForWorkflow(workflowId);
     Log.debug(
       `[replayTerminalSessionsTo] terminal replay for inst:${workflowId.slice(0, 8)} — ` +
-        `found ${sessionsForWorkflow.length} PTY session(s): ` +
-        `[${sessionsForWorkflow.map((s) => `${s.id.slice(0, 8)}(status=${s.status},kind=${s.kind})`).join(", ") || "none"}]`
+        `found ${tabs.length} terminal tab(s): ` +
+        `[${tabs.map((s) => `${s.id.slice(0, 8)}(status=${s.status},kind=${s.kind})`).join(", ") || "none"}]`
     );
     // Give this client the unowned sessions, plus every session when it is the
     // controller that disconnected and the current holder only auto-claimed them
     // and never used them. Runs before TERMINAL_STARTED so it names the right
     // controller, and updates workflowRunControllers so later steps inherit it.
     claimTerminalsOnReplay(ptyManager, workflowId, clientId);
-    for (const session of sessionsForWorkflow) {
+    for (const session of tabs) {
       Log.debug(
         `[replayTerminalSessionsTo] sending TERMINAL_STARTED for session ${session.id.slice(0, 8)} ` +
           `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +
@@ -1213,6 +1218,9 @@ export class WorkflowOrchestrator {
         });
       }
     }
+    // Drop any tab this client still shows that was closed while its socket
+    // was down — a TERMINAL_REMOVED broadcast during the outage is lost.
+    send(buildTerminalOpenTabsMessage(tabs, workflowId));
   }
 
   /**

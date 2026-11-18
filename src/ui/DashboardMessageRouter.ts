@@ -3686,12 +3686,12 @@ export class DashboardMessageRouter {
       this.terminalHandlers.handleRestartShell(message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_SHELL, (message) => {
-      this.terminalHandlers.handleCloseShell(message);
+    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_SHELL, async (message) => {
+      await this.terminalHandlers.handleCloseTab(message);
     });
 
     table.set(MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI, async (message) => {
-      await this.terminalHandlers.handleCloseAiCli(message);
+      await this.terminalHandlers.handleCloseTab(message);
     });
 
     table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, (message, ctx) => {

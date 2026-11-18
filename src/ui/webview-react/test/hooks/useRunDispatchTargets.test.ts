@@ -146,28 +146,6 @@ describe("useRunDispatchTargets", () => {
     }
   );
 
-  it("enables Interrupt Turn only for an open headless target that advertises support", () => {
-    setRunningState([2]);
-    useTerminalStore.getState().updateHeadlessControlTarget({
-      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
-      workflowId: "workflow-1",
-      controlSessionId: "control-1",
-      stepIndex: 2,
-      harnessId: HARNESS_IDS.CLAUDE_CLI,
-      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
-      canInterruptTurn: true,
-      isOpen: true,
-    });
-
-    const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
-
-    expect(result.current.interruptTurn).toEqual({
-      enabled: true,
-      title:
-        "Interrupts the current turn on the live Claude Code headless session (step 3) without stopping the session.",
-    });
-  });
-
   it("reports pausing before other running-state reasons", () => {
     useWorkflowStore.setState({
       executionState: EXECUTION_STATES.PAUSING,
@@ -214,16 +192,20 @@ describe("useRunDispatchTargets", () => {
     expect(result.current.newWorkflow.enabled).toBe(true);
   });
 
-  it("enables steer only for the live rail-selected AI session", () => {
+  it("offers one Send Steer Message for a single live PTY", () => {
     setActiveAiCliSession();
 
     const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
 
-    expect(result.current.steer).toEqual({
-      enabled: true,
-      title:
-        "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
-    });
+    expect(result.current.steer).toEqual([
+      {
+        label: "Send Steer Message",
+        sessionId: "session-1",
+        enabled: true,
+        title:
+          "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
+      },
+    ]);
   });
 
   it.each([
@@ -263,38 +245,78 @@ describe("useRunDispatchTargets", () => {
 
       const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
 
-      expect(result.current.steer).toEqual({ enabled: true, title });
+      expect(result.current.steer).toEqual([
+        {
+          label: "Send Steer Message",
+          sessionId: "control-1",
+          enabled: true,
+          title,
+        },
+      ]);
     }
   );
 
+  it("lists every destination, executing steps first, regardless of rail selection", () => {
+    setRunningState([1, 2]);
+    // A retained interactive terminal from finished step 1, selected in the rail.
+    setActiveAiCliSession({ stepIndex: 0 });
+    for (const [controlSessionId, stepIndex, harnessId, steerDelivery] of [
+      ["control-3", 2, HARNESS_IDS.QWEN_CLI, HEADLESS_STEER_DELIVERIES.QUEUE],
+      [
+        "control-2",
+        1,
+        HARNESS_IDS.CLAUDE_CLI,
+        HEADLESS_STEER_DELIVERIES.INJECT,
+      ],
+    ] as const) {
+      useTerminalStore.getState().updateHeadlessControlTarget({
+        type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+        workflowId: "workflow-1",
+        controlSessionId,
+        stepIndex,
+        harnessId,
+        steerDelivery,
+        isOpen: true,
+      });
+    }
+
+    const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
+
+    expect(
+      result.current.steer.map(({ label, sessionId }) => ({ label, sessionId }))
+    ).toEqual([
+      { label: "Steer Step 2 · Claude Code", sessionId: "control-2" },
+      {
+        label: "Steer Step 3 · Qwen Code (after turn)",
+        sessionId: "control-3",
+      },
+      { label: "Steer Step 1 · Codex (finished)", sessionId: "session-1" },
+    ]);
+    expect(result.current.steer.every((target) => target.enabled)).toBe(true);
+  });
+
   it.each([
-    [
-      "without a live session",
-      undefined,
-      "No live harness session for this workflow",
-    ],
-    [
-      "with a shell session",
-      { kind: SESSION_KINDS.SHELL },
-      "No live harness session for this workflow",
-    ],
+    ["without a live session", undefined],
+    ["with a shell session", { kind: SESSION_KINDS.SHELL }],
     [
       "with a non-running session",
       { status: TERMINAL_SESSION_STATUS.COMPLETED as never },
-      "No live harness session for this workflow",
     ],
-  ] as const)("disables steer %s", (_label, session, reason) => {
+  ] as const)("disables steer %s", (_label, session) => {
     if (session) {
       setActiveAiCliSession(session);
     }
 
     const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
 
-    expect(result.current.steer).toMatchObject({
-      enabled: false,
-      disabledReason: reason,
-      title: reason,
-    });
+    expect(result.current.steer).toEqual([
+      {
+        label: "Send Steer Message",
+        enabled: false,
+        disabledReason: "No live harness session for this workflow",
+        title: "No live harness session for this workflow",
+      },
+    ]);
   });
 
   it.each([
@@ -315,11 +337,15 @@ describe("useRunDispatchTargets", () => {
 
     const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
 
-    expect(result.current.steer).toMatchObject({
-      enabled: false,
-      disabledReason: reason,
-      title: reason,
-    });
+    expect(result.current.steer).toEqual([
+      {
+        label: "Send Steer Message",
+        sessionId: "session-1",
+        enabled: false,
+        disabledReason: reason,
+        title: reason,
+      },
+    ]);
   });
 
   it("disables steer for external runs", () => {
@@ -330,7 +356,7 @@ describe("useRunDispatchTargets", () => {
 
     const { result } = renderHook(() => useRunDispatchTargets("workflow-1"));
 
-    expect(result.current.steer).toMatchObject({
+    expect(result.current.steer[0]).toMatchObject({
       enabled: false,
       disabledReason: "Read-only — external run",
       title: "Read-only — external run",

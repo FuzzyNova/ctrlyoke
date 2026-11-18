@@ -95,10 +95,11 @@ its per-run assisted flag is unsupported there. A global
 interactive Custom steps, where the allowed-tools list no longer limits what
 the judge may approve. Use `/permissions assisted` for the current session
 when you want Copilot Auto interactively, rather than setting that global
-default. Copilot's judge also often refuses commands the step's prompt asks
-for, because ctrlyoke passes the prompt as a file reference and the judge does
-not count the file's contents as your request. Until that is fixed, put
-commands a Copilot Auto step must run in its allow list.
+default. Copilot's judge approves only what your own message asks for, so
+ctrlyoke sends the step's prompt inline on stdin. If you turn that off with
+`execution.inlineGeneratedPromptOnStdin: false`, the judge sees only a file
+reference and often refuses commands the prompt asks for; put commands a
+Copilot Auto step must run in its allow list in that case.
 
 #### Using a harness's Auto mode on ctrlyoke 0.7.1 or earlier
 
@@ -340,14 +341,14 @@ attaches, which it receives as that server's `disabled_tools`. It can't enforce
 an entry for a server configured only in Codex's own `config.toml`, a wildcard
 tool name, or a shell pattern.
 
-| Harness                                   | `dangerouslyAllowAll`                   | `allowAll`                          | `auto`                                                                                  | `custom`                                                    |
-| ----------------------------------------- | --------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                | `--allow-all-tools` plus deny rules | Headless: `--assisted-approval` plus allow/deny rules; interactive falls back to Custom | allow/deny rules                                            |
-| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`        | `bypassPermissions` plus deny rules | `--permission-mode auto` plus allow/deny rules; eligible models only                    | Headless `dontAsk`; interactive `default`; allow/deny rules |
+| Harness                                   | `dangerouslyAllowAll`                   | `allowAll`                                           | `auto`                                                                                  | `custom`                                                                 |
+| ----------------------------------------- | --------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                | `--allow-all-tools` plus deny rules                  | Headless: `--assisted-approval` plus allow/deny rules; interactive falls back to Custom | allow/deny rules                                                         |
+| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`        | `bypassPermissions` plus deny rules                  | `--permission-mode auto` plus allow/deny rules; eligible models only                    | Headless `dontAsk`; interactive `default`; allow/deny rules              |
 | [Codex](/harnesses/codex-cli)             | `-a never`                              | `-a on-request` plus MCP deny rules; manual reviewer | auto reviewer plus `on-request`; may approve sandbox escalation                         | `-a on-request` plus MCP deny rules; manual reviewer; allow list ignored |
-| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode defaults) | allow everything plus deny rules    | Unsupported; falls back to Custom                                                       | ask, allow list, deny list                                  |
-| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                    | `auto-edit` plus deny rules         | `--approval-mode auto` plus allow/deny rules                                            | `default` plus allow/deny rules                             |
-| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`        | `always-proceed` plus deny rules    | settings `agentMode: auto` plus allow/deny rules                                        | settings allow/deny rules                                   |
+| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode defaults) | allow everything plus deny rules                     | Unsupported; falls back to Custom                                                       | ask, allow list, deny list                                               |
+| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                    | `auto-edit` plus deny rules                          | `--approval-mode auto` plus allow/deny rules                                            | `default` plus allow/deny rules                                          |
+| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`        | `always-proceed` plus deny rules                     | settings `agentMode: auto` plus allow/deny rules                                        | settings allow/deny rules                                                |
 
 Antigravity command allow rules match the entire raw command line. A command
 chain containing an allowed command plus anything else is not allowed piecemeal.

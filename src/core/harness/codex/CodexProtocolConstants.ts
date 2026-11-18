@@ -55,6 +55,16 @@ export const CODEX_EXEC_ARGUMENTS = {
   CONFIG_OVERRIDE: "-c",
 } as const;
 
+/**
+ * `-c` overrides for Codex's `approvals_reviewer`. Codex serializes the
+ * reviewer as `user` (manual, its default) or `auto_review`. Non-`auto` modes
+ * pin `user` so a user-level `auto_review` cannot judge their escalations.
+ */
+export const CODEX_APPROVALS_REVIEWER_OVERRIDES = {
+  MANUAL: "approvals_reviewer=user",
+  AUTO: "approvals_reviewer=auto_review",
+} as const;
+
 /** Wire-level values from Codex's response-item log protocol. */
 export const CODEX_EVENT_TYPES = {
   RESPONSE_ITEM: "response_item",

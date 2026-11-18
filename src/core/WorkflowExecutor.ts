@@ -4838,8 +4838,7 @@ export class WorkflowExecutor {
         outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY,
         retryScope: result.retryPromptDisposition.disposition,
         nextAttemptIndex: result.retryPromptDisposition.nextAttemptIndex,
-        nextErrorRetryCount:
-          result.retryPromptDisposition.nextErrorRetryCount,
+        nextErrorRetryCount: result.retryPromptDisposition.nextErrorRetryCount,
       };
     }
 
@@ -5380,8 +5379,7 @@ export class WorkflowExecutor {
         }
         if (!isPhaseRetryPolicy(resolvedProperties.errorBehavior)) {
           return {
-            disposition:
-              RETRY_PROMPT_SEND_DISPOSITIONS.RETRY_WHOLE_STEP,
+            disposition: RETRY_PROMPT_SEND_DISPOSITIONS.RETRY_WHOLE_STEP,
             nextAttemptIndex: sendAttemptIndex + 1,
             nextErrorRetryCount:
               failureDisposition.nextErrorRetryCount ??

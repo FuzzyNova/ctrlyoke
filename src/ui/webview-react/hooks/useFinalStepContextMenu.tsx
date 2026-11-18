@@ -8,7 +8,14 @@ import {
   getStepSessionDetails,
   type StepRuntimeMetaSnapshot,
 } from "@utils/stepMetadataClipboard";
+import { useSteerTargets } from "@hooks/useSteerTargets";
+import { useEditorStore } from "@store/editorStore";
 import {
+  findFinalStepSteerTarget,
+  getSteerDraftDisabledReason,
+} from "@utils/steerTargets";
+import {
+  buildLiveStepControlMenuItems,
   buildReplyToStepMenuItem,
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
@@ -58,6 +65,14 @@ export function useFinalStepContextMenu({
   phase,
 }: UseFinalStepContextMenuOptions) {
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
+  const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
+  const steerTargets = useSteerTargets(activeWorkflowId);
+  const isExternallyManaged = useUiStore((s) =>
+    s.loadedWorkflows.some(
+      (workflow) =>
+        workflow.id === s.activeWorkflowId && !!workflow.externalOwner
+    )
+  );
   const hiddenOutputTargets = useUiStore((s) => s.hiddenOutputTargets);
   const setOutputTargetsHidden = useUiStore((s) => s.setOutputTargetsHidden);
   const soloOutputTargets = useUiStore((s) => s.soloOutputTargets);
@@ -90,6 +105,10 @@ export function useFinalStepContextMenu({
   const openFinalStepContextMenu = useCallback(
     (x: number, y: number) => {
       const hasFinalStep = !!finalStep;
+      const isRunningFinalStep =
+        status === STEP_STATUS.RUNNING &&
+        phase === FINAL_STEP_PHASES.FINAL_STEP;
+      const finalTarget = findFinalStepSteerTarget(steerTargets);
       const copyItems = finalStep
         ? buildStepCopyMenuItems({
             step: finalStep,
@@ -97,9 +116,7 @@ export function useFinalStepContextMenu({
             latestOutput,
             latestPrompt: latestPrompt ?? currentLatestPrompt,
             runtimeMeta,
-            isCurrent:
-              status === STEP_STATUS.RUNNING &&
-              phase === FINAL_STEP_PHASES.FINAL_STEP,
+            isCurrent: isRunningFinalStep,
             liveContextWindow,
           })
         : [];
@@ -159,6 +176,18 @@ export function useFinalStepContextMenu({
                   ),
                   sourceLabel: "Final step",
                 }),
+                ...buildLiveStepControlMenuItems({
+                  workflowId: activeWorkflowId,
+                  stepIndex:
+                    finalTarget?.stepIndex ?? -(finalStepLoopCount + 1),
+                  isRunning: isRunningFinalStep,
+                  target: finalTarget,
+                  draftDisabledReason: getSteerDraftDisabledReason({
+                    ...useEditorStore.getState(),
+                    isExternallyManaged,
+                  }),
+                  isExternallyManaged,
+                }),
                 { type: "divider" as const },
               ]
             : []),
@@ -195,6 +224,9 @@ export function useFinalStepContextMenu({
       presentOutputTargetKeys,
       setOutputTargetsHidden,
       soloOutputTargets,
+      activeWorkflowId,
+      steerTargets,
+      isExternallyManaged,
     ]
   );
 

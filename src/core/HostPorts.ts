@@ -83,6 +83,16 @@ export interface DashboardHostActions {
   reloadHost?(): Promise<void>;
 }
 
+/**
+ * The host's own terminal font family, for dashboard terminals to match the
+ * editor's terminal. `get()` returns "" when the host has none configured;
+ * dashboard terminals then fall back to the editor font.
+ */
+export interface TerminalFontFamilySource {
+  get(): string;
+  onDidChange(listener: () => void): Disposable;
+}
+
 /** Controls the lifetime and access token of the hosted dashboard server. */
 export interface HostedServerControl {
   enable?(): Promise<void>;

@@ -34,7 +34,6 @@ suite("ClaudeHeadlessControlChannel", () => {
       parent_tool_use_id: null,
     });
     assert.strictEqual(channel.steerDelivery, HEADLESS_STEER_DELIVERIES.INJECT);
-    assert.strictEqual(channel.holdOpenForBackgroundWork, true);
     channel.close();
   });
 

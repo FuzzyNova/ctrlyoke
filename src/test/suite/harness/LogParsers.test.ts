@@ -2682,6 +2682,36 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
+    test("should clear pending background work from a headless stdout task_notification", () => {
+      // Shape captured from Claude Code 2.1.325 `-p --output-format
+      // stream-json`: stdout has no `<task-notification>` text, only this
+      // system record. It clears the launch without awaiting a resumed turn.
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_headless_bg",
+              name: "Bash",
+              input: { command: "node probe.js", run_in_background: true },
+            },
+          ],
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "system",
+        subtype: "task_notification",
+        task_id: "busi6rme3",
+        tool_use_id: "toolu_headless_bg",
+        status: "completed",
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
     test("should clear a stopped background task without waiting for a notification", () => {
       parser.trackBackgroundWorkState({
         type: "assistant",

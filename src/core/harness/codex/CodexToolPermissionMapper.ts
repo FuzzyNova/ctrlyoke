@@ -17,6 +17,7 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../utils/ToolPermissionUtils";
+import { CODEX_APPROVALS_REVIEWER_OVERRIDES } from "./CodexProtocolConstants";
 
 const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.129.0",
@@ -131,11 +132,11 @@ export class CodexToolPermissionMapper
       return isInteractive === false
         ? [
             "-c",
-            "approvals_reviewer=auto_review",
+            CODEX_APPROVALS_REVIEWER_OVERRIDES.AUTO,
             "-c",
             "approval_policy=on-request",
           ]
-        : ["-a", "on-request", "-c", "approvals_reviewer=auto_review"];
+        : ["-a", "on-request", "-c", CODEX_APPROVALS_REVIEWER_OVERRIDES.AUTO];
     }
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
@@ -143,8 +144,13 @@ export class CodexToolPermissionMapper
       case PERMISSION_MODES.ALLOW_ALL:
       case PERMISSION_MODES.CUSTOM:
         return isInteractive === false
-          ? ["-c", "approvals_reviewer=user"]
-          : ["-a", "on-request", "-c", "approvals_reviewer=user"];
+          ? ["-c", CODEX_APPROVALS_REVIEWER_OVERRIDES.MANUAL]
+          : [
+              "-a",
+              "on-request",
+              "-c",
+              CODEX_APPROVALS_REVIEWER_OVERRIDES.MANUAL,
+            ];
       default:
         return [];
     }

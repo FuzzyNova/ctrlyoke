@@ -104,9 +104,8 @@ widening permissions.
   `can_use_tool` request that nevertheless appears with ctrlyoke's deny response.
 - A background Agent emitted `system.task_notification` after the first `result` while stdin
   remained open, followed by its resumed user/assistant turn and another `result`. Stage 2a
-  reproduced this without `initialize` too, matching its production launch. It holds channel
-  closure while `ClaudeLogParser` reports pending background work, bounded by the configured
-  prompt timeout.
+  reproduced this without `initialize` too, matching its production launch. Stage 2a held
+  channel closure for this; that hold was removed on 2026-11-17 (see Decisions).
 
 ### Qwen Code
 
@@ -467,9 +466,9 @@ Qwen failure left is skill-mode commit generation, filed as
 Move Claude headless onto stream-json stdin,
 send the first prompt as a `user` message, and inline generated sections because the
 `@path` probe showed they are not expanded. Do not initialize host permission prompting:
-custom stays `dontAsk`, and any `can_use_tool` request is answered with deny. When the
-parser reports pending background work after `result`, hold stdin open until it clears or
-the prompt timeout expires. `npm run test:harness -- --grep "claude-cli"` passed (20 tests),
+custom stays `dontAsk`, and any `can_use_tool` request is answered with deny. (Stage 2a also
+held stdin open after `result` while the parser reported background work; removed on
+2026-11-17, see Decisions.) `npm run test:harness -- --grep "claude-cli"` passed (20 tests),
 including headless image input and resume.
 
 ### Stage 2b [Done]: headless steer dispatch for Claude (inject) and Qwen (queue)
@@ -709,8 +708,13 @@ questions.
 
 - **Claude background tasks after `result` (Stage 2a, probed 2026-11-16).** The probe confirmed
   task-notification turns arrive after the first `result` while stdin is open, including without
-  `initialize`. Stage 2a now holds channel closure while `ClaudeLogParser` reports pending work,
-  bounded by the prompt timeout.
+  `initialize`. Stage 2a held channel closure while the parser reported pending work, bounded by
+  the prompt timeout. **Reversed 2026-11-17:** a headless step ends at its turn boundary, as the
+  headless prompt note tells the model; background work is abandoned and recorded, not awaited.
+  The hold also hung finished steps: headless stdout reports completion as a
+  `system.task_notification` record, which the parser did not recognize, so a background Bash
+  launch stayed pending until the prompt timeout. Claude and Copilot ACP no longer hold, and the
+  parser now clears launches from that record so the abandoned-work note is accurate.
 - **Copilot ACP flags and the judge (Stage 6, probed 2026-11-16).** `--allow-tool`,
   `--deny-tool`, `--allow-all-tools`, and `--yolo` work under ACP. `--assisted-approval` is
   rejected, and ACP Autopilot is allow-all, not judge-based. Stage 6a uses ACP except for
@@ -742,3 +746,21 @@ questions.
   event/output) because the user ended the turn, not the workflow. The normal turn-end path closes
   stdin and lets the queue continue. Live harness cases interrupt the same 25-second Node sleep
   and both complete the step/workflow well before it ends (Claude 2.1.325, Qwen 0.27.4).
+- **End Step Early (decided 2026-11-17, Nathan; not yet built).** Keep the interrupt
+  capability, but rename the user-facing action from "Interrupt Turn" to **End Step Early**.
+  It does not leave the step waiting for input: the interrupted turn ends, the channel closes
+  unless a queued steer is outstanding, and the step completes as a successful partial step
+  while the queue continues. It is "this step is good enough, move on" for one step, which
+  Stop (halts the whole workflow and every parallel sibling) and Pause (lets the step finish)
+  do not offer. The TUI meaning of "interrupt" (stop and wait for me) is the opposite, so the
+  old name invited the wrong expectation. The action moves from the header Stop button's
+  context menu to the running step's context menu, which also makes the target unambiguous in
+  parallel groups. Plans:
+  [`parallel-headless-steer-always-targets-lowest-step.md`](../bugs/backlog/parallel-headless-steer-always-targets-lowest-step.md)
+  and
+  [`header-control-buttons-have-context-menus.md`](../bugs/backlog/header-control-buttons-have-context-menus.md).
+- **Steering a retained, finished step's terminal stays supported (decided 2026-11-17).**
+  It was designed in `STEER_MESSAGE_PLAN.md` ("between runs"), and it keeps follow-up
+  questions out of the saved workflow, unlike Reply to Step plus Run in Parallel. The send
+  menu lists every live destination, including idle retained terminals, instead of inferring
+  one; see the parallel-steer bug above.

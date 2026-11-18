@@ -78,7 +78,6 @@ import {
 import type { Writable } from "stream";
 import { APPROVAL_DECISIONS } from "../../../types/DashboardConstants";
 
-const HEADLESS_BACKGROUND_WORK_POLL_INTERVAL_MS = 100;
 const MAX_HEADLESS_APPROVAL_INPUT_SUMMARY_LENGTH = 2_000;
 
 function summarizeHeadlessApprovalInput(input: unknown): string {
@@ -216,11 +215,17 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   private activeHeadlessControlSessionId?: string;
   private activeHeadlessControlSend?: (text: string) => Promise<boolean>;
   private activeHeadlessControlInterrupt?: () => Promise<boolean>;
+  /** The open steer target last published to dashboards, for reconnect replay. */
+  private activeHeadlessControlTarget?: HeadlessControlTargetMessage;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
 
   getHeadlessControlSessionId(): string | undefined {
     return this.activeHeadlessControlSessionId;
+  }
+
+  getOpenHeadlessControlTarget(): HeadlessControlTargetMessage | undefined {
+    return this.activeHeadlessControlTarget;
   }
 
   sendHeadlessUserMessage(sessionId: string, text: string): Promise<boolean> {
@@ -582,8 +587,6 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let controlClosing = false;
       let controlClosePromise: Promise<void> | undefined;
       let controlOperations = Promise.resolve();
-      let controlCloseScheduled = false;
-      let promptDeadlineAt = 0;
       let publishedControlTarget = false;
       let controlTurnActive = false;
       let interruptedTurnCompleted = false;
@@ -684,6 +687,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             this.activeHeadlessControlSend = undefined;
             this.activeHeadlessControlInterrupt = undefined;
           }
+          if (
+            this.activeHeadlessControlTarget?.controlSessionId ===
+            controlSessionId
+          ) {
+            this.activeHeadlessControlTarget = undefined;
+          }
           if (targetBase && publishedControlTarget) {
             this.deps.hostCallbacks.onHeadlessControlTarget?.({
               type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
@@ -708,57 +717,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           });
       };
 
-      const hasPendingBackgroundWork = (): boolean =>
-        source?.parser.hasPendingBackgroundWork?.() === true;
-
+      // A headless step ends at its turn boundary. Background work the model
+      // left running is not awaited: closing stdin ends the process, and the
+      // response collector records any unfinished task as abandoned.
       const closeAfterTurnEnd = (): void => {
         if (hasOutstandingSteers()) return;
-        if (
-          !controlChannel?.holdOpenForBackgroundWork ||
-          !hasPendingBackgroundWork()
-        ) {
-          enqueueControlOperation(closeControlChannel);
-          return;
-        }
-        if (controlCloseScheduled) return;
-        controlCloseScheduled = true;
-
-        // Keep this wait outside the control queue so approvals can still
-        // be answered.
-        void (async () => {
-          try {
-            while (
-              !controlClosed &&
-              !this.deps.runtimeState.isCancelling() &&
-              Date.now() < promptDeadlineAt &&
-              hasPendingBackgroundWork()
-            ) {
-              const remainingMs = promptDeadlineAt - Date.now();
-              await new Promise<void>((resolve) =>
-                setTimeout(
-                  resolve,
-                  Math.min(
-                    HEADLESS_BACKGROUND_WORK_POLL_INTERVAL_MS,
-                    Math.max(0, remainingMs)
-                  )
-                )
-              );
-            }
-          } catch (error) {
-            Log.warn(
-              `[CliTransportCoordinator] Could not inspect pending headless background work: ${getErrorMessage(error)}`
-            );
-          }
-          if (
-            this.deps.runtimeState.isCancelling() ||
-            Date.now() >= promptDeadlineAt
-          ) {
-            enqueueControlOperation(closeControlChannel);
-            return;
-          }
-          controlCloseScheduled = false;
-          closeAfterTurnEnd();
-        })();
+        enqueueControlOperation(closeControlChannel);
       };
 
       const processControlObservations = (
@@ -989,10 +953,6 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       try {
         const promptTimeoutMs =
           ConfigurationUtils.getMaxPromptExecutionTimeMs();
-        promptDeadlineAt =
-          promptTimeoutMs === undefined
-            ? Number.POSITIVE_INFINITY
-            : Date.now() + promptTimeoutMs;
         result = await this.spawnProcess(spawnCommand.command, spawnArgs, {
           timeout: promptTimeoutMs,
           env: {
@@ -1077,11 +1037,15 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                       }
                     : undefined;
                   if (targetBase) {
-                    this.deps.hostCallbacks.onHeadlessControlTarget?.({
+                    const openTarget: HeadlessControlTargetMessage = {
                       type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
                       ...targetBase,
                       isOpen: true,
-                    });
+                    };
+                    this.activeHeadlessControlTarget = openTarget;
+                    this.deps.hostCallbacks.onHeadlessControlTarget?.(
+                      openTarget
+                    );
                     publishedControlTarget = true;
                   }
                 })().catch(async (error: unknown) => {
@@ -1282,6 +1246,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       ptySession.pty.kill();
     }
     if (options.removeTerminalTab) {
+      ptyManager?.forgetTab(sessionId);
       const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
       postMessage(
         buildTerminalRemovedMessage(ptySession.workflowId, sessionId)

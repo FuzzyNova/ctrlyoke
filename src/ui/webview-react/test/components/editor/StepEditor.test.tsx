@@ -949,15 +949,6 @@ describe("StepEditor — Send Steer Message", () => {
     );
   }
 
-  async function clickInterruptTurn() {
-    const user = userEvent.setup();
-    render(<StepEditor />);
-    const runButton = screen.getByRole("button", { name: "Run" });
-    runButton.focus();
-    await user.keyboard("{ArrowDown}");
-    await user.click(screen.getByRole("option", { name: "Interrupt Turn" }));
-  }
-
   it("posts the plain steer message and clears the draft", async () => {
     enableSteerDispatch();
     useEditorStore.getState().setPromptText("follow up immediately");
@@ -1004,28 +995,6 @@ describe("StepEditor — Send Steer Message", () => {
       workflowId: "workflow-1",
       sessionId: "control-1",
       text: "headless follow-up",
-    });
-  });
-
-  it("interrupts a capable headless target without requiring draft text", async () => {
-    useUiStore.setState({ activeWorkflowId: "workflow-1" });
-    useTerminalStore.getState().updateHeadlessControlTarget({
-      type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
-      workflowId: "workflow-1",
-      controlSessionId: "control-1",
-      stepIndex: 0,
-      harnessId: HARNESS_IDS.CLAUDE_CLI,
-      steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
-      canInterruptTurn: true,
-      isOpen: true,
-    });
-
-    await clickInterruptTurn();
-
-    expect(postMessageSpy).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
-      workflowId: "workflow-1",
-      sessionId: "control-1",
     });
   });
 

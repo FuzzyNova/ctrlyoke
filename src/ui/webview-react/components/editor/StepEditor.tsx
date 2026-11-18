@@ -17,7 +17,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
-import { useActiveSteerTarget } from "../../hooks/useActiveSteerTarget";
+import { sendEditorDraftAsSteer } from "../../utils/sendEditorSteer";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -231,7 +231,6 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   useSettingsStore(); // Keep store initialized for reactive updates
   const { globalSettings, workflowProperties } = useSettingsStore();
   const runDispatchTargets = useRunDispatchTargets(activeWorkflowId);
-  const activeSteerTarget = useActiveSteerTarget(activeWorkflowId);
 
   // ── Drawer tab state (lifted from PromptPropertiesDrawer for footer tab bar) ─────
   // Persisted in uiStore so reopening the drawer restores the last-viewed tab.
@@ -1023,58 +1022,17 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     executePrompt(ACTION_TYPES.RUN_PARALLEL);
   }, [executePrompt, runDispatchTargets.parallel.enabled]);
 
-  const sendSteerMessage = useCallback(() => {
-    if (
-      !runDispatchTargets.steer.enabled ||
-      !activeWorkflowId ||
-      !activeSteerTarget
-    ) {
-      return;
-    }
-
-    const text = promptText.trim();
-    if (!text) return;
-
-    lastSubmittedTextRef.current = text;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
-      workflowId: activeWorkflowId,
-      sessionId: activeSteerTarget.sessionId,
-      text,
-    });
-    resetEditor();
-    markClean();
-    vscode.setState(null);
-  }, [
-    activeSteerTarget,
-    activeWorkflowId,
-    markClean,
-    promptText,
-    resetEditor,
-    runDispatchTargets.steer.enabled,
-    vscode,
-  ]);
-
-  const interruptHeadlessTurn = useCallback(() => {
-    if (
-      !runDispatchTargets.interruptTurn.enabled ||
-      !activeWorkflowId ||
-      !activeSteerTarget
-    ) {
-      return;
-    }
-
-    vscode.postMessage({
-      type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
-      workflowId: activeWorkflowId,
-      sessionId: activeSteerTarget.sessionId,
-    });
-  }, [
-    activeSteerTarget,
-    activeWorkflowId,
-    runDispatchTargets.interruptTurn.enabled,
-    vscode,
-  ]);
+  const sendSteerMessage = useCallback(
+    (sessionId: string) => {
+      const destination = runDispatchTargets.steer.find(
+        (target) => target.sessionId === sessionId
+      );
+      if (!destination?.enabled || !activeWorkflowId) return;
+      lastSubmittedTextRef.current = promptText.trim();
+      sendEditorDraftAsSteer(activeWorkflowId, sessionId);
+    },
+    [activeWorkflowId, promptText, runDispatchTargets.steer]
+  );
 
   const runInNewWorkflow = useCallback(() => {
     const currentWorkflowId = useUiStore.getState().activeWorkflowId;
@@ -1683,11 +1641,9 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         onRunInParallel={runInParallel}
         onRunInNewWorkflow={runInNewWorkflow}
         onSendSteerMessage={sendSteerMessage}
-        onInterruptHeadlessTurn={interruptHeadlessTurn}
         runInParallelTarget={runDispatchTargets.parallel}
         newWorkflowTarget={runDispatchTargets.newWorkflow}
-        steerTarget={runDispatchTargets.steer}
-        interruptTurnTarget={runDispatchTargets.interruptTurn}
+        steerTargets={runDispatchTargets.steer}
         onQueue={() => executePrompt(ACTION_TYPES.QUEUE)}
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}

@@ -2,7 +2,11 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing a1f660730
 - **Area:** `src/core/WorkflowExecutor.ts` (`createSendRetryPromptCallback`)
-- **Resolution:** fixed in this commit
+- **Resolution:** 9fc9b1292, following the decision below. Under `retry` the callback
+  returns `RETRY_PROMPT_SEND_DISPOSITIONS.RETRY_WHOLE_STEP` and the outer step loop reruns
+  the pre-condition and original prompt in a fresh session; under `retryPhase` it re-sends
+  the retry prompt, resuming the session. `retryPhase` still uses the callback's own
+  error-retry loop, so the "remove the private loop" item is not done.
 
 ## Symptom
 
@@ -40,12 +44,19 @@ The new `retry`/`retryPhase` definitions don't account for it.
 
 ## Suggested Fix
 
-Decide which is intended:
+**Decided 2026-11-18 (Nathan): match the documented behavior.**
 
-- Under `retry`, return a disposition from the callback so the outer step loop
-  performs the documented whole-step retry (pre-condition, original prompt,
-  fresh session). Under `retryPhase`, re-send the retry prompt, preferably
-  resuming the session so the model keeps the task context.
-- Or document this case as an exception in the schema description and the
-  error-handling table, and reconsider sending the retry prompt in a fresh
-  session.
+- Under `retry`, `createSendRetryPromptCallback` stops retrying on its own and returns a
+  disposition (for example a typed "step error, retry whole step" result) so the outer
+  step loop performs the documented whole-step retry: pre-condition, original prompt,
+  fresh session, counted against `errorBehavior.maxRetries`.
+- Under `retryPhase`, re-send the retry prompt, resuming the session so the model keeps
+  the task context.
+- Remove the callback's private error-retry loop once both paths go through the shared
+  disposition, so there is one place that counts error retries.
+- Tests: the reproduction above asserts the pre-condition runs twice and the prompts are
+  `["step 1", <retry prompt>, "step 1"]` with `resumeSession` `[true, true, false]` under
+  `retry`, and that `retryPhase` re-sends the retry prompt with `resumeSession: true`.
+- If the end-condition retry count and the error retry count interact (a whole-step retry
+  restarting `endCondition.maxRetries`), state the rule in the schema description and
+  `docs/workflows/error-handling.md`. Record the change under **Changed** in `CHANGELOG.md`.

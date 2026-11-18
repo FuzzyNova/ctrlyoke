@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing 2bee7ffff and c1ee66dac
 - **Area:** `src/ui/webview-react/components/workflow/SchedulePanel.tsx`
-- **Severity:** low (low confidence; may be a design gap)
+- **Severity:** low
 
 ## Symptom
 
@@ -41,11 +41,21 @@ machine's time", so the preview arguably shows the result after saving.
 
 ## Suggested Fix
 
-When the schedule belongs to another host and has a `timeZone`, do one of
-these:
+**Decided 2026-11-18 (Nathan): edit in the owner's zone.**
 
-- convert its wall-clock values into this host's zone when loading the pickers;
-- say in the panel that it currently runs in `<zone>` and that saving
-  reinterprets the times in this machine's zone.
-
-Either way, preview an untouched schedule through `ownerScheduleCalendar`.
+- When the schedule has a recorded `timeZone`, `SchedulePanel` builds `pickerFor`,
+  validation and the "Next run" preview from that zone (the calendar
+  `ownerScheduleCalendar` already builds), not from `hostTimeZone`.
+- Saving on this host still takes ownership, but keeps the schedule's `timeZone`, so an
+  unedited save (for example ticking **Pause**) never moves a fire time and a valid Once
+  time never fails validation here.
+- Show the zone in the panel when it differs from this machine's ("Times are in
+  Asia/Tokyo"), with an explicit action to switch the schedule to this machine's zone.
+  Switching reinterprets the wall-clock values in the new zone; say so.
+- Change the cron hint from "in this machine's time" to name the schedule's zone.
+- Check what the runner uses at fire time: it must evaluate the schedule in its recorded
+  `timeZone`, not the runner's local zone, or keeping the zone on save is only cosmetic.
+- Update `docs/guide/dashboard.md` and record the change under **Changed** in
+  `CHANGELOG.md`. Vitest cases: unedited save from another zone keeps times and zone; a
+  Once time in this host's DST gap but valid in the owner's zone saves; the switch action
+  rewrites the zone.

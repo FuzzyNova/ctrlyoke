@@ -82,8 +82,7 @@ export type RetryPromptSendDisposition = {
 };
 
 export type SendRetryPromptResult =
-  | { attemptIndex: number }
-  | RetryPromptSendDisposition;
+  { attemptIndex: number } | RetryPromptSendDisposition;
 
 export type SendRetryPromptCallback = (
   retryPromptStep: PromptStep,

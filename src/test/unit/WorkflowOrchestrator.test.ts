@@ -883,6 +883,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         _sink: unknown,
         options?: { asReplacement?: boolean }
       ) => replayCalls.push(options),
+      replayOpenHeadlessControlTargets: () => {},
       replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
@@ -913,6 +914,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         sink.updateCliOutput(0, { text: "a" });
         sink.updateCliOutput(1, { text: "b" });
       },
+      replayOpenHeadlessControlTargets: () => {},
       replayPendingHeadlessApprovals: () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
@@ -1555,6 +1557,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       }),
       getExecutionRunRef: () => runRef,
       replayBufferedOutputTo: () => undefined,
+      replayOpenHeadlessControlTargets: () => undefined,
+      replayPendingHeadlessApprovals: () => undefined,
       getActiveStepIndices: () => [],
       getRunViewLiveState: () => ({
         executionState: EXECUTION_STATES.RUNNING,
@@ -2906,6 +2910,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayOpenHeadlessControlTargets: () => {},
           replayPendingHeadlessApprovals: () => {},
         },
       ],
@@ -2967,6 +2972,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("session-restored"),
+          replayOpenHeadlessControlTargets: () => {},
           replayPendingHeadlessApprovals: () => {},
         },
       ],
@@ -3031,6 +3037,13 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 
     assert.strictEqual(sent[0].type, MESSAGE_TYPES.TERMINAL_STARTED);
     assert.strictEqual(sent[0].shellKind, "bash");
+    // The replay closes with the live set, so a reconnecting client can end
+    // any session whose TERMINAL_ENDED it missed.
+    assert.deepStrictEqual(sent[sent.length - 1], {
+      type: MESSAGE_TYPES.TERMINAL_OPEN_TABS,
+      workflowId,
+      sessionIds: ["shell-session"],
+    });
   });
 
   test("loadRunSummariesForClient sends a request-correlated summary snapshot without binding a client view", async () => {
@@ -3117,6 +3130,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           replayFullStateTo: () => {
             sent.push({ type: MESSAGE_TYPES.SESSION_RESTORED });
           },
+          replayOpenHeadlessControlTargets: () => {},
           replayPendingHeadlessApprovals: () => {},
         },
       ],

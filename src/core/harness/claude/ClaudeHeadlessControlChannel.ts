@@ -18,7 +18,6 @@ import {
 
 /** Claude Code's stream-json input channel for one headless step. */
 export class ClaudeHeadlessControlChannel extends StreamJsonHeadlessControlChannel {
-  readonly holdOpenForBackgroundWork = true;
   private initializeRequestId?: string;
   private initializeResolve?: () => void;
   private initializeReject?: (error: Error) => void;

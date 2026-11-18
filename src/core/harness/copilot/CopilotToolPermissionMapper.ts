@@ -6,6 +6,7 @@ import {
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
+  INLINE_CONFIG_SUITE_REFERENCE,
   PERMISSION_CAVEAT_CODES,
   capabilitySuiteVerification,
   type PermissionCapabilityDescriptor,
@@ -23,13 +24,20 @@ const COPILOT_PERMISSION_VERIFICATION = capabilitySuiteVerification([
 // The published 1.0.3 binary lacks the flag; 1.0.4 first exposes it, and its
 // live headless allow/unlisted/deny probe passed from a scratch directory.
 const COPILOT_AUTO_MODE_MIN_VERSION = ">=1.0.4";
+// The judge approves only what the user's own message asks for. Headless
+// prompts carry the step text inline on stdin (not a `@prompt.md` reference),
+// and the live unlisted-command case first passed that way on 1.0.112.
+const COPILOT_AUTO_MODE_VERIFIED_VERSION = ">=1.0.112";
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   autoMode: {
     fidelity: "exact",
     mechanism: "native",
     autoModeMinimumVersion: COPILOT_AUTO_MODE_MIN_VERSION,
-    verification: capabilitySuiteVerification([COPILOT_AUTO_MODE_MIN_VERSION]),
+    verification: capabilitySuiteVerification(
+      [COPILOT_AUTO_MODE_VERIFIED_VERSION],
+      INLINE_CONFIG_SUITE_REFERENCE
+    ),
     modeOverrides: {
       interactive: {
         fidelity: "unsupported",

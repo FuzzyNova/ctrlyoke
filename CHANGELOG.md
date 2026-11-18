@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - A harness error while sending an end-condition retry prompt now follows `errorBehavior`: `retry` restarts the whole step from its pre-condition in a fresh session, while `retryPhase` retries the prompt in its existing session when available.
+- Dashboard terminals now use VS Code's terminal font (`terminal.integrated.fontFamily`), falling back to the editor font when that setting is empty, as VS Code's own terminal does. Browsers connected to the ctrlyoke server get the same font. The size still comes from ctrlyoke's `terminal.fontSize` setting.
+- Every device showing a workflow, such as VS Code and a browser, now shows the same terminal tabs. Closing a terminal on any device closes it on all of them; before, the other devices kept it open as an ended terminal. An ended terminal stays open on every device until someone closes it, and a device that opens the workflow later gets the ended terminals too, with their recent output.
 - Headless Copilot CLI 1.0.112 and later now uses ACP for queued steering and dashboard tool approvals. `auto` permission mode stays on Copilot's existing assisted-approval path.
 - Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
 - Headless Codex 0.146.0 and later now runs through `codex app-server` JSON-RPC, while older versions keep using `codex exec`. The rollout log remains the source of headless Codex output.
-- Claude headless steps wait for tracked background tasks to finish before ending the step.
+- With more than one live harness session, such as in a parallel group, the Run menu lists one **Steer Step N** item per session instead of a single **Send Steer Message** that went to the session selected in the terminal rail, so every running step can be steered.
+- A headless step ends when its turn ends, even if the model left background tasks running. Ending the turn closes the harness process, which stops those tasks, and the step's output notes any task that had not finished.
 - In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Added
@@ -22,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Headless Codex command, file-change and additional-permission approvals now follow `toolPermissions.headlessApprovals`; **Deny** remains the default, and **Ask** routes requests to the dashboard.
 - Headless OpenCode 2.3.0+ steps can route one-shot tool approvals to the dashboard and inject **Send Steer Message** into the active turn. OpenCode 1 and earlier OpenCode 2 versions keep auto-rejecting headless approval requests.
 - Send Steer Message now works during headless Claude Code, Codex CLI, Qwen Code and Antigravity steps: Claude and Codex receive the message in their current turns, while Qwen and Antigravity queue it after their current turns.
-- Interrupt Turn ends a headless Claude, Codex or Qwen turn while preserving the partial output and completing the step without stopping the workflow.
+- **End Step Early**, on a running step's menu or the final step's menu, ends a headless Claude, Codex or Qwen step's current turn while preserving the partial output and completing the step without stopping the workflow.
+- **Send Steer to Step**, on a step's menu or the final step's menu, sends the prompt editor's text as a steer message to that step's live session.
 - Codex headless approval requests use the configured timeout directly because app-server has no client-side timeout. Optional denial messages remain in the dashboard approval card because Codex's approval responses cannot carry them to the model.
 - The `workflow_status` MCP tool lists the workflow's condition presets under `metadata.conditionPresets`, with each preset's name, script preview, required params and retry limit. Before this, an orchestrator agent had no way to see which presets it could attach, and could queue steps without the `committed` gate a loop template declares. `append_step` now warns when it adds a sequential step with no end condition while the workflow declares presets, and its unknown-preset error lists each preset's params.
 - The workflow properties panel shows whole-value variable placeholders as read-only chips with their current value and a Clear action. Model, agent and skill dropdown validation leaves unresolved placeholders alone, and step names resolve from the workflow's vars in the run view.
@@ -56,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dashboard terminals that are already open now switch to a new VS Code color theme or editor font when you change it, instead of keeping the old one until a new terminal opens.
+- In VS Code 1.147 and later, dashboard terminals no longer draw tiny, widely spaced text without bold. A Chromium change in that release made the terminal's GPU renderer fall back to a 10px sans-serif font.
+- A dashboard that reconnects, such as a browser tab returning from the background, no longer shows terminals as running after they ended while it was disconnected, or keeps terminals that were closed meanwhile. Ended terminals now show as ended and stop accepting input, and closed ones disappear.
+- A shell terminal that ends now shows the same "Process closed" banner as an AI terminal, and a terminal in the collapsed rail is dimmed once it ends.
 - Qwen Code headless steps no longer hang when an unlisted tool needs approval. They now start stream-json SDK mode with `initialize`, send the prompt over stdin, and deny approval requests with an explanation.
 - Qwen Code subagent output no longer stops early. ctrlyoke sometimes stopped reading a subagent at the record holding its reasoning, just before its tool call, so the subagent's commands and later output were missing from the step. It now waits for Qwen to mark the subagent finished.
 - The dashboard no longer runs out of memory and turns gray when a long run streams output while its panel is hidden or its window is covered, minimized or on a sleeping display. Before, every VS Code window showing ctrlyoke went gray at once and stayed that way until reloaded.

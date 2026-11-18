@@ -596,11 +596,13 @@ export const Header: React.FC<{
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               : `${HIDDEN_UNTIL_FITS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
-          onClick={
-            isExternallyManaged
-              ? handleStopExternallyManagedRun
-              : () => handleSlotAction(slot3.action)
-          }
+          onClick={() => {
+            if (isExternallyManaged) {
+              handleStopExternallyManagedRun();
+            } else {
+              handleSlotAction(slot3.action);
+            }
+          }}
           disabled={
             (!slot3.enabled && !isExternallyManaged) || isLineageReadOnly
           }

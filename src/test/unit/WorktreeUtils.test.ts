@@ -23,12 +23,15 @@ import {
 } from "../../utils/WorktreeUtils";
 import { listWorktrees, gitCommonDir } from "../../utils/GitUtils";
 import type { GitWorktreeEntry } from "../../utils/GitUtils";
-import { removeTempDir } from "../helpers/tempWorkspace";
 
 suite("WorktreeUtils", function () {
   const temporaryDirectories: string[] = [];
-  teardown(() => {
-    temporaryDirectories.splice(0).forEach((directory) => removeTempDir(directory));
+  teardown(async () => {
+    await Promise.all(
+      temporaryDirectories
+        .splice(0)
+        .map((directory) => fs.rm(directory, { recursive: true, force: true }))
+    );
   });
 
   async function makeDirectory(name: string): Promise<string> {

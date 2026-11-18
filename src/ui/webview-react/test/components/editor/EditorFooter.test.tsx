@@ -4,7 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { EditorFooter } from "@components/editor/EditorFooter";
 import { useEditorStore } from "@store/editorStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
-import type { RunDispatchTarget } from "@hooks/useRunDispatchTargets";
+import type {
+  RunDispatchTarget,
+  SteerDispatchTarget,
+} from "@hooks/useRunDispatchTargets";
 
 const layout = vi.hoisted(() => ({ medium: false, small: false }));
 
@@ -51,7 +54,6 @@ const defaultProps: React.ComponentProps<typeof EditorFooter> = {
   onRunInParallel: vi.fn(),
   onRunInNewWorkflow: vi.fn(),
   onSendSteerMessage: vi.fn(),
-  onInterruptHeadlessTurn: vi.fn(),
   runInParallelTarget: {
     enabled: false,
     disabledReason: "No step is running",
@@ -61,16 +63,14 @@ const defaultProps: React.ComponentProps<typeof EditorFooter> = {
     enabled: true,
     title: "Starts a separate workflow with default settings and this prompt",
   } satisfies RunDispatchTarget,
-  steerTarget: {
-    enabled: false,
-    disabledReason: "No live harness session for this workflow",
-    title: "No live harness session for this workflow",
-  } satisfies RunDispatchTarget,
-  interruptTurnTarget: {
-    enabled: false,
-    disabledReason: "No live headless turn supports interruption",
-    title: "No live headless turn supports interruption",
-  } satisfies RunDispatchTarget,
+  steerTargets: [
+    {
+      label: "Send Steer Message",
+      enabled: false,
+      disabledReason: "No live harness session for this workflow",
+      title: "No live harness session for this workflow",
+    },
+  ] satisfies SteerDispatchTarget[],
   onQueue: vi.fn(),
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
@@ -104,20 +104,12 @@ describe("EditorFooter run menu", () => {
 
     expect(
       screen.getAllByRole("option").map((option) => option.textContent)
-    ).toEqual([
-      "Send Steer Message",
-      "Interrupt Turn",
-      "Run in Parallel",
-      "Run in New Workflow",
-    ]);
+    ).toEqual(["Send Steer Message", "Run in Parallel", "Run in New Workflow"]);
     expect(
       screen.getByRole("option", { name: "Send Steer Message" })
     ).toBeDisabled();
     expect(
       screen.getByRole("option", { name: "Run in Parallel" })
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("option", { name: "Interrupt Turn" })
     ).toBeDisabled();
     expect(
       screen.getByRole("option", { name: "Send Steer Message" })
@@ -179,11 +171,15 @@ describe("EditorFooter run menu", () => {
   it("enables steer with its target tooltip and fires the callback", async () => {
     const user = userEvent.setup();
     renderFooter({
-      steerTarget: {
-        enabled: true,
-        title:
-          "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
-      },
+      steerTargets: [
+        {
+          label: "Send Steer Message",
+          sessionId: "session-3",
+          enabled: true,
+          title:
+            "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
+        },
+      ],
     });
 
     await user.click(screen.getByRole("button", { name: "More options" }));
@@ -196,28 +192,55 @@ describe("EditorFooter run menu", () => {
     );
     await user.click(steer);
     expect(defaultProps.onSendSteerMessage).toHaveBeenCalledTimes(1);
+    expect(defaultProps.onSendSteerMessage).toHaveBeenCalledWith("session-3");
   });
 
-  it("enables Interrupt Turn without prompt text for a capable headless target", async () => {
+  it("lists one steer item per destination before Run in Parallel", async () => {
     const user = userEvent.setup();
     renderFooter({
-      hasContent: false,
-      interruptTurnTarget: {
-        enabled: true,
-        title:
-          "Interrupts the current turn on the live Claude Code headless session (step 3) without stopping the session.",
-      },
+      steerTargets: [
+        {
+          label: "Steer Step 2 · Claude Code",
+          sessionId: "control-2",
+          enabled: true,
+          title: "Sends to step 2",
+        },
+        {
+          label: "Steer Step 3 · Qwen Code (after turn)",
+          sessionId: "control-3",
+          enabled: true,
+          title: "Queues for step 3",
+        },
+      ],
     });
 
-    expect(
-      document.querySelector<HTMLButtonElement>(".btn-editor-run")
-    ).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "More options" }));
 
-    const interrupt = screen.getByRole("option", { name: "Interrupt Turn" });
-    expect(interrupt).toBeEnabled();
-    await user.click(interrupt);
-    expect(defaultProps.onInterruptHeadlessTurn).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getAllByRole("option").map((option) => option.textContent)
+    ).toEqual([
+      "Steer Step 2 · Claude Code",
+      "Steer Step 3 · Qwen Code (after turn)",
+      "Run in Parallel",
+      "Run in New Workflow",
+    ]);
+    await user.click(
+      screen.getByRole("option", {
+        name: "Steer Step 3 · Qwen Code (after turn)",
+      })
+    );
+    expect(defaultProps.onSendSteerMessage).toHaveBeenCalledWith("control-3");
+  });
+
+  it("does not offer Interrupt Turn in the send menu", async () => {
+    const user = userEvent.setup();
+    renderFooter();
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    expect(
+      screen.queryByRole("option", { name: "Interrupt Turn" })
+    ).not.toBeInTheDocument();
   });
 
   it.each([

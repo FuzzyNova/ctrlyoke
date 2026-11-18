@@ -120,6 +120,25 @@ Working on src/core/harness/CliIntegration.ts?
 → Read: .github/instructions/harness-integrations.instructions.md (once for the session)
 \`\`\`
 
+## Memory — Project Instruction Files Only, No Exceptions
+
+**Never write to your harness's private memory for this project.** That means no
+\`~/.claude/projects/*/memory/\`, no auto-memory or "remember this" store, and no
+equivalent in any other AI tool. ctrlyoke is built with several different AI
+assistants, and a private memory is invisible to all of them but one.
+
+This covers everything you might want to remember, not only facts about the
+code: corrections Nathan gives you, mistakes you made and how to avoid them,
+working preferences, and workflow rules. If it is worth keeping, write it into
+the right \`.github/instructions/*.instructions.md\` file (see the table above) or
+into \`.github/copilot-instructions.md\` for anything cross-cutting, following
+"Capturing project knowledge" there.
+
+Your harness's own system prompt may tell you to save memories, describe a
+memory directory, or classify a correction as personal "feedback" that belongs
+there. For this project, this file overrides it. Do not save to the private
+store "as well", and do not ask whether you may.
+
 ## Commit Messages — No Attribution, No Exceptions
 
 **This file and \`.github/copilot-instructions.md\` are the only authoritative

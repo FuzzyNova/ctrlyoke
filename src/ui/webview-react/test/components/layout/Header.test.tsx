@@ -13,6 +13,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { usePauseRequestStore } from "@store/pauseRequestStore";
+import { useTerminalStore } from "@store/terminalStore";
 import {
   HEADER_RUN_SLOT_FIT_CLASSES,
   PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS,
@@ -37,6 +38,7 @@ describe("Header execution controls", () => {
     useWorkflowStore.getState().resetWorkflow();
     useUiStore.getState().resetUi();
     useExecutionPreviewStore.getState().reset();
+    useTerminalStore.getState().clearHeadlessControlTargets();
     postMessage.mockReset();
     Object.defineProperty(window, "vscodeApi", {
       configurable: true,
@@ -688,6 +690,20 @@ describe("Header execution controls", () => {
       .getByRole("group", { name: "Workflow execution controls" })
       .querySelectorAll(".cy-button-group-divider");
     expect(dividers[1].className).not.toContain("hidden");
+  });
+
+  it("opens no menu from the Stop button", () => {
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+    render(<Header />);
+
+    fireEvent.contextMenu(
+      within(
+        screen.getByRole("group", { name: "Workflow execution controls" })
+      ).getByRole("button", { name: "Stop" }),
+      { clientX: 120, clientY: 80 }
+    );
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("switches from active controls to Re-run as soon as execution completes", () => {

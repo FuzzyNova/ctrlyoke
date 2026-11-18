@@ -89,7 +89,10 @@ import {
   formatHarnessVersionGuidance,
   type HarnessVersionAssessment,
 } from "../../utils/HarnessVersion";
-import type { HarnessAvailabilityReport } from "../../types/WebviewMessageTypes";
+import type {
+  HarnessAvailabilityReport,
+  HeadlessControlTargetMessage,
+} from "../../types/WebviewMessageTypes";
 import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
@@ -789,6 +792,11 @@ export class CliIntegration extends HarnessIntegration {
 
   override getHeadlessControlSessionId(): string | undefined {
     return this.transportCoordinator.getHeadlessControlSessionId();
+  }
+
+  override getOpenHeadlessControlTarget():
+    HeadlessControlTargetMessage | undefined {
+    return this.transportCoordinator.getOpenHeadlessControlTarget();
   }
 
   /**

@@ -8,7 +8,16 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
+import {
+  FINAL_STEP_PHASES,
+  HARNESS_IDS,
+  HEADLESS_STEER_DELIVERIES,
+  OUTPUT_HISTORY_KINDS,
+  SESSION_KINDS,
+  STEP_STATUS,
+  TERMINAL_SESSION_STATUS,
+} from "@/types/messages";
+import { useTerminalStore } from "@store/terminalStore";
 
 function TestHarness({
   step,
@@ -482,6 +491,185 @@ describe("useStepContextMenu", () => {
       harness: "claude-cli",
       sourceLabel: "Step 2",
     });
+  });
+
+  describe("live step controls", () => {
+    function openHeadlessTarget(
+      stepIndex: number,
+      canInterruptTurn: boolean | undefined,
+      controlSessionId = `control-${stepIndex}`
+    ) {
+      useTerminalStore.getState().updateHeadlessControlTarget({
+        type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+        workflowId: "workflow-1",
+        controlSessionId,
+        stepIndex,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+        ...(canInterruptTurn !== undefined ? { canInterruptTurn } : {}),
+        isOpen: true,
+      });
+    }
+
+    beforeEach(() => {
+      useTerminalStore.setState({
+        sessions: {},
+        activeSessionIds: {},
+        headlessControlTargets: {},
+      });
+      useUiStore.setState({ activeWorkflowId: "workflow-1" });
+      useWorkflowStore.setState({ activeStepIndices: [0, 1] });
+    });
+
+    const runningStep: WorkflowStep = {
+      prompt: "Running",
+      status: STEP_STATUS.RUNNING,
+    };
+
+    it("omits both items on a step that is neither running nor live", () => {
+      render(<TestHarness step={{ prompt: "Pending" }} />);
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+      expect(
+        screen.queryByRole("menuitem", { name: "Send Steer to Step" })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("menuitem", { name: "End Step Early" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("places both items after Reply to Step on a running step", () => {
+      openHeadlessTarget(1, true);
+      render(
+        <TestHarness step={runningStep} deleteIndex={1} currentStep={0} />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+      const labels = screen
+        .getAllByRole("menuitem")
+        .map((button) => button.textContent?.trim());
+      const replyIndex = labels.indexOf("Reply to Step");
+      expect(labels.slice(replyIndex, replyIndex + 3)).toEqual([
+        "Reply to Step",
+        "Send Steer to Step",
+        "End Step Early",
+      ]);
+    });
+
+    it("steers the editor draft to the pressed step, not the lowest one", () => {
+      openHeadlessTarget(0, true);
+      openHeadlessTarget(1, true);
+      useEditorStore.setState({ promptText: "  focus on tests  " });
+      render(
+        <TestHarness step={runningStep} deleteIndex={1} currentStep={0} />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Send Steer to Step" })
+      );
+
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+        workflowId: "workflow-1",
+        sessionId: "control-1",
+        text: "focus on tests",
+      });
+      expect(useEditorStore.getState().promptText).toBe("");
+    });
+
+    it("disables Send Steer to Step without an editor draft", () => {
+      openHeadlessTarget(1, true);
+      useEditorStore.setState({ promptText: "" });
+      render(
+        <TestHarness step={runningStep} deleteIndex={1} currentStep={0} />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+      expect(
+        screen.getByRole("menuitem", { name: "Send Steer to Step" })
+      ).toBeDisabled();
+    });
+
+    it("offers Send Steer to Step on a finished step with a retained terminal", () => {
+      useWorkflowStore.setState({ activeStepIndices: [] });
+      useTerminalStore.setState({
+        sessions: {
+          "workflow-1": [
+            {
+              id: "pty-0",
+              workflowId: "workflow-1",
+              stepName: "Step 1",
+              stepIndex: 0,
+              kind: SESSION_KINDS.AI_CLI,
+              harnessId: HARNESS_IDS.CLAUDE_CLI,
+              status: TERMINAL_SESSION_STATUS.RUNNING,
+              isController: true,
+            },
+          ],
+        },
+      });
+      useEditorStore.setState({ promptText: "follow up" });
+      render(
+        <TestHarness
+          step={{ prompt: "Done", status: STEP_STATUS.COMPLETED }}
+          deleteIndex={0}
+          currentStep={1}
+          direction="rewind"
+        />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+      expect(
+        screen.getByRole("menuitem", { name: "Send Steer to Step" })
+      ).toBeEnabled();
+      expect(
+        screen.queryByRole("menuitem", { name: "End Step Early" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("ends the pressed step early through its own control session", () => {
+      openHeadlessTarget(0, true);
+      openHeadlessTarget(1, true);
+      render(
+        <TestHarness step={runningStep} deleteIndex={1} currentStep={0} />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+      const endItem = screen.getByRole("menuitem", { name: "End Step Early" });
+      expect(endItem).toHaveAttribute(
+        "title",
+        "Stops step 2's current turn, keeps its output so far, and continues the workflow."
+      );
+      fireEvent.click(endItem);
+
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
+        workflowId: "workflow-1",
+        sessionId: "control-1",
+      });
+    });
+
+    it.each([
+      ["no control target", undefined, false],
+      ["a target that cannot interrupt", false, true],
+    ] as const)(
+      "disables End Step Early with %s",
+      (_label, canInterruptTurn, hasTarget) => {
+        if (hasTarget) openHeadlessTarget(1, canInterruptTurn);
+        render(
+          <TestHarness step={runningStep} deleteIndex={1} currentStep={0} />
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+        const endItem = screen.getByRole("menuitem", {
+          name: "End Step Early",
+        });
+        expect(endItem).toBeDisabled();
+        expect(endItem).toHaveAttribute(
+          "title",
+          "End Step Early needs a headless Claude Code, Codex or Qwen step"
+        );
+      }
+    );
   });
 
   it("opens a step-scoped Dry Run from the step menu", () => {

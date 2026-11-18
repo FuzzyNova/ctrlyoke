@@ -32,6 +32,10 @@ import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { sendAsMessageBatch } from "../../ui/MessageBatchSender";
 import { WorkflowTaggedSink } from "../WorkflowTaggedSink";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import type {
+  HeadlessApprovalRequestMessage,
+  HeadlessControlTargetMessage,
+} from "../../types/WebviewMessageTypes";
 import {
   getLineageLastModifiedAt,
   stripLegacyWorkingFileLineageMetadata,
@@ -69,6 +73,12 @@ export interface RunViewPublisherInstance {
   replayBufferedOutputTo(sink: IDashboardSink): void;
   getActiveStepIndices(): number[];
   getRunViewLiveState(): RunViewLoadedMessage["liveState"];
+  replayOpenHeadlessControlTargets(
+    send: (message: HeadlessControlTargetMessage) => void
+  ): void;
+  replayPendingHeadlessApprovals(
+    send: (message: HeadlessApprovalRequestMessage) => void
+  ): void;
 }
 
 export interface RunViewPublisherExternalRunWatchPort {
@@ -584,6 +594,10 @@ export class RunViewPublisher implements RunLifecycleViewPort {
           )
         )
       );
+      // A reconnecting client starts with no headless steer targets or
+      // approval cards; re-announce the ones still open on the live run.
+      boundInstance.replayOpenHeadlessControlTargets(send);
+      boundInstance.replayPendingHeadlessApprovals(send);
     }
     if (boundWorkflowId && !skipTerminalReplay) {
       this.host.replayTerminalSessionsTo(boundWorkflowId, send, clientId);

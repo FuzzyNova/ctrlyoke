@@ -373,3 +373,112 @@ suite("PtyProcessManager intentional kills", () => {
     assert.strictEqual(restarted?.cwd, manager.spawnCwds[0]);
   });
 });
+
+suite("PtyProcessManager terminal tabs", () => {
+  function spawn(
+    manager: PtyProcessManager,
+    workflowId = "wf-tabs",
+    kind: (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS] = SESSION_KINDS.AI_CLI
+  ): PtySession {
+    return manager.spawnPty({
+      workflowId,
+      stepName: "Step 1",
+      stepIndex: 0,
+      kind,
+      command: "fake-cli",
+      args: [],
+      cwd: process.cwd(),
+      onData: () => {},
+      onExit: () => {},
+    });
+  }
+
+  const tabIds = (manager: PtyProcessManager, workflowId = "wf-tabs") =>
+    manager.getTabsForWorkflow(workflowId).map((tab) => tab.id);
+
+  test("keeps an exited session's tab open, replayed as ended", () => {
+    const manager = new FakePtyProcessManager();
+    const session = spawn(manager);
+    manager.killSession(session.id, TERMINAL_END_REASONS.STEP_COMPLETE);
+
+    // The process is gone, so input and steering no longer find it…
+    assert.strictEqual(manager.getSession(session.id), undefined);
+    // …but its tab is still open for every client.
+    assert.deepStrictEqual(tabIds(manager), [session.id]);
+    const started = buildTerminalStartedMessage(session);
+    assert.strictEqual(started.status, TERMINAL_SESSION_STATUS.STOPPED);
+    assert.strictEqual(started.endReason, TERMINAL_END_REASONS.STEP_COMPLETE);
+  });
+
+  test("lists tabs in spawn order, live and ended alike", () => {
+    const manager = new FakePtyProcessManager();
+    const first = spawn(manager);
+    const second = spawn(manager);
+    manager.killSession(first.id, TERMINAL_END_REASONS.CLOSED);
+
+    assert.deepStrictEqual(tabIds(manager), [first.id, second.id]);
+  });
+
+  test("closeTab kills a live session and forgets its tab", async () => {
+    const manager = new FakePtyProcessManager();
+    const session = spawn(manager);
+
+    const removed = await manager.closeTab("wf-tabs", session.id);
+
+    assert.deepStrictEqual(removed, {
+      type: MESSAGE_TYPES.TERMINAL_REMOVED,
+      workflowId: "wf-tabs",
+      sessionId: session.id,
+    });
+    assert.strictEqual(session.endReason, TERMINAL_END_REASONS.CLOSED);
+    assert.deepStrictEqual(tabIds(manager), []);
+  });
+
+  test("closeTab still reports removal for a tab the extension no longer has", async () => {
+    const manager = new FakePtyProcessManager();
+    const removed = await manager.closeTab("wf-tabs", "unknown-session");
+    assert.strictEqual(removed.sessionId, "unknown-session");
+  });
+
+  test("a forgotten live session does not reopen its tab when it exits", () => {
+    const manager = new FakePtyProcessManager();
+    const session = spawn(manager);
+    manager.forgetTab(session.id);
+    assert.deepStrictEqual(tabIds(manager), []);
+
+    manager.ptys[0].exit(0);
+
+    assert.deepStrictEqual(tabIds(manager), []);
+  });
+
+  test("over the output budget, the oldest ended tabs lose output but stay open", () => {
+    class SmallBudgetManager extends FakePtyProcessManager {
+      protected override endedTabOutputBudget = 10;
+    }
+    const manager = new SmallBudgetManager();
+    const oldest = spawn(manager);
+    const newest = spawn(manager);
+    oldest.bufferChunk("12345678");
+    newest.bufferChunk("abcdefgh");
+
+    manager.killSession(oldest.id, TERMINAL_END_REASONS.STEP_COMPLETE);
+    manager.killSession(newest.id, TERMINAL_END_REASONS.STEP_COMPLETE);
+
+    assert.deepStrictEqual(tabIds(manager), [oldest.id, newest.id]);
+    assert.deepStrictEqual(oldest.reconnectBuffer, []);
+    assert.deepStrictEqual(newest.reconnectBuffer, ["abcdefgh"]);
+  });
+
+  test("forgetWorkflowTabs drops only the requested kind of one workflow", () => {
+    const manager = new FakePtyProcessManager();
+    const ai = spawn(manager);
+    const shell = spawn(manager, "wf-tabs", SESSION_KINDS.SHELL);
+    const otherWorkflow = spawn(manager, "wf-other");
+    manager.killSession(ai.id, TERMINAL_END_REASONS.STEP_COMPLETE);
+
+    manager.forgetWorkflowTabs("wf-tabs", SESSION_KINDS.AI_CLI);
+
+    assert.deepStrictEqual(tabIds(manager), [shell.id]);
+    assert.deepStrictEqual(tabIds(manager, "wf-other"), [otherWorkflow.id]);
+  });
+});

@@ -55,6 +55,14 @@ class FakeInstance implements RunViewPublisherInstance {
     return this.activeStepIndices;
   }
 
+  replayOpenHeadlessControlTargets(): void {
+    this.events.push("headlessTargets");
+  }
+
+  replayPendingHeadlessApprovals(): void {
+    this.events.push("headlessApprovals");
+  }
+
   getRunViewLiveState(): RunViewPublisherInstance["getRunViewLiveState"] extends () => infer T
     ? T
     : never {
@@ -302,6 +310,16 @@ suite("RunViewPublisher", () => {
       assert.strictEqual(
         events.filter((event) => event === "buffer").length,
         1
+      );
+      // A reconnecting client also gets open headless steer targets and
+      // pending approval cards for the live run, after the output replay.
+      assert.ok(
+        events.indexOf("headlessTargets") > events.indexOf("buffer"),
+        "headless steer targets are replayed after the output buffer"
+      );
+      assert.ok(
+        events.indexOf("headlessApprovals") > events.indexOf("buffer"),
+        "pending headless approvals are replayed after the output buffer"
       );
     } finally {
       await fs.rm(root, { recursive: true, force: true });

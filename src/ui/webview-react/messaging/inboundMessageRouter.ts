@@ -385,6 +385,13 @@ function applyTerminalSettings(settings: TerminalSettings): void {
   terminalRegistry.updateTerminalOptions(settings);
 }
 
+/** INIT and GLOBAL_SETTINGS_UPDATED carry the host terminal's font family. */
+function applyHostTerminalFontFamily(fontFamily: unknown): void {
+  if (typeof fontFamily === "string") {
+    terminalRegistry.setHostTerminalFontFamily(fontFamily);
+  }
+}
+
 function applyTerminalSetting(path: string, value: unknown): void {
   if (!path.startsWith("terminal.")) return;
 
@@ -473,6 +480,7 @@ export function createMessageHandlers(
         applyTerminalSettings(data.globalSettings.terminal);
       }
     }
+    applyHostTerminalFontFamily(data.terminalFontFamily);
     if (data.licenseAccess) {
       settingsStore.setLicenseAccess(data.licenseAccess);
     }
@@ -547,6 +555,7 @@ export function createMessageHandlers(
         applyTerminalSettings(message.globalSettings.terminal);
       }
     }
+    applyHostTerminalFontFamily(message.terminalFontFamily);
     if (message.modelOptions) {
       settingsStore.setModelOptions(message.modelOptions);
     }
