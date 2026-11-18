@@ -74,7 +74,7 @@ denial message stays in the dashboard approval card; Codex's approval responses 
 back to the model.
 
 On Codex 0.146.0 and later, **Send Steer Message** injects a message into the current headless
-turn, and **Interrupt Turn** (right-click **Stop**) ends that turn without stopping the workflow. If a turn completes
+turn, and **End Step Early** (on the running step's menu) ends that turn without stopping the workflow. If a turn completes
 before Codex accepts a steer, ctrlyoke reports that the message was not queued; start a new step
 to send it.
 

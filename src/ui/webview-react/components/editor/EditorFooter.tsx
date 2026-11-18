@@ -18,7 +18,10 @@ import {
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { SplitButton } from "../shared/SplitButton";
-import type { RunDispatchTarget } from "../../hooks/useRunDispatchTargets";
+import type {
+  RunDispatchTarget,
+  SteerDispatchTarget,
+} from "../../hooks/useRunDispatchTargets";
 
 export const EDITOR_FOOTER_HEIGHT_REM = 2.5;
 
@@ -44,10 +47,11 @@ interface EditorFooterProps {
   onRun: () => void;
   onRunInParallel: () => void;
   onRunInNewWorkflow: () => void;
-  onSendSteerMessage: () => void;
+  onSendSteerMessage: (sessionId: string) => void;
   runInParallelTarget: RunDispatchTarget;
   newWorkflowTarget: RunDispatchTarget;
-  steerTarget: RunDispatchTarget;
+  /** One Run-menu item per live steer destination. */
+  steerTargets: SteerDispatchTarget[];
   onQueue: () => void;
   onUpdate: () => void;
   onDelete: () => void;
@@ -98,7 +102,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   onSendSteerMessage,
   runInParallelTarget,
   newWorkflowTarget,
-  steerTarget,
+  steerTargets,
   onQueue,
   onUpdate,
   onDelete,
@@ -369,19 +373,28 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               portal
               hideMenuButton={isSmallWidth}
               options={[
-                {
-                  label: "Send Steer Message",
-                  value: "sendSteerMessage",
-                  onClick: onSendSteerMessage,
+                ...steerTargets.map((steerTarget) => ({
+                  label: steerTarget.label,
+                  value: steerTarget.sessionId
+                    ? `sendSteerMessage:${steerTarget.sessionId}`
+                    : "sendSteerMessage",
+                  onClick: () => {
+                    if (steerTarget.sessionId) {
+                      onSendSteerMessage(steerTarget.sessionId);
+                    }
+                  },
                   disabled:
-                    isExternallyManaged || !hasContent || !steerTarget.enabled,
+                    isExternallyManaged ||
+                    !hasContent ||
+                    !steerTarget.enabled ||
+                    !steerTarget.sessionId,
                   title: isExternallyManaged
                     ? (externalReadOnlyLabel ?? "Read-only — external run")
                     : !hasContent
                       ? "Enter a prompt first"
                       : steerTarget.title,
                   icon: <Icon name="arrow-up" />,
-                },
+                })),
                 {
                   label: "Run in Parallel",
                   value: "runInParallel",

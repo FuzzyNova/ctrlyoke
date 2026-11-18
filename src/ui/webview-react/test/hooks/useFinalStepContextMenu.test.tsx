@@ -6,7 +6,19 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
+import {
+  FINAL_STEP_PHASES,
+  HARNESS_IDS,
+  HEADLESS_STEER_DELIVERIES,
+  MESSAGE_TYPES,
+  OUTPUT_HISTORY_KINDS,
+  SESSION_KINDS,
+  STEP_STATUS,
+  TERMINAL_SESSION_STATUS,
+  type FinalStepPhase,
+  type StepStatus,
+} from "@/types/messages";
+import { useTerminalStore } from "@store/terminalStore";
 import type {
   OrderedCliHistoryEntry,
   OrderedHistoryEntry,
@@ -64,12 +76,16 @@ function TestHarness({
   isDisabled = false,
   latestOutput,
   runtimeMeta,
+  status,
+  phase,
 }: {
   finalStep: WorkflowStep | null | undefined;
   isReadOnly?: boolean;
   isDisabled?: boolean;
   latestOutput?: CliOutput | null;
   runtimeMeta?: { sessionId?: string; elapsed?: number };
+  status?: StepStatus | null;
+  phase?: FinalStepPhase | null;
 }) {
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -79,6 +95,8 @@ function TestHarness({
       onToggleEnabled: vi.fn(),
       latestOutput,
       runtimeMeta,
+      status,
+      phase,
     });
 
   return (
@@ -410,5 +428,156 @@ describe("useFinalStepContextMenu", () => {
     expect(
       screen.getByRole("menuitem", { name: "Disable final step" })
     ).toBeDisabled();
+  });
+
+  describe("live final-step controls", () => {
+    const finalStep: WorkflowStep = { prompt: "Summarize" };
+
+    function openFinalHeadlessTarget(
+      loopIndex: number,
+      canInterruptTurn: boolean
+    ) {
+      useTerminalStore.getState().updateHeadlessControlTarget({
+        type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+        workflowId: "workflow-1",
+        controlSessionId: `final-${loopIndex}`,
+        stepIndex: -(loopIndex + 1),
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+        canInterruptTurn,
+        isOpen: true,
+      });
+    }
+
+    function renderRunningFinalStep() {
+      render(
+        <TestHarness
+          finalStep={finalStep}
+          status={STEP_STATUS.RUNNING}
+          phase={FINAL_STEP_PHASES.FINAL_STEP}
+        />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    }
+
+    beforeEach(() => {
+      useTerminalStore.setState({
+        sessions: {},
+        activeSessionIds: {},
+        headlessControlTargets: {},
+      });
+      useUiStore.setState({ activeWorkflowId: "workflow-1" });
+      // A running final step reports its signed index -(loopIndex + 1).
+      useWorkflowStore.setState({
+        activeStepIndices: [-2],
+        finalStepLoopCount: 1,
+      });
+    });
+
+    it("omits both items when the final step is not running or live", () => {
+      render(<TestHarness finalStep={finalStep} />);
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+      expect(
+        screen.queryByRole("menuitem", { name: "Send Steer to Step" })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("menuitem", { name: "End Step Early" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("steers the editor draft to the running pass", () => {
+      openFinalHeadlessTarget(1, true);
+      useEditorStore.setState({ promptText: "wrap up" });
+      renderRunningFinalStep();
+
+      const labels = screen
+        .getAllByRole("menuitem")
+        .map((button) => button.textContent?.trim());
+      const replyIndex = labels.indexOf("Reply to Step");
+      expect(labels.slice(replyIndex, replyIndex + 3)).toEqual([
+        "Reply to Step",
+        "Send Steer to Step",
+        "End Step Early",
+      ]);
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Send Steer to Step" })
+      );
+
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+        workflowId: "workflow-1",
+        sessionId: "final-1",
+        text: "wrap up",
+      });
+    });
+
+    it("ends the running pass early through its control session", () => {
+      openFinalHeadlessTarget(1, true);
+      renderRunningFinalStep();
+
+      const endItem = screen.getByRole("menuitem", { name: "End Step Early" });
+      expect(endItem).toHaveAttribute(
+        "title",
+        "Stops final step pass 2's current turn, keeps its output so far, and continues the workflow."
+      );
+      fireEvent.click(endItem);
+
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN,
+        workflowId: "workflow-1",
+        sessionId: "final-1",
+      });
+    });
+
+    it("disables End Step Early without an interruptible session", () => {
+      renderRunningFinalStep();
+
+      expect(
+        screen.getByRole("menuitem", { name: "End Step Early" })
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("menuitem", { name: "Send Steer to Step" })
+      ).toHaveAttribute(
+        "title",
+        "Final Step Pass 2 has no live harness session"
+      );
+    });
+
+    it("steers a finished pass's retained terminal", () => {
+      useWorkflowStore.setState({ activeStepIndices: [] });
+      useTerminalStore.setState({
+        sessions: {
+          "workflow-1": [
+            {
+              id: "final-pty",
+              workflowId: "workflow-1",
+              stepName: "Final step",
+              stepIndex: -1,
+              kind: SESSION_KINDS.AI_CLI,
+              harnessId: HARNESS_IDS.CLAUDE_CLI,
+              status: TERMINAL_SESSION_STATUS.RUNNING,
+              isController: true,
+            },
+          ],
+        },
+      });
+      useEditorStore.setState({ promptText: "one more thing" });
+      render(<TestHarness finalStep={finalStep} />);
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Send Steer to Step" })
+      );
+
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+        workflowId: "workflow-1",
+        sessionId: "final-pty",
+        text: "one more thing",
+      });
+      expect(
+        screen.queryByRole("menuitem", { name: "End Step Early" })
+      ).not.toBeInTheDocument();
+    });
   });
 });

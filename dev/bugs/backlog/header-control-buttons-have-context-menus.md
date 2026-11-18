@@ -26,6 +26,9 @@ Design choice: Dry Run (released) and Interrupt Turn (unreleased) were attached 
 nearest related button instead of to the object they act on. Dry Run acts on the workflow,
 and Interrupt Turn acts on one step.
 
+**Status:** the Stop half is done (Interrupt Turn moved to End Step Early on the step menu,
+and Stop has no context menu). The Run button's Dry Run menu remains.
+
 ## Suggested Fix
 
 The header control buttons get no context menus. Each action lives on the context menu of
@@ -36,7 +39,7 @@ what it acts on.
   its `onContextMenu` and `runSlotLongPressHandlers` from slot 1.
 - **Interrupt Turn** becomes **End Step Early** on the running step's context menu
   (`useStepContextMenu`). The plan is in
-  [`parallel-headless-steer-always-targets-lowest-step.md`](parallel-headless-steer-always-targets-lowest-step.md).
+  [`parallel-headless-steer-always-targets-lowest-step.md`](../implemented/parallel-headless-steer-always-targets-lowest-step.md).
   Remove `openStopInterruptMenu`, its `onContextMenu`, `stopSlotLongPressHandlers` and the
   `stopMenuOpenedAtRef` click guard from slot 3.
 - Let a right click on the control buttons fall through to the default behavior (no menu)

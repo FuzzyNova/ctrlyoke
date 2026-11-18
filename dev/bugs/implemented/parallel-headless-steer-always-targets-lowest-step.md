@@ -2,7 +2,10 @@
 
 - **Found:** 2026-11-17 by Claude (live test with two headless Claude members)
 - **Area:** `src/ui/webview-react/hooks/useActiveSteerTarget.ts`, `src/ui/webview-react/hooks/useInterruptTurnTarget.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit. Instead of the "convenience" bullet below (moving the
+  soloed or rail-selected session to the top of the Run menu), a step's own context menu
+  carries **Send Steer to Step**, which sends the prompt editor's draft to that step's live
+  session; the Run menu order never depends on solo or rail state.
 
 ## Symptom
 
