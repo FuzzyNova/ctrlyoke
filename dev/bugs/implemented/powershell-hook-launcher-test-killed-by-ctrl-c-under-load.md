@@ -4,7 +4,14 @@
   (`npm test` on Windows 11)
 - **Area:** `src/test/unit/UserHookEnvironment.test.ts`
   (`runs a PowerShell-syntax command under PowerShell on Windows`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
+
+The PowerShell case now launches its Node hook runner with `windowsHide: true` and
+`detached: true`, giving the runner and its PowerShell child an isolated console. The
+PowerShell process is spawned by the production hook runner, whose child lifecycle and
+termination behavior must remain unchanged; isolating the test's own launcher avoids
+changing production spawn semantics. This flake was not reproduced, but the isolation is
+in place.
 
 ## Symptom
 
