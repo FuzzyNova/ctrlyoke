@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the bug-hunt workflow final step (claude-cli), reviewing the `auto` permission mode commits
 - **Area:** `src/core/harness/copilot/CopilotToolPermissionMapper.ts` (`prepare`, custom branch), `src/core/harness/codex/CodexToolPermissionMapper.ts` (custom/allowAll args), `src/types/CompatibilityTypes.ts` (Copilot auto caveat text), `docs/workflows/permissions.md`
-- **Severity:** medium (security; low confidence until probed)
+- **Resolution:** fixed in this commit. Codex pins the manual reviewer; Copilot has no per-run manual override for an assisted user default, so its caveat and permissions guide now warn that interactive `custom` steps are judged too.
 
 ## Symptom
 
@@ -25,15 +25,20 @@ and agy (`agentMode: ""`) do. Copilot and Codex don't:
 
 ## Steps to Reproduce
 
-Not yet probed live. Expected reproduction:
+Verification and findings:
 
-1. Copilot: set `defaultPermissionMode: "assisted"`, run an interactive
-   `custom` step allowing only `shell(echo:*)`, and ask it to run
-   `echo hi && node x.js`. Expected under `custom`: an approval prompt.
-   Suspected: the judge approves it.
-2. Codex: add `approvals_reviewer = "auto_review"` to `config.toml`, run an
-   interactive `custom` step, and ask it to write outside the workspace.
-   Expected: an approval prompt. Suspected: the reviewer approves it.
+1. Codex 0.169.0's config schema accepts reviewer values `user`,
+   `auto_review`, and the legacy `guardian_subagent`; `user` is the manual
+   reviewer. A targeted harness case used a throwaway `CODEX_HOME` with
+   `approvals_reviewer = "auto_review"` and confirmed that `custom` refuses an
+   unlisted command requiring sandbox escalation after ctrlyoke pins
+   `approvals_reviewer=user`.
+2. Copilot's `--help` exposes `--assisted-approval`, which enables the judge,
+   but no flag or environment variable that forces manual approval. Its config
+   help says `defaultPermissionMode` applies to new interactive sessions, so
+   the global assisted setting also affects interactive `custom` steps. No
+   live Copilot probe was run; the finding is based on CLI help and config
+   documentation.
 
 ## Root Cause
 
@@ -42,15 +47,9 @@ config that turns the judge on is inherited by `custom` runs.
 
 ## Suggested Fix
 
-Probe both cases first.
-
-- Codex: if confirmed, emit an explicit reviewer pin for `custom` and
-  `allowAll` (`-c approvals_reviewer=<manual value>`, after checking the value
-  name against the Codex CLI).
-- Copilot: look for a flag that forces manual approval for the session. If
-  none exists, change the caveat and docs to warn that
-  `defaultPermissionMode: "assisted"` also affects `custom` steps, and
-  recommend `/permissions assisted` per session instead.
-
-Add mapper tests asserting the pin, and a harness-suite case for "custom
-refuses an unlisted command with a user-configured judge".
+Codex now emits `-c approvals_reviewer=user` for `custom` and `allowAll` in
+interactive and headless runs; `auto` remains on `auto_review`. Copilot's
+caveat and permissions guide explain that its global assisted default also
+judges interactive `custom` steps and recommend `/permissions assisted` per
+session when users want interactive Auto. Mapper tests and the targeted Codex
+harness regression cover the pin.

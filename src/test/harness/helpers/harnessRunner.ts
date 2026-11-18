@@ -699,7 +699,8 @@ export async function withMovedHarnessHome<T>(
  */
 export async function withIsolatedCodexHome<T>(
   trustedDirs: readonly string[],
-  fn: () => Promise<T>
+  fn: (isolatedHome: string) => Promise<T>,
+  approvalsReviewer?: "auto_review"
 ): Promise<T> {
   const realHome = getCodexHomeDir();
   return withMovedHarnessHome(
@@ -720,13 +721,31 @@ export async function withIsolatedCodexHome<T>(
       // how Codex itself records trust. Codex looks the folder up by its real
       // path, so a macOS temp folder (`/var/folders/…`, a symlink into
       // `/private/var/…`) is recorded under both spellings.
+      const configPath = path.join(isolatedHome, "config.toml");
+      if (approvalsReviewer) {
+        const config = fs.existsSync(configPath)
+          ? fs.readFileSync(configPath, "utf8")
+          : "";
+        const tableStart = config.search(/^\[/m);
+        const rootConfig =
+          tableStart < 0 ? config : config.slice(0, tableStart);
+        const tables = tableStart < 0 ? "" : config.slice(tableStart);
+        const rootWithoutReviewer = rootConfig.replace(
+          /^approvals_reviewer\s*=.*(?:\r?\n|$)/m,
+          ""
+        );
+        fs.writeFileSync(
+          configPath,
+          `approvals_reviewer = "${approvalsReviewer}"\n${rootWithoutReviewer}${tables}`
+        );
+      }
       const trustEntries = [
         ...new Set(trustedDirs.flatMap((dir) => [dir, fs.realpathSync(dir)])),
       ]
         .map((dir) => `\n[projects.'${dir}']\ntrust_level = "trusted"\n`)
         .join("");
-      fs.appendFileSync(path.join(isolatedHome, "config.toml"), trustEntries);
-      return fn();
+      fs.appendFileSync(configPath, trustEntries);
+      return fn(isolatedHome);
     }
   );
 }

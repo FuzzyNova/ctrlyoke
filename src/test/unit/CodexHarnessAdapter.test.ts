@@ -182,7 +182,7 @@ suite("CodexHarnessAdapter", () => {
     );
   });
 
-  test("approval flags follow the permission mode alone, and only interactively", () => {
+  test("reviewer pin follows custom and allowAll in both launch modes", () => {
     const mapper = new CodexToolPermissionMapper();
     const cases = [
       [
@@ -226,13 +226,19 @@ suite("CodexHarnessAdapter", () => {
     }
     assert.deepStrictEqual(snapshots, {
       none: { interactive: [], headless: [] },
-      custom: { interactive: ["-a", "on-request"], headless: [] },
+      custom: {
+        interactive: ["-a", "on-request", "-c", "approvals_reviewer=user"],
+        headless: ["-c", "approvals_reviewer=user"],
+      },
       // No read-only clamp: the deny list is reported, not enforced.
       "custom denied write": {
-        interactive: ["-a", "on-request"],
-        headless: [],
+        interactive: ["-a", "on-request", "-c", "approvals_reviewer=user"],
+        headless: ["-c", "approvals_reviewer=user"],
       },
-      allowAll: { interactive: ["-a", "on-request"], headless: [] },
+      allowAll: {
+        interactive: ["-a", "on-request", "-c", "approvals_reviewer=user"],
+        headless: ["-c", "approvals_reviewer=user"],
+      },
       dangerouslyAllowAll: { interactive: ["-a", "never"], headless: [] },
     });
   });
@@ -283,7 +289,12 @@ suite("CodexHarnessAdapter", () => {
       result.diagnostics.map((d) => d.code),
       [COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL]
     );
-    assert.deepStrictEqual(result.cliArgs, ["-a", "on-request"]);
+    assert.deepStrictEqual(result.cliArgs, [
+      "-a",
+      "on-request",
+      "-c",
+      "approvals_reviewer=user",
+    ]);
   });
 
   test("sandbox flags follow sandbox and sandboxMode alone", async () => {

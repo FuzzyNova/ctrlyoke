@@ -1190,22 +1190,37 @@ suite("HarnessToolPermissionMappers", () => {
       });
 
       // Approval only: `-s` comes from the sandbox mapper (SandboxMappers.test.ts).
-      const approvalRows: Array<[PermissionMode, string[]]> = [
-        [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["-a", "never"]],
-        [PERMISSION_MODES.ALLOW_ALL, ["-a", "on-request"]],
-        [PERMISSION_MODES.CUSTOM, ["-a", "on-request"]],
-        [PERMISSION_MODES.NONE, []],
+      const approvalRows: Array<[PermissionMode, string[], string[]]> = [
+        [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["-a", "never"], []],
+        [
+          PERMISSION_MODES.ALLOW_ALL,
+          ["-a", "on-request", "-c", "approvals_reviewer=user"],
+          ["-c", "approvals_reviewer=user"],
+        ],
+        [
+          PERMISSION_MODES.CUSTOM,
+          ["-a", "on-request", "-c", "approvals_reviewer=user"],
+          ["-c", "approvals_reviewer=user"],
+        ],
+        [PERMISSION_MODES.NONE, [], []],
       ];
-      for (const [mode, expected] of approvalRows) {
-        test(`${mode} → ${expected.join(" ") || "no flags"} interactively, nothing headless`, async () => {
-          assert.deepStrictEqual(await mapperArgs(mapper, cfg(mode)), expected);
+      for (const [
+        mode,
+        interactiveExpected,
+        headlessExpected,
+      ] of approvalRows) {
+        test(`${mode} configures the expected approval reviewer in both launch modes`, async () => {
+          assert.deepStrictEqual(
+            await mapperArgs(mapper, cfg(mode)),
+            interactiveExpected
+          );
           assert.deepStrictEqual(
             await mapperArgs(mapper, cfg(mode), { isInteractive: true }),
-            expected
+            interactiveExpected
           );
           assert.deepStrictEqual(
             await mapperArgs(mapper, cfg(mode), { isInteractive: false }),
-            []
+            headlessExpected
           );
         });
       }
@@ -1246,7 +1261,10 @@ suite("HarnessToolPermissionMappers", () => {
             cliVersion,
             isInteractive: false,
           });
-          assert.deepStrictEqual(result.cliArgs, []);
+          assert.deepStrictEqual(result.cliArgs, [
+            "-c",
+            "approvals_reviewer=user",
+          ]);
           assert.strictEqual(
             result.diagnostics[0].code,
             COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
@@ -1259,7 +1277,12 @@ suite("HarnessToolPermissionMappers", () => {
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], ["edit"])
         );
-        assert.deepStrictEqual(args, ["-a", "on-request"]);
+        assert.deepStrictEqual(args, [
+          "-a",
+          "on-request",
+          "-c",
+          "approvals_reviewer=user",
+        ]);
       });
     });
 

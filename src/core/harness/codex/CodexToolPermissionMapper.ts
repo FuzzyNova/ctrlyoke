@@ -68,9 +68,9 @@ export const CODEX_FOLD_EXCLUDED_SERVER_IDS: ReadonlySet<string> = new Set([
  *
  * | Mode                | Interactive                 | Headless |
  * | ------------------- | --------------------------- | -------- |
- * | allowAll            | `-a on-request`             | `never` |
+ * | allowAll            | `-a on-request` + user reviewer | `never` + user reviewer |
  * | dangerouslyAllowAll | `-a never`                  | `never` |
- * | custom              | `-a on-request`             | `never`, or `on-request` for headless `ask` |
+ * | custom              | `-a on-request` + user reviewer | `never` + user reviewer, or `on-request` for headless `ask` |
  * | auto                | `-a on-request` + reviewer  | reviewer config |
  * | none / null         | nothing                     | `never` |
  *
@@ -137,13 +137,14 @@ export class CodexToolPermissionMapper
           ]
         : ["-a", "on-request", "-c", "approvals_reviewer=auto_review"];
     }
-    if (isInteractive === false) return [];
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
-        return ["-a", "never"];
+        return isInteractive === false ? [] : ["-a", "never"];
       case PERMISSION_MODES.ALLOW_ALL:
       case PERMISSION_MODES.CUSTOM:
-        return ["-a", "on-request"];
+        return isInteractive === false
+          ? ["-c", "approvals_reviewer=user"]
+          : ["-a", "on-request", "-c", "approvals_reviewer=user"];
       default:
         return [];
     }

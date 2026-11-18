@@ -90,9 +90,12 @@ Platform and Foundry. With any other model Claude refuses every request the
 allow list doesn't cover, without reporting an error.
 
 Copilot Auto is headless only. Interactive Copilot falls back to Custom because
-its per-run assisted flag is unsupported there; enable it in Copilot with
-`/permissions assisted` (or `defaultPermissionMode: "assisted"` in its
-settings). Copilot's judge also often refuses commands the step's prompt asks
+its per-run assisted flag is unsupported there. A global
+`defaultPermissionMode: "assisted"` setting also turns on the judge for
+interactive Custom steps, where the allowed-tools list no longer limits what
+the judge may approve. Use `/permissions assisted` for the current session
+when you want Copilot Auto interactively, rather than setting that global
+default. Copilot's judge also often refuses commands the step's prompt asks
 for, because ctrlyoke passes the prompt as a file reference and the judge does
 not count the file's contents as your request. Until that is fixed, put
 commands a Copilot Auto step must run in its allow list.
@@ -341,7 +344,7 @@ tool name, or a shell pattern.
 | ----------------------------------------- | --------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                | `--allow-all-tools` plus deny rules | Headless: `--assisted-approval` plus allow/deny rules; interactive falls back to Custom | allow/deny rules                                            |
 | [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`        | `bypassPermissions` plus deny rules | `--permission-mode auto` plus allow/deny rules; eligible models only                    | Headless `dontAsk`; interactive `default`; allow/deny rules |
-| [Codex](/harnesses/codex-cli)             | `-a never`                              | `-a on-request` plus MCP deny rules | auto reviewer plus `on-request`; may approve sandbox escalation                         | `-a on-request` plus MCP deny rules; allow list ignored     |
+| [Codex](/harnesses/codex-cli)             | `-a never`                              | `-a on-request` plus MCP deny rules; manual reviewer | auto reviewer plus `on-request`; may approve sandbox escalation                         | `-a on-request` plus MCP deny rules; manual reviewer; allow list ignored |
 | [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode defaults) | allow everything plus deny rules    | Unsupported; falls back to Custom                                                       | ask, allow list, deny list                                  |
 | [Qwen Code](/harnesses/qwen-cli)          | `-y`                                    | `auto-edit` plus deny rules         | `--approval-mode auto` plus allow/deny rules                                            | `default` plus allow/deny rules                             |
 | [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`        | `always-proceed` plus deny rules    | settings `agentMode: auto` plus allow/deny rules                                        | settings allow/deny rules                                   |

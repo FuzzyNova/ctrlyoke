@@ -1508,96 +1508,111 @@ suite("Inline harness configuration regression tests", function () {
     // "outside" file is created even without an escalation. The write goes
     // through a workspace script so the prompt names no outside path.
     //
-    // `custom` (approval `never`) is asked to run the command normally:
-    // asking it to escalate under `never` makes the model decline
-    // before making any call. The sandbox then refuses the outside write.
+    // `custom` (headless approval `never`) inherits `auto_review` from its
+    // isolated config home, but ctrlyoke pins the reviewer to `user`. The
+    // sandbox then refuses the outside write without prompting a human.
     // `auto` is asked to escalate up front, because a model that first hits
     // the sandbox and then reads "do not retry" never asks at all.
     for (const escalationCase of [
       {
         mode: "auto",
         reviewed: true,
+        userConfiguredJudge: false,
         prompt: `Run exactly one shell command, with escalated permissions (request approval to run it outside the sandbox, because it writes a scratch file outside the workspace): node ${OUTSIDE_WRITE_SCRIPT}. Do not run it inside the sandbox first. If approval is refused, stop and do not create the file another way.`,
       },
       {
         mode: "custom",
         reviewed: false,
+        userConfiguredJudge: true,
         prompt: `Run exactly this shell command once: node ${OUTSIDE_WRITE_SCRIPT}. If it fails, report the error and stop; do not retry it and do not create the file another way.`,
       },
     ] as const) {
-      test(`${CODEX}: ${escalationCase.reviewed ? "auto's reviewer approves" : "custom refuses"} an escalation to write outside the sandbox`, async function () {
-        if (escalationCase.mode === "auto") {
-          const minimum =
-            CODEX_PERMISSION_CAPABILITIES.autoMode.autoModeMinimumVersion;
-          const detection = await detectHarness(
-            IntegrationFactory.createCapabilityProvider(CODEX)
-          );
-          const installed = detection.rawVersion;
-          if (
-            detection.available &&
-            minimum &&
-            (!installed || !versionSatisfies(installed, minimum))
-          ) {
-            // ctrlyoke runs `auto` as `custom` below the gate, so there is no
-            // reviewer to approve anything: the case would only measure that.
-            console.log(
-              `  ⚠  ${CODEX} (auto escalation) — SKIPPED (auto needs ${minimum}, installed ${installed ?? "unknown"})`
+      test(
+        escalationCase.userConfiguredJudge
+          ? `${CODEX}: custom refuses an unlisted command with a user-configured judge`
+          : `${CODEX}: auto's reviewer approves an escalation to write outside the sandbox`,
+        async function () {
+          if (escalationCase.mode === "auto") {
+            const minimum =
+              CODEX_PERMISSION_CAPABILITIES.autoMode.autoModeMinimumVersion;
+            const detection = await detectHarness(
+              IntegrationFactory.createCapabilityProvider(CODEX)
             );
-            this.skip();
+            const installed = detection.rawVersion;
+            if (
+              detection.available &&
+              minimum &&
+              (!installed || !versionSatisfies(installed, minimum))
+            ) {
+              // ctrlyoke runs `auto` as `custom` below the gate, so there is no
+              // reviewer to approve anything: the case would only measure that.
+              console.log(
+                `  ⚠  ${CODEX} (auto escalation) — SKIPPED (auto needs ${minimum}, installed ${installed ?? "unknown"})`
+              );
+              this.skip();
+            }
+          }
+          const outsideDir = fs.mkdtempSync(
+            path.join(os.homedir(), ".cy-codex-escalation-")
+          );
+          const outsidePath = path.join(
+            outsideDir,
+            `codex-${escalationCase.mode}-escalation.txt`
+          );
+          fs.writeFileSync(
+            path.join(tmpDir, OUTSIDE_WRITE_SCRIPT),
+            `require("fs").writeFileSync(${JSON.stringify(outsidePath)}, "escalation-marker");\n`
+          );
+          const label = `codex-${escalationCase.mode}-escalation`;
+          try {
+            const runProbe = () =>
+              runToolProbe(
+                {
+                  harness: CODEX,
+                  model: HARNESS_MODELS[CODEX],
+                  sandbox: true,
+                  toolPermissions: {
+                    mode: escalationCase.mode,
+                    allowedTools: [],
+                    deniedTools: [],
+                  },
+                  steps: [
+                    {
+                      name: label,
+                      prompt: escalationCase.prompt,
+                    },
+                  ],
+                },
+                tmpDir,
+                label
+              );
+            const { result, toolEvents } = escalationCase.userConfiguredJudge
+              ? await withIsolatedCodexHome(
+                  [tmpDir],
+                  () => Promise.resolve(runProbe()),
+                  "auto_review"
+                )
+              : runProbe();
+            if (logAndMaybeSkip(`${CODEX} (${label})`, result)) return;
+            assertSuccessfulRun(`${CODEX} (${label})`, result);
+            assert.ok(
+              toolEvents.includes(OUTSIDE_WRITE_SCRIPT),
+              `codex never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+            );
+            assert.strictEqual(
+              fs.existsSync(outsidePath),
+              escalationCase.reviewed,
+              `outside write ${escalationCase.reviewed ? "missing" : "created"}\ntool events: ${toolEvents}`
+            );
+          } finally {
+            fs.rmSync(outsideDir, {
+              recursive: true,
+              force: true,
+              maxRetries: 3,
+            });
           }
         }
-        const outsideDir = fs.mkdtempSync(
-          path.join(os.homedir(), ".cy-codex-escalation-")
-        );
-        const outsidePath = path.join(
-          outsideDir,
-          `codex-${escalationCase.mode}-escalation.txt`
-        );
-        fs.writeFileSync(
-          path.join(tmpDir, OUTSIDE_WRITE_SCRIPT),
-          `require("fs").writeFileSync(${JSON.stringify(outsidePath)}, "escalation-marker");\n`
-        );
-        const label = `codex-${escalationCase.mode}-escalation`;
-        try {
-          const { result, toolEvents } = runToolProbe(
-            {
-              harness: CODEX,
-              model: HARNESS_MODELS[CODEX],
-              sandbox: true,
-              toolPermissions: {
-                mode: escalationCase.mode,
-                allowedTools: [],
-                deniedTools: [],
-              },
-              steps: [
-                {
-                  name: label,
-                  prompt: escalationCase.prompt,
-                },
-              ],
-            },
-            tmpDir,
-            label
-          );
-          if (logAndMaybeSkip(`${CODEX} (${label})`, result)) return;
-          assertSuccessfulRun(`${CODEX} (${label})`, result);
-          assert.ok(
-            toolEvents.includes(OUTSIDE_WRITE_SCRIPT),
-            `codex never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
-          );
-          assert.strictEqual(
-            fs.existsSync(outsidePath),
-            escalationCase.reviewed,
-            `outside write ${escalationCase.reviewed ? "missing" : "created"}\ntool events: ${toolEvents}`
-          );
-        } finally {
-          fs.rmSync(outsideDir, {
-            recursive: true,
-            force: true,
-            maxRetries: 3,
-          });
-        }
-      });
+      );
     }
 
     test(`${CODEX}: auto still refuses a denied MCP tool`, function () {
