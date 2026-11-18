@@ -291,8 +291,12 @@ export function createPtyDimensionsPersistence(
 
 const DEFAULT_COLS = 220;
 const DEFAULT_ROWS = 50;
-/** Ended tabs kept for replay across all workflows; see retireSession. */
-const MAX_ENDED_TABS = 50;
+/**
+ * Replay output kept across all ended tabs (characters, which is what the
+ * per-session replay buffer counts). Past it, the oldest ended tabs give up
+ * their stored output; the tabs themselves are never dropped for space.
+ */
+const ENDED_TAB_OUTPUT_BUDGET = 100 * 1024 * 1024;
 let nextPtySessionSeq = 0;
 
 /**
@@ -399,6 +403,17 @@ export class PtySession {
   // Bounded shared replay buffer for panel/browser reconnects and failure output capture.
   readonly reconnectBuffer: string[] = [];
   private reconnectBufferSize = 0;
+
+  /** Characters currently held in the replay buffer. */
+  get reconnectBufferLength(): number {
+    return this.reconnectBufferSize;
+  }
+
+  /** Discard the replay buffer (an ended tab giving up its stored output). */
+  clearReconnectBuffer(): void {
+    this.reconnectBuffer.length = 0;
+    this.reconnectBufferSize = 0;
+  }
   private readonly reconnectBufferMaxBytes: number;
 
   constructor(
@@ -542,6 +557,8 @@ export class PtyProcessManager {
   private endedTabs = new Map<string, PtySession>();
   /** Live sessions whose tab is already gone; their exit must not re-open it. */
   private droppedTabIds = new Set<string>();
+  /** See ENDED_TAB_OUTPUT_BUDGET; overridable so tests can use a small one. */
+  protected endedTabOutputBudget = ENDED_TAB_OUTPUT_BUDGET;
   private streamingFlushes = new Map<string, () => void>();
   /**
    * workflowId → clientId that should become the controller for the next PTY session
@@ -1061,11 +1078,24 @@ export class PtyProcessManager {
     this.sessions.delete(sessionId);
     if (this.droppedTabIds.delete(sessionId)) return;
     this.endedTabs.set(sessionId, session);
-    // Bounded: a tab nobody closes must not hold its scrollback forever. The
-    // oldest goes first; a client still showing it drops it on its next replay.
-    while (this.endedTabs.size > MAX_ENDED_TABS) {
-      const oldest = this.endedTabs.keys().next().value as string;
-      this.endedTabs.delete(oldest);
+    this.enforceEndedTabOutputBudget();
+  }
+
+  /**
+   * Keep ended tabs' stored output within budget by emptying the oldest
+   * ended tabs' buffers first (`endedTabs` is in end order). Only replay to a
+   * device that has not seen the tab yet loses anything: a device already
+   * showing it keeps its own rendered output.
+   */
+  private enforceEndedTabOutputBudget(): void {
+    let total = 0;
+    for (const tab of this.endedTabs.values()) {
+      total += tab.reconnectBufferLength;
+    }
+    for (const tab of this.endedTabs.values()) {
+      if (total <= this.endedTabOutputBudget) return;
+      total -= tab.reconnectBufferLength;
+      tab.clearReconnectBuffer();
     }
   }
 

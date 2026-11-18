@@ -451,6 +451,24 @@ suite("PtyProcessManager terminal tabs", () => {
     assert.deepStrictEqual(tabIds(manager), []);
   });
 
+  test("over the output budget, the oldest ended tabs lose output but stay open", () => {
+    class SmallBudgetManager extends FakePtyProcessManager {
+      protected override endedTabOutputBudget = 10;
+    }
+    const manager = new SmallBudgetManager();
+    const oldest = spawn(manager);
+    const newest = spawn(manager);
+    oldest.bufferChunk("12345678");
+    newest.bufferChunk("abcdefgh");
+
+    manager.killSession(oldest.id, TERMINAL_END_REASONS.STEP_COMPLETE);
+    manager.killSession(newest.id, TERMINAL_END_REASONS.STEP_COMPLETE);
+
+    assert.deepStrictEqual(tabIds(manager), [oldest.id, newest.id]);
+    assert.deepStrictEqual(oldest.reconnectBuffer, []);
+    assert.deepStrictEqual(newest.reconnectBuffer, ["abcdefgh"]);
+  });
+
   test("forgetWorkflowTabs drops only the requested kind of one workflow", () => {
     const manager = new FakePtyProcessManager();
     const ai = spawn(manager);
