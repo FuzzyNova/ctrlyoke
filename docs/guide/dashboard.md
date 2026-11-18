@@ -91,9 +91,10 @@ workflow you're viewing.
 - **Resume** continues a paused, stopped or failed run from where it left off.
 - **Stop** ends the current step immediately and stops the workflow.
 
-Right-click (or long-press) the first button for a [Dry Run](/guide/dry-run) of
-the whole workflow. To end one running step without stopping the workflow, use
-**End Step Early** on that step's [menu](#step-menu).
+Right-click (or long-press) the workflow name for a [Dry Run](/guide/dry-run) of
+the whole workflow. The execution buttons have no context menu. To end one
+running step without stopping the workflow, use **End Step Early** on that
+step's [menu](#step-menu).
 
 If a run belongs to the CLI or to another VS Code window, the dashboard shows it
 read-only with a lock banner. Its Stop button still works: it stops the run in

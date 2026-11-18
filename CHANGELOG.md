@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Dry Run is no longer on the Run button's right-click or long-press menu; use the workflow menu or **Dry Run Step** instead.
 - Codex `custom` and `allowAll` steps now pin the manual approval reviewer, so a user-level automatic reviewer cannot silently take over their sandbox escalations. Copilot's permissions guide now warns that its global assisted default also affects interactive `custom` steps.
 - Unresolved variable placeholders now warn even when a workflow has no `vars`; agent-supplied condition-preset parameter values remain literal instead of expanding as workflow variables; Dry Run secret grants now match the real run by scanning authored prompt text.
 - The `--var` help, workflow schema and variables guide now list the fields supported by variable substitution. Dry Run shows the resolved worktree setup command.

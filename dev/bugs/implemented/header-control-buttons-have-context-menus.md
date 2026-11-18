@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-17 by Nathan (design review while planning End Step Early)
 - **Area:** `src/ui/webview-react/components/layout/Header.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

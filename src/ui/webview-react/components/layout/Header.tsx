@@ -6,13 +6,11 @@ import { MESSAGE_TYPES, RUNNER_IDS } from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
-import { useLongPress } from "@hooks/useLongPress";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useIsDisplayedWorkflowFavorite } from "@hooks/useIsDisplayedWorkflowFavorite";
 import { sendMessage } from "@messaging/sendMessage";
 import { WebviewLog } from "@utils/logger";
-import { openWorkflowDryRun } from "@utils/executionPreview";
 import { startNewBlankWorkflow } from "@utils/newWorkflow";
 import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
 import { getExternalRunnerLabel } from "@utils/externalRunner";
@@ -36,7 +34,6 @@ import { RerunConfirmModal } from "../shared/RerunConfirmModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { DryRunModal } from "../shared/DryRunModal";
-import { ContextMenu, type ContextMenuState } from "../shared/ContextMenu";
 import {
   HEADER_BUTTON_SIZES,
   HEADER_RUN_SLOT_FIT_CLASSES,
@@ -279,24 +276,6 @@ export const Header: React.FC<{
     });
   }, [vscode, canSave, displayedViewAddress]);
 
-  const [runContextMenu, setRunContextMenu] =
-    React.useState<ContextMenuState | null>(null);
-  const openRunDryRunMenu = useCallback((x: number, y: number) => {
-    setRunContextMenu({
-      x,
-      y,
-      items: [
-        {
-          label: "Dry Run",
-          icon: "codicon-telescope",
-          disabled: false,
-          onClick: openWorkflowDryRun,
-        },
-      ],
-    });
-  }, []);
-  const runSlotLongPressHandlers = useLongPress(openRunDryRunMenu);
-
   // Handlers
   const postViewedRunAction = useCallback(
     (type: string) => {
@@ -537,11 +516,6 @@ export const Header: React.FC<{
             if (!slot1Enabled) return;
             handleSlotAction(slot1.action);
           }}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            openRunDryRunMenu(event.clientX, event.clientY);
-          }}
-          {...runSlotLongPressHandlers}
           aria-disabled={!slot1Enabled}
           title={
             externalManagementLabel
@@ -622,12 +596,6 @@ export const Header: React.FC<{
           <Icon name={slot3.icon} className={btnSize.icon} />
         </button>
       </div>
-      {runContextMenu && (
-        <ContextMenu
-          {...runContextMenu}
-          onClose={() => setRunContextMenu(null)}
-        />
-      )}
     </div>
   );
 
@@ -754,7 +722,7 @@ export const Header: React.FC<{
           {isMediumLayout && (
             <WorkflowSwitcher className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
           )}
-          {runControls}
+          {isMediumLayout && runControls}
         </div>
 
         <div className="hidden lg:flex lg:col-start-3 lg:row-start-1 items-center justify-end min-w-0 mr-1">
