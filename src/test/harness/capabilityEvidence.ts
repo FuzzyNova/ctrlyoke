@@ -91,13 +91,4 @@ export const OTHER_SUITE_CLAIMS: Readonly<Record<CapabilityPath, string>> = {
  */
 export const KNOWN_BROKEN_CLAIMS: Partial<
   Record<HarnessId, Partial<Record<CapabilityPath, string>>>
-> = {
-  "opencode-cli": {
-    "mcp.perServerToolFiltering":
-      "dev/bugs/backlog/opencode-mcp-tool-deny-rules-never-match.md",
-  },
-  "copilot-cli": {
-    "permissions.autoMode":
-      "dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md",
-  },
-};
+> = {};

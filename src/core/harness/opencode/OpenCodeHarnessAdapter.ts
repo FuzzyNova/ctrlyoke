@@ -121,17 +121,10 @@ function flagValue(args: readonly string[], flag: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined;
 }
 
-// The capability suite finds denied tools still callable:
-// dev/bugs/backlog/opencode-mcp-tool-deny-rules-never-match.md.
 const OPENCODE_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
   mechanism: "translated-cli",
-  verification: {
-    kind: "manual",
-    reference: "src/core/harness/opencode/OpenCodeToolPermissionMapper.ts",
-    basis: "cli-version",
-    verifiedVersions: [">=1.3.16"],
-  },
+  verification: capabilitySuiteVerification([">=1.3.16"]),
 } as const;
 
 const OPENCODE_IMAGE_INPUT_CAPABILITY = {

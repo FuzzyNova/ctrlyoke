@@ -219,6 +219,22 @@ suite("HarnessCapabilityRegistry", () => {
     }
   });
 
+  test("known-broken claims reference existing backlog bug reports", () => {
+    const problems: string[] = [];
+    for (const [harnessId, claims] of Object.entries(KNOWN_BROKEN_CLAIMS)) {
+      for (const [claim, reference] of Object.entries(claims ?? {})) {
+        if (!reference) continue;
+        if (
+          !reference.startsWith("dev/bugs/backlog/") ||
+          !fs.existsSync(path.join(REPO_ROOT, reference))
+        ) {
+          problems.push(`${harnessId} ${claim}: ${reference}`);
+        }
+      }
+    }
+    assert.deepStrictEqual(problems, []);
+  });
+
   test("enables prompt-input compatibility for every registered harness", async function () {
     const registry = new HarnessCapabilityRegistry();
     const snapshot = await registry.getSnapshot();

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-18 by the bug-drain final step, while reading `KNOWN_BROKEN_CLAIMS`
 - **Area:** `src/test/harness/capabilityEvidence.ts` (`KNOWN_BROKEN_CLAIMS`), `src/core/harness/opencode/OpenCodeHarnessAdapter.ts` (`OPENCODE_MCP_FILTERING_CAPABILITY`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

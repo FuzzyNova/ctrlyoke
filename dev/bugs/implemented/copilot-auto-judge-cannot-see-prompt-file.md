@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-13 by the `auto` permission-mode harness cases (step 5 of `dev/implemented/AUTO_PERMISSION_MODE_PLAN.md`), Copilot CLI 1.0.111, `gpt-6-luna`
 - **Area:** `src/core/harness/CliIntegration.ts` (prompt delivery), `src/core/harness/copilot/CopilotToolPermissionMapper.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
