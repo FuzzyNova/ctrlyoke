@@ -710,7 +710,7 @@ const HOOKS_CASES: UndoCase[] = [
     name: "add hook",
     tab: "Hooks",
     run: () => {
-      fireEvent.click(screen.getByRole("button", { name: "+ Add Hook" }));
+      fireEvent.click(screen.getByRole("button", { name: "Add Hook" }));
     },
   },
 ];

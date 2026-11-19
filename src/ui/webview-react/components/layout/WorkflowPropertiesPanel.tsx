@@ -2308,147 +2308,155 @@ const WorkflowPropertiesPanelInner: React.FC<{
             <>
               {/* Row 1: Resume Session (with paired Session ID) + Prior Context */}
               <DrawerRow narrow={isNarrow}>
-                <FormField
-                  label="Resume Session"
-                  schemaPath="resumeSession"
-                  htmlFor="settings-resume-session"
-                  description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.RESUME_SESSION}
-                      show={isDifferentFromGlobal(
-                        PROMPT_PROPERTIES.RESUME_SESSION
-                      )}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          PROMPT_PROPERTIES.RESUME_SESSION,
-                          workflowProperties.resumeSession
-                        )
-                      }
-                    />
-                  }
-                >
-                  <WorkflowVariableValue
-                    value={
-                      typeof workflowProperties.resumeSession === "string"
-                        ? workflowProperties.resumeSession
-                        : undefined
-                    }
-                    vars={workflowVars}
-                    onClear={() =>
-                      postWorkflowPropertiesUpdate({ resumeSession: undefined })
+                <PropertyGroup>
+                  <FormField
+                    label="Resume Session"
+                    schemaPath="resumeSession"
+                    htmlFor="settings-resume-session"
+                    description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property={PROMPT_PROPERTIES.RESUME_SESSION}
+                        show={isDifferentFromGlobal(
+                          PROMPT_PROPERTIES.RESUME_SESSION
+                        )}
+                        onSetDefault={() =>
+                          handleSetAsDefault(
+                            PROMPT_PROPERTIES.RESUME_SESSION,
+                            workflowProperties.resumeSession
+                          )
+                        }
+                      />
                     }
                   >
-                    <CustomSelect
-                      id="settings-resume-session"
-                      schemaPath="resumeSession"
-                      shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME}
-                      triggerAriaLabel="Resume Session"
+                    <WorkflowVariableValue
                       value={
-                        workflowProperties.sessionId ===
-                          SESSION_ID_SENTINELS.FINAL_STEP &&
-                        effectiveResumeSession
-                          ? SESSION_ID_SENTINELS.FINAL_STEP
-                          : effectiveResumeSession
-                            ? RESUME_SESSION_SELECTIONS.YES
-                            : RESUME_SESSION_SELECTIONS.NO
-                      }
-                      onChange={handleResumeSessionChange}
-                      options={[...getResumeSessionOptions()]}
-                    />
-                  </WorkflowVariableValue>
-                  {/* Session ID input — always visible, grayed out when not applicable */}
-                  <div
-                    className={`mt-1 ${
-                      effectiveResumeSession &&
-                      workflowProperties.sessionId !==
-                        SESSION_ID_SENTINELS.FINAL_STEP
-                        ? ""
-                        : "opacity-50 pointer-events-none"
-                    }`}
-                    title={
-                      !effectiveResumeSession
-                        ? "Enable Resume Session to specify a Session ID"
-                        : workflowProperties.sessionId ===
-                            SESSION_ID_SENTINELS.FINAL_STEP
-                          ? "Using Final Step Session — no explicit Session ID needed"
+                        typeof workflowProperties.resumeSession === "string"
+                          ? workflowProperties.resumeSession
                           : undefined
+                      }
+                      vars={workflowVars}
+                      onClear={() =>
+                        postWorkflowPropertiesUpdate({
+                          resumeSession: undefined,
+                        })
+                      }
+                    >
+                      <CustomSelect
+                        id="settings-resume-session"
+                        schemaPath="resumeSession"
+                        shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME}
+                        triggerAriaLabel="Resume Session"
+                        value={
+                          workflowProperties.sessionId ===
+                            SESSION_ID_SENTINELS.FINAL_STEP &&
+                          effectiveResumeSession
+                            ? SESSION_ID_SENTINELS.FINAL_STEP
+                            : effectiveResumeSession
+                              ? RESUME_SESSION_SELECTIONS.YES
+                              : RESUME_SESSION_SELECTIONS.NO
+                        }
+                        onChange={handleResumeSessionChange}
+                        options={[...getResumeSessionOptions()]}
+                      />
+                    </WorkflowVariableValue>
+                    {/* Session ID input — always visible, grayed out when not applicable */}
+                    <div
+                      className={`mt-1 ${
+                        effectiveResumeSession &&
+                        workflowProperties.sessionId !==
+                          SESSION_ID_SENTINELS.FINAL_STEP
+                          ? ""
+                          : "opacity-50 pointer-events-none"
+                      }`}
+                      title={
+                        !effectiveResumeSession
+                          ? "Enable Resume Session to specify a Session ID"
+                          : workflowProperties.sessionId ===
+                              SESSION_ID_SENTINELS.FINAL_STEP
+                            ? "Using Final Step Session — no explicit Session ID needed"
+                            : undefined
+                      }
+                    >
+                      <input
+                        type="text"
+                        id="settings-session-id"
+                        aria-label="Session ID"
+                        value={sessionIdInput}
+                        onChange={(e) => setSessionIdInput(e.target.value)}
+                        onBlur={(e) => handleSessionIdChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === KEYBOARD_KEYS.ENTER)
+                            e.currentTarget.blur();
+                        }}
+                        placeholder="Session ID, prompt number, or blank for auto-resume"
+                        className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
+                        title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
+                      />
+                      {effectiveResumeSession &&
+                        workflowProperties.sessionId !==
+                          SESSION_ID_SENTINELS.FINAL_STEP &&
+                        !sessionIdInput && (
+                          <AutoResumeStatusRow preview={autoResumePreview} />
+                        )}
+                    </div>
+                  </FormField>
+                </PropertyGroup>
+
+                <PropertyGroup>
+                  <FormField
+                    label="Prior Context"
+                    schemaPath="priorContext"
+                    htmlFor="settings-prior-context"
+                    description="Send prior step outputs with the prompt"
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property={PROMPT_PROPERTIES.PRIOR_CONTEXT}
+                        show={isDifferentFromGlobal(
+                          PROMPT_PROPERTIES.PRIOR_CONTEXT
+                        )}
+                        onSetDefault={() =>
+                          handleSetAsDefault(
+                            PROMPT_PROPERTIES.PRIOR_CONTEXT,
+                            workflowProperties.priorContext
+                          )
+                        }
+                      />
                     }
                   >
-                    <input
-                      type="text"
-                      id="settings-session-id"
-                      aria-label="Session ID"
-                      value={sessionIdInput}
-                      onChange={(e) => setSessionIdInput(e.target.value)}
-                      onBlur={(e) => handleSessionIdChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === KEYBOARD_KEYS.ENTER)
-                          e.currentTarget.blur();
-                      }}
-                      placeholder="Session ID, prompt number, or blank for auto-resume"
-                      className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
-                      title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
-                    />
-                    {effectiveResumeSession &&
-                      workflowProperties.sessionId !==
-                        SESSION_ID_SENTINELS.FINAL_STEP &&
-                      !sessionIdInput && (
-                        <AutoResumeStatusRow preview={autoResumePreview} />
-                      )}
-                  </div>
-                </FormField>
-
-                <FormField
-                  label="Prior Context"
-                  schemaPath="priorContext"
-                  htmlFor="settings-prior-context"
-                  description="Send prior step outputs with the prompt"
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.PRIOR_CONTEXT}
-                      show={isDifferentFromGlobal(
-                        PROMPT_PROPERTIES.PRIOR_CONTEXT
-                      )}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          PROMPT_PROPERTIES.PRIOR_CONTEXT,
-                          workflowProperties.priorContext
-                        )
+                    <PriorContextSelect
+                      id="settings-prior-context"
+                      detailId="settings-prior-context-detail"
+                      schemaPath="priorContext"
+                      value={effectivePriorContext}
+                      onChange={handlePriorContextChange}
+                      detail={
+                        workflowProperties.priorContextDetail ??
+                        PRIOR_CONTEXT_DETAILS.FULL
                       }
+                      onDetailChange={handlePriorContextDetailChange}
                     />
-                  }
-                >
-                  <PriorContextSelect
-                    id="settings-prior-context"
-                    detailId="settings-prior-context-detail"
-                    schemaPath="priorContext"
-                    value={effectivePriorContext}
-                    onChange={handlePriorContextChange}
-                    detail={
-                      workflowProperties.priorContextDetail ??
-                      PRIOR_CONTEXT_DETAILS.FULL
-                    }
-                    onDetailChange={handlePriorContextDetailChange}
-                  />
-                </FormField>
+                  </FormField>
+                </PropertyGroup>
               </DrawerRow>
 
-              <FormField
-                label="Variables"
-                schemaPath="vars"
-                description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
-              >
-                <KeyValueRowsEditor
-                  label="name=value"
-                  id={WORKFLOW_VARS_EDITOR_ID}
-                  ariaLabel="Variables"
-                  value={workflowProperties.vars ?? {}}
-                  onChange={handleVarsChange}
-                  keyKind="variable"
-                  entryNoun="variable"
-                />
-              </FormField>
+              <PropertyGroup>
+                <FormField
+                  label="Variables"
+                  schemaPath="vars"
+                  description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
+                >
+                  <KeyValueRowsEditor
+                    label="name=value"
+                    id={WORKFLOW_VARS_EDITOR_ID}
+                    ariaLabel="Variables"
+                    value={workflowProperties.vars ?? {}}
+                    onChange={handleVarsChange}
+                    keyKind="variable"
+                    entryNoun="variable"
+                  />
+                </FormField>
+              </PropertyGroup>
             </>
           )}
 

@@ -27,6 +27,7 @@ import { findLiteralCredentialEnvKeys } from "./KeyValueMapHelpers";
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { Icon } from "./Icon";
+import { FullWidthButton } from "./Button";
 import { ScopeBadge } from "@components/shared/ManagerUi";
 import {
   getMcpServerDetailRows,
@@ -592,15 +593,14 @@ function McpServersPanel({
         )}
 
         {onManageServers && (
-          <button
-            type="button"
+          <FullWidthButton
             onClick={onManageServers}
-            className="mb-1 flex items-center justify-center gap-1 rounded-sm border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors"
+            className="mb-1"
             title="Open MCP Manager in Settings to add, edit, or remove MCP servers"
           >
             <Icon name="settings-gear" className="text-xxs" />
             Manage MCP Servers
-          </button>
+          </FullWidthButton>
         )}
       </div>
     </div>

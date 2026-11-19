@@ -86,7 +86,7 @@ describe("CustomSelect — basic behavior", () => {
     expect(onChange).toHaveBeenCalledWith("b");
   });
 
-  it("renders a muted, length-truncated option description", async () => {
+  it("renders a muted option description, leaving truncation to CSS width", async () => {
     const user = userEvent.setup();
     const description = "A".repeat(130);
     render(
@@ -102,9 +102,9 @@ describe("CustomSelect — basic behavior", () => {
 
     await user.click(getTrigger());
 
-    expect(screen.getByText(`${"A".repeat(117)}...`)).toHaveClass(
-      "text-description-fg"
-    );
+    const subtitle = screen.getByText(description);
+    expect(subtitle).toHaveClass("text-description-fg");
+    expect(subtitle).toHaveClass("truncate");
     expect(screen.getByRole("button", { name: /^Described/ })).toHaveAttribute(
       "title",
       `Described\n\n${description}`

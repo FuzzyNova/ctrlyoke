@@ -29,15 +29,6 @@ interface CustomSelectOption extends SharedSelectOption {
 
 export type { SelectOption } from "@root/types/SelectOption";
 
-const OPTION_DESCRIPTION_MAX_LENGTH = 120;
-
-function truncateOptionDescription(description: string): string {
-  if (description.length <= OPTION_DESCRIPTION_MAX_LENGTH) {
-    return description;
-  }
-  return `${description.slice(0, OPTION_DESCRIPTION_MAX_LENGTH - 3).trimEnd()}...`;
-}
-
 /**
  * Optional props that enable the per-item hide/show feature.
  * When `namespace` is not provided the component renders exactly as before.
@@ -274,7 +265,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   <span
                     className={`text-xxs truncate ${option.descriptionClassName ?? "text-description-fg"}`}
                   >
-                    {truncateOptionDescription(option.description)}
+                    {option.description}
                   </span>
                 )}
               </span>
@@ -334,7 +325,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                     <span
                       className={`text-xxs truncate ${option.descriptionClassName ?? ""}`}
                     >
-                      {truncateOptionDescription(option.description)}
+                      {option.description}
                     </span>
                   )}
                 </span>

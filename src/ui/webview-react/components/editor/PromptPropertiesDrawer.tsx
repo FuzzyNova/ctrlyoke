@@ -1131,7 +1131,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
           <div className="space-y-2">
             <DrawerRow narrow={isNarrow}>
               {/* Resume Session — paired control with Session ID below */}
-              <div className="flex flex-col gap-1">
+              <PropertyGroup className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-resume-session"
                   className="text-xs font-semibold uppercase text-description-fg"
@@ -1205,10 +1205,10 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                     <AutoResumeStatusRow preview={autoResumePreview} />
                   )}
                 </div>
-              </div>
+              </PropertyGroup>
 
               {/* Prior Context */}
-              <div className="flex flex-col gap-1">
+              <PropertyGroup className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-prior-context"
                   className="text-xs font-semibold uppercase text-description-fg"
@@ -1237,7 +1237,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
                   disabled={fieldDisabled(PROMPT_PROPERTIES.PRIOR_CONTEXT)}
                   disabledReason={bulkEditDisabledReason}
                 />
-              </div>
+              </PropertyGroup>
             </DrawerRow>
           </div>
         )}
