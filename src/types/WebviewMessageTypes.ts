@@ -278,6 +278,13 @@ export interface CliOutput {
   elapsed: number;
   /** Token usage statistics */
   tokens?: TokenStats;
+  /**
+   * Context window observed after this attempt recorded its own usage, by a
+   * post-completion follow-up turn. Never written to the timeline aggregate:
+   * the live store and the history readers fold it in from the follow-up.
+   * Read it through `getOutputContextWindow`, which prefers it over `tokens`.
+   */
+  contextWindow?: { used: number; size: number };
   /** Whether the response is still streaming */
   isStreaming: boolean;
   /** The CLI command executed (for debugging) */

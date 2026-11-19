@@ -1,10 +1,10 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { calcContextPct } from "@utils/tokenUtils";
 import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
 import {
   formatTokenBreakdown,
   formatAttemptCostTooltip,
   formatCostLabel,
+  formatContextWindowUsage,
   formatTokenCount,
   formatTokenTotal,
   resolveTokenTotal,
@@ -12,6 +12,7 @@ import {
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
+import { getOutputContextWindow } from "@root/utils/OutputContextWindow";
 import {
   BASH_OUTPUT_EXPANSION_SECTIONS,
   HISTORY_MATCH_FIELDS,
@@ -1728,14 +1729,15 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   if (!output) return null;
 
   const parts: React.ReactNode[] = [];
+  const contextWindow = getOutputContextWindow(output);
+  const contextUsage = formatContextWindowUsage(contextWindow);
+  const contextLabel = contextUsage ? `Context: ${contextUsage}` : undefined;
   if (output.tokens) {
     const {
       prompt,
       completion,
       cached,
       cacheCreated,
-      contextWindowUsed,
-      contextWindowSize,
       total: reportedTotal,
       compactionCount,
       cost,
@@ -1751,28 +1753,18 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
       cacheCreated,
     });
 
-    const pct = calcContextPct(contextWindowUsed, contextWindowSize);
-    const contextDetails =
-      pct !== undefined
-        ? `${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`
-        : undefined;
-    const contextLabel =
-      contextDetails !== undefined ? `Context: ${contextDetails}` : undefined;
     const compactionLabel =
       compactionCount !== undefined && compactionCount > 0
         ? `Compacted ${compactionCount}x`
         : undefined;
     const tokenTooltip = buildAttemptTokenTooltipLines({
-      contextWindow:
-        contextWindowUsed !== undefined && contextWindowSize
-          ? { used: contextWindowUsed, size: contextWindowSize }
-          : undefined,
+      contextWindow,
       harness: harnessId,
       attemptTokens: output.tokens,
       showCostEstimates,
     }).join("\n");
 
-    if (pct !== undefined) {
+    if (contextLabel) {
       parts.push(
         <span key="context" title={tokenTooltip}>
           {contextLabel}
@@ -1821,6 +1813,9 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
         </span>
       );
     }
+  } else if (contextLabel) {
+    // No usage of its own, but a follow-up turn reported the context window.
+    parts.push(<span key="context">{contextLabel}</span>);
   }
 
   if (sessionId) {

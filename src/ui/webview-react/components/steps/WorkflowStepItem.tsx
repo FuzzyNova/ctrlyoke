@@ -182,7 +182,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   const ctx = resolveEffectiveContextWindow({
     isCurrent,
     liveContextWindow,
-    latestOutputTokens: latestOutput?.tokens,
+    latestOutput,
     runtimeContextWindow: runtimeMeta,
   });
   const attemptTokens = resolveDisplayedAttemptTokens(latestOutput);

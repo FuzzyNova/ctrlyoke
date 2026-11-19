@@ -18,6 +18,11 @@ import type { CliOutput } from "../../types/WebviewMessageTypes";
 import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
 import { outputAttemptKey } from "../../utils/OutputTargetKeys";
 import {
+  hasRecordedContextWindow,
+  withFollowUpContextWindow,
+  type OutputContextWindow,
+} from "../../utils/OutputContextWindow";
+import {
   TIMELINE_EVENT_TYPES,
   type CliOutputChunkAppendedEvent,
   type CliOutputEventsAppendedEvent,
@@ -69,6 +74,9 @@ export class OutputHistoryTimelineAdapter {
     // Deltas are buffered rather than folded in per batch; see
     // `StreamingCliOutputAccumulator` for why that matters on a large run.
     const deltas = new StreamingCliOutputAccumulator();
+    // Applied after the walk: the attempt's own aggregate can be recorded
+    // after its follow-up (Stop fired before the harness flushed the turn).
+    const followUpContextWindows = new Map<string, OutputContextWindow>();
     for await (const event of this.outputResolver.streamFromEvents(
       manifest,
       events
@@ -84,6 +92,24 @@ export class OutputHistoryTimelineAdapter {
         // delta buffered before it is superseded.
         deltas.discard(key);
         outputs.set(key, event.attempt.output);
+        // ...and its own context window is newer than an earlier follow-up's.
+        if (hasRecordedContextWindow(event.attempt.output)) {
+          followUpContextWindows.delete(key);
+        }
+      } else if (
+        event.kind ===
+          RUN_OUTPUT_RESOLVER_EVENT_KINDS.FOLLOW_UP_RESPONSE_APPENDED &&
+        event.contextWindow
+      ) {
+        followUpContextWindows.set(
+          getCliEntryKey(
+            event.attempt.target,
+            event.attempt.runIndex,
+            event.attempt.attemptIndex,
+            event.attempt.phase
+          ),
+          event.contextWindow
+        );
       } else if (
         event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION
       ) {
@@ -128,6 +154,12 @@ export class OutputHistoryTimelineAdapter {
         outputs.set(key, deltas.flush(key, output));
       } else {
         deltas.discard(key);
+      }
+    }
+    for (const [key, contextWindow] of followUpContextWindows) {
+      const output = outputs.get(key);
+      if (output) {
+        outputs.set(key, withFollowUpContextWindow(output, contextWindow));
       }
     }
     for (const entry of history.orderedEntries) {

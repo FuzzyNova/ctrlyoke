@@ -1,6 +1,7 @@
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { calcContextPct } from "@utils/tokenUtils";
+import { getOutputContextWindow } from "@root/utils/OutputContextWindow";
 import type { OrderedCliHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   OUTPUT_HISTORY_KINDS,
@@ -60,10 +61,12 @@ export function useContextPct() {
           (e as any).target?.kind === FINAL_STEP_PHASES.QUEUE &&
           (e as any).target?.stepIndex === index
       );
-    const tokens = cliEntry ? (cliEntry as any).cliOutput?.tokens : undefined;
+    const completedContextWindow = getOutputContextWindow(
+      cliEntry ? (cliEntry as OrderedCliHistoryEntry).cliOutput : undefined
+    );
     const completedPct = calcContextPct(
-      tokens?.contextWindowUsed,
-      tokens?.contextWindowSize
+      completedContextWindow?.used,
+      completedContextWindow?.size
     );
     if (completedPct !== undefined) {
       return completedPct;

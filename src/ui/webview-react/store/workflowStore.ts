@@ -125,6 +125,7 @@ import { preserveReferences } from "@utils/structuralSharing";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type { WorkflowProperties } from "./settingsStore";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
+import { withFollowUpContextWindow } from "@root/utils/OutputContextWindow";
 import {
   canCoalesceTextEvents,
   coalesceTextEvents,
@@ -221,26 +222,23 @@ function mergeResumedActivityIntoOutput(
   const existingEvents = existingStructured?.events || [];
   const eventsToMerge = computeStreamingEventsToMerge(existing, incomingEvents);
 
-  return {
+  const merged: CliOutput = {
     ...existing,
     structured: {
       ...existingStructured,
       events: mergeStreamingEvents(existingEvents, eventsToMerge),
       metadata: existingStructured?.metadata || {},
     },
-    tokens:
-      isFollowUp && latestContextWindowSync && existing.tokens
-        ? {
-            ...existing.tokens,
-            contextWindowUsed: latestContextWindowSync.used,
-            contextWindowSize: latestContextWindowSync.size,
-          }
-        : existing.tokens,
     elapsed:
       isFollowUp && existing.timestampMs != null
         ? (Date.now() - existing.timestampMs) / 1000
         : existing.elapsed,
   };
+  // A completed attempt can carry no usage of its own (its turn surfaced only
+  // as a follow-up), so the reading rides beside `tokens`, never inside them.
+  return isFollowUp
+    ? withFollowUpContextWindow(merged, latestContextWindowSync)
+    : merged;
 }
 
 /**

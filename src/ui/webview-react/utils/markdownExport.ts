@@ -58,10 +58,10 @@ import {
 import { getCliCommandDisplayParts } from "../../../utils/outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
 import {
-  formatTokenCount,
+  formatContextWindowUsage,
   resolveTokenTotal,
 } from "@root/utils/TokenFormatting";
-import { calcContextPct } from "@utils/tokenUtils";
+import { getOutputContextWindow } from "@root/utils/OutputContextWindow";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { formatCreatedFileDiff } from "@root/utils/CliEventDiff";
@@ -525,6 +525,7 @@ export function generateMarkdownExport(
           contextWindowUsed?: number;
           contextWindowSize?: number;
         };
+        contextWindow?: CliOutputType["contextWindow"];
         elapsed?: number;
         structured?: {
           events: Array<{ type: string; data: unknown }>;
@@ -624,21 +625,19 @@ export function generateMarkdownExport(
           ? getHarnessDisplayName(harnessId)
           : undefined;
 
+        const contextUsage = formatContextWindowUsage(
+          getOutputContextWindow(output)
+        );
+        if (contextUsage) {
+          stats.push(`Context: ${contextUsage}`);
+        }
         if (output.tokens) {
           const {
             prompt,
             completion,
             cached,
-            contextWindowUsed,
-            contextWindowSize,
             total: reportedTotal,
           } = output.tokens;
-          const pct = calcContextPct(contextWindowUsed, contextWindowSize);
-          if (pct !== undefined) {
-            stats.push(
-              `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`
-            );
-          }
           const total = resolveTokenTotal(reportedTotal, prompt, completion);
           const cachedSuffix = cached ? ` / ${cached} cached` : "";
           stats.push(

@@ -497,7 +497,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
     const ctx = resolveEffectiveContextWindow({
       isCurrent: isCurrentChip,
       liveContextWindow: liveContextWindow?.[index],
-      latestOutputTokens: latestOutput?.tokens,
+      latestOutput,
       runtimeContextWindow: runtimeMeta,
     });
     return buildStepHoverTooltip({
@@ -637,7 +637,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
   const finalStepContextWindow = resolveEffectiveContextWindow({
     isCurrent: finalStepIsExecuting,
     liveContextWindow: liveFinalStepContextWindow[finalStepLoopCount],
-    latestOutputTokens: finalStepLatestOutput?.tokens,
+    latestOutput: finalStepLatestOutput,
     runtimeContextWindow:
       finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
   });

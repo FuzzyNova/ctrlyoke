@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-18 while diagnosing a Qwen step with no context-window gauge (user report)
 - **Area:** `src/ui/webview-react/store/workflowStore.ts`, `src/core/orchestration/RunOutputResolver.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -35,10 +35,24 @@ exposed it).
   `payload.contextWindow`, and the attempt fold ignores that event kind. Nothing
   in `src/` reads the persisted `payload.contextWindow`.
 
-## Suggested Fix
+## Fix
 
-Create a minimal `tokens` object holding only the context-window fields when
-`existing.tokens` is absent. Carry `payload.contextWindow` through the resolver
-event and fold the latest one into the attempt output's usage
-(`contextWindowUsedTokens`/`contextWindowSize`), so a reload matches the live
-view.
+The suggested fix (a context-only `tokens` object) was rejected. `TokenStats`
+requires `prompt`/`completion`, so it would show "Total: 0" and "0 tks", and
+`history show --json` emits `tokens` verbatim.
+
+- A follow-up's reading now rides beside `tokens` in `CliOutput.contextWindow`.
+  The timeline aggregate never stores it; it is folded in on read.
+  `src/utils/OutputContextWindow.ts` owns the attach and read helpers, and the
+  read helper prefers the follow-up's reading over `tokens`.
+- Live: `mergeResumedActivityIntoOutput` attaches it whether or not the attempt
+  has `tokens`.
+- Reload: `RunOutputResolver` carries `payload.contextWindow` on its follow-up
+  event. Both `streamAttempts` and
+  `OutputHistoryTimelineAdapter.hydrateCliOutputsFromResolver` apply the latest
+  one when the attempt settles, because the aggregate can be recorded after the
+  follow-up. An aggregate with its own context window supersedes an earlier
+  follow-up.
+- The step card, chip rail, final-step footer, output footer, copied metadata
+  and markdown export read it through `getOutputContextWindow`. The output
+  footer shows it even when the attempt has no `tokens`.
