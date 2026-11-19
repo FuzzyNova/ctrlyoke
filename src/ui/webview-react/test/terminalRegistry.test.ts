@@ -379,7 +379,7 @@ describe("terminalRegistry host theme and font", () => {
     expect(entry.term.options.theme?.background).toBe("#ffffff");
   });
 
-  it("prefers the host terminal font and falls back to the editor font", async () => {
+  it("prefers the host terminal font and keeps the editor font as its fallback", async () => {
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       cb(0);
       return 1;
@@ -387,20 +387,39 @@ describe("terminalRegistry host theme and font", () => {
     root.style.setProperty("--vscode-editor-font-family", "Consolas");
     const { terminalRegistry } = await import("../terminalRegistry");
     const entry = await terminalRegistry.create("wf-font", "sess-1");
-    expect(entry.term.options.fontFamily).toBe("Consolas");
+    expect(entry.term.options.fontFamily).toBe("Consolas, monospace");
 
+    // A host font that is missing on this device (a Nerd Font on an iPhone)
+    // must still fall back to a monospace font, not the browser's serif.
     terminalRegistry.setHostTerminalFontFamily(" MesloLGM Nerd Font ");
-    expect(entry.term.options.fontFamily).toBe("MesloLGM Nerd Font");
+    expect(entry.term.options.fontFamily).toBe(
+      "MesloLGM Nerd Font, Consolas, monospace"
+    );
 
-    // An editor-font change does not override the host terminal font.
+    // An editor-font change keeps the host terminal font first.
     root.style.setProperty("--vscode-editor-font-family", "Fira Code");
     await flushStyleObserver();
-    expect(entry.term.options.fontFamily).toBe("MesloLGM Nerd Font");
+    expect(entry.term.options.fontFamily).toBe(
+      "MesloLGM Nerd Font, Fira Code, monospace"
+    );
 
     terminalRegistry.setHostTerminalFontFamily("");
-    expect(entry.term.options.fontFamily).toBe("Fira Code");
+    expect(entry.term.options.fontFamily).toBe("Fira Code, monospace");
 
     const later = await terminalRegistry.create("wf-font", "sess-2");
-    expect(later.term.options.fontFamily).toBe("Fira Code");
+    expect(later.term.options.fontFamily).toBe("Fira Code, monospace");
+  });
+
+  it("does not append monospace to a stack that already ends with it", async () => {
+    root.style.setProperty(
+      "--vscode-editor-font-family",
+      "Consolas, 'Courier New', monospace"
+    );
+    const { terminalRegistry } = await import("../terminalRegistry");
+    terminalRegistry.setHostTerminalFontFamily("MesloLGM Nerd Font");
+    const entry = await terminalRegistry.create("wf-font-generic", "sess-1");
+    expect(entry.term.options.fontFamily).toBe(
+      "MesloLGM Nerd Font, Consolas, 'Courier New', monospace"
+    );
   });
 });

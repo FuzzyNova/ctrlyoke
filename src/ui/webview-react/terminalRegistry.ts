@@ -138,15 +138,27 @@ function applyViewerLetterbox(entry: FitRegistryTarget): void {
   entry.domEl.style.marginRight = "auto";
 }
 
-/** Host terminal font, then the editor font, then a built-in monospace stack. */
+const DEFAULT_TERMINAL_FONT_STACK = '"Cascadia Code", "Courier New", monospace';
+const ENDS_WITH_MONOSPACE = /(^|,)\s*monospace\s*$/i;
+
+/**
+ * Host terminal font, then the editor font, always ending in `monospace`.
+ *
+ * The host font is kept as a preference, never the whole stack: it is often
+ * one font installed only on the VS Code machine (e.g. a Nerd Font), and a
+ * browser on another device without it would otherwise fall back to its
+ * proportional default (Times on iOS). xterm sizes cells from the widest
+ * glyph, so that renders as letters spaced far apart.
+ */
 function readTerminalFontFamily(): string {
-  return (
-    hostTerminalFontFamily ||
+  const editorStack =
     getComputedStyle(document.documentElement)
       .getPropertyValue("--vscode-editor-font-family")
-      .trim() ||
-    '"Cascadia Code", "Courier New", monospace'
-  );
+      .trim() || DEFAULT_TERMINAL_FONT_STACK;
+  const stack = hostTerminalFontFamily
+    ? `${hostTerminalFontFamily}, ${editorStack}`
+    : editorStack;
+  return ENDS_WITH_MONOSPACE.test(stack) ? stack : `${stack}, monospace`;
 }
 
 function forEachTerminal(apply: (term: Terminal) => void): void {
