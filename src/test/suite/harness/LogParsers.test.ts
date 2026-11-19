@@ -3744,6 +3744,57 @@ suite("CopilotLogParser", () => {
     );
   });
 
+  test("attributes subagent tool events by envelope agentId (Copilot 1.0.114+)", () => {
+    const events = [
+      {
+        type: "tool.execution_start",
+        data: { toolCallId: "spawn-a", toolName: "task", arguments: {} },
+      },
+      {
+        type: "subagent.started",
+        agentId: "agent-a",
+        data: { toolCallId: "spawn-a", agentDisplayName: "Alpha" },
+      },
+      {
+        type: "tool.execution_start",
+        agentId: "agent-a",
+        data: {
+          toolCallId: "child-a",
+          toolName: "powershell",
+          arguments: { command: "echo a" },
+        },
+      },
+      {
+        type: "tool.shell_output",
+        data: { toolCallId: "child-a", text: "a" },
+      },
+    ] as unknown as BaseCliEvent[];
+
+    const output = new CopilotLogParser().extractResponse(events);
+    const attributed = output.events.filter(
+      (event) => event.subagent?.parentToolCallId === "spawn-a"
+    );
+    assert.ok(
+      attributed.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND),
+      "the child's command is attributed to its spawn call"
+    );
+    assert.ok(
+      !output.events.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          event.subagent !== undefined
+      ),
+      "the spawn call itself is not attributed to a subagent"
+    );
+
+    const streaming = new CopilotLogParser();
+    streaming.extractStructuredEventsFromEvent(events[1]);
+    const childStart = streaming.extractStructuredEventsFromEvent(events[2]);
+    const shellOutput = streaming.extractStructuredEventsFromEvent(events[3]);
+    assert.strictEqual(childStart[0].subagent?.parentToolCallId, "spawn-a");
+    assert.strictEqual(shellOutput[0].subagent?.parentToolCallId, "spawn-a");
+  });
+
   test("normalizes Copilot tool start, completion, and result triples into one row", () => {
     const scenarios = [
       {
