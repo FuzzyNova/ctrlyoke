@@ -117,7 +117,9 @@ describe("SchedulePanel", () => {
         hostId: "owner-host",
         timeZone: OWNER_ZONE,
       });
-      expect(screen.getByText(`Times are in ${OWNER_ZONE}.`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Times are in ${OWNER_ZONE}.`)
+      ).toBeInTheDocument();
       const expectedNextRun = new Date(
         Date.parse("2026-12-02T00:00:00Z")
       ).toLocaleString(undefined, {

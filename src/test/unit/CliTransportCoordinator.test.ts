@@ -193,7 +193,10 @@ async function runStdoutSpawns(
 async function capturePermissionWarningDecision(
   channel: IHeadlessControlChannel | undefined,
   hasApprovalDashboard: boolean
-): Promise<{ channelAnswersApprovalRequests: boolean; hasApprovalDashboard: boolean }> {
+): Promise<{
+  channelAnswersApprovalRequests: boolean;
+  hasApprovalDashboard: boolean;
+}> {
   let warningDecision:
     | { channelAnswersApprovalRequests: boolean; hasApprovalDashboard: boolean }
     | undefined;
@@ -247,9 +250,16 @@ async function capturePermissionWarningDecision(
       approvalTimeoutMs: 1000,
       useApprovalControl: true,
       ...(hasApprovalDashboard
-        ? { requestApproval: async () => ({ decision: APPROVAL_DECISIONS.ALLOW_ONCE }) }
+        ? {
+            requestApproval: async () => ({
+              decision: APPROVAL_DECISIONS.ALLOW_ONCE,
+            }),
+          }
         : {}),
-      onPermissionWarning: (channelAnswersApprovalRequests, dashboardConnected) => {
+      onPermissionWarning: (
+        channelAnswersApprovalRequests,
+        dashboardConnected
+      ) => {
         warningDecision = {
           channelAnswersApprovalRequests,
           hasApprovalDashboard: dashboardConnected,
@@ -355,10 +365,13 @@ suite("CliTransportCoordinator", () => {
       answerApproval: async () => {},
       close: () => {},
     };
-    assert.deepStrictEqual(await capturePermissionWarningDecision(channel, true), {
-      channelAnswersApprovalRequests: true,
-      hasApprovalDashboard: true,
-    });
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(channel, true),
+      {
+        channelAnswersApprovalRequests: true,
+        hasApprovalDashboard: true,
+      }
+    );
   });
 
   test("identifies ask approvals that will be denied without a dashboard", async () => {
@@ -372,17 +385,23 @@ suite("CliTransportCoordinator", () => {
       answerApproval: async () => {},
       close: () => {},
     };
-    assert.deepStrictEqual(await capturePermissionWarningDecision(channel, false), {
-      channelAnswersApprovalRequests: true,
-      hasApprovalDashboard: false,
-    });
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(channel, false),
+      {
+        channelAnswersApprovalRequests: true,
+        hasApprovalDashboard: false,
+      }
+    );
   });
 
   test("keeps the existing warning when ask has no control channel", async () => {
-    assert.deepStrictEqual(await capturePermissionWarningDecision(undefined, false), {
-      channelAnswersApprovalRequests: false,
-      hasApprovalDashboard: false,
-    });
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(undefined, false),
+      {
+        channelAnswersApprovalRequests: false,
+        hasApprovalDashboard: false,
+      }
+    );
   });
 
   test("keeps the existing warning for Antigravity's non-approval channel", async () => {

@@ -15,21 +15,18 @@ suite("CLI provider argument characterization", () => {
   test("sends Claude headless prompts through stream-json stdin", () => {
     const provider = new ClaudeHarnessAdapter();
     assert.strictEqual(provider.config.inlinesGeneratedPromptOnStdin, true);
-    assert.deepStrictEqual(
-      provider.buildHeadlessArgs(baseArgs, prompt),
-      [
-        "-p",
-        "--input-format",
-        "stream-json",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--model",
-        "model-x",
-        "--add-dir",
-        "/workspace",
-      ]
-    );
+    assert.deepStrictEqual(provider.buildHeadlessArgs(baseArgs, prompt), [
+      "-p",
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--model",
+      "model-x",
+      "--add-dir",
+      "/workspace",
+    ]);
   });
 
   test("keeps the Copilot headless prompt out of argv for stdin delivery", () => {

@@ -877,10 +877,7 @@ suite("ExecutionPreviewService", () => {
     const inline = await buildWith(undefined);
     assert.strictEqual(inline.steps[0].command?.promptOnStdin, undefined);
     const controlChannel = await buildWith(undefined, true);
-    assert.strictEqual(
-      controlChannel.steps[0].command?.promptOnStdin,
-      true
-    );
+    assert.strictEqual(controlChannel.steps[0].command?.promptOnStdin, true);
   });
 
   test("Dry Run preview includes inline generated prompt text for an opted-in harness", async () => {

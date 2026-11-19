@@ -29,7 +29,7 @@ exposed it).
 
 - Live: `mergeResumedActivityIntoOutput` in `workflowStore.ts` applies the sync
   only when `existing.tokens` is already set (`isFollowUp &&
-  latestContextWindowSync && existing.tokens`), so a step with no tokens drops
+latestContextWindowSync && existing.tokens`), so a step with no tokens drops
   it.
 - Reload: `RunOutputResolver` yields `FOLLOW_UP_RESPONSE_APPENDED` without
   `payload.contextWindow`, and the attempt fold ignores that event kind. Nothing

@@ -814,10 +814,10 @@ suite("CliIntegration", () => {
       (integration as any).executionRunner.executeHeadless = async (
         session: any
       ) => {
-        if (
-          !session.workflowContext?.suppressHeadlessPermissionWarning
-        ) {
-          (integration as any).executionRunner.deps.hostCallbacks.onHeadlessPermissionWarning(
+        if (!session.workflowContext?.suppressHeadlessPermissionWarning) {
+          (
+            integration as any
+          ).executionRunner.deps.hostCallbacks.onHeadlessPermissionWarning(
             session.resolvedProperties?.toolPermissions,
             false,
             false

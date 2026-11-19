@@ -62,7 +62,7 @@ machine's time", so the preview arguably shows the result after saving.
   fix therefore includes:
   - `WorkflowScheduler` computes every occurrence (`armFromDescriptor`,
     `nextOccurrenceFromNow`, `onWake`) with `ownerScheduleCalendar(schedule, <this host's
-    zone>)`.
+zone>)`.
   - `recordOwnerTimeZone` only fills a **missing** `timeZone` (schedules saved before the
     field existed); it no longer overwrites a recorded one. A host whose own zone changed
     keeps firing in the recorded zone, which matches what the panel displays; the panel's
