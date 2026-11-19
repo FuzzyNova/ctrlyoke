@@ -18,7 +18,10 @@ import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
 import { sendEditorDraftAsSteer } from "../../utils/sendEditorSteer";
-import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import {
+  knownDrawerPageOrDefault,
+  type DrawerPage,
+} from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -238,12 +241,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   const setDrawerActivePage = useUiStore(
     (s) => s.setPromptPropertiesActivePage
   );
-  // A persisted value from another build may name a page that no longer exists.
-  const drawerActivePage: DrawerPage = (
-    Object.values(DRAWER_PAGES) as readonly string[]
-  ).includes(storedDrawerPage)
-    ? storedDrawerPage
-    : DRAWER_PAGES.HARNESS;
+  const drawerActivePage = knownDrawerPageOrDefault(storedDrawerPage);
   const handleCompatibilityReview = useCallback(
     (page: DrawerPage, focusId: string) => {
       setDrawerActivePage(page);

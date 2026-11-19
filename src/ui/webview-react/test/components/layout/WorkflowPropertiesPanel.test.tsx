@@ -28,6 +28,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import { defineWorkflowVariable } from "@utils/workflowVars";
+import { DRAWER_PAGES } from "@/types/drawerPages";
 import {
   CONDITION_ACTIONS,
   EXECUTION_MODES,
@@ -51,7 +52,10 @@ function resetStores(): void {
   useEditorStore.getState().resetEditor();
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
-  useUiStore.setState({ settingsCollapsed: false });
+  useUiStore.setState({
+    settingsCollapsed: false,
+    workflowPropertiesActivePage: DRAWER_PAGES.HARNESS,
+  });
   useSecretRegistryStore.getState().resetSecretRegistry();
 }
 
@@ -81,6 +85,22 @@ describe("WorkflowPropertiesPanel permissions", () => {
     expect(
       screen.getByRole("region", { name: "Workflow Properties" })
     ).toContainElement(screen.getByRole("tab", { name: "Harness" }));
+  });
+
+  it("restores the last-viewed tab after the panel unmounts and remounts", () => {
+    // As a narrow-layout drawer the panel unmounts on close.
+    const { unmount } = render(
+      <WorkflowPropertiesPanel onRequestClose={() => {}} />
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Hooks" }));
+    unmount();
+
+    render(<WorkflowPropertiesPanel onRequestClose={() => {}} />);
+
+    expect(screen.getByRole("tab", { name: "Hooks" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
   });
 
   it("labels workflow fields with their workflow-relative schema path", () => {

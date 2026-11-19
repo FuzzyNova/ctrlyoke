@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a synced state home, a schedule saved on another machine is read in that machine's timezone, which ctrlyoke now records with the schedule. Before, a machine in a different timezone worked out its next run in its own timezone whenever the owner wasn't running, and could drop a **Once** or **Until** time that fell in its own daylight-saving gap as invalid, deleting the schedule from the shared history the next time it wrote to that workflow.
 - Undoing or redoing a skipped step now keeps its Skipped status.
 - The collapsed steps sidebar's context menu now offers **Discard Continuation**.
+- On narrow screens, where Workflow Properties opens as a drawer, closing and reopening it now returns to the tab you were on instead of **Harness**. The last tab is also remembered after the dashboard reloads.
 
 ## [0.7.1] - 2026-11-13
 

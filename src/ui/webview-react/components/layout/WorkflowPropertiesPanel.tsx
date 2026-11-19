@@ -88,6 +88,7 @@ import { PermissionListEditor } from "../shared/PermissionListEditor";
 import {
   DRAWER_PAGES,
   drawerPageTitle,
+  knownDrawerPageOrDefault,
   type DrawerPage,
 } from "../../types/drawerPages";
 import {
@@ -410,10 +411,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       ? workflowProperties.preCondition
       : globalSettings.defaultPreCondition;
 
-  // Active drawer page
-  const [activePage, setActivePage] = useState<DrawerPage>(
-    DRAWER_PAGES.HARNESS
+  // Active drawer page — kept in uiStore (and persisted) so it survives the
+  // panel unmounting when it is shown as a closable drawer in narrow layouts.
+  const activePage = knownDrawerPageOrDefault(
+    useUiStore((s) => s.workflowPropertiesActivePage)
   );
+  const setActivePage = useUiStore((s) => s.setWorkflowPropertiesActivePage);
 
   // Alt+H/M/R: show the page holding the targeted picker. The store has
   // already expanded the panel; the picker claims the request once mounted.
@@ -1656,7 +1659,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       const firstProperty = firstCompatibilityProperty(permissionDiagnostics);
       document.getElementById(firstProperty)?.focus();
     });
-  }, [permissionDiagnostics]);
+  }, [permissionDiagnostics, setActivePage]);
 
   // Ctrl+click on a prompt's `{{name}}` (or its "add to vars" quick fix) asks
   // for that variable's row. Wait until the panel is actually showing, switch
@@ -1680,7 +1683,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       )?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [workflowVariableRevealRequest, settingsCollapsed, isMobileMode]);
+  }, [
+    workflowVariableRevealRequest,
+    settingsCollapsed,
+    isMobileMode,
+    setActivePage,
+  ]);
 
   function handleToggle() {
     if (isMobileMode) return;

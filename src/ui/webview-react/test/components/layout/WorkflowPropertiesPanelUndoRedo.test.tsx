@@ -25,6 +25,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
+import { DRAWER_PAGES } from "@/types/drawerPages";
 import {
   CONDITION_ACTIONS,
   EXECUTION_MODES,
@@ -59,7 +60,10 @@ function resetStores(): void {
   useEditorStore.getState().resetEditor();
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
-  useUiStore.setState({ settingsCollapsed: false });
+  useUiStore.setState({
+    settingsCollapsed: false,
+    workflowPropertiesActivePage: DRAWER_PAGES.HARNESS,
+  });
   useSecretRegistryStore.getState().resetSecretRegistry();
 }
 
