@@ -316,13 +316,13 @@ Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' aut
 
 - **Type:** `string[]`
 
-Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.
+Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.
 
 ### `toolPermissions.deniedTools` {#execution-properties-toolpermissions-deniedtools}
 
 - **Type:** `string[]`
 
-Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.
+Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.
 
 ### `toolPermissions.headlessApprovals` {#execution-properties-toolpermissions-headlessapprovals}
 

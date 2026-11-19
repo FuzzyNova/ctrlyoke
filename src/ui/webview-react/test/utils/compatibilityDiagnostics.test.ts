@@ -219,9 +219,59 @@ describe("workflowPermissionDiagnostic", () => {
       snapshot
     )?.message;
     expect(message).toContain(
-      "Ignored by 1 Codex step because this harness uses sandbox/approval modes"
+      "Ignored by 1 Codex step because this harness has no allow list"
     );
     expect(message).not.toContain("because because");
+  });
+
+  it("reports a partially enforced deny list as partly enforced, not ignored", () => {
+    const harness = unsupportedSnapshot.harnesses[HARNESS_IDS.CODEX_CLI]!;
+    const partialDeny = {
+      fidelity: "partial",
+      mechanism: "native",
+      verification: "verified",
+      caveatCode: PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY,
+    };
+    const snapshot = {
+      ...unsupportedSnapshot,
+      harnesses: {
+        [HARNESS_IDS.CODEX_CLI]: {
+          ...harness,
+          descriptor: {
+            harnessId: HARNESS_IDS.CODEX_CLI,
+            permissions: { deniedTools: partialDeny },
+          },
+          effective: {
+            permissions: {
+              ...harness.effective!.permissions,
+              deniedTools: partialDeny,
+            },
+          },
+        },
+      } as unknown as HarnessCapabilityRegistrySnapshot["harnesses"],
+    };
+    const result = workflowPermissionDiagnostic(
+      "deniedTools",
+      [target("custom", [], ["mcp__github__delete_repo", "shell(rm:*)"])],
+      snapshot
+    );
+    expect(result?.severity).toBe(COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING);
+    expect(result?.message).toContain(
+      "Only partly enforced for 1 Codex step because this harness enforces only mcp__<server>__<tool> denials"
+    );
+    expect(result?.message).not.toContain("Ignored");
+    expect(result?.message).not.toContain("can still run the denied tools");
+  });
+
+  it("says outright that steps ignoring a deny list can run those tools", () => {
+    const result = workflowPermissionDiagnostic(
+      "deniedTools",
+      [target("custom", [], ["shell(rm:*)"])],
+      unsupportedSnapshot
+    );
+    expect(result?.message).toMatch(
+      /^Ignored by 1 Codex step .*\. Those steps can still run the denied tools\.$/
+    );
   });
 
   it("writes every reason caveat as a because clause", () => {

@@ -352,7 +352,7 @@ export function getCompatibilityCaveatMessage(
 ): string | undefined {
   switch (caveatCode) {
     case PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES:
-      return "because this harness uses sandbox/approval modes instead of individual tool patterns";
+      return "because this harness has no allow list; its sandbox and approval modes decide what runs";
     case PERMISSION_CAVEAT_CODES.ANTIGRAVITY_RULE_TRANSLATION:
       return "because Antigravity cannot translate web search or subagent tools, list/search denials, or allow a command chain piecemeal";
     case PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS:
