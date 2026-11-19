@@ -225,7 +225,7 @@ suite("HarnessCapabilityRegistry", () => {
       for (const [claim, reference] of Object.entries(claims ?? {})) {
         if (!reference) continue;
         if (
-          !/^dev\/bugs\/(?:backlog|implemented)\//.test(reference) ||
+          !/^dev\/bugs\/(?:backlog|rejected)\//.test(reference) ||
           !fs.existsSync(path.join(REPO_ROOT, reference))
         ) {
           problems.push(`${harnessId} ${claim}: ${reference}`);

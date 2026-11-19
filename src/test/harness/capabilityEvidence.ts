@@ -94,6 +94,6 @@ export const KNOWN_BROKEN_CLAIMS: Partial<
 > = {
   "antigravity-cli": {
     "permissions.autoMode":
-      "dev/bugs/implemented/antigravity-auto-approved-command-cannot-write-workspace.md",
+      "dev/bugs/rejected/antigravity-auto-approved-command-cannot-write-workspace.md",
   },
 };

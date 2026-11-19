@@ -163,16 +163,58 @@ suite("OpenCode 2 support", () => {
       const commands = followed?.events.filter(
         (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
       );
+      // Sources drain concurrently, so compare command/parent pairs as a set.
       assert.deepStrictEqual(
-        commands?.map((event) => (event.data as BashCommandData).command),
-        ["echo subagent-marker-alpha", "echo subagent-marker-beta"]
-      );
-      assert.deepStrictEqual(
-        commands?.map((event) => event.subagent?.parentToolCallId),
+        commands
+          ?.map(
+            (event) =>
+              `${(event.data as BashCommandData).command} <- ${event.subagent?.parentToolCallId}`
+          )
+          .sort(),
         [
-          (output.events[0].data as ToolCall).id,
-          (output.events[1].data as ToolCall).id,
-        ]
+          `echo subagent-marker-alpha <- ${(output.events[0].data as ToolCall).id}`,
+          `echo subagent-marker-beta <- ${(output.events[1].data as ToolCall).id}`,
+        ].sort()
+      );
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("shows a child tool once when both the event stream and execute.after record it", async () => {
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-v23-subagents-dup-")
+    );
+    try {
+      // The plugin's event translator and its execute.after hook both write
+      // a completed `tool:<callID>` part when OpenCode delivers child tool
+      // events on the subscription.
+      const lines = readFixture("v2.3-subagents.sidecar.jsonl")
+        .split("\n")
+        .filter((line) => line.trim());
+      const withDuplicates = lines.flatMap((line) =>
+        line.includes('"kind":"part"') ? [line, line] : [line]
+      );
+      await fs.promises.writeFile(
+        path.join(directory, "run-subagents.jsonl"),
+        `${withDuplicates.join("\n")}\n`
+      );
+      const provider = new OpenCodeHarnessAdapter();
+      const parser = provider.logParser;
+      parser.setSubagentSidecar(directory, "run");
+      parser.extractResponse(
+        provider.parseHeadlessStdout(readFixture("v2.3-subagents.stdout.jsonl"))
+      );
+      const followed = await parser.getSubagentFollower()?.drainToEof(100);
+      const commands = followed?.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      // Sources drain concurrently, so only the set of commands is stable.
+      assert.deepStrictEqual(
+        commands
+          ?.map((event) => (event.data as BashCommandData).command)
+          .sort(),
+        ["echo subagent-marker-alpha", "echo subagent-marker-beta"]
       );
     } finally {
       await fs.promises.rm(directory, { recursive: true, force: true });
