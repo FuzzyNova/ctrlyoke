@@ -156,7 +156,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
     npmPackage: "@github/copilot",
     versionPolicy: {
       minimum: "1.0.19",
-      testedWith: COPILOT_ACP_MIN_VERSION,
+      testedWith: "1.0.114",
       updateCommand: "copilot update",
     },
     shouldStreamHeadlessOutput: true,

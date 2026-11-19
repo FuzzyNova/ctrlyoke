@@ -123,7 +123,7 @@ sooner when a CLI release breaks something older versions can't work around.
 |  | Copilot | Claude Code | Codex | OpenCode | Qwen Code | Antigravity |
 | --- | --- | --- | --- | --- | --- | --- |
 | Minimum | 1.0.19 | 2.1.94 | 0.129.0 | 1.3.16 | 0.15.5 | 1.4.10 |
-| Tested with | 1.0.112 | 2.1.323 | 0.167.2 | 2.2.7 | 0.27.2 | 1.5.7 |
+| Tested with | 1.0.114 | 2.1.328 | 0.170.0 | 2.3.2 | 0.28.0 | 1.5.7 |
 | Update | `copilot update` | `claude update` | `codex update` | `opencode upgrade` | `npm install -g @qwen-code/qwen-code@latest` | `agy update` |
 
 ## Verified versions
