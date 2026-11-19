@@ -691,7 +691,7 @@ suite("WorkflowLibraryHandlers", () => {
       ],
     };
 
-    test("clears an authored value saved at User scope", async () => {
+    test("stores a value equal to the template's authored default", async () => {
       const originalSet = configService.set;
       const originalGetScoped = configService.getScoped;
       const writes: unknown[] = [];
@@ -723,7 +723,10 @@ suite("WorkflowLibraryHandlers", () => {
           SETTING_SCOPES.USER
         );
 
-        assert.deepStrictEqual(writes, [{}]);
+        // The template's default can change later; the pin must survive it.
+        assert.deepStrictEqual(writes, [
+          { "single-template": { value: "authored" } },
+        ]);
       } finally {
         configService.set = originalSet;
         configService.getScoped = originalGetScoped;

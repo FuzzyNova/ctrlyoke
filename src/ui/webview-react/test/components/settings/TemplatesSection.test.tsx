@@ -202,12 +202,50 @@ describe("TemplatesSection", () => {
     expect(lastWrite()).toMatchObject({ values: { text: null } });
   });
 
-  it("keeps an unedited added row when the next value is added", () => {
+  it("saves and keeps showing a value equal to the template's default", () => {
+    mount();
+    fireEvent.change(screen.getByRole("combobox", { name: "Add template" }), {
+      target: { value: "sample" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Add value" }), {
+      target: { value: "path" },
+    });
+    expect(lastWrite()).toMatchObject({
+      templateId: "sample",
+      values: { path: "src" },
+    });
+    const input = screen.getByRole("textbox", { name: "path" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "src2" } });
+    fireEvent.blur(input);
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "src" } });
+    fireEvent.blur(input);
+    expect(lastWrite()).toMatchObject({
+      templateId: "sample",
+      values: { path: "src" },
+    });
+    cleanup();
+
+    mount({ values: { user: { sample: { path: "src" } }, workspace: {} } });
+    expect(screen.getByRole("textbox", { name: "path" })).toHaveValue("src");
+  });
+
+  it("saves nothing for a template card with no variable chosen", () => {
+    mount();
+    fireEvent.change(screen.getByRole("combobox", { name: "Add template" }), {
+      target: { value: "sample" },
+    });
+    expect(screen.getByText("Choose a variable to add.")).toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+  });
+
+  it("saves a chosen variable's initial value as soon as it is picked", () => {
     const three = template({
       variables: [
         { name: "first", type: "text", default: "a" },
         { name: "second", type: "text", default: "b" },
-        { name: "third", type: "text", default: "c" },
+        { name: "blank", type: "text" },
       ],
     });
     mount({ templates: [three] });
@@ -223,11 +261,34 @@ describe("TemplatesSection", () => {
     expect(
       within(add()).queryByRole("option", { name: "second" })
     ).not.toBeInTheDocument();
-    fireEvent.change(add(), { target: { value: "third" } });
-    expect(writes()).toHaveLength(0);
+    fireEvent.change(add(), { target: { value: "blank" } });
+    // A blank value has nothing to pin; it waits for the user to type one.
+    expect(writes().map((write) => write.values)).toEqual([
+      { first: "a" },
+      { second: "b" },
+    ]);
     expect(screen.getByRole("textbox", { name: "first" })).toHaveValue("a");
     expect(screen.getByRole("textbox", { name: "second" })).toHaveValue("b");
-    expect(screen.getByRole("textbox", { name: "third" })).toHaveValue("c");
+    expect(screen.getByRole("textbox", { name: "blank" })).toHaveValue("");
+  });
+
+  it("saves a picked harness together with its linked model", () => {
+    const paired = template({
+      variables: [
+        { name: "runner", type: "harness" },
+        { name: "model", type: "model", harness: "runner", default: "opus" },
+      ],
+    });
+    mount({ templates: [paired] });
+    fireEvent.change(screen.getByRole("combobox", { name: "Add template" }), {
+      target: { value: "sample" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Add value" }), {
+      target: { value: "runner" },
+    });
+    expect(lastWrite()).toMatchObject({
+      values: { runner: "claude-cli", model: "opus" },
+    });
   });
 
   it("edits a saved value and shows refreshed settings once committed", () => {
@@ -275,19 +336,23 @@ describe("TemplatesSection", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Add value" }), {
       target: { value: "task" },
     });
+    expect(lastWrite()).toMatchObject({ values: { task: "build" } });
     fireEvent.click(screen.getByRole("button", { name: "Clear all sample" }));
-    expect(lastWrite()).toMatchObject({ values: { path: null } });
-    expect(lastWrite().values).not.toHaveProperty("task");
+    // The just-added row was already written, so Clear all clears it too.
+    expect(lastWrite()).toMatchObject({ values: { path: null, task: null } });
     expect(
       screen.queryByRole("textbox", { name: "task" })
     ).not.toBeInTheDocument();
   });
 
   it("removes an unsaved card with Clear all without writing", () => {
-    mount();
+    mount({
+      templates: [template({ variables: [{ name: "path", type: "text" }] })],
+    });
     fireEvent.change(screen.getByRole("combobox", { name: "Add template" }), {
       target: { value: "sample" },
     });
+    // A blank value is never written, so there is nothing to clear.
     fireEvent.change(screen.getByRole("combobox", { name: "Add value" }), {
       target: { value: "path" },
     });
