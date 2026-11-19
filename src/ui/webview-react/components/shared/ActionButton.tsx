@@ -35,6 +35,8 @@ interface ActionButtonProps {
   feedback?: ActionFeedback;
   title?: string;
   ariaLabel?: string;
+  /** Set for a toggle button; rendered as `aria-pressed`. */
+  pressed?: boolean;
   className?: string;
 }
 
@@ -57,6 +59,7 @@ export function ActionButton({
   feedback,
   title,
   ariaLabel,
+  pressed,
   className: customClassName = "",
 }: ActionButtonProps) {
   const flashing = success && !pending;
@@ -96,6 +99,7 @@ export function ActionButton({
         onClick={flashing ? undefined : onClick}
         title={title}
         aria-label={ariaLabel}
+        aria-pressed={pressed}
       >
         {content}
       </button>

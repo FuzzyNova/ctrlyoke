@@ -102,7 +102,7 @@ describe("HooksEditor compatibility diagnostics", () => {
           `The ${harnessName} harness does not support the Notification hook event.`
         )
       ).toBeVisible();
-      expect(screen.getByRole("button", { name: "+ Add Hook" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Add Hook" })).toBeVisible();
     }
   );
 
@@ -135,7 +135,7 @@ describe("HooksEditor compatibility diagnostics", () => {
     expect(
       screen.getByText(/does not support the Error hook event/)
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "+ Add Hook" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add Hook" })).toBeVisible();
   });
 
   it("renders and round-trips hook environment and timeout controls", () => {

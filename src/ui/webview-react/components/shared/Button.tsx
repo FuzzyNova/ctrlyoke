@@ -41,3 +41,19 @@ export const Button: React.FC<ButtonProps> = ({
     </button>
   );
 };
+
+/**
+ * Bordered secondary button that spans its container, for the one action at
+ * the foot of a property list (Manage MCP Servers, Add Hook).
+ */
+export const FullWidthButton: React.FC<
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode }
+> = ({ children, className = "", type = "button", ...props }) => (
+  <button
+    type={type}
+    className={`flex w-full items-center justify-center gap-1 rounded-sm border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+    {...props}
+  >
+    {children}
+  </button>
+);

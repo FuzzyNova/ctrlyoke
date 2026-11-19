@@ -23,6 +23,7 @@ import {
 } from "./KeyValueMapHelpers";
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { Button } from "./Button";
+import { ActionButton } from "./ActionButton";
 import { Icon } from "./Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
@@ -514,18 +515,16 @@ export function KeyValueRowsEditor({
         title={schemaPath ? schemaTitle(schemaPath) : undefined}
         className="flex min-w-0 flex-col gap-2"
       >
-        <button
-          type="button"
-          aria-label={
+        <ActionButton
+          label={isBulkEdit ? "Exit bulk edit" : "Bulk edit"}
+          icon={isBulkEdit ? "list-unordered" : "edit"}
+          ariaLabel={
             isBulkEdit ? "Exit bulk edit mode" : "Enter bulk edit mode"
           }
-          aria-pressed={isBulkEdit}
+          pressed={isBulkEdit}
           disabled={disabled}
           onClick={isBulkEdit ? exitBulkEdit : enterBulkEdit}
-          className="self-start text-xs text-link-fg underline hover:no-underline focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isBulkEdit ? "Exit bulk edit" : "Bulk edit"}
-        </button>
+        />
         {isBulkEdit ? (
           <textarea
             aria-label={`${ariaLabel} bulk editor`}
