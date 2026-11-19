@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-19
+
 ### Changed
 
 - The Advanced Permissions settings tab is gone: **Trusted External Roots** and **Offer trust for untrusted file links** now sit below the sandbox settings in Settings → Workflow Defaults → Permissions, matching the workflow Permissions tab, and the per-harness permission notes it carried are covered by the harness and permissions docs. Workflow Defaults → Permissions also no longer lists which harnesses support Allowed Tools and Denied Tools, and warns only when a harness cannot enforce them. That warning now names each such harness with its own reason (today only Codex, for Allowed Tools), and the workflow Permissions tab reports Codex's deny list, which enforces MCP tool entries, as partly enforced rather than ignored.
@@ -50,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tested with: Copilot CLI 1.0.114, Claude Code 2.1.328, Codex CLI 0.170.0, OpenCode 2.3.2 and Qwen Code 0.28.0. Antigravity stays at 1.5.7: on 1.5.12, `auto` permission mode runs commands in agy's sandbox, which refuses workspace writes on Windows (see the note above).
 - Dry Run is no longer on the Run button's right-click or long-press menu; use the workflow menu or **Dry Run Step** instead.
 - Codex `custom` and `allowAll` steps now pin the manual approval reviewer, so a user-level automatic reviewer cannot silently take over their sandbox escalations. Copilot's permissions guide now warns that its global assisted default also affects interactive `custom` steps.
 - Unresolved variable placeholders now warn even when a workflow has no `vars`; agent-supplied condition-preset parameter values remain literal instead of expanding as workflow variables; Dry Run secret grants now match the real run by scanning authored prompt text.
@@ -94,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Undoing or redoing a skipped step now keeps its Skipped status.
 - The collapsed steps sidebar's context menu now offers **Discard Continuation**.
 - On narrow screens, where Workflow Properties opens as a drawer, closing and reopening it now returns to the tab you were on instead of **Harness**. The last tab is also remembered after the dashboard reloads.
+- Copilot CLI 1.0.114 subagent commands are attributed to their spawn card again. That release tags a subagent's events with an `agentId` instead of `parentToolCallId`, so its commands showed as the parent's; ctrlyoke now reads either form.
 
 ## [0.7.1] - 2026-11-13
 
