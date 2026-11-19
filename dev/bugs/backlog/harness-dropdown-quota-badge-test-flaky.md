@@ -34,36 +34,58 @@ unreliable.
   from `src/ui/webview-react`; the installed Vitest 5.1.0 rejects `--repeat` as an unknown
   option.
 - Replaced it with 50 sequential runs of `npx vitest run
-  test/components/shared/HarnessDropdown.test.tsx`; all 50 passed.
+test/components/shared/HarnessDropdown.test.tsx`; all 50 passed.
 - Repeated the file 25 times while a CPU-bound PowerShell job ran alongside it; all 25 passed.
 - The reported failure was not reproduced. Do not treat the suspected cause below as confirmed.
 
 ## Root Cause
 
-Not confirmed: the failure did not reproduce in 75 repeat runs, including 25 under CPU load.
-Code inspection identifies a plausible timing hazard, but it has not been observed causing this
-failure. The badge only renders when `useElementNarrow(180)` reports a wide element. The test
-makes the element wide by replacing `Element.prototype.getBoundingClientRect` and restores it as
-soon as its synchronous assertions finish, while the hook also measures from an animation-frame
-ResizeObserver callback. If that callback runs after restoration, it can measure jsdom's default
-0px width and hide the badge. Confirm this path with a reproduction or failure-time instrumentation
-before calling it the root cause. Other items to check:
+Not confirmed. Running the file alone (75 times) is the wrong reproduction. The UI suite runs
+with `isolate: false`, so a failure seen only in the full run is almost always a leak from an
+earlier file in the same worker (see the `isolate: false` bullet in
+`.github/instructions/webview-react.instructions.md`).
 
-- `useElementTier` measures once on ref attach, then again from
-  `createAnimationFrameResizeObserver`. If a deferred frame or observer callback from this
-  test or an earlier one runs while a different stub (or the original jsdom 0-width rect) is
-  in place, `isNarrow` flips to true and hides the badge. Under load the frame timing changes.
-- Store state (`useHarnessUsageStore`, `useSettingsStore`) or the prototype patch leaking
-  between tests in the file. The file's `afterEach` resets usage and settings state, and no other
-  test in the file patches `getBoundingClientRect`.
-- Anything time-based in the badge: `fetchedAt`/`updatedAt` use `Date.now()` with a 5-minute
-  `staleAfterMs`, so staleness is unlikely, but confirm the badge has no tighter freshness rule.
+Ruled out by code inspection (2026-11-18 final-step review):
+
+- **A late animation-frame measurement after the stub is restored.** The setup file's global
+  `ResizeObserver` mock (`test/setup.ts`) has a no-op `observe`, so
+  `createAnimationFrameResizeObserver` never schedules a frame in this file. Every width
+  measurement (the ref-attach snapshot and the `useElementTier` effect) runs synchronously
+  inside `render()`'s `act()`, while the stub is still in place. The failing assertion at
+  line 292 also runs before the `finally` restores the prototype.
+- **Time or staleness.** `getHarnessUsageDisplay` applies no freshness rule to `percentOnly`.
+  It drops only a past `resetAt` suffix.
+- **Persisted-store rehydration.** Neither `harnessUsageStore` nor `settingsStore` uses
+  `persist`.
+
+So in the failing run, either the rendered div did not resolve `getBoundingClientRect` to the
+`Element.prototype` stub, or the badge's inputs were different: the usage snapshot was missing,
+or `percentDirection` was not `remaining`, which renders `25%`. The truncated DOM dump does not
+show which. Candidates, all of which are cross-file leaks:
+
+- An own `getBoundingClientRect` on a prototype between `Element` and the div that
+  `test/fileIsolation.ts` does not guard. `GUARDED_PROTOTYPES` covers `Node`, `Element`,
+  `HTMLElement`, `HTMLCanvasElement`, `Range` and `Document`, but not `HTMLDivElement` and
+  the other concrete element prototypes. No test patches those today by name, so check
+  helpers and `Object.defineProperty(proto, …)` calls on computed prototypes too.
+- A `ResizeObserver` installed by direct `window.ResizeObserver =` assignment
+  (`test/hooks/useElementNarrow.test.ts` does this and restores it in `afterEach`), or any
+  other global that `vi.unstubAllGlobals()` does not undo.
+- A store or module instance that the component and the test resolve differently after
+  `vi.resetModules()`.
 
 ## Suggested Fix
 
-Reproduce first: loop the file (for example `npx vitest run <file> --repeat 50`, or run it
-under `--pool=threads` with a CPU-heavy process alongside) until it fails. Then make the width
-deterministic without a global prototype patch outliving the render: stub
-`getBoundingClientRect` with `vi.spyOn` and restore it in `afterEach`, flush pending animation
-frames or observer callbacks inside `act()` before asserting, and use `findByText` if the badge
-legitimately appears after a frame. Do not weaken the assertion or the 180px threshold.
+1. Try to reproduce the failure deterministically in a single worker. Run the whole UI suite
+   with one worker (`npx vitest run --maxWorkers=1` from `src/ui/webview-react`) a few times.
+   If it fails, bisect the files that ran before it with an ordered `BaseSequencer` subclass,
+   as the instruction file describes. Fix the leak at its source, or extend
+   `test/fileIsolation.ts` if the leak is a class of state it should already cover.
+2. Whether or not it reproduces, make the test self-diagnosing and less fragile:
+   - Move the width stub into the test's setup and teardown using
+     `test/fixtures/elementLayout.ts` or `vi.spyOn`, not a hand-rolled prototype swap.
+   - Before rendering, assert that a freshly created `div` measures 300px. That makes a
+     prototype-shadowing leak fail with its own message.
+   - If `75%` is missing, report the badge inputs (the store's Claude snapshot and the
+     settings `percentDirection`) and the row's text, so the next failure names its cause.
+3. Do not weaken the `75%` assertion or the 180px threshold.
