@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A [Known issues](https://ctrlyoke.dev/docs/troubleshooting/known-issues) page in the docs lists harness CLI problems ctrlyoke cannot fix. It starts with agy's `auto` sandbox refusing workspace writes on Windows.
+
+### Changed
+
+- Tested with Antigravity CLI 1.5.12, which has the known issue above.
+
 ## [0.8.0] - 2026-11-19
 
 ### Changed

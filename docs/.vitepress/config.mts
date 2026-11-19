@@ -237,6 +237,10 @@ export default defineConfig({
             },
             { text: "Common errors", link: "/troubleshooting/common-errors" },
             { text: "FAQ", link: "/troubleshooting/faq" },
+            {
+              text: "Known issues",
+              link: "/troubleshooting/known-issues",
+            },
           ],
         },
       ],

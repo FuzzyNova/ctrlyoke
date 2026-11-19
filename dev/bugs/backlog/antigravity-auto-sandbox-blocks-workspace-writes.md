@@ -29,5 +29,6 @@ workspace-write behavior on Windows.
 
 Re-check on each new agy release. If it persists, gate `auto` for agy to the versions that can write
 the workspace (`autoModeMinimumVersion`/fallback in the mapper), or find an agy setting that widens
-the sandbox's write roots. `versionPolicy.testedWith` for Antigravity stays at 1.5.7 until the case
-passes.
+the sandbox's write roots. `versionPolicy.testedWith` for Antigravity is 1.5.12 despite this failing
+case; the issue is public in `docs/troubleshooting/known-issues.md`. agy is closed source, so no
+public tracker is known; report it through agy's `/feedback` or Google's channel if one exists.
