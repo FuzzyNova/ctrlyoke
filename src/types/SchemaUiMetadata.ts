@@ -75,7 +75,13 @@ export const SCHEMA_FIELD_META = {
 export interface SchemaOptionMeta<V extends string> {
   value: V;
   label: string;
+  /**
+   * One-line subtitle shown under the label in dropdowns. Keep it short
+   * enough to fit the narrowest panel; longer explanation goes in `detail`.
+   */
   description?: string;
+  /** Tooltip-only explanation, shown after the description on hover. */
+  detail?: string;
   alias?: { reason: string };
   visual?: {
     codicon: string;
@@ -99,6 +105,7 @@ export function toSelectOptions<
     value: option.value,
     label: option.label,
     ...(option.description ? { description: option.description } : {}),
+    ...(option.detail ? { tooltipDetail: option.detail } : {}),
     ...(option.short ? { short: option.short } : {}),
     ...(option.variant !== undefined &&
     SCHEMA_VARIANT_DESCRIPTIONS[path]?.[option.variant]
@@ -124,6 +131,9 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     value: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
     label: "Dangerously Allow All (yolo)",
     short: "allow all!",
+    description: "No checks; ignores both lists",
+    detail:
+      "Passes the harness's own skip-all-permissions flag. Every tool runs without approval, and the deny list is not applied.",
     alias: {
       reason: "Yolo is a widely recognized nickname for this risky mode.",
     },
@@ -136,6 +146,9 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     value: PERMISSION_MODES.ALLOW_ALL,
     label: "Allow All",
     short: "allow all",
+    description: "Everything except the deny list",
+    detail:
+      "Approves every tool except those on the deny list. The allow list is ignored. This is the default.",
     visual: {
       codicon: "workspace-trusted",
       color: "text-warning-fg",
@@ -145,8 +158,9 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     value: PERMISSION_MODES.AUTO,
     label: "Auto (harness judges each request)",
     short: "auto",
-    description:
-      "The harness's safety judge approves or blocks each request. The deny list always blocks; the allow list pre-approves tools without limiting what runs.",
+    description: "Harness's judge decides; deny list still blocks",
+    detail:
+      "The harness's safety judge approves or blocks each request. The deny list always blocks; the allow list pre-approves tools without limiting what runs. Harnesses without an auto mode fall back to Custom.",
     alias: { reason: "Auto delegates permission decisions to the harness." },
     visual: { codicon: "shield", color: "text-warning-fg" },
   },
@@ -154,6 +168,9 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     value: PERMISSION_MODES.CUSTOM,
     label: "Custom",
     short: "custom",
+    description: "Only the allow list, minus the deny list",
+    detail:
+      "Tools on the allow list run without asking and tools on the deny list are blocked; anything else is left to the harness to ask about. Codex and Antigravity cannot enforce per-tool lists.",
     visual: {
       codicon: "workspace-trusted",
       color: "text-terminal-ansiGreen",
@@ -163,6 +180,9 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     value: PERMISSION_MODES.NONE,
     label: "None",
     short: "none",
+    description: "No flags; the harness's own settings apply",
+    detail:
+      "ctrlyoke passes no permission flags, so the harness uses its own configuration (such as ~/.claude/settings.json). This does not deny anything.",
     visual: {
       codicon: "workspace-trusted",
       color: "text-description-fg",
