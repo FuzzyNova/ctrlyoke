@@ -761,7 +761,12 @@ $defs:
           - gemini-4-hydrogen-low
           - gemini-4-hydrogen-medium
           - gemini-4-hydrogen-xhigh
+          - gemini-4-neon-high
+          - gemini-4-neon-low
+          - gemini-4-neon-medium
+          - gemini-4-neon-xhigh
           - gemini-pro-orchestrator-g1-pro
+          - gemini-pro-orchestrator-neon
           - gpt-5.3-codex
           - gpt-5.6-luna
           - gpt-5.6-sol
@@ -771,6 +776,8 @@ $defs:
           - gpt-6-sol
           - gpt-6.1-sol
           - gpt-6.1-terra
+          - gpt-6.2-astra
+          - gpt-6.2-sol
           - gpt-oss-120b-medium
           - grok-4.6
           - grok-4.7
