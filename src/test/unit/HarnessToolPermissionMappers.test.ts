@@ -1449,7 +1449,7 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(args.includes("--exclude-tools"));
       });
 
-      test("a quoted Windows path before :* stays part of the command prefix", async () => {
+      test("normalizes quoted Windows paths to Qwen's command matcher spelling", async () => {
         const prefix =
           'node "C:\\ext\\out\\mcp-server.js" --tool submit_commit_message --workspace "C:\\repo" --commit-output "C:\\repo\\out.txt" --args';
         const args = await mapperArgs(
@@ -1457,7 +1457,7 @@ suite("HarnessToolPermissionMappers", () => {
           cfg(PERMISSION_MODES.CUSTOM, [`shell(${prefix}:*)`], [])
         );
         assert.deepStrictEqual(argsAfterFlag(args, "--allowed-tools"), [
-          `ShellTool(${prefix} *)`,
+          "ShellTool(node C:/ext/out/mcp-server.js --tool submit_commit_message --workspace C:/repo --commit-output C:/repo/out.txt --args *)",
         ]);
       });
 

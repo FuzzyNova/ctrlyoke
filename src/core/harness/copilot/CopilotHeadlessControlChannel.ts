@@ -64,6 +64,7 @@ function getPermissionOption(
 /** Copilot CLI's ACP channel for one headless workflow step. */
 export class CopilotHeadlessControlChannel implements IHeadlessControlChannel {
   readonly steerDelivery = HEADLESS_STEER_DELIVERIES.QUEUE;
+  readonly answersApprovalRequests = true;
   readonly startLogTailAfterChannelStart = true;
   readonly spawnShape: {
     args: readonly string[];

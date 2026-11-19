@@ -474,6 +474,7 @@ suite("CommitMessageGenerator", () => {
       outputPath,
       prefix
     );
+    const normalizedOutputPath = outputPath.replace(/\\/g, "/");
 
     assert.strictEqual(overrides.mcpServers, null);
     assert.deepStrictEqual(overrides.skills, [MCP_SKILL_NAMES.COMMIT_MESSAGE]);
@@ -483,7 +484,7 @@ suite("CommitMessageGenerator", () => {
         "read",
         "grep",
         "glob",
-        `shell(node "/ext/out/mcp-server.js" --tool submit_commit_message --workspace "/repo" --commit-output "${outputPath}" --args:*)`,
+        `shell(node "/ext/out/mcp-server.js" --tool submit_commit_message --workspace "/repo" --commit-output "${normalizedOutputPath}" --args:*)`,
       ],
       deniedTools: ["write", "edit", "multiedit"],
     });
@@ -497,6 +498,19 @@ suite("CommitMessageGenerator", () => {
           outputPath
         ),
       /skill command prefix/
+    );
+  });
+
+  test("uses forward-slash paths in the skill command on Windows", () => {
+    const prefix = buildCommitMessageSkillCommandPrefix({
+      mcpServerPath: String.raw`C:\dev\ctrlyoke\out\mcp-server.js`,
+      workspaceRoot: String.raw`C:\Users\natha\repo`,
+      commitOutputPath: String.raw`C:\Users\natha\repo\.ctrlyoke\temp\commit-output.txt`,
+    });
+
+    assert.strictEqual(
+      prefix,
+      'node "C:/dev/ctrlyoke/out/mcp-server.js" --tool submit_commit_message --workspace "C:/Users/natha/repo" --commit-output "C:/Users/natha/repo/.ctrlyoke/temp/commit-output.txt" --args'
     );
   });
 

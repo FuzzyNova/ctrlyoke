@@ -219,13 +219,13 @@ suite("HarnessCapabilityRegistry", () => {
     }
   });
 
-  test("known-broken claims reference existing backlog bug reports", () => {
+  test("known-broken claims reference existing bug reports", () => {
     const problems: string[] = [];
     for (const [harnessId, claims] of Object.entries(KNOWN_BROKEN_CLAIMS)) {
       for (const [claim, reference] of Object.entries(claims ?? {})) {
         if (!reference) continue;
         if (
-          !reference.startsWith("dev/bugs/backlog/") ||
+          !/^dev\/bugs\/(?:backlog|rejected)\//.test(reference) ||
           !fs.existsSync(path.join(REPO_ROOT, reference))
         ) {
           problems.push(`${harnessId} ${claim}: ${reference}`);

@@ -229,8 +229,7 @@ export const WORKFLOW_SCHEDULE_LABELS = {
   noWeekdays: "Pick at least one day.",
   neverRuns: "This schedule has no future runs. Pick a later time.",
   cronExpression: "Cron expression",
-  cronHint:
-    "minute hour day-of-month month day-of-week, in this machine's time",
+  cronHint: "minute hour day-of-month month day-of-week, in {zone}",
   untilOptional: "Until (optional)",
   pauseSchedule: "Pause this schedule",
   noNextRun: "None",
@@ -238,7 +237,8 @@ export const WORKFLOW_SCHEDULE_LABELS = {
   hostRunningNote:
     "Runs start unattended, and only while VS Code with ctrlyoke or ctrlyoke server is running. Runs missed while it is closed are skipped.",
   otherHostNote: "Scheduled on another machine; saving here moves it.",
-  hostTimeZoneNote: "Times are in the host's timezone,",
+  timeZoneNote: "Times are in",
+  switchTimeZone: "Switch to {zone} and reinterpret these wall-clock times",
   missedRunNote: "A scheduled run was missed while ctrlyoke was not running.",
   cancel: "Cancel",
   create: "Schedule",

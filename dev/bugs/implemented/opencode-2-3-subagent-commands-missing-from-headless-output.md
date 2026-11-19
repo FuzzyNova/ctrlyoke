@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-17 by the headless session control plan review pass (full `npm run test:harness`)
 - **Area:** `src/core/harness/opencode/OpenCodeLogParser.ts` (headless `STDOUT` source)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -29,6 +29,20 @@ OpenCode subagent's commands are missing, not just mis-attributed.
   capability declaration (e4394dc77). The cause is therefore most likely an output change in
   OpenCode 2.3.0: child-session tool parts are no longer emitted on `opencode run --format json`
   stdout, or are emitted in a shape `OpenCodeLogParser` does not recognize.
+
+## Resolution evidence
+
+- Captured OpenCode v2.3.0 stdout with `opencode run --standalone --format json` and the
+  cheapest listed model, `opencode/beam-free`, in
+  `C:\Users\natha\AppData\Local\Temp\ctrlyoke-opencode-2.3-3a30b4c81d7040a48353f998bf856654\stdout.jsonl`.
+  It contains completed parent `subagent` `tool_use` records with child session IDs, followed
+  by `background_wait` and parent text, but no child `shell`/`echo` tool parts.
+- Loading the ctrlyoke plugin produced the child shell calls in its per-run subagent sidecar.
+  The V2 event subscription did not provide those tool parts during the failing headless case,
+  while `execute.after` did. That hook now writes completed child tool calls to the sidecar.
+- OpenCode 2.3 reports the parent's subagent tool as completed when the child is launched, so
+  the parser now waits for the child's own `child-idle` sidecar record before closing that
+  source. The focused live case passes on OpenCode v2.3.0.
 
 ## Next step
 

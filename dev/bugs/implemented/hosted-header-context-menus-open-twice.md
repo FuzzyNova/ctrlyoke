@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-17 by Claude (Playwright test of the hosted dashboard, dev build)
 - **Area:** `src/ui/webview-react/components/layout/Header.tsx`, `src/ui/webview-react/components/shared/ContextMenu.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

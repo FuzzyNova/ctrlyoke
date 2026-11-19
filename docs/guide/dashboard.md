@@ -91,9 +91,10 @@ workflow you're viewing.
 - **Resume** continues a paused, stopped or failed run from where it left off.
 - **Stop** ends the current step immediately and stops the workflow.
 
-Right-click (or long-press) the first button for a [Dry Run](/guide/dry-run) of
-the whole workflow. To end one running step without stopping the workflow, use
-**End Step Early** on that step's [menu](#step-menu).
+Right-click (or long-press) the workflow name for a [Dry Run](/guide/dry-run) of
+the whole workflow. The execution buttons have no context menu. To end one
+running step without stopping the workflow, use **End Step Early** on that
+step's [menu](#step-menu).
 
 If a run belongs to the CLI or to another VS Code window, the dashboard shows it
 read-only with a lock banner. Its Stop button still works: it stops the run in
@@ -287,20 +288,23 @@ such as `1-5`, and steps such as `*/15` or `1-30/2`. Month and weekday names
 and six-field (seconds) expressions are not supported. When both day of month
 and day of week are restricted, either matching field qualifies.
 
-Times use the local timezone of the machine running ctrlyoke. When you open the
-dashboard from a browser in a different timezone, the Schedule view and the
-**Scheduled** section show times in the host's timezone and name it. Daily schedules
-stay at the same local wall-clock time across daylight-saving changes. A time
-that falls in the spring-forward gap runs at the first valid minute after the
-clock change; an ambiguous time in the fall-back hour runs once.
+New schedules use the local timezone of the machine running ctrlyoke. An
+existing schedule keeps its recorded timezone when you edit it from another
+machine: the Schedule view shows and validates its wall-clock times in that
+timezone, and the **Scheduled** section names it when it differs from your
+machine's timezone. Use the switch action to keep the displayed values but
+reinterpret them in this machine's timezone. Daily schedules stay at the same
+local wall-clock time across daylight-saving changes. A time that falls in the
+spring-forward gap runs at the first valid minute after the clock change; an
+ambiguous time in the fall-back hour runs once.
 
 The built-in scheduler runs only while VS Code or `ctrlyoke server` is running.
 Missed occurrences are skipped when ctrlyoke is stopped or asleep, and a new
 occurrence is skipped if that workflow is already running. For a schedule
 stored in a synced state home, only the machine that created it (`hostId`) runs
 it; editing the schedule on another machine transfers that responsibility.
-Other machines read a schedule's times in the timezone of the machine that runs
-it.
+Other machines read a schedule's times in its recorded timezone. The machine
+that runs it continues using that timezone even if its own timezone changes.
 If a task must run while ctrlyoke is closed, use an external cron or CI job to
 call `ctrlyoke run <workflow-file>`.
 

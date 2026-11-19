@@ -105,6 +105,11 @@ export interface CliExecutionRunnerDeps {
     logResponse: (response: string, statistics?: string) => void;
     onContextWindowUpdate?: (used: number, size: number) => void;
     onNotificationEvent?: (event: CtrlYokeNotificationEvent) => void;
+    onHeadlessPermissionWarning?: (
+      toolPermissions: ResolvedProperties["toolPermissions"] | undefined,
+      channelAnswersApprovalRequests: boolean,
+      hasApprovalDashboard: boolean
+    ) => void;
   };
 }
 
@@ -537,6 +542,20 @@ export class CliExecutionRunner {
       ),
       useApprovalControl,
       requestApproval: workflowContext?.requestHeadlessApproval,
+      suppressPermissionWarning:
+        workflowContext?.suppressHeadlessPermissionWarning === true,
+      onPermissionWarning: (
+        channelAnswersApprovalRequests,
+        hasApprovalDashboard,
+        suppressWarning
+      ) => {
+        if (suppressWarning) return;
+        this.deps.hostCallbacks.onHeadlessPermissionWarning?.(
+          session.resolvedProperties?.toolPermissions,
+          channelAnswersApprovalRequests,
+          hasApprovalDashboard
+        );
+      },
     };
     const executeWithRecovery = async (
       args: string[],

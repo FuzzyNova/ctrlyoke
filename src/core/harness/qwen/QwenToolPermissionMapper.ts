@@ -369,26 +369,38 @@ export class QwenToolPermissionMapper
 
     // Strip surrounding parens: "(rm:*)" → "rm:*"
     const inner = toolArgs.replace(/^\(|\)$/g, "");
+    // Qwen normalizes shell commands with shell-quote before matching. That
+    // removes quote delimiters and treats backslashes in quoted Windows paths
+    // as escapes, so normalize the rule to the same command spelling.
+    const normalizedInner = inner
+      .replace(/"([A-Za-z]:\\[^\"]*)"/g, (_match, windowsPath: string) =>
+        windowsPath.replace(/\\/g, "/")
+      )
+      .replace(/["']/g, "");
 
     // Pure wildcards mean "all commands" — emit the bare tool name
-    if (!inner || inner === "*" || inner === "*:*") {
+    if (
+      !normalizedInner ||
+      normalizedInner === "*" ||
+      normalizedInner === "*:*"
+    ) {
       return qwenToolName;
     }
 
     // A trailing ":*" is the args separator even when the command itself
     // holds a colon, as a quoted Windows path (`node "C:\…\x.js" …:*`) does.
-    if (inner.endsWith(":*")) {
-      return `${qwenToolName}(${inner.slice(0, -2)} *)`;
+    if (normalizedInner.endsWith(":*")) {
+      return `${qwenToolName}(${normalizedInner.slice(0, -2)} *)`;
     }
 
-    const colonIdx = inner.indexOf(":");
+    const colonIdx = normalizedInner.indexOf(":");
     if (colonIdx === -1) {
       // No colon: treat entire inner as command name (e.g. shell(npm) → ShellTool(npm *))
-      return `${qwenToolName}(${inner} *)`;
+      return `${qwenToolName}(${normalizedInner} *)`;
     }
 
-    const command = inner.substring(0, colonIdx);
-    const argPattern = inner.substring(colonIdx + 1);
+    const command = normalizedInner.substring(0, colonIdx);
+    const argPattern = normalizedInner.substring(colonIdx + 1);
 
     // Wildcard command with specific args is still effectively "all commands" → bare tool
     if (!command || command === "*") {

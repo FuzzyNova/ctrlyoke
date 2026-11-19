@@ -367,7 +367,11 @@ suite("WorkflowLibraryHandlers", () => {
       );
       await handlers.handleSetSchedule(
         { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
-        { enabled: true, trigger: { cron: "0 9 * * 1" } }
+        {
+          enabled: true,
+          trigger: { cron: "0 9 * * 1" },
+          timeZone: "Asia/Tokyo",
+        }
       );
       const descriptor = await repository.readDescriptor(
         workspaceRoot,
@@ -377,7 +381,7 @@ suite("WorkflowLibraryHandlers", () => {
         cron: "0 9 * * 1",
       });
       assert.ok(descriptor.schedule?.hostId);
-      assert.strictEqual(descriptor.schedule?.timeZone, localTimeZone());
+      assert.strictEqual(descriptor.schedule?.timeZone, "Asia/Tokyo");
       assert.strictEqual(refreshed, workflowKey);
       assert.strictEqual(messages.at(-1)?.type, MESSAGE_TYPES.RECENT_WORKFLOWS);
       assert.strictEqual(messages.at(-1)?.hostTimeZone, localTimeZone());

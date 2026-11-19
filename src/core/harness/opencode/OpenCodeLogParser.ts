@@ -909,13 +909,13 @@ export class OpenCodeLogParser extends BaseLogParser {
           cacheReadInputTokens: usage.cachedInputTokens,
         };
       },
-      // A child the export tracker is holding the step on is not done at its
-      // idle or when its subagent call returns: it will wake for its own
-      // background job (see syncSubagentOutput).
+      // A completed subagent tool part only says that the parent accepted the
+      // launch; OpenCode 2.3 returns that result while the child is still
+      // running. The child's own idle event is the completion signal. A child
+      // held by its own background work wakes again later (see
+      // syncSubagentOutput).
       isComplete: (record) =>
-        (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE ||
-          (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING &&
-            record.part?.state?.status === OPERATION_STATUS.COMPLETED)) &&
+        record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE &&
         !this.childSessions.isHolding(record.childSessionId),
     });
   }

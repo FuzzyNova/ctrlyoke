@@ -360,7 +360,7 @@ export function getCompatibilityCaveatMessage(
     case PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY:
       return "because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns";
     case PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY:
-      return 'because Copilot assisted approval is available only in headless sessions; interactive sessions run as Custom, and defaultPermissionMode: "assisted" in ~/.copilot/settings.json also enables the judge for those Custom steps. Use /permissions assisted per session when you want Copilot Auto interactively';
+      return 'because Copilot assisted approval is available only in headless sessions; interactive sessions run as Custom, and defaultPermissionMode: "assisted" in ~/.copilot/settings.json also enables the judge for those Custom steps. Use /permissions default for a manual Custom session, or /permissions assisted when you want Copilot Auto interactively';
     case PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED:
       return "because this harness has no judged approval mode";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:

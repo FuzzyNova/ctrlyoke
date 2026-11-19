@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-17 by Claude (live dashboard steer test)
 - **Area:** `src/core/harness/shared/CliPromptPreparer.ts`, `src/core/harness/CliIntegration.ts` (`sendSteerMessage`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -631,10 +631,9 @@ function defineShellProbeTests(
         shellCase.shouldCreate,
         `command ${shellCase.shouldCreate ? "was refused" : "ran"}\ntool events: ${toolEvents}`
       );
-      // An allowed command must be able to write the workspace. For agy this
-      // also guards against `custom` regaining --sandbox; agy's `auto` runs
-      // commands in its own sandbox, which still lets them write the
-      // workspace (1.5.8).
+      // An allowed command must be able to write the workspace. Antigravity's
+      // Auto sandbox currently blocks this write on Windows; see the known
+      // broken claim and its bug report.
       assert.strictEqual(
         fs.existsSync(markerPath),
         shellCase.shouldCreate,

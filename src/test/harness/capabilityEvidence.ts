@@ -86,9 +86,14 @@ export const OTHER_SUITE_CLAIMS: Readonly<Record<CapabilityPath, string>> = {
 
 /**
  * Claims the suite proves wrong today. The suite still asserts them, so it
- * stays red until the bug is fixed; their declarations stay `kind: "manual"`
- * meanwhile. Each value is the bug document.
+ * stays red until the behavior changes; their declarations stay manual
+ * meanwhile. Each value is the bug or limitation document.
  */
 export const KNOWN_BROKEN_CLAIMS: Partial<
   Record<HarnessId, Partial<Record<CapabilityPath, string>>>
-> = {};
+> = {
+  "antigravity-cli": {
+    "permissions.autoMode":
+      "dev/bugs/rejected/antigravity-auto-approved-command-cannot-write-workspace.md",
+  },
+};

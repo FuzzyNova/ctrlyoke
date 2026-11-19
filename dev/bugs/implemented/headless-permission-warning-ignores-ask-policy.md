@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-17 by Claude (live dashboard test of headless approvals)
 - **Area:** `src/core/harness/CliIntegration.ts` (`warnIfHeadlessWithoutPermissions`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

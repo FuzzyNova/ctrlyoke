@@ -19,6 +19,7 @@ import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarness
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import { QwenHeadlessControlChannel } from "../../core/harness/qwen/QwenHeadlessControlChannel";
 import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { AntigravityHeadlessControlChannel } from "../../core/harness/antigravity/AntigravityHeadlessControlChannel";
 import {
   QWEN_CONTROL,
   QWEN_EVENT_TYPES,
@@ -189,6 +190,76 @@ async function runStdoutSpawns(
   return { streamedIds, countsAfterChunks };
 }
 
+async function capturePermissionWarningDecision(
+  channel: IHeadlessControlChannel | undefined,
+  hasApprovalDashboard: boolean
+): Promise<{ channelAnswersApprovalRequests: boolean; hasApprovalDashboard: boolean }> {
+  let warningDecision:
+    | { channelAnswersApprovalRequests: boolean; hasApprovalDashboard: boolean }
+    | undefined;
+  const coordinator = new CliTransportCoordinator({
+    provider: {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter,
+    processManager: {
+      spawn: async (
+        _command: string,
+        _args: string[],
+        options: { onStdinReady?: (writer: any) => void }
+      ) => {
+        options.onStdinReady?.({
+          write: (
+            _text: string,
+            _encoding: string,
+            callback?: (error?: Error | null) => void
+          ) => {
+            callback?.();
+            return true;
+          },
+          end: (callback?: () => void) => callback?.(),
+        });
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+      isActive: () => false,
+    } as any,
+    resolveCliCommand: resolveCommand,
+    runtimeState: {
+      getWorkspaceRoot: () => process.cwd(),
+      isCancelling: () => false,
+    },
+    hostCallbacks: createHeadlessHostCallbacks(),
+  });
+
+  await coordinator.executeHeadless(
+    [],
+    "prompt",
+    [],
+    async () => true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false,
+    undefined,
+    {
+      approvalPolicy: HEADLESS_APPROVAL_POLICIES.ASK,
+      approvalTimeoutMs: 1000,
+      useApprovalControl: true,
+      ...(hasApprovalDashboard
+        ? { requestApproval: async () => ({ decision: APPROVAL_DECISIONS.ALLOW_ONCE }) }
+        : {}),
+      onPermissionWarning: (channelAnswersApprovalRequests, dashboardConnected) => {
+        warningDecision = {
+          channelAnswersApprovalRequests,
+          hasApprovalDashboard: dashboardConnected,
+        };
+      },
+    }
+  );
+  return warningDecision!;
+}
+
 const stdoutProviderFactories: ReadonlyArray<{
   name: string;
   create: () => IHarnessAdapter;
@@ -273,6 +344,57 @@ async function createCoordinatorWithLivePty(
 }
 
 suite("CliTransportCoordinator", () => {
+  test("does not warn for an approval-capable ask channel with a dashboard", async () => {
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      answersApprovalRequests: true,
+      start: async () => {},
+      sendUserMessage: async () => {},
+      observe: () => [],
+      answerApproval: async () => {},
+      close: () => {},
+    };
+    assert.deepStrictEqual(await capturePermissionWarningDecision(channel, true), {
+      channelAnswersApprovalRequests: true,
+      hasApprovalDashboard: true,
+    });
+  });
+
+  test("identifies ask approvals that will be denied without a dashboard", async () => {
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      answersApprovalRequests: true,
+      start: async () => {},
+      sendUserMessage: async () => {},
+      observe: () => [],
+      answerApproval: async () => {},
+      close: () => {},
+    };
+    assert.deepStrictEqual(await capturePermissionWarningDecision(channel, false), {
+      channelAnswersApprovalRequests: true,
+      hasApprovalDashboard: false,
+    });
+  });
+
+  test("keeps the existing warning when ask has no control channel", async () => {
+    assert.deepStrictEqual(await capturePermissionWarningDecision(undefined, false), {
+      channelAnswersApprovalRequests: false,
+      hasApprovalDashboard: false,
+    });
+  });
+
+  test("keeps the existing warning for Antigravity's non-approval channel", async () => {
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(
+        new AntigravityHeadlessControlChannel(),
+        true
+      ),
+      { channelAnswersApprovalRequests: false, hasApprovalDashboard: true }
+    );
+  });
+
   test("re-resolves replacement control arguments with the CLI launcher prefix", async () => {
     const resolveArgs: string[][] = [];
     let spawnedArgs: string[] = [];

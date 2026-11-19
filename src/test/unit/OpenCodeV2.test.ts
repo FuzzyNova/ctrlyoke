@@ -122,6 +122,105 @@ suite("OpenCode 2 support", () => {
     assert.match(call.subagentSpawn?.children?.[0]?.agentId ?? "", /^ses_/);
   });
 
+  test("maps the real OpenCode 2.3 subagent stdout shape", () => {
+    const provider = new OpenCodeHarnessAdapter();
+    const events = provider.logParser.extractResponse(
+      provider.parseHeadlessStdout(readFixture("v2.3-subagents.stdout.jsonl"))
+    ).events;
+    const calls = events.filter(
+      (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+    assert.strictEqual(calls.length, 2);
+    assert.deepStrictEqual(
+      calls.map(
+        (event) =>
+          (event.data as ToolCall).subagentSpawn?.children?.[0]?.agentId
+      ),
+      ["ses_e0ef626e1ffehE9o8k59OukbYH", "ses_e0ef626e1ffddmE3gmU4H4DTlM"]
+    );
+    assert.ok(
+      events.every((event) => event.type !== CLI_EVENT_TYPES.BASH_COMMAND),
+      "OpenCode 2.3 stdout omits child shell calls; the plugin sidecar supplies them"
+    );
+  });
+
+  test("joins OpenCode 2.3 parent stdout with child tools from the plugin sidecar", async () => {
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-v23-subagents-")
+    );
+    try {
+      await fs.promises.copyFile(
+        path.join(FIXTURE_ROOT, "v2.3-subagents.sidecar.jsonl"),
+        path.join(directory, "run-subagents.jsonl")
+      );
+      const provider = new OpenCodeHarnessAdapter();
+      const parser = provider.logParser;
+      parser.setSubagentSidecar(directory, "run");
+      const output = parser.extractResponse(
+        provider.parseHeadlessStdout(readFixture("v2.3-subagents.stdout.jsonl"))
+      );
+      const followed = await parser.getSubagentFollower()?.drainToEof(100);
+      const commands = followed?.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      // Sources drain concurrently, so compare command/parent pairs as a set.
+      assert.deepStrictEqual(
+        commands
+          ?.map(
+            (event) =>
+              `${(event.data as BashCommandData).command} <- ${event.subagent?.parentToolCallId}`
+          )
+          .sort(),
+        [
+          `echo subagent-marker-alpha <- ${(output.events[0].data as ToolCall).id}`,
+          `echo subagent-marker-beta <- ${(output.events[1].data as ToolCall).id}`,
+        ].sort()
+      );
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("shows a child tool once when both the event stream and execute.after record it", async () => {
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-v23-subagents-dup-")
+    );
+    try {
+      // The plugin's event translator and its execute.after hook both write
+      // a completed `tool:<callID>` part when OpenCode delivers child tool
+      // events on the subscription.
+      const lines = readFixture("v2.3-subagents.sidecar.jsonl")
+        .split("\n")
+        .filter((line) => line.trim());
+      const withDuplicates = lines.flatMap((line) =>
+        line.includes('"kind":"part"') ? [line, line] : [line]
+      );
+      await fs.promises.writeFile(
+        path.join(directory, "run-subagents.jsonl"),
+        `${withDuplicates.join("\n")}\n`
+      );
+      const provider = new OpenCodeHarnessAdapter();
+      const parser = provider.logParser;
+      parser.setSubagentSidecar(directory, "run");
+      parser.extractResponse(
+        provider.parseHeadlessStdout(readFixture("v2.3-subagents.stdout.jsonl"))
+      );
+      const followed = await parser.getSubagentFollower()?.drainToEof(100);
+      const commands = followed?.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      // Sources drain concurrently, so only the set of commands is stable.
+      assert.deepStrictEqual(
+        commands
+          ?.map((event) => (event.data as BashCommandData).command)
+          .sort(),
+        ["echo subagent-marker-alpha", "echo subagent-marker-beta"]
+      );
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("converts `session export` messages into the same events, once", async () => {
     const parser = new OpenCodeLogParser(
       () => undefined,

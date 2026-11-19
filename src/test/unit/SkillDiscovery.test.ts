@@ -183,8 +183,11 @@ suite("Execution-root asset discovery", () => {
           commitOutputPath,
         }
       );
+      const normalizedCommitOutputPath = commitOutputPath.replace(/\\/g, "/");
       assert.ok(
-        commitSkills?.includes(`--commit-output "${commitOutputPath}"`)
+        commitSkills?.includes(
+          `--commit-output "${normalizedCommitOutputPath}"`
+        )
       );
       assert.ok(!commitSkills?.includes("<commit output path>"));
 

@@ -21,6 +21,7 @@ import {
   FINAL_STEP_PHASES,
   INTERACTIVE_TERMINAL_MODES,
 } from "../../types/DashboardConstants";
+import { HEADLESS_EXECUTION_NOTE } from "../../core/harness/shared/CliPromptPreparer";
 import {
   HARNESS_IDS,
   HARNESS_VERSION_STATUSES,
@@ -810,7 +811,20 @@ suite("CliIntegration", () => {
         }),
         resolvedSessionId: undefined,
       });
-      (integration as any).executionRunner.executeHeadless = async () => true;
+      (integration as any).executionRunner.executeHeadless = async (
+        session: any
+      ) => {
+        if (
+          !session.workflowContext?.suppressHeadlessPermissionWarning
+        ) {
+          (integration as any).executionRunner.deps.hostCallbacks.onHeadlessPermissionWarning(
+            session.resolvedProperties?.toolPermissions,
+            false,
+            false
+          );
+        }
+        return true;
+      };
       try {
         await integration.sendPrompt({ prompt: "run" }, true, {
           promptIndex: 0,
@@ -2202,18 +2216,24 @@ suite("CliIntegration", () => {
     ) => {
       preparedArguments = args;
       return {
-        promptWithInstruction: "prepared steer",
+        promptWithInstruction:
+          (args[5] as { omitHeadlessExecutionNote?: boolean } | undefined)
+            ?.omitHeadlessExecutionNote === true
+            ? String((args[0] as PromptStep).prompt)
+            : `${String((args[0] as PromptStep).prompt)} ${HEADLESS_EXECUTION_NOTE}`,
         tempFilePaths: [],
         diagnostics: [],
       };
     };
 
     let sent: { sessionId: string; text: string } | undefined;
+    let receiptText: string | undefined;
     (integration as any).transportCoordinator.sendHeadlessUserMessage = async (
       sessionId: string,
       text: string
     ) => {
       sent = { sessionId, text };
+      receiptText = text;
       return true;
     };
 
@@ -2229,10 +2249,16 @@ suite("CliIntegration", () => {
         prompt: "multi-line\nsteer",
       });
       assert.strictEqual(preparedArguments[4], false);
+      assert.deepStrictEqual(preparedArguments[5], {
+        omitHeadlessExecutionNote: true,
+      });
       assert.deepStrictEqual(sent, {
         sessionId: controlSessionId,
-        text: "prepared steer",
+        text: "multi-line\nsteer",
       });
+      assert.ok(!sent.text.includes(HEADLESS_EXECUTION_NOTE));
+      assert.ok(receiptText);
+      assert.ok(!receiptText.includes(HEADLESS_EXECUTION_NOTE));
     } finally {
       integration.dispose();
     }

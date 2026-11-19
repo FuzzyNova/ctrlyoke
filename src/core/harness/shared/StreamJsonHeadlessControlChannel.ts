@@ -40,6 +40,7 @@ export interface StreamJsonControlProtocol {
 /** Shared stream-json control messages used by Claude and Qwen. */
 export abstract class StreamJsonHeadlessControlChannel implements IHeadlessControlChannel {
   readonly spawnShape = {};
+  readonly answersApprovalRequests = true;
   protected writer?: ControlWriter;
   private interruptRequested = false;
   private readonly pendingToolInputs = new Map<string, unknown>();

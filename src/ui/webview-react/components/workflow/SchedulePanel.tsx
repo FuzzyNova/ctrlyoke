@@ -5,12 +5,13 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import {
   nextScheduleOccurrence,
+  ownerScheduleCalendar,
   validateWorkflowSchedule,
 } from "@root/utils/WorkflowSchedule";
 import {
   formatScheduleTime,
   LOCAL_CALENDAR,
-  scheduleCalendar,
+  localTimeZone,
   type CalendarDate,
   type ScheduleCalendar,
 } from "@root/utils/ScheduleCalendar";
@@ -168,9 +169,12 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
 }) => {
   const idPrefix = useId();
   const fieldId = (name: string) => `${idPrefix}-${name}`;
-  // Schedule times are the host's wall clock, whatever zone this browser is in.
   const hostTimeZone = useUiStore((s) => s.hostTimeZone);
-  const calendar = scheduleCalendar(hostTimeZone);
+  const effectiveHostTimeZone = hostTimeZone ?? localTimeZone();
+  const [timeZone, setTimeZone] = useState(
+    schedule?.timeZone ?? effectiveHostTimeZone
+  );
+  const calendar = ownerScheduleCalendar({ timeZone }, effectiveHostTimeZone);
   const initial = useMemo(
     () => pickerFor(calendar, schedule),
     [calendar, schedule]
@@ -200,6 +204,7 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
     trigger,
     ...untilField,
     hostId: schedule?.hostId ?? WORKFLOW_SCHEDULE_PREVIEW_HOST_ID,
+    timeZone,
   } as WorkflowSchedule;
   const shapeError =
     frequency === FREQUENCY.weekly && picker.weekdays.length === 0
@@ -227,6 +232,7 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
       enabled: !paused,
       trigger,
       ...untilField,
+      timeZone,
     });
     onBack();
   };
@@ -375,7 +381,7 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
               className={`${INPUT_CLASS} w-full max-w-[220px] font-mono`}
             />
             <p id={fieldId("cron-hint")} className="mt-1 text-description-fg">
-              {LABELS.cronHint}
+              {LABELS.cronHint.replace("{zone}", timeZone)}
             </p>
           </div>
         )}
@@ -412,12 +418,22 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
             ? LABELS.pausedNextRun
             : next === null
               ? LABELS.noNextRun
-              : formatScheduleTime(next, hostTimeZone)}
+              : formatScheduleTime(next, timeZone)}
         </p>
-        {calendar !== LOCAL_CALENDAR && (
+        {(timeZone !== effectiveHostTimeZone ||
+          calendar !== LOCAL_CALENDAR) && (
           <p className="text-description-fg">
-            {LABELS.hostTimeZoneNote} {hostTimeZone}.
+            {LABELS.timeZoneNote} {timeZone}.
           </p>
+        )}
+        {timeZone !== effectiveHostTimeZone && (
+          <button
+            type="button"
+            onClick={() => setTimeZone(effectiveHostTimeZone)}
+            className="text-link-fg underline"
+          >
+            {LABELS.switchTimeZone.replace("{zone}", effectiveHostTimeZone)}
+          </button>
         )}
         {hasError && (
           <p role="alert" className="text-error-fg">

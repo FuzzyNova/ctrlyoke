@@ -112,6 +112,8 @@ const CLI_EXECUTION_MODE = EXECUTION_MODES;
 const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
     "Headless mode with limited tool permissions: there is no interactive approval prompt, so tools that are not explicitly allowed will be auto-denied. Workflow may not make progress.",
+  HEADLESS_APPROVALS_WITHOUT_DASHBOARD:
+    "Headless mode with limited tool permissions: approval requests are denied because no dashboard is connected to answer them. Workflow may not make progress.",
 } as const;
 
 interface CliIntegrationServices {
@@ -1127,6 +1129,20 @@ export class CliIntegration extends HarnessIntegration {
           this.emitContextWindowUpdate(used, size),
         onNotificationEvent: (event) =>
           this.notificationEventEmitter.fire(event),
+        onHeadlessPermissionWarning: (
+          toolPermissions,
+          channelAnswersApprovalRequests,
+          hasApprovalDashboard
+        ) => {
+          if (channelAnswersApprovalRequests && hasApprovalDashboard) {
+            return;
+          }
+          this.warnIfHeadlessWithoutPermissions(
+            toolPermissions,
+            CLI_EXECUTION_MODE.HEADLESS,
+            channelAnswersApprovalRequests && !hasApprovalDashboard
+          );
+        },
       },
     });
 
@@ -1381,12 +1397,6 @@ export class CliIntegration extends HarnessIntegration {
             executionPlan.resolvedCommand
           )
         : await (() => {
-            if (!session.workflowContext?.suppressHeadlessPermissionWarning) {
-              this.warnIfHeadlessWithoutPermissions(
-                executionPlan.effectiveToolPermissions,
-                mode
-              );
-            }
             return this.executionRunner.executeHeadless(
               session,
               executionPlan.cliArgs,
@@ -1772,7 +1782,8 @@ export class CliIntegration extends HarnessIntegration {
         workflowContext,
         reducedResolvedProperties,
         activeSession.effectiveSessionId,
-        false
+        false,
+        { omitHeadlessExecutionNote: true }
       );
       if (this.getHeadlessControlSessionId() !== controlSessionId) {
         return false;
@@ -1971,7 +1982,8 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected warnIfHeadlessWithoutPermissions(
     toolPermissions?: ToolPermissionConfig | null,
-    mode: CliExecutionMode = this.getExecutionMode()
+    mode: CliExecutionMode = this.getExecutionMode(),
+    approvalRequestsDenied = false
   ): void {
     if (
       mode !== CLI_EXECUTION_MODE.HEADLESS ||
@@ -1983,7 +1995,9 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     this.headlessPermissionWarningShown = true;
-    const message = CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS;
+    const message = approvalRequestsDenied
+      ? CLI_WARNING_MESSAGES.HEADLESS_APPROVALS_WITHOUT_DASHBOARD
+      : CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS;
 
     notifyUserFeedback(this.userFeedbackSink, "warning", message);
   }

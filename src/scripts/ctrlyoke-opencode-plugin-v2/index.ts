@@ -110,6 +110,12 @@ const TOOL_STATUS = {
   ERROR: "error",
 } as const;
 
+const SUBAGENT_RECORD = {
+  FILE_SUFFIX: "-subagents.jsonl",
+  KIND_PART: "part",
+  PART_TOOL: "tool",
+} as const;
+
 // Keep these bridge names and route paths aligned with
 // OpenCodeProtocolConstants.ts. The script is copied verbatim, not bundled.
 const CONTROL_ENV = {
@@ -173,6 +179,59 @@ function record(value: unknown): Data | undefined {
 function contentText(content: unknown): string {
   if (!Array.isArray(content)) return "";
   return content.map((item) => str(record(item)?.text) ?? "").join("");
+}
+
+function appendChildToolPart(
+  translator: EventTranslator,
+  event: OpenCodeV2ToolHookEvent
+): void {
+  const notifyDir = process.env.CTRLYOKE_NOTIFY_DIR;
+  const runId = process.env.CTRLYOKE_RUN_ID;
+  if (!notifyDir || !runId || !translator.isChildSession(event.sessionID))
+    return;
+
+  // execute.after runs only once the call has ended. OpenCode 2.3's hook
+  // payload does not consistently include `status`, so infer success unless
+  // the hook explicitly reports an error.
+  const status =
+    event.status === TOOL_STATUS.ERROR
+      ? TOOL_STATUS.ERROR
+      : TOOL_STATUS.COMPLETED;
+
+  const result = event.result;
+  const record = {
+    kind: SUBAGENT_RECORD.KIND_PART,
+    childSessionId: event.sessionID,
+    part: {
+      type: SUBAGENT_RECORD.PART_TOOL,
+      id: `tool:${event.id}`,
+      sessionID: event.sessionID,
+      messageID: "",
+      callID: event.id,
+      tool: event.tool,
+      state: {
+        status,
+        input: event.input ?? {},
+        output: contentText(result?.content),
+        ...(result?.metadata !== undefined
+          ? { metadata: result.metadata }
+          : {}),
+      },
+    },
+  };
+
+  try {
+    mkdirSync(notifyDir, { recursive: true });
+    appendFileSync(
+      path.join(notifyDir, `${runId}${SUBAGENT_RECORD.FILE_SUFFIX}`),
+      `${JSON.stringify(record)}\n`
+    );
+  } catch (error) {
+    logControlFailure(
+      "Could not append child tool to the subagent sidecar",
+      error
+    );
+  }
 }
 
 /**
@@ -613,8 +672,9 @@ export default {
         { args: event.input }
       )
     );
-    await ctx.tool.hook("execute.after", (event) =>
-      handlers["tool.execute.after"](
+    await ctx.tool.hook("execute.after", (event) => {
+      appendChildToolPart(translator, event);
+      return handlers["tool.execute.after"](
         {
           tool: event.tool,
           sessionID: event.sessionID,
@@ -626,8 +686,8 @@ export default {
           output: contentText(event.result?.content),
           metadata: event.result?.metadata,
         }
-      )
-    );
+      );
+    });
 
     return () => {
       controller.abort();

@@ -53,7 +53,7 @@ describe("SchedulePanel", () => {
           "2026-12-02T03:00"
         );
         expect(
-          screen.getByText(`Times are in the host's timezone, ${HOST_ZONE}.`)
+          screen.getByText(`Times are in ${HOST_ZONE}.`)
         ).toBeInTheDocument();
       }
     );
@@ -98,6 +98,108 @@ describe("SchedulePanel", () => {
     );
   });
 
+  describe("when editing a schedule owned in another time zone", () => {
+    const HOST_ZONE = "America/New_York";
+    const OWNER_ZONE = "Asia/Tokyo";
+
+    function useHostZone(now: string) {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.parse(now));
+      useUiStore.setState({ hostTimeZone: HOST_ZONE });
+    }
+
+    it("keeps both times and the zone when saving an unedited pause", () => {
+      useHostZone("2026-12-01T12:00:00Z");
+      renderPanel({
+        enabled: true,
+        trigger: { cron: "0 9 * * *" },
+        until: "2027-01-01T09:00",
+        hostId: "owner-host",
+        timeZone: OWNER_ZONE,
+      });
+      expect(screen.getByText(`Times are in ${OWNER_ZONE}.`)).toBeInTheDocument();
+      const expectedNextRun = new Date(
+        Date.parse("2026-12-02T00:00:00Z")
+      ).toLocaleString(undefined, {
+        timeZone: OWNER_ZONE,
+        timeZoneName: "short",
+      });
+      expect(screen.getByText(/^Next run:/).closest("p")).toHaveTextContent(
+        expectedNextRun
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: "Pause this schedule" })
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      expect(sendMessage).toHaveBeenCalledWith("setSchedule", {
+        address,
+        enabled: false,
+        trigger: { cron: "0 9 * * *" },
+        until: "2027-01-01T09:00",
+        timeZone: OWNER_ZONE,
+      });
+    });
+
+    it("accepts a Once time in the host's DST gap when it is valid in the owner's zone", () => {
+      useHostZone("2026-03-07T12:00:00Z");
+      renderPanel({
+        enabled: true,
+        trigger: { at: "2026-03-08T02:30" },
+        hostId: "owner-host",
+        timeZone: OWNER_ZONE,
+      });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      expect(sendMessage).toHaveBeenCalledWith("setSchedule", {
+        address,
+        enabled: true,
+        trigger: { at: "2026-03-08T02:30" },
+        timeZone: OWNER_ZONE,
+      });
+    });
+
+    it("switches zones while preserving the wall-clock values", () => {
+      useHostZone("2026-12-01T12:00:00Z");
+      renderPanel({
+        enabled: true,
+        trigger: { cron: "0 9 * * *" },
+        hostId: "owner-host",
+        timeZone: OWNER_ZONE,
+      });
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: `Switch to ${HOST_ZONE} and reinterpret these wall-clock times`,
+        })
+      );
+      expect(
+        screen.queryByText(`Times are in ${OWNER_ZONE}.`)
+      ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      expect(sendMessage).toHaveBeenCalledWith("setSchedule", {
+        address,
+        enabled: true,
+        trigger: { cron: "0 9 * * *" },
+        timeZone: HOST_ZONE,
+      });
+    });
+
+    it("names the schedule's zone in the cron hint", () => {
+      useHostZone("2026-12-01T12:00:00Z");
+      renderPanel({
+        enabled: true,
+        trigger: { cron: "0 9 * * *" },
+        hostId: "owner-host",
+        timeZone: OWNER_ZONE,
+      });
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      expect(
+        screen.getByText(
+          `minute hour day-of-month month day-of-week, in ${OWNER_ZONE}`
+        )
+      ).toBeInTheDocument();
+    });
+  });
+
   it("titles the view with the workflow name and backs out", () => {
     const { onBack } = renderPanel();
     expect(
@@ -124,6 +226,7 @@ describe("SchedulePanel", () => {
       address,
       enabled: true,
       trigger: { cron: "35 8 * * *" },
+      timeZone: expect.any(String),
     });
     expect(onBack).toHaveBeenCalledTimes(1);
   });
@@ -151,6 +254,7 @@ describe("SchedulePanel", () => {
       address,
       enabled: true,
       trigger: { cron: "0 9 * * 1,3" },
+      timeZone: expect.any(String),
     });
   });
 
@@ -218,6 +322,7 @@ describe("SchedulePanel", () => {
       address,
       enabled: false,
       trigger: { cron: "0 9 * * *" },
+      timeZone: expect.any(String),
     });
   });
 

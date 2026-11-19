@@ -138,7 +138,7 @@ suite("WorkflowScheduler", () => {
     assert.strictEqual(disabled.timers.entries.size, 0);
   });
 
-  test("records this host's time zone on the schedules it owns, paused or not", async () => {
+  test("fills a missing time zone but preserves a recorded zone on owned schedules", async () => {
     for (const enabled of [true, false]) {
       const legacy = setup({
         descriptor: makeDescriptor({
@@ -153,15 +153,37 @@ suite("WorkflowScheduler", () => {
       assert.strictEqual(legacy.descriptor().schedule?.timeZone, HOST_ZONE);
       assert.strictEqual(legacy.descriptor().revision, 7);
     }
-    // A host whose zone changed since the schedule was saved updates it.
+    // A host whose zone changed keeps the schedule's recorded clock.
     const moved = setup({
       descriptor: makeDescriptor({
         schedule: { ...makeDescriptor().schedule!, timeZone: "Old/Zone" },
       }),
     });
     await moved.scheduler.start();
-    assert.strictEqual(moved.descriptor().schedule?.timeZone, HOST_ZONE);
+    assert.strictEqual(moved.descriptor().schedule?.timeZone, "Old/Zone");
     assert.strictEqual(moved.timers.entries.size, 1);
+  });
+
+  test("fires an owned schedule at its recorded zone's wall-clock time", async () => {
+    const tokyoOccurrence = Date.parse("2030-01-01T00:00:00.000Z");
+    const testCase = setup({
+      descriptor: makeDescriptor({
+        schedule: {
+          enabled: true,
+          hostId: "test-host",
+          timeZone: "Asia/Tokyo",
+          trigger: { at: "2030-01-01T09:00" },
+        },
+        scheduleNextRunAt: undefined,
+      }),
+    });
+    testCase.setNow(tokyoOccurrence - 1_000);
+    await testCase.scheduler.start();
+    assert.strictEqual([...testCase.timers.entries.values()][0].delay, 1_000);
+    assert.strictEqual(testCase.descriptor().schedule?.timeZone, "Asia/Tokyo");
+    testCase.setNow(tokyoOccurrence);
+    await testCase.timers.fireNext();
+    assert.strictEqual(testCase.fires(), 1);
   });
 
   test("leaves the time zone of a current or another host's schedule alone", async () => {

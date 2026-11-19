@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Commit-message skill commands now use matcher-compatible paths on Windows so Qwen's narrow shell allow rule matches while staying limited to that command.
+- Antigravity's Windows Auto sandbox may refuse workspace writes from approved shell commands; Copilot's interactive Custom mode inherits a global Assisted setting, while headless ACP continues to forward approval requests to ctrlyoke.
+- Headless permission warnings now account for dashboard approval requests, and steering a headless step no longer repeats the execution note in the user's message receipt.
+- OpenCode 2.3 headless output now includes child-session tool calls from its plugin sidecar, attributed to the matching subagent.
 - A saved template variable value that equals the template's current default is now kept in your settings and stays listed under **Saved variable values**. Before, saving it removed it, so the row disappeared and the value stopped applying once the template's default changed. Choosing a variable in **Settings → Templates → Add value** now saves it straight away with the template's default; before, the row was only saved once you edited it.
 - A harness error while sending an end-condition retry prompt now follows `errorBehavior`: `retry` restarts the whole step from its pre-condition in a fresh session, while `retryPhase` retries the prompt in its existing session when available.
 - Dashboard terminals now use VS Code's terminal font (`terminal.integrated.fontFamily`), falling back to the editor font when that setting is empty, as VS Code's own terminal does. Browsers connected to the ctrlyoke server get the same font. The size still comes from ctrlyoke's `terminal.fontSize` setting.
@@ -43,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Dry Run is no longer on the Run button's right-click or long-press menu; use the workflow menu or **Dry Run Step** instead.
 - Codex `custom` and `allowAll` steps now pin the manual approval reviewer, so a user-level automatic reviewer cannot silently take over their sandbox escalations. Copilot's permissions guide now warns that its global assisted default also affects interactive `custom` steps.
 - Unresolved variable placeholders now warn even when a workflow has no `vars`; agent-supplied condition-preset parameter values remain literal instead of expanding as workflow variables; Dry Run secret grants now match the real run by scanning authored prompt text.
 - The `--var` help, workflow schema and variables guide now list the fields supported by variable substitution. Dry Run shows the resolved worktree setup command.
@@ -57,7 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A named worktree's `setup` command now runs at the start of every run, not only when ctrlyoke creates the worktree, so a dependency change pulled or merged into the branch since the last run is installed before the first step. Resuming or continuing a run whose setup already succeeded doesn't run it again. Omit `setup` if you don't want it to run. Managed worktrees are unchanged.
 - The **View N changes** links in the output toolbar and on step headers now stay visible while a run is executing, counting the files changed so far, instead of being hidden until the run stops or pauses. The changes dialog they open lists what's known so far but disables undo and redo until the run stops or pauses, and says that files changed by shell commands or scripts appear only when their step finishes. The extension now also refuses an undo or redo of a run that has a step in flight.
-- When the dashboard is open in a browser whose timezone differs from the machine running ctrlyoke, such as a hosted dashboard on a server set to UTC, the Schedule view and the Scheduled section show times in the host's timezone and name it. The Schedule view also says which timezone its times are in.
+- The Schedule view and Scheduled section name the timezone used for schedule times when it differs from the viewing machine's timezone.
+- Editing a schedule on another machine now keeps its recorded timezone, so saving without changing its wall-clock values does not move its runs. The Schedule view validates and previews those times in that zone; an explicit switch action reinterprets the unchanged wall-clock values in this machine's zone.
 
 ### Fixed
 
