@@ -347,14 +347,28 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
 
   /** Installed path of the ctrlyoke plugin entry for one CLI generation. */
   static pluginEntryPath(extensionPath: string, openCodeV2: boolean): string {
-    return path.resolve(
+    const entryName = openCodeV2
+      ? OPENCODE_PLUGIN_PATHS.V2_DIRECTORY
+      : OPENCODE_PLUGIN_PATHS.V1_FILE;
+    const packageRootEntry = path.resolve(
       extensionPath,
       "out",
       "scripts",
-      openCodeV2
-        ? OPENCODE_PLUGIN_PATHS.V2_DIRECTORY
-        : OPENCODE_PLUGIN_PATHS.V1_FILE
+      entryName
     );
+    if (fs.existsSync(packageRootEntry)) return packageRootEntry;
+
+    // The bundled CLI's platform adapter lives under <package>/out/platform,
+    // while the build copies plugin assets to <package>/out/scripts. VS Code
+    // adapters receive the package root, so keep the installed-extension path
+    // above as the primary location.
+    const bundledCliEntry = path.resolve(
+      extensionPath,
+      "..",
+      "scripts",
+      entryName
+    );
+    return fs.existsSync(bundledCliEntry) ? bundledCliEntry : packageRootEntry;
   }
 
   /**

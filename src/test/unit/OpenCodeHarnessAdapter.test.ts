@@ -165,6 +165,30 @@ suite("OpenCodeHarnessAdapter", () => {
     }
   });
 
+  test("resolves plugin assets beside the bundled CLI platform directory", async () => {
+    const packageRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-cli-plugin-path-")
+    );
+    try {
+      const pluginPath = path.join(
+        packageRoot,
+        "out",
+        "scripts",
+        "ctrlyoke-opencode-plugin-v2"
+      );
+      await fs.mkdir(path.join(pluginPath), { recursive: true });
+      const platformDirectory = path.join(packageRoot, "out", "platform");
+      await fs.mkdir(platformDirectory, { recursive: true });
+
+      assert.strictEqual(
+        OpenCodeHarnessAdapter.pluginEntryPath(platformDirectory, true),
+        pluginPath
+      );
+    } finally {
+      await fs.rm(packageRoot, { recursive: true, force: true });
+    }
+  });
+
   test("rewrites colliding top-level and nested keys until they are novel", () => {
     const provider = new OpenCodeHarnessAdapter();
     const config = provider.buildInlineConfig({

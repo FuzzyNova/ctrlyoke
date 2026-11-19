@@ -655,6 +655,55 @@ suite("OpenCode 2 plugin entry", () => {
     });
   });
 
+  test("records completed child tools from OpenCode 2 execute hooks", async () => {
+    await withNotifyDir(async (notifyDir) => {
+      const { v2 } = await loadPlugin([], {
+        v2: true,
+        notifyDir,
+        runId: "run-1",
+      });
+      await v2!.publish("session.created", {
+        sessionID: "child-1",
+        parentID: "main",
+      });
+      await v2!.toolHooks.get("execute.after")!({
+        tool: "shell",
+        sessionID: "child-1",
+        id: "shell-call-1",
+        input: { command: "echo subagent-marker-alpha" },
+        result: {
+          content: [{ type: "text", text: "subagent-marker-alpha\r\n" }],
+          metadata: { exit: 0 },
+        },
+      });
+
+      const lines = (
+        await fsPromises.readFile(
+          path.join(notifyDir, "run-1-subagents.jsonl"),
+          "utf8"
+        )
+      )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      assert.strictEqual(lines.length, 1);
+      assert.strictEqual(lines[0].kind, "part");
+      assert.strictEqual(lines[0].childSessionId, "child-1");
+      assert.strictEqual(lines[0].part.callID, "shell-call-1");
+      assert.strictEqual(lines[0].part.tool, "shell");
+      assert.strictEqual(
+        lines[0].part.state.input.command,
+        "echo subagent-marker-alpha"
+      );
+      assert.strictEqual(
+        lines[0].part.state.output,
+        "subagent-marker-alpha\r\n"
+      );
+      assert.strictEqual(lines[0].part.state.metadata.exit, 0);
+      v2!.dispose();
+    });
+  });
+
   test("fails the step through the error file when an execution fails", async () => {
     await withNotifyDir(async (notifyDir) => {
       const { v2 } = await loadPlugin([], {
