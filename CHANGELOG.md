@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An interactive step that finished just as VS Code briefly stalled no longer loses its reply. ctrlyoke could stop reading the harness's session log before the last record arrived, so the step showed no token count or context-window gauge, and its reply appeared later as a follow-up.
 - Dashboard terminals that are already open now switch to a new VS Code color theme or editor font when you change it, instead of keeping the old one until a new terminal opens.
 - In VS Code 1.147 and later, dashboard terminals no longer draw tiny, widely spaced text without bold. A Chromium change in that release made the terminal's GPU renderer fall back to a 10px sans-serif font.
 - A dashboard that reconnects, such as a browser tab returning from the background, no longer shows terminals as running after they ended while it was disconnected, or keeps terminals that were closed meanwhile. Ended terminals now show as ended and stop accepting input, and closed ones disappear.

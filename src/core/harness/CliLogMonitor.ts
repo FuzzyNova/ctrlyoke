@@ -737,18 +737,26 @@ export class CliLogMonitor {
         }
         draining = true;
 
+        // Read before checking the deadline, so the drain always ends with a
+        // read. An extension-host event-loop stall during the poll sleep can
+        // overrun the whole deadline; checking first would then exit without
+        // reading what the harness wrote meanwhile. Qwen can fire Stop before
+        // its turn-ending assistant record reaches disk, so that record (with
+        // the step's text and token usage) would leak to the post-completion
+        // session-activity watcher as a "follow-up".
         const deadline = Date.now() + CliLogMonitor.DRAIN_DEADLINE_MS;
-        while (Date.now() < deadline) {
+        while (true) {
           const newEntries = await pump.readNewEntriesSince(logPath, startTime);
+          for (const entry of newEntries) {
+            processEvent(entry, "log file (drain)");
+          }
+          if (Date.now() >= deadline) {
+            break;
+          }
           if (newEntries.length === 0) {
             await new Promise((r) =>
               setTimeout(r, CliLogMonitor.DRAIN_POLL_INTERVAL_MS)
             );
-            continue;
-          }
-
-          for (const entry of newEntries) {
-            processEvent(entry, "log file (drain)");
           }
         }
       };
