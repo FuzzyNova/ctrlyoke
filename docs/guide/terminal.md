@@ -118,7 +118,7 @@ resumable. Exiting also releases a
 
 Turn on `execution.closeTerminalOnComplete` to close every AI terminal when its
 work is done. That also turns terminal reuse off, since there is no terminal left
-to type into. Both settings are on the **Execution** tab of Settings.
+to type into. Both settings are under **Terminal Behavior** on the **Terminal** tab of Settings.
 
 ### Background work
 

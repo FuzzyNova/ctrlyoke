@@ -8,6 +8,7 @@ import { CustomSelect } from "../../shared/CustomSelect";
 import { PermissionListEditor } from "../../shared/PermissionListEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
+import { TrustedExternalRootsRows } from "./TrustedExternalRootsRows";
 import {
   PERMISSION_MODE_OPTIONS_META,
   HEADLESS_APPROVAL_POLICY_OPTIONS_META,
@@ -113,6 +114,13 @@ export function DefaultsPermissionsPage({
           )}
         />
       </SettingInputRow>
+      {/* Same order as the workflow Permissions tab: roots follow the sandbox. */}
+      <TrustedExternalRootsRows
+        settings={settings}
+        activeScope={activeScope}
+        onUpdate={onUpdate}
+        onReset={onReset}
+      />
       <SettingInputRow
         settingKey="defaults.toolPermissions.mode"
         id="defaults-permission-mode"

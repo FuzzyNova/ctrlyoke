@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GeneralSection } from "@components/settings/GeneralSection";
 import {
   EDITOR_FONT_SIZE_VSCODE,
-  SERVER_THEME_MODES,
   STEP_COLOR_MODES,
   type EditorFontSize,
 } from "@root/types/DashboardConstants";
@@ -32,7 +31,6 @@ function renderGeneralSection(stepColorMode: string) {
       activeScope="user"
       onUpdate={() => undefined}
       onReset={() => undefined}
-      onReload={() => undefined}
     />
   );
 }
@@ -92,50 +90,21 @@ describe("GeneralSection limit controls", () => {
     ).toHaveAttribute("min", "0");
   });
 
-  it("uses Unlimited for max runs without showing the stored -1", () => {
-    const current = settings(STEP_COLOR_MODES.UNIQUE);
-    current.settings.runs.maxRuns = -1;
-    render(
-      <GeneralSection
-        settings={current}
-        activeScope="user"
-        onUpdate={() => undefined}
-        onReset={() => undefined}
-        onReload={() => undefined}
-      />
-    );
+  it("leaves runs, temp files, MCP mode and diagnostics to the Advanced tab", () => {
+    renderGeneralSection(STEP_COLOR_MODES.UNIQUE);
 
-    expect(
-      screen.getByRole("button", {
-        name: "Unlimited, property runs.maxRuns",
-      })
-    ).toBeInTheDocument();
-  });
-});
-
-describe("GeneralSection browser dashboard theme", () => {
-  it("writes the chosen theme to server.theme", () => {
-    const onUpdate = vi.fn();
-    render(
-      <GeneralSection
-        settings={settings(STEP_COLOR_MODES.NONE)}
-        activeScope="user"
-        onUpdate={onUpdate}
-        onReset={() => undefined}
-        onReload={() => undefined}
-      />
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Auto (match system), property server.theme",
-      })
-    );
-    fireEvent.click(screen.getByRole("button", { name: /^Dark,/ }));
-    expect(onUpdate).toHaveBeenCalledWith(
+    for (const path of [
       "server.theme",
-      SERVER_THEME_MODES.DARK
-    );
+      "runs.maxRuns",
+      "execution.autoDeleteTempFiles",
+      "execution.ctrlyokeMcpMode",
+      "diagnostics.verboseLogging",
+    ]) {
+      expect(
+        document.querySelector(`[data-settings-search-id="${path}"]`),
+        path
+      ).toBeNull();
+    }
   });
 });
 
@@ -158,7 +127,6 @@ describe("GeneralSection font sizes", () => {
         activeScope="user"
         onUpdate={onUpdate}
         onReset={() => undefined}
-        onReload={() => undefined}
       />
     );
     return onUpdate;

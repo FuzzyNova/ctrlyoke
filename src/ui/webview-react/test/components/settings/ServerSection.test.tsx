@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerSection } from "@components/settings/ServerSection";
-import { SETTING_SCOPES } from "@root/types/DashboardConstants";
+import {
+  SERVER_THEME_MODES,
+  SETTING_SCOPES,
+} from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { useSettingsStore } from "@store/settingsStore";
@@ -54,6 +57,29 @@ describe("ServerSection", () => {
       portFallback: null,
       bindAddressFallback: null,
     });
+  });
+
+  it("writes the chosen browser dashboard theme to server.theme", () => {
+    const onUpdate = vi.fn();
+    render(
+      <ServerSection
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={vi.fn()}
+        settings={createSettings("127.0.0.1")}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Auto (match system), property server.theme",
+      })
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Dark,/ }));
+    expect(onUpdate).toHaveBeenCalledWith(
+      "server.theme",
+      SERVER_THEME_MODES.DARK
+    );
   });
 
   it("shows the bind fallback only for the still-configured address and labels the Pro option", () => {

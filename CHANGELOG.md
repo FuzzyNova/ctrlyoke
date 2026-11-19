@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Advanced Permissions settings tab is gone: **Trusted External Roots** and **Offer trust for untrusted file links** now sit below the sandbox settings in Settings → Workflow Defaults → Permissions, matching the workflow Permissions tab, and the per-harness permission notes it carried are covered by the harness and permissions docs. Workflow Defaults → Permissions also no longer lists which harnesses support Allowed Tools and Denied Tools, and warns only when a harness cannot enforce them.
+- Settings has fewer tabs. Queue's limits are now part of **Execution**, and **Close terminal on completion** and **Reuse running terminal** moved from Execution to **Terminal**. A new **Advanced** tab holds run retention and Run History (including Recently deleted), prompt temp files, ctrlyoke's MCP mode, the Coordination settings and board, and diagnostic logging, which leaves General with editor, output and accessibility preferences. **Browser dashboard theme** moved from General to **Server**, above Icon Colors. Setting keys are unchanged.
 - Commit-message skill commands now use matcher-compatible paths on Windows so Qwen's narrow shell allow rule matches while staying limited to that command.
 - Antigravity's Windows Auto sandbox may refuse workspace writes from approved shell commands; Copilot's interactive Custom mode inherits a global Assisted setting, while headless ACP continues to forward approval requests to ctrlyoke.
 - Headless permission warnings now account for dashboard approval requests, and steering a headless step no longer repeats the execution note in the user's message receipt.

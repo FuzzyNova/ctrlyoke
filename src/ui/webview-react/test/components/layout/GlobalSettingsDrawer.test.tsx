@@ -82,7 +82,7 @@ describe("GlobalSettingsDrawer", () => {
 
   it.each([
     ["general", "General"],
-    ["queue", "Queue"],
+    ["advanced", "Advanced"],
     ["mcpmanager", "MCP Manager"],
   ])("titles the %s tab with its tab label exactly once", (tab, title) => {
     useUiStore.setState({ globalSettingsActiveTab: tab });
@@ -188,7 +188,7 @@ describe("GlobalSettingsDrawer", () => {
     });
 
     expect(
-      screen.getByRole("button", { name: "Queue, 2 matches" })
+      screen.getByRole("button", { name: "Execution, 2 matches" })
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "License, 0 matches" })
@@ -275,13 +275,15 @@ describe("GlobalSettingsDrawer", () => {
   });
 
   it("keeps search navigation on a tab with matches and wraps backward", () => {
-    useUiStore.setState({ globalSettingsActiveTab: "queue" });
+    useUiStore.setState({
+      globalSettingsActiveTab: GLOBAL_SETTINGS_TABS.EXECUTION,
+    });
     render(<GlobalSettingsDrawer />);
     fireEvent.click(screen.getByRole("button", { name: "Search settings" }));
     const input = screen.getByRole("textbox", { name: "Search settings" });
     fireEvent.change(input, { target: { value: "max steps" } });
     expect(
-      screen.getByRole("button", { name: "Queue, 2 matches" })
+      screen.getByRole("button", { name: "Execution, 2 matches" })
     ).toHaveClass("bg-list-active-bg");
 
     fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
@@ -300,7 +302,7 @@ describe("GlobalSettingsDrawer", () => {
 
   it("advances from the last match on one tab to the next tab with matches", () => {
     useUiStore.setState({
-      globalSettingsActiveTab: GLOBAL_SETTINGS_TABS.QUEUE,
+      globalSettingsActiveTab: GLOBAL_SETTINGS_TABS.EXECUTION,
     });
     render(<GlobalSettingsDrawer />);
     fireEvent.click(screen.getByRole("button", { name: "Search settings" }));
@@ -309,7 +311,7 @@ describe("GlobalSettingsDrawer", () => {
 
     const matches = searchSettingsCatalog("max", { devEnabled: false }).matches;
     const queueMatches = matches.filter(
-      (entry) => entry.tab === GLOBAL_SETTINGS_TABS.QUEUE
+      (entry) => entry.tab === GLOBAL_SETTINGS_TABS.EXECUTION
     );
     const lastQueueIndex = matches.findIndex(
       (entry) => entry.id === queueMatches[queueMatches.length - 1]?.id

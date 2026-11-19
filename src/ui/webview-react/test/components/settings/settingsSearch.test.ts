@@ -5,6 +5,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { DRAWER_PAGES } from "@/types/drawerPages";
 import { searchSettingsCatalog } from "@components/settings/settingsSearch";
+import { ALL_TABS } from "@components/settings/settingsTabs";
 
 describe("searchSettingsCatalog", () => {
   it("normalizes dotted paths and hyphenated harness ids", () => {
@@ -62,17 +63,17 @@ describe("searchSettingsCatalog", () => {
 
   it("keeps matches in tab order and preserves catalog order within a tab", () => {
     const result = searchSettingsCatalog("terminal", { devEnabled: true });
-    const tabRank = new Map<GlobalSettingsTab, number>([
-      [GLOBAL_SETTINGS_TABS.GENERAL, 0],
-      [GLOBAL_SETTINGS_TABS.WORKFLOW, 1],
-      [GLOBAL_SETTINGS_TABS.EXECUTION, 2],
-      [GLOBAL_SETTINGS_TABS.QUEUE, 3],
-      [GLOBAL_SETTINGS_TABS.WORKTREES, 4],
-      [GLOBAL_SETTINGS_TABS.COORDINATION, 5],
-      [GLOBAL_SETTINGS_TABS.TERMINAL, 6],
-    ]);
+    const tabRank = new Map<GlobalSettingsTab, number>(
+      ALL_TABS.map((tab, index) => [tab.id, index])
+    );
     const ranks = result.matches.map((entry) => tabRank.get(entry.tab)!);
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    // The terminal toggles moved from Execution to the Terminal tab.
+    expect(
+      result.matches.find(
+        (entry) => entry.id === "execution.closeTerminalOnComplete"
+      )?.tab
+    ).toBe(GLOBAL_SETTINGS_TABS.TERMINAL);
     expect(
       result.matches.findIndex((entry) => entry.id === "terminal.fontSize")
     ).toBeLessThan(

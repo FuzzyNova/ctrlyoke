@@ -41,6 +41,10 @@ import { WebviewLog } from "@utils/logger";
 import { isIosDevice } from "@utils/platform";
 import { getServerCertLanCoverage } from "@utils/serverCertCoverage";
 import {
+  SERVER_THEME_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
+import {
   normalizePublicHostname,
   withUrlHostname,
 } from "@root/utils/ServerPublicHostname";
@@ -668,6 +672,21 @@ export function ServerSection({
           </div>
         )}
       </div>
+
+      {/* Theme — visible to all clients; it is the browser dashboard's own look */}
+      <SettingInputRow
+        settingKey="server.theme"
+        id="server-theme"
+        {...rowProps}
+      >
+        <CustomSelect
+          id="server-theme"
+          value={server.theme}
+          onChange={(v) => onUpdate("server.theme", v)}
+          schemaPath="server.theme"
+          options={toSelectOptions(SERVER_THEME_OPTIONS_META, "server.theme")}
+        />
+      </SettingInputRow>
 
       {/* Icon Colors — visible to all clients; live SVG preview, colors persist on blur */}
       <div className="relative mt-3 rounded-sm border border-pro-brand px-3 pb-3 pt-2">

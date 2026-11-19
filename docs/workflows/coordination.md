@@ -181,7 +181,7 @@ ctrlyoke releases a step's claims when the step ends, so steps rarely need to.
 
 ## Seeing the board
 
-Open **Settings → Coordination**. Below the settings is the board for the
+Open **Settings → Advanced**. Below the **Coordination** settings is the board for the
 current checkout: the live participants with their attestation state, the
 recent entries, and an **Open board file** action that opens the raw board.
 
@@ -203,7 +203,7 @@ to `false` to refuse them.
 
 ## Settings
 
-The `coordination` settings live in **Settings → Coordination** and in
+The `coordination` settings live under **Coordination** in **Settings → Advanced** and in
 `.ctrlyoke/settings.json`. The [settings reference](/reference/settings#coordination)
 lists each one with its default.
 

@@ -265,7 +265,7 @@ Right-click a workflow or run for:
 - **Add to Favorites** / **Remove from Favorites**.
 - **Schedule…** / **Edit Schedule…** opens the workflow's schedule view.
 - **Delete Workflow** / **Delete Run**: moves it to Recently deleted. You can
-  restore it from **Settings → General → Run History**.
+  restore it from **Settings → Advanced → Run History**.
 
 ### Scheduling workflows
 

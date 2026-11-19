@@ -26,7 +26,10 @@ export function CoordinationSection({
   const rowProps = { sources, onReset, activeScope };
 
   return (
-    <div className="space-y-4">
+    <div className="pt-3 border-t border-panel-border mt-3 space-y-4">
+      <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+        Coordination
+      </h3>
       <SettingInputRow
         settingKey="coordination.readNotesPageSize"
         id="coordination-read-notes-page-size"

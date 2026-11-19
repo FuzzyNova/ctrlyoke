@@ -431,7 +431,10 @@ Roots come from three places:
 | `trustedExternalRoots` in a **workflow** file                    | You, once per workflow file on each machine.                        |
 
 User and workspace roots are combined, unlike other list settings, which
-replace each other (see [Settings](/guide/settings)).
+replace each other (see [Settings](/guide/settings)). Edit them in
+**Settings → Workflow Defaults → Permissions**, below the sandbox settings and
+next to **Offer trust for untrusted file links**, which controls whether a
+blocked file link offers to trust its parent folder.
 
 ### Approving a workspace's or workflow's roots
 

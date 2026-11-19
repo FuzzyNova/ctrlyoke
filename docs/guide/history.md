@@ -180,7 +180,7 @@ History is always on, and by default every run is kept.
   [`storage.trashRetentionDays`](/reference/settings#storage-trashretentiondays)
   days (30 by default).
 
-To restore a deleted run, open **Settings → General**, find **Run History**,
+To restore a deleted run, open **Settings → Advanced**, find **Run History**,
 and click **View** next to **Recently deleted**. Each entry has a **Restore**
 button, and a **Delete** button that asks before deleting it for good. From a terminal, use
 [`ctrlyoke history trash`](/cli/ctrlyoke#ctrlyoke-history-trash).

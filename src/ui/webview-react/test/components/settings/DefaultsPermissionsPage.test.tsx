@@ -16,7 +16,12 @@ import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
-function createSnapshot(): HarnessCapabilityRegistrySnapshot {
+function createSnapshot(
+  unsupportedHarnesses: readonly string[] = [
+    HARNESS_IDS.CODEX_CLI,
+    HARNESS_IDS.ANTIGRAVITY_CLI,
+  ]
+): HarnessCapabilityRegistrySnapshot {
   const supported: EffectivePermissionCapabilityState = {
     mode: { fidelity: "exact", mechanism: "native", verification: "verified" },
     autoMode: {
@@ -72,11 +77,9 @@ function createSnapshot(): HarnessCapabilityRegistrySnapshot {
         },
       },
       effective: {
-        permissions:
-          harnessId === HARNESS_IDS.CODEX_CLI ||
-          harnessId === HARNESS_IDS.ANTIGRAVITY_CLI
-            ? unsupported
-            : supported,
+        permissions: unsupportedHarnesses.includes(harnessId)
+          ? unsupported
+          : supported,
       },
     };
   }
@@ -103,7 +106,26 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
       .setCapabilitySnapshot(createSnapshot());
   });
 
-  it("summarizes supported and mode-only harnesses while keeping both fields editable", () => {
+  it("shows no support note when every harness enforces the tool lists", () => {
+    useHarnessCapabilityStore
+      .getState()
+      .setCapabilitySnapshot(createSnapshot([]));
+    render(
+      <DefaultsPermissionsPage
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={() => {}}
+        onReset={() => {}}
+      />
+    );
+
+    expect(
+      screen.queryByText(/currently supported by/)
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/NOT ENFORCED/)).not.toBeInTheDocument();
+  });
+
+  it("warns about mode-only harnesses while keeping both fields editable", () => {
     render(
       <DefaultsPermissionsPage
         settings={createSettings()}
@@ -120,10 +142,8 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
       screen.getByRole("textbox", { name: "Denied tools (one per line)" })
     ).not.toBeDisabled();
     expect(
-      screen.getByText(
-        "Allowed Tools are currently supported by Copilot CLI, Claude CLI, OpenCode, and Qwen Code."
-      )
-    ).toBeInTheDocument();
+      screen.queryByText(/currently supported by/)
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(
         "Codex and Antigravity CLI only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by these harnesses."

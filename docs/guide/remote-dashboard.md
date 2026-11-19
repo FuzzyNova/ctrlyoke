@@ -154,7 +154,7 @@ closing the tab but don't sync between your phone and your computer.
 ## Theme and icon
 
 The browser dashboard follows each browser's light or dark preference. Set
-**Browser dashboard theme** on the General settings tab (`server.theme`) to
+**Browser dashboard theme** on the Server settings tab (`server.theme`) to
 `light` or `dark` to pick one for every browser, or add `?theme=light` or
 `?theme=dark` to the link for one browser. A change applies when the page
 reloads.

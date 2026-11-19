@@ -85,49 +85,40 @@ export function diagnosticsForMcpFiltering(
   );
 }
 
+/**
+ * A warning naming the harnesses that cannot enforce a tool list, or nothing
+ * when every harness enforces it (the normal case).
+ */
 export function permissionCapabilitySummary(
   snapshot: HarnessCapabilityRegistrySnapshot,
   field: Exclude<PermissionField, "mode">
 ): Pick<CompatibilityDiagnostic, "severity" | "message">[] {
-  const supported: string[] = [];
   const notEnforced: string[] = [];
 
   for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
     const state =
       snapshot.harnesses[harnessId]?.effective?.permissions?.[field];
-    const label =
-      harnessId === HARNESS_IDS.CLAUDE_CLI
-        ? "Claude CLI"
-        : getHarnessDisplayName(harnessId);
-
     if (state?.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
-      notEnforced.push(label);
-    } else {
-      supported.push(label);
+      notEnforced.push(
+        harnessId === HARNESS_IDS.CLAUDE_CLI
+          ? "Claude CLI"
+          : getHarnessDisplayName(harnessId)
+      );
     }
   }
+
+  if (notEnforced.length === 0) return [];
 
   const label =
     field === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
       ? "Allowed Tools"
       : "Denied Tools";
-  const diagnostics: Pick<CompatibilityDiagnostic, "severity" | "message">[] =
-    [];
-
-  if (supported.length > 0) {
-    diagnostics.push({
-      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
-      message: `${label} are currently supported by ${joinLabels(supported)}.`,
-    });
-  }
-  if (notEnforced.length > 0) {
-    diagnostics.push({
+  return [
+    {
       severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       message: `${joinLabels(notEnforced)} only support an overall permission mode, not individual tool patterns; ${label} are NOT ENFORCED by these harnesses.`,
-    });
-  }
-
-  return diagnostics;
+    },
+  ];
 }
 
 function joinLabels(labels: readonly string[]): string {
