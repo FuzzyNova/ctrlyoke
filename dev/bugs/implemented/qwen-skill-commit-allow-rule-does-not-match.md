@@ -62,7 +62,6 @@ denies. The probe logged every evaluation stage:
 This identifies the evaluator stage that refused the command; compound splitting and
 comma-separated argv transport were not the cause.
 
-
 ## Suggested Fix
 
 1. `buildCommitMessageSkillCommandPrefix` renders Windows paths with forward slashes for the

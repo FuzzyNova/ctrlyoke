@@ -379,7 +379,11 @@ export class QwenToolPermissionMapper
       .replace(/["']/g, "");
 
     // Pure wildcards mean "all commands" — emit the bare tool name
-    if (!normalizedInner || normalizedInner === "*" || normalizedInner === "*:*") {
+    if (
+      !normalizedInner ||
+      normalizedInner === "*" ||
+      normalizedInner === "*:*"
+    ) {
       return qwenToolName;
     }
 
