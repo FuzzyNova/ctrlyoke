@@ -3,7 +3,7 @@
 - **Found:** 2026-11-18 by the bug-drain final-step review (`npm test` after ~c48b4a673)
 - **Area:** `src/ui/webview-react/test/components/shared/HarnessDropdown.test.tsx`,
   `src/ui/webview-react/hooks/useElementNarrow.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit (test hardened and made self-diagnosing; root cause not reproduced, so file a new bug citing the diagnostic message if it recurs)
 
 ## Symptom
 
@@ -37,13 +37,21 @@ unreliable.
 test/components/shared/HarnessDropdown.test.tsx`; all 50 passed.
 - Repeated the file 25 times while a CPU-bound PowerShell job ran alongside it; all 25 passed.
 - The reported failure was not reproduced. Do not treat the suspected cause below as confirmed.
+- Tried the whole UI suite with `npx vitest run --maxWorkers=1` to exercise cross-file
+  state in one worker. The run remained CPU-active for three hours without emitting a
+  result, so it was stopped; no test failure or completed-suite verdict was captured.
+- Hardened the badge test to verify that a new `div` measures 300px before rendering,
+  scope its geometry spy with `mockRestore()`, and include the Claude usage snapshot,
+  `percentDirection`, and Claude row text in a missing-badge failure.
 
 ## Root Cause
 
 Not confirmed. Running the file alone (75 times) is the wrong reproduction. The UI suite runs
 with `isolate: false`, so a failure seen only in the full run is almost always a leak from an
 earlier file in the same worker (see the `isolate: false` bullet in
-`.github/instructions/webview-react.instructions.md`).
+`.github/instructions/webview-react.instructions.md`). The requested single-worker run did not
+finish within three hours and produced no test verdict, so it neither reproduced nor ruled out
+the cross-file failure.
 
 Ruled out by code inspection (2026-11-18 final-step review):
 
