@@ -95,7 +95,9 @@ its per-run assisted flag is unsupported there. A global
 interactive Custom steps, where the allowed-tools list no longer limits what
 the judge may approve. Use `/permissions assisted` for the current session
 when you want Copilot Auto interactively, rather than setting that global
-default. Copilot's judge approves only what your own message asks for, so
+default. If you need Custom's manual approval for the current session, use
+`/permissions default`; there is no per-run CLI flag that overrides the global
+setting. Copilot's judge approves only what your own message asks for, so
 ctrlyoke sends the step's prompt inline on stdin. If you turn that off with
 `execution.inlineGeneratedPromptOnStdin: false`, the judge sees only a file
 reference and often refuses commands the prompt asks for; put commands a

@@ -53,7 +53,7 @@ Applies to **Codex**: Allowed Tools.
 <a id="note-3"></a>**3.** Partially supported because Antigravity cannot translate web search or subagent tools, list/search denials, or allow a command chain piecemeal. _What to do:_ Narrow the rule to the supported subset or select a harness with exact list support.<br>
 Applies to **Antigravity**: Allowed Tools, Denied Tools.
 
-<a id="note-4"></a>**4.** Not supported because Copilot assisted approval is available only in headless sessions; interactive sessions run as Custom, and defaultPermissionMode: "assisted" in ~/.copilot/settings.json also enables the judge for those Custom steps. Use /permissions assisted per session when you want Copilot Auto interactively. _What to do:_ Use custom permission mode or a harness with auto permission mode support.<br>
+<a id="note-4"></a>**4.** Not supported because Copilot assisted approval is available only in headless sessions; interactive sessions run as Custom, and defaultPermissionMode: "assisted" in ~/.copilot/settings.json also enables the judge for those Custom steps. Use /permissions default for a manual Custom session, or /permissions assisted when you want Copilot Auto interactively. _What to do:_ Use custom permission mode or a harness with auto permission mode support.<br>
 Applies to **Copilot**: Auto Mode (interactive).
 
 <a id="note-5"></a>**5.** Not supported because this harness has no judged approval mode. _What to do:_ Use custom permission mode or a harness with auto permission mode support.<br>

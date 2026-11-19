@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Antigravity's Windows Auto sandbox may refuse workspace writes from approved shell commands; Copilot's interactive Custom mode inherits a global Assisted setting, while headless ACP continues to forward approval requests to ctrlyoke.
 - Headless permission warnings now account for dashboard approval requests, and steering a headless step no longer repeats the execution note in the user's message receipt.
 - OpenCode 2.3 headless output now includes child-session tool calls from its plugin sidecar, attributed to the matching subagent.
 - A harness error while sending an end-condition retry prompt now follows `errorBehavior`: `retry` restarts the whole step from its pre-condition in a fresh session, while `retryPhase` retries the prompt in its existing session when available.
