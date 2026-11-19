@@ -28,18 +28,34 @@ unreliable.
    CPU load, for example `npm run test:ui` while the extension suite runs.
 2. The test above sometimes fails. The full log is under `.ctrlyoke/logs/test-runs/`.
 
+### Investigation attempt (2026-11-18)
+
+- Tried the documented `npx vitest run test/components/shared/HarnessDropdown.test.tsx --repeat 50`
+  from `src/ui/webview-react`; the installed Vitest 5.1.0 rejects `--repeat` as an unknown
+  option.
+- Replaced it with 50 sequential runs of `npx vitest run
+  test/components/shared/HarnessDropdown.test.tsx`; all 50 passed.
+- Repeated the file 25 times while a CPU-bound PowerShell job ran alongside it; all 25 passed.
+- The reported failure was not reproduced. Do not treat the suspected cause below as confirmed.
+
 ## Root Cause
 
-Not yet confirmed. The test badge only renders when `useElementNarrow(180)` reports a wide
-element. The test makes the element wide by replacing `Element.prototype.getBoundingClientRect`
-for the duration of the test. Things to check:
+Not confirmed: the failure did not reproduce in 75 repeat runs, including 25 under CPU load.
+Code inspection identifies a plausible timing hazard, but it has not been observed causing this
+failure. The badge only renders when `useElementNarrow(180)` reports a wide element. The test
+makes the element wide by replacing `Element.prototype.getBoundingClientRect` and restores it as
+soon as its synchronous assertions finish, while the hook also measures from an animation-frame
+ResizeObserver callback. If that callback runs after restoration, it can measure jsdom's default
+0px width and hide the badge. Confirm this path with a reproduction or failure-time instrumentation
+before calling it the root cause. Other items to check:
 
 - `useElementTier` measures once on ref attach, then again from
   `createAnimationFrameResizeObserver`. If a deferred frame or observer callback from this
   test or an earlier one runs while a different stub (or the original jsdom 0-width rect) is
   in place, `isNarrow` flips to true and hides the badge. Under load the frame timing changes.
 - Store state (`useHarnessUsageStore`, `useSettingsStore`) or the prototype patch leaking
-  between tests in the file. Check what `beforeEach`/`afterEach` reset.
+  between tests in the file. The file's `afterEach` resets usage and settings state, and no other
+  test in the file patches `getBoundingClientRect`.
 - Anything time-based in the badge: `fetchedAt`/`updatedAt` use `Date.now()` with a 5-minute
   `staleAfterMs`, so staleness is unlikely, but confirm the badge has no tighter freshness rule.
 
