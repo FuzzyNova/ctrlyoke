@@ -18,6 +18,9 @@ import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
 import { sendEditorDraftAsSteer } from "../../utils/sendEditorSteer";
+import { clearEditorAfterDispatch } from "@utils/editorDraftDispatch";
+import type { RecentPromptsMenuOptions } from "@utils/editorEditMenuItems";
+import { usePromptHistoryStore } from "@store/promptHistoryStore";
 import {
   knownDrawerPageOrDefault,
   type DrawerPage,
@@ -119,6 +122,12 @@ function includeEmptyPromptNameClear(
  */
 let persistedDraftRestored = false;
 
+/** Module-level so the editor's menu callback keeps a stable dependency. */
+const RECENT_PROMPTS_MENU: RecentPromptsMenuOptions = {
+  getEntries: () => usePromptHistoryStore.getState().entries,
+  onLoad: (text) => useEditorStore.getState().loadRecentPrompt(text),
+};
+
 function ignoreBulkEditorChange(_value: string): void {
   // The read-only bulk editor displays an empty document without changing the
   // single-step draft that will be restored when the selection clears.
@@ -176,9 +185,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     setPromptText,
     setProperty,
     properties,
-    resetEditor,
     cancelEdit,
-    markClean,
     saveToVsCodeState,
     restoreFromVsCodeState,
     hasActiveQueue,
@@ -972,9 +979,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
           action: finalAction,
           promptName: promptName.trim(),
         });
-        resetEditor();
-        markClean();
-        vscode.setState(null);
+        clearEditorAfterDispatch();
         return;
       }
 
@@ -994,12 +999,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         promptName: promptName.trim(),
       });
 
-      // Clear editor after submission
-      resetEditor();
-      markClean();
-
-      // Clear persisted state
-      vscode.setState(null);
+      clearEditorAfterDispatch(text);
     },
     [
       isScriptMode,
@@ -1010,8 +1010,6 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       getPropertyValues,
       resolveFinalAction,
       vscode,
-      resetEditor,
-      markClean,
     ]
   );
 
@@ -1063,18 +1061,14 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       properties: propertyValues,
       promptName: promptName.trim(),
     });
-    resetEditor();
-    markClean();
-    vscode.setState(null);
+    clearEditorAfterDispatch(isScriptMode ? undefined : text);
   }, [
     buildScriptProperties,
     fileName,
     getPropertyValues,
     isScriptMode,
-    markClean,
     promptName,
     promptText,
-    resetEditor,
     scriptCommand,
     vscode,
     workflowName,
@@ -1475,6 +1469,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
             onInsertApplied={consumePromptEditorInsert}
             pendingFocusRequest={pendingPromptEditorFocus}
             onFocusApplied={consumePromptEditorFocus}
+            recentPrompts={RECENT_PROMPTS_MENU}
           />
 
           {/* Properties Drawer (slides up from bottom, overlays only editor) */}

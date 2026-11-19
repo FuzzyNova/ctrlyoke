@@ -12,7 +12,11 @@ import {
   FINAL_STEP_PHASES,
   PROMPT_EDITOR_INSERT_MODES,
 } from "@/types/messages";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  PROMPT_HISTORY_KINDS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
+import { usePromptHistoryStore } from "@store/promptHistoryStore";
 import type { PromptStep } from "@/types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 
@@ -281,6 +285,101 @@ describe("reply to step editor state", () => {
     useUiStore.getState().setEditorCollapsed(true);
     store().startReplyToStep(reply);
     expect(useUiStore.getState().editorCollapsed).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Taking text back into the editor (Move to Editor, Recent Prompts)
+// ---------------------------------------------------------------------------
+
+describe("moveStepToNewStepDraft", () => {
+  beforeEach(() => {
+    usePromptHistoryStore.setState({ entries: [] });
+  });
+
+  it("makes the step the new-prompt draft and keeps the replaced draft", () => {
+    store().setPromptText("half-written");
+    store().moveStepToNewStepDraft(2, makePromptStep());
+
+    expect(store().selectionTarget.kind).toBe("newPrompt");
+    expect(store().selectedPromptIndex).toBeNull();
+    expect(store().savedNewPromptState).toBeNull();
+    expect(store().promptText).toBe("Do something useful");
+    expect(store().promptName).toBe("My Prompt");
+    expect(store().properties.model).toBe("claude-opus-4");
+    expect(store().isDirty).toBe(true);
+    expect(usePromptHistoryStore.getState().entries).toMatchObject([
+      { text: "half-written", kind: PROMPT_HISTORY_KINDS.DRAFT },
+    ]);
+  });
+
+  it("takes the step's unsaved edits and the draft saved while editing it", () => {
+    store().setPromptText("new-prompt draft");
+    store().enterEditMode(1, makePromptStep());
+    store().setPromptText("edited but not updated");
+    store().deselect();
+    store().enterEditMode(0, makePromptStep({ prompt: "other" }));
+
+    store().moveStepToNewStepDraft(1, makePromptStep());
+
+    expect(store().promptText).toBe("edited but not updated");
+    expect(store().pendingEdits["queue:1"]).toBeUndefined();
+    expect(usePromptHistoryStore.getState().entries[0]?.text).toBe(
+      "new-prompt draft"
+    );
+  });
+
+  it("moves a script step with its command", () => {
+    store().moveStepToNewStepDraft(0, makeScriptStep());
+    expect(store().stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(store().scriptCommand).toBe("npm test");
+    expect(store().selectionTarget.kind).toBe("newPrompt");
+  });
+});
+
+describe("loadRecentPrompt", () => {
+  beforeEach(() => {
+    usePromptHistoryStore.setState({ entries: [] });
+  });
+
+  it("replaces a new prompt and keeps its unsent text", () => {
+    store().setPromptText("unsent");
+    store().loadRecentPrompt("earlier prompt");
+
+    expect(store().promptText).toBe("earlier prompt");
+    expect(store().isDirty).toBe(true);
+    expect(usePromptHistoryStore.getState().entries[0]?.text).toBe("unsent");
+  });
+
+  it("edits an existing step's text without remembering it", () => {
+    store().enterEditMode(0, makePromptStep());
+    store().loadRecentPrompt("earlier prompt");
+
+    expect(store().promptText).toBe("earlier prompt");
+    expect(usePromptHistoryStore.getState().entries).toEqual([]);
+  });
+});
+
+describe("clearPersistedNewStepDraft", () => {
+  it("removes only the draft from the shared webview state", () => {
+    let vscodeState: Record<string, unknown> | undefined = {
+      "ctrlyoke-ui-state": "{}",
+    };
+    const vscode = {
+      getState: () => vscodeState,
+      setState: (state: Record<string, unknown>) => {
+        vscodeState = state;
+      },
+      postMessage: () => undefined,
+    };
+    store().setPromptText("draft");
+    store().saveToVsCodeState(vscode);
+    expect(vscodeState).toHaveProperty("editorState");
+
+    store().clearPersistedNewStepDraft(vscode);
+
+    expect(vscodeState).toEqual({ "ctrlyoke-ui-state": "{}" });
+    expect(store().restoreFromVsCodeState(vscode)).toBe(false);
   });
 });
 

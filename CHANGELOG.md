@@ -10,8 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - A [Known issues](https://ctrlyoke.dev/docs/troubleshooting/known-issues) page in the docs lists harness CLI problems ctrlyoke cannot fix. It starts with agy's `auto` sandbox refusing workspace writes on Windows.
+- A pending step's menu has **Move to Editor**, which puts the step back in the prompt editor and removes it from the queue, and **Send as Steer**, which sends its prompt to a live session instead of running it as a step.
+- The prompt editor's right-click menu has **Recent Prompts**: the last 15 prompts you ran, queued or steered, in any workflow, ready to load back into the editor. Unsent text the editor replaces is kept there too.
 
 ### Changed
+
+- Sending a prompt no longer erases the dashboard's other saved state, such as unsaved file edits in the workspace viewer. Before, that state could be lost if the panel reloaded before it was next saved.
 
 - Tested with Antigravity CLI 1.5.12, which has the known issue above.
 

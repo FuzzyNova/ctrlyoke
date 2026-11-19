@@ -1,5 +1,9 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
-import type { ContextMenuItem } from "../components/shared/ContextMenu";
+import type {
+  ContextMenuItem,
+  ContextMenuSubmenu,
+} from "../components/shared/ContextMenu";
+import { useEditorStore } from "@store/editorStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
@@ -35,13 +39,17 @@ import {
 import { generateSingleStepMarkdownExport } from "./markdownExport";
 import {
   END_STEP_EARLY_UNSUPPORTED,
+  NO_LIVE_HARNESS,
   STEER_EXTERNAL_RUN,
+  STEER_NO_CONTENT,
+  STEER_PROMPT_ONLY,
   formatEndStepEarlyTitle,
   formatNoLiveSessionReason,
+  formatSteerTargetLabel,
   formatSteerTargetTitle,
   type SteerTarget,
 } from "./steerTargets";
-import { sendEditorDraftAsSteer } from "./sendEditorSteer";
+import { sendEditorDraftAsSteer, sendSteerText } from "./sendEditorSteer";
 import { sendMessage } from "@messaging/sendMessage";
 import { MESSAGE_TYPES } from "@/types/messages";
 
@@ -260,6 +268,103 @@ export function buildLiveStepControlMenuItems({
     });
   }
   return items;
+}
+
+export interface QueuedStepHandoffMenuItemsInput {
+  step: WorkflowStep;
+  /** Absolute queue index of the step. */
+  stepIndex: number;
+  workflowId: string | null;
+  /**
+   * Why the step cannot leave the queue (it is running or settled, or the
+   * workflow is read-only), or undefined when it can.
+   */
+  removeDisabledReason: string | undefined;
+  /** Every live steer destination for the workflow, from `useSteerTargets`. */
+  steerTargets: readonly SteerTarget[];
+}
+
+/**
+ * Move to Editor and Send as Steer: take a queued step back out of the queue,
+ * into the prompt editor or into a live session. Both remove the step without
+ * the delete confirmation, because its text is not lost: it is in the editor,
+ * or delivered and kept in Recent Prompts (a failed steer is restored into
+ * the editor). Send as Steer opens a submenu when several sessions are live.
+ */
+export function buildQueuedStepHandoffMenuItems({
+  step,
+  stepIndex,
+  workflowId,
+  removeDisabledReason,
+  steerTargets,
+}: QueuedStepHandoffMenuItemsInput): Array<
+  ContextMenuItem | ContextMenuSubmenu
+> {
+  const removeStep = () =>
+    sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { indices: [stepIndex] });
+
+  const moveToEditor: ContextMenuItem = {
+    label: "Move to Editor",
+    icon: "codicon-edit",
+    disabled: removeDisabledReason !== undefined,
+    title: "Load this step into the prompt editor and remove it from the queue",
+    disabledTitle: removeDisabledReason,
+    onClick: () => {
+      if (removeDisabledReason !== undefined) return;
+      useEditorStore.getState().moveStepToNewStepDraft(stepIndex, step);
+      removeStep();
+    },
+  };
+
+  const steerText = isScriptStep(step) ? "" : step.prompt.trim();
+  // A step's own session never steers it: it has not started yet.
+  const destinations = steerTargets.filter(
+    (target) => target.stepIndex !== stepIndex
+  );
+  const steerDisabledReason = isScriptStep(step)
+    ? STEER_PROMPT_ONLY
+    : (removeDisabledReason ??
+      (steerText.length === 0
+        ? STEER_NO_CONTENT
+        : !workflowId || destinations.length === 0
+          ? NO_LIVE_HARNESS
+          : undefined));
+  const steerTo = (target: SteerTarget) => () => {
+    if (steerDisabledReason !== undefined || !workflowId) return;
+    sendSteerText(workflowId, target.sessionId, steerText);
+    removeStep();
+  };
+
+  const steerLabel = "Send as Steer";
+  const steerIcon = "codicon-arrow-up";
+  const sendAsSteer: ContextMenuItem | ContextMenuSubmenu =
+    steerDisabledReason !== undefined || destinations.length === 1
+      ? {
+          label: steerLabel,
+          icon: steerIcon,
+          disabled: steerDisabledReason !== undefined,
+          title: destinations[0]
+            ? `${formatSteerTargetTitle(destinations[0])} Removes this step from the queue.`
+            : undefined,
+          disabledTitle: steerDisabledReason,
+          onClick: destinations[0] ? steerTo(destinations[0]) : () => {},
+        }
+      : {
+          label: steerLabel,
+          icon: steerIcon,
+          disabled: false,
+          title:
+            "Send this step's prompt to a live session and remove it from the queue",
+          submenu: destinations.map((target) => ({
+            label: formatSteerTargetLabel(target),
+            icon: steerIcon,
+            disabled: false,
+            title: formatSteerTargetTitle(target),
+            onClick: steerTo(target),
+          })),
+        };
+
+  return [moveToEditor, sendAsSteer];
 }
 
 export interface StepOutputFilterMenuItemsInput {

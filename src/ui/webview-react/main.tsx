@@ -8,6 +8,7 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { usePromptHistoryStore } from "@store/promptHistoryStore";
 import { installPerformanceProfiler } from "@utils/performanceProfiler";
 import "./styles/globals.css";
 import { getErrorMessage } from "@root/utils/ErrorUtils";
@@ -32,6 +33,7 @@ if (!root) {
     try {
       await useUiStore.persist.rehydrate();
       await useWorkspaceViewerStore.persist.rehydrate();
+      await usePromptHistoryStore.persist.rehydrate();
       ReactDOM.createRoot(root).render(
         <React.StrictMode>
           <ErrorBoundary>

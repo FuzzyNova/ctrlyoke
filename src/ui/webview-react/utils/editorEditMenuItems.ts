@@ -1,14 +1,59 @@
 import { EditorSelection, type EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { selectAll, selectLine } from "@codemirror/commands";
-import type { ContextMenuEntry } from "@components/shared/ContextMenu";
+import type {
+  ContextMenuEntry,
+  ContextMenuSubmenu,
+} from "@components/shared/ContextMenu";
+import {
+  PROMPT_HISTORY_KINDS,
+  type PromptHistoryKind,
+} from "@root/types/DashboardConstants";
+import type { PromptHistoryEntry } from "@store/promptHistoryStore";
 import { readClipboardText, writeClipboardText } from "@utils/clipboard";
 import { readClipboardImages, type ClipboardImage } from "@utils/pastedImages";
+import { formatRelativeTime } from "@utils/time";
 
 const NO_SELECTION_TITLE = "No text selected";
 const READ_ONLY_TITLE = "Editor is read-only";
 const EMPTY_EDITOR_TITLE = "Editor is empty";
 const NO_WORD_TITLE = "No word at cursor";
+const NO_RECENT_PROMPTS_TITLE = "Prompts you run, queue or steer appear here";
+
+/** Characters of a prompt's first line shown as its Recent Prompts label. */
+const RECENT_PROMPT_LABEL_LENGTH = 60;
+/** Characters of a prompt shown in its Recent Prompts tooltip. */
+const RECENT_PROMPT_PREVIEW_LENGTH = 400;
+
+const RECENT_PROMPT_KIND_DISPLAY: Record<
+  PromptHistoryKind,
+  { icon: string; verb: string }
+> = {
+  [PROMPT_HISTORY_KINDS.SENT]: { icon: "codicon-play", verb: "Sent" },
+  [PROMPT_HISTORY_KINDS.STEER]: { icon: "codicon-arrow-up", verb: "Steered" },
+  [PROMPT_HISTORY_KINDS.DRAFT]: { icon: "codicon-edit", verb: "Replaced" },
+};
+
+function truncateText(text: string, length: number): string {
+  return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+}
+
+/** A prompt's first non-blank line, whitespace collapsed and shortened. */
+export function formatRecentPromptLabel(text: string): string {
+  const firstLine =
+    text.split(/\r?\n/).find((line) => line.trim().length > 0) ?? text;
+  return truncateText(
+    firstLine.trim().replace(/\s+/g, " "),
+    RECENT_PROMPT_LABEL_LENGTH
+  );
+}
+
+function formatRecentPromptTitle(entry: PromptHistoryEntry): string {
+  const age = formatRelativeTime(entry.timestampMs);
+  const when = age === "just now" ? age : `${age} ago`;
+  const { verb } = RECENT_PROMPT_KIND_DISPLAY[entry.kind];
+  return `${verb} ${when}\n\n${truncateText(entry.text, RECENT_PROMPT_PREVIEW_LENGTH)}`;
+}
 
 /**
  * Moves the caret to the given client coordinates, as a right-click or long
@@ -115,12 +160,43 @@ async function pasteClipboard(
   await pasteClipboardText(view);
 }
 
+/** The prompt editor's Recent Prompts submenu. */
+export interface RecentPromptsMenuOptions {
+  /** Read when the menu opens, so it lists what was sent since the last one. */
+  getEntries: () => readonly PromptHistoryEntry[];
+  /** Replace the editor's prompt with the chosen entry's text. */
+  onLoad: (text: string) => void;
+}
+
 export interface EditorEditMenuOptions {
   /**
    * Set where the caret accepts pasted images (a prompt): Paste then hands
    * the clipboard's images here instead of pasting its text.
    */
   pasteImages?: (images: ClipboardImage[]) => void;
+  /** Set only by the main prompt editor, which alone gets Recent Prompts. */
+  recentPrompts?: RecentPromptsMenuOptions;
+}
+
+function buildRecentPromptsMenuEntry(
+  { getEntries, onLoad }: RecentPromptsMenuOptions,
+  readOnly: boolean,
+  run: (action: () => void) => () => void
+): ContextMenuSubmenu {
+  const entries = getEntries();
+  return {
+    label: "Recent Prompts",
+    icon: "codicon-history",
+    disabled: readOnly || entries.length === 0,
+    disabledTitle: readOnly ? READ_ONLY_TITLE : NO_RECENT_PROMPTS_TITLE,
+    submenu: entries.map((entry) => ({
+      label: formatRecentPromptLabel(entry.text),
+      icon: RECENT_PROMPT_KIND_DISPLAY[entry.kind].icon,
+      disabled: false,
+      title: formatRecentPromptTitle(entry),
+      onClick: run(() => onLoad(entry.text)),
+    })),
+  };
 }
 
 /**
@@ -132,7 +208,7 @@ export interface EditorEditMenuOptions {
 export function buildEditorEditMenuItems(
   view: EditorView,
   readOnly: boolean,
-  { pasteImages }: EditorEditMenuOptions = {}
+  { pasteImages, recentPrompts }: EditorEditMenuOptions = {}
 ): ContextMenuEntry[] {
   const { state } = view;
   const selection = state.selection.main;
@@ -208,5 +284,11 @@ export function buildEditorEditMenuItems(
       disabledTitle: EMPTY_EDITOR_TITLE,
       onClick: run(() => selectAll(view)),
     },
+    ...(recentPrompts
+      ? [
+          { type: "divider" as const },
+          buildRecentPromptsMenuEntry(recentPrompts, readOnly, run),
+        ]
+      : []),
   ];
 }

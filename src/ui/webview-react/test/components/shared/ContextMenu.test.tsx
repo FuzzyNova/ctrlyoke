@@ -175,4 +175,83 @@ describe("ContextMenu", () => {
     fireEvent(window, new Event("resize"));
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  describe("submenus", () => {
+    const labels = () =>
+      screen.getAllByRole("menuitem").map((el) => el.textContent?.trim());
+
+    function submenuMenu() {
+      const nested = item("First nested");
+      const entries: ContextMenuEntry[] = [
+        item("Copy"),
+        {
+          label: "Recent",
+          icon: "codicon-history",
+          disabled: false,
+          submenu: [nested, { type: "divider" }, item("Second nested")],
+        },
+      ];
+      return { entries, nested };
+    }
+
+    it("drills into a submenu in place, with a Back row, and stays open", () => {
+      const { entries } = submenuMenu();
+      const { onClose } = renderMenu(entries);
+      const recent = screen.getByRole("menuitem", { name: "Recent" });
+      expect(recent).toHaveAttribute("aria-haspopup", "menu");
+
+      fireEvent.click(recent);
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(labels()).toEqual(["Recent", "First nested", "Second nested"]);
+      expect(
+        screen.getByRole("menuitem", { name: "Back from Recent" })
+      ).toHaveFocus();
+    });
+
+    it("runs a nested item and closes", () => {
+      const { entries, nested } = submenuMenu();
+      const { onClose } = renderMenu(entries);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Recent" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "First nested" }));
+
+      expect(onClose).toHaveBeenCalled();
+      expect(
+        (nested as Extract<ContextMenuEntry, { onClick: unknown }>).onClick
+      ).toHaveBeenCalled();
+    });
+
+    it("returns with the Back row or ArrowLeft, and opens with ArrowRight", () => {
+      const { entries } = submenuMenu();
+      renderMenu(entries);
+      const recent = screen.getByRole("menuitem", { name: "Recent" });
+
+      fireEvent.keyDown(recent, { key: "ArrowRight" });
+      expect(labels()).toContain("First nested");
+      fireEvent.keyDown(screen.getByRole("menu"), { key: "ArrowLeft" });
+      expect(labels()).toEqual(["Copy", "Recent"]);
+
+      fireEvent.click(screen.getByRole("menuitem", { name: "Recent" }));
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Back from Recent" })
+      );
+      expect(labels()).toEqual(["Copy", "Recent"]);
+    });
+
+    it("does not open a disabled submenu", () => {
+      renderMenu([
+        {
+          label: "Recent",
+          icon: "codicon-history",
+          disabled: true,
+          disabledTitle: "Nothing yet",
+          submenu: [item("Hidden")],
+        },
+      ]);
+      const recent = screen.getByRole("menuitem", { name: "Recent" });
+      expect(recent).toBeDisabled();
+      fireEvent.click(recent);
+      expect(screen.queryByText("Hidden")).not.toBeInTheDocument();
+    });
+  });
 });

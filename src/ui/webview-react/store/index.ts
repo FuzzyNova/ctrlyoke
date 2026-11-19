@@ -23,6 +23,10 @@ export { useExecutionPreviewStore } from "./executionPreviewStore";
 export { useTerminalStore } from "./terminalStore";
 export { useWorkspaceViewerStore } from "./workspaceViewerStore";
 export {
+  usePromptHistoryStore,
+  type PromptHistoryEntry,
+} from "./promptHistoryStore";
+export {
   useMcpManagerStore,
   MCP_MANAGER_DISCOVERY_TABS,
   MCP_MANAGER_REMOTE_SORTS,

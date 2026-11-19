@@ -68,10 +68,22 @@ the next `Backspace` removes the whole reference.
   [Writing references literally](/workflows/context-files#writing-references-literally)).
 
 Right-click or long-press anywhere else in the editor for **Cut**, **Copy**,
-**Paste**, **Select Word**, **Select Line** and **Select All**. Selecting and
-then pressing `Backspace` is the quick way to clear text on a phone. **Select
-Word** takes the whole run of text around the cursor, so it selects a complete
-reference such as `@src/app.ts` at once.
+**Paste**, **Select Word**, **Select Line**, **Select All** and **Recent
+Prompts**. Selecting and then pressing `Backspace` is the quick way to clear
+text on a phone. **Select Word** takes the whole run of text around the cursor,
+so it selects a complete reference such as `@src/app.ts` at once.
+
+### Recent prompts {#recent-prompts}
+
+**Recent Prompts** lists the last 15 prompts you ran, queued or steered from
+the editor, newest first, in every workflow. Choose one to put it back in the
+editor, for example to send a prompt you queued in the wrong workflow again in
+the right one. If the editor holds unsent text, that text is added to the list
+before it is replaced, so you can switch back to it. The list is kept per
+dashboard: the VS Code panel and each browser have their own.
+
+To take back a step that is still waiting in the queue, use **Move to Editor**
+or **Send as Steer** in its [step menu](/guide/dashboard#step-menu).
 
 Turn the setting off to edit references character by character. They then
 show as underlined links; `Ctrl+Click` (`Cmd+Click` on macOS) opens one.

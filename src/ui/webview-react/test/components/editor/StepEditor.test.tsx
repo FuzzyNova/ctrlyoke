@@ -52,6 +52,8 @@ import {
   StepEditor,
   type PromptFileAction,
 } from "@components/editor/StepEditor";
+import { usePromptHistoryStore } from "@store/promptHistoryStore";
+import { PROMPT_HISTORY_KINDS } from "@root/types/DashboardConstants";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -706,6 +708,30 @@ describe("StepEditor — EXECUTE_PROMPT run addressing", () => {
   });
 });
 
+describe("StepEditor — Recent Prompts", () => {
+  it("loads a recent prompt from the editor's right-click menu", () => {
+    usePromptHistoryStore.setState({ entries: [] });
+    usePromptHistoryStore
+      .getState()
+      .record("queued to the wrong workflow", PROMPT_HISTORY_KINDS.SENT);
+    useEditorStore.setState({ promptText: "unsent" });
+
+    const { container } = render(<StepEditor />);
+    const editor = container.querySelector(".codemirror-editor");
+    expect(editor).not.toBeNull();
+    fireEvent.contextMenu(editor!, { clientX: 5, clientY: 5 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Recent Prompts" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "queued to the wrong workflow" })
+    );
+
+    expect(useEditorStore.getState().promptText).toBe(
+      "queued to the wrong workflow"
+    );
+    expect(usePromptHistoryStore.getState().entries[0]?.text).toBe("unsent");
+  });
+});
+
 describe("StepEditor — Run in New Workflow", () => {
   it("posts the composed prompt payload and clears the draft", async () => {
     const user = userEvent.setup();
@@ -738,13 +764,19 @@ describe("StepEditor — Run in New Workflow", () => {
     });
     expect(useEditorStore.getState().promptText).toBe("");
     expect(useEditorStore.getState().promptName).toBe("");
+    expect(usePromptHistoryStore.getState().entries[0]).toMatchObject({
+      text: "start an isolated workflow",
+      kind: PROMPT_HISTORY_KINDS.SENT,
+    });
+    // Clearing the draft must not wipe the state other stores persist
+    // beside it (layout, workspace file drafts, Recent Prompts).
     expect(
       (
         window.vscodeApi as unknown as {
           setState: ReturnType<typeof vi.fn>;
         }
       ).setState
-    ).toHaveBeenCalledWith(null);
+    ).not.toHaveBeenCalledWith(null);
   });
 
   it("posts script drafts with the same script properties as Run", async () => {

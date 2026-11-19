@@ -3541,6 +3541,20 @@ export const EDITOR_TARGET_KINDS = {
 } as const;
 
 // ============================================================================
+// PROMPT HISTORY KINDS - How a Recent Prompts entry left the prompt editor
+// ============================================================================
+export const PROMPT_HISTORY_KINDS = {
+  /** Run or queued as a step, here or in a new workflow. */
+  SENT: "sent",
+  /** Sent as a steer message to a live session. */
+  STEER: "steer",
+  /** Unsent text the editor replaced (loading a recent prompt, Move to Editor). */
+  DRAFT: "draft",
+} as const;
+export type PromptHistoryKind =
+  (typeof PROMPT_HISTORY_KINDS)[keyof typeof PROMPT_HISTORY_KINDS];
+
+// ============================================================================
 // PROMPT EDITOR INSERT MODES - How external reference insertions are applied
 // ============================================================================
 export const PROMPT_EDITOR_INSERT_MODES = {
@@ -5509,6 +5523,8 @@ export const KEYBOARD_KEYS = {
   F3: "F3",
   ARROW_UP: "ArrowUp",
   ARROW_DOWN: "ArrowDown",
+  ARROW_LEFT: "ArrowLeft",
+  ARROW_RIGHT: "ArrowRight",
   HOME: "Home",
   END: "End",
   BACKSPACE: "Backspace",

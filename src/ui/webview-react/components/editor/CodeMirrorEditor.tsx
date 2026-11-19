@@ -121,6 +121,7 @@ import {
   buildEditorEditMenuItems,
   isTouchOnSelectionHandle,
   placeCaretForContextMenu,
+  type RecentPromptsMenuOptions,
 } from "@utils/editorEditMenuItems";
 import {
   clipboardEventImages,
@@ -214,6 +215,8 @@ interface CodeMirrorEditorProps {
   pendingFocusRequest?: number | null;
   /** Called after a pending focus request has been applied. */
   onFocusApplied?: (nonce: number) => void;
+  /** Adds Recent Prompts to the right-click menu (the main prompt editor). */
+  recentPrompts?: RecentPromptsMenuOptions;
 }
 
 interface PendingPlaceholder {
@@ -335,6 +338,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     onInsertApplied,
     pendingFocusRequest,
     onFocusApplied,
+    recentPrompts,
   } = props;
   const stepCountRef = useRef(props.stepCount ?? 0);
   const hasFinalStepRef = useRef(props.hasFinalStep ?? false);
@@ -1525,11 +1529,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             mode === CODE_MIRROR_EDITOR_MODES.PROMPT && !readOnly
               ? (images) => pasteImages(images, view)
               : undefined,
+          recentPrompts,
         }),
         fromTouch
       );
     },
-    [mode, openReferenceChipMenu, pasteImages]
+    [mode, openReferenceChipMenu, pasteImages, recentPrompts]
   );
   const openEditMenuFromTouch = useCallback(
     (x: number, y: number) => openEditMenu(x, y, true),

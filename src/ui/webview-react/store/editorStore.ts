@@ -31,6 +31,7 @@ import {
 } from "@root/types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
+import { usePromptHistoryStore } from "./promptHistoryStore";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
 import { useWorkflowStore } from "./workflowStore";
 import {
@@ -360,6 +361,51 @@ function isNewStepDraftDirty(draft: SavedNewStepState): boolean {
   );
 }
 
+/**
+ * The key the new-step draft is persisted under in the webview state root,
+ * which every persisted store shares (uiStore, the workspace viewer's file
+ * drafts, prompt history), so clearing the draft must remove only this key.
+ */
+const PERSISTED_NEW_STEP_DRAFT_KEY = "editorState";
+
+/** The new-step draft persisted in webview state, or null when there is none. */
+function readPersistedNewStepDraft(
+  vscode: VsCodeApi
+): NewStepDraftFields | null {
+  const root = vscode.getState();
+  if (!root) return null;
+
+  // Support both namespaced (new) and legacy (root-level) formats for migration.
+  const persistedState = root[PERSISTED_NEW_STEP_DRAFT_KEY] ?? root;
+  if (!persistedState || typeof persistedState !== "object") return null;
+
+  // Only restore if we were in new prompt mode
+  const persistedTarget = persistedState.selectionTarget;
+  if (
+    (persistedTarget &&
+      persistedTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) ||
+    persistedState.selectedPromptIndex !== null
+  ) {
+    return null;
+  }
+
+  return restoreNewStepDraft({
+    ...persistedState,
+    promptText: persistedState.promptText ?? persistedState.editorText ?? "",
+  });
+}
+
+/**
+ * Keep unsent prompt text the editor is about to replace in Recent Prompts.
+ * A script draft has no prompt text and is left alone.
+ */
+function rememberReplacedPromptDraft(
+  draft: Pick<NewStepDraftFields, "promptText" | "stepType"> | null
+): void {
+  if (draft?.stepType !== STEP_TYPES.PROMPT) return;
+  usePromptHistoryStore.getState().rememberDraft(draft.promptText);
+}
+
 /** Drop the reply context once the draft no longer resumes that session. */
 function replyContextAfterPropertyChange(
   replyContext: ReplyContext | null,
@@ -395,6 +441,19 @@ interface EditorActions {
   startReplyToStep: (reply: ReplyContextInput) => void;
   cancelReplyToStep: () => void;
   enterEditMode: (index: number, promptData: WorkflowStep) => void;
+  /**
+   * Make a queued step the new-step draft: its text, name and properties,
+   * including unsaved edits made to it in the editor. The caller removes the
+   * step from the queue. Unsent prompt text in the draft it replaces is kept
+   * in Recent Prompts.
+   */
+  moveStepToNewStepDraft: (index: number, step: WorkflowStep) => void;
+  /**
+   * Replace the editor's prompt text with a Recent Prompts entry. Unsent text
+   * in a new prompt is kept in Recent Prompts first; an existing step's text
+   * is still in the step, so it is simply edited.
+   */
+  loadRecentPrompt: (text: string) => void;
   cancelEdit: () => void;
   /**
    * Saves current edit state to pendingEdits and returns to new prompt mode.
@@ -478,6 +537,8 @@ interface EditorActions {
   // State persistence (VS Code webview state)
   saveToVsCodeState: (vscode: VsCodeApi) => void;
   restoreFromVsCodeState: (vscode: VsCodeApi) => boolean;
+  /** Drop the persisted new-step draft, leaving other stores' state alone. */
+  clearPersistedNewStepDraft: (vscode: VsCodeApi) => void;
 
   // Reset
   resetEditor: () => void;
@@ -861,6 +922,42 @@ export const useEditorStore = create<
         pendingEdits: newPendingEdits,
       });
     }
+  },
+
+  moveStepToNewStepDraft: (index, step) => {
+    const before = get();
+    rememberReplacedPromptDraft(
+      before.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
+        ? before
+        : (before.savedNewPromptState ??
+            readPersistedNewStepDraft(getVsCodeApi()))
+    );
+
+    // Loading the step through edit mode reuses its step-to-editor mapping
+    // and picks up unsaved edits cached for it; the editor then leaves edit
+    // mode without restoring the draft it replaced.
+    get().enterEditMode(index, step);
+    const pendingEdits = { ...get().pendingEdits };
+    delete pendingEdits[
+      selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index })
+    ];
+    set({
+      selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+      selectedPromptIndex: null,
+      originalPromptData: null,
+      savedNewPromptState: null,
+      isDirty: true,
+      pendingEdits,
+    });
+    expandPromptEditorIfCollapsed();
+  },
+
+  loadRecentPrompt: (text) => {
+    const state = get();
+    if (state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      rememberReplacedPromptDraft(state);
+    }
+    set({ promptText: text, isDirty: true });
   },
 
   cancelEdit: () => {
@@ -1665,40 +1762,15 @@ export const useEditorStore = create<
       selectedPromptIndex: null, // Always null for new prompt state
     };
 
-    // Merge under "editorState" key to coexist with other vscode state consumers
+    // Merge under its own key to coexist with other vscode state consumers
     // (e.g. uiStore's Zustand persist storage uses "ctrlyoke-ui-state" key).
     const root = vscode.getState() ?? {};
-    vscode.setState({ ...root, editorState });
+    vscode.setState({ ...root, [PERSISTED_NEW_STEP_DRAFT_KEY]: editorState });
   },
 
   restoreFromVsCodeState: (vscode) => {
-    const root = vscode.getState();
-
-    if (!root) {
-      return false;
-    }
-
-    // Support both namespaced (new) and legacy (root-level) formats for migration.
-    const persistedState = root.editorState ?? root;
-
-    if (!persistedState || typeof persistedState !== "object") {
-      return false;
-    }
-
-    // Only restore if we were in new prompt mode
-    const persistedTarget = persistedState.selectionTarget;
-    if (
-      (persistedTarget &&
-        persistedTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) ||
-      persistedState.selectedPromptIndex !== null
-    ) {
-      return false;
-    }
-
-    const draft = restoreNewStepDraft({
-      ...persistedState,
-      promptText: persistedState.promptText ?? persistedState.editorText ?? "",
-    });
+    const draft = readPersistedNewStepDraft(vscode);
+    if (!draft) return false;
 
     set({
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
@@ -1707,6 +1779,13 @@ export const useEditorStore = create<
     });
 
     return true;
+  },
+
+  clearPersistedNewStepDraft: (vscode) => {
+    const root = vscode.getState();
+    if (!root || !(PERSISTED_NEW_STEP_DRAFT_KEY in root)) return;
+    const { [PERSISTED_NEW_STEP_DRAFT_KEY]: _cleared, ...rest } = root;
+    vscode.setState(rest);
   },
 
   // ============================================================================

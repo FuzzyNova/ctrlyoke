@@ -23,7 +23,17 @@ export type ContextMenuDivider = {
   type: "divider";
 };
 
-export type ContextMenuEntry = ContextMenuItem | ContextMenuDivider;
+/**
+ * An item that opens a nested list in place of the menu's own items, with a
+ * Back row above it. Drilling in rather than flying out to the side works the
+ * same with a mouse, a keyboard and a tap on a narrow phone screen.
+ */
+export type ContextMenuSubmenu = Omit<ContextMenuItem, "onClick"> & {
+  submenu: ContextMenuEntry[];
+};
+
+export type ContextMenuEntry =
+  ContextMenuItem | ContextMenuSubmenu | ContextMenuDivider;
 
 export type ContextMenuState = {
   x: number;
@@ -47,6 +57,19 @@ const DEFAULT_MENU_LABEL = "Context menu";
 function isDividerEntry(item: ContextMenuEntry): item is ContextMenuDivider {
   return "type" in item && item.type === "divider";
 }
+
+export function isSubmenuEntry(
+  item: ContextMenuEntry
+): item is ContextMenuSubmenu {
+  return "submenu" in item;
+}
+
+const MENU_ITEM_CLASS =
+  "cy-dropdown-row flex items-center gap-1.5 w-full px-2.5 py-1 text-xs text-left transition-colors focus-visible:bg-toolbar-hover-bg";
+const MENU_ITEM_ENABLED_CLASS =
+  "text-foreground hover:bg-toolbar-hover-bg cursor-pointer";
+const MENU_ITEM_DISABLED_CLASS =
+  "text-description-fg cursor-not-allowed opacity-50";
 
 function enabledMenuItems(menu: HTMLElement): HTMLButtonElement[] {
   return Array.from(
@@ -115,14 +138,21 @@ export function ContextMenu({
       ? document.activeElement
       : null
   );
+  // The submenus drilled into, outermost first; empty shows `items`.
+  const [openSubmenus, setOpenSubmenus] = useState<ContextMenuSubmenu[]>([]);
+  const openSubmenu = openSubmenus[openSubmenus.length - 1] as
+    ContextMenuSubmenu | undefined;
+  const visibleItems = openSubmenu?.submenu ?? items;
 
+  // Re-measured on every drill in or out: a submenu is usually a different
+  // size, and the menu must stay inside the viewport either way.
   useLayoutEffect(() => {
     if (!menuRef.current) return;
     const { width, height } = menuRef.current.getBoundingClientRect();
     const clampedX = Math.max(4, Math.min(x, window.innerWidth - width - 4));
     const clampedY = Math.max(4, Math.min(y, window.innerHeight - height - 4));
     setPos({ x: clampedX, y: clampedY });
-  }, [x, y]);
+  }, [x, y, openSubmenus]);
 
   // A `visibility: hidden` element cannot take focus, so wait for the
   // measured position before focusing the first item.
@@ -130,7 +160,11 @@ export function ContextMenu({
   useEffect(() => {
     if (!isVisible || !menuRef.current || keepInvokerFocus) return;
     enabledMenuItems(menuRef.current)[0]?.focus({ preventScroll: true });
-  }, [isVisible, keepInvokerFocus]);
+  }, [isVisible, keepInvokerFocus, openSubmenus]);
+
+  const enterSubmenu = (submenu: ContextMenuSubmenu) =>
+    setOpenSubmenus((open) => [...open, submenu]);
+  const leaveSubmenu = () => setOpenSubmenus((open) => open.slice(0, -1));
 
   const restoreFocusAndClose = useCallback(() => {
     if (invoker?.isConnected && invoker !== document.body) {
@@ -166,6 +200,11 @@ export function ContextMenu({
       restoreFocusAndClose();
       return;
     }
+    if (e.key === KEYBOARD_KEYS.ARROW_LEFT && openSubmenu) {
+      e.preventDefault();
+      leaveSubmenu();
+      return;
+    }
     const menuItems = enabledMenuItems(e.currentTarget);
     if (menuItems.length === 0) return;
     const next = nextMenuItemIndex(
@@ -194,7 +233,7 @@ export function ContextMenu({
       // cy-no-select: the menu is portaled to body, outside any chrome that
       // carries the class, and the long press that opened it otherwise lands
       // in an iOS text selection of the item labels.
-      className="context-menu cy-no-select bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px] outline-none"
+      className="context-menu cy-no-select bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px] max-w-[min(24rem,calc(100vw-8px))] max-h-[calc(100vh-8px)] overflow-y-auto outline-none"
       onKeyDown={handleMenuKeyDown}
       onPointerDown={(e) => e.stopPropagation()}
       // Focus moves on mousedown (a tap's emulated one, too); cancelling it
@@ -206,7 +245,23 @@ export function ContextMenu({
         e.stopPropagation();
       }}
     >
-      {items.map((item, i) =>
+      {openSubmenu && (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            tabIndex={-1}
+            aria-label={`Back from ${openSubmenu.label}`}
+            className={`${MENU_ITEM_CLASS} ${MENU_ITEM_ENABLED_CLASS} font-semibold`}
+            onClick={leaveSubmenu}
+          >
+            <Icon name="codicon-chevron-left" className="text-xxs" />
+            {openSubmenu.label}
+          </button>
+          <div role="separator" className="h-px my-0.5 mx-1 bg-panel-border" />
+        </>
+      )}
+      {visibleItems.map((item, i) =>
         isDividerEntry(item) ? (
           <div
             key={i}
@@ -219,21 +274,37 @@ export function ContextMenu({
             type="button"
             role="menuitem"
             tabIndex={-1}
-            className={`cy-dropdown-row flex items-center gap-1.5 w-full px-2.5 py-1 text-xs text-left transition-colors focus-visible:bg-toolbar-hover-bg ${
-              item.disabled
-                ? "text-description-fg cursor-not-allowed opacity-50"
-                : "text-foreground hover:bg-toolbar-hover-bg cursor-pointer"
+            aria-haspopup={isSubmenuEntry(item) ? "menu" : undefined}
+            className={`${MENU_ITEM_CLASS} ${
+              item.disabled ? MENU_ITEM_DISABLED_CLASS : MENU_ITEM_ENABLED_CLASS
             }`}
             disabled={item.disabled}
             title={item.disabled ? item.disabledTitle : item.title}
+            onKeyDown={
+              isSubmenuEntry(item)
+                ? (e) => {
+                    if (e.key !== KEYBOARD_KEYS.ARROW_RIGHT) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    enterSubmenu(item);
+                  }
+                : undefined
+            }
             onClick={() => {
               if (item.disabled) return;
+              if (isSubmenuEntry(item)) {
+                enterSubmenu(item);
+                return;
+              }
               restoreFocusAndClose();
               item.onClick();
             }}
           >
             <Icon name={item.icon} className="text-xxs" />
-            {item.label}
+            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            {isSubmenuEntry(item) && (
+              <Icon name="codicon-chevron-right" className="text-xxs" />
+            )}
           </button>
         )
       )}

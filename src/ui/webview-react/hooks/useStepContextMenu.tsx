@@ -27,6 +27,7 @@ import {
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
   buildStepGroupingMenuItems,
+  buildQueuedStepHandoffMenuItems,
   isParallelGroupTopologyLocked,
   getPresentOutputTargetKeys,
 } from "@utils/stepContextMenuItems";
@@ -68,6 +69,7 @@ import {
 } from "@utils/stepMultiSelection";
 
 const SHELL_WORKFLOW_ID = "_shell";
+const CANNOT_REMOVE_STEP_TITLE = "This step can't be removed from the queue";
 const EMPTY_TARGET_KEYS: readonly string[] = [];
 const EMPTY_ORDERED_ENTRIES: readonly OrderedHistoryEntry[] = [];
 
@@ -306,6 +308,18 @@ export function useStepContextMenu({
         deleteIndex,
         capabilityContext
       );
+      // Shared by Delete and the two items that also take the step out of
+      // the queue (Move to Editor, Send as Steer).
+      const deleteDisabledReason = capabilities.canDelete
+        ? undefined
+        : externalReadOnlyLabel && isExternallyManaged
+          ? externalReadOnlyLabel
+          : (getStepCapabilityDisabledReason(
+              capabilityContext,
+              "delete",
+              deleteIndex,
+              step
+            ) ?? CANNOT_REMOVE_STEP_TITLE);
       const editorSelection = useEditorStore.getState();
       const selectedIndices =
         editorSelection.multiSelection?.indices ??
@@ -617,6 +631,14 @@ export function useStepContextMenu({
           ...(direction === "forward"
             ? [
                 { type: "divider" as const },
+                ...buildQueuedStepHandoffMenuItems({
+                  step,
+                  stepIndex: deleteIndex,
+                  workflowId: activeWorkflowId,
+                  removeDisabledReason: deleteDisabledReason,
+                  steerTargets,
+                }),
+                { type: "divider" as const },
                 {
                   label: "Move Up",
                   icon: "codicon-arrow-up",
@@ -714,16 +736,7 @@ export function useStepContextMenu({
                   label: "Delete",
                   icon: "codicon-trash",
                   disabled: !capabilities.canDelete,
-                  disabledTitle: capabilities.canDelete
-                    ? undefined
-                    : externalReadOnlyLabel && isExternallyManaged
-                      ? externalReadOnlyLabel
-                      : getStepCapabilityDisabledReason(
-                          capabilityContext,
-                          "delete",
-                          deleteIndex,
-                          step
-                        ),
+                  disabledTitle: deleteDisabledReason,
                   onClick: () => handleDeleteSteps([deleteIndex]),
                 },
               ]),

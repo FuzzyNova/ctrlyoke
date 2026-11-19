@@ -18,6 +18,12 @@ import {
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
 import { useTerminalStore } from "@store/terminalStore";
+import { usePromptHistoryStore } from "@store/promptHistoryStore";
+import {
+  EDITOR_TARGET_KINDS,
+  PROMPT_HISTORY_KINDS,
+} from "@root/types/DashboardConstants";
+import { NO_LIVE_HARNESS, STEER_PROMPT_ONLY } from "@utils/steerTargets";
 
 function TestHarness({
   step,
@@ -140,12 +146,14 @@ describe("useStepContextMenu", () => {
       "Dry Run Step",
       "Paste Step",
       "Set Start Position",
+      "Move to Editor",
+      "Send as Steer",
       "Move Up",
       "Move Down",
       "Disable",
       "Delete",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(6);
+    expect(screen.getAllByRole("separator")).toHaveLength(7);
     expect(
       screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toBeDisabled();
@@ -670,6 +678,173 @@ describe("useStepContextMenu", () => {
         );
       }
     );
+  });
+
+  describe("taking a queued step back out of the queue", () => {
+    const queuedStep: WorkflowStep = {
+      prompt: "  meant as a steer  ",
+      name: "Queued",
+      model: "claude-sonnet-5-5",
+    };
+
+    function openHeadlessTarget(stepIndex: number) {
+      useTerminalStore.getState().updateHeadlessControlTarget({
+        type: MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED,
+        workflowId: "workflow-1",
+        controlSessionId: `control-${stepIndex}`,
+        stepIndex,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        steerDelivery: HEADLESS_STEER_DELIVERIES.INJECT,
+        isOpen: true,
+      });
+    }
+
+    function openMenuOnQueuedStep(step: WorkflowStep = queuedStep) {
+      render(
+        <TestHarness
+          step={step}
+          deleteIndex={1}
+          currentStep={0}
+          totalSteps={2}
+          confirmDeleteOperations
+        />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    }
+
+    beforeEach(() => {
+      useTerminalStore.setState({
+        sessions: {},
+        activeSessionIds: {},
+        headlessControlTargets: {},
+      });
+      useUiStore.setState({ activeWorkflowId: "workflow-1" });
+      useWorkflowStore.setState({ activeStepIndices: [0] });
+      usePromptHistoryStore.setState({ entries: [] });
+    });
+
+    it("moves the step into the new-prompt draft and removes it without asking", () => {
+      useEditorStore.setState({ promptText: "unsent draft" });
+      openMenuOnQueuedStep();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Move to Editor" }));
+
+      const editor = useEditorStore.getState();
+      expect(editor.selectionTarget).toEqual({
+        kind: EDITOR_TARGET_KINDS.NEW_PROMPT,
+      });
+      expect(editor.promptText).toBe(queuedStep.prompt);
+      expect(editor.promptName).toBe("Queued");
+      expect(editor.properties.model).toBe("claude-sonnet-5-5");
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.DELETE_PROMPT,
+        indices: [1],
+      });
+      // The confirmation guards against losing a step; this one is kept.
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(usePromptHistoryStore.getState().entries[0]).toMatchObject({
+        text: "unsent draft",
+        kind: PROMPT_HISTORY_KINDS.DRAFT,
+      });
+    });
+
+    it("steers the step's prompt to the only live session and removes it", () => {
+      openHeadlessTarget(0);
+      openMenuOnQueuedStep();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Send as Steer" }));
+
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+        workflowId: "workflow-1",
+        sessionId: "control-0",
+        text: "meant as a steer",
+      });
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.DELETE_PROMPT,
+        indices: [1],
+      });
+      expect(usePromptHistoryStore.getState().entries[0]).toMatchObject({
+        text: "meant as a steer",
+        kind: PROMPT_HISTORY_KINDS.STEER,
+      });
+    });
+
+    it("lists each live session in a submenu when there are several", () => {
+      openHeadlessTarget(0);
+      useTerminalStore.setState({
+        sessions: {
+          "workflow-1": [
+            {
+              id: "pty-3",
+              workflowId: "workflow-1",
+              stepName: "Step 4",
+              stepIndex: 3,
+              kind: SESSION_KINDS.AI_CLI,
+              harnessId: HARNESS_IDS.CLAUDE_CLI,
+              status: TERMINAL_SESSION_STATUS.RUNNING,
+              isController: true,
+            },
+          ],
+        },
+      });
+      openMenuOnQueuedStep();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Send as Steer" }));
+
+      const labels = screen
+        .getAllByRole("menuitem")
+        .map((button) => button.textContent?.trim());
+      expect(labels).toEqual([
+        "Send as Steer",
+        "Steer Step 1 · Claude Code",
+        "Steer Step 4 · Claude Code (finished)",
+      ]);
+      fireEvent.click(
+        screen.getByRole("menuitem", {
+          name: "Steer Step 4 · Claude Code (finished)",
+        })
+      );
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+          sessionId: "pty-3",
+        })
+      );
+    });
+
+    it("disables Send as Steer with a reason when nothing is live or the step is a script", () => {
+      openMenuOnQueuedStep();
+      expect(
+        screen.getByRole("menuitem", { name: "Send as Steer" })
+      ).toHaveAttribute("title", NO_LIVE_HARNESS);
+      cleanup();
+
+      openHeadlessTarget(0);
+      openMenuOnQueuedStep({ type: STEP_TYPES.SCRIPT, script: "npm test" });
+      const steer = screen.getByRole("menuitem", { name: "Send as Steer" });
+      expect(steer).toBeDisabled();
+      expect(steer).toHaveAttribute("title", STEER_PROMPT_ONLY);
+      expect(
+        screen.getByRole("menuitem", { name: "Move to Editor" })
+      ).toBeEnabled();
+    });
+
+    it("disables both on a step that cannot leave the queue", () => {
+      openHeadlessTarget(0);
+      render(
+        <TestHarness
+          step={{ prompt: "Done", status: STEP_STATUS.COMPLETED }}
+          deleteIndex={0}
+          currentStep={1}
+        />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+      expect(
+        screen.getByRole("menuitem", { name: "Move to Editor" })
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("menuitem", { name: "Send as Steer" })
+      ).toBeDisabled();
+    });
   });
 
   it("opens a step-scoped Dry Run from the step menu", () => {

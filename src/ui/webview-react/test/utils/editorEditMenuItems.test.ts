@@ -4,12 +4,16 @@ import { EditorState } from "@codemirror/state";
 import type {
   ContextMenuEntry,
   ContextMenuItem,
+  ContextMenuSubmenu,
 } from "@components/shared/ContextMenu";
 import {
   buildEditorEditMenuItems,
   findWordRangeAt,
+  formatRecentPromptLabel,
   isTouchOnSelectionHandle,
 } from "@utils/editorEditMenuItems";
+import { PROMPT_HISTORY_KINDS } from "@root/types/DashboardConstants";
+import type { PromptHistoryEntry } from "@store/promptHistoryStore";
 
 const views: EditorView[] = [];
 
@@ -171,6 +175,84 @@ describe("buildEditorEditMenuItems", () => {
     expect(item(empty, "Select Word").disabled).toBe(true);
     expect(item(empty, "Select Line").disabled).toBe(true);
     expect(item(empty, "Select All").disabled).toBe(true);
+  });
+});
+
+describe("Recent Prompts", () => {
+  const entries: PromptHistoryEntry[] = [
+    {
+      text: "\n  Fix the   flaky test\nin the parser",
+      kind: PROMPT_HISTORY_KINDS.STEER,
+      timestampMs: Date.now() - 5 * 60_000,
+    },
+    {
+      text: "x".repeat(100),
+      kind: PROMPT_HISTORY_KINDS.SENT,
+      timestampMs: Date.now(),
+    },
+  ];
+
+  function recentPrompts(
+    items: ContextMenuEntry[]
+  ): ContextMenuSubmenu | undefined {
+    return items.find(
+      (entry): entry is ContextMenuSubmenu =>
+        "submenu" in entry && entry.label === "Recent Prompts"
+    );
+  }
+
+  it("is left out unless the editor asks for it", () => {
+    expect(
+      recentPrompts(buildEditorEditMenuItems(createView("text", 0), false))
+    ).toBeUndefined();
+  });
+
+  it("lists each prompt by its first line and loads the chosen one", () => {
+    const onLoad = vi.fn();
+    const items = buildEditorEditMenuItems(createView("text", 0), false, {
+      recentPrompts: { getEntries: () => entries, onLoad },
+    });
+    const submenu = recentPrompts(items);
+    expect(items[items.length - 2]).toEqual({ type: "divider" });
+    expect(submenu?.disabled).toBe(false);
+
+    const [steered, sent] = submenu!.submenu as ContextMenuItem[];
+    expect(steered.label).toBe("Fix the flaky test");
+    expect(steered.icon).toBe("codicon-arrow-up");
+    expect(steered.title).toMatch(/^Steered 5 min ago\n\n/);
+    expect(sent.label).toHaveLength(60);
+    expect(sent.label.endsWith("…")).toBe(true);
+    expect(sent.title).toMatch(/^Sent just now/);
+
+    steered.onClick();
+    expect(onLoad).toHaveBeenCalledWith(entries[0].text);
+  });
+
+  it("is disabled with a reason when empty or read-only", () => {
+    const view = createView("text", 0);
+    const empty = recentPrompts(
+      buildEditorEditMenuItems(view, false, {
+        recentPrompts: { getEntries: () => [], onLoad: vi.fn() },
+      })
+    );
+    expect(empty?.disabled).toBe(true);
+    expect(empty?.disabledTitle).toBe(
+      "Prompts you run, queue or steer appear here"
+    );
+
+    const readOnly = recentPrompts(
+      buildEditorEditMenuItems(view, true, {
+        recentPrompts: { getEntries: () => entries, onLoad: vi.fn() },
+      })
+    );
+    expect(readOnly?.disabled).toBe(true);
+    expect(readOnly?.disabledTitle).toBe("Editor is read-only");
+  });
+});
+
+describe("formatRecentPromptLabel", () => {
+  it("falls back to the whole text when every line is blank", () => {
+    expect(formatRecentPromptLabel("   ")).toBe("");
   });
 });
 
