@@ -168,6 +168,7 @@ export default defineConfig({
               link: "/workflows/session-management",
             },
             { text: "Context references", link: "/workflows/context-files" },
+            { text: "Prompt delivery", link: "/workflows/prompt-delivery" },
             { text: "Agents and skills", link: "/workflows/agents-and-skills" },
             { text: "Templates", link: "/workflows/templates" },
           ],

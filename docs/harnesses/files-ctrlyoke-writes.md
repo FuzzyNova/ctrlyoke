@@ -44,7 +44,8 @@ Two per-step moves are followed as well:
 Each run writes working files into the workspace's `.ctrlyoke/temp/` folder: prompt files,
 generated MCP configuration, per-prompt hook settings, the signal files hook scripts write when a
 step ends (`<cli>-notifications/`), and status line snapshots. The generated
-`.ctrlyoke/.gitignore` ignores `temp/`, so none of it shows in `git status`.
+`.ctrlyoke/.gitignore` ignores `temp/`, so none of it shows in `git status`. See
+[How prompts reach the harness](/workflows/prompt-delivery) for when a prompt is sent as files.
 
 Files are deleted when the prompt or run that used them finishes. When VS Code starts, ctrlyoke
 also deletes anything left in `.ctrlyoke/temp/` that is more than 24 hours old, which covers runs

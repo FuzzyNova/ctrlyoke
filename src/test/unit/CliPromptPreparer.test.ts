@@ -271,6 +271,48 @@ suite("CliPromptPreparer", () => {
     }
   });
 
+  test("omits the empty root block when every section falls back to files", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-all-fallback-");
+    const oversizedPrompt = "p".repeat(MAX_INLINE_GENERATED_PROMPT_CHARS + 1);
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ userPromptText: oversizedPrompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => ({ maxTokensPerFile: 1_000_000 }),
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+      shouldInlineGeneratedPromptOnStdin: () => true,
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "Do it." },
+        undefined,
+        { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
+        undefined
+      );
+      assert.ok(plan.tempFilePaths.length > 0);
+      assert.ok(
+        plan.files.every(
+          (file) => file.category === TEMP_FILE_CATEGORIES.PROMPT
+        )
+      );
+      assert.ok(
+        !plan.promptWithInstruction.includes(
+          `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>`
+        )
+      );
+      assert.ok(plan.promptWithInstruction.startsWith("@"));
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
   test("applies provider escaping and guards a leading slash in the inline block", async () => {
     const workspaceRoot = makeTempDir("ctrlyoke-inline-escape-");
     const preparer = new CliPromptPreparer({

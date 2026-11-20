@@ -1237,7 +1237,11 @@ export class CliPromptPreparer {
     ) {
       rootContent = ` ${rootContent}`;
     }
-    const rootBlock = `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n${rootContent}\n</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`;
+    // When every section fell back to files, send only the reference sentence
+    // rather than an empty root block ahead of it.
+    const rootBlock = rootContent
+      ? `<${INLINE_GENERATED_PROMPT_ROOT_TAG}>\n${rootContent}\n</${INLINE_GENERATED_PROMPT_ROOT_TAG}>`
+      : "";
     const formatRefs = (category: InlineSection["category"]) =>
       refs.get(category) ?? [];
     const fallbackInstruction = this.deps.formatCategorizedReferences(

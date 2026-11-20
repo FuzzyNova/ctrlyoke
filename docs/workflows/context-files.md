@@ -212,31 +212,14 @@ teach the AI to cite its work this way; every bundled agent already includes it.
 
 ## How context reaches CLI harnesses
 
-The reference syntax above is what you author. ctrlyoke also provides a delivery layer underneath it so a complex expanded prompt does not have to become one enormous terminal command or one undifferentiated file.
+The references you write are expanded before the step runs. Headless steps put the generated
+content (agent instructions, skills, prior context and excerpts) in the harness's first message.
+Interactive steps write it to files in `.ctrlyoke/temp/` and send the harness a short instruction
+that names them. Workspace `@file` references always stay paths. Very large content is moved to
+numbered files rather than truncated.
 
-Simple prompts may be sent directly. When ctrlyoke needs to assemble richer context, it writes temporary files grouped by purpose:
-
-- agent instructions;
-- available skills;
-- direct workspace file references;
-- prior conversation context;
-- excerpts expanded from selections, symbols, directories, and Git references;
-- the main prompt.
-
-It then sends the harness a short ordered instruction. The exact file-reference syntax is adapted to the active harness, but its conceptual shape is:
-
-```text
-Following these agent instructions @agent.1.md,
-using these available skills @skills.md,
-using these file references @src/foo.ts, @src/bar.ts,
-with this prior conversation context @context.md,
-and these attachment excerpts @excerpts.1.md,
-follow the instructions in @prompt.md
-```
-
-Categories that are not needed are omitted. The main prompt is named last so its role remains explicit instead of being buried among supporting material.
-
-Large generated categories are split conservatively by token and line count before delivery. Prior context is split at step boundaries, and complete attachment blocks are kept together where possible. This reduces dependence on shell command-length limits—particularly on Windows—and reduces the risk of hitting known per-file read limits with one oversized generated context file. It does not change the syntax you write, and the temporary files are cleaned up automatically after the turn by default.
+See [How prompts reach the harness](/workflows/prompt-delivery) for the details, including size
+limits.
 
 ## Tips
 
