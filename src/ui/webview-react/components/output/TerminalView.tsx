@@ -39,6 +39,7 @@ import {
 import { WebviewLog } from "@utils/logger";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { Icon } from "../shared/Icon";
+import { ScrollOverflowRail } from "../shared/ScrollOverflowRail";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -434,7 +435,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                 }
               }}
             >
-              <div className="flex flex-col h-full bg-sidebar-bg overflow-y-auto">
+              {/* Collapsed, the rail is only 30px wide and a native scrollbar
+                  overlaps its entries, so it hides the scrollbar and shows
+                  edge chevrons instead. Expanded, the scrollbar fits. */}
+              <ScrollOverflowRail
+                className="h-full bg-sidebar-bg"
+                contentClassName="flex flex-col"
+                chevrons={railCollapsed}
+                scrollUpLabel="Scroll terminals up"
+                scrollDownLabel="Scroll terminals down"
+                scrollerTestId="terminal-session-rail-scroller"
+              >
                 {/* AI CLI sessions */}
                 {aiCliSessions.map((session) =>
                   railCollapsed ? (
@@ -491,9 +502,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                     />
                   )
                 )}
-
-                {!railCollapsed && <div className="flex-1" />}
-              </div>
+              </ScrollOverflowRail>
             </Panel>
           </>
         )}
