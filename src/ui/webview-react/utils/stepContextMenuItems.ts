@@ -33,6 +33,17 @@ import {
   getStepCopyLabels,
 } from "./outputCopyMenuLabels";
 import { generateSingleStepMarkdownExport } from "./markdownExport";
+import {
+  END_STEP_EARLY_UNSUPPORTED,
+  STEER_EXTERNAL_RUN,
+  formatEndStepEarlyTitle,
+  formatNoLiveSessionReason,
+  formatSteerTargetTitle,
+  type SteerTarget,
+} from "./steerTargets";
+import { sendEditorDraftAsSteer } from "./sendEditorSteer";
+import { sendMessage } from "@messaging/sendMessage";
+import { MESSAGE_TYPES } from "@/types/messages";
 
 export interface StepCopyMenuItemsInput {
   step: WorkflowStep;
@@ -179,6 +190,76 @@ export function buildReplyToStepMenuItem({
       );
     },
   };
+}
+
+export interface LiveStepControlMenuItemsInput {
+  workflowId: string | null;
+  /** Queue index, or the signed final-step index `-(loopIndex + 1)`. */
+  stepIndex: number;
+  /** True while this step is executing. */
+  isRunning: boolean;
+  /** This step's live steer destination, from `useSteerTargets`. */
+  target: SteerTarget | undefined;
+  /** Why the editor draft can't be sent (`getSteerDraftDisabledReason`). */
+  draftDisabledReason: string | undefined;
+  isExternallyManaged: boolean;
+}
+
+/**
+ * Send Steer to Step and End Step Early. The pressed step is the target, so
+ * neither needs a picker. Send Steer to Step also appears on a finished step
+ * whose interactive terminal is still open; End Step Early only on a running
+ * step. Returns no items for a step with neither.
+ */
+export function buildLiveStepControlMenuItems({
+  workflowId,
+  stepIndex,
+  isRunning,
+  target,
+  draftDisabledReason,
+  isExternallyManaged,
+}: LiveStepControlMenuItemsInput): ContextMenuItem[] {
+  if (!isRunning && !target) return [];
+  const steerDisabledReason = !target
+    ? formatNoLiveSessionReason(stepIndex)
+    : draftDisabledReason;
+  const items: ContextMenuItem[] = [
+    {
+      label: "Send Steer to Step",
+      icon: "codicon-arrow-up",
+      disabled: steerDisabledReason !== undefined || !workflowId,
+      title: target ? formatSteerTargetTitle(target) : undefined,
+      disabledTitle: steerDisabledReason,
+      onClick: () => {
+        if (steerDisabledReason !== undefined || !workflowId || !target) {
+          return;
+        }
+        sendEditorDraftAsSteer(workflowId, target.sessionId);
+      },
+    },
+  ];
+  if (isRunning) {
+    const endDisabledReason = isExternallyManaged
+      ? STEER_EXTERNAL_RUN
+      : !target?.canInterruptTurn
+        ? END_STEP_EARLY_UNSUPPORTED
+        : undefined;
+    items.push({
+      label: "End Step Early",
+      icon: "codicon-debug-stop",
+      disabled: endDisabledReason !== undefined || !workflowId,
+      title: formatEndStepEarlyTitle(stepIndex),
+      disabledTitle: endDisabledReason,
+      onClick: () => {
+        if (endDisabledReason !== undefined || !workflowId || !target) return;
+        sendMessage(MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN, {
+          workflowId,
+          sessionId: target.sessionId,
+        });
+      },
+    });
+  }
+  return items;
 }
 
 export interface StepOutputFilterMenuItemsInput {

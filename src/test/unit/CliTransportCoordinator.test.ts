@@ -4,13 +4,22 @@ import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
 import { PtyProcessManager } from "../../core/harness/PtyProcessManager";
 import { CliTransportError } from "../../core/harness/shared/CliTransportError";
-import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
+import type {
+  HeadlessProcessResult,
+  HeadlessStreamingSource,
+} from "../../core/harness/shared/HeadlessLogTail";
 import type { IHarnessAdapter } from "../../core/harness/shared/interfaces/IHarnessAdapter";
 import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAdapter";
+import { ClaudeHeadlessControlChannel } from "../../core/harness/claude/ClaudeHeadlessControlChannel";
+import {
+  CLAUDE_CONTROL,
+  CLAUDE_EVENT_TYPES,
+} from "../../core/harness/claude/ClaudeProtocolConstants";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import { QwenHeadlessControlChannel } from "../../core/harness/qwen/QwenHeadlessControlChannel";
 import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { AntigravityHeadlessControlChannel } from "../../core/harness/antigravity/AntigravityHeadlessControlChannel";
 import {
   QWEN_CONTROL,
   QWEN_EVENT_TYPES,
@@ -21,14 +30,18 @@ import {
   HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
   HEADLESS_CONTROL_OBSERVATION_KINDS,
+  HEADLESS_STEER_DELIVERIES,
   FAILURE_KINDS,
   APPROVAL_DECISIONS,
   HEADLESS_APPROVAL_DENIAL_MESSAGE,
+  HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+  HEADLESS_APPROVAL_POLICIES,
   type HeadlessPromptDelivery,
   MESSAGE_TYPES,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
   type TerminalEndReason,
+  USER_STEER_ATTRIBUTIONS,
 } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessTimeoutError } from "../../utils/CliProcessManager";
@@ -42,6 +55,12 @@ import type {
   CliProcessManager,
   InteractiveExitResult,
 } from "../../utils/CliProcessManager";
+import type {
+  ControlWriter,
+  HeadlessApprovalExecutionContext,
+  IHeadlessControlChannel,
+} from "../../core/harness/shared/IHeadlessControlChannel";
+import type { HeadlessControlTargetMessage } from "../../types/WebviewMessageTypes";
 
 async function resolveCommand(command: string, args: string[]) {
   return {
@@ -171,6 +190,86 @@ async function runStdoutSpawns(
   return { streamedIds, countsAfterChunks };
 }
 
+async function capturePermissionWarningDecision(
+  channel: IHeadlessControlChannel | undefined,
+  hasApprovalDashboard: boolean
+): Promise<{
+  channelAnswersApprovalRequests: boolean;
+  hasApprovalDashboard: boolean;
+}> {
+  let warningDecision:
+    | { channelAnswersApprovalRequests: boolean; hasApprovalDashboard: boolean }
+    | undefined;
+  const coordinator = new CliTransportCoordinator({
+    provider: {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter,
+    processManager: {
+      spawn: async (
+        _command: string,
+        _args: string[],
+        options: { onStdinReady?: (writer: any) => void }
+      ) => {
+        options.onStdinReady?.({
+          write: (
+            _text: string,
+            _encoding: string,
+            callback?: (error?: Error | null) => void
+          ) => {
+            callback?.();
+            return true;
+          },
+          end: (callback?: () => void) => callback?.(),
+        });
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+      isActive: () => false,
+    } as any,
+    resolveCliCommand: resolveCommand,
+    runtimeState: {
+      getWorkspaceRoot: () => process.cwd(),
+      isCancelling: () => false,
+    },
+    hostCallbacks: createHeadlessHostCallbacks(),
+  });
+
+  await coordinator.executeHeadless(
+    [],
+    "prompt",
+    [],
+    async () => true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false,
+    undefined,
+    {
+      approvalPolicy: HEADLESS_APPROVAL_POLICIES.ASK,
+      approvalTimeoutMs: 1000,
+      useApprovalControl: true,
+      ...(hasApprovalDashboard
+        ? {
+            requestApproval: async () => ({
+              decision: APPROVAL_DECISIONS.ALLOW_ONCE,
+            }),
+          }
+        : {}),
+      onPermissionWarning: (
+        channelAnswersApprovalRequests,
+        dashboardConnected
+      ) => {
+        warningDecision = {
+          channelAnswersApprovalRequests,
+          hasApprovalDashboard: dashboardConnected,
+        };
+      },
+    }
+  );
+  return warningDecision!;
+}
+
 const stdoutProviderFactories: ReadonlyArray<{
   name: string;
   create: () => IHarnessAdapter;
@@ -183,7 +282,8 @@ const stdoutProviderFactories: ReadonlyArray<{
 /** A coordinator holding one live PTY for workflow-1, for termination tests. */
 async function createCoordinatorWithLivePty(
   onKill: (sessionId: string, reason: TerminalEndReason) => Promise<void>,
-  postTerminalMessage: (message: unknown) => void = () => {}
+  postTerminalMessage: (message: unknown) => void = () => {},
+  onForgetTab: (sessionId: string) => void = () => {}
 ): Promise<CliTransportCoordinator> {
   const coordinator = new CliTransportCoordinator({
     provider: {
@@ -235,6 +335,7 @@ async function createCoordinatorWithLivePty(
       ({
         getExpectedController: () => undefined,
         gracefulKillAiCliSession: onKill,
+        forgetTab: onForgetTab,
         spawnPty: (config: { sessionId: string; workflowId: string }) => ({
           id: config.sessionId,
           workflowId: config.workflowId,
@@ -253,6 +354,156 @@ async function createCoordinatorWithLivePty(
 }
 
 suite("CliTransportCoordinator", () => {
+  test("does not warn for an approval-capable ask channel with a dashboard", async () => {
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      answersApprovalRequests: true,
+      start: async () => {},
+      sendUserMessage: async () => {},
+      observe: () => [],
+      answerApproval: async () => {},
+      close: () => {},
+    };
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(channel, true),
+      {
+        channelAnswersApprovalRequests: true,
+        hasApprovalDashboard: true,
+      }
+    );
+  });
+
+  test("identifies ask approvals that will be denied without a dashboard", async () => {
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      answersApprovalRequests: true,
+      start: async () => {},
+      sendUserMessage: async () => {},
+      observe: () => [],
+      answerApproval: async () => {},
+      close: () => {},
+    };
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(channel, false),
+      {
+        channelAnswersApprovalRequests: true,
+        hasApprovalDashboard: false,
+      }
+    );
+  });
+
+  test("keeps the existing warning when ask has no control channel", async () => {
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(undefined, false),
+      {
+        channelAnswersApprovalRequests: false,
+        hasApprovalDashboard: false,
+      }
+    );
+  });
+
+  test("keeps the existing warning for Antigravity's non-approval channel", async () => {
+    assert.deepStrictEqual(
+      await capturePermissionWarningDecision(
+        new AntigravityHeadlessControlChannel(),
+        true
+      ),
+      { channelAnswersApprovalRequests: false, hasApprovalDashboard: true }
+    );
+  });
+
+  test("re-resolves replacement control arguments with the CLI launcher prefix", async () => {
+    const resolveArgs: string[][] = [];
+    let spawnedArgs: string[] = [];
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {
+        args: ["--acp", "--model", "test-model"],
+        replaceArgs: true,
+      },
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      async start() {},
+      async sendUserMessage() {},
+      observe() {
+        return [];
+      },
+      async answerApproval() {},
+      close() {},
+    };
+    const provider = {
+      ...createHeadlessProvider(),
+      buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+        "--output-format",
+        "json",
+        ...baseArgs,
+        prompt,
+      ],
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            stdinText?: string;
+          }
+        ) => {
+          spawnedArgs = args;
+          assert.strictEqual(options.stdinText, undefined);
+          options.onStdinReady?.({
+            write: (
+              _chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => callback?.(),
+          });
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: async (command, args) => {
+        resolveArgs.push([...args]);
+        return {
+          command,
+          args: ["npm-loader.js", ...args],
+          displayCommand: [command, "npm-loader.js", ...args].join(" "),
+          launcherKind: "node-shim",
+        };
+      },
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await coordinator.executeHeadless(
+      ["--resume", "old-session"],
+      "prompt",
+      [],
+      async () => true
+    );
+
+    assert.deepStrictEqual(resolveArgs, [
+      ["--output-format", "json", "--resume", "old-session", "prompt"],
+      ["--acp", "--model", "test-model"],
+    ]);
+    assert.deepStrictEqual(spawnedArgs, [
+      "npm-loader.js",
+      "--acp",
+      "--model",
+      "test-model",
+    ]);
+  });
+
   test("passes the configured prompt limit to headless spawn", async () => {
     const originalTimeoutReader =
       ConfigurationUtils.getMaxPromptExecutionTimeMs;
@@ -348,6 +599,10 @@ suite("CliTransportCoordinator", () => {
     let maxConcurrentWrites = 0;
     let closed = false;
     const calls: string[] = [];
+    let resolvePromptWrite!: () => void;
+    const promptWrite = new Promise<void>(
+      (resolve) => (resolvePromptWrite = resolve)
+    );
     let writerHandle:
       { write(text: string): Promise<void>; end(): Promise<void> } | undefined;
     const channel = {
@@ -399,6 +654,7 @@ suite("CliTransportCoordinator", () => {
         setTimeout(() => {
           writes.push(chunk);
           activeWrites--;
+          if (chunk === "user:prompt\n") resolvePromptWrite();
           callback?.();
         }, 1);
         return true;
@@ -422,7 +678,7 @@ suite("CliTransportCoordinator", () => {
         ) => {
           assert.deepStrictEqual(args, ["prompt", "--control"]);
           options.onStdinReady?.(rawWriter);
-          await new Promise((resolve) => setTimeout(resolve, 5));
+          await promptWrite;
           options.onStdout?.('{"kind":"approval"}\n{"kind":"turn-end"}\n');
           return { stdout: "", stderr: "", exitCode: 0 };
         },
@@ -449,6 +705,448 @@ suite("CliTransportCoordinator", () => {
       `approval:approval-1:${APPROVAL_DECISIONS.DENY}:${HEADLESS_APPROVAL_DENIAL_MESSAGE}`,
     ]);
     assert.strictEqual(closed, true);
+  });
+
+  test("denies a pending approval before closing stdin on Stop", async () => {
+    const writes: string[] = [];
+    let active = true;
+    let resolveSpawn!: () => void;
+    let notifyApproval!: () => void;
+    const spawnWait = new Promise<void>((resolve) => (resolveSpawn = resolve));
+    const approvalRequested = new Promise<void>(
+      (resolve) => (notifyApproval = resolve)
+    );
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      async start(writer) {
+        await writer.write("initialize\n");
+      },
+      async sendUserMessage(text) {
+        writes.push(`user:${text}`);
+      },
+      observe(record) {
+        if (
+          typeof record === "object" &&
+          record !== null &&
+          "kind" in record &&
+          record.kind === "approval"
+        ) {
+          return [
+            {
+              kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
+              requestId: "pending-on-stop",
+              toolName: "Bash",
+              input: { command: "node script.js" },
+            },
+          ];
+        }
+        return [];
+      },
+      async answerApproval(_requestId, decision, message) {
+        writes.push(`answer:${decision}:${message}`);
+      },
+      close() {
+        writes.push("channel-close");
+      },
+    };
+    const provider = {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              writes.push(chunk);
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => {
+              writes.push("stdin-end");
+              callback?.();
+            },
+          });
+          options.onStdout?.('{"kind":"approval"}\n');
+          await spawnWait;
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+        isActive: () => active,
+        cancel: async () => {
+          active = false;
+          resolveSpawn();
+        },
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    const approvalContext: HeadlessApprovalExecutionContext = {
+      approvalPolicy: HEADLESS_APPROVAL_POLICIES.ASK,
+      approvalTimeoutMs: 30_000,
+      useApprovalControl: true,
+      requestApproval: (_request, signal) => {
+        notifyApproval();
+        return new Promise((resolve) => {
+          const onAbort = () =>
+            resolve({
+              decision: APPROVAL_DECISIONS.DENY,
+              message: HEADLESS_APPROVAL_SESSION_CLOSED_MESSAGE,
+            });
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    };
+
+    const run = coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        workflowId: "workflow-1",
+        stepIndex: 0,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+      },
+      approvalContext
+    );
+    await approvalRequested;
+    await coordinator.cancel();
+    await run;
+
+    const answerIndex = writes.findIndex((entry) =>
+      entry.startsWith(`answer:${APPROVAL_DECISIONS.DENY}:`)
+    );
+    const endIndex = writes.indexOf("stdin-end");
+    assert.ok(answerIndex >= 0, `approval was not answered: ${writes}`);
+    assert.ok(endIndex > answerIndex, `stdin closed before denial: ${writes}`);
+    assert.strictEqual(writes.includes("channel-close"), true);
+  });
+
+  test("serializes headless steering and interrupt through the turn result", async () => {
+    const writes: string[] = [];
+    const events: Array<{
+      type: string;
+      timestamp?: number;
+      data?: unknown;
+    }> = [];
+    const targets: HeadlessControlTargetMessage[] = [];
+    let emitStdout: ((chunk: string) => void) | undefined;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    let endCalled = false;
+    let capturedResult: HeadlessProcessResult | undefined;
+    let resolveTargetOpen!: (target: HeadlessControlTargetMessage) => void;
+    const targetOpened = new Promise<HeadlessControlTargetMessage>(
+      (resolve) => (resolveTargetOpen = resolve)
+    );
+    let resolveSteerWriteStarted!: () => void;
+    const steerWriteStarted = new Promise<void>(
+      (resolve) => (resolveSteerWriteStarted = resolve)
+    );
+    let finishSteerWrite!: () => void;
+    const spawnResult = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const provider = {
+      ...createHeadlessProvider(),
+      config: {
+        ...createHeadlessProvider().config,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+      },
+      createHeadlessControlChannel: () => new ClaudeHeadlessControlChannel(),
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          emitStdout = options.onStdout;
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              writes.push(chunk);
+              if (chunk.includes("steer text")) {
+                finishSteerWrite = () => callback?.();
+                resolveSteerWriteStarted();
+              } else {
+                callback?.();
+              }
+              return true;
+            },
+            end: (callback?: () => void) => {
+              endCalled = true;
+              callback?.();
+              finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+            },
+          });
+          return spawnResult;
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        ...createHeadlessHostCallbacks(),
+        onStreamingEvents: (next) => events.push(...next),
+        onHeadlessControlTarget: (target) => {
+          targets.push(target);
+          if (target.isOpen) resolveTargetOpen(target);
+        },
+      },
+    });
+
+    const execution = coordinator.executeHeadless(
+      [],
+      "initial prompt",
+      [],
+      async (result) => {
+        capturedResult = result;
+        return true;
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        workflowId: "workflow-1",
+        stepIndex: 2,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+      }
+    );
+    const openedTarget = await targetOpened;
+    assert.strictEqual(openedTarget.isOpen, true);
+    assert.strictEqual(openedTarget.canInterruptTurn, true);
+    // Reconnecting dashboards replay this open target.
+    assert.deepStrictEqual(
+      coordinator.getOpenHeadlessControlTarget(),
+      openedTarget
+    );
+
+    const sending = coordinator.sendHeadlessUserMessage(
+      openedTarget.controlSessionId,
+      "steer text"
+    );
+    await steerWriteStarted;
+    assert.deepStrictEqual(
+      events.filter((event) => event.type === CLI_EVENT_TYPES.USER_STEER),
+      []
+    );
+    finishSteerWrite();
+    assert.strictEqual(await sending, true);
+    const receipts = events.filter(
+      (event) => event.type === CLI_EVENT_TYPES.USER_STEER
+    );
+    assert.strictEqual(receipts.length, 1);
+    assert.strictEqual(typeof receipts[0].timestamp, "number");
+    assert.deepStrictEqual(receipts[0].data, {
+      text: "steer text",
+      attribution: USER_STEER_ATTRIBUTIONS.USER,
+    });
+
+    assert.strictEqual(
+      await coordinator.interruptHeadlessTurn(openedTarget.controlSessionId),
+      true
+    );
+    const interruptRequest = JSON.parse(writes.at(-1) ?? "{}") as {
+      type: string;
+      request_id: string;
+      request: { subtype: string };
+    };
+    assert.strictEqual(interruptRequest.type, CLAUDE_CONTROL.REQUEST_TYPE);
+    assert.ok(interruptRequest.request_id);
+    assert.strictEqual(
+      interruptRequest.request.subtype,
+      CLAUDE_CONTROL.INTERRUPT_SUBTYPE
+    );
+
+    emitStdout?.(`${JSON.stringify({ type: CLAUDE_EVENT_TYPES.RESULT })}\n`);
+    assert.strictEqual(await execution, true);
+    assert.strictEqual(capturedResult?.interrupted, true);
+    assert.strictEqual(endCalled, true);
+    assert.strictEqual(coordinator.getOpenHeadlessControlTarget(), undefined);
+    assert.deepStrictEqual(
+      targets.map(({ controlSessionId, isOpen }) => ({
+        controlSessionId,
+        isOpen,
+      })),
+      [
+        { controlSessionId: openedTarget.controlSessionId, isOpen: true },
+        { controlSessionId: openedTarget.controlSessionId, isOpen: false },
+      ]
+    );
+    assert.ok(writes.some((write) => write.includes("steer text")));
+  });
+
+  test("queue steering keeps the channel open for the additional result", async () => {
+    let emitStdout: ((chunk: string) => void) | undefined;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    let endCalled = false;
+    let writer: ControlWriter | undefined;
+    let resolveTargetOpen!: (target: HeadlessControlTargetMessage) => void;
+    const targetOpened = new Promise<HeadlessControlTargetMessage>(
+      (resolve) => (resolveTargetOpen = resolve)
+    );
+    const spawnResult = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      async start(controlWriter) {
+        writer = controlWriter;
+      },
+      async sendUserMessage(text) {
+        await writer?.write(`${text}\n`);
+      },
+      observe(record) {
+        if (
+          typeof record === "object" &&
+          record !== null &&
+          "type" in record &&
+          record.type === QWEN_EVENT_TYPES.RESULT
+        ) {
+          return [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }];
+        }
+        return [];
+      },
+      async answerApproval() {},
+      close() {},
+    };
+    const provider = {
+      ...createHeadlessProvider(),
+      config: {
+        ...createHeadlessProvider().config,
+        harnessId: HARNESS_IDS.QWEN_CLI,
+      },
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          emitStdout = options.onStdout;
+          options.onStdinReady?.({
+            write: (
+              _chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => {
+              endCalled = true;
+              callback?.();
+              finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+            },
+          });
+          return spawnResult;
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        ...createHeadlessHostCallbacks(),
+        onHeadlessControlTarget: (target) => {
+          if (target.isOpen) resolveTargetOpen(target);
+        },
+      },
+    });
+
+    const execution = coordinator.executeHeadless(
+      [],
+      "initial prompt",
+      [],
+      async () => true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        workflowId: "workflow-2",
+        stepIndex: 0,
+        harnessId: HARNESS_IDS.QWEN_CLI,
+      }
+    );
+    const openedTarget = await targetOpened;
+    assert.strictEqual(
+      await coordinator.sendHeadlessUserMessage(
+        openedTarget.controlSessionId,
+        "queued steer"
+      ),
+      true
+    );
+
+    emitStdout?.(`${JSON.stringify({ type: QWEN_EVENT_TYPES.RESULT })}\n`);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(
+      coordinator.getHeadlessControlSessionId(),
+      openedTarget.controlSessionId
+    );
+    assert.strictEqual(endCalled, false);
+
+    emitStdout?.(`${JSON.stringify({ type: QWEN_EVENT_TYPES.RESULT })}\n`);
+    assert.strictEqual(await execution, true);
+    assert.strictEqual(endCalled, true);
   });
 
   test("runs Qwen initialize, user message, approval denial, and result through one process", async () => {
@@ -725,6 +1423,106 @@ suite("CliTransportCoordinator", () => {
       if (mode === HEADLESS_SOURCE_MODES.LOG) {
         assert.strictEqual(logTailStdout, '{"id":1}\n{"id":2}\n');
       }
+    }
+  });
+
+  test("closes the control channel at the turn result even with background work pending", async () => {
+    // A headless step ends at its turn boundary; background work the model
+    // left running is abandoned, not awaited. The long prompt timeout makes a
+    // regression that holds stdin open hang this test instead of passing.
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => 60 * 60 * 1000;
+    let channelClosed = false;
+    let onStdout: ((chunk: string) => void) | undefined;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    let promptSent!: () => void;
+    const promptSentPromise = new Promise<void>(
+      (resolve) => (promptSent = resolve)
+    );
+    class TrackedClaudeControlChannel extends ClaudeHeadlessControlChannel {
+      override close(): void {
+        channelClosed = true;
+        super.close();
+      }
+    }
+    const spawnResult = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const channel = new TrackedClaudeControlChannel();
+    const provider = {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          onStdout = options.onStdout;
+          options.onStdinReady?.({
+            write: (
+              chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              const record = JSON.parse(chunk) as { type: string };
+              if (record.type === CLAUDE_CONTROL.USER_TYPE) {
+                promptSent();
+              }
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => {
+              callback?.();
+              finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+            },
+          });
+          return spawnResult;
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+    const source = {
+      mode: HEADLESS_SOURCE_MODES.STDOUT,
+      parser: { hasPendingBackgroundWork: () => true },
+      parseStdout: () => [],
+    } as unknown as HeadlessStreamingSource;
+
+    try {
+      const execution = coordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true,
+        undefined,
+        source
+      );
+      await promptSentPromise;
+      onStdout?.(`${JSON.stringify({ type: CLAUDE_EVENT_TYPES.RESULT })}\n`);
+
+      assert.strictEqual(await execution, true);
+      assert.strictEqual(channelClosed, true);
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
     }
   });
 
@@ -1752,9 +2550,11 @@ line two`,
 
   test("drops the terminated PTY's tab when asked", async () => {
     const posted: { type?: string }[] = [];
+    const forgotten: string[] = [];
     const coordinator = await createCoordinatorWithLivePty(
       async () => {},
-      (message) => posted.push(message as { type?: string })
+      (message) => posted.push(message as { type?: string }),
+      (sessionId) => forgotten.push(sessionId)
     );
     posted.length = 0;
 
@@ -1770,6 +2570,8 @@ line two`,
         sessionId: terminatedSessionId,
       },
     ]);
+    // The extension forgets the tab too, so replay never brings it back.
+    assert.deepStrictEqual(forgotten, [terminatedSessionId]);
   });
 
   test("should honor closeTerminalOnComplete for active PTY sessions", async () => {

@@ -50,6 +50,7 @@ import {
   CODEX_ITEM_TYPES,
   CODEX_MESSAGE_ROLES,
   CODEX_PAYLOAD_TYPES,
+  CODEX_SUBAGENT_ACTIVITY_KINDS,
   CODEX_TOOL_NAMES,
   CODEX_COLLABORATION_NAMESPACES,
   CODEX_AGENT_MESSAGE_MARKERS,
@@ -301,6 +302,7 @@ export class CodexLogParser extends BaseLogParser {
     let sessionId: string | undefined;
     let model: string | undefined;
     let cliVersion: string | undefined;
+    let sessionError: string | undefined;
 
     // Token statistics tracking
     let totalInputTokens = 0;
@@ -341,6 +343,12 @@ export class CodexLogParser extends BaseLogParser {
     const reasoningGrouper = new CodexReasoningGrouper();
 
     for (const event of events as CodexProviderEvent[]) {
+      const errorSignal = this.getSessionError(event);
+      if (errorSignal) {
+        sessionError = errorSignal.message;
+      }
+      this.observeSubagentActivity(event);
+
       // Everything this iteration maps is routed through the grouper below.
       const mappedFrom = outputEvents.length;
       const timestamp = event.timestamp
@@ -845,6 +853,7 @@ export class CodexLogParser extends BaseLogParser {
       model,
       cliVersion,
       harness: HARNESS_IDS.CODEX_CLI,
+      ...(sessionError ? { error: sessionError } : {}),
     };
 
     if (
@@ -1415,7 +1424,36 @@ export class CodexLogParser extends BaseLogParser {
     ) {
       this.recordParentSessionMeta(e.payload as CodexSessionMetaPayload);
     }
+    this.observeSubagentActivity(e);
     return this.mapStreamRecord(e, this.parentStream);
+  }
+
+  /**
+   * App-server rollouts record agent start/completion as SubAgentActivity
+   * items. Older exec rollouts expose the spawned task name in a function-call
+   * result instead; both routes register the same child rollout source.
+   */
+  private observeSubagentActivity(event: CodexProviderEvent): void {
+    if (
+      event.type !== CODEX_EVENT_TYPES.EVENT_MSG ||
+      event.payload?.type !== CODEX_PAYLOAD_TYPES.ITEM_COMPLETED ||
+      event.payload.item?.type !== CODEX_ITEM_TYPES.SUBAGENT_ACTIVITY
+    ) {
+      return;
+    }
+
+    const item = event.payload.item;
+    if (typeof item.agent_path !== "string" || !item.agent_path) return;
+
+    if (
+      item.kind === CODEX_SUBAGENT_ACTIVITY_KINDS.STARTED &&
+      typeof item.id === "string" &&
+      this.pendingSubagentSpawns.has(item.id)
+    ) {
+      this.registerCodexSubagent(item.id, item.agent_path);
+    } else if (item.kind === CODEX_SUBAGENT_ACTIVITY_KINDS.COMPLETED) {
+      this.subagentFollower.markChildComplete(item.agent_path);
+    }
   }
 
   /**

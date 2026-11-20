@@ -8,6 +8,7 @@ import {
   WORKTREE_DIRECTORY_FIELD,
   WORKTREE_MODES,
   WORKTREE_KEEP_HELP_TEXT,
+  SETTING_PATHS,
   type HarnessId,
   type StatusLineHarnessId,
   type HookEvent,
@@ -114,15 +115,6 @@ const STATIC_SETTINGS_CATALOG = {
       "ignore word",
       "add to dictionary",
     ],
-  },
-  "server.theme": {
-    id: "server.theme",
-    path: "server.theme",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Browser dashboard theme",
-    description:
-      "Light or dark theme for the dashboard served by ctrlyoke server. Auto follows each browser's system setting. Takes effect when the page reloads. A browser dashboard started from VS Code follows the VS Code theme instead.",
-    keywords: ["dark mode", "light mode", "appearance", "color theme"],
   },
   "ui.showCliCommand": {
     id: "ui.showCliCommand",
@@ -286,109 +278,6 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Terminal screen reader mode",
     keywords: ["accessibility", "screen reader", "xterm"],
   },
-  "execution.autoDeleteTempFiles": {
-    id: "execution.autoDeleteTempFiles",
-    path: "execution.autoDeleteTempFiles",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Auto-delete temp files",
-    description:
-      "Automatically delete prompt temp files after execution. Disable to retain files in .ctrlyoke/temp/ for debugging.",
-  },
-  "execution.inlineGeneratedPromptOnStdin": {
-    id: "execution.inlineGeneratedPromptOnStdin",
-    path: "execution.inlineGeneratedPromptOnStdin",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Inline generated prompt sections (headless)",
-    description:
-      "Send agent instructions, skills, prior context and the prompt inline on stdin for headless Qwen, Copilot, Codex and Antigravity steps. Disable to reference temp files instead.",
-    keywords: ["stdin", "headless", "temp files", "inline"],
-  },
-  "runs.maxRuns": {
-    id: "runs.maxRuns",
-    path: "runs.maxRuns",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Max runs to keep",
-    description:
-      "Per workflow. Starting a new run permanently deletes that workflow's oldest runs, definition and output together.",
-  },
-  "runs.historySearchCacheMb": {
-    id: "runs.historySearchCacheMb",
-    path: "runs.historySearchCacheMb",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "History search cache (MB, 0 = disabled)",
-    description:
-      "Approximate working-set budget for caching parsed history-search documents from the most recently run workflows, evicted oldest-first once exceeded. Bounds real process memory, not a literal byte count — raising it does not scale memory use 1:1.",
-  },
-  "execution.ctrlyokeMcpMode": {
-    id: "execution.ctrlyokeMcpMode",
-    path: "execution.ctrlyokeMcpMode",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "MCP mode",
-    description:
-      "Controls only ctrlyoke's own MCP server (queue/coordination/commit tools) — never any other MCP servers a workflow configures. Native attaches ctrlyoke's real MCP server. Skill replaces it with the built-in MCP-tools skill instead, for environments where MCP configuration itself is unavailable (e.g. blocked by policy).",
-  },
-  "diagnostics.verboseLogging": {
-    id: "diagnostics.verboseLogging",
-    path: "diagnostics.verboseLogging",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Enable diagnostic logs",
-    description: "Write detailed diagnostic logs to help troubleshoot issues.",
-  },
-  "diagnostics.logRawCliOutput": {
-    id: "diagnostics.logRawCliOutput",
-    path: "diagnostics.logRawCliOutput",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Log raw CLI output",
-  },
-  "storage.runHistoryLocation": {
-    id: "storage.runHistoryLocation",
-    path: "storage.runHistoryLocation",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Run history location",
-    description:
-      "Choose where ctrlyoke keeps run history. Workspace mode keeps it beside the repo, still ignores .runs/, and does not make runs shareable.",
-  },
-  "history.recentlyDeleted": {
-    id: "history.recentlyDeleted",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Recently deleted",
-    description:
-      "Deleted runs and workflows, which you can restore until they expire.",
-    keywords: ["trash", "restore", "undo delete", "deleted runs"],
-  },
-  "storage.trashRetentionDays": {
-    id: "storage.trashRetentionDays",
-    path: "storage.trashRetentionDays",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Keep deleted items (days)",
-    keywords: ["trash", "recently deleted", "retention", "undo delete"],
-  },
-  "history.clearAll": {
-    id: "history.clearAll",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Clear all history",
-    description:
-      "Moves every workflow and run in this project to Recently deleted. Running workflows are kept.",
-    keywords: ["clear history", "delete all", "wipe", "remove history"],
-  },
-  "queue.maxSteps": {
-    id: "queue.maxSteps",
-    path: "queue.maxSteps",
-    tab: GLOBAL_SETTINGS_TABS.QUEUE,
-    label: "Max steps",
-  },
-  "queue.maxParallelSteps": {
-    id: "queue.maxParallelSteps",
-    path: "queue.maxParallelSteps",
-    tab: GLOBAL_SETTINGS_TABS.QUEUE,
-    label: "Max parallel steps",
-  },
-  "queue.maxWorkflowExecutionTimeSec": {
-    id: "queue.maxWorkflowExecutionTimeSec",
-    path: "queue.maxWorkflowExecutionTimeSec",
-    tab: GLOBAL_SETTINGS_TABS.QUEUE,
-    label: "Max workflow execution time (seconds)",
-  },
   "execution.contextResolutionFailure": {
     id: "execution.contextResolutionFailure",
     path: "execution.contextResolutionFailure",
@@ -415,19 +304,26 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.EXECUTION,
     label: "Regex timeout (seconds)",
   },
-  "execution.closeTerminalOnComplete": {
-    id: "execution.closeTerminalOnComplete",
-    path: "execution.closeTerminalOnComplete",
+  "queue.maxSteps": {
+    id: "queue.maxSteps",
+    path: "queue.maxSteps",
     tab: GLOBAL_SETTINGS_TABS.EXECUTION,
-    label: "Close terminal on completion",
-    description:
-      "Automatically close the terminal when a workflow completes. Turns off terminal reuse.",
+    label: "Max steps",
+    keywords: ["queue"],
   },
-  "execution.reuseRunningTerminal": {
-    id: "execution.reuseRunningTerminal",
-    path: "execution.reuseRunningTerminal",
+  "queue.maxParallelSteps": {
+    id: "queue.maxParallelSteps",
+    path: "queue.maxParallelSteps",
     tab: GLOBAL_SETTINGS_TABS.EXECUTION,
-    label: "Reuse running terminal (interactive)",
+    label: "Max parallel steps",
+    keywords: ["queue"],
+  },
+  "queue.maxWorkflowExecutionTimeSec": {
+    id: "queue.maxWorkflowExecutionTimeSec",
+    path: "queue.maxWorkflowExecutionTimeSec",
+    tab: GLOBAL_SETTINGS_TABS.EXECUTION,
+    label: "Max workflow execution time (seconds)",
+    keywords: ["queue"],
   },
   "commit.harness": {
     id: "commit.harness",
@@ -453,10 +349,82 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "Prompt sent to the AI along with the git diff. The AI should return only the commit message text.",
   },
+  "runs.maxRuns": {
+    id: "runs.maxRuns",
+    path: "runs.maxRuns",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Max runs to keep",
+    description:
+      "Per workflow. Starting a new run permanently deletes that workflow's oldest runs, definition and output together.",
+  },
+  "runs.historySearchCacheMb": {
+    id: "runs.historySearchCacheMb",
+    path: "runs.historySearchCacheMb",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "History search cache (MB, 0 = disabled)",
+    description:
+      "Approximate working-set budget for caching parsed history-search documents from the most recently run workflows, evicted oldest-first once exceeded. Bounds real process memory, not a literal byte count — raising it does not scale memory use 1:1.",
+  },
+  "storage.runHistoryLocation": {
+    id: "storage.runHistoryLocation",
+    path: "storage.runHistoryLocation",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Run history location",
+    description:
+      "Choose where ctrlyoke keeps run history. Workspace mode keeps it beside the repo, still ignores .runs/, and does not make runs shareable.",
+  },
+  "history.recentlyDeleted": {
+    id: "history.recentlyDeleted",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Recently deleted",
+    description:
+      "Deleted runs and workflows, which you can restore until they expire.",
+    keywords: ["trash", "restore", "undo delete", "deleted runs"],
+  },
+  "storage.trashRetentionDays": {
+    id: "storage.trashRetentionDays",
+    path: "storage.trashRetentionDays",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Keep deleted items (days)",
+    keywords: ["trash", "recently deleted", "retention", "undo delete"],
+  },
+  "history.clearAll": {
+    id: "history.clearAll",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Clear all history",
+    description:
+      "Moves every workflow and run in this project to Recently deleted. Running workflows are kept.",
+    keywords: ["clear history", "delete all", "wipe", "remove history"],
+  },
+  "execution.autoDeleteTempFiles": {
+    id: "execution.autoDeleteTempFiles",
+    path: "execution.autoDeleteTempFiles",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Auto-delete temp files",
+    description:
+      "Automatically delete prompt temp files after execution. Disable to retain files in .ctrlyoke/temp/ for debugging.",
+  },
+  "execution.inlineGeneratedPromptOnStdin": {
+    id: "execution.inlineGeneratedPromptOnStdin",
+    path: "execution.inlineGeneratedPromptOnStdin",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Inline generated prompt sections (headless)",
+    description:
+      "Send agent instructions, skills, prior context and the prompt inline on stdin for headless Qwen, Copilot, Codex and Antigravity steps. Disable to reference temp files instead.",
+    keywords: ["stdin", "headless", "temp files", "inline"],
+  },
+  "execution.ctrlyokeMcpMode": {
+    id: "execution.ctrlyokeMcpMode",
+    path: "execution.ctrlyokeMcpMode",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "MCP mode",
+    description:
+      "Controls only ctrlyoke's own MCP server (queue/coordination/commit tools) — never any other MCP servers a workflow configures. Native attaches ctrlyoke's real MCP server. Skill replaces it with the built-in MCP-tools skill instead, for environments where MCP configuration itself is unavailable (e.g. blocked by policy).",
+  },
   "coordination.readNotesPageSize": {
     id: "coordination.readNotesPageSize",
     path: "coordination.readNotesPageSize",
-    tab: GLOBAL_SETTINGS_TABS.COORDINATION,
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
     label: "Read notes page size",
     description:
       "Maximum entries returned by one read_notes call. Reads are always paged.",
@@ -464,7 +432,7 @@ const STATIC_SETTINGS_CATALOG = {
   "coordination.maxNoteLength": {
     id: "coordination.maxNoteLength",
     path: "coordination.maxNoteLength",
-    tab: GLOBAL_SETTINGS_TABS.COORDINATION,
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
     label: "Maximum note length",
     description:
       "Notes longer than this are rejected instead of being silently truncated.",
@@ -472,7 +440,7 @@ const STATIC_SETTINGS_CATALOG = {
   "coordination.maxEntries": {
     id: "coordination.maxEntries",
     path: "coordination.maxEntries",
-    tab: GLOBAL_SETTINGS_TABS.COORDINATION,
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
     label: "Maximum board entries",
     description:
       "Target entry count after compaction. Held claims are protected.",
@@ -480,14 +448,14 @@ const STATIC_SETTINGS_CATALOG = {
   "coordination.maxBoardBytes": {
     id: "coordination.maxBoardBytes",
     path: "coordination.maxBoardBytes",
-    tab: GLOBAL_SETTINGS_TABS.COORDINATION,
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
     label: "Maximum board size (bytes)",
     description: "Hygiene ceiling for the persisted board.",
   },
   "coordination.maxNoteAgeHours": {
     id: "coordination.maxNoteAgeHours",
     path: "coordination.maxNoteAgeHours",
-    tab: GLOBAL_SETTINGS_TABS.COORDINATION,
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
     label: "Note retention (hours)",
     description:
       "Notes older than this are hidden and removed once their author has left the board.",
@@ -495,17 +463,30 @@ const STATIC_SETTINGS_CATALOG = {
   "coordination.cliParticipantTtlMinutes": {
     id: "coordination.cliParticipantTtlMinutes",
     path: "coordination.cliParticipantTtlMinutes",
-    tab: GLOBAL_SETTINGS_TABS.COORDINATION,
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
     label: "CLI participant TTL (minutes)",
     description: "Lease lifetime for CLI and built-in skill participants.",
   },
   "coordination.allowExternalParticipants": {
     id: "coordination.allowExternalParticipants",
     path: "coordination.allowExternalParticipants",
-    tab: GLOBAL_SETTINGS_TABS.COORDINATION,
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
     label: "Allow external participants",
     description:
       "Allow agents not launched by ctrlyoke to join this execution-root board.",
+  },
+  "diagnostics.verboseLogging": {
+    id: "diagnostics.verboseLogging",
+    path: "diagnostics.verboseLogging",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Enable diagnostic logs",
+    description: "Write detailed diagnostic logs to help troubleshoot issues.",
+  },
+  "diagnostics.logRawCliOutput": {
+    id: "diagnostics.logRawCliOutput",
+    path: "diagnostics.logRawCliOutput",
+    tab: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Log raw CLI output",
   },
   "worktrees.root": {
     id: "worktrees.root",
@@ -533,6 +514,20 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.TERMINAL,
     label: "Cursor blink",
     description: "Blink the terminal cursor.",
+  },
+  "execution.closeTerminalOnComplete": {
+    id: "execution.closeTerminalOnComplete",
+    path: "execution.closeTerminalOnComplete",
+    tab: GLOBAL_SETTINGS_TABS.TERMINAL,
+    label: "Close terminal on completion",
+    description:
+      "Automatically close the terminal when a workflow completes. Turns off terminal reuse.",
+  },
+  "execution.reuseRunningTerminal": {
+    id: "execution.reuseRunningTerminal",
+    path: "execution.reuseRunningTerminal",
+    tab: GLOBAL_SETTINGS_TABS.TERMINAL,
+    label: "Reuse running terminal (interactive)",
   },
   "terminal.macOptionIsMeta": {
     id: "terminal.macOptionIsMeta",
@@ -706,20 +701,6 @@ const STATIC_SETTINGS_CATALOG = {
       "Verbose; logs the routine 'user-scroll' verdict for every scroll event. Settle-window verdicts (suppressed/programmatic/echo) always log while profiling is on.",
     devOnly: true,
   },
-  "permissions.trustedExternalRoots": {
-    id: "permissions.trustedExternalRoots",
-    path: "permissions.trustedExternalRoots",
-    tab: GLOBAL_SETTINGS_TABS.PERMISSIONS,
-    label: "Trusted external roots",
-  },
-  "ui.offerTrustForUntrustedFileLinks": {
-    id: "ui.offerTrustForUntrustedFileLinks",
-    path: "ui.offerTrustForUntrustedFileLinks",
-    tab: GLOBAL_SETTINGS_TABS.PERMISSIONS,
-    label: "Offer trust for untrusted file links",
-    description:
-      "Allow an AI-generated file link outside trusted roots to offer a Trust Parent Folder action. When off, untrusted links are still blocked outright — this only controls whether the offer appears.",
-  },
   "defaults.sandbox": {
     id: "defaults.sandbox",
     path: "defaults.sandbox",
@@ -737,6 +718,23 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Default sandbox mode",
     description:
       "How strict the sandbox is when it is on: terminal commands may write the workspace, or nothing in it.",
+  },
+  "permissions.trustedExternalRoots": {
+    id: "permissions.trustedExternalRoots",
+    path: "permissions.trustedExternalRoots",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Trusted external roots",
+    keywords: ["external folder", "outside workspace", "add-dir"],
+  },
+  "ui.offerTrustForUntrustedFileLinks": {
+    id: "ui.offerTrustForUntrustedFileLinks",
+    path: "ui.offerTrustForUntrustedFileLinks",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Offer trust for untrusted file links",
+    description:
+      "Allow an AI-generated file link outside trusted roots to offer a Trust Parent Folder action. When off, untrusted links are still blocked outright — this only controls whether the offer appears.",
   },
   "server.autoStart": {
     id: "server.autoStart",
@@ -780,6 +778,15 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "The name your phone uses to reach this computer from outside your network, such as a Tailscale MagicDNS name or a dynamic DNS name. It's offered under Connect via and added to the HTTPS certificate, so generate the certificate again after changing it.",
     keywords: ["dynamic DNS", "DDNS", "Tailscale", "MagicDNS", "remote access"],
+  },
+  "server.theme": {
+    id: "server.theme",
+    path: "server.theme",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Browser dashboard theme",
+    description:
+      "Light or dark theme for the dashboard served by ctrlyoke server. Auto follows each browser's system setting. Takes effect when the page reloads. A browser dashboard started from VS Code follows the VS Code theme instead.",
+    keywords: ["dark mode", "light mode", "appearance", "color theme"],
   },
   "server.iconBgColor": {
     id: "server.iconBgColor",
@@ -1023,6 +1030,20 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "permissions",
     label: "Denied tools (one per line)",
+  },
+  [SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS]: {
+    id: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS,
+    path: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS,
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Headless approval requests",
+  },
+  [SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC]: {
+    id: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC,
+    path: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC,
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Headless approval timeout (seconds)",
   },
   "landmark:mcp-manager:servers": {
     id: "landmark:mcp-manager:servers",

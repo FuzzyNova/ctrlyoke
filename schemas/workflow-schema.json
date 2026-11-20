@@ -467,14 +467,14 @@
                 "type": "string",
                 "minLength": 1
               },
-              "description": "Absolute external directory roots this workflow is restricted to. REPLACES (does not add to) the workspace's approved permissions.trustedExternalRoots for this workflow's runs \u2014 a root already approved at user or workspace scope needs no separate approval, but this array is the complete set; roots trusted broadly but omitted here are not accessible to this workflow. Declaring a new root here only registers a request \u2014 it never grants access by itself. Before this workflow first runs (or is loaded in VS Code) with a newly declared root, a one-time batch approval is required: a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI. Execution fails closed until every declared root has a recorded decision for this workflow file's identity."
+              "description": "Absolute external directory roots this workflow is restricted to. REPLACES (does not add to) the workspace's approved permissions.trustedExternalRoots for this workflow's runs — a root already approved at user or workspace scope needs no separate approval, but this array is the complete set; roots trusted broadly but omitted here are not accessible to this workflow. Declaring a new root here only registers a request — it never grants access by itself. Before this workflow first runs (or is loaded in VS Code) with a newly declared root, a one-time batch approval is required: a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI. Execution fails closed until every declared root has a recorded decision for this workflow file's identity."
             },
             {
               "type": "null",
               "description": "Explicitly disables all external-root access for this workflow, regardless of user/workspace-scope trusted roots. Only workspace files are accessible. Use this to run a specific workflow with no external directories at all."
             }
           ],
-          "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it \u2014 it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. These roots bound where terminal commands can write only while `sandbox` resolves to true (they become the sandbox's extra writable roots, none under `sandboxMode: read-only`); with the sandbox off or None they limit the directories given to ctrlyoke and the harness's file tools, not what a shell command can reach. Not substituted: Approval is keyed to the authored value."
+          "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. These roots bound where terminal commands can write only while `sandbox` resolves to true (they become the sandbox's extra writable roots, none under `sandboxMode: read-only`); with the sandbox off or None they limit the directories given to ctrlyoke and the harness's file tools, not what a shell command can reach. Not substituted: Approval is keyed to the authored value."
         }
       }
     },
@@ -706,7 +706,12 @@
             "gemini-4-hydrogen-low",
             "gemini-4-hydrogen-medium",
             "gemini-4-hydrogen-xhigh",
+            "gemini-4-neon-high",
+            "gemini-4-neon-low",
+            "gemini-4-neon-medium",
+            "gemini-4-neon-xhigh",
             "gemini-pro-orchestrator-g1-pro",
+            "gemini-pro-orchestrator-neon",
             "gpt-5.3-codex",
             "gpt-5.6-luna",
             "gpt-5.6-sol",
@@ -716,6 +721,8 @@
             "gpt-6-sol",
             "gpt-6.1-sol",
             "gpt-6.1-terra",
+            "gpt-6.2-astra",
+            "gpt-6.2-sol",
             "gpt-oss-120b-medium",
             "grok-4.6",
             "grok-4.7",
@@ -802,7 +809,7 @@
               "minimum": 1
             }
           ],
-          "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution \u2014 works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
+          "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
         },
         "skills": {
           "description": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
@@ -844,13 +851,13 @@
               "type": "string",
               "enum": ["full", "summary"],
               "default": "full",
-              "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt \u2192 workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference."
+              "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference."
             },
             {
               "$ref": "#/$defs/varPlaceholder"
             }
           ],
-          "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt \u2192 workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "additionalArgs": {
           "oneOf": [
@@ -864,7 +871,7 @@
           "description": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\""
         },
         "toolPermissions": {
-          "description": "Tool permission overrides for this prompt/workflow. Resolves prompt \u2192 workflow \u2192 the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+          "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
           "$ref": "#/$defs/toolPermissions"
         },
         "sandbox": {
@@ -881,10 +888,10 @@
         "sandboxMode": {
           "type": "string",
           "enum": ["workspace-write", "read-only"],
-          "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step \u2192 workflow \u2192 the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value."
+          "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value."
         },
         "errorBehavior": {
-          "description": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt \u2192 workflow \u2192 the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+          "description": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
           "$ref": "#/$defs/errorBehaviorDefault"
         }
       }
@@ -1014,7 +1021,7 @@
             },
             "prompt": {
               "type": "string",
-              "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending \u2014 use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
+              "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
             },
             "_runtime": {
               "$ref": "#/$defs/promptRuntimeMetadata",
@@ -1173,7 +1180,7 @@
               "$ref": "#/$defs/varPlaceholder"
             }
           ],
-          "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression \u2014 add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "expected": {
           "$ref": "#/$defs/scriptProperties/properties/expected"
@@ -1206,7 +1213,9 @@
       "properties": {
         "mcpLiteralEnvKeys": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Internal provenance for MCP supplied literal env values."
         },
         "script": {
@@ -1402,7 +1411,7 @@
         },
         "returns": {
           "not": {},
-          "description": "Removed \u2014 renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
+          "description": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
         },
         "timeoutSec": {
           "oneOf": [
@@ -1439,17 +1448,17 @@
                 "isEmpty",
                 "isNotEmpty"
               ],
-              "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression \u2014 add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors."
+              "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors."
             },
             {
               "$ref": "#/$defs/varPlaceholder"
             }
           ],
-          "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression \u2014 add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "expected": {
           "type": ["string", "number"],
-          "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 \u2014 there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
+          "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
         },
         "ignoreCase": {
           "oneOf": [
@@ -1477,7 +1486,9 @@
       "properties": {
         "mcpLiteralEnvKeys": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Internal provenance for MCP supplied literal env values."
         },
         "script": {
@@ -1548,13 +1559,13 @@
             {
               "type": "string",
               "enum": ["stopWorkflow", "retry", "retryPhase", "continue"],
-              "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored \u2014 an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count."
+              "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count."
             },
             {
               "$ref": "#/$defs/varPlaceholder"
             }
           ],
-          "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored \u2014 an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "maxRetries": {
           "oneOf": [
@@ -1588,7 +1599,7 @@
     },
     "promptRuntimeMetadata": {
       "type": "object",
-      "description": "Per-prompt runtime execution metadata (optional, added automatically during execution). Execution-property fields record the values the step actually ran with after inheritance, including the session ID the harness reported; secrets are recorded by name only, never by value. The step's response text is not stored here \u2014 the run's events.jsonl is the only record of step output.",
+      "description": "Per-prompt runtime execution metadata (optional, added automatically during execution). Execution-property fields record the values the step actually ran with after inheritance, including the session ID the harness reported; secrets are recorded by name only, never by value. The step's response text is not stored here — the run's events.jsonl is the only record of step output.",
       "allOf": [
         {
           "$ref": "#/$defs/executionProperties"
@@ -2215,7 +2226,7 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata \u2014 deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file."
+          "description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file."
         },
         "command": {
           "type": "string",
@@ -2313,21 +2324,32 @@
                 "custom",
                 "none"
               ],
-              "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all \u2014 it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored."
+              "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored."
             },
             "allowedTools": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses."
+              "description": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs."
             },
             "deniedTools": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns."
+              "description": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns."
+            },
+            "headlessApprovals": {
+              "type": "string",
+              "enum": ["deny", "ask"],
+              "description": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered."
+            },
+            "headlessApprovalTimeoutSec": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600,
+              "description": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions."
             }
           },
           "additionalProperties": false
@@ -2391,7 +2413,7 @@
         {
           "type": "string",
           "const": "",
-          "description": "Empty string means no agent \u2014 the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+          "description": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
         },
         {
           "type": "null"

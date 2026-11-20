@@ -31,6 +31,7 @@ import type {
   CapabilitiesModel,
 } from "../../types/CapabilitiesTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
+import type { TerminalFontFamilySource } from "../../core/HostPorts";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { configService } from "../../config/CtrlYokeConfigService";
 import {
@@ -932,6 +933,56 @@ suite("DashboardSettingsSync", () => {
       );
       assert.ok(init);
       assert.ok(!Object.hasOwn(init.data, "coordinationScope"));
+    });
+
+    test("INIT and settings updates carry the host terminal font family", async () => {
+      const messages: any[] = [];
+      const postMessage = (msg: any) => messages.push(msg);
+      let hostFont = "MesloLGM Nerd Font";
+      const terminalFontFamily: TerminalFontFamilySource = {
+        get: () => hostFont,
+        onDidChange: () => ({ dispose: () => undefined }),
+      };
+      const sync = new DashboardSettingsSync(
+        postMessage,
+        () => makeViewOrchestrator({ [PANEL_CLIENT_ID]: "panel-workflow" }),
+        undefined,
+        undefined,
+        undefined,
+        {
+          getWorkspaceRoot: () => undefined,
+          getNamedRoots: () => [],
+          terminalFontFamily,
+        }
+      );
+
+      await sync.sendInitialState(postMessage);
+      hostFont = "";
+      sync.sendGlobalSettingsUpdate(postMessage);
+
+      const init = messages.find((m) => m.type === MESSAGE_TYPES.INIT);
+      const update = messages.find(
+        (m) => m.type === MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED
+      );
+      assert.strictEqual(init.data.terminalFontFamily, "MesloLGM Nerd Font");
+      assert.strictEqual(
+        update.terminalFontFamily,
+        "",
+        "an empty value tells clients to fall back to the editor font"
+      );
+    });
+
+    test("sends an empty terminal font family when the host has no terminal font", async () => {
+      const messages: any[] = [];
+      const postMessage = (msg: any) => messages.push(msg);
+      const sync = new DashboardSettingsSync(postMessage, () =>
+        makeViewOrchestrator({ [PANEL_CLIENT_ID]: "panel-workflow" })
+      );
+
+      await sync.sendInitialState(postMessage);
+
+      const init = messages.find((m) => m.type === MESSAGE_TYPES.INIT);
+      assert.strictEqual(init.data.terminalFontFamily, "");
     });
 
     test("sends the requesting client's own workflow, not the panel's", async () => {

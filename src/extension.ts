@@ -35,6 +35,7 @@ import {
   type ServerCommandOptions,
 } from "./platform/VsCodeHostedServerControl";
 import { VsCodeKeyValueStore } from "./platform/VsCodeKeyValueStore";
+import { VsCodeTerminalFontFamily } from "./platform/VsCodeTerminalFontFamily";
 import { TemplateManager } from "./core/TemplateManager";
 import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
 import {
@@ -548,6 +549,7 @@ export async function activate(context: vscode.ExtensionContext) {
       getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
       actions: dashboardHostActions,
       serverControl: webviewHostDependencies.serverControl,
+      terminalFontFamily: new VsCodeTerminalFontFamily(),
       nativeFeedbackSink: vscodeUserFeedbackSink,
       licenseService,
       hostDependencies: {

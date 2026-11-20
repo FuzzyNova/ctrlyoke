@@ -48,6 +48,7 @@ import {
   STEP_TYPES,
   SCRIPT_VERDICT_OUTCOMES,
   WORKFLOW_EXECUTION_OUTCOMES,
+  RETRY_PROMPT_SEND_DISPOSITIONS,
   COMPARE_SOURCES,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
@@ -75,6 +76,7 @@ import { HarnessIntegration } from "./HarnessIntegration";
 import {
   EndConditionHandler,
   SendRetryPromptCallback,
+  type SendRetryPromptResult,
   type RetryContext,
 } from "./EndConditionHandler";
 import {
@@ -237,6 +239,7 @@ export interface WorkflowExecutionContext {
   statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
+  requestHeadlessApproval?: WorkflowContext["requestHeadlessApproval"];
   analyzeCompatibilityForPrompt?: WorkflowContext["analyzeCompatibilityForPrompt"];
   shouldShowCliCommand: boolean;
   dynamicQueueConfig: DynamicQueueConfig;
@@ -480,6 +483,7 @@ type PhaseDisposition = {
   actionText?: string;
   nextAttemptIndex?: number;
   nextErrorRetryCount?: number;
+  retryScope?: typeof RETRY_PROMPT_SEND_DISPOSITIONS.RETRY_WHOLE_STEP;
 };
 
 function canRetryErrorBehavior(
@@ -2744,6 +2748,7 @@ export class WorkflowExecutor {
           // this unset keeps first-attempt prompt text deterministic.
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
+          requestHeadlessApproval: context.requestHeadlessApproval,
           reportStatusMessage: (message, severity) =>
             void this.trackStatusMessage(context, target, message, severity),
           markNoTurnStarted: () => this.markNoTurnStarted(target),
@@ -2894,6 +2899,17 @@ export class WorkflowExecutor {
         if (endDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           if (await this.checkExecutionTimeLimitBeforeRetry()) {
             return false;
+          }
+          if (
+            endDisposition.retryScope ===
+            RETRY_PROMPT_SEND_DISPOSITIONS.RETRY_WHOLE_STEP
+          ) {
+            promptErrorRetryCounter.count =
+              endDisposition.nextErrorRetryCount ??
+              promptErrorRetryCounter.count + 1;
+            attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
+            skipPreCondition = false;
+            continue;
           }
           attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
           endConditionErrorRetryCount =
@@ -4817,6 +4833,15 @@ export class WorkflowExecutor {
       );
     }
 
+    if (result.retryPromptDisposition) {
+      return {
+        outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY,
+        retryScope: result.retryPromptDisposition.disposition,
+        nextAttemptIndex: result.retryPromptDisposition.nextAttemptIndex,
+        nextErrorRetryCount: result.retryPromptDisposition.nextErrorRetryCount,
+      };
+    }
+
     if (!result.shouldContinue) {
       if (context.dashboardProvider && signedStepIndex !== undefined) {
         context.dashboardProvider.updateStepStatus(signedStepIndex, {
@@ -5160,7 +5185,7 @@ export class WorkflowExecutor {
       currentIndex: number,
       retryAttemptIndex: number,
       promptSource: RetryPromptSource
-    ): Promise<{ attemptIndex: number } | null> => {
+    ): Promise<SendRetryPromptResult | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.getRunStartWorkflow(context);
       const retryVars = this.getRunStartView(context).vars;
@@ -5261,15 +5286,21 @@ export class WorkflowExecutor {
 
       let sendAttemptIndex = retryAttemptIndex;
       let result: { duration: number } | null;
+      const resumedSessionId =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? state.steps[target.stepIndex]?._runtime?.sessionId
+          : workflowFile.finalStep?._runtime?.sessionId;
       while (true) {
         const retryAttemptProperties =
           sendAttemptIndex === retryAttemptIndex
             ? resolvedProperties
-            : {
-                ...resolvedProperties,
-                resumeSession: false,
-                sessionId: undefined,
-              };
+            : isPhaseRetryPolicy(resolvedProperties.errorBehavior)
+              ? {
+                  ...resolvedProperties,
+                  resumeSession: Boolean(resumedSessionId),
+                  sessionId: undefined,
+                }
+              : resolvedProperties;
         result = await this.executeWithStreaming(
           effectiveRetryPrompt,
           integration,
@@ -5306,6 +5337,7 @@ export class WorkflowExecutor {
             endConditionResult: this.promptQueue.getEndConditionSummary(target),
             reportCompatibilityDiagnostics:
               context.reportCompatibilityDiagnostics,
+            requestHeadlessApproval: context.requestHeadlessApproval,
             reportStatusMessage: (message, severity) =>
               void this.trackStatusMessage(context, target, message, severity),
             markNoTurnStarted: () => this.markNoTurnStarted(target),
@@ -5344,6 +5376,15 @@ export class WorkflowExecutor {
         );
         if (failureDisposition.outcome !== WORKFLOW_EXECUTION_OUTCOMES.RETRY) {
           return null;
+        }
+        if (!isPhaseRetryPolicy(resolvedProperties.errorBehavior)) {
+          return {
+            disposition: RETRY_PROMPT_SEND_DISPOSITIONS.RETRY_WHOLE_STEP,
+            nextAttemptIndex: sendAttemptIndex + 1,
+            nextErrorRetryCount:
+              failureDisposition.nextErrorRetryCount ??
+              promptErrorRetryCounter.count + 1,
+          };
         }
         promptErrorRetryCounter.count =
           failureDisposition.nextErrorRetryCount ??

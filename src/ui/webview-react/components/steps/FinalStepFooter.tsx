@@ -113,7 +113,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   const contextWindow = resolveEffectiveContextWindow({
     isCurrent: isWorkflowRunningForFinalStep(status, phase),
     liveContextWindow,
-    latestOutputTokens: latestOutput?.tokens,
+    latestOutput,
     runtimeContextWindow: finalStep?._runtime,
   });
   // The details panel and the bar are one selectable unit, so hovering either

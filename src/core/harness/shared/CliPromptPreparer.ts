@@ -155,6 +155,10 @@ export interface CliPromptPreparerDeps {
   isSecretAvailable?: (name: string) => Promise<boolean>;
 }
 
+export interface CliPromptPreparationOptions {
+  omitHeadlessExecutionNote?: boolean;
+}
+
 export class CliPromptPreparer {
   constructor(private readonly deps: CliPromptPreparerDeps) {}
 
@@ -168,7 +172,8 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
-    reuseRunningTerminal = false
+    reuseRunningTerminal = false,
+    options: CliPromptPreparationOptions = {}
   ): Promise<PromptPreparationPlan> {
     const conditionOutputSubstitution = substituteConditionOutputRefs(
       prompt.prompt.trim(),
@@ -369,7 +374,10 @@ export class CliPromptPreparer {
       ),
     };
     const noteFreeUserPromptText = outgoingSections.userPromptText;
-    if (resolvedProperties?.executionMode === EXECUTION_MODES.HEADLESS) {
+    if (
+      resolvedProperties?.executionMode === EXECUTION_MODES.HEADLESS &&
+      !options.omitHeadlessExecutionNote
+    ) {
       outgoingSections.userPromptText = `${outgoingSections.userPromptText.trimEnd()} ${HEADLESS_EXECUTION_NOTE}`;
     }
 
@@ -541,14 +549,16 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
-    reuseRunningTerminal = false
+    reuseRunningTerminal = false,
+    options: CliPromptPreparationOptions = {}
   ): Promise<PromptFileResult> {
     const plan = await this.planPrompt(
       prompt,
       workflowContext,
       resolvedProperties,
       resolvedSessionId,
-      reuseRunningTerminal
+      reuseRunningTerminal,
+      options
     );
     const appliedMutations: PreparedMutation[] = [];
     try {

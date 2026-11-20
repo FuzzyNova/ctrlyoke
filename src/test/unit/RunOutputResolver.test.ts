@@ -2070,6 +2070,134 @@ suite("RunOutputResolver", () => {
     );
   });
 
+  suite("follow-up context window", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const identity = { target, runIndex: 0, attemptIndex: 0 } as const;
+    const contextWindow = { used: 26527, size: 1000000 };
+    const started: WorkflowTimelineEventDraft = {
+      eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+      timestampMs: 1,
+      ...identity,
+      definitionRevision: 1,
+      payload: { kind: "ai", startReason: "initial", prompt: "just say hi" },
+    };
+    const followUp = (
+      timestampMs: number,
+      reported?: { used: number; size: number }
+    ): WorkflowTimelineEventDraft[] => [
+      {
+        eventType: TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+        timestampMs,
+        ...identity,
+        definitionRevision: 1,
+        payload: {
+          responseTextLength: 6,
+          eventCount: 2,
+          ...(reported ? { contextWindow: reported } : {}),
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+        timestampMs,
+        ...identity,
+        payload: {
+          events: [
+            { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: { resumedAt: 5 } },
+            { type: CLI_EVENT_TYPES.TEXT, data: { text: "Hi!" } },
+          ],
+        },
+      },
+    ];
+    const aggregate = (
+      timestampMs: number,
+      tokens?: Record<string, number>
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs,
+      ...identity,
+      definitionRevision: 1,
+      responseKind: "ai",
+      payload: {
+        cliOutput: {
+          structured: { events: [], metadata: {} },
+          elapsed: 14.4,
+          isStreaming: false,
+          ...(tokens
+            ? { tokens: { prompt: 1, completion: 1, ...tokens } }
+            : {}),
+        },
+      },
+    });
+    const terminated: WorkflowTimelineEventDraft = {
+      eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+      timestampMs: 9,
+      ...identity,
+      definitionRevision: 1,
+      payload: { terminalState: "completed" },
+    };
+
+    const resolveOutput = async () => {
+      const resolver = new RunOutputResolver(recorder);
+      const single = await resolver.resolveAttempt(manifestPath, target, 0, 0);
+      const latest = (
+        await resolver.resolveLatestAttempts(manifestPath, [target])
+      ).get("queue:0");
+      return { single: single?.output, latest: latest?.output };
+    };
+
+    test("applies a follow-up recorded before the step's usage-less aggregate", async () => {
+      // The real ordering: Stop fired before the harness flushed its turn, so
+      // the turn was persisted as a follow-up ahead of the step's aggregate.
+      await recorder.appendEvents(manifestPath, [
+        started,
+        ...followUp(4, contextWindow),
+        aggregate(1),
+        terminated,
+      ]);
+
+      const { single, latest } = await resolveOutput();
+      assert.deepStrictEqual(single?.contextWindow, contextWindow);
+      assert.deepStrictEqual(latest?.contextWindow, contextWindow);
+      // No usage was recorded, so none is invented.
+      assert.strictEqual(single?.tokens, undefined);
+    });
+
+    test("applies a follow-up recorded after run termination", async () => {
+      await recorder.appendEvents(manifestPath, [
+        started,
+        aggregate(2, { contextWindowUsed: 1000, contextWindowSize: 1000000 }),
+        terminated,
+        {
+          eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+          timestampMs: 10,
+          payload: {
+            executionState: EXECUTION_STATES.COMPLETED,
+            stepCount: 1,
+          },
+        },
+        ...followUp(11, contextWindow),
+      ]);
+
+      const { single, latest } = await resolveOutput();
+      assert.deepStrictEqual(single?.contextWindow, contextWindow);
+      assert.deepStrictEqual(latest?.contextWindow, contextWindow);
+      assert.strictEqual(single?.tokens?.contextWindowUsed, 1000);
+    });
+
+    test("lets an aggregate's own context window supersede an earlier follow-up", async () => {
+      await recorder.appendEvents(manifestPath, [
+        started,
+        ...followUp(4, contextWindow),
+        aggregate(5, { contextWindowUsed: 30000, contextWindowSize: 1000000 }),
+        terminated,
+      ]);
+
+      const { single } = await resolveOutput();
+      assert.strictEqual(single?.contextWindow, undefined);
+      assert.strictEqual(single?.tokens?.contextWindowUsed, 30000);
+    });
+  });
+
   test("yields interleaved parallel attempts once in settle order", async () => {
     const firstTarget = {
       kind: FINAL_STEP_PHASES.QUEUE,

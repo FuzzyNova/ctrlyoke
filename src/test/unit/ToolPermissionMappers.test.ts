@@ -443,7 +443,12 @@ suite("ToolPermissionMappers", () => {
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
         );
-        assert.deepStrictEqual(args, ["-a", "on-request"]);
+        assert.deepStrictEqual(args, [
+          "-a",
+          "on-request",
+          "-c",
+          "approvals_reviewer=user",
+        ]);
       });
     });
 

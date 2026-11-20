@@ -31,6 +31,7 @@ import {
   STEP_TYPES,
   PREVIEW_SCOPES,
   type TokenTotalConfidence,
+  type ApprovalDecision,
   type ScriptOutputSource,
   type ExecutionPhase,
   type UndoFileAction,
@@ -69,6 +70,7 @@ import {
   type RunDefinitionDecision,
   type SandboxMode,
   type SandboxRequest,
+  type HeadlessSteerDelivery,
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
@@ -276,6 +278,13 @@ export interface CliOutput {
   elapsed: number;
   /** Token usage statistics */
   tokens?: TokenStats;
+  /**
+   * Context window observed after this attempt recorded its own usage, by a
+   * post-completion follow-up turn. Never written to the timeline aggregate:
+   * the live store and the history readers fold it in from the follow-up.
+   * Read it through `getOutputContextWindow`, which prefers it over `tokens`.
+   */
+  contextWindow?: { used: number; size: number };
   /** Whether the response is still streaming */
   isStreaming: boolean;
   /** The CLI command executed (for debugging) */
@@ -598,6 +607,8 @@ export interface InitMessageData {
     isMultiRoot: boolean;
     terminal?: TerminalSettings;
   };
+  /** The host terminal's font family; "" means use the editor font. */
+  terminalFontFamily?: string;
   workflowProperties: Record<string, any>;
   modelOptions: Record<HarnessId, CapabilitiesModel[]>;
   harnessStatus: Record<string, HarnessStatusInfo>;
@@ -903,6 +914,10 @@ export interface FinalStepContextWindowUpdateMessage {
  * `stepIndex` is zero-based for queue steps, signed negative for final-step
  * attempts, and -1 for standalone shell sessions. A parallel group id keeps
  * same-harness sibling sessions distinct during webview reconciliation.
+ *
+ * Replay also uses it for a tab whose process has already exited: `status` is
+ * then that session's end status (with its `endReason`), so the client opens
+ * the tab ended instead of running. Omitted for a running session.
  */
 export interface TerminalStartedMessage {
   type: typeof MESSAGE_TYPES.TERMINAL_STARTED;
@@ -916,6 +931,8 @@ export interface TerminalStartedMessage {
   shellKind?: ShellKind;
   parallelGroupId?: string;
   controllerClientId?: string;
+  status?: TerminalSessionStatus;
+  endReason?: TerminalEndReason;
 }
 
 /**
@@ -936,14 +953,28 @@ export interface TerminalEndedMessage {
 }
 
 /**
- * PTY session retired and its tab dropped (extension -> webview). Sent when a
- * newly spawned process continues the AI session this terminal held, so the
- * same conversation is not shown in two tabs.
+ * Terminal tab closed for every client (extension -> webview). Sent when any
+ * client closes a tab, and when a newly spawned process continues the AI
+ * session this terminal held, so the same conversation is not shown twice.
  */
 export interface TerminalRemovedMessage {
   type: typeof MESSAGE_TYPES.TERMINAL_REMOVED;
   workflowId: string;
   sessionId: string;
+}
+
+/**
+ * Every terminal tab still open (extension -> one webview), running or ended.
+ * Sent at the end of each terminal replay, after the TERMINAL_STARTED messages,
+ * so a client that missed a TERMINAL_REMOVED while its connection was down (a
+ * backgrounded browser tab) drops the tabs it should no longer show.
+ *
+ * Scoped to `workflowId` when set; otherwise it covers every workflow.
+ */
+export interface TerminalOpenTabsMessage {
+  type: typeof MESSAGE_TYPES.TERMINAL_OPEN_TABS;
+  workflowId?: string;
+  sessionIds: string[];
 }
 
 /**
@@ -1275,6 +1306,8 @@ export interface SetScheduleMessage {
   enabled: boolean;
   trigger: WorkflowSchedule["trigger"];
   until?: string;
+  /** Preserve the schedule's wall-clock zone when another host edits it. */
+  timeZone?: string;
 }
 
 export interface ClearScheduleMessage {
@@ -1989,6 +2022,8 @@ export interface GlobalSettingsUpdatedMessage {
     externalFileRootsByScope?: ExternalFileRootsByScope;
     terminal?: TerminalSettings;
   };
+  /** The host terminal's font family; "" means use the editor font. */
+  terminalFontFamily?: string;
   licenseAccess?: LicenseAccessState;
 }
 
@@ -2668,12 +2703,56 @@ export interface AppendFileMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
-/** Webview → Extension: send a prompt to a live interactive PTY session. */
+/** Webview → Extension: `sessionId` names a PTY session or headless control channel. */
 export interface SendSteerMessage {
   type: typeof MESSAGE_TYPES.SEND_STEER_MESSAGE;
   workflowId: string;
   sessionId: string;
   text: string;
+}
+
+/** Webview → Extension: interrupt a live headless turn without stopping its step. */
+export interface InterruptHeadlessTurnMessage {
+  type: typeof MESSAGE_TYPES.INTERRUPT_HEADLESS_TURN;
+  workflowId: string;
+  sessionId: string;
+}
+
+/** Extension → Webview: a headless channel that can receive steers opened or closed. */
+export interface HeadlessControlTargetMessage {
+  type: typeof MESSAGE_TYPES.HEADLESS_CONTROL_TARGET_CHANGED;
+  workflowId: string;
+  controlSessionId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
+  steerDelivery: HeadlessSteerDelivery;
+  canInterruptTurn?: boolean;
+  isOpen: boolean;
+}
+
+/** Extension → Webview: a pending headless tool-approval request or its removal. */
+export interface HeadlessApprovalRequestMessage {
+  type: typeof MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED;
+  approvalId: string;
+  requestId: string;
+  workflowId: string;
+  controlSessionId: string;
+  stepIndex: number;
+  harnessId: HarnessId;
+  toolName: string;
+  inputSummary: string;
+  deadline: number;
+  isPending: boolean;
+}
+
+/** Webview → Extension: allow one tool call or deny it with an optional message. */
+export interface HeadlessApprovalResponseMessage {
+  type: typeof MESSAGE_TYPES.RESPOND_TO_HEADLESS_APPROVAL;
+  workflowId: string;
+  controlSessionId: string;
+  approvalId: string;
+  decision: ApprovalDecision;
+  message?: string;
 }
 
 /**
@@ -3663,6 +3742,8 @@ export type IncomingMessage =
   | CliOutputMessage
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
+  | HeadlessControlTargetMessage
+  | HeadlessApprovalRequestMessage
   | ContextWindowUpdateMessage
   | FinalStepContextWindowUpdateMessage
   | StatusMessageMessage

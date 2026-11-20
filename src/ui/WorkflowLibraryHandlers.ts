@@ -22,7 +22,6 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { configService } from "../config/CtrlYokeConfigService";
-import { shouldClearTemplateVariableDefaults } from "../utils/TemplateVariableDefaults";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { AsyncWriteQueue } from "../config/AsyncWriteQueue";
 import { Log } from "../utils/Log";
@@ -981,29 +980,15 @@ export class WorkflowLibraryHandlers {
         "templates",
         SETTING_SCOPES.WORKSPACE
       );
-      const userValues = userSettings?.variableDefaults?.[templateId];
-      const workspaceValues = workspaceSettings?.variableDefaults?.[templateId];
-      const pinnedValues = Object.fromEntries(
-        Object.entries(values).filter(
-          (entry): entry is [string, string] => entry[1] !== null
-        )
-      );
-      const clearPinnedValues =
-        !!template &&
-        Object.keys(pinnedValues).length > 0 &&
-        shouldClearTemplateVariableDefaults(
-          template.variables,
-          scope,
-          userValues,
-          workspaceValues,
-          pinnedValues
-        );
-
+      // A pin is kept even when it equals the template's current default: the
+      // template can change later, and the user asked for this value.
       const nextValues = {
-        ...(scope === SETTING_SCOPES.USER ? userValues : workspaceValues),
+        ...(scope === SETTING_SCOPES.USER
+          ? userSettings?.variableDefaults?.[templateId]
+          : workspaceSettings?.variableDefaults?.[templateId]),
       };
       for (const [name, value] of Object.entries(values)) {
-        if (value === null || clearPinnedValues) {
+        if (value === null) {
           delete nextValues[name];
         } else {
           nextValues[name] = value;
@@ -1381,6 +1366,7 @@ export class WorkflowLibraryHandlers {
       enabled: boolean;
       trigger: WorkflowSchedule["trigger"];
       until?: string;
+      timeZone?: string;
     },
     postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
@@ -1389,7 +1375,7 @@ export class WorkflowLibraryHandlers {
     const validation = validateWorkflowSchedule({
       ...input,
       hostId: currentScheduleHostId(),
-      timeZone: localTimeZone(),
+      timeZone: input.timeZone ?? localTimeZone(),
     });
     if (typeof validation === "string") {
       this.sendActionFailure(postMessage, "set workflow schedule", validation);

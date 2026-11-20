@@ -41,6 +41,7 @@ import {
   type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
 import type {
+  OrderedCliHistoryEntry,
   OutputActivityEntry,
   WorkspaceSnapshot,
 } from "../../types/OutputHistoryTypes";
@@ -904,6 +905,44 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const manifest = await recorder.readManifest(filePath);
     assert.strictEqual(manifest.executionState, EXECUTION_STATES.STOPPED);
     assert.strictEqual(manifest.definitionRevision, 2);
+  });
+
+  test("shows a follow-up's context window on a step that recorded no usage", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-ctx");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+    // The ordering a fast Qwen step produced: Stop fired before the turn was
+    // flushed, so the turn (with the context window) was persisted as a
+    // follow-up ahead of the step's own usage-less aggregate.
+    await manager.recordFollowUpResponse(
+      filePath,
+      target,
+      0,
+      0,
+      "Hi!",
+      [{ type: CLI_EVENT_TYPES.TEXT, timestamp: 120, data: { text: "Hi!" } }],
+      { used: 26527, size: 1000000 }
+    );
+    await manager.saveExecutionOutput(filePath, target, [
+      {
+        structured: { events: [], metadata: {} },
+        elapsed: 14.4,
+        isStreaming: false,
+        timestampMs: 100,
+        attemptIndex: 0,
+      },
+    ]);
+
+    const history = await manager.loadHistory(filePath);
+    const entry = history.orderedEntries.find(
+      (candidate): candidate is OrderedCliHistoryEntry =>
+        candidate.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.deepStrictEqual(entry?.cliOutput.contextWindow, {
+      used: 26527,
+      size: 1000000,
+    });
+    assert.strictEqual(entry?.cliOutput.tokens, undefined);
   });
 
   test("projects timeline events back into WorkflowOutputHistory shape", async () => {

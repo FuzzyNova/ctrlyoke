@@ -27,6 +27,7 @@ import {
 import {
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
+  MESSAGE_TYPES,
   OUTPUT_ACTIVITY_KINDS,
   SCRIPT_OUTPUT_SOURCES,
   getStreamingChunkKey,
@@ -42,6 +43,7 @@ import {
   SUBAGENT_SPAWN_STATES,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
+import type { HeadlessApprovalRequestMessage } from "@root/types/WebviewMessageTypes";
 
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
@@ -109,6 +111,62 @@ describe("outputRows", () => {
         )
         .map((row) => row.rowKind)
     ).toEqual([OUTPUT_ROW_KINDS.PROMPT, OUTPUT_ROW_KINDS.CLI_COMMAND]);
+  });
+
+  it("adds approval cards to queue steps and final-step passes without output", () => {
+    const makeApproval = (
+      approvalId: string,
+      stepIndex: number
+    ): HeadlessApprovalRequestMessage => ({
+      type: MESSAGE_TYPES.HEADLESS_APPROVAL_REQUEST_CHANGED,
+      approvalId,
+      requestId: `request-${approvalId}`,
+      workflowId: "workflow-1",
+      controlSessionId: "control-1",
+      stepIndex,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      toolName: "shell",
+      inputSummary: "npm test",
+      deadline: 120_000,
+      isPending: true,
+    });
+
+    const approvals = [
+      makeApproval("queue-approval", 0),
+      makeApproval("final-approval", -1),
+    ];
+    const result = buildOutputRows({
+      allMessages: [],
+      steps,
+      finalStep: { name: "Wrap up", prompt: "Finish the workflow" },
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: true,
+      showChangeActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      pendingHeadlessApprovals: approvals,
+      defaultDiffCollapsed: false,
+    });
+
+    const approvalRows = result.rows.filter(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.HEADLESS_APPROVAL
+    );
+    expect(approvalRows).toHaveLength(2);
+    expect(approvalRows.map((row) => row.target)).toEqual([
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      { kind: FINAL_STEP_PHASES.FINAL_STEP, index: 0 },
+    ]);
+    expect(approvalRows.map((row) => row.key)).toEqual([
+      "queue:0:headless-approval:queue-approval",
+      "finalStep:0:headless-approval:final-approval",
+    ]);
   });
 
   it("labels and indents attributed child rows, including siblings and grandchildren", () => {

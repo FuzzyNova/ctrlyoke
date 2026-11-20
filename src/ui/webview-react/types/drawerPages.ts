@@ -9,6 +9,16 @@ export const DRAWER_PAGES = {
 
 export type DrawerPage = (typeof DRAWER_PAGES)[keyof typeof DRAWER_PAGES];
 
+/**
+ * A persisted drawer page from another build may name a page that no longer
+ * exists; fall back to the Harness page in that case.
+ */
+export function knownDrawerPageOrDefault(value: string): DrawerPage {
+  return (Object.values(DRAWER_PAGES) as readonly string[]).includes(value)
+    ? (value as DrawerPage)
+    : DRAWER_PAGES.HARNESS;
+}
+
 export interface DrawerTab {
   id: DrawerPage;
   label: string;

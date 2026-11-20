@@ -15,7 +15,7 @@ import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 import { KeyValueRowsEditor } from "../shared/KeyValueRowsEditor";
 import { ScriptCommandEditor } from "../shared/ScriptCommandEditor";
-import { Button } from "../shared/Button";
+import { Button, FullWidthButton } from "../shared/Button";
 import { Icon } from "../shared/Icon";
 import { PropertyGroup } from "../shared/PropertyGroup";
 import { useLocalValue } from "@hooks/useLocalInput";
@@ -321,13 +321,10 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
           </PropertyGroup>
         ))}
       </div>
-      <button
-        type="button"
-        onClick={handleAddHook}
-        className="text-xs text-link-fg hover:underline mt-2 cursor-pointer"
-      >
-        + Add Hook
-      </button>
+      <FullWidthButton onClick={handleAddHook} className="mt-2">
+        <Icon name="add" className="text-xxs" />
+        Add Hook
+      </FullWidthButton>
       {diagnosticsView}
     </div>
   );

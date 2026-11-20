@@ -587,6 +587,11 @@ interface UiState {
   promptPropertiesDrawerOpen: boolean;
   /** Last tab viewed in the step properties drawer; persisted so reopening restores it. */
   promptPropertiesActivePage: DrawerPage;
+  /**
+   * Last tab viewed in the workflow properties panel; persisted so the panel
+   * restores it after unmounting (it unmounts when shown as a narrow-layout drawer).
+   */
+  workflowPropertiesActivePage: DrawerPage;
 
   // Settings panel collapse
   settingsCollapsed: boolean;
@@ -994,6 +999,7 @@ interface UiActions {
   openPromptPropertiesDrawer: () => void;
   closePromptPropertiesDrawer: () => void;
   setPromptPropertiesActivePage: (page: DrawerPage) => void;
+  setWorkflowPropertiesActivePage: (page: DrawerPage) => void;
 
   // Settings panel
   toggleSettingsCollapse: () => void;
@@ -1378,6 +1384,7 @@ const initialState: UiState = {
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   promptPropertiesDrawerOpen: false,
   promptPropertiesActivePage: DRAWER_PAGES.HARNESS,
+  workflowPropertiesActivePage: DRAWER_PAGES.HARNESS,
   settingsCollapsed: false,
   outputScrollTargets: {},
   hiddenOutputTargets: {},
@@ -1523,6 +1530,7 @@ const persistedFields = [
   "terminalRailSizePx",
   "globalSettingsActiveTab",
   "promptPropertiesActivePage",
+  "workflowPropertiesActivePage",
   "displayedViewAddress",
   "mobileStepsOpen",
   "mobileStepsMode",
@@ -1640,6 +1648,9 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setPromptPropertiesActivePage: (page) =>
         set({ promptPropertiesActivePage: page }),
+
+      setWorkflowPropertiesActivePage: (page) =>
+        set({ workflowPropertiesActivePage: page }),
 
       // ============================================================================
       // SETTINGS PANEL

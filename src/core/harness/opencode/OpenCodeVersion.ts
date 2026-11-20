@@ -1,10 +1,15 @@
 import { HarnessAdapterUtils } from "../shared/HarnessAdapterUtils";
 import {
+  isOpenCodeHeadlessControlVersion,
   isOpenCodeV2Version,
   OPENCODE_VERSION_COMMAND,
 } from "./OpenCodeProtocolConstants";
 
-export { isOpenCodeV2Version, OPENCODE_VERSION_COMMAND };
+export {
+  isOpenCodeHeadlessControlVersion,
+  isOpenCodeV2Version,
+  OPENCODE_VERSION_COMMAND,
+};
 
 /** Returns the raw `opencode --version` output, or undefined when unknown. */
 export type OpenCodeVersionProbe = () => Promise<string | undefined>;
@@ -44,4 +49,9 @@ export function setOpenCodeVersionProbe(
  */
 export async function detectOpenCodeV2(): Promise<boolean> {
   return isOpenCodeV2Version(await versionProbe());
+}
+
+/** Whether the installed CLI supports the V2 headless control hooks. */
+export async function detectOpenCodeHeadlessControl(): Promise<boolean> {
+  return isOpenCodeHeadlessControlVersion(await versionProbe());
 }

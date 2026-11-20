@@ -270,6 +270,15 @@ describe("properties drawer", () => {
       promptPropertiesActivePage: DRAWER_PAGES.HOOKS,
     });
   });
+
+  it("persists the workflow properties panel's last-viewed tab", () => {
+    store().setWorkflowPropertiesActivePage(DRAWER_PAGES.PERMISSIONS);
+    expect(store().workflowPropertiesActivePage).toBe(DRAWER_PAGES.PERMISSIONS);
+    const persisted = useUiStore.persist.getOptions().partialize?.(store());
+    expect(persisted).toMatchObject({
+      workflowPropertiesActivePage: DRAWER_PAGES.PERMISSIONS,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

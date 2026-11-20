@@ -212,6 +212,20 @@ export interface AttemptTokenSnapshot {
 }
 
 /**
+ * Format context-window occupancy as `used/size (pct%)`, e.g. `26.5k/1M (3%)`.
+ * Undefined when there is no usable size.
+ */
+export function formatContextWindowUsage(
+  contextWindow: { used: number; size: number } | undefined
+): string | undefined {
+  if (!contextWindow?.size) {
+    return undefined;
+  }
+  const pct = Math.round((contextWindow.used / contextWindow.size) * 100);
+  return `${formatTokenCount(contextWindow.used)}/${formatTokenCount(contextWindow.size)} (${pct}%)`;
+}
+
+/**
  * Builds the lines shown in a step's context/token tooltip (context window
  * usage, attempt total, input/output/cache breakdown, compactions, cost).
  * Single source shared by the on-hover tooltip and the "Copy Metadata" step
@@ -224,13 +238,7 @@ export function buildAttemptTokenTooltipLines(params: {
   showCostEstimates?: boolean;
 }): string[] {
   const { contextWindow, harness, attemptTokens, showCostEstimates } = params;
-  const contextPct = contextWindow?.size
-    ? Math.round((contextWindow.used / contextWindow.size) * 100)
-    : undefined;
-  const contextLabel =
-    contextWindow && contextPct !== undefined
-      ? `${formatTokenCount(contextWindow.used)}/${formatTokenCount(contextWindow.size)} (${contextPct}%)`
-      : undefined;
+  const contextLabel = formatContextWindowUsage(contextWindow);
   const attemptTotalLabel = formatTokenCount(
     resolveTokenTotal(
       attemptTokens?.total,

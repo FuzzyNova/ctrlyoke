@@ -1,6 +1,6 @@
 # Headless Stdin Inline Prompt Delivery
 
-**Status:** Implemented for this plan's current scope: Qwen, Copilot, Codex and Antigravity are opted in, with unit coverage for their prompt plans, arguments and echo handling. Confirmed live on 2026-11-15 by the full `npm run test:harness` run: new and resumed headless steps ("headless: image input reaches the model and the next step resumes", multi-step and end-condition cases) pass on all four over stdin. Claude is deferred to session-control Stage 2. Researched 2026-11-10 against vendor sources and installed CLIs. Open questions resolved 2026-11-15 (see "Decisions").
+**Status:** Implemented for this plan's current scope: Qwen, Copilot, Codex, Antigravity and Claude are opted in, with unit coverage for their prompt plans, arguments and echo handling. Confirmed live on 2026-11-15 by the full `npm run test:harness` run: new and resumed headless steps ("headless: image input reaches the model and the next step resumes", multi-step and end-condition cases) pass on the first four over stdin. Claude joined through session-control Stage 2a on 2026-11-16 after probes confirmed stream-json does not expand `@path`; its targeted Claude subset passed 20 tests, including image input and resume. Researched 2026-11-10 against vendor sources and installed CLIs. Open questions resolved 2026-11-16 (see "Decisions").
 **Priority:** P2
 **Depends on:** Stage 1 of
 [`HEADLESS_SESSION_CONTROL_PLAN.md`](HEADLESS_SESSION_CONTROL_PLAN.md), which
@@ -20,9 +20,11 @@ Following these agent instructions <agent.md>, using these available skills
 instructions in <prompt.md>
 ```
 
-Only Claude Code reads `@path` references into the first message itself. The
-other harnesses get a path, and the model spends one read tool call per file
-before it starts the actual work. That costs:
+Before session-control Stage 2a, Claude Code was the only harness that read
+`@path` references into the first message itself. Its stream-json control
+channel does not expand them, so generated sections are inlined as described
+below. The other harnesses get a path, and the model spends one read tool call
+per file before it starts the actual work. That costs:
 
 - **Latency and tokens.** Each read is a full model round trip, and the whole
   conversation so far is re-sent each time.
@@ -57,8 +59,8 @@ generated section into the prompt text and deliver the whole prompt on
   a prompt with many references from loading every file into context up front.
 - **Stdin, not argv.** Inline content quickly passes the Windows command-line
   limit (about 32K characters, less through a `.cmd` shim). Stdin also avoids
-  argv quoting problems and greedy array flags swallowing the prompt
-  (`moveGreedyOptionArgsAfterPrompt`, Claude's prompt-first ordering).
+  argv quoting problems and greedy array flags swallowing the prompt. Claude
+  sends its first prompt as a stream-json user message instead of argv.
 
 The context window cost is about the same as today. Every generated section is
 content the model is told to read, so the same tokens already arrive, just one
@@ -114,7 +116,7 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 | Qwen        | yes: one stream-json user message             | n/a                                                | inferred yes         | none in stream-json                         |
 | Antigravity | yes: piped stdin with no `--print`            | flag wins, stdin not read                          | inferred yes         | none found                                  |
 
-### Claude Code (v2.1.322, read from the installed binary and the docs)
+### Claude Code (v2.1.325, probed 2026-11-16)
 
 - `claude -p` reads plain-text stdin when stdin is not a TTY, joining it to the
   positional prompt with a newline. `--output-format stream-json` only affects
@@ -122,17 +124,20 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
   superseded: the session-control channel needs stream-json input.
 - Plain-text stdin is merged into the same string as an argv prompt before any
   other processing, so `@path` references in it should still be expanded
-  (inferred). **Whether `@path` is expanded in a stream-json `user` message is
-  unknown** (Agent SDK messages may skip it). If it is not, moving Claude onto
-  the control channel without inlining would silently turn today's free
-  `@path` reads into Read tool calls. Probe this first (see "Decisions").
+  (inferred). A stream-json `user` message without `initialize` containing
+  `@somefile` did not expand the file; Claude reported that no file was
+  attached. Claude therefore opts into generated-section inlining now that its
+  headless prompt uses the session-control channel. Direct workspace references
+  remain paths and can be read by the model on demand.
 - 10 MB stdin cap: the CLI exits with "piped stdin input exceeds 10MB". If no
-  data arrives within 3 s it proceeds without stdin; ctrlyoke writes and closes
-  stdin immediately, so this does not apply.
-- **Benefit is smaller here** while Claude stays on argv: it already inlines
-  `@path` files without a tool call. Once Claude moves to the control channel
-  (session-control Stage 2), inlining becomes the default way to keep that
-  benefit unless the probe shows `@path` still expands in stream-json.
+  data arrives within 3 s it proceeds without stdin; ctrlyoke sends its first
+  stream-json `user` record immediately. Stdin remains open until the turn ends
+  and Claude's tracked background follow-up work is complete, or the prompt
+  timeout expires.
+- Two stream-json `user` records produced two results without an `initialize`
+  handshake. Session-control Stage 2a therefore omits both `initialize` and
+  `--permission-prompt-tool stdio`; custom headless `dontAsk` still refuses
+  unlisted tools in-band.
 
 ### Copilot CLI (1.0.107, read from the bundle, `--help`, the changelog)
 
@@ -201,14 +206,13 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 - Older versions lost output or hung when stdout was not a terminal (upstream
   issues #76, #318); later changelog entries say pipes are fixed.
 
-## Scope of this round (2026-11-15)
+## Scope of this round (updated 2026-11-16)
 
-- **Claude is not opted in here.** It keeps today's argv prompt and free `@path` reads until
-  session-control Stage 2 moves it onto stream-json input; whether it inlines is decided there by
-  the `@path` probe. Step 4's "Claude: drop the prompt" applies only then.
-- **Opted in now:** Qwen (first message on the control channel) and Copilot, Codex and
-  agy (`STDIN` delivery). Codex uses `exec -` / `exec resume <id> -`; agy drops
-  `--print <prompt>` so stdin selects print mode. OpenCode stays on `--file`.
+- **Claude was opted in by session-control Stage 2a.** Its stream-json `user` message does not
+  expand `@path`, so generated sections are inlined; direct workspace references remain paths.
+- **Opted in:** Claude and Qwen (first message on the control channel), plus Copilot, Codex and
+  agy (`STDIN` delivery). Codex uses `exec -` / `exec resume <id> -`; agy drops the positional
+  `--print` prompt so stdin selects print mode. OpenCode stays on `--file`.
 - **The setting controls content, not transport.** Moving Copilot, Codex and agy to stdin is
   unconditional, so their args do not fork on a setting. With the setting off, the stdin text
   is today's `follow the instructions in @…` sentence.
@@ -223,7 +227,7 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 2. [x] **Provider opt-in.** A provider flag (for example
        `inlinesGeneratedPromptOnStdin`). Transport by harness:
    - With a headless control channel (Qwen after session-control Stage 1,
-     Claude after Stage 2, agy after Stage 4, Codex after Stage 5): the inline
+     Claude after Stage 2a, agy after Stage 4, Codex after Stage 5): the inline
      text is the channel's first `sendUserMessage`. No new transport.
    - Without one yet (Copilot, and Codex/agy if this lands before their
      stages): `headlessPromptDelivery: STDIN`, which `CliTransportCoordinator`
@@ -236,7 +240,8 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
        prompt for the control channel. Copilot now drops `--prompt <text>`, relies
        on piped stdin for prompt mode, and clears `COPILOT_PROMPT_TURN_DELIMITER`.
        Codex and agy use plain stdin until their session-control stages replace
-       this transport; Claude remains deferred to Stage 2.
+       this transport; Claude joined the stream-json control channel in
+       session-control Stage 2a.
 5. [x] **Escaping.** Inlined content must not trigger harness syntax. Escape `@`
        for Qwen, and avoid a leading `/` for Qwen and agy. Copilot will tag any
        `@token` that resolves to a real path, which is harmless except for images.
@@ -250,8 +255,10 @@ submit in OpenCode and Codex. Qwen wraps pastes over 1,000 characters in
 7. [x] **Setting.** An opt-out setting, default **on** (decided 2026-11-15). Record
        it under **Changed** in `CHANGELOG.md` in the commit that ships it.
 8. **Tests.** Unit tests cover each adapter's args/env and a prompt-plan path
-   per harness. Live cases remain to confirm vendor stdin behavior; run these
-   manually (do not use the paid `npm run test:harness` gate for this change):
+   per harness. Live checks confirmed the first four opted-in harnesses on
+   2026-11-15; the Claude subset passed on 2026-11-16, including the existing
+   headless image-and-resume case. Keep paid harness runs restricted to the
+   authorized harness subset:
    - **Qwen:** run a headless step with generated agent/skill content containing
      a literal `@name`, a workspace `@file` reference, and a prompt starting
      with `/`; confirm generated content is not expanded as a mention, the
@@ -300,11 +307,11 @@ Resolved 2026-11-15 from the code; the last two are Nathan's calls.
   should only help. Check it in one long live run per harness; do not design
   around it.
 - **OpenCode: not opted in.** It keeps `--file` (see its section).
-- **Codex and Antigravity live stdin behavior:** the CLI findings support the
-  chosen forms, but the new adapter paths have not been exercised against live
-  harnesses. The live cases above are still required.
-- **Claude: probe first.** Before session-control Stage 2 moves Claude to
-  stream-json input, send a stream-json `user` message containing an `@path`
-  and see whether the file is read in. If it is not, ship Claude's inlining in
-  the same commit as its control channel.
+- **Codex and Antigravity live stdin behavior:** confirmed by the 2026-11-15
+  harness run for new/resumed prompts, multi-step execution and end conditions.
+- **Claude stream-json `@path` probe (resolved 2026-11-16).** Claude did not
+  expand `@somefile` from a stream-json `user` message, so generated-section
+  inlining shipped with session-control Stage 2a. Without `initialize`, two
+  user messages produced two results, and a background Agent's
+  `task_notification` arrived after the first result while stdin stayed open.
 - **Default** (Nathan, 2026-11-15): the setting defaults on, with an opt-out.

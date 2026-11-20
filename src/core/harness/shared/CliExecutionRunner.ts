@@ -8,7 +8,12 @@ import {
   CTRLYOKE_ENV_VARS,
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_MAX_TIMEOUT_MS,
+  HEADLESS_APPROVAL_MIN_TIMEOUT_MS,
+  HEADLESS_APPROVAL_POLICIES,
   INTERACTIVE_TERMINAL_MODES,
+  PERMISSION_MODES,
   SESSION_AVAILABILITY,
   STATUS_MESSAGE_SEVERITY,
   type InteractiveTerminalMode,
@@ -20,6 +25,7 @@ import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { CliLogMonitor } from "../CliLogMonitor";
 import { CliExecutionSession } from "./CliExecutionSession";
+import { HarnessAdapterUtils } from "./HarnessAdapterUtils";
 import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import {
@@ -39,8 +45,10 @@ import {
 } from "./HookNotificationPlan";
 import type {
   CliExecutionTransportCoordinator,
+  HeadlessControlTargetContext,
   StandaloneInteractiveProcess,
 } from "./CliTransportCoordinator";
+import type { HeadlessApprovalExecutionContext } from "./IHeadlessControlChannel";
 import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
@@ -97,6 +105,11 @@ export interface CliExecutionRunnerDeps {
     logResponse: (response: string, statistics?: string) => void;
     onContextWindowUpdate?: (used: number, size: number) => void;
     onNotificationEvent?: (event: CtrlYokeNotificationEvent) => void;
+    onHeadlessPermissionWarning?: (
+      toolPermissions: ResolvedProperties["toolPermissions"] | undefined,
+      channelAnswersApprovalRequests: boolean,
+      hasApprovalDashboard: boolean
+    ) => void;
   };
 }
 
@@ -462,7 +475,7 @@ export class CliExecutionRunner {
     baseArgs: string[],
     resolvedCommand?: CliResolvedCommand
   ): Promise<boolean> {
-    const source = this.createHeadlessStreamingSource(session);
+    const source = await this.createHeadlessStreamingSource(session);
     const responseCallback = this.buildHeadlessResponseCallback(
       session,
       "",
@@ -488,6 +501,62 @@ export class CliExecutionRunner {
 
     const deferTempFileCleanup =
       this.deps.provider.isRecoverableSessionError !== undefined;
+    const workflowContext = session.workflowContext;
+    const harnessId = this.deps.provider.config.harnessId;
+    const controlTarget: HeadlessControlTargetContext | undefined =
+      workflowContext?.instanceId && harnessId
+        ? {
+            workflowId: workflowContext.instanceId,
+            stepIndex:
+              workflowContext.terminalStepIndex ?? workflowContext.promptIndex,
+            harnessId,
+          }
+        : undefined;
+    const toolPermissions = session.resolvedProperties?.toolPermissions;
+    const approvalPolicy =
+      toolPermissions?.headlessApprovals ?? HEADLESS_APPROVAL_POLICIES.DENY;
+    const configuredTimeoutValue = toolPermissions?.headlessApprovalTimeoutSec;
+    const configuredTimeoutSec =
+      typeof configuredTimeoutValue === "number" &&
+      Number.isFinite(configuredTimeoutValue)
+        ? configuredTimeoutValue
+        : HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC;
+    const configuredTimeoutMs = Math.max(
+      HEADLESS_APPROVAL_MIN_TIMEOUT_MS,
+      Math.min(configuredTimeoutSec * 1000, HEADLESS_APPROVAL_MAX_TIMEOUT_MS)
+    );
+    const useApprovalControl =
+      approvalPolicy === HEADLESS_APPROVAL_POLICIES.ASK &&
+      (toolPermissions?.mode === PERMISSION_MODES.CUSTOM ||
+        toolPermissions?.mode === PERMISSION_MODES.AUTO);
+    const harnessTimeoutMs = useApprovalControl
+      ? await this.deps.provider.resolveHeadlessApprovalTimeoutMs?.(
+          configuredTimeoutMs
+        )
+      : undefined;
+    const approvalContext: HeadlessApprovalExecutionContext = {
+      approvalPolicy,
+      approvalTimeoutMs: Math.max(
+        HEADLESS_APPROVAL_MIN_TIMEOUT_MS,
+        Math.min(harnessTimeoutMs ?? configuredTimeoutMs, configuredTimeoutMs)
+      ),
+      useApprovalControl,
+      requestApproval: workflowContext?.requestHeadlessApproval,
+      suppressPermissionWarning:
+        workflowContext?.suppressHeadlessPermissionWarning === true,
+      onPermissionWarning: (
+        channelAnswersApprovalRequests,
+        hasApprovalDashboard,
+        suppressWarning
+      ) => {
+        if (suppressWarning) return;
+        this.deps.hostCallbacks.onHeadlessPermissionWarning?.(
+          session.resolvedProperties?.toolPermissions,
+          channelAnswersApprovalRequests,
+          hasApprovalDashboard
+        );
+      },
+    };
     const executeWithRecovery = async (
       args: string[],
       activeSource: HeadlessStreamingSource | undefined,
@@ -509,7 +578,19 @@ export class CliExecutionRunner {
           activeSource,
           command,
           session.resolvedProperties?.secrets,
-          deferTempFileCleanup
+          deferTempFileCleanup,
+          controlTarget,
+          approvalContext,
+          {
+            sessionId: HarnessAdapterUtils.shouldResumeSession(
+              session.resolvedProperties?.resumeSession,
+              session.resolvedSessionId
+            )
+              ? session.resolvedSessionId
+              : undefined,
+            imageFilePaths: session.imageFileRefs,
+            workspaceRoot: this.deps.runtimeState.getWorkspaceRoot(),
+          }
         );
       } catch (error) {
         if (
@@ -574,7 +655,12 @@ export class CliExecutionRunner {
             undefined,
             retryPlan.resolvedCommand,
             session.resolvedProperties?.secrets,
-            true
+            true,
+            controlTarget,
+            approvalContext,
+            {
+              imageFilePaths: session.imageFileRefs,
+            }
           );
         }
 
@@ -1117,6 +1203,7 @@ export class CliExecutionRunner {
 
     return async (result) => {
       if (
+        !result.interrupted &&
         result.exitCode !== 0 &&
         !result.terminationSignal &&
         session.resolvedSessionId !== undefined &&
@@ -1147,6 +1234,7 @@ export class CliExecutionRunner {
         exitCode: result.exitCode,
         terminationSignal: result.terminationSignal,
         terminatedByManager: result.terminatedByManager,
+        interrupted: result.interrupted,
         promptForSessionLog: session.promptForSessionLog,
         executionStartTime: session.executionStartTime,
         resolvedSessionId: session.resolvedSessionId,
@@ -1227,11 +1315,14 @@ export class CliExecutionRunner {
     };
   }
 
-  private createHeadlessStreamingSource(
+  private async createHeadlessStreamingSource(
     session: CliExecutionSession
-  ): HeadlessStreamingSource | undefined {
+  ): Promise<HeadlessStreamingSource | undefined> {
     const parser = this.deps.provider.logParser;
-    const mode = resolveHeadlessSourceMode(this.deps.provider);
+    const executionMode = await this.deps.provider.getHeadlessSourceMode?.(
+      session.resolvedProperties?.toolPermissions?.mode
+    );
+    const mode = resolveHeadlessSourceMode(this.deps.provider, executionMode);
     if (!parser || !mode) {
       return undefined;
     }
@@ -1273,6 +1364,7 @@ export class CliExecutionRunner {
           onStdoutEnded: this.deps.provider.finishHeadlessStdout?.bind(
             this.deps.provider
           ),
+          deferSubagentFollowerStop: true,
           extractSessionIdFromLogs:
             this.deps.provider.extractSessionIdFromLogs?.bind(
               this.deps.provider

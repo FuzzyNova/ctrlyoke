@@ -96,6 +96,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 
 suite("CliPromptPreparer", () => {
   const inlinePromptProviders: Array<[string, IHarnessAdapter, string]> = [
+    ["Claude", new ClaudeHarnessAdapter(), "@generated"],
     ["Qwen", new QwenHarnessAdapter(), "\\@generated"],
     ["Copilot", new CopilotHarnessAdapter(), "@generated"],
     ["Codex", new CodexHarnessAdapter(), "@generated"],
@@ -369,6 +370,14 @@ suite("CliPromptPreparer", () => {
       { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
       undefined
     );
+    const headlessSteer = await preparer.planPrompt(
+      prompt,
+      undefined,
+      { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
+      undefined,
+      false,
+      { omitHeadlessExecutionNote: true }
+    );
     const interactive = await preparer.planPrompt(
       prompt,
       undefined,
@@ -377,6 +386,7 @@ suite("CliPromptPreparer", () => {
     );
 
     assert.ok(headless.promptWithInstruction.includes(HEADLESS_EXECUTION_NOTE));
+    assert.strictEqual(headlessSteer.promptWithInstruction, prompt.prompt);
     assert.ok(
       !interactive.promptWithInstruction.includes(HEADLESS_EXECUTION_NOTE)
     );

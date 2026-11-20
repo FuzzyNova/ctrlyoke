@@ -5,8 +5,9 @@
 // (`plugins: ["<this directory>"]`). OpenCode 2 skips a configured local plugin
 // path that names a file, so this entry is a directory.
 //
-// All behaviour lives in ../ctrlyoke-opencode-plugin.ts, the OpenCode 1
-// plugin. This file only adapts the OpenCode 2 plugin API onto it:
+// Completion and notification behaviour lives in ../ctrlyoke-opencode-plugin.ts,
+// the OpenCode 1 plugin. This file adapts the OpenCode 2 plugin API onto it and
+// owns the OpenCode 2.3+ headless control bridge:
 //  - OpenCode 2 events are `{ type, data }`; OpenCode 1 handlers read
 //    `{ type, properties }` and a different vocabulary, translated below.
 //  - OpenCode 2 tool hooks receive one mutable event; OpenCode 1 hooks take
@@ -18,6 +19,8 @@
 //
 // This file must remain TypeScript with ESM import/export syntax.
 
+import { appendFileSync, mkdirSync } from "fs";
+import path from "path";
 import { CtrlYokeHook } from "../ctrlyoke-opencode-plugin";
 
 type V1Handlers = Awaited<ReturnType<typeof CtrlYokeHook>>;
@@ -36,6 +39,29 @@ interface OpenCodeV2PluginContext {
       callback: (event: OpenCodeV2ToolHookEvent) => unknown
     ): Promise<unknown>;
   };
+  permission: {
+    hook(
+      name: "evaluate",
+      callback: (event: OpenCodeV2PermissionHookEvent) => Promise<void>
+    ): Promise<unknown>;
+  };
+  session: {
+    prompt(options: {
+      sessionID: string;
+      text: string;
+      delivery: "steer";
+    }): Promise<unknown>;
+  };
+}
+
+interface OpenCodeV2PermissionHookEvent {
+  sessionID: string;
+  agent: string;
+  action: string;
+  resources: unknown;
+  source: string;
+  effect: "allow" | "deny" | "ask";
+  message?: string;
 }
 
 interface OpenCodeV2ToolHookEvent {
@@ -84,7 +110,60 @@ const TOOL_STATUS = {
   ERROR: "error",
 } as const;
 
+const SUBAGENT_RECORD = {
+  FILE_SUFFIX: "-subagents.jsonl",
+  KIND_PART: "part",
+  PART_TOOL: "tool",
+} as const;
+
+// Keep these bridge names and route paths aligned with
+// OpenCodeProtocolConstants.ts. The script is copied verbatim, not bundled.
+const CONTROL_ENV = {
+  URL: "CTRLYOKE_OPENCODE_CONTROL_URL",
+  TOKEN: "CTRLYOKE_OPENCODE_CONTROL_TOKEN",
+} as const;
+
+const CONTROL_ROUTES = {
+  PERMISSION: "/permission",
+  SESSION_EVENT: "/session-event",
+  STEER: "/steer",
+} as const;
+
+const CONTROL_DECISIONS = {
+  ONCE: "once",
+  REJECT: "reject",
+} as const;
+
+const CONTROL_PERMISSION_EFFECTS = {
+  ALLOW: "allow",
+  DENY: "deny",
+  ASK: "ask",
+} as const;
+
+const OPENCODE_BOOLEAN_TRUE = "true" as const;
+
+const CONTROL_FAILURE_MESSAGE =
+  "ctrlyoke: the OpenCode approval bridge could not be reached; the tool was denied.";
+const DIAGNOSTIC_LOG_PATH = (() => {
+  if (process.env.CTRLYOKE_DIAGNOSTIC_LOGS !== OPENCODE_BOOLEAN_TRUE) {
+    return undefined;
+  }
+  const workspaceRoot = process.env.CTRLYOKE_WORKSPACE_ROOT ?? process.cwd();
+  const logDirectory = path.join(workspaceRoot, ".ctrlyoke", "logs");
+  try {
+    mkdirSync(logDirectory, { recursive: true });
+    return path.join(logDirectory, "ctrlyoke-opencode-plugin-debug.log");
+  } catch {
+    return undefined;
+  }
+})();
+
 type Data = Record<string, unknown>;
+
+interface OpenCodeControlBridge {
+  url: string;
+  token: string;
+}
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -102,6 +181,59 @@ function contentText(content: unknown): string {
   return content.map((item) => str(record(item)?.text) ?? "").join("");
 }
 
+function appendChildToolPart(
+  translator: EventTranslator,
+  event: OpenCodeV2ToolHookEvent
+): void {
+  const notifyDir = process.env.CTRLYOKE_NOTIFY_DIR;
+  const runId = process.env.CTRLYOKE_RUN_ID;
+  if (!notifyDir || !runId || !translator.isChildSession(event.sessionID))
+    return;
+
+  // execute.after runs only once the call has ended. OpenCode 2.3's hook
+  // payload does not consistently include `status`, so infer success unless
+  // the hook explicitly reports an error.
+  const status =
+    event.status === TOOL_STATUS.ERROR
+      ? TOOL_STATUS.ERROR
+      : TOOL_STATUS.COMPLETED;
+
+  const result = event.result;
+  const record = {
+    kind: SUBAGENT_RECORD.KIND_PART,
+    childSessionId: event.sessionID,
+    part: {
+      type: SUBAGENT_RECORD.PART_TOOL,
+      id: `tool:${event.id}`,
+      sessionID: event.sessionID,
+      messageID: "",
+      callID: event.id,
+      tool: event.tool,
+      state: {
+        status,
+        input: event.input ?? {},
+        output: contentText(result?.content),
+        ...(result?.metadata !== undefined
+          ? { metadata: result.metadata }
+          : {}),
+      },
+    },
+  };
+
+  try {
+    mkdirSync(notifyDir, { recursive: true });
+    appendFileSync(
+      path.join(notifyDir, `${runId}${SUBAGENT_RECORD.FILE_SUFFIX}`),
+      `${JSON.stringify(record)}\n`
+    );
+  } catch (error) {
+    logControlFailure(
+      "Could not append child tool to the subagent sidecar",
+      error
+    );
+  }
+}
+
 /**
  * OpenCode 1 reported a subagent's child as `metadata.sessionId`; OpenCode 2
  * calls it `sessionID`. Add the V1 key so the shared handlers find it.
@@ -114,12 +246,150 @@ function v1Metadata(metadata: unknown): Data {
     : value;
 }
 
+function controlBridgeFromEnvironment(): OpenCodeControlBridge | undefined {
+  const url = process.env[CONTROL_ENV.URL];
+  const token = process.env[CONTROL_ENV.TOKEN];
+  delete process.env[CONTROL_ENV.URL];
+  delete process.env[CONTROL_ENV.TOKEN];
+  return url && token ? { url, token } : undefined;
+}
+
+function controlHeaders(token: string): Record<string, string> {
+  return { authorization: `Bearer ${token}` };
+}
+
+async function postControlJson(
+  bridge: OpenCodeControlBridge,
+  route: string,
+  body: Data,
+  signal: AbortSignal
+): Promise<Response> {
+  return fetch(new URL(route, bridge.url), {
+    method: "POST",
+    headers: {
+      ...controlHeaders(bridge.token),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function logControlFailure(message: string, error: unknown): void {
+  if (!DIAGNOSTIC_LOG_PATH) return;
+  try {
+    appendFileSync(
+      DIAGNOSTIC_LOG_PATH,
+      `[${new Date().toISOString()}] ${message}: ${describeError(error)}\n`
+    );
+  } catch {
+    // Diagnostics are best-effort and must not break plugin control handling.
+  }
+}
+
+function isPermissionReply(
+  value: unknown
+): value is { decision: string; message?: string } {
+  return (
+    record(value) !== undefined &&
+    typeof record(value)?.decision === "string" &&
+    (record(value)?.message === undefined ||
+      typeof record(value)?.message === "string")
+  );
+}
+
+async function applyPermissionDecision(
+  bridge: OpenCodeControlBridge,
+  event: OpenCodeV2PermissionHookEvent,
+  signal: AbortSignal
+): Promise<void> {
+  if (event.effect !== CONTROL_PERMISSION_EFFECTS.ASK) return;
+  try {
+    const response = await postControlJson(
+      bridge,
+      CONTROL_ROUTES.PERMISSION,
+      {
+        sessionID: event.sessionID,
+        agent: event.agent,
+        action: event.action,
+        resources: event.resources,
+        source: event.source,
+        effect: event.effect,
+      },
+      signal
+    );
+    if (!response.ok) {
+      throw new Error(
+        `OpenCode approval bridge returned HTTP ${response.status}`
+      );
+    }
+    const reply: unknown = await response.json();
+    if (!isPermissionReply(reply)) {
+      throw new Error("OpenCode approval bridge returned an invalid decision");
+    }
+    event.effect =
+      reply.decision === CONTROL_DECISIONS.ONCE
+        ? CONTROL_PERMISSION_EFFECTS.ALLOW
+        : CONTROL_PERMISSION_EFFECTS.DENY;
+    if (reply.message !== undefined) event.message = reply.message;
+  } catch (error) {
+    if (signal.aborted) return;
+    event.effect = CONTROL_PERMISSION_EFFECTS.DENY;
+    event.message = CONTROL_FAILURE_MESSAGE;
+    logControlFailure("OpenCode approval bridge failed", error);
+  }
+}
+
+function startSteerPolling(
+  bridge: OpenCodeControlBridge,
+  session: OpenCodeV2PluginContext["session"],
+  sessionID: string,
+  signal: AbortSignal
+): void {
+  void (async () => {
+    while (!signal.aborted) {
+      try {
+        const url = new URL(CONTROL_ROUTES.STEER, bridge.url);
+        url.searchParams.set("sessionID", sessionID);
+        const response = await fetch(url, {
+          headers: controlHeaders(bridge.token),
+          signal,
+        });
+        if (response.status === 204 || response.status === 410) return;
+        if (!response.ok) {
+          throw new Error(
+            `OpenCode steer bridge returned HTTP ${response.status}`
+          );
+        }
+        const delivery: unknown = await response.json();
+        const value = record(delivery);
+        const text = str(value?.text);
+        if (!text) continue;
+        await session.prompt({ sessionID, text, delivery: "steer" });
+      } catch (error) {
+        if (!signal.aborted) {
+          logControlFailure("OpenCode steer delivery failed", error);
+        }
+        return;
+      }
+    }
+  })();
+}
+
 /** Translate OpenCode 2's event stream into OpenCode 1 handler events. */
 class EventTranslator {
   private readonly parents = new Map<string, string>();
   private readonly tools = new Map<string, { name: string; input: unknown }>();
   /** Sessions whose current execution already reported its end. */
   private readonly ended = new Set<string>();
+
+  isChildSession(sessionID: string): boolean {
+    return this.parents.has(sessionID);
+  }
 
   translate(type: string, data: Data): V1Event[] {
     const sessionID = str(data.sessionID);
@@ -300,21 +570,99 @@ export default {
     const handlers = await CtrlYokeHook({});
     const translator = new EventTranslator();
     const controller = new AbortController();
+    const controlBridge = controlBridgeFromEnvironment();
+    let controlSessionID: string | undefined;
+    let steeringController: AbortController | undefined;
+
+    if (controlBridge) {
+      await ctx.permission.hook("evaluate", async (event) => {
+        if (event.effect === CONTROL_PERMISSION_EFFECTS.ASK) {
+          for (const translated of translator.translate(
+            V2_EVENTS.PERMISSION_ASKED,
+            { ...event }
+          )) {
+            await handlers.event({ event: translated });
+          }
+        }
+        await applyPermissionDecision(controlBridge, event, controller.signal);
+      });
+    }
 
     void (async () => {
       try {
         for await (const event of ctx.event.subscribe({
           signal: controller.signal,
         })) {
+          const eventData = event.data ?? {};
+          const sessionID = str(eventData.sessionID);
+          if (
+            controlBridge &&
+            sessionID &&
+            event.type === V2_EVENTS.EXECUTION_STARTED &&
+            !translator.isChildSession(sessionID) &&
+            !str(eventData.parentID) &&
+            !controlSessionID
+          ) {
+            controlSessionID = sessionID;
+            steeringController = new AbortController();
+            controller.signal.addEventListener(
+              "abort",
+              () => steeringController?.abort(),
+              { once: true }
+            );
+            const response = await postControlJson(
+              controlBridge,
+              CONTROL_ROUTES.SESSION_EVENT,
+              {
+                type: event.type,
+                sessionID,
+                parentID: str(eventData.parentID),
+              },
+              controller.signal
+            );
+            if (!response.ok) {
+              throw new Error(
+                `OpenCode session bridge returned HTTP ${response.status}`
+              );
+            }
+            startSteerPolling(
+              controlBridge,
+              ctx.session,
+              sessionID,
+              steeringController.signal
+            );
+          } else if (
+            controlBridge &&
+            sessionID === controlSessionID &&
+            (event.type === V2_EVENTS.EXECUTION_SUCCEEDED ||
+              event.type === V2_EVENTS.EXECUTION_FAILED ||
+              event.type === V2_EVENTS.EXECUTION_INTERRUPTED)
+          ) {
+            const response = await postControlJson(
+              controlBridge,
+              CONTROL_ROUTES.SESSION_EVENT,
+              { type: event.type, sessionID },
+              controller.signal
+            );
+            if (!response.ok) {
+              throw new Error(
+                `OpenCode session bridge returned HTTP ${response.status}`
+              );
+            }
+            steeringController?.abort();
+          }
           for (const translated of translator.translate(
             event.type,
-            event.data ?? {}
+            eventData
           )) {
             await handlers.event({ event: translated });
           }
         }
-      } catch {
-        // The subscription ends with an abort when the plugin unloads.
+      } catch (error) {
+        steeringController?.abort();
+        if (!controller.signal.aborted) {
+          logControlFailure("OpenCode event handling failed", error);
+        }
       }
     })();
 
@@ -324,8 +672,9 @@ export default {
         { args: event.input }
       )
     );
-    await ctx.tool.hook("execute.after", (event) =>
-      handlers["tool.execute.after"](
+    await ctx.tool.hook("execute.after", (event) => {
+      appendChildToolPart(translator, event);
+      return handlers["tool.execute.after"](
         {
           tool: event.tool,
           sessionID: event.sessionID,
@@ -337,9 +686,12 @@ export default {
           output: contentText(event.result?.content),
           metadata: event.result?.metadata,
         }
-      )
-    );
+      );
+    });
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      steeringController?.abort();
+    };
   },
 };

@@ -12,6 +12,7 @@ import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   SESSION_KINDS,
+  TERMINAL_END_REASONS,
 } from "../../types/DashboardConstants";
 import { TerminalMessageHandlers } from "../../ui/TerminalMessageHandlers";
 import { createDashboardClientContext } from "../../ui/DashboardClientContext";
@@ -85,6 +86,78 @@ suite("TerminalMessageHandlers panel reconnect", () => {
     assert.deepStrictEqual(session.reconnectBuffer, [
       "buffered terminal output",
     ]);
+  });
+
+  test("ends the replay with every workflow's open tab ids, ended tabs included", () => {
+    const manager = new FakePtyProcessManager();
+    const spawned = ["workflow-1", "workflow-2"].map((workflowId) =>
+      manager.spawnPty({
+        workflowId,
+        stepName: "Step 1",
+        stepIndex: 0,
+        kind: SESSION_KINDS.AI_CLI,
+        command: "fake-cli",
+        args: [],
+        cwd: process.cwd(),
+        onData: () => {},
+        onExit: () => {},
+      })
+    );
+    // An exited process whose tab nobody closed is still an open tab.
+    manager.killSession(spawned[0].id, TERMINAL_END_REASONS.STEP_COMPLETE);
+    const emitted: unknown[] = [];
+    const handlers = new TerminalMessageHandlers(
+      () => undefined,
+      () => manager
+    );
+
+    handlers.reconnectPanel(
+      createDashboardClientContext("panel", (message) => emitted.push(message))
+    );
+
+    assert.deepStrictEqual(emitted[emitted.length - 1], {
+      type: MESSAGE_TYPES.TERMINAL_OPEN_TABS,
+      sessionIds: spawned.map((session) => session.id),
+    });
+  });
+});
+
+suite("TerminalMessageHandlers tab close", () => {
+  teardown(() => setPtyPostMessage(() => {}));
+
+  test("closing a tab on any client tells every client to drop it", async () => {
+    const manager = new FakePtyProcessManager();
+    const session = manager.spawnPty({
+      workflowId: "workflow-1",
+      stepName: "pwsh",
+      stepIndex: -1,
+      kind: SESSION_KINDS.SHELL,
+      command: "fake-shell",
+      args: [],
+      cwd: process.cwd(),
+      onData: () => {},
+      onExit: () => {},
+    });
+    const broadcast: unknown[] = [];
+    setPtyPostMessage((message) => broadcast.push(message));
+    const handlers = new TerminalMessageHandlers(
+      () => undefined,
+      () => manager
+    );
+
+    await handlers.handleCloseTab({
+      workflowId: "workflow-1",
+      sessionId: session.id,
+    });
+
+    assert.deepStrictEqual(broadcast, [
+      {
+        type: MESSAGE_TYPES.TERMINAL_REMOVED,
+        workflowId: "workflow-1",
+        sessionId: session.id,
+      },
+    ]);
+    assert.deepStrictEqual(manager.getTabsForWorkflow("workflow-1"), []);
   });
 });
 

@@ -7,6 +7,7 @@ import type {
   DashboardHostActions,
   NamedRoot,
   HostedServerControl,
+  TerminalFontFamilySource,
 } from "../core/HostPorts";
 import type { SecretStore } from "../platform/SecretStore";
 import type {
@@ -74,6 +75,8 @@ export interface DashboardApplicationOptions {
   getTrustedRoots(): string[];
   actions: DashboardHostActions;
   serverControl?: HostedServerControl;
+  /** The host terminal's font; absent where the host has no terminal of its own. */
+  terminalFontFamily?: TerminalFontFamilySource;
   nativeFeedbackSink?: UserFeedbackSink;
   licenseService?: LicenseService;
   hostDependencies?: Omit<
@@ -155,6 +158,7 @@ export class DashboardApplication
         ),
         actions: options.actions,
         serverControl: options.serverControl,
+        terminalFontFamily: options.terminalFontFamily,
       }
     );
     this.serializer = new WorkflowLibraryHandlers(
@@ -236,6 +240,11 @@ export class DashboardApplication
       const broadcast = this.getSettingsBroadcast();
       if (broadcast) this.settingsSync.sendGlobalSettingsUpdate(broadcast);
     };
+    if (this.options.terminalFontFamily) {
+      this.disposables.push(
+        this.options.terminalFontFamily.onDidChange(sendGlobalSettingsUpdate)
+      );
+    }
     this.unsubscribers.push(
       configService.subscribe(sendGlobalSettingsUpdate),
       harnessAvailability.onFirstAvailableChange(sendGlobalSettingsUpdate),

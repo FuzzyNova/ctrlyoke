@@ -44,6 +44,7 @@ import type {
   WorkflowOutputHistory,
   WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
+import type { HeadlessApprovalRequestMessage } from "@root/types/WebviewMessageTypes";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import { getBackgroundTaskLabel } from "@root/utils/BackgroundWorkHoldText";
@@ -153,6 +154,7 @@ export interface OutputRowBashExpansionState {
 }
 
 const STEP_HIDDEN_ROW_HEIGHT = 40;
+const HEADLESS_APPROVAL_ROW_HEIGHT = 280;
 
 export interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
   key: string;
@@ -192,6 +194,15 @@ export interface StepAnchorRow extends OutputRowBase<
   typeof OUTPUT_ROW_KINDS.STEP_ANCHOR
 > {
   target: OutputMessageTarget;
+}
+
+export interface HeadlessApprovalRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.HEADLESS_APPROVAL
+> {
+  target: OutputMessageTarget;
+  approval: HeadlessApprovalRequestMessage;
+  stepLabel: string;
+  stepName?: string;
 }
 
 /** One member chip of a parallel group's output header. */
@@ -392,6 +403,7 @@ export interface ScriptVerdictRow extends OutputRowBase<
 
 export type OutputRenderRow =
   | StepAnchorRow
+  | HeadlessApprovalRow
   | ParallelGroupHeaderRow
   | StepHiddenRow
   | FinalStepLabelRow
@@ -419,6 +431,8 @@ export interface BuildOutputRowsInput {
    * running when either signal says so.
    */
   activeStepIndices?: readonly number[];
+  /** Current pending headless tool approvals for the displayed workflow. */
+  pendingHeadlessApprovals?: readonly HeadlessApprovalRequestMessage[];
   /** Workflow-level fallback for prompt-step harness resolution. */
   effectiveHarness?: HarnessId;
   /** Dashboard-only per-harness identity color settings. */
@@ -2030,6 +2044,8 @@ function estimateOutputRowContentHeight(
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       return 1;
+    case OUTPUT_ROW_KINDS.HEADLESS_APPROVAL:
+      return HEADLESS_APPROVAL_ROW_HEIGHT;
     case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
       return estimateParallelGroupHeaderHeight(row, outputContentWidth);
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
@@ -2344,6 +2360,28 @@ export function buildOutputRows(
   const anchorRowIndexByTarget = new Map<string, number>();
   const parallelGroupHeaderRows = new Map<string, ParallelGroupHeaderRow>();
   const parallelGroupUndoMeta = new Map<string, OutputRowPromptUndoMeta>();
+  const approvalsByTargetKey = new Map<
+    string,
+    { target: OutputMessageTarget; approvals: HeadlessApprovalRequestMessage[] }
+  >();
+  for (const approval of input.pendingHeadlessApprovals ?? []) {
+    if (!Number.isInteger(approval.stepIndex)) continue;
+    const target: OutputMessageTarget =
+      approval.stepIndex < 0
+        ? {
+            kind: FINAL_STEP_PHASES.FINAL_STEP,
+            index: Math.abs(approval.stepIndex) - 1,
+          }
+        : { kind: FINAL_STEP_PHASES.QUEUE, index: approval.stepIndex };
+    const targetKey = getTargetKey(target);
+    const targetApprovals = approvalsByTargetKey.get(targetKey);
+    if (targetApprovals) {
+      targetApprovals.approvals.push(approval);
+    } else {
+      approvalsByTargetKey.set(targetKey, { target, approvals: [approval] });
+    }
+  }
+  const approvalRowsAddedForTargets = new Set<string>();
   const collapsedToolOutputLineCount =
     input.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
   // OutputSection starts with an unmeasured width of 0. Treat that as unknown,
@@ -2437,6 +2475,29 @@ export function buildOutputRows(
   const isInParallelGroup = (target: OutputMessageTarget): boolean =>
     target.kind === FINAL_STEP_PHASES.QUEUE &&
     getParallelGroupForStep(input.parallelGroups, target.index) !== undefined;
+  const appendHeadlessApprovalRows = (
+    target: OutputMessageTarget,
+    targetKey: string
+  ): void => {
+    if (approvalRowsAddedForTargets.has(targetKey)) return;
+    approvalRowsAddedForTargets.add(targetKey);
+    const targetApprovals = approvalsByTargetKey.get(targetKey)?.approvals;
+    if (!targetApprovals) return;
+
+    uniqueTargets.set(targetKey, target);
+    const { stepLabel, stepName } = getStepTargetIdentity(input, target);
+    for (const approval of targetApprovals) {
+      rows.push({
+        key: `${targetKey}:headless-approval:${approval.approvalId}`,
+        rowKind: OUTPUT_ROW_KINDS.HEADLESS_APPROVAL,
+        target,
+        approval,
+        stepLabel,
+        stepName,
+        estimateSize: HEADLESS_APPROVAL_ROW_HEIGHT,
+      });
+    }
+  };
   // An attempt's chrome belongs to the attempt, not to each activity slice
   // inside it: the header/prompt/command/error open the block and the
   // verdict/stats close it. Emitting them per slice repeated a full CLI header
@@ -2554,6 +2615,7 @@ export function buildOutputRows(
         estimateSize: 1,
       });
       if (input.hiddenTargetKeys?.has(targetKey)) {
+        appendHeadlessApprovalRows(target, targetKey);
         const { stepLabel, stepName } = getStepTargetIdentity(input, target);
         rows.push({
           key: `${targetKey}:hidden`,
@@ -2574,6 +2636,7 @@ export function buildOutputRows(
           estimateSize: 24,
         });
       }
+      appendHeadlessApprovalRows(target, targetKey);
     }
 
     if (input.hiddenTargetKeys?.has(targetKey)) continue;
@@ -3168,6 +3231,38 @@ export function buildOutputRows(
       if (emitsLeadingChrome) rows[groupStartIndex].groupStart = true;
       if (emitsTrailingChrome) rows[rows.length - 1].groupEnd = true;
     }
+  }
+
+  for (const [targetKey, { target }] of approvalsByTargetKey) {
+    if (approvalRowsAddedForTargets.has(targetKey)) continue;
+
+    const parallelGroup =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? getParallelGroupForStep(input.parallelGroups, target.index)
+        : undefined;
+    if (parallelGroup && !parallelGroupHeaderRows.has(parallelGroup.id)) {
+      const headerRow = buildParallelGroupHeaderRow(input, parallelGroup);
+      parallelGroupHeaderRows.set(parallelGroup.id, headerRow);
+      rows.push(headerRow);
+    }
+    firstRowIndexByTarget.set(targetKey, rows.length);
+    anchorRowIndexByTarget.set(targetKey, rows.length);
+    rows.push({
+      key: `${targetKey}:anchor`,
+      rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
+      target,
+      estimateSize: 1,
+    });
+    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      rows.push({
+        key: `${targetKey}:final-step-label`,
+        rowKind: OUTPUT_ROW_KINDS.FINAL_STEP_LABEL,
+        target,
+        label: formatFinalPassLabel(target.index + 1),
+        estimateSize: 24,
+      });
+    }
+    appendHeadlessApprovalRows(target, targetKey);
   }
 
   // A group's undo is aggregated while its first member's rows are built, which

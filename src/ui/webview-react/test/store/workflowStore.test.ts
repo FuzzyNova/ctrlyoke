@@ -1,5 +1,6 @@
 import { getStepOutputText } from "../../../../utils/StepOutputText";
 import { StepOutputTextMode } from "../../../../types/DashboardConstants";
+import { getOutputContextWindow } from "../../../../utils/OutputContextWindow";
 /**
  * Tests for non-temporal workflowStore behaviour.
  * Temporal (undo/redo) behaviour is covered in workflowStore.temporal.test.ts.
@@ -802,45 +803,52 @@ describe("appendStreamingEvents", () => {
     ]);
   });
 
-  it("refreshes tokens from a CONTEXT_WINDOW_SYNC marker without rendering it as a row", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+  it.each([
+    ["with its own usage", { prompt: 10, completion: 5 }],
+    // The step's turn surfaced only as a follow-up, so it recorded no usage.
+    ["with no usage of its own", undefined],
+  ])(
+    "records a CONTEXT_WINDOW_SYNC marker on a completed entry %s without rendering it as a row",
+    (_label, tokens) => {
+      store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 
-    store().appendLiveEntry({
-      kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-      runIndex: 0,
-      attemptIndex: 0,
-      cliOutput: makeOutput({
-        tokens: { prompt: 10, completion: 5 },
-        structured: { events: [], metadata: {} },
-      }),
-      timestampMs: Date.now(),
-      sequence: 0,
-    });
+      store().appendLiveEntry({
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        cliOutput: makeOutput({
+          tokens,
+          structured: { events: [], metadata: {} },
+        }),
+        timestampMs: Date.now(),
+        sequence: 0,
+      });
 
-    store().appendStreamingEvents(0, [
-      {
-        type: CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC,
-        data: { used: 4000, size: 200000 },
-      },
-    ]);
+      store().appendStreamingEvents(0, [
+        {
+          type: CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC,
+          data: { used: 4000, size: 200000 },
+        },
+      ]);
 
-    const entry = store().liveOrderedEntries.find(
-      (item) =>
-        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
-        "target" in item &&
-        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
-        item.target.stepIndex === 0
-    ) as OrderedCliHistoryEntry;
+      const entry = store().liveOrderedEntries.find(
+        (item) =>
+          item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          "target" in item &&
+          item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+          item.target.stepIndex === 0
+      ) as OrderedCliHistoryEntry;
 
-    expect(entry.cliOutput.tokens).toMatchObject({
-      prompt: 10,
-      completion: 5,
-      contextWindowUsed: 4000,
-      contextWindowSize: 200000,
-    });
-    expect(entry.cliOutput.structured?.events).toHaveLength(0);
-  });
+      expect(getOutputContextWindow(entry.cliOutput)).toEqual({
+        used: 4000,
+        size: 200000,
+      });
+      // Recorded usage is left as recorded; no zero-token stats are invented.
+      expect(entry.cliOutput.tokens).toEqual(tokens);
+      expect(entry.cliOutput.structured?.events).toHaveLength(0);
+    }
+  );
 
   it("refreshes elapsed time when follow-up activity is merged into a completed entry", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });

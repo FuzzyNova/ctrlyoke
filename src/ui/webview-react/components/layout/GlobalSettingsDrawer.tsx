@@ -27,12 +27,10 @@ import {
   GeneralSection,
   TemplatesSection,
   WorkflowDefaultsSection,
-  AdvancedPermissionsSection,
   ExecutionSection,
   WorktreesSection,
   TerminalSection,
-  QueueSection,
-  CoordinationSection,
+  AdvancedSection,
   ServerSection,
   LicenseSection,
   NotificationsSection,
@@ -449,6 +447,13 @@ export function GlobalSettingsDrawer() {
                       <GeneralSection
                         settings={fullSettings}
                         {...sectionProps}
+                      />
+                    )}
+                  {fullSettings &&
+                    effectiveActiveTab === GLOBAL_SETTINGS_TABS.ADVANCED && (
+                      <AdvancedSection
+                        settings={fullSettings}
+                        {...sectionProps}
                         onReload={handleReloadWindow}
                       />
                     )}
@@ -476,13 +481,6 @@ export function GlobalSettingsDrawer() {
                   {fullSettings &&
                     effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATUS_LINE && (
                       <StatusLineSection settings={fullSettings} />
-                    )}
-                  {fullSettings &&
-                    effectiveActiveTab === GLOBAL_SETTINGS_TABS.PERMISSIONS && (
-                      <AdvancedPermissionsSection
-                        settings={fullSettings}
-                        {...sectionProps}
-                      />
                     )}
                   {fullSettings &&
                     effectiveActiveTab === GLOBAL_SETTINGS_TABS.SECRETS && (
@@ -516,18 +514,6 @@ export function GlobalSettingsDrawer() {
                   {fullSettings &&
                     effectiveActiveTab === GLOBAL_SETTINGS_TABS.TERMINAL && (
                       <TerminalSection
-                        settings={fullSettings}
-                        {...sectionProps}
-                      />
-                    )}
-                  {fullSettings &&
-                    effectiveActiveTab === GLOBAL_SETTINGS_TABS.QUEUE && (
-                      <QueueSection settings={fullSettings} {...sectionProps} />
-                    )}
-                  {fullSettings &&
-                    effectiveActiveTab ===
-                      GLOBAL_SETTINGS_TABS.COORDINATION && (
-                      <CoordinationSection
                         settings={fullSettings}
                         {...sectionProps}
                       />

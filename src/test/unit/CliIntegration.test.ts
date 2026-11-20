@@ -21,6 +21,7 @@ import {
   FINAL_STEP_PHASES,
   INTERACTIVE_TERMINAL_MODES,
 } from "../../types/DashboardConstants";
+import { HEADLESS_EXECUTION_NOTE } from "../../core/harness/shared/CliPromptPreparer";
 import {
   HARNESS_IDS,
   HARNESS_VERSION_STATUSES,
@@ -810,7 +811,20 @@ suite("CliIntegration", () => {
         }),
         resolvedSessionId: undefined,
       });
-      (integration as any).executionRunner.executeHeadless = async () => true;
+      (integration as any).executionRunner.executeHeadless = async (
+        session: any
+      ) => {
+        if (!session.workflowContext?.suppressHeadlessPermissionWarning) {
+          (
+            integration as any
+          ).executionRunner.deps.hostCallbacks.onHeadlessPermissionWarning(
+            session.resolvedProperties?.toolPermissions,
+            false,
+            false
+          );
+        }
+        return true;
+      };
       try {
         await integration.sendPrompt({ prompt: "run" }, true, {
           promptIndex: 0,
@@ -2177,6 +2191,103 @@ suite("CliIntegration", () => {
     assert.strictEqual(success, true);
     assert.strictEqual(promptPreparationArguments.length, 5);
     assert.strictEqual(promptPreparationArguments[4], false);
+  });
+
+  test("headless steering uses inline prompt preparation and the active channel", async () => {
+    const integration = createHeadlessIntegration();
+    const prompt: PromptStep = { prompt: "initial prompt" };
+    const controlSessionId = "headless-control-session";
+    const workflowContext = {
+      promptIndex: 0,
+      allPrompts: [prompt],
+    };
+    const properties = createResolvedProperties({
+      executionMode: EXECUTION_MODES.HEADLESS,
+    });
+    (integration as any).activeSession = (
+      integration as any
+    ).createExecutionSession(prompt, workflowContext, properties, undefined);
+    (integration as any).transportCoordinator.getHeadlessControlSessionId =
+      () => controlSessionId;
+
+    let preparedArguments: unknown[] = [];
+    (integration as any).promptPreparer.preparePrompt = async (
+      ...args: unknown[]
+    ) => {
+      preparedArguments = args;
+      return {
+        promptWithInstruction:
+          (args[5] as { omitHeadlessExecutionNote?: boolean } | undefined)
+            ?.omitHeadlessExecutionNote === true
+            ? String((args[0] as PromptStep).prompt)
+            : `${String((args[0] as PromptStep).prompt)} ${HEADLESS_EXECUTION_NOTE}`,
+        tempFilePaths: [],
+        diagnostics: [],
+      };
+    };
+
+    let sent: { sessionId: string; text: string } | undefined;
+    let receiptText: string | undefined;
+    (integration as any).transportCoordinator.sendHeadlessUserMessage = async (
+      sessionId: string,
+      text: string
+    ) => {
+      sent = { sessionId, text };
+      receiptText = text;
+      return true;
+    };
+
+    try {
+      assert.strictEqual(
+        await integration.sendSteerMessage(
+          "multi-line\nsteer",
+          controlSessionId
+        ),
+        true
+      );
+      assert.deepStrictEqual(preparedArguments[0], {
+        prompt: "multi-line\nsteer",
+      });
+      assert.strictEqual(preparedArguments[4], false);
+      assert.deepStrictEqual(preparedArguments[5], {
+        omitHeadlessExecutionNote: true,
+      });
+      assert.deepStrictEqual(sent, {
+        sessionId: controlSessionId,
+        text: "multi-line\nsteer",
+      });
+      assert.ok(!sent.text.includes(HEADLESS_EXECUTION_NOTE));
+      assert.ok(receiptText);
+      assert.ok(!receiptText.includes(HEADLESS_EXECUTION_NOTE));
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  test("headless turn interruption delegates to the active control channel", async () => {
+    const integration = createHeadlessIntegration();
+    const controlSessionId = "headless-control-session";
+    (integration as any).transportCoordinator.getHeadlessControlSessionId =
+      () => controlSessionId;
+
+    let interruptedSessionId: string | undefined;
+    (integration as any).transportCoordinator.interruptHeadlessTurn = async (
+      sessionId: string
+    ) => {
+      interruptedSessionId = sessionId;
+      return true;
+    };
+
+    try {
+      assert.strictEqual(
+        await integration.interruptHeadlessTurn(controlSessionId),
+        true
+      );
+      assert.strictEqual(interruptedSessionId, controlSessionId);
+      assert.strictEqual(await integration.interruptHeadlessTurn(), false);
+    } finally {
+      integration.dispose();
+    }
   });
 
   test("should return false and expose the failure reason when execution throws", async () => {

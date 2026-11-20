@@ -27,6 +27,7 @@ import {
 import { CliParseUtils } from "../shared/CliParseUtils";
 import {
   ANTIGRAVITY_STREAM_JSON_EVENTS,
+  ANTIGRAVITY_STREAM_JSON_ARGS,
   ANTIGRAVITY_STREAM_JSON_RESULT_STATUSES,
 } from "./AntigravityProtocolConstants";
 import {
@@ -52,6 +53,7 @@ import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   getCompatibilityDiagnosticMessage,
   getCompatibilityDiagnosticRemediation,
   type CompatibilityDiagnostic,
@@ -78,6 +80,8 @@ import {
   isProcessAlive,
 } from "../../../utils/LockSafetyPrimitives";
 import { AntigravityNotificationMonitor } from "./AntigravityNotificationMonitor";
+import { AntigravityHeadlessControlChannel } from "./AntigravityHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
 import {
   AntigravityToolPermissionMapper,
   getAntigravityUserSettingsPath,
@@ -110,6 +114,15 @@ const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=1.4.4"]),
+} as const;
+
+const ANTIGRAVITY_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: CAPABILITY_FIDELITIES.EXACT,
+  mechanism: CAPABILITY_MECHANISMS.NATIVE,
+  verification: capabilitySuiteVerification(
+    [">=1.5.9"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 type AntigravityHookGroup = Record<
@@ -184,7 +197,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
       // headless steps were cut short); 1.1.20 stopped benign tool errors
       // failing `-p` runs; 1.1.10 made `Stop` hooks and `--model` work.
       minimum: "1.4.10",
-      testedWith: "1.5.7",
+      testedWith: "1.5.12",
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,
@@ -212,6 +225,9 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: ANTIGRAVITY_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: ANTIGRAVITY_IMAGE_INPUT_CAPABILITY },
+      headlessControl: {
+        steering: ANTIGRAVITY_HEADLESS_STEERING_CAPABILITY,
+      },
     };
   }
   readonly logParser = new AntigravityLogParser();
@@ -410,10 +426,22 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
   }
 
   buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
-    // With no --print prompt value, agy enters print mode from piped stdin.
-    // The inline root block also prevents slash-command parsing, and the
-    // prompt preparer applies the non-slash prefix safeguard as defense in depth.
-    return ["--output-format", "stream-json", ...baseArgs];
+    // The first user record is sent through the control channel after stdin is
+    // ready. Generated prompt sections are already inlined into that message.
+    return [
+      ANTIGRAVITY_STREAM_JSON_ARGS.INPUT_FORMAT_FLAG,
+      ANTIGRAVITY_STREAM_JSON_ARGS.FORMAT,
+      ANTIGRAVITY_STREAM_JSON_ARGS.OUTPUT_FORMAT_FLAG,
+      ANTIGRAVITY_STREAM_JSON_ARGS.FORMAT,
+      ...baseArgs,
+    ];
+  }
+
+  createHeadlessControlChannel(
+    _prompt: string,
+    _options: HeadlessControlChannelOptions
+  ): AntigravityHeadlessControlChannel {
+    return new AntigravityHeadlessControlChannel();
   }
 
   /**

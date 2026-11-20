@@ -6,6 +6,7 @@ import { HeadlessLogTail } from "../../core/harness/shared/HeadlessLogTail";
 import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
 import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
 import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { SubagentSourceFollower } from "../../core/harness/shared/SubagentSourceFollower";
 import type {
   BaseCliEvent,
   ILogParser,
@@ -83,6 +84,15 @@ function waitFor(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+class TrackingSubagentSourceFollower extends SubagentSourceFollower {
+  stopped = false;
+
+  override stop(): void {
+    this.stopped = true;
+    super.stop();
+  }
+}
+
 suite("HeadlessLogTail", () => {
   test("reads the log on each stdout tick and streams parsed events", async () => {
     const event = { type: "text", text: "from log" };
@@ -107,6 +117,29 @@ suite("HeadlessLogTail", () => {
       { type: "text", data: { text: "from log" } },
     ]);
     assert.strictEqual(fake.getReadCount() >= 2, true);
+  });
+
+  test("defers stopping subagent following until the response collector drains", async () => {
+    const fake = createParser();
+    const follower = new TrackingSubagentSourceFollower();
+    Object.assign(fake.parser, { getSubagentFollower: () => follower });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      onStreamingEvents: () => {},
+      deferSubagentFollowerStop: true,
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 1,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    await tail.finish();
+    assert.strictEqual(follower.stopped, false);
+
+    follower.stop();
+    assert.strictEqual(follower.stopped, true);
   });
 
   test("attributes the echoed prompt to dispatch instead of a human steer", async () => {

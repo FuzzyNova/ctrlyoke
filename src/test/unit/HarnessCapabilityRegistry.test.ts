@@ -22,6 +22,7 @@ import {
   CAPABILITY_DOMAINS,
   CAPABILITY_VERIFICATION_KINDS,
   HARNESS_IDS,
+  HEADLESS_CONTROL_CAPABILITY_KEYS,
   HOOK_EVENT_ORDER,
   SANDBOX_CAPABILITY_KEYS,
   type HarnessId,
@@ -182,6 +183,12 @@ function allDomainFacts(harnessId: HarnessId): HarnessCapabilityFacts {
         declaration("partial", "translated-cli"),
       ])
     ),
+    headlessControl: {
+      [HEADLESS_CONTROL_CAPABILITY_KEYS.STEERING]: declaration(
+        "exact",
+        "native"
+      ),
+    },
     mcp: { perServerToolFiltering: declaration("exact", "workspace-config") },
     sandbox: {
       [SANDBOX_CAPABILITY_KEYS.TERMINAL]: declaration(
@@ -212,6 +219,22 @@ suite("HarnessCapabilityRegistry", () => {
     }
   });
 
+  test("known-broken claims reference existing bug reports", () => {
+    const problems: string[] = [];
+    for (const [harnessId, claims] of Object.entries(KNOWN_BROKEN_CLAIMS)) {
+      for (const [claim, reference] of Object.entries(claims ?? {})) {
+        if (!reference) continue;
+        if (
+          !/^dev\/bugs\/(?:backlog|rejected)\//.test(reference) ||
+          !fs.existsSync(path.join(REPO_ROOT, reference))
+        ) {
+          problems.push(`${harnessId} ${claim}: ${reference}`);
+        }
+      }
+    }
+    assert.deepStrictEqual(problems, []);
+  });
+
   test("enables prompt-input compatibility for every registered harness", async function () {
     const registry = new HarnessCapabilityRegistry();
     const snapshot = await registry.getSnapshot();
@@ -219,6 +242,7 @@ suite("HarnessCapabilityRegistry", () => {
       CAPABILITY_DOMAINS.PERMISSIONS,
       CAPABILITY_DOMAINS.SANDBOX,
       CAPABILITY_DOMAINS.PROMPT_INPUTS,
+      CAPABILITY_DOMAINS.HEADLESS_CONTROL,
       CAPABILITY_DOMAINS.HOOKS,
       CAPABILITY_DOMAINS.MCP,
     ]);
@@ -363,10 +387,12 @@ suite("HarnessCapabilityRegistry", () => {
     const snapshot = await registry.getSnapshot();
     const effective = snapshot.harnesses[HARNESS_IDS.COPILOT_CLI].effective;
     const image = effective?.promptInputs?.images;
+    const steering = effective?.headlessControl?.steering;
     const hook = effective?.hooks?.stop;
     const mcp = effective?.mcp?.perServerToolFiltering;
 
     assert.strictEqual(image?.verification, "verified");
+    assert.strictEqual(steering?.verification, "verified");
     assert.strictEqual(hook?.fidelity, "partial");
     assert.strictEqual(mcp?.mechanism, "workspace-config");
   });

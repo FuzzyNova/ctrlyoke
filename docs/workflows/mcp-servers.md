@@ -186,7 +186,7 @@ mcpServers:
 Some environments don't allow MCP servers at all, for example by an
 organization policy. Set
 [`execution.ctrlyokeMcpMode`](/reference/settings#execution-ctrlyokemcpmode) to
-`skill`, or choose **MCP mode → Skill** in **Settings → General**. ctrlyoke
+`skill`, or choose **MCP mode → Skill** in **Settings → Advanced**. ctrlyoke
 then attaches built-in skills instead of its server, and the harness calls the
 same tools as shell commands. This only affects ctrlyoke's own server; other
 servers are attached as usual. See

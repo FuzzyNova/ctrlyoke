@@ -41,6 +41,7 @@ import {
   PROMPT_TERMINAL_STATUS,
   CTRLYOKE_ENV_VARS,
   CONDITION_ACTIONS,
+  ERROR_BEHAVIOR_ACTIONS,
   TOKEN_TOTAL_CONFIDENCE,
   FAILURE_KINDS,
   GUARDRAIL_STOP_CODES,
@@ -245,6 +246,7 @@ class FixedEvaluationEvaluator extends EndConditionEvaluator {
 
 class RecordingShellEvaluator extends EndConditionEvaluator {
   readonly shells: Array<string | undefined> = [];
+  readonly scripts: string[] = [];
 
   constructor(
     platform: MockPlatform,
@@ -257,6 +259,7 @@ class RecordingShellEvaluator extends EndConditionEvaluator {
     condition: ScriptProperties
   ): Promise<EvaluationResult> {
     this.shells.push(condition.shell);
+    this.scripts.push(condition.script);
     const result = this.results.shift();
     if (!result) {
       throw new Error("Unexpected condition evaluation");
@@ -992,28 +995,42 @@ suite("WorkflowExecutor condition shell reporting", () => {
     ]);
   });
 
-  test("uses the default error retry after an end-condition retry send fails", async () => {
+  test("retries the whole step when an end-condition retry send fails under retry", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     let sendCount = 0;
-    integration.onSend = async () => {
+    const sentResumeValues: Array<boolean | undefined> = [];
+    integration.onSend = async (prompt, workflowContext) => {
       sendCount += 1;
+      sentResumeValues.push(workflowContext?.resolvedProperties?.resumeSession);
       if (sendCount === 2) {
         integration.harnessErrorFailure = true;
         return { success: false };
       }
       integration.harnessErrorFailure = false;
+      if (prompt.prompt === "step 1") {
+        await queue.persistRuntimeMetadata(0, { sessionId: "session-1" });
+      }
       return { responseText: "ok" };
     };
     const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(true),
       shellEvaluationResult(false),
+      shellEvaluationResult(true),
       shellEvaluationResult(true),
     ]);
     queue.loadPrompts({
       steps: [
         {
-          prompt: "initial",
-          errorBehavior: { onError: CONDITION_ACTIONS.RETRY },
+          prompt: "step 1",
+          preCondition: {
+            script: "count-precondition",
+          },
+          errorBehavior: {
+            onError: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryDelaySec: 0,
+          },
           endCondition: {
             script: "check-result",
             onFail: CONDITION_ACTIONS.RETRY,
@@ -1030,10 +1047,74 @@ suite("WorkflowExecutor condition shell reporting", () => {
     );
 
     assert.deepStrictEqual(integration.sentPrompts, [
-      "initial",
+      "step 1",
+      "retry",
+      "step 1",
+    ]);
+    assert.strictEqual(
+      evaluator.scripts.filter((script) => script === "count-precondition")
+        .length,
+      2
+    );
+    assert.strictEqual(sentResumeValues[2], false);
+  });
+
+  test("resumes the existing session when an end-condition retry send fails under retryPhase", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    let sendCount = 0;
+    const retryResumeValues: Array<boolean | undefined> = [];
+    integration.onSend = async (prompt, workflowContext) => {
+      sendCount += 1;
+      if (prompt.prompt === "retry") {
+        retryResumeValues.push(
+          workflowContext?.resolvedProperties?.resumeSession
+        );
+      }
+      if (sendCount === 2) {
+        integration.harnessErrorFailure = true;
+        return { success: false };
+      }
+      integration.harnessErrorFailure = false;
+      if (prompt.prompt === "step 1") {
+        await queue.persistRuntimeMetadata(0, { sessionId: "session-1" });
+      }
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "step 1",
+          errorBehavior: {
+            onError: ERROR_BEHAVIOR_ACTIONS.RETRY_PHASE,
+            maxRetries: 1,
+            retryDelaySec: 0,
+          },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "step 1",
       "retry",
       "retry",
     ]);
+    assert.deepStrictEqual(retryResumeValues, [true, true]);
   });
 
   test("prints harness failure reason when the step continues", async () => {
@@ -1185,7 +1266,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
       steps: [
         {
           prompt: "initial",
-          errorBehavior: { onError: CONDITION_ACTIONS.RETRY },
+          errorBehavior: { onError: ERROR_BEHAVIOR_ACTIONS.RETRY_PHASE },
           endCondition: {
             script: "check-result",
             onFail: CONDITION_ACTIONS.RETRY,

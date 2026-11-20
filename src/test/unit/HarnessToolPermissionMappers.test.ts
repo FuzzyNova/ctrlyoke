@@ -25,6 +25,7 @@ import type {
 } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  HEADLESS_APPROVAL_POLICIES,
   PERMISSION_MODES,
   type PermissionMode,
 } from "../../types/DashboardConstants";
@@ -993,6 +994,42 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--permission-mode", "dontAsk"]);
       });
 
+      test("headless custom ask uses stdio permission prompts", async () => {
+        const args = await mapperArgs(
+          mapper,
+          {
+            ...cfg(PERMISSION_MODES.CUSTOM, ["write"], []),
+            headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          },
+          { isInteractive: false }
+        );
+
+        assert.deepStrictEqual(args.slice(0, 4), [
+          "--permission-mode",
+          "default",
+          "--permission-prompt-tool",
+          "stdio",
+        ]);
+      });
+
+      test("headless auto ask routes judge escalations to stdio", async () => {
+        const args = await mapperArgs(
+          mapper,
+          {
+            ...cfg(PERMISSION_MODES.AUTO),
+            headlessApprovals: HEADLESS_APPROVAL_POLICIES.ASK,
+          },
+          { isInteractive: false, cliVersion: "2.1.325" }
+        );
+
+        assert.deepStrictEqual(args.slice(0, 4), [
+          "--permission-mode",
+          "auto",
+          "--permission-prompt-tool",
+          "stdio",
+        ]);
+      });
+
       test("interactive custom mode with no tools overrides the user's default mode", async () => {
         const args = await mapperArgs(
           mapper,
@@ -1153,22 +1190,37 @@ suite("HarnessToolPermissionMappers", () => {
       });
 
       // Approval only: `-s` comes from the sandbox mapper (SandboxMappers.test.ts).
-      const approvalRows: Array<[PermissionMode, string[]]> = [
-        [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["-a", "never"]],
-        [PERMISSION_MODES.ALLOW_ALL, ["-a", "on-request"]],
-        [PERMISSION_MODES.CUSTOM, ["-a", "on-request"]],
-        [PERMISSION_MODES.NONE, []],
+      const approvalRows: Array<[PermissionMode, string[], string[]]> = [
+        [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["-a", "never"], []],
+        [
+          PERMISSION_MODES.ALLOW_ALL,
+          ["-a", "on-request", "-c", "approvals_reviewer=user"],
+          ["-c", "approvals_reviewer=user"],
+        ],
+        [
+          PERMISSION_MODES.CUSTOM,
+          ["-a", "on-request", "-c", "approvals_reviewer=user"],
+          ["-c", "approvals_reviewer=user"],
+        ],
+        [PERMISSION_MODES.NONE, [], []],
       ];
-      for (const [mode, expected] of approvalRows) {
-        test(`${mode} → ${expected.join(" ") || "no flags"} interactively, nothing headless`, async () => {
-          assert.deepStrictEqual(await mapperArgs(mapper, cfg(mode)), expected);
+      for (const [
+        mode,
+        interactiveExpected,
+        headlessExpected,
+      ] of approvalRows) {
+        test(`${mode} configures the expected approval reviewer in both launch modes`, async () => {
+          assert.deepStrictEqual(
+            await mapperArgs(mapper, cfg(mode)),
+            interactiveExpected
+          );
           assert.deepStrictEqual(
             await mapperArgs(mapper, cfg(mode), { isInteractive: true }),
-            expected
+            interactiveExpected
           );
           assert.deepStrictEqual(
             await mapperArgs(mapper, cfg(mode), { isInteractive: false }),
-            []
+            headlessExpected
           );
         });
       }
@@ -1209,7 +1261,10 @@ suite("HarnessToolPermissionMappers", () => {
             cliVersion,
             isInteractive: false,
           });
-          assert.deepStrictEqual(result.cliArgs, []);
+          assert.deepStrictEqual(result.cliArgs, [
+            "-c",
+            "approvals_reviewer=user",
+          ]);
           assert.strictEqual(
             result.diagnostics[0].code,
             COMPATIBILITY_DIAGNOSTIC_CODES.AUTO_PERMISSION_MODE_FALLBACK
@@ -1222,7 +1277,12 @@ suite("HarnessToolPermissionMappers", () => {
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], ["edit"])
         );
-        assert.deepStrictEqual(args, ["-a", "on-request"]);
+        assert.deepStrictEqual(args, [
+          "-a",
+          "on-request",
+          "-c",
+          "approvals_reviewer=user",
+        ]);
       });
     });
 
@@ -1389,7 +1449,7 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(args.includes("--exclude-tools"));
       });
 
-      test("a quoted Windows path before :* stays part of the command prefix", async () => {
+      test("normalizes quoted Windows paths to Qwen's command matcher spelling", async () => {
         const prefix =
           'node "C:\\ext\\out\\mcp-server.js" --tool submit_commit_message --workspace "C:\\repo" --commit-output "C:\\repo\\out.txt" --args';
         const args = await mapperArgs(
@@ -1397,7 +1457,7 @@ suite("HarnessToolPermissionMappers", () => {
           cfg(PERMISSION_MODES.CUSTOM, [`shell(${prefix}:*)`], [])
         );
         assert.deepStrictEqual(argsAfterFlag(args, "--allowed-tools"), [
-          `ShellTool(${prefix} *)`,
+          "ShellTool(node C:/ext/out/mcp-server.js --tool submit_commit_message --workspace C:/repo --commit-output C:/repo/out.txt --args *)",
         ]);
       });
 

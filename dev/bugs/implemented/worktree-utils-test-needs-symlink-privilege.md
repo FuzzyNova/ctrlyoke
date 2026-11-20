@@ -3,7 +3,7 @@
 - **Found:** 2026-11-15 by the orchestrator review of session-control Stage 1 (`npm test` on
   Windows 11 without Developer Mode)
 - **Area:** `src/test/unit/WorktreeUtils.test.ts` (`guards planned path-form directories against checkout and worktree placement`, line ~320)
-- **Severity:** low
+- **Resolution:** aa99ebb9d (the test now creates a junction on win32, as suggested)
 
 ## Symptom
 

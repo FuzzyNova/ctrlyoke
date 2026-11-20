@@ -51,11 +51,35 @@ Permissions quick picker in the prompt editor's footer.
 ### Headless runs
 
 A [headless](/reference/settings#defaults-executionmode) step has no terminal, so an approval
-prompt can never be answered. With `custom` mode, a tool that is not on the
-allow list is refused and the step may not make progress. ctrlyoke warns once
-when a headless step starts with a mode other than `allowAll` or
-`dangerouslyAllowAll`. That includes `auto`, because its judge can refuse a
-request and there is no one to ask instead. Turn the warning off with
+prompt needs a connected dashboard to be answered. By default, `custom` mode denies a tool
+that is not on the allow list, and an `auto` judge escalation is also denied.
+
+#### Asking for headless tool approvals
+
+Headless Claude Code, Qwen Code, Copilot CLI 1.0.112+, and OpenCode 2.3.0+ `custom` steps can
+show an approval card in the dashboard instead. OpenCode requires its private standalone server;
+OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests. Set
+`toolPermissions.headlessApprovals` to `ask` on the workflow, step or
+[`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions):
+
+```yaml
+toolPermissions:
+  headlessApprovals: ask
+  headlessApprovalTimeoutSec: 60
+```
+
+The card shows the tool and its input, and offers **Allow once** or **Deny** with an optional
+message. An unanswered request is denied when the timeout expires; with no dashboard connected,
+ctrlyoke denies it immediately. Claude and Qwen also apply this to human escalations from their
+`auto` judges. OpenCode resolves an approval as a one-request `once` or `reject`, never `always`.
+Copilot `auto` stays on `--assisted-approval` and does not use ACP. It does not add an allow-always
+option. Copilot ACP cannot forward a custom denial message to the model, so that note remains in
+the dashboard.
+
+Other headless harnesses, OpenCode versions before 2.3.0, and Copilot versions before 1.0.112
+continue to deny approval requests.
+ctrlyoke warns once when a headless step starts with a mode other than `allowAll` or
+`dangerouslyAllowAll`. That includes `auto`, because its judge can refuse a request. Turn the warning off with
 [`ui.showHeadlessPermissionWarning`](/reference/settings#ui-showheadlesspermissionwarning).
 
 For CI, see [Tool permissions on CI](/cli/ci#tool-permissions).
@@ -66,12 +90,18 @@ Platform and Foundry. With any other model Claude refuses every request the
 allow list doesn't cover, without reporting an error.
 
 Copilot Auto is headless only. Interactive Copilot falls back to Custom because
-its per-run assisted flag is unsupported there; enable it in Copilot with
-`/permissions assisted` (or `defaultPermissionMode: "assisted"` in its
-settings). Copilot's judge also often refuses commands the step's prompt asks
-for, because ctrlyoke passes the prompt as a file reference and the judge does
-not count the file's contents as your request. Until that is fixed, put
-commands a Copilot Auto step must run in its allow list.
+its per-run assisted flag is unsupported there. A global
+`defaultPermissionMode: "assisted"` setting also turns on the judge for
+interactive Custom steps, where the allowed-tools list no longer limits what
+the judge may approve. Use `/permissions assisted` for the current session
+when you want Copilot Auto interactively, rather than setting that global
+default. If you need Custom's manual approval for the current session, use
+`/permissions default`; there is no per-run CLI flag that overrides the global
+setting. Copilot's judge approves only what your own message asks for, so
+ctrlyoke sends the step's prompt inline on stdin. If you turn that off with
+`execution.inlineGeneratedPromptOnStdin: false`, the judge sees only a file
+reference and often refuses commands the prompt asks for; put commands a
+Copilot Auto step must run in its allow list in that case.
 
 #### Using a harness's Auto mode on ctrlyoke 0.7.1 or earlier
 
@@ -313,14 +343,14 @@ attaches, which it receives as that server's `disabled_tools`. It can't enforce
 an entry for a server configured only in Codex's own `config.toml`, a wildcard
 tool name, or a shell pattern.
 
-| Harness                                   | `dangerouslyAllowAll`                   | `allowAll`                          | `auto`                                                                                  | `custom`                                                    |
-| ----------------------------------------- | --------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                | `--allow-all-tools` plus deny rules | Headless: `--assisted-approval` plus allow/deny rules; interactive falls back to Custom | allow/deny rules                                            |
-| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`        | `bypassPermissions` plus deny rules | `--permission-mode auto` plus allow/deny rules; eligible models only                    | Headless `dontAsk`; interactive `default`; allow/deny rules |
-| [Codex](/harnesses/codex-cli)             | `-a never`                              | `-a on-request` plus MCP deny rules | auto reviewer plus `on-request`; may approve sandbox escalation                         | `-a on-request` plus MCP deny rules; allow list ignored     |
-| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode defaults) | allow everything plus deny rules    | Unsupported; falls back to Custom                                                       | ask, allow list, deny list                                  |
-| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                    | `auto-edit` plus deny rules         | `--approval-mode auto` plus allow/deny rules                                            | `default` plus allow/deny rules                             |
-| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`        | `always-proceed` plus deny rules    | settings `agentMode: auto` plus allow/deny rules                                        | settings allow/deny rules                                   |
+| Harness                                   | `dangerouslyAllowAll`                   | `allowAll`                                           | `auto`                                                                                  | `custom`                                                                 |
+| ----------------------------------------- | --------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                | `--allow-all-tools` plus deny rules                  | Headless: `--assisted-approval` plus allow/deny rules; interactive falls back to Custom | allow/deny rules                                                         |
+| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`        | `bypassPermissions` plus deny rules                  | `--permission-mode auto` plus allow/deny rules; eligible models only                    | Headless `dontAsk`; interactive `default`; allow/deny rules              |
+| [Codex](/harnesses/codex-cli)             | `-a never`                              | `-a on-request` plus MCP deny rules; manual reviewer | auto reviewer plus `on-request`; may approve sandbox escalation                         | `-a on-request` plus MCP deny rules; manual reviewer; allow list ignored |
+| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode defaults) | allow everything plus deny rules                     | Unsupported; falls back to Custom                                                       | ask, allow list, deny list                                               |
+| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                    | `auto-edit` plus deny rules                          | `--approval-mode auto` plus allow/deny rules                                            | `default` plus allow/deny rules                                          |
+| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`        | `always-proceed` plus deny rules                     | settings `agentMode: auto` plus allow/deny rules                                        | settings allow/deny rules                                                |
 
 Antigravity command allow rules match the entire raw command line. A command
 chain containing an allowed command plus anything else is not allowed piecemeal.
@@ -401,7 +431,10 @@ Roots come from three places:
 | `trustedExternalRoots` in a **workflow** file                    | You, once per workflow file on each machine.                        |
 
 User and workspace roots are combined, unlike other list settings, which
-replace each other (see [Settings](/guide/settings)).
+replace each other (see [Settings](/guide/settings)). Edit them in
+**Settings → Workflow Defaults → Permissions**, below the sandbox settings and
+next to **Offer trust for untrusted file links**, which controls whether a
+blocked file link offers to trust its parent folder.
 
 ### Approving a workspace's or workflow's roots
 

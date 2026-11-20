@@ -56,10 +56,12 @@ export {
 export { useIsViewingDeletedWorkflow } from "./useIsViewingDeletedWorkflow";
 export { useIsSystemGeneratedWorkflow } from "./useIsSystemGeneratedWorkflow";
 export { useActiveWorkflowExternalOwner } from "./useActiveWorkflowExternalOwner";
+export { useSteerTargets } from "./useSteerTargets";
 export {
   useRunDispatchTargets,
   type RunDispatchTarget,
   type RunDispatchTargets,
+  type SteerDispatchTarget,
 } from "./useRunDispatchTargets";
 export {
   useHideableOptions,

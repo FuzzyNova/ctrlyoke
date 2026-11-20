@@ -29,6 +29,10 @@ suite("Codex session errors", () => {
         },
       ]
     );
+    assert.strictEqual(
+      new CodexLogParser().extractResponse(records).metadata.error,
+      "unexpected status 401 Unauthorized: stub: Incorrect API key provided, url: http://127.0.0.1:18403/v1/responses"
+    );
   });
 
   test("ignores a task_complete without an error", () => {

@@ -346,3 +346,80 @@ describe("terminalRegistry screen-reader mode", () => {
     expect(after.term.options.screenReaderMode).toBe(false);
   });
 });
+
+describe("terminalRegistry host theme and font", () => {
+  const root = document.documentElement;
+
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    terminalConstructCount = 0;
+    root.style.removeProperty("--vscode-terminal-background");
+    root.style.removeProperty("--vscode-editor-font-family");
+  });
+
+  /** Let the MutationObserver callback run, with rAF made synchronous. */
+  async function flushStyleObserver(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("re-themes live terminals when the host rewrites its theme variables", async () => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    root.style.setProperty("--vscode-terminal-background", "#1e1e1e");
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const entry = await terminalRegistry.create("wf-theme", "sess-1");
+    expect(entry.term.options.theme?.background).toBe("#1e1e1e");
+
+    root.style.setProperty("--vscode-terminal-background", "#ffffff");
+    await flushStyleObserver();
+
+    expect(entry.term.options.theme?.background).toBe("#ffffff");
+  });
+
+  it("prefers the host terminal font and keeps the editor font as its fallback", async () => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    root.style.setProperty("--vscode-editor-font-family", "Consolas");
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const entry = await terminalRegistry.create("wf-font", "sess-1");
+    expect(entry.term.options.fontFamily).toBe("Consolas, monospace");
+
+    // A host font that is missing on this device (a Nerd Font on an iPhone)
+    // must still fall back to a monospace font, not the browser's serif.
+    terminalRegistry.setHostTerminalFontFamily(" MesloLGM Nerd Font ");
+    expect(entry.term.options.fontFamily).toBe(
+      "MesloLGM Nerd Font, Consolas, monospace"
+    );
+
+    // An editor-font change keeps the host terminal font first.
+    root.style.setProperty("--vscode-editor-font-family", "Fira Code");
+    await flushStyleObserver();
+    expect(entry.term.options.fontFamily).toBe(
+      "MesloLGM Nerd Font, Fira Code, monospace"
+    );
+
+    terminalRegistry.setHostTerminalFontFamily("");
+    expect(entry.term.options.fontFamily).toBe("Fira Code, monospace");
+
+    const later = await terminalRegistry.create("wf-font", "sess-2");
+    expect(later.term.options.fontFamily).toBe("Fira Code, monospace");
+  });
+
+  it("does not append monospace to a stack that already ends with it", async () => {
+    root.style.setProperty(
+      "--vscode-editor-font-family",
+      "Consolas, 'Courier New', monospace"
+    );
+    const { terminalRegistry } = await import("../terminalRegistry");
+    terminalRegistry.setHostTerminalFontFamily("MesloLGM Nerd Font");
+    const entry = await terminalRegistry.create("wf-font-generic", "sess-1");
+    expect(entry.term.options.fontFamily).toBe(
+      "MesloLGM Nerd Font, Consolas, 'Courier New', monospace"
+    );
+  });
+});

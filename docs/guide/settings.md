@@ -103,17 +103,22 @@ Open it from the gear button (**Global Settings**) in the dashboard header.
   how many matches it holds.
 - **Open settings file.** Opens the `settings.json` for the selected scope in the editor.
 
-The drawer has 19 tabs:
+The drawer has 17 tabs:
 
 | Group        | Tabs                                                          |
 | ------------ | ------------------------------------------------------------- |
 | Core         | General, Workflow Defaults, Templates                         |
-| Execution    | Execution, Queue, Worktrees, Coordination                     |
+| Execution    | Execution, Worktrees                                          |
 | Output       | Terminal, Status Line, Commit Message                         |
-| Security     | Advanced Permissions, Secrets                                 |
+| Security     | Secrets                                                       |
 | Integrations | Server, Agent & Skills Manager, MCP Manager, Language Servers |
 | Insights     | Notifications, Stats & Usage                                  |
+| Advanced     | Advanced                                                      |
 | Account      | License                                                       |
+
+**Execution** holds the timeouts, how unresolved context references are handled, and the queue
+limits. **Advanced** holds settings most people never change: run retention and history storage,
+prompt temp files, ctrlyoke's MCP mode, coordination limits and diagnostic logging.
 
 In **Language Servers**, the Command field accepts quoted arguments. Wrap an argument that
 contains spaces in single or double quotes, for example:
@@ -121,7 +126,9 @@ contains spaces in single or double quotes, for example:
 
 **Workflow Defaults** uses the same Harness, Context, Validation, MCP, Hooks and Permissions tabs
 as the [workflow properties panel](/workflows/properties-panel). Values there are the `defaults.*`
-settings, which every workflow inherits unless the workflow or step sets its own.
+settings, which every workflow inherits unless the workflow or step sets its own. Its Permissions
+tab also holds the [trusted external roots](/workflows/permissions#trusted-external-roots) that a
+workflow's own roots are added to.
 
 **Templates** lets you choose the default template for New Workflow and save variable values for
 each template. The drawer's User/Workspace scope switch applies here too. Saved values fill in

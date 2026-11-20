@@ -25,6 +25,8 @@ export interface HeadlessLogTailOptions {
   onStdoutChunkObserved?: (chunk: string) => void;
   /** Called once stdout has ended, so the observer can flush a partial record. */
   onStdoutEnded?: () => void;
+  /** The response collector will drain and stop the follower after this tail finishes. */
+  deferSubagentFollowerStop?: boolean;
   extractSessionIdFromLogs?: (
     promptText: string,
     startTime: Date,
@@ -67,6 +69,8 @@ export interface HeadlessProcessResult {
   terminationSignal?: NodeJS.Signals;
   /** Whether ctrlyoke requested the termination. */
   terminatedByManager?: boolean;
+  /** The harness reported a turn end after ctrlyoke requested an interrupt. */
+  interrupted?: boolean;
   headlessLogTail?: HeadlessLogTail;
 }
 
@@ -94,12 +98,16 @@ export type HeadlessSourceModeAdapter = Pick<
  *
  * Single source of truth for the mode decision: the live streaming path and the
  * final-output path must agree, or a harness would stream one mapping and
- * report another. An explicit `headlessSource` always wins so a provider that
- * implements both hooks can still pin itself to the log.
+ * report another. A per-execution override wins first; otherwise an explicit
+ * `headlessSource` can pin a provider that implements both hooks to the log.
  */
 export function resolveHeadlessSourceMode(
-  provider: HeadlessSourceModeAdapter
+  provider: HeadlessSourceModeAdapter,
+  executionMode?: HeadlessSourceMode
 ): HeadlessSourceMode | undefined {
+  if (executionMode) {
+    return executionMode;
+  }
   if (provider.headlessSource) {
     return provider.headlessSource;
   }
@@ -163,6 +171,14 @@ export class HeadlessLogTail {
     options.parser.getSubagentFollower?.()?.start(options.onStreamingEvents);
   }
 
+  registerDispatchedUserMessage(text: string): void {
+    this.pump.registerDispatchedUserMessage(text);
+  }
+
+  discardDispatchedUserMessage(text: string): void {
+    this.pump.discardDispatchedUserMessage(text);
+  }
+
   /** Start idle polling and perform an initial discovery/read attempt. */
   async start(): Promise<void> {
     if (this.started || this.finished) {
@@ -219,7 +235,7 @@ export class HeadlessLogTail {
 
   /** Queue a stdout clock tick. Safe to call from a synchronous stream callback. */
   onStdoutChunk(chunk: string): void {
-    if (this.finished) {
+    if (!this.started || this.finished) {
       return;
     }
 
@@ -240,7 +256,9 @@ export class HeadlessLogTail {
       return this.getResult();
     }
     this.finished = true;
-    this.options.parser.getSubagentFollower?.()?.stop();
+    if (!this.options.deferSubagentFollowerStop) {
+      this.options.parser.getSubagentFollower?.()?.stop();
+    }
     if (this.pollHandle) {
       clearInterval(this.pollHandle);
       this.pollHandle = undefined;
@@ -287,6 +305,17 @@ export class HeadlessLogTail {
 
   getSessionId(): string | undefined {
     return this.sessionId;
+  }
+
+  setResolvedSessionId(sessionId: string): void {
+    if (!sessionId) return;
+    if (this.sessionId && this.sessionId !== sessionId) {
+      Log.warn(
+        "[HeadlessLogTail] Ignored a control-channel session ID that conflicts with the resolved session"
+      );
+      return;
+    }
+    this.sessionId = sessionId;
   }
 
   getResult(): HeadlessLogTailResult {

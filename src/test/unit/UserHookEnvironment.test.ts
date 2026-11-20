@@ -416,18 +416,31 @@ suite("UserHookEnvironment", () => {
         JSON.stringify({ "hook-0": { env: { HOOK_TOKEN: "value" } } })
       );
       const command = "Write-Output $env:HOOK_TOKEN";
-      const result = spawnSync(
-        process.execPath,
-        [
-          launcherPath,
-          envFile,
-          "hook-0",
-          "powershell.exe",
-          Buffer.from(command, "utf8").toString("base64"),
-        ],
-        { encoding: "utf8" }
-      );
-      assert.strictEqual(result.error, undefined);
+      const result = await new Promise<{
+        status: number | null;
+        stdout: string;
+        stderr: string;
+      }>((resolve, reject) => {
+        const child = spawn(
+          process.execPath,
+          [
+            launcherPath,
+            envFile,
+            "hook-0",
+            "powershell.exe",
+            Buffer.from(command, "utf8").toString("base64"),
+          ],
+          { windowsHide: true, detached: true }
+        );
+        let stdout = "";
+        let stderr = "";
+        child.stdout?.setEncoding("utf8");
+        child.stderr?.setEncoding("utf8");
+        child.stdout?.on("data", (chunk: string) => (stdout += chunk));
+        child.stderr?.on("data", (chunk: string) => (stderr += chunk));
+        child.once("error", reject);
+        child.once("close", (status) => resolve({ status, stdout, stderr }));
+      });
       assert.strictEqual(result.status, 0, result.stderr);
       assert.strictEqual(result.stdout.trim(), "value");
     } finally {

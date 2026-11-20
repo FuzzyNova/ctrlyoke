@@ -33,6 +33,8 @@ import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
   CliOutput,
+  HeadlessApprovalRequestMessage,
+  HeadlessControlTargetMessage,
   BindAddressFallbackInfo,
   ServerPortFallbackInfo,
   UndoExecutionTarget,
@@ -1083,6 +1085,19 @@ export class CtrlYokeHostedServer
       timestampMs,
       sequence
     );
+  }
+  updateHeadlessControlTarget(target: HeadlessControlTargetMessage): void {
+    this.sink.updateHeadlessControlTarget(target);
+  }
+  /**
+   * Report delivery only when a browser is connected, so the approval policy
+   * service still falls back to an immediate deny when nobody can answer.
+   */
+  updateHeadlessApprovalRequest(
+    request: HeadlessApprovalRequestMessage
+  ): boolean {
+    this.sink.updateHeadlessApprovalRequest(request);
+    return [...this.connections].some((ws) => ws.readyState === WebSocket.OPEN);
   }
   updateContextWindow(
     stepIndex: number,

@@ -11,6 +11,8 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   STATUS_LINE_HARNESS_IDS,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
@@ -51,6 +53,8 @@ import {
   CLAUDE_HOOK_CONFIG_TYPES,
   CLAUDE_SYSTEM_SUBTYPES,
 } from "./ClaudeProtocolConstants";
+import { ClaudeHeadlessControlChannel } from "./ClaudeHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
 import type {
   CliExecutionSidecar,
   CliExecutionSidecarDeps,
@@ -58,6 +62,7 @@ import type {
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -86,6 +91,15 @@ const CLAUDE_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=2.1.17"]),
+} as const;
+
+const CLAUDE_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: CAPABILITY_FIDELITIES.EXACT,
+  mechanism: CAPABILITY_MECHANISMS.NATIVE,
+  verification: capabilitySuiteVerification(
+    [">=2.1.325"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 function mergeClaudeSettings(
@@ -166,11 +180,11 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     npmPackage: "@anthropic-ai/claude-code",
     versionPolicy: {
       minimum: "2.1.94",
-      testedWith: "2.1.323",
+      testedWith: "2.1.328",
       updateCommand: "claude update",
     },
     shouldStreamHeadlessOutput: true,
-    inlinesGeneratedPromptOnStdin: false,
+    inlinesGeneratedPromptOnStdin: true,
 
     // Claude uses Stop hook for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
@@ -190,6 +204,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: CLAUDE_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: CLAUDE_IMAGE_INPUT_CAPABILITY },
+      headlessControl: { steering: CLAUDE_HEADLESS_STEERING_CAPABILITY },
     };
   }
   readonly logParser = new ClaudeLogParser();
@@ -367,9 +382,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
       }
     }
 
-    // Note: Headless-specific flags (-p, --output-format, --verbose) are added by
-    // buildHeadlessArgs() to ensure correct positioning after the prompt argument.
-    // Don't add them here to avoid duplication.
+    // Headless-specific flags are added by buildHeadlessArgs().
 
     // Model selection with validation - use resolved property if available
     const model = this.validateAndGetModel(resolvedModel);
@@ -757,26 +770,29 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
   /**
    * Build CLI arguments for headless mode
    *
-   * Claude CLI expects the prompt as the FIRST positional argument (right after command name).
-   * This is critical because variadic flags like --disallowedTools will consume any args after them.
-   *
-   * Format: claude "prompt" -p --output-format stream-json --verbose [other args]
-   *
-   * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
+   * Headless prompt text is sent as the first stream-json user message.
    *
    * @param baseArgs Base arguments array
-   * @param prompt Prompt text or file reference
+   * @param _prompt Prompt text is delivered by the control channel
    * @returns Complete arguments array
    */
-  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+  buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
     return [
-      prompt,
       "-p", // Print mode (non-interactive)
+      "--input-format",
+      "stream-json",
       "--output-format",
       "stream-json", // JSON streaming for parsing
       "--verbose", // Include detailed information
       ...baseArgs,
     ];
+  }
+
+  createHeadlessControlChannel(
+    _promptText: string,
+    options: HeadlessControlChannelOptions
+  ): ClaudeHeadlessControlChannel {
+    return new ClaudeHeadlessControlChannel(options);
   }
 
   /**

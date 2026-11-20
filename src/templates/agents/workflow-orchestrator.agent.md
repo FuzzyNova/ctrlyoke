@@ -64,7 +64,9 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
 - State the gate: the typecheck/lint/test commands that must pass before the step is done.
 - Tell it how to wait for long commands, based on the mode the step will run in (`workflow_status` shows each step's `harness` and `executionMode`, and the workflow default an appended step inherits). Never tell a step to "run it in the background and check back later" unless that mode supports it. See `<longRunningCommands>`.
 - If a step must wait for a long command, set `executionMode: interactive` and choose a non-Codex harness.
-- When the workflow declares a `committed` condition preset, attach
+- `workflow_status` lists the workflow's condition presets under
+  `metadata.conditionPresets`. Check it before you queue anything; an empty
+  list means the workflow declares none. When it includes a `committed` preset, attach
   `endCondition: { use: "committed" }` to every implementation step that runs on
   its own. Never attach it to a parallel group member: the members share one
   working tree, so one would fail the check on a sibling's unfinished edits. Put

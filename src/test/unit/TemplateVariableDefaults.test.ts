@@ -3,12 +3,10 @@ import { suite, test } from "mocha";
 import {
   TEMPLATE_VARIABLE_DEFAULT_SOURCES as SOURCE,
   TEMPLATE_VARIABLE_TYPES as TYPE,
-  SETTING_SCOPES,
 } from "../../types/DashboardConstants";
 import {
   classifyTemplateVariableDefaults,
   resolveTemplateVariableDefaults,
-  shouldClearTemplateVariableDefaults,
   type TemplateVariableDefaultDefinition,
 } from "../../utils/TemplateVariableDefaults";
 
@@ -102,51 +100,6 @@ suite("TemplateVariableDefaults", () => {
     );
   });
 
-  test("compares against the inherited value at the target scope", () => {
-    assert.strictEqual(
-      shouldClearTemplateVariableDefaults(
-        definitions,
-        SETTING_SCOPES.USER,
-        undefined,
-        undefined,
-        { folder: "authored" }
-      ),
-      true
-    );
-    assert.strictEqual(
-      shouldClearTemplateVariableDefaults(
-        definitions,
-        SETTING_SCOPES.WORKSPACE,
-        { folder: "user" },
-        { folder: "x" },
-        { folder: "user" }
-      ),
-      true
-    );
-    // Authored value at Workspace must be stored when it differs from the User value.
-    assert.strictEqual(
-      shouldClearTemplateVariableDefaults(
-        definitions,
-        SETTING_SCOPES.WORKSPACE,
-        { folder: "different-user" },
-        undefined,
-        { folder: "authored" }
-      ),
-      false
-    );
-    assert.strictEqual(
-      shouldClearTemplateVariableDefaults(
-        definitions,
-        SETTING_SCOPES.WORKSPACE,
-        undefined,
-        undefined,
-        { harness: "claude-cli" }
-      ),
-      false,
-      "a harness pin must include its linked model as one unit"
-    );
-  });
-
   test("uses the authored baseline of already-resolved (wire) variables", () => {
     // A resolved variable without an authored default arrives over JSON with no
     // `authoredDefault` key; its `default` is the effective Workspace value.
@@ -159,17 +112,6 @@ suite("TemplateVariableDefaults", () => {
         ).map(({ variable }) => variable)
       )
     ) as TemplateVariableDefaultDefinition[];
-    assert.strictEqual(
-      shouldClearTemplateVariableDefaults(
-        wire,
-        SETTING_SCOPES.USER,
-        undefined,
-        { testCommand: "npm test" },
-        { testCommand: "npm test" }
-      ),
-      false,
-      "pinning the Workspace value at User must store it, not treat it as authored"
-    );
     const [resolved] = resolveTemplateVariableDefaults(
       wire,
       undefined,

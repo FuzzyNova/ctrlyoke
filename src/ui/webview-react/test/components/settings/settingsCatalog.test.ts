@@ -6,6 +6,7 @@ import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 import {
   HARNESS_IDS,
   STATUS_LINE_HARNESS_IDS,
+  SETTING_PATHS,
 } from "@root/types/DashboardConstants";
 import { ALL_TABS } from "@components/settings/settingsTabs";
 import {
@@ -83,6 +84,26 @@ function sourceSettingKeys(): SourceSettingKey[] {
             key: template.getText(sourceFile),
             kind: node.tagName.getText(sourceFile) as SourceSettingKey["kind"],
             templatePrefix: template.head.text,
+          });
+        } else if (
+          ts.isJsxExpression(initializer) &&
+          initializer.expression &&
+          ts.isPropertyAccessExpression(initializer.expression) &&
+          ts.isIdentifier(initializer.expression.expression) &&
+          initializer.expression.expression.text === "SETTING_PATHS"
+        ) {
+          const pathKey = initializer.expression.name
+            .text as keyof typeof SETTING_PATHS;
+          const key = SETTING_PATHS[pathKey];
+          if (typeof key !== "string") {
+            throw new Error(
+              `${file}: unknown SETTING_PATHS key ${initializer.expression.name.text}`
+            );
+          }
+          found.push({
+            file,
+            key,
+            kind: node.tagName.getText(sourceFile) as SourceSettingKey["kind"],
           });
         } else {
           throw new Error(`${file}: settingKey must be a string or template`);
@@ -169,21 +190,22 @@ describe("settings catalog drift guards", () => {
 
   it("renders referenced row ids in their catalog tab/page order", () => {
     const placementByFile: Record<string, { tab: string; page?: string }> = {
-      AdvancedPermissionsSection: { tab: "permissions" },
+      AdvancedSection: { tab: "advanced" },
       CommitSection: { tab: "commit" },
-      CoordinationSection: { tab: "coordination" },
+      CoordinationSection: { tab: "advanced" },
       DefaultsContextPage: { tab: "workflow", page: "context" },
       DefaultsHarnessPage: { tab: "workflow", page: "harness" },
       DefaultsHooksPage: { tab: "workflow", page: "hooks" },
       DefaultsMcpPage: { tab: "workflow", page: "mcp" },
       DefaultsPermissionsPage: { tab: "workflow", page: "permissions" },
+      TrustedExternalRootsRows: { tab: "workflow", page: "permissions" },
       DeveloperSection: { tab: "developer" },
       ExecutionSection: { tab: "execution" },
       GeneralSection: { tab: "general" },
       HarnessesSection: { tab: "workflow", page: "harness" },
       NotificationsSection: { tab: "notifications" },
-      QueueSection: { tab: "queue" },
-      RunHistorySection: { tab: "general" },
+      QueueSection: { tab: "execution" },
+      RunHistorySection: { tab: "advanced" },
       SecretsSection: { tab: "secrets" },
       ServerSection: { tab: "server" },
       StatusLineSection: { tab: "statusline" },

@@ -31,12 +31,12 @@ steps:
     script: npm test
 ```
 
-| `onError`      | Dashboard label    | What happens                                                                                                           |
-| -------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `stopWorkflow` | Stop Workflow      | The step is marked failed and the workflow stops. This is the default.                                                 |
-| `retry`        | Retry Step         | The whole step runs again from its pre-condition, in a fresh harness session, up to `maxRetries` times. Then it stops. |
-| `retryPhase`   | Retry Failed Phase | Only the phase that errored runs again, up to `maxRetries` times. Then it stops.                                       |
-| `continue`     | Continue           | A warning is recorded and the step carries on. See below for what that means for each phase.                           |
+| `onError`      | Dashboard label    | What happens                                                                                                                                                                                                     |
+| -------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stopWorkflow` | Stop Workflow      | The step is marked failed and the workflow stops. This is the default.                                                                                                                                           |
+| `retry`        | Retry Step         | The whole step runs again from its pre-condition, in a fresh harness session, up to `maxRetries` times. A harness error while sending an end-condition retry prompt also restarts the whole step. Then it stops. |
+| `retryPhase`   | Retry Failed Phase | Only the phase that errored runs again, up to `maxRetries` times. A failed retry-prompt send is retried in the existing session when available, otherwise in a fresh session. Then it stops.                     |
+| `continue`     | Continue           | A warning is recorded and the step carries on. See below for what that means for each phase.                                                                                                                     |
 
 With `continue`, what happens next depends on the phase that errored:
 
@@ -55,12 +55,13 @@ such as `Retrying attempt 1/2`. Each phase keeps its own retry count.
 
 The two differ only for a step that has more than one phase:
 
-| Phase that errored | `retry`                                                  | `retryPhase`                                                                   |
-| ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Pre-condition      | Runs the pre-condition again                             | Same as `retry`                                                                |
-| Prompt / harness   | Runs the pre-condition again, then sends the prompt      | Sends the prompt again in a fresh harness session, without the pre-condition   |
-| End condition      | Runs the pre-condition and the prompt again, then checks | Runs only the end condition again, against the files already there; no AI call |
-| Script step        | Runs the script again                                    | Same as `retry`                                                                |
+| Phase that errored              | `retry`                                                                         | `retryPhase`                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Pre-condition                   | Runs the pre-condition again                                                    | Same as `retry`                                                                |
+| Prompt / harness                | Runs the pre-condition again, then sends the prompt                             | Sends the prompt again in a fresh harness session, without the pre-condition   |
+| End-condition retry prompt send | Runs the pre-condition again, then sends the original prompt in a fresh session | Sends the retry prompt again, resuming its session when available              |
+| End condition                   | Runs the pre-condition and the prompt again, then checks                        | Runs only the end condition again, against the files already there; no AI call |
+| Script step                     | Runs the script again                                                           | Same as `retry`                                                                |
 
 Use `retry` when the pre-condition prepares or checks something the prompt
 depends on and must hold again before another attempt. Use `retryPhase` when
@@ -210,18 +211,22 @@ missing harness.
 
 ### Steer
 
-A steer message talks to the model while a step is still working, without
-waiting for it to finish. Type the message in the prompt editor, open the
-**Run** button's menu, and choose **Send Steer Message**. The text goes
-straight to the live harness session; it does not add a step to the queue, and
-any prompt properties you set in the editor are ignored.
+A steer message sends text to a model while its step is still working, without
+adding another step to the queue. Type the message in the prompt editor, open
+the **Run** button's menu, and choose **Send Steer Message**. When several
+sessions are live, such as in a parallel group, the menu lists one
+**Steer Step N** item per session; you can also choose **Send Steer to Step**
+on the step's own menu. Headless Claude receives it in the current turn; headless Qwen and
+Copilot CLI 1.0.112+ queue it after the current prompt. Prompt properties set
+in the editor are ignored.
 
 ![The Run menu open in the prompt editor footer during an interactive step, showing Send Steer Message, Run in Parallel and Run in New Workflow](/screenshots/run-menu-steer-1125x231.png)
 
-Steering needs a live interactive session: the step must be running in
-interactive mode with its harness tab open in the terminal. Otherwise the menu
-item is disabled and its tooltip says why, for example _No live harness session
-for this workflow_. Steering is only available for prompt steps.
+Steering needs a live interactive session or an open headless Claude, Qwen, or
+Copilot control channel. Copilot uses ACP on 1.0.112 and later, except in
+`auto` permission mode. Otherwise the menu item is disabled and its tooltip
+says why, for example _No live harness session for this workflow_. Steering
+is only available for prompt steps.
 
 ## See also
 

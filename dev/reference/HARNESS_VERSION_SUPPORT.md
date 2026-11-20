@@ -120,9 +120,14 @@ nothing, so it is done as late as possible:
    `versionPolicy.testedWith` to the version that harness passed with.
 4. `npm run generate-compatibility-docs` and commit before the version bump.
 
-If a new CLI release fails the suite, either fix it in this release or roll
-that CLI back to its previous `testedWith` and keep that value. Never record a
-`testedWith` the suite has not passed against.
+If a new CLI release fails the suite, fix it in this release when the cause is
+ctrlyoke's. Never record a `testedWith` with a failure ctrlyoke can fix. When
+the failure is the CLI's own behavior and ctrlyoke cannot work around it (for
+example agy 1.5.12's auto-mode sandbox on Windows), still record the version
+so `testedWith` does not freeze behind a vendor bug: list it in
+`docs/troubleshooting/known-issues.md`, link that entry from the harness page,
+note it in the CHANGELOG, and keep a bug under `dev/bugs/backlog/`. Never
+record a `testedWith` whose failures you have not explained this way.
 
 ## Writing parsers that survive format changes
 

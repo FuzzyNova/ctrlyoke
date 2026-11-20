@@ -113,8 +113,8 @@ the agent can run any shell command you haven't denied, with the job's credentia
 - A mode that can still ask for approval can stall an unattended run on that prompt.
 
 See [Tool permissions](/cli/ctrlyoke#tool-permissions) and the
-[`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions) setting. Codex and
-Antigravity don't enforce allow and deny lists.
+[`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions) setting. Codex ignores
+the allow list and enforces only MCP tool entries from the deny list.
 
 ## Approvals on a fresh runner
 

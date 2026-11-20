@@ -627,7 +627,8 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
 }) => (
   <button
     className={`flex flex-col items-center justify-center gap-0.5 py-2 w-full shrink-0 transition-colors
-      ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}`}
+      ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}
+      ${session.status !== TERMINAL_SESSION_STATUS.RUNNING ? "opacity-60" : ""}`}
     onClick={onClick}
     title={getTerminalStepLabel(session)}
     aria-label="Open terminal session"

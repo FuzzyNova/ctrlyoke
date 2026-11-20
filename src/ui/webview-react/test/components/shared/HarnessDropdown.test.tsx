@@ -230,55 +230,55 @@ describe("HarnessDropdown", () => {
   it("shows a percentage badge before the status dot when usage data exists", () => {
     // The badge is hidden below a 180px measured width; jsdom reports 0 by
     // default, so stub a wide layout for this assertion.
-    const originalGetBoundingClientRect =
-      Element.prototype.getBoundingClientRect;
-    Element.prototype.getBoundingClientRect = function (
-      this: Element
-    ): DOMRect {
-      return { width: 300, height: 20 } as DOMRect;
-    };
-
-    useHarnessUsageStore.setState({
-      snapshotsByHarness: {
-        [HARNESS_IDS.CLAUDE_CLI]: {
-          harnessId: HARNESS_IDS.CLAUDE_CLI,
-          updatedAt: Date.now(),
-          quota: {
-            harnessId: HARNESS_IDS.CLAUDE_CLI,
-            source: HARNESS_QUOTA_SOURCES.PROVIDER_LIVE,
-            fetchedAt: Date.now(),
-            staleAfterMs: 5 * 60 * 1000,
-            windows: [
-              {
-                id: "5h",
-                kind: HARNESS_USAGE_WINDOW_KINDS.ROLLING,
-                label: "5-hour",
-                percentUsed: 25,
-                unit: HARNESS_USAGE_UNITS.PERCENT,
-                confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
-              },
-            ],
-          },
-          observed: {},
-        },
-      },
-    });
-    useSettingsStore.setState({
-      fullGlobalSettings: {
-        settings: {
-          ...CTRLYOKE_SETTINGS_DEFAULTS,
-          usageTracking: {
-            ...CTRLYOKE_SETTINGS_DEFAULTS.usageTracking,
-            percentDirection: STATUS_LINE_USAGE_DIRECTIONS.REMAINING,
-          },
-        },
-        sources: {},
-        isMultiRoot: false,
-      },
-    });
+    const getBoundingClientRect = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(() => ({ width: 300, height: 20 }) as DOMRect);
 
     try {
-      render(
+      expect(document.createElement("div").getBoundingClientRect().width).toBe(
+        300
+      );
+
+      useHarnessUsageStore.setState({
+        snapshotsByHarness: {
+          [HARNESS_IDS.CLAUDE_CLI]: {
+            harnessId: HARNESS_IDS.CLAUDE_CLI,
+            updatedAt: Date.now(),
+            quota: {
+              harnessId: HARNESS_IDS.CLAUDE_CLI,
+              source: HARNESS_QUOTA_SOURCES.PROVIDER_LIVE,
+              fetchedAt: Date.now(),
+              staleAfterMs: 5 * 60 * 1000,
+              windows: [
+                {
+                  id: "5h",
+                  kind: HARNESS_USAGE_WINDOW_KINDS.ROLLING,
+                  label: "5-hour",
+                  percentUsed: 25,
+                  unit: HARNESS_USAGE_UNITS.PERCENT,
+                  confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
+                },
+              ],
+            },
+            observed: {},
+          },
+        },
+      });
+      useSettingsStore.setState({
+        fullGlobalSettings: {
+          settings: {
+            ...CTRLYOKE_SETTINGS_DEFAULTS,
+            usageTracking: {
+              ...CTRLYOKE_SETTINGS_DEFAULTS.usageTracking,
+              percentDirection: STATUS_LINE_USAGE_DIRECTIONS.REMAINING,
+            },
+          },
+          sources: {},
+          isMultiRoot: false,
+        },
+      });
+
+      const { container } = render(
         <HarnessDropdown
           value={HARNESS_IDS.CLAUDE_CLI}
           onChange={vi.fn()}
@@ -289,12 +289,29 @@ describe("HarnessDropdown", () => {
         />
       );
 
-      expect(screen.getByText("75%")).toBeInTheDocument();
+      const badge = screen.queryByText("75%");
+      const claudeButton = screen.queryByRole("button", { name: /Claude/ });
+      const claudeRowText =
+        claudeButton?.parentElement?.textContent?.trim() ??
+        container.textContent?.trim() ??
+        "(Claude row not rendered)";
+      const usageSnapshot =
+        useHarnessUsageStore.getState().snapshotsByHarness[
+          HARNESS_IDS.CLAUDE_CLI
+        ];
+      const percentDirection =
+        useSettingsStore.getState().fullGlobalSettings?.settings.usageTracking
+          .percentDirection ?? "(unset)";
+
+      expect(
+        badge,
+        `Expected the Claude quota badge to show 75%. Usage snapshot: ${JSON.stringify(usageSnapshot)}. Settings percentDirection: ${percentDirection}. Claude row text: ${claudeRowText}`
+      ).toBeInTheDocument();
       expect(
         screen.getByTitle(/^Available \| 75% remaining 5-hour \(updated .+\)$/)
       ).toBeInTheDocument();
     } finally {
-      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      getBoundingClientRect.mockRestore();
     }
   });
 

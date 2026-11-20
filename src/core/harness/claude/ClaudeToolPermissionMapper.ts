@@ -17,6 +17,7 @@ import { normalizeClaudeMcpServerId } from "../../../utils/ToolPermissionUtils";
 import * as path from "path";
 import {
   HARNESS_IDS,
+  HEADLESS_APPROVAL_POLICIES,
   PERMISSION_MODES,
   TOOL_PERMISSION_CATEGORIES,
 } from "../../../types/DashboardConstants";
@@ -120,6 +121,10 @@ export class ClaudeToolPermissionMapper
     );
     if (fallback) return fallback;
     const isAuto = config.mode === PERMISSION_MODES.AUTO;
+    const useHeadlessApprovalControl =
+      !context.isInteractive &&
+      config.headlessApprovals === HEADLESS_APPROVAL_POLICIES.ASK &&
+      (isAuto || config.mode === PERMISSION_MODES.CUSTOM);
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
     }
@@ -138,8 +143,15 @@ export class ClaudeToolPermissionMapper
         // bypassPermissions or acceptEdits would never ask.
         args = [
           "--permission-mode",
-          isAuto ? "auto" : context.isInteractive ? "default" : "dontAsk",
+          isAuto
+            ? "auto"
+            : context.isInteractive || useHeadlessApprovalControl
+              ? "default"
+              : "dontAsk",
         ];
+        if (useHeadlessApprovalControl) {
+          args.push("--permission-prompt-tool", "stdio");
+        }
         const convertedAllowTools = this.convertUnique(
           config.allowedTools,
           (t) => this.convertToClaudeFormat(t)

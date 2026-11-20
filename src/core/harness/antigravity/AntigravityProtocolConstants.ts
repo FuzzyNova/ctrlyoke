@@ -66,6 +66,10 @@ export const ANTIGRAVITY_TOOL_NAMES = {
 export const ANTIGRAVITY_SUBAGENT_REPORT_PATTERN =
   /sender=([0-9a-f-]{36})[^\n]*content=/i;
 
+export const ANTIGRAVITY_STREAM_JSON_INPUT_EVENTS = {
+  USER: "user",
+} as const;
+
 /**
  * `event` values from Antigravity's headless stream-json **stdout**, a separate
  * vocabulary from the transcript protocol above. Shared by the usage
@@ -75,6 +79,15 @@ export const ANTIGRAVITY_STREAM_JSON_EVENTS = {
   INIT: "init",
   STEP_UPDATE: "step_update",
   RESULT: "result",
+} as const;
+
+export const ANTIGRAVITY_STREAM_JSON_USER_ROLE =
+  ANTIGRAVITY_STREAM_JSON_INPUT_EVENTS.USER;
+
+export const ANTIGRAVITY_STREAM_JSON_ARGS = {
+  INPUT_FORMAT_FLAG: "--input-format",
+  OUTPUT_FORMAT_FLAG: "--output-format",
+  FORMAT: "stream-json",
 } as const;
 
 /** `result.status` values on the terminal stream-json `result` event. */

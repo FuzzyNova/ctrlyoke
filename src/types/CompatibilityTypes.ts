@@ -12,6 +12,7 @@ import {
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
+  HEADLESS_CONTROL_CAPABILITY_KEYS,
   SANDBOX_CAPABILITY_KEYS,
   type HarnessId,
   type HookEvent,
@@ -116,6 +117,8 @@ export interface CapabilityDeclaration {
  */
 const CAPABILITY_SUITE_REFERENCE =
   "src/test/harness/capabilities.harness.test.ts";
+export const HEADLESS_STEERING_SUITE_REFERENCE =
+  "src/test/harness/headless-steer.harness.test.ts";
 
 /**
  * The live suite that proves per-harness permission and inline-config
@@ -162,6 +165,9 @@ export interface PermissionCapabilityDescriptor {
 export interface CapabilityDomainDescriptorMap {
   promptInputs: {
     images: CapabilityDeclaration;
+  };
+  [CAPABILITY_DOMAINS.HEADLESS_CONTROL]: {
+    [HEADLESS_CONTROL_CAPABILITY_KEYS.STEERING]: CapabilityDeclaration;
   };
   permissions: PermissionCapabilityDescriptor;
   hooks: Partial<Record<HookEvent, CapabilityDeclaration>>;
@@ -300,6 +306,10 @@ export const HOOK_CAVEAT_CODES = {
   DECISION_UNSUPPORTED: "hooks.decisionUnsupported",
 } as const;
 
+export const HEADLESS_CONTROL_CAVEAT_CODES = {
+  NO_STEERING_CHANNEL: "headlessControl.noSteeringChannel",
+} as const;
+
 export type PermissionCaveatCode =
   (typeof PERMISSION_CAVEAT_CODES)[keyof typeof PERMISSION_CAVEAT_CODES];
 
@@ -310,7 +320,11 @@ export type HookCaveatCode =
   (typeof HOOK_CAVEAT_CODES)[keyof typeof HOOK_CAVEAT_CODES];
 
 export type CompatibilityCaveatCode =
-  PermissionCaveatCode | McpCaveatCode | HookCaveatCode | SandboxCaveatCode;
+  | PermissionCaveatCode
+  | McpCaveatCode
+  | HookCaveatCode
+  | SandboxCaveatCode
+  | (typeof HEADLESS_CONTROL_CAVEAT_CODES)[keyof typeof HEADLESS_CONTROL_CAVEAT_CODES];
 
 /**
  * Caveats that explain a risk alongside a capability that is enforced. Every
@@ -338,7 +352,7 @@ export function getCompatibilityCaveatMessage(
 ): string | undefined {
   switch (caveatCode) {
     case PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES:
-      return "because this harness uses sandbox/approval modes instead of individual tool patterns";
+      return "because this harness has no allow list; its sandbox and approval modes decide what runs";
     case PERMISSION_CAVEAT_CODES.ANTIGRAVITY_RULE_TRANSLATION:
       return "because Antigravity cannot translate web search or subagent tools, list/search denials, or allow a command chain piecemeal";
     case PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS:
@@ -346,7 +360,7 @@ export function getCompatibilityCaveatMessage(
     case PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY:
       return "because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns";
     case PERMISSION_CAVEAT_CODES.COPILOT_AUTO_MODE_HEADLESS_ONLY:
-      return 'because Copilot assisted approval is available only in headless sessions; for interactive sessions use /permissions assisted, or set defaultPermissionMode: "assisted" in ~/.copilot/settings.json';
+      return 'because Copilot assisted approval is available only in headless sessions; interactive sessions run as Custom, and defaultPermissionMode: "assisted" in ~/.copilot/settings.json also enables the judge for those Custom steps. Use /permissions default for a manual Custom session, or /permissions assisted when you want Copilot Auto interactively';
     case PERMISSION_CAVEAT_CODES.AUTO_MODE_NOT_ENABLED:
       return "because this harness has no judged approval mode";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
@@ -363,6 +377,8 @@ export function getCompatibilityCaveatMessage(
       return "because this harness's pre-tool hook fires but cannot block the tool call";
     case HOOK_CAVEAT_CODES.DECISION_UNSUPPORTED:
       return "because OpenCode delivers this event as notification-only; allow and deny decisions are not supported";
+    case HEADLESS_CONTROL_CAVEAT_CODES.NO_STEERING_CHANNEL:
+      return "because this harness has no ctrlyoke headless steering channel";
     case SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY:
       return "because network access is set by the harness's own sandbox settings, not by ctrlyoke, and Codex's Windows sandbox does not block network access at all";
     case SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT:
@@ -669,6 +685,8 @@ function getDeclarationDiagnosticCode(
       return fidelity === CAPABILITY_FIDELITIES.PARTIAL
         ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL
         : COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED;
+    case CAPABILITY_DOMAINS.HEADLESS_CONTROL:
+      return undefined;
     case CAPABILITY_DOMAINS.HOOKS:
       return fidelity === CAPABILITY_FIDELITIES.PARTIAL
         ? COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL

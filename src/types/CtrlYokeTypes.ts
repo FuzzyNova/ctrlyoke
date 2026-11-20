@@ -44,6 +44,7 @@ import {
   type WorkflowValidationWarningCode,
   type GuardrailStopCode,
   type PriorContextDetail,
+  type HeadlessApprovalPolicy,
   type SandboxMode,
   type SandboxRequest,
 } from "./DashboardConstants";
@@ -226,6 +227,10 @@ export interface ToolPermissionsOverride {
   allowedTools?: string[];
   /** Tool patterns to deny (takes precedence over allow list). */
   deniedTools?: string[];
+  /** Headless approval behavior when a harness requests human approval. */
+  headlessApprovals?: HeadlessApprovalPolicy;
+  /** Maximum time in seconds to wait for a headless approval response. */
+  headlessApprovalTimeoutSec?: number;
 }
 
 export type { ErrorBehaviorAction };

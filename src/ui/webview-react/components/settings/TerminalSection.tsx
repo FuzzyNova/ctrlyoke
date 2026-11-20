@@ -53,6 +53,7 @@ export function TerminalSection({
   onReset,
 }: Props) {
   const terminal = settings.settings.terminal;
+  const execution = settings.settings.execution;
   const sources = settings.sources as Record<string, SettingSource>;
   const platform = useMemo(() => detectPlatform(), []);
   const knownWindowsShell = WINDOWS_SHELL_OPTIONS.some(
@@ -145,6 +146,26 @@ export function TerminalSection({
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Terminal Behavior
         </h3>
+
+        <SettingToggleRow
+          settingKey="execution.closeTerminalOnComplete"
+          checked={execution.closeTerminalOnComplete}
+          onChange={(v) => onUpdate("execution.closeTerminalOnComplete", v)}
+          {...rowProps}
+        />
+
+        <SettingToggleRow
+          settingKey="execution.reuseRunningTerminal"
+          {...{
+            description: execution.closeTerminalOnComplete
+              ? "Unavailable — terminal reuse requires keeping the terminal open. Disable 'Close terminal on completion' to enable this."
+              : "Type a resumed step's prompt into its still-open terminal instead of restarting the harness — faster.",
+          }}
+          checked={execution.reuseRunningTerminal ?? false}
+          onChange={(v) => onUpdate("execution.reuseRunningTerminal", v)}
+          disabled={execution.closeTerminalOnComplete}
+          {...rowProps}
+        />
 
         <SettingToggleRow
           settingKey="terminal.macOptionIsMeta"

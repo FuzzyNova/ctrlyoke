@@ -87,6 +87,50 @@ suite("CliResponseCollector", () => {
     });
   });
 
+  test("keeps an acknowledged turn interrupt as a successful partial step", async () => {
+    const collector = createCollector({
+      ...createProvider(
+        createParsedOutput({
+          metadata: { error: "Operation cancelled.", errorType: "interrupt" },
+        })
+      ),
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 1,
+      interrupted: true,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.failureKind, undefined);
+    assert.strictEqual(result.cliResult.exitCode, 1);
+  });
+
+  test("does not accept an interrupted turn if its process was also terminated", async () => {
+    const result = await createCollector(
+      createProvider(
+        createParsedOutput({
+          metadata: { error: "Operation cancelled.", errorType: "interrupt" },
+        })
+      )
+    ).collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 1,
+      terminationSignal: "SIGKILL",
+      interrupted: true,
+      terminatedByManager: true,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.USER_CANCELLED);
+  });
+
   test("classifies externally signalled process termination as a process exit", async () => {
     const result = await createCollector(
       createProvider()

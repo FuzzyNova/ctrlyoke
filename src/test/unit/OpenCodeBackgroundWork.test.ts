@@ -7,6 +7,7 @@ import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser
 import { OPENCODE_V2_MESSAGE_TYPES } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
+import { removeTempDir } from "../helpers/tempWorkspace";
 
 /**
  * Real OpenCode 2.2.5 interactive (TUI) captures, driven through node-pty
@@ -493,7 +494,7 @@ suite("OpenCodeLogParser subagent follow-up output (OpenCode 2)", () => {
   setup(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-oc-sidecar-"));
   });
-  teardown(() => fs.rmSync(dir, { recursive: true, force: true }));
+  teardown(() => removeTempDir(dir));
 
   const append = (...records: object[]): void =>
     fs.appendFileSync(

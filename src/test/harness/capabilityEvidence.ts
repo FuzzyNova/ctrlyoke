@@ -8,12 +8,14 @@
  */
 
 import {
+  HEADLESS_STEERING_SUITE_REFERENCE,
   INLINE_CONFIG_SUITE_REFERENCE,
   type CapabilityDeclaration,
   type HarnessCapabilityFacts,
 } from "../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
+  HEADLESS_CONTROL_CAPABILITY_PATHS,
   type HarnessId,
 } from "../../types/DashboardConstants";
 
@@ -75,6 +77,8 @@ export const UNPROVEN_CLAIMS: Partial<
  */
 export const OTHER_SUITE_CLAIMS: Readonly<Record<CapabilityPath, string>> = {
   "sandbox.terminal": "src/test/harness/sandbox.harness.test.ts",
+  [HEADLESS_CONTROL_CAPABILITY_PATHS.STEERING]:
+    HEADLESS_STEERING_SUITE_REFERENCE,
   // Deny still blocks and an unlisted chained command runs under the judge;
   // Codex's cases prove the reviewer-approved sandbox escalation instead.
   "permissions.autoMode": INLINE_CONFIG_SUITE_REFERENCE,
@@ -82,18 +86,14 @@ export const OTHER_SUITE_CLAIMS: Readonly<Record<CapabilityPath, string>> = {
 
 /**
  * Claims the suite proves wrong today. The suite still asserts them, so it
- * stays red until the bug is fixed; their declarations stay `kind: "manual"`
- * meanwhile. Each value is the bug document.
+ * stays red until the behavior changes; their declarations stay manual
+ * meanwhile. Each value is the bug or limitation document.
  */
 export const KNOWN_BROKEN_CLAIMS: Partial<
   Record<HarnessId, Partial<Record<CapabilityPath, string>>>
 > = {
-  "opencode-cli": {
-    "mcp.perServerToolFiltering":
-      "dev/bugs/backlog/opencode-mcp-tool-deny-rules-never-match.md",
-  },
-  "copilot-cli": {
+  "antigravity-cli": {
     "permissions.autoMode":
-      "dev/bugs/backlog/copilot-auto-judge-cannot-see-prompt-file.md",
+      "dev/bugs/rejected/antigravity-auto-approved-command-cannot-write-workspace.md",
   },
 };

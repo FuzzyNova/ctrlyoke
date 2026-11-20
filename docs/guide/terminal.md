@@ -118,7 +118,7 @@ resumable. Exiting also releases a
 
 Turn on `execution.closeTerminalOnComplete` to close every AI terminal when its
 work is done. That also turns terminal reuse off, since there is no terminal left
-to type into. Both settings are on the **Execution** tab of Settings.
+to type into. Both settings are under **Terminal Behavior** on the **Terminal** tab of Settings.
 
 ### Background work
 
@@ -152,8 +152,15 @@ types in the terminal there before the first device reconnects, control goes
 back to that device when it opens the workflow again, so you don't have to
 click **Take Control** each time you reopen the app.
 
-A browser that reconnects replays the most recent output of each terminal
-(50 KB by default, `terminal.replayBufferKb`).
+Every device shows the same terminal tabs. Closing a terminal on any device,
+controlling or not, closes it everywhere, and an ended terminal stays open
+everywhere until someone closes it. A device that opens the workflow later
+also gets the ended terminals, with their most recent output.
+
+A browser that reconnects catches up on whatever changed while it was away:
+it replays the most recent output of each terminal (50 KB by default,
+`terminal.replayBufferKb`), shows terminals that ended in the meantime as
+ended, and drops terminals that were closed.
 
 ## On a phone or tablet
 

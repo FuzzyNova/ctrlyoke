@@ -7,7 +7,10 @@ import type {
 } from "./IToolPermissionMapper";
 import type { ISandboxMapper } from "./ISandboxMapper";
 import type { HarnessAdapterPreparation } from "./PreparedMutation";
-import type { IHeadlessControlChannel } from "../IHeadlessControlChannel";
+import type {
+  HeadlessControlChannelOptions,
+  IHeadlessControlChannel,
+} from "../IHeadlessControlChannel";
 export type { HarnessAdapterPreparation } from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type { HarnessVersionPolicy } from "../../../../utils/HarnessVersion";
@@ -179,6 +182,14 @@ export interface IHarnessAdapter {
    * log. Resolved in one place by `resolveHeadlessSourceMode()`.
    */
   readonly headlessSource?: HeadlessSourceMode;
+
+  /**
+   * Select the headless source for one permission mode when protocol choice
+   * changes the CLI output channel (for example Copilot ACP versus JSONL).
+   */
+  getHeadlessSourceMode?(
+    permissionMode?: ToolPermissionConfig["mode"]
+  ): HeadlessSourceMode | undefined | Promise<HeadlessSourceMode | undefined>;
 
   /**
    * Convert one complete headless stdout record into the event vocabulary
@@ -591,8 +602,16 @@ export interface IHarnessAdapter {
 
   /** Create the optional stdin control protocol for one headless execution. */
   createHeadlessControlChannel?(
-    promptText: string
-  ): IHeadlessControlChannel | undefined;
+    promptText: string,
+    options: HeadlessControlChannelOptions
+  ):
+    | IHeadlessControlChannel
+    | undefined
+    | Promise<IHeadlessControlChannel | undefined>;
+  /** Clamp a configured approval timeout to this CLI's protocol limit. */
+  resolveHeadlessApprovalTimeoutMs?(
+    requestedTimeoutMs: number
+  ): Promise<number>;
 
   /**
    * Receive the sandbox mapper's process environment for the next launch

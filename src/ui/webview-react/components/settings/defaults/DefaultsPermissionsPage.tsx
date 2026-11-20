@@ -8,13 +8,18 @@ import { CustomSelect } from "../../shared/CustomSelect";
 import { PermissionListEditor } from "../../shared/PermissionListEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
+import { TrustedExternalRootsRows } from "./TrustedExternalRootsRows";
 import {
   PERMISSION_MODE_OPTIONS_META,
+  HEADLESS_APPROVAL_POLICY_OPTIONS_META,
   SANDBOX_MODE_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import {
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_POLICIES,
+  SETTING_PATHS,
   defaultSandboxSelectOptions,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
@@ -24,6 +29,8 @@ const EMPTY_TOOL_PERMISSIONS = {
   mode: PERMISSION_MODES.NONE,
   allowedTools: [] as string[],
   deniedTools: [] as string[],
+  headlessApprovals: HEADLESS_APPROVAL_POLICIES.DENY,
+  headlessApprovalTimeoutSec: HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
 };
 
 interface Props {
@@ -46,6 +53,12 @@ export function DefaultsPermissionsPage({
     toolPermissions.allowedTools
   );
   const [deniedTools, setDeniedTools] = useState(toolPermissions.deniedTools);
+  const [approvalTimeoutSec, setApprovalTimeoutSec] = useState(
+    String(
+      toolPermissions.headlessApprovalTimeoutSec ??
+        HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC
+    )
+  );
   const rowProps = { sources, onReset, activeScope };
 
   useEffect(() => {
@@ -55,6 +68,15 @@ export function DefaultsPermissionsPage({
   useEffect(() => {
     setDeniedTools(toolPermissions.deniedTools);
   }, [toolPermissions.deniedTools]);
+
+  useEffect(() => {
+    setApprovalTimeoutSec(
+      String(
+        toolPermissions.headlessApprovalTimeoutSec ??
+          HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC
+      )
+    );
+  }, [toolPermissions.headlessApprovalTimeoutSec]);
 
   return (
     <div className="space-y-4">
@@ -92,6 +114,13 @@ export function DefaultsPermissionsPage({
           )}
         />
       </SettingInputRow>
+      {/* Same order as the workflow Permissions tab: roots follow the sandbox. */}
+      <TrustedExternalRootsRows
+        settings={settings}
+        activeScope={activeScope}
+        onUpdate={onUpdate}
+        onReset={onReset}
+      />
       <SettingInputRow
         settingKey="defaults.toolPermissions.mode"
         id="defaults-permission-mode"
@@ -150,6 +179,59 @@ export function DefaultsPermissionsPage({
         <PermissionCapabilitySummary
           id="defaults-denied-tools-diagnostic"
           field="deniedTools"
+        />
+      </SettingInputRow>
+      <SettingInputRow
+        settingKey={SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS}
+        id="defaults-headless-approvals"
+        {...rowProps}
+      >
+        <CustomSelect
+          id="defaults-headless-approvals"
+          value={
+            toolPermissions.headlessApprovals ?? HEADLESS_APPROVAL_POLICIES.DENY
+          }
+          onChange={(value) =>
+            onUpdate(
+              SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVALS,
+              value
+            )
+          }
+          schemaPath="defaults.toolPermissions.headlessApprovals"
+          options={toSelectOptions(
+            HEADLESS_APPROVAL_POLICY_OPTIONS_META,
+            "defaults.toolPermissions.headlessApprovals"
+          )}
+        />
+      </SettingInputRow>
+      <SettingInputRow
+        settingKey={
+          SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC
+        }
+        id="defaults-headless-approval-timeout"
+        {...rowProps}
+      >
+        <input
+          id="defaults-headless-approval-timeout"
+          type="number"
+          min={1}
+          max={600}
+          step={1}
+          value={approvalTimeoutSec}
+          aria-label="Headless approval timeout in seconds"
+          onChange={(event) => setApprovalTimeoutSec(event.target.value)}
+          onBlur={() => {
+            const parsed = Number(approvalTimeoutSec);
+            const value = Number.isFinite(parsed)
+              ? Math.max(1, Math.min(600, Math.round(parsed)))
+              : HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC;
+            setApprovalTimeoutSec(String(value));
+            onUpdate(
+              SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS_HEADLESS_APPROVAL_TIMEOUT_SEC,
+              value
+            );
+          }}
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-input-fg focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
     </div>

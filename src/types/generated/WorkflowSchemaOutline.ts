@@ -946,11 +946,23 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "allowedTools": {
         "valueKind": "array",
-        "description": "Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses."
+        "description": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs."
       },
       "deniedTools": {
         "valueKind": "array",
-        "description": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns."
+        "description": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns."
+      },
+      "headlessApprovals": {
+        "valueKind": "string",
+        "enum": [
+          "deny",
+          "ask"
+        ],
+        "description": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered."
+      },
+      "headlessApprovalTimeoutSec": {
+        "valueKind": "number",
+        "description": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions."
       }
     },
     "forbiddenKeys": []
@@ -965,7 +977,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "retryPhase",
           "continue"
         ],
-        "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; for pre-conditions and script steps it behaves like 'retry'. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "maxRetries": {
         "valueKind": "oneOf",

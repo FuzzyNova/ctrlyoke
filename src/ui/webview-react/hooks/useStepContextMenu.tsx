@@ -22,6 +22,7 @@ import {
   type StepRuntimeMetaSnapshot,
 } from "@utils/stepMetadataClipboard";
 import {
+  buildLiveStepControlMenuItems,
   buildReplyToStepMenuItem,
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
@@ -37,7 +38,13 @@ import {
   postRunLifecycleMutation,
   postSetStartPositionMutation,
 } from "../utils/workflowMutation";
+import { useSteerTargets } from "@hooks/useSteerTargets";
 import {
+  findSteerTargetForStep,
+  getSteerDraftDisabledReason,
+} from "@utils/steerTargets";
+import {
+  STEP_STATUS,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_POSITION_DIRECTIONS,
   type WorktreePositionDirection,
@@ -133,6 +140,8 @@ export function useStepContextMenu({
   pendingGroups = [],
 }: UseStepContextMenuOptions) {
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
+  const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
+  const steerTargets = useSteerTargets(activeWorkflowId);
   const hiddenOutputTargets = useUiStore((s) => s.hiddenOutputTargets);
   const toggleHiddenOutputTarget = useUiStore(
     (s) => s.toggleHiddenOutputTarget
@@ -520,6 +529,17 @@ export function useStepContextMenu({
             ...getStepSessionDetails(step, latestOutput, runtimeMeta),
             sourceLabel: `Step ${deleteIndex + 1}`,
           }),
+          ...buildLiveStepControlMenuItems({
+            workflowId: activeWorkflowId,
+            stepIndex: deleteIndex,
+            isRunning: step.status === STEP_STATUS.RUNNING,
+            target: findSteerTargetForStep(steerTargets, deleteIndex),
+            draftDisabledReason: getSteerDraftDisabledReason({
+              ...useEditorStore.getState(),
+              isExternallyManaged,
+            }),
+            isExternallyManaged,
+          }),
           { type: "divider" },
           ...buildStepOutputFilterMenuItems({
             hidden: hiddenOutputKeys.includes(targetKey),
@@ -731,6 +751,8 @@ export function useStepContextMenu({
       parallelGroups,
       steps,
       getLatestPrompt,
+      activeWorkflowId,
+      steerTargets,
     ]
   );
 

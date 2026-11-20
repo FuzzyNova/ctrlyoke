@@ -46,6 +46,7 @@ test("compatibility documentation covers the current registry without uniform fe
     "permissions",
     "sandbox",
     "promptInputs",
+    "headlessControl",
     "hooks",
     "mcp",
   ]);
@@ -54,8 +55,8 @@ test("compatibility documentation covers the current registry without uniform fe
     .filter((line) => line.startsWith("| "));
   assert.equal(
     matrixRows.length,
-    22,
-    "sixteen capability rows, five domain rows, plus the header and divider"
+    24,
+    "sixteen capability rows, six domain rows, plus the header and divider"
   );
   assert.equal(
     matrixRows[0].split(" | ").length,

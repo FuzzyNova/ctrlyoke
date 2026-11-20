@@ -17,10 +17,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import {
-  classifyTemplateVariableDefaults,
-  shouldClearTemplateVariableDefaults,
-} from "@root/utils/TemplateVariableDefaults";
+import { classifyTemplateVariableDefaults } from "@root/utils/TemplateVariableDefaults";
 import { defaultModelForHarness } from "@utils/harnessChangeCascade";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { TemplateVariableField } from "../workflow/TemplateVariableField";
@@ -110,9 +107,6 @@ function TemplateDefaultsPage({
   const [extraCards, setExtraCards] = useState<CardState[]>([]);
   const [drafts, setDrafts] = useState<DraftValues>({});
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
-  const [noticeByTemplate, setNoticeByTemplate] = useState<
-    Record<string, boolean>
-  >({});
   const selectRefs = useRef<Record<string, HTMLSelectElement | null>>({});
   const pendingBrowse = useRef<{ templateId: string; variable: string } | null>(
     null
@@ -214,11 +208,18 @@ function TemplateDefaultsPage({
   }
 
   function clearAll(templateId: string, saved: Record<string, string>) {
-    const savedNames = Object.keys(saved);
-    if (savedNames.length)
+    // Non-blank drafts are included: a just-added row may have a write that
+    // settings have not reflected yet. Blank drafts were never written.
+    const names = new Set([
+      ...Object.keys(saved),
+      ...Object.entries(drafts[templateId] ?? {})
+        .filter(([, value]) => value.trim())
+        .map(([name]) => name),
+    ]);
+    if (names.size)
       commit(
         templateId,
-        Object.fromEntries(savedNames.map((name) => [name, null]))
+        Object.fromEntries([...names].map((name) => [name, null]))
       );
     // Unsaved rows go too, and the card with them.
     setDrafts((previous) => {
@@ -267,11 +268,29 @@ function TemplateDefaultsPage({
             ? HARNESS_IDS.CLAUDE_CLI
             : "");
     }
-    const effective = { ...initial };
+    // A linked model without its own default follows the harness's default
+    // model, so the pair is saved as a unit, as a harness change does.
+    if (variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS) {
+      const harness = initial[variable.name] as HarnessId;
+      const fallback =
+        defaultModelForHarness(
+          harness,
+          harnessDefaults,
+          modelOptions[harness] ?? []
+        ) ?? "";
+      for (const model of group.slice(1))
+        if (!initial[model.name]) initial[model.name] = fallback;
+    }
     const key = `${template.id}:${variable.name}`;
+    // Choosing the variable is the pin: save its initial value now. A blank
+    // value has nothing to save, so it stays a draft until the user types one.
+    const toSave = Object.fromEntries(
+      Object.entries(initial).filter(([, value]) => value.trim())
+    );
+    if (Object.keys(toSave).length) commit(template.id, toSave);
     setDrafts((previous) => ({
       ...previous,
-      [template.id]: { ...(previous[template.id] ?? {}), ...effective },
+      [template.id]: { ...(previous[template.id] ?? {}), ...initial },
     }));
     setExtraCards((previous) =>
       previous.some((card) => card.templateId === template.id)
@@ -338,30 +357,8 @@ function TemplateDefaultsPage({
     } else {
       valuesToPin[name] = value;
     }
-    if (
-      shouldClearTemplateVariableDefaults(
-        template.variables ?? [],
-        activeScope,
-        scoped[SETTING_SCOPES.USER]?.[template.id],
-        scoped[SETTING_SCOPES.WORKSPACE]?.[template.id],
-        valuesToPin
-      )
-    ) {
-      setNoticeByTemplate((previous) => ({ ...previous, [template.id]: true }));
-      window.setTimeout(
-        () =>
-          setNoticeByTemplate((previous) => ({
-            ...previous,
-            [template.id]: false,
-          })),
-        4000
-      );
-      commit(
-        template.id,
-        Object.fromEntries(Object.keys(valuesToPin).map((key) => [key, null]))
-      );
-      return;
-    }
+    // A value equal to the template's default is still saved: the template's
+    // default can change later, and the pin should survive that.
     const values: Record<string, string | null> = Object.fromEntries(
       Object.entries(valuesToPin).map(([key, next]) => [
         key,
@@ -558,11 +555,6 @@ function TemplateDefaultsPage({
                   Clear all
                 </button>
               </header>
-              {noticeByTemplate[templateId] && (
-                <p role="status" className="text-xs text-description-fg">
-                  Matches the inherited value, so nothing is saved
-                </p>
-              )}
               {showFields.map((variable) => {
                 const paired =
                   variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS

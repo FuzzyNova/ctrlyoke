@@ -55,6 +55,11 @@ import {
 } from "../../utils/CliEventDiff";
 import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
 import { evaluateFileAccess } from "../../utils/FileAccessPolicy";
+import {
+  hasRecordedContextWindow,
+  withFollowUpContextWindow,
+  type OutputContextWindow,
+} from "../../utils/OutputContextWindow";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
 import {
@@ -193,6 +198,11 @@ interface OpenAttemptState {
   terminated: boolean;
   /** Reopened after this attempt was already settled and yielded. */
   continuation: boolean;
+  /**
+   * Latest context window a follow-up reported. Applied when the attempt
+   * settles, because the attempt's own aggregate can be recorded after it.
+   */
+  followUpContextWindow?: OutputContextWindow;
 }
 
 /**
@@ -239,6 +249,8 @@ export type RunOutputResolverEvent =
       attempt: ResolvedRunAttempt;
       responseTextLength: number;
       eventCount: number;
+      /** Context window the follow-up turn reported, when it reported one. */
+      contextWindow?: OutputContextWindow;
     }
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED;
@@ -489,6 +501,9 @@ export class RunOutputResolver {
             ),
             responseTextLength: event.payload.responseTextLength,
             eventCount: event.payload.eventCount,
+            ...(event.payload.contextWindow
+              ? { contextWindow: event.payload.contextWindow }
+              : {}),
           };
           break;
         case TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED:
@@ -566,6 +581,11 @@ export class RunOutputResolver {
           state.deltas.discard(key);
           state.value.output = event.attempt.output;
           state.value.kind = event.attempt.kind;
+          // An aggregate carrying its own reading is newer than any follow-up
+          // recorded before it.
+          if (hasRecordedContextWindow(event.attempt.output)) {
+            state.followUpContextWindow = undefined;
+          }
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK:
           state.deltas.appendChunk(key, event.chunk);
@@ -581,8 +601,11 @@ export class RunOutputResolver {
           state.value.terminalReason = event.reason;
           state.terminated = true;
           break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.RETRY_SCHEDULED:
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.FOLLOW_UP_RESPONSE_APPENDED:
+          state.followUpContextWindow =
+            event.contextWindow ?? state.followUpContextWindow;
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.RETRY_SCHEDULED:
           break;
       }
     }
@@ -652,7 +675,15 @@ export class RunOutputResolver {
       // only, so they are the continuation's entire output.
       const empty: CliOutput = { elapsed: 0, isStreaming: false };
       const appended = state.deltas.flush(key, empty);
-      if (appended !== empty) state.value.output = appended;
+      if (appended !== empty || state.followUpContextWindow) {
+        state.value.output = appended;
+      }
+    }
+    if (state.value.output && state.followUpContextWindow) {
+      state.value.output = withFollowUpContextWindow(
+        state.value.output,
+        state.followUpContextWindow
+      );
     }
     return state.value;
   }
@@ -1826,6 +1857,9 @@ function appendFollowUpOutput(
       ],
       metadata: existing.structured?.metadata ?? {},
     },
+    ...(followUp.contextWindow || existing.contextWindow
+      ? { contextWindow: followUp.contextWindow ?? existing.contextWindow }
+      : {}),
   };
 }
 

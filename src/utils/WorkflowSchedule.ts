@@ -109,9 +109,10 @@ export function validateWorkflowSchedule(
 }
 
 /**
- * Computes the next enabled schedule occurrence, bounded by `until`. Schedule
- * times are the host's wall clock: the host uses the default local calendar,
- * and a dashboard on another machine passes `scheduleCalendar(hostTimeZone)`.
+ * Computes the next enabled schedule occurrence, bounded by `until`. Pass
+ * `ownerScheduleCalendar(schedule, fallbackTimeZone)` to evaluate recorded
+ * schedules in their owner's zone; the default remains the process-local
+ * calendar for callers without a schedule zone.
  */
 export function nextScheduleOccurrence(
   schedule: WorkflowSchedule,

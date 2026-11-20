@@ -75,7 +75,10 @@ import { resolveCoordinationBoardScope } from "../../core/orchestration/Executio
 import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
 import { materializeMcpConditionPreset } from "../../utils/McpConditionPresetResolver";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
-import { resolveRetryBudget } from "../../core/RetryBudget";
+import {
+  resolveRetryBudget,
+  resolveRetryBudgetMaxRetries,
+} from "../../core/RetryBudget";
 
 interface RunFixture {
   workflowKey: WorkflowKey;
@@ -1490,6 +1493,121 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
+  test("workflow_status lists the workflow's condition presets", async () => {
+    const server = await setup();
+    const run = await createRun("presets", "2026-01-01T00-00-00-000Z");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const none = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.deepStrictEqual(none.metadata.conditionPresets, []);
+
+    workingFile.conditions = {
+      committed: {
+        script: "git status --porcelain 2>&1\necho second line",
+        compareSource: "stdout",
+        operator: "isEmpty",
+        maxRetries: 2,
+      },
+      inspect: {
+        script: 'node "$BUG_FILE"',
+        params: ["BUG_FILE"],
+        onFail: "retry",
+      },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.deepStrictEqual(status.metadata.conditionPresets, [
+      {
+        name: "committed",
+        script: "git status --porcelain 2>&1",
+        params: [],
+        maxRetries: 2,
+      },
+      {
+        name: "inspect",
+        script: 'node "$BUG_FILE"',
+        params: ["BUG_FILE"],
+        maxRetries: resolveRetryBudgetMaxRetries({ onFail: "retry" }, 0),
+      },
+    ]);
+  });
+
+  test("append_step warns when sequential steps skip a declared preset", async () => {
+    const server = await setup();
+    const run = await createRun("ungated-presets", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain" },
+      inspect: { script: 'node "$BUG_FILE"', params: ["BUG_FILE"] },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          { prompt: "ungated" },
+          { prompt: "gated", endCondition: { use: "committed" } },
+          { parallel: [{ prompt: "member a" }, { prompt: "member b" }] },
+          { prompt: "also ungated" },
+        ],
+      })
+    );
+    assert.strictEqual(
+      result.warning,
+      'Steps 2, 6 will run with no end condition, but this workflow declares condition presets: committed, inspect (params: BUG_FILE). To gate a step, call edit_step with updates.endCondition: { "use": "<name>" }; workflow_status lists each preset under metadata.conditionPresets.'
+    );
+
+    const allGated = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "gated", endCondition: { use: "committed" } }],
+      })
+    );
+    assert.strictEqual(allGated.warning, undefined);
+
+    // A workflow-level end condition already gates every appended step.
+    const inherited = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    inherited.endCondition = { script: "workflow gate" };
+    await writeTrustedRunFile(run.runFilePath, inherited);
+    const inheritedResult = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "inherits the workflow gate" }],
+      })
+    );
+    assert.strictEqual(inheritedResult.warning, undefined);
+  });
+
+  test("append_step does not warn about presets when none are declared", async () => {
+    const server = await setup();
+    const run = await createRun("no-presets", "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "ungated" }],
+      })
+    );
+    assert.strictEqual(result.warning, undefined);
+  });
+
   test("workflow_status reports finished prompt-step git outcomes when recorded", async () => {
     const server = await setup();
     const run = await createRun("git-outcome", "2026-01-01T00-00-00-000Z", {
@@ -2699,7 +2817,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         position: "end",
         steps: [{ prompt: "unknown", endCondition: { use: "missing" } }],
       }),
-      /unknown condition preset 'missing'.*committed/
+      /unknown condition preset 'missing'\. Available presets: committed\. workflow_status lists each preset under metadata\.conditionPresets\./
     );
     for (const key of ["script", "env", "shell"]) {
       await assert.rejects(

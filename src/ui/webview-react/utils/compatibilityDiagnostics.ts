@@ -1,5 +1,4 @@
 import {
-  getHarnessDisplayName,
   getHarnessShortName,
   HARNESS_IDS,
   PERMISSION_CAPABILITY_KEYS,
@@ -16,6 +15,7 @@ import {
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityCaveatMessage,
+  getCompatibilityDiagnosticMessage,
   isAdvisoryCaveat,
   type CompatibilityCaveatCode,
   type CompatibilityDiagnostic,
@@ -85,55 +85,36 @@ export function diagnosticsForMcpFiltering(
   );
 }
 
+/**
+ * One warning per harness that cannot enforce a tool list at all, each giving
+ * that harness's own reason, or nothing when every harness enforces it (the
+ * normal case). Partial support is left to the per-step diagnostics.
+ */
 export function permissionCapabilitySummary(
   snapshot: HarnessCapabilityRegistrySnapshot,
   field: Exclude<PermissionField, "mode">
 ): Pick<CompatibilityDiagnostic, "severity" | "message">[] {
-  const supported: string[] = [];
-  const notEnforced: string[] = [];
-
-  for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
-    const state =
-      snapshot.harnesses[harnessId]?.effective?.permissions?.[field];
-    const label =
-      harnessId === HARNESS_IDS.CLAUDE_CLI
-        ? "Claude CLI"
-        : getHarnessDisplayName(harnessId);
-
-    if (state?.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
-      notEnforced.push(label);
-    } else {
-      supported.push(label);
-    }
-  }
-
-  const label =
+  const code =
     field === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
-      ? "Allowed Tools"
-      : "Denied Tools";
-  const diagnostics: Pick<CompatibilityDiagnostic, "severity" | "message">[] =
-    [];
+      ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED
+      : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED;
 
-  if (supported.length > 0) {
-    diagnostics.push({
-      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
-      message: `${label} are currently supported by ${joinLabels(supported)}.`,
-    });
-  }
-  if (notEnforced.length > 0) {
-    diagnostics.push({
+  return (Object.values(HARNESS_IDS) as HarnessId[])
+    .filter(
+      (harnessId) =>
+        snapshot.harnesses[harnessId]?.effective?.permissions?.[field]
+          ?.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+    )
+    .map((harnessId) => ({
       severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
-      message: `${joinLabels(notEnforced)} only support an overall permission mode, not individual tool patterns; ${label} are NOT ENFORCED by these harnesses.`,
-    });
-  }
-
-  return diagnostics;
-}
-
-function joinLabels(labels: readonly string[]): string {
-  if (labels.length <= 1) return labels[0] ?? "no harnesses";
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId,
+        capability: field,
+        caveatCode:
+          snapshot.harnesses[harnessId]?.descriptor?.permissions?.[field]
+            ?.caveatCode,
+      }),
+    }));
 }
 
 export function toFieldDiagnostic(
@@ -228,13 +209,14 @@ export function workflowPermissionDiagnostic(
 
   const grouped = new Map<
     HarnessId,
-    { supported: number; caveated: number; affected: number }
+    { supported: number; caveated: number; partial: number; affected: number }
   >();
   for (const target of relevant) {
     const harnessId = target.resolved.properties.harness;
     const group = grouped.get(harnessId) ?? {
       supported: 0,
       caveated: 0,
+      partial: 0,
       affected: 0,
     };
     const state =
@@ -244,7 +226,9 @@ export function workflowPermissionDiagnostic(
         ?.caveatCode;
     if (state && hasAdvisoryCaveat(state, caveatCode)) group.caveated += 1;
     else if (state && !isLossy(state)) group.supported += 1;
-    else group.affected += 1;
+    else if (state?.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
+      group.partial += 1;
+    } else group.affected += 1;
     grouped.set(harnessId, group);
   }
 
@@ -271,17 +255,28 @@ export function workflowPermissionDiagnostic(
       return `Enforced for ${counts.caveated} ${harnessLabel(harnessId)} step${counts.caveated === 1 ? "" : "s"}${caveat ? `, but ${caveat}` : ""}`;
     });
 
-  if (ignored.length === 0 && caveated.length === 0) return undefined;
+  const partial = [...grouped.entries()]
+    .filter(([, counts]) => counts.partial > 0)
+    .map(
+      ([harnessId, counts]) =>
+        `Only partly enforced for ${counts.partial} ${harnessLabel(harnessId)} step${counts.partial === 1 ? "" : "s"} ${reasonForHarness(harnessId, field, capabilities)}`
+    );
+
+  if (ignored.length === 0 && partial.length === 0 && caveated.length === 0) {
+    return undefined;
+  }
+  // An ignored deny list is the one case where a step can run a tool the
+  // author meant to forbid, so say that outright.
   const deniedRuleWarning =
-    field === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
-      ? " Denied Tools are NOT ENFORCED by the affected consumers."
+    field === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS && ignored.length > 0
+      ? " Those steps can still run the denied tools."
       : "";
   return {
     severity:
-      ignored.length > 0
+      ignored.length > 0 || partial.length > 0
         ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
         : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
-    message: `${enforced.concat(caveated, ignored).join(". ")}.${deniedRuleWarning}`,
+    message: `${enforced.concat(caveated, partial, ignored).join(". ")}.${deniedRuleWarning}`,
   };
 }
 

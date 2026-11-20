@@ -13,6 +13,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { usePauseRequestStore } from "@store/pauseRequestStore";
+import { useTerminalStore } from "@store/terminalStore";
 import {
   HEADER_RUN_SLOT_FIT_CLASSES,
   PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS,
@@ -32,11 +33,45 @@ import {
 const postMessage = vi.fn();
 const runRef = "run-2026-07-20T10-30-00-000Z" as never;
 
+function setViewportWidth(width: number) {
+  vi.mocked(window.matchMedia).mockImplementation((query) => {
+    const matches = query.includes("min-width: 1024px")
+      ? width >= 1024
+      : query.includes("max-width: 639px")
+        ? width <= 639
+        : false;
+    return {
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    };
+  });
+}
+
+function resetViewportWidth() {
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
 describe("Header execution controls", () => {
   beforeEach(() => {
     useWorkflowStore.getState().resetWorkflow();
     useUiStore.getState().resetUi();
     useExecutionPreviewStore.getState().reset();
+    useTerminalStore.getState().clearHeadlessControlTargets();
     postMessage.mockReset();
     Object.defineProperty(window, "vscodeApi", {
       configurable: true,
@@ -74,37 +109,40 @@ describe("Header execution controls", () => {
     });
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    resetViewportWidth();
+  });
 
-  it("opens the workflow-scoped Dry Run from the Run button's menu, not the action controls", () => {
+  it.each([
+    { width: 768, breakpoint: "medium" },
+    { width: 1280, breakpoint: "wide" },
+  ])(
+    "mounts one execution-control group at $width px ($breakpoint)",
+    ({ width }) => {
+      setViewportWidth(width);
+      render(<Header />);
+
+      expect(
+        screen.getAllByRole("group", { name: "Workflow execution controls" })
+      ).toHaveLength(1);
+    }
+  );
+
+  it("leaves right-clicks on execution controls to the browser", () => {
     render(<Header />);
 
-    const actionGroup = screen.getByRole("group", {
-      name: "Workflow action controls",
+    const runButton = screen.getByRole("button", { name: "Continue" });
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 120,
+      clientY: 80,
     });
-    expect(
-      within(actionGroup).queryByRole("button", { name: "Dry Run" })
-    ).not.toBeInTheDocument();
+    runButton.dispatchEvent(event);
 
-    const firstRunSlot = screen
-      .getByRole("group", { name: "Workflow execution controls" })
-      .querySelector("button")!;
-    fireEvent.contextMenu(firstRunSlot, { clientX: 120, clientY: 80 });
-    fireEvent.click(
-      within(screen.getByRole("menu")).getByRole("menuitem", {
-        name: "Dry Run",
-      })
-    );
-
-    expect(useExecutionPreviewStore.getState().scope).toEqual({
-      kind: "workflow",
-    });
-    expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW,
-        scope: { kind: "workflow" },
-      })
-    );
+    expect(event.defaultPrevented).toBe(false);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("shows Restart/Continue/Stop execution controls", () => {
@@ -339,40 +377,6 @@ describe("Header execution controls", () => {
         HEADER_RUN_SLOT_FIT_CLASSES.vscode.divider
       );
     }
-  });
-
-  it("opens Dry Run from a disabled Run button without running the workflow", () => {
-    useUiStore.setState({
-      displayedViewAddress: {
-        workflowKey: "workflow-b" as never,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-      },
-      executionRunRef: null,
-      pendingRewind: null,
-      runSummaries: [],
-    });
-    useWorkflowStore.getState().loadWorkflow({
-      fileName: "new-workflow.ctrlyoke.json",
-      workflowName: "New workflow",
-      steps: [],
-      executionState: EXECUTION_STATES.IDLE,
-    });
-
-    render(<Header />);
-
-    const runButton = screen.getByRole("button", { name: "Run" });
-    expect(runButton).toHaveAttribute("aria-disabled", "true");
-    fireEvent.contextMenu(runButton, { clientX: 120, clientY: 80 });
-
-    expect(
-      within(screen.getByRole("menu")).getByRole("menuitem", {
-        name: "Dry Run",
-      })
-    ).toBeInTheDocument();
-    fireEvent.click(runButton);
-    expect(postMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: MESSAGE_TYPES.EXECUTE_DRAFT })
-    );
   });
 
   it("offers Re-run immediately when navigation addresses a completed run", () => {
@@ -688,6 +692,20 @@ describe("Header execution controls", () => {
       .getByRole("group", { name: "Workflow execution controls" })
       .querySelectorAll(".cy-button-group-divider");
     expect(dividers[1].className).not.toContain("hidden");
+  });
+
+  it("opens no menu from the Stop button", () => {
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+    render(<Header />);
+
+    fireEvent.contextMenu(
+      within(
+        screen.getByRole("group", { name: "Workflow execution controls" })
+      ).getByRole("button", { name: "Stop" }),
+      { clientX: 120, clientY: 80 }
+    );
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("switches from active controls to Re-run as soon as execution completes", () => {

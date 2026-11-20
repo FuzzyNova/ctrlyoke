@@ -104,7 +104,10 @@ export function buildCommitMessageSkillCommandPrefix(paths: {
   workspaceRoot: string;
   commitOutputPath: string;
 }): string {
-  return `node "${paths.mcpServerPath}" --tool ${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME} --workspace "${paths.workspaceRoot}" --commit-output "${paths.commitOutputPath}" --args`;
+  // Forward slashes are accepted by Node and the MCP server on Windows, and
+  // keep Windows paths literal to Qwen's shell-command permission matcher.
+  const shellPath = (value: string) => value.replace(/\\/g, "/");
+  return `node "${shellPath(paths.mcpServerPath)}" --tool ${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME} --workspace "${shellPath(paths.workspaceRoot)}" --commit-output "${shellPath(paths.commitOutputPath)}" --args`;
 }
 
 function renderCommand(

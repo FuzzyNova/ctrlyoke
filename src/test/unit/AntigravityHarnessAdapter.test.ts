@@ -337,6 +337,8 @@ suite("AntigravityHarnessAdapter", () => {
         "ignored prompt"
       ),
       [
+        "--input-format",
+        "stream-json",
         "--output-format",
         "stream-json",
         "--model",

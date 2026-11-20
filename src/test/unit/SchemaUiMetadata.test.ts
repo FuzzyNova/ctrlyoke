@@ -16,6 +16,7 @@ import {
   HOOK_EVENT_OPTIONS_META,
   NOTIFICATION_EVENT_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
+  HEADLESS_APPROVAL_POLICY_OPTIONS_META,
   PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
   RUN_HISTORY_LOCATION_OPTIONS_META,
   SCRIPT_OPERATOR_OPTIONS_META,
@@ -43,6 +44,7 @@ import {
   HARNESS_IDS,
   NOTIFICATION_EVENT_MODES,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_POLICIES,
   PRIOR_CONTEXT_KEYWORDS,
   RUN_HISTORY_LOCATIONS,
   SCRIPT_OPERATORS,
@@ -77,6 +79,14 @@ const META_BINDINGS: Array<{
     name: "permission modes",
     rows: Object.values(PERMISSION_MODE_OPTIONS_META),
     paths: ["toolPermissions.mode", "defaults.toolPermissions.mode"],
+  },
+  {
+    name: "headless approval policies",
+    rows: Object.values(HEADLESS_APPROVAL_POLICY_OPTIONS_META),
+    paths: [
+      "toolPermissions.headlessApprovals",
+      "defaults.toolPermissions.headlessApprovals",
+    ],
   },
   {
     name: "harness IDs",
@@ -216,6 +226,14 @@ const CONSTANT_BINDINGS: Array<{
     name: "PERMISSION_MODES",
     values: Object.values(PERMISSION_MODES),
     paths: ["toolPermissions.mode", "defaults.toolPermissions.mode"],
+  },
+  {
+    name: "HEADLESS_APPROVAL_POLICIES",
+    values: Object.values(HEADLESS_APPROVAL_POLICIES),
+    paths: [
+      "toolPermissions.headlessApprovals",
+      "defaults.toolPermissions.headlessApprovals",
+    ],
   },
   {
     name: "WORKTREE_MODES",

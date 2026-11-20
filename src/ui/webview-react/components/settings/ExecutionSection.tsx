@@ -7,8 +7,8 @@ import { SETTING_PATHS } from "@root/types/DashboardConstants";
 import { LocalNumberInput } from "../shared/LocalInputs";
 import { LimitSelect } from "../shared/LimitSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
-import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { CustomSelect } from "../shared/CustomSelect";
+import { QueueSection } from "./QueueSection";
 import {
   CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
   toSelectOptions,
@@ -95,24 +95,17 @@ export function ExecutionSection({
           className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
-      <SettingToggleRow
-        settingKey="execution.closeTerminalOnComplete"
-        checked={exec.closeTerminalOnComplete}
-        onChange={(v) => onUpdate("execution.closeTerminalOnComplete", v)}
-        {...rowProps}
-      />
-      <SettingToggleRow
-        settingKey="execution.reuseRunningTerminal"
-        {...{
-          description: exec.closeTerminalOnComplete
-            ? "Unavailable — terminal reuse requires keeping the terminal open. Disable 'Close terminal on completion' to enable this."
-            : "Type a resumed step's prompt into its still-open terminal instead of restarting the harness — faster.",
-        }}
-        checked={exec.reuseRunningTerminal ?? false}
-        onChange={(v) => onUpdate("execution.reuseRunningTerminal", v)}
-        disabled={exec.closeTerminalOnComplete}
-        {...rowProps}
-      />
+      <section className="space-y-4 pt-3 border-t border-panel-border">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Queue
+        </h3>
+        <QueueSection
+          settings={settings}
+          activeScope={activeScope}
+          onUpdate={onUpdate}
+          onReset={onReset}
+        />
+      </section>
     </div>
   );
 }

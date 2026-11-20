@@ -455,6 +455,82 @@ suite("CliLogMonitor", () => {
     }
   });
 
+  test("reads once more when an event-loop stall overruns the drain deadline", async () => {
+    // Regression: Qwen fired Stop before its turn-ending assistant record hit
+    // disk, then a ~1.8 s extension-host stall during the drain's poll sleep
+    // ate the whole drain deadline. The drain exited without a final read, so
+    // the step completed with no text or usage and the record surfaced later
+    // as a post-completion "follow-up".
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    const originalDateNow = Date.now;
+    let clockOffsetMs = 0;
+    Date.now = () => originalDateNow() + clockOffsetMs;
+    const drainDeadlineMs = (
+      CliLogMonitor as unknown as { DRAIN_DEADLINE_MS: number }
+    ).DRAIN_DEADLINE_MS;
+
+    let readCount = 0;
+    let lateRecordDelivered = false;
+    const responseEventTypes: string[] = [];
+    const parser = createParser({
+      isComplete: (event) => event.type === "complete",
+      readNewLines: async () => {
+        readCount++;
+        if (readCount === 1) {
+          return [{ type: "complete" }];
+        }
+        // Read 2 is the completion catch-up and read 3 the drain's first
+        // poll, both before the record lands. A stall then overruns the
+        // drain deadline while the drain sleeps.
+        if (readCount === 3) {
+          setTimeout(() => {
+            clockOffsetMs += drainDeadlineMs + 1000;
+          }, 0);
+        }
+        if (readCount >= 4 && !lateRecordDelivered) {
+          lateRecordDelivered = true;
+          return [{ type: "assistant" }];
+        }
+        return [];
+      },
+      extractResponse: (events) => {
+        responseEventTypes.push(...events.map((event) => event.type));
+        return { events: [], metadata: {} };
+      },
+    });
+    const monitor = new CliLogMonitor({
+      logParser: parser,
+      runtimeState: {
+        getWorkspaceRoot: () => undefined,
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onStreamingEvents: () => undefined,
+        onResponseComplete: () => undefined,
+        logResponse: () => undefined,
+      },
+    });
+
+    try {
+      const result = await monitor.monitor(
+        "session.jsonl",
+        null,
+        new Date(0),
+        "test-model"
+      );
+      assert.strictEqual(result.success, true);
+      assert.ok(
+        responseEventTypes.includes("assistant"),
+        `final response missed the late record; saw [${responseEventTypes.join(", ")}]`
+      );
+    } finally {
+      Date.now = originalDateNow;
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
   test("does not time out an unlimited prompt", async () => {
     const originalTimeoutReader =
       ConfigurationUtils.getMaxPromptExecutionTimeMs;

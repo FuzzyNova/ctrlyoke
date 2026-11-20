@@ -346,7 +346,7 @@ export function buildStepMetadataClipboardText({
   const contextWindow = resolveEffectiveContextWindow({
     isCurrent,
     liveContextWindow,
-    latestOutputTokens: latestOutput?.tokens,
+    latestOutput,
     runtimeContextWindow: runtimeMeta,
   });
   const showCostEstimates =

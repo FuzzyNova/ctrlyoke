@@ -41,7 +41,7 @@ from the positional prompt was the cause.
 
 ## Suggested Fix
 
-Stage 1 of [`HEADLESS_SESSION_CONTROL_PLAN.md`](../../backlog/HEADLESS_SESSION_CONTROL_PLAN.md):
+Stage 1 of [`HEADLESS_SESSION_CONTROL_PLAN.md`](../../implemented/HEADLESS_SESSION_CONTROL_PLAN.md):
 
 - Drop the positional prompt and send `initialize` first, then the prompt as a `user` message.
 - Answer every `can_use_tool` request with a deny that tells the model why.

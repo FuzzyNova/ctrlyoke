@@ -7,16 +7,20 @@ import {
   CAPABILITY_DOMAINS,
   HARNESS_IDS,
 } from "@root/types/DashboardConstants";
-import type {
-  CapabilityDeclaration,
-  HarnessCapabilityRegistrySnapshot,
-  EffectivePermissionCapabilityState,
+import {
+  PERMISSION_CAVEAT_CODES,
+  type CapabilityDeclaration,
+  type HarnessCapabilityRegistrySnapshot,
+  type EffectivePermissionCapabilityState,
 } from "@root/types/CompatibilityTypes";
 import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
-function createSnapshot(): HarnessCapabilityRegistrySnapshot {
+/** Unsupported harnesses mirror Codex: no allow list, a partial deny list. */
+function createSnapshot(
+  unsupportedHarnesses: readonly string[] = [HARNESS_IDS.CODEX_CLI]
+): HarnessCapabilityRegistrySnapshot {
   const supported: EffectivePermissionCapabilityState = {
     mode: { fidelity: "exact", mechanism: "native", verification: "verified" },
     autoMode: {
@@ -48,8 +52,8 @@ function createSnapshot(): HarnessCapabilityRegistrySnapshot {
       verification: "verified",
     },
     deniedTools: {
-      fidelity: "unsupported",
-      mechanism: "none",
+      fidelity: "partial",
+      mechanism: "native",
       verification: "verified",
     },
   };
@@ -67,16 +71,20 @@ function createSnapshot(): HarnessCapabilityRegistrySnapshot {
           mode: supportedDeclaration,
 
           autoMode: supportedDeclaration,
-          allowedTools: supportedDeclaration,
+          allowedTools: unsupportedHarnesses.includes(harnessId)
+            ? {
+                fidelity: "unsupported",
+                mechanism: "none",
+                caveatCode: PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES,
+              }
+            : supportedDeclaration,
           deniedTools: supportedDeclaration,
         },
       },
       effective: {
-        permissions:
-          harnessId === HARNESS_IDS.CODEX_CLI ||
-          harnessId === HARNESS_IDS.ANTIGRAVITY_CLI
-            ? unsupported
-            : supported,
+        permissions: unsupportedHarnesses.includes(harnessId)
+          ? unsupported
+          : supported,
       },
     };
   }
@@ -103,7 +111,26 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
       .setCapabilitySnapshot(createSnapshot());
   });
 
-  it("summarizes supported and mode-only harnesses while keeping both fields editable", () => {
+  it("shows no support note when every harness enforces the tool lists", () => {
+    useHarnessCapabilityStore
+      .getState()
+      .setCapabilitySnapshot(createSnapshot([]));
+    render(
+      <DefaultsPermissionsPage
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={() => {}}
+        onReset={() => {}}
+      />
+    );
+
+    expect(
+      screen.queryByText(/currently supported by/)
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/NOT ENFORCED/)).not.toBeInTheDocument();
+  });
+
+  it("warns only about the harness that ignores a list, with its own reason, while keeping both fields editable", () => {
     render(
       <DefaultsPermissionsPage
         settings={createSettings()}
@@ -120,15 +147,15 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
       screen.getByRole("textbox", { name: "Denied tools (one per line)" })
     ).not.toBeDisabled();
     expect(
-      screen.getByText(
-        "Allowed Tools are currently supported by Copilot CLI, Claude CLI, OpenCode, and Qwen Code."
-      )
-    ).toBeInTheDocument();
+      screen.queryByText(/currently supported by/)
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Codex and Antigravity CLI only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by these harnesses."
+        "Allowed Tools are NOT ENFORCED by the Codex harness because this harness has no allow list; its sandbox and approval modes decide what runs."
       )
     ).toBeInTheDocument();
+    // Codex enforces MCP tool denials, so the deny list carries no warning.
+    expect(screen.queryByText(/Denied Tools are/)).not.toBeInTheDocument();
   });
 
   it("renders the default sandbox and sandbox mode settings", () => {

@@ -41,6 +41,7 @@ import {
   type PriorContext,
   type HarnessId,
   type ToolPermissionMode,
+  type HeadlessApprovalPolicy,
 } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
@@ -87,6 +88,7 @@ import { PermissionListEditor } from "../shared/PermissionListEditor";
 import {
   DRAWER_PAGES,
   drawerPageTitle,
+  knownDrawerPageOrDefault,
   type DrawerPage,
 } from "../../types/drawerPages";
 import {
@@ -96,6 +98,9 @@ import {
   WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
   PERMISSION_MODES,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_POLICIES,
+  INHERIT_DEFAULT_OPTION,
   SANDBOX_UI_LABELS,
   resolveSandboxRequest,
   workflowSandboxModeVisible,
@@ -119,6 +124,7 @@ import { isUnlimited } from "../../../../utils/LimitUtils";
 import {
   EXECUTION_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
+  HEADLESS_APPROVAL_POLICY_OPTIONS_META,
   TRUSTED_ROOTS_SELECTION_OPTIONS_META,
   WORKFLOW_AGENT_SELECTION_OPTIONS_META,
   WORKTREE_SELECTION_OPTIONS_META,
@@ -405,10 +411,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       ? workflowProperties.preCondition
       : globalSettings.defaultPreCondition;
 
-  // Active drawer page
-  const [activePage, setActivePage] = useState<DrawerPage>(
-    DRAWER_PAGES.HARNESS
+  // Active drawer page — kept in uiStore (and persisted) so it survives the
+  // panel unmounting when it is shown as a closable drawer in narrow layouts.
+  const activePage = knownDrawerPageOrDefault(
+    useUiStore((s) => s.workflowPropertiesActivePage)
   );
+  const setActivePage = useUiStore((s) => s.setWorkflowPropertiesActivePage);
 
   // Alt+H/M/R: show the page holding the targeted picker. The store has
   // already expanded the panel; the picker claims the request once mounted.
@@ -1603,6 +1611,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
     toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
   const effectiveDeniedTools =
     toolPerms?.deniedTools ?? globalSettings.toolPermissions.deniedTools;
+  const inheritedHeadlessApprovalPolicy =
+    globalSettings.toolPermissions.headlessApprovals ??
+    HEADLESS_APPROVAL_POLICIES.DENY;
+  const effectiveHeadlessApprovalPolicy =
+    toolPerms?.headlessApprovals ?? inheritedHeadlessApprovalPolicy;
+  const effectiveHeadlessApprovalTimeoutSec =
+    toolPerms?.headlessApprovalTimeoutSec ??
+    globalSettings.toolPermissions.headlessApprovalTimeoutSec ??
+    HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC;
 
   // PermissionListEditor echoes lossless text on every edit so CodeMirror can
   // keep blank lines/cursor state intact. Keep that draft local and persist the
@@ -1613,6 +1630,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [deniedToolsInput, setDeniedToolsInput] = useState<string[]>(
     () => effectiveDeniedTools ?? []
   );
+  const [headlessApprovalTimeoutInput, setHeadlessApprovalTimeoutInput] =
+    useState(String(effectiveHeadlessApprovalTimeoutSec));
 
   useEffect(() => {
     setAllowedToolsInput(effectiveAllowedTools ?? []);
@@ -1621,6 +1640,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
   useEffect(() => {
     setDeniedToolsInput(effectiveDeniedTools ?? []);
   }, [effectiveDeniedTools]);
+
+  useEffect(() => {
+    setHeadlessApprovalTimeoutInput(
+      String(effectiveHeadlessApprovalTimeoutSec)
+    );
+  }, [effectiveHeadlessApprovalTimeoutSec]);
 
   // ============================================================================
   // RENDER
@@ -1634,7 +1659,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       const firstProperty = firstCompatibilityProperty(permissionDiagnostics);
       document.getElementById(firstProperty)?.focus();
     });
-  }, [permissionDiagnostics]);
+  }, [permissionDiagnostics, setActivePage]);
 
   // Ctrl+click on a prompt's `{{name}}` (or its "add to vars" quick fix) asks
   // for that variable's row. Wait until the panel is actually showing, switch
@@ -1658,7 +1683,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       )?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [workflowVariableRevealRequest, settingsCollapsed, isMobileMode]);
+  }, [
+    workflowVariableRevealRequest,
+    settingsCollapsed,
+    isMobileMode,
+    setActivePage,
+  ]);
 
   function handleToggle() {
     if (isMobileMode) return;
@@ -2286,147 +2316,155 @@ const WorkflowPropertiesPanelInner: React.FC<{
             <>
               {/* Row 1: Resume Session (with paired Session ID) + Prior Context */}
               <DrawerRow narrow={isNarrow}>
-                <FormField
-                  label="Resume Session"
-                  schemaPath="resumeSession"
-                  htmlFor="settings-resume-session"
-                  description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.RESUME_SESSION}
-                      show={isDifferentFromGlobal(
-                        PROMPT_PROPERTIES.RESUME_SESSION
-                      )}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          PROMPT_PROPERTIES.RESUME_SESSION,
-                          workflowProperties.resumeSession
-                        )
-                      }
-                    />
-                  }
-                >
-                  <WorkflowVariableValue
-                    value={
-                      typeof workflowProperties.resumeSession === "string"
-                        ? workflowProperties.resumeSession
-                        : undefined
-                    }
-                    vars={workflowVars}
-                    onClear={() =>
-                      postWorkflowPropertiesUpdate({ resumeSession: undefined })
+                <PropertyGroup>
+                  <FormField
+                    label="Resume Session"
+                    schemaPath="resumeSession"
+                    htmlFor="settings-resume-session"
+                    description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property={PROMPT_PROPERTIES.RESUME_SESSION}
+                        show={isDifferentFromGlobal(
+                          PROMPT_PROPERTIES.RESUME_SESSION
+                        )}
+                        onSetDefault={() =>
+                          handleSetAsDefault(
+                            PROMPT_PROPERTIES.RESUME_SESSION,
+                            workflowProperties.resumeSession
+                          )
+                        }
+                      />
                     }
                   >
-                    <CustomSelect
-                      id="settings-resume-session"
-                      schemaPath="resumeSession"
-                      shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME}
-                      triggerAriaLabel="Resume Session"
+                    <WorkflowVariableValue
                       value={
-                        workflowProperties.sessionId ===
-                          SESSION_ID_SENTINELS.FINAL_STEP &&
-                        effectiveResumeSession
-                          ? SESSION_ID_SENTINELS.FINAL_STEP
-                          : effectiveResumeSession
-                            ? RESUME_SESSION_SELECTIONS.YES
-                            : RESUME_SESSION_SELECTIONS.NO
-                      }
-                      onChange={handleResumeSessionChange}
-                      options={[...getResumeSessionOptions()]}
-                    />
-                  </WorkflowVariableValue>
-                  {/* Session ID input — always visible, grayed out when not applicable */}
-                  <div
-                    className={`mt-1 ${
-                      effectiveResumeSession &&
-                      workflowProperties.sessionId !==
-                        SESSION_ID_SENTINELS.FINAL_STEP
-                        ? ""
-                        : "opacity-50 pointer-events-none"
-                    }`}
-                    title={
-                      !effectiveResumeSession
-                        ? "Enable Resume Session to specify a Session ID"
-                        : workflowProperties.sessionId ===
-                            SESSION_ID_SENTINELS.FINAL_STEP
-                          ? "Using Final Step Session — no explicit Session ID needed"
+                        typeof workflowProperties.resumeSession === "string"
+                          ? workflowProperties.resumeSession
                           : undefined
+                      }
+                      vars={workflowVars}
+                      onClear={() =>
+                        postWorkflowPropertiesUpdate({
+                          resumeSession: undefined,
+                        })
+                      }
+                    >
+                      <CustomSelect
+                        id="settings-resume-session"
+                        schemaPath="resumeSession"
+                        shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME}
+                        triggerAriaLabel="Resume Session"
+                        value={
+                          workflowProperties.sessionId ===
+                            SESSION_ID_SENTINELS.FINAL_STEP &&
+                          effectiveResumeSession
+                            ? SESSION_ID_SENTINELS.FINAL_STEP
+                            : effectiveResumeSession
+                              ? RESUME_SESSION_SELECTIONS.YES
+                              : RESUME_SESSION_SELECTIONS.NO
+                        }
+                        onChange={handleResumeSessionChange}
+                        options={[...getResumeSessionOptions()]}
+                      />
+                    </WorkflowVariableValue>
+                    {/* Session ID input — always visible, grayed out when not applicable */}
+                    <div
+                      className={`mt-1 ${
+                        effectiveResumeSession &&
+                        workflowProperties.sessionId !==
+                          SESSION_ID_SENTINELS.FINAL_STEP
+                          ? ""
+                          : "opacity-50 pointer-events-none"
+                      }`}
+                      title={
+                        !effectiveResumeSession
+                          ? "Enable Resume Session to specify a Session ID"
+                          : workflowProperties.sessionId ===
+                              SESSION_ID_SENTINELS.FINAL_STEP
+                            ? "Using Final Step Session — no explicit Session ID needed"
+                            : undefined
+                      }
+                    >
+                      <input
+                        type="text"
+                        id="settings-session-id"
+                        aria-label="Session ID"
+                        value={sessionIdInput}
+                        onChange={(e) => setSessionIdInput(e.target.value)}
+                        onBlur={(e) => handleSessionIdChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === KEYBOARD_KEYS.ENTER)
+                            e.currentTarget.blur();
+                        }}
+                        placeholder="Session ID, prompt number, or blank for auto-resume"
+                        className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
+                        title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
+                      />
+                      {effectiveResumeSession &&
+                        workflowProperties.sessionId !==
+                          SESSION_ID_SENTINELS.FINAL_STEP &&
+                        !sessionIdInput && (
+                          <AutoResumeStatusRow preview={autoResumePreview} />
+                        )}
+                    </div>
+                  </FormField>
+                </PropertyGroup>
+
+                <PropertyGroup>
+                  <FormField
+                    label="Prior Context"
+                    schemaPath="priorContext"
+                    htmlFor="settings-prior-context"
+                    description="Send prior step outputs with the prompt"
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property={PROMPT_PROPERTIES.PRIOR_CONTEXT}
+                        show={isDifferentFromGlobal(
+                          PROMPT_PROPERTIES.PRIOR_CONTEXT
+                        )}
+                        onSetDefault={() =>
+                          handleSetAsDefault(
+                            PROMPT_PROPERTIES.PRIOR_CONTEXT,
+                            workflowProperties.priorContext
+                          )
+                        }
+                      />
                     }
                   >
-                    <input
-                      type="text"
-                      id="settings-session-id"
-                      aria-label="Session ID"
-                      value={sessionIdInput}
-                      onChange={(e) => setSessionIdInput(e.target.value)}
-                      onBlur={(e) => handleSessionIdChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === KEYBOARD_KEYS.ENTER)
-                          e.currentTarget.blur();
-                      }}
-                      placeholder="Session ID, prompt number, or blank for auto-resume"
-                      className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
-                      title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
-                    />
-                    {effectiveResumeSession &&
-                      workflowProperties.sessionId !==
-                        SESSION_ID_SENTINELS.FINAL_STEP &&
-                      !sessionIdInput && (
-                        <AutoResumeStatusRow preview={autoResumePreview} />
-                      )}
-                  </div>
-                </FormField>
-
-                <FormField
-                  label="Prior Context"
-                  schemaPath="priorContext"
-                  htmlFor="settings-prior-context"
-                  description="Send prior step outputs with the prompt"
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property={PROMPT_PROPERTIES.PRIOR_CONTEXT}
-                      show={isDifferentFromGlobal(
-                        PROMPT_PROPERTIES.PRIOR_CONTEXT
-                      )}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          PROMPT_PROPERTIES.PRIOR_CONTEXT,
-                          workflowProperties.priorContext
-                        )
+                    <PriorContextSelect
+                      id="settings-prior-context"
+                      detailId="settings-prior-context-detail"
+                      schemaPath="priorContext"
+                      value={effectivePriorContext}
+                      onChange={handlePriorContextChange}
+                      detail={
+                        workflowProperties.priorContextDetail ??
+                        PRIOR_CONTEXT_DETAILS.FULL
                       }
+                      onDetailChange={handlePriorContextDetailChange}
                     />
-                  }
-                >
-                  <PriorContextSelect
-                    id="settings-prior-context"
-                    detailId="settings-prior-context-detail"
-                    schemaPath="priorContext"
-                    value={effectivePriorContext}
-                    onChange={handlePriorContextChange}
-                    detail={
-                      workflowProperties.priorContextDetail ??
-                      PRIOR_CONTEXT_DETAILS.FULL
-                    }
-                    onDetailChange={handlePriorContextDetailChange}
-                  />
-                </FormField>
+                  </FormField>
+                </PropertyGroup>
               </DrawerRow>
 
-              <FormField
-                label="Variables"
-                schemaPath="vars"
-                description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
-              >
-                <KeyValueRowsEditor
-                  label="name=value"
-                  id={WORKFLOW_VARS_EDITOR_ID}
-                  ariaLabel="Variables"
-                  value={workflowProperties.vars ?? {}}
-                  onChange={handleVarsChange}
-                  keyKind="variable"
-                  entryNoun="variable"
-                />
-              </FormField>
+              <PropertyGroup>
+                <FormField
+                  label="Variables"
+                  schemaPath="vars"
+                  description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
+                >
+                  <KeyValueRowsEditor
+                    label="name=value"
+                    id={WORKFLOW_VARS_EDITOR_ID}
+                    ariaLabel="Variables"
+                    value={workflowProperties.vars ?? {}}
+                    onChange={handleVarsChange}
+                    keyKind="variable"
+                    entryNoun="variable"
+                  />
+                </FormField>
+              </PropertyGroup>
             </>
           )}
 
@@ -2803,6 +2841,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       value={permMode}
                       onChange={(mode) => {
                         handleToolPermissionsChange({
+                          ...(workflowProperties.toolPermissions ?? {}),
                           mode: mode as ToolPermissionMode,
                           allowedTools: allowedToolsInput,
                           deniedTools: deniedToolsInput,
@@ -2821,6 +2860,142 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       }
                       warningId="settings-permission-mode-diagnostic"
                     />
+                  </FormField>
+
+                  <FormField
+                    label="Headless Approval Requests"
+                    schemaPath="toolPermissions.headlessApprovals"
+                    htmlFor="settings-headless-approvals"
+                    description="Used by headless Claude Code and Qwen Code steps when a tool request needs human approval."
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property="toolPermissions.headlessApprovals"
+                        show={
+                          toolPerms?.headlessApprovals !== undefined &&
+                          toolPerms.headlessApprovals !==
+                            inheritedHeadlessApprovalPolicy
+                        }
+                        onSetDefault={() =>
+                          handleSetAsDefault(
+                            "toolPermissions.headlessApprovals",
+                            effectiveHeadlessApprovalPolicy
+                          )
+                        }
+                      />
+                    }
+                  >
+                    <CustomSelect
+                      id="settings-headless-approvals"
+                      schemaPath="toolPermissions.headlessApprovals"
+                      triggerAriaLabel="Headless Approval Requests"
+                      value={
+                        toolPerms?.headlessApprovals ?? INHERIT_DEFAULT_OPTION
+                      }
+                      onChange={(value) => {
+                        const current = workflowProperties.toolPermissions;
+                        if (current === null) return;
+                        const next = {
+                          ...(current ?? {}),
+                          mode: current?.mode ?? permMode,
+                          allowedTools:
+                            current?.allowedTools ??
+                            effectiveAllowedTools ??
+                            [],
+                          deniedTools:
+                            current?.deniedTools ?? effectiveDeniedTools ?? [],
+                        };
+                        if (value === INHERIT_DEFAULT_OPTION) {
+                          delete next.headlessApprovals;
+                          handleToolPermissionsChange(
+                            Object.keys(next).length > 0 ? next : undefined
+                          );
+                        } else {
+                          handleToolPermissionsChange({
+                            ...next,
+                            headlessApprovals: value as HeadlessApprovalPolicy,
+                          });
+                        }
+                      }}
+                      options={[
+                        {
+                          value: INHERIT_DEFAULT_OPTION,
+                          label: `Inherit (${inheritedHeadlessApprovalPolicy})`,
+                          pseudo: { omit: true },
+                        },
+                        ...toSelectOptions(
+                          HEADLESS_APPROVAL_POLICY_OPTIONS_META,
+                          "toolPermissions.headlessApprovals"
+                        ),
+                      ]}
+                      disabled={permMode === PERMISSION_MODES.NONE}
+                    />
+                  </FormField>
+
+                  <FormField
+                    label="Headless Approval Timeout (seconds)"
+                    schemaPath="toolPermissions.headlessApprovalTimeoutSec"
+                    htmlFor="settings-headless-approval-timeout"
+                    description="Maximum time a connected dashboard has to answer a headless approval request."
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="settings-headless-approval-timeout"
+                        type="number"
+                        min={1}
+                        max={600}
+                        step={1}
+                        value={headlessApprovalTimeoutInput}
+                        disabled={permMode === PERMISSION_MODES.NONE}
+                        aria-label="Headless approval timeout in seconds"
+                        onChange={(event) =>
+                          setHeadlessApprovalTimeoutInput(event.target.value)
+                        }
+                        onBlur={() => {
+                          const parsed = Number(headlessApprovalTimeoutInput);
+                          const value = Number.isFinite(parsed)
+                            ? Math.max(1, Math.min(600, Math.round(parsed)))
+                            : (globalSettings.toolPermissions
+                                .headlessApprovalTimeoutSec ??
+                              HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC);
+                          setHeadlessApprovalTimeoutInput(String(value));
+                          const current = workflowProperties.toolPermissions;
+                          if (current === null) return;
+                          handleToolPermissionsChange({
+                            ...(current ?? {}),
+                            mode: current?.mode ?? permMode,
+                            allowedTools:
+                              current?.allowedTools ??
+                              effectiveAllowedTools ??
+                              [],
+                            deniedTools:
+                              current?.deniedTools ??
+                              effectiveDeniedTools ??
+                              [],
+                            headlessApprovalTimeoutSec: value,
+                          });
+                        }}
+                        className="w-full max-w-32 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-sm text-input-fg focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                      {toolPerms?.headlessApprovalTimeoutSec !== undefined && (
+                        <button
+                          type="button"
+                          className="text-xs text-description-fg underline hover:text-foreground"
+                          onClick={() => {
+                            const current = workflowProperties.toolPermissions;
+                            if (!current) return;
+                            const {
+                              headlessApprovalTimeoutSec: _timeout,
+                              ...next
+                            } = current;
+                            handleToolPermissionsChange(
+                              Object.keys(next).length > 0 ? next : undefined
+                            );
+                          }}
+                        >
+                          Use default
+                        </button>
+                      )}
+                    </div>
                   </FormField>
 
                   {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}

@@ -180,7 +180,11 @@ import {
   type McpReleasePathsArguments,
 } from "./utils/McpToolDefinitions";
 import { validateMcpToolCall } from "./utils/McpSchemaValidator";
-import { materializeMcpConditionPreset } from "./utils/McpConditionPresetResolver";
+import {
+  formatUngatedAppendedStepsWarning,
+  materializeMcpConditionPreset,
+  summarizeMcpConditionPresets,
+} from "./utils/McpConditionPresetResolver";
 import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
@@ -444,6 +448,23 @@ function materializeConditionUpdates(
         }
       : {}),
   };
+}
+
+/** Offsets, within the flattened append, of the steps not in a parallel group. */
+function sequentialAppendOffsets(
+  items: readonly (McpAppendStepInput | { parallel: unknown[] })[]
+): number[] {
+  const offsets: number[] = [];
+  let offset = 0;
+  for (const item of items) {
+    if ("parallel" in item) {
+      offset += item.parallel.length;
+    } else {
+      offsets.push(offset);
+      offset += 1;
+    }
+  }
+  return offsets;
 }
 
 function materializeAppendStep(
@@ -1377,6 +1398,10 @@ export class CtrlYokeMCPServer {
         maxSteps,
         remainingSteps: isUnlimited(maxSteps) ? -1 : maxSteps - allSteps.length,
         stopReason: runtime.stopReason ?? null,
+        conditionPresets: summarizeMcpConditionPresets(
+          queueData,
+          ConfigurationUtils.getDefaultMaxRetries()
+        ),
         workingFile,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,
@@ -1603,6 +1628,29 @@ export class CtrlYokeMCPServer {
           : {}),
       };
     });
+
+    // A caller that never saw the workflow's presets cannot know it skipped a
+    // gate it was expected to attach. Parallel members are left out: they
+    // share one working tree, so a clean-tree preset would fail on a
+    // sibling's edits, and leaving them ungated is the right default.
+    const ungatedPresetWarning = formatUngatedAppendedStepsWarning(
+      updatedWorkingFile,
+      position === QUEUE_POSITION.PARALLEL_WITH_CURRENT ||
+        updatedWorkingFile.endCondition !== undefined
+        ? []
+        : sequentialAppendOffsets(resolvedItems)
+            .map((offset) => response!.insertIndex + offset)
+            .filter(
+              (index) =>
+                (updatedWorkingFile!.steps?.[index] as PromptStep | undefined)
+                  ?.endCondition === undefined
+            )
+    );
+    if (ungatedPresetWarning) {
+      response.warning = [response.warning, ungatedPresetWarning]
+        .filter(Boolean)
+        .join(" ");
+    }
 
     // Steps appended mid-run never pass the start-time approval prompt, so
     // tell the appending agent now instead of letting the step fail at

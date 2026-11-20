@@ -7,13 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A [Known issues](https://ctrlyoke.dev/docs/troubleshooting/known-issues) page in the docs lists harness CLI problems ctrlyoke cannot fix. It starts with agy's `auto` sandbox refusing workspace writes on Windows.
+
 ### Changed
 
-- Headless steps on Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- Tested with Antigravity CLI 1.5.12, which has the known issue above.
+
+## [0.8.0] - 2026-11-19
+
+### Changed
+
+- The Advanced Permissions settings tab is gone: **Trusted External Roots** and **Offer trust for untrusted file links** now sit below the sandbox settings in Settings → Workflow Defaults → Permissions, matching the workflow Permissions tab, and the per-harness permission notes it carried are covered by the harness and permissions docs. Workflow Defaults → Permissions also no longer lists which harnesses support Allowed Tools and Denied Tools, and warns only when a harness cannot enforce them. That warning now names each such harness with its own reason (today only Codex, for Allowed Tools), and the workflow Permissions tab reports Codex's deny list, which enforces MCP tool entries, as partly enforced rather than ignored.
+- Settings has fewer tabs. Queue's limits are now part of **Execution**, and **Close terminal on completion** and **Reuse running terminal** moved from Execution to **Terminal**. A new **Advanced** tab holds run retention and Run History (including Recently deleted), prompt temp files, ctrlyoke's MCP mode, the Coordination settings and board, and diagnostic logging, which leaves General with editor, output and accessibility preferences. **Browser dashboard theme** moved from General to **Server**, above Icon Colors. Setting keys are unchanged.
+- Commit-message skill commands now use matcher-compatible paths on Windows so Qwen's narrow shell allow rule matches while staying limited to that command.
+- Antigravity's Windows Auto sandbox may refuse workspace writes from approved shell commands; Copilot's interactive Custom mode inherits a global Assisted setting, while headless ACP continues to forward approval requests to ctrlyoke.
+- Headless permission warnings now account for dashboard approval requests, and steering a headless step no longer repeats the execution note in the user's message receipt.
+- OpenCode 2.3 headless output now includes child-session tool calls from its plugin sidecar, attributed to the matching subagent.
+- A saved template variable value that equals the template's current default is now kept in your settings and stays listed under **Saved variable values**. Before, saving it removed it, so the row disappeared and the value stopped applying once the template's default changed. Choosing a variable in **Settings → Templates → Add value** now saves it straight away with the template's default; before, the row was only saved once you edited it.
+- Every option in the **Tool Permission Mode** picker now has a one-line summary under its name, with the full explanation in its tooltip. Option summaries in dashboard dropdowns are no longer cut off at 120 characters on wide panels; they fill the available width.
+- A harness error while sending an end-condition retry prompt now follows `errorBehavior`: `retry` restarts the whole step from its pre-condition in a fresh session, while `retryPhase` retries the prompt in its existing session when available.
+- Dashboard terminals now use VS Code's terminal font (`terminal.integrated.fontFamily`), falling back to the editor font when that setting is empty, as VS Code's own terminal does. Browsers connected to the ctrlyoke server get the same font. The size still comes from ctrlyoke's `terminal.fontSize` setting.
+- Every device showing a workflow, such as VS Code and a browser, now shows the same terminal tabs. Closing a terminal on any device closes it on all of them; before, the other devices kept it open as an ended terminal. An ended terminal stays open on every device until someone closes it, and a device that opens the workflow later gets the ended terminals too, with their recent output.
+- Headless Copilot CLI 1.0.112 and later now uses ACP for queued steering and dashboard tool approvals. `auto` permission mode stays on Copilot's existing assisted-approval path.
+- Headless steps on Claude Code, Qwen Code, Copilot CLI, Codex CLI and Antigravity now receive generated prompt sections inline on stdin. Set `execution.inlineGeneratedPromptOnStdin` to `false` to use categorized temporary files and references instead.
+- Headless Codex 0.146.0 and later now runs through `codex app-server` JSON-RPC, while older versions keep using `codex exec`. The rollout log remains the source of headless Codex output.
+- With more than one live harness session, such as in a parallel group, the Run menu lists one **Steer Step N** item per session instead of a single **Send Steer Message** that went to the session selected in the terminal rail, so every running step can be steered.
+- A headless step ends when its turn ends, even if the model left background tasks running. Ending the turn closes the harness process, which stops those tasks, and the step's output notes any task that had not finished.
 - In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Added
 
+- Headless Claude Code and Qwen Code steps can ask the dashboard to approve tool requests with **Allow once** or **Deny**, including an optional denial message. Requests with no connected dashboard or no answer before the timeout are denied.
+- Headless Codex command, file-change and additional-permission approvals now follow `toolPermissions.headlessApprovals`; **Deny** remains the default, and **Ask** routes requests to the dashboard.
+- Headless OpenCode 2.3.0+ steps can route one-shot tool approvals to the dashboard and inject **Send Steer Message** into the active turn. OpenCode 1 and earlier OpenCode 2 versions keep auto-rejecting headless approval requests.
+- Send Steer Message now works during headless Claude Code, Codex CLI, Qwen Code and Antigravity steps: Claude and Codex receive the message in their current turns, while Qwen and Antigravity queue it after their current turns.
+- **End Step Early**, on a running step's menu or the final step's menu, ends a headless Claude, Codex or Qwen step's current turn while preserving the partial output and completing the step without stopping the workflow.
+- **Send Steer to Step**, on a step's menu or the final step's menu, sends the prompt editor's text as a steer message to that step's live session.
+- Codex headless approval requests use the configured timeout directly because app-server has no client-side timeout. Optional denial messages remain in the dashboard approval card because Codex's approval responses cannot carry them to the model.
+- The `workflow_status` MCP tool lists the workflow's condition presets under `metadata.conditionPresets`, with each preset's name, script preview, required params and retry limit. Before this, an orchestrator agent had no way to see which presets it could attach, and could queue steps without the `committed` gate a loop template declares. `append_step` now warns when it adds a sequential step with no end condition while the workflow declares presets, and its unknown-preset error lists each preset's params.
 - The workflow properties panel shows whole-value variable placeholders as read-only chips with their current value and a Clear action. Model, agent and skill dropdown validation leaves unresolved placeholders alone, and step names resolve from the workflow's vars in the run view.
 - Every dashboard picker and checkbox for a typed variable field—harness, model, execution mode, resume session, prior-context detail, compare source, operator, ignore case, condition and script-step On Pass/On Fail, On Error and step enabled—shows a whole-value placeholder as a read-only `{{name}} → value` chip with Clear, in the workflow properties panel, the prompt properties drawer and the script step editor. Timeout, Max Retries, Retry Delay and Max Steps inputs accept a typed `{{name}}`, and saving a step keeps an authored `enabled` or `ignoreCase` placeholder instead of rewriting it.
 - Dry Run lists every substituted field with its authored text next to the value it shows, including the worktree branch, base, directory and setup command, and reports a variable substitution failure as a blocker instead of failing the whole preview.
@@ -27,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tested with: Copilot CLI 1.0.114, Claude Code 2.1.328, Codex CLI 0.170.0, OpenCode 2.3.2 and Qwen Code 0.28.0. Antigravity stays at 1.5.7: on 1.5.12, `auto` permission mode runs commands in agy's sandbox, which refuses workspace writes on Windows (see the note above).
+- Dry Run is no longer on the Run button's right-click or long-press menu; use the workflow menu or **Dry Run Step** instead.
+- Codex `custom` and `allowAll` steps now pin the manual approval reviewer, so a user-level automatic reviewer cannot silently take over their sandbox escalations. Copilot's permissions guide now warns that its global assisted default also affects interactive `custom` steps.
 - Unresolved variable placeholders now warn even when a workflow has no `vars`; agent-supplied condition-preset parameter values remain literal instead of expanding as workflow variables; Dry Run secret grants now match the real run by scanning authored prompt text.
 - The `--var` help, workflow schema and variables guide now list the fields supported by variable substitution. Dry Run shows the resolved worktree setup command.
 - Variable placeholders in script, environment, hook command and worktree setup text now substitute even inside fenced code blocks; prompt text remains protected inside fences.
@@ -40,10 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A named worktree's `setup` command now runs at the start of every run, not only when ctrlyoke creates the worktree, so a dependency change pulled or merged into the branch since the last run is installed before the first step. Resuming or continuing a run whose setup already succeeded doesn't run it again. Omit `setup` if you don't want it to run. Managed worktrees are unchanged.
 - The **View N changes** links in the output toolbar and on step headers now stay visible while a run is executing, counting the files changed so far, instead of being hidden until the run stops or pauses. The changes dialog they open lists what's known so far but disables undo and redo until the run stops or pauses, and says that files changed by shell commands or scripts appear only when their step finishes. The extension now also refuses an undo or redo of a run that has a step in flight.
-- When the dashboard is open in a browser whose timezone differs from the machine running ctrlyoke, such as a hosted dashboard on a server set to UTC, the Schedule view and the Scheduled section show times in the host's timezone and name it. The Schedule view also says which timezone its times are in.
+- The Schedule view and Scheduled section name the timezone used for schedule times when it differs from the viewing machine's timezone.
+- Editing a schedule on another machine now keeps its recorded timezone, so saving without changing its wall-clock values does not move its runs. The Schedule view validates and previews those times in that zone; an explicit switch action reinterprets the unchanged wall-clock values in this machine's zone.
 
 ### Fixed
 
+- An interactive step that finished just as VS Code briefly stalled no longer loses its reply. ctrlyoke could stop reading the harness's session log before the last record arrived, so the step showed no token count or context-window gauge, and its reply appeared later as a follow-up.
+- A step's context-window gauge now reflects the latest follow-up turn, such as a resumed background task, after the dashboard reloads, not only while it is open. A step whose reply arrived only as a follow-up now shows its context window too.
+- Dashboard terminals that are already open now switch to a new VS Code color theme or editor font when you change it, instead of keeping the old one until a new terminal opens.
+- In VS Code 1.147 and later, dashboard terminals no longer draw tiny, widely spaced text without bold. A Chromium change in that release made the terminal's GPU renderer fall back to a 10px sans-serif font.
+- A dashboard that reconnects, such as a browser tab returning from the background, no longer shows terminals as running after they ended while it was disconnected, or keeps terminals that were closed meanwhile. Ended terminals now show as ended and stop accepting input, and closed ones disappear.
+- A shell terminal that ends now shows the same "Process closed" banner as an AI terminal, and a terminal in the collapsed rail is dimmed once it ends.
 - Qwen Code headless steps no longer hang when an unlisted tool needs approval. They now start stream-json SDK mode with `initialize`, send the prompt over stdin, and deny approval requests with an explanation.
 - Qwen Code subagent output no longer stops early. ctrlyoke sometimes stopped reading a subagent at the record holding its reasoning, just before its tool call, so the subagent's commands and later output were missing from the step. It now waits for Qwen to mark the subagent finished.
 - The dashboard no longer runs out of memory and turns gray when a long run streams output while its panel is hidden or its window is covered, minimized or on a sleeping display. Before, every VS Code window showing ctrlyoke went gray at once and stayed that way until reloaded.
@@ -62,6 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a synced state home, a schedule saved on another machine is read in that machine's timezone, which ctrlyoke now records with the schedule. Before, a machine in a different timezone worked out its next run in its own timezone whenever the owner wasn't running, and could drop a **Once** or **Until** time that fell in its own daylight-saving gap as invalid, deleting the schedule from the shared history the next time it wrote to that workflow.
 - Undoing or redoing a skipped step now keeps its Skipped status.
 - The collapsed steps sidebar's context menu now offers **Discard Continuation**.
+- On narrow screens, where Workflow Properties opens as a drawer, closing and reopening it now returns to the tab you were on instead of **Harness**. The last tab is also remembered after the dashboard reloads.
+- Copilot CLI 1.0.114 subagent commands are attributed to their spawn card again. That release tags a subagent's events with an `agentId` instead of `parentToolCallId`, so its commands showed as the parent's; ctrlyoke now reads either form.
 
 ## [0.7.1] - 2026-11-13
 

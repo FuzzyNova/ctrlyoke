@@ -17,8 +17,11 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { usePropertiesTabOverrides } from "../../hooks/usePropertiesTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
-import { useActiveInteractiveSession } from "../../hooks/useActiveInteractiveSession";
-import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import { sendEditorDraftAsSteer } from "../../utils/sendEditorSteer";
+import {
+  knownDrawerPageOrDefault,
+  type DrawerPage,
+} from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -231,8 +234,6 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   useSettingsStore(); // Keep store initialized for reactive updates
   const { globalSettings, workflowProperties } = useSettingsStore();
   const runDispatchTargets = useRunDispatchTargets(activeWorkflowId);
-  const activeInteractiveSession =
-    useActiveInteractiveSession(activeWorkflowId);
 
   // ── Drawer tab state (lifted from PromptPropertiesDrawer for footer tab bar) ─────
   // Persisted in uiStore so reopening the drawer restores the last-viewed tab.
@@ -240,12 +241,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   const setDrawerActivePage = useUiStore(
     (s) => s.setPromptPropertiesActivePage
   );
-  // A persisted value from another build may name a page that no longer exists.
-  const drawerActivePage: DrawerPage = (
-    Object.values(DRAWER_PAGES) as readonly string[]
-  ).includes(storedDrawerPage)
-    ? storedDrawerPage
-    : DRAWER_PAGES.HARNESS;
+  const drawerActivePage = knownDrawerPageOrDefault(storedDrawerPage);
   const handleCompatibilityReview = useCallback(
     (page: DrawerPage, focusId: string) => {
       setDrawerActivePage(page);
@@ -1024,37 +1020,17 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     executePrompt(ACTION_TYPES.RUN_PARALLEL);
   }, [executePrompt, runDispatchTargets.parallel.enabled]);
 
-  const sendSteerMessage = useCallback(() => {
-    if (
-      !runDispatchTargets.steer.enabled ||
-      !activeWorkflowId ||
-      !activeInteractiveSession
-    ) {
-      return;
-    }
-
-    const text = promptText.trim();
-    if (!text) return;
-
-    lastSubmittedTextRef.current = text;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
-      workflowId: activeWorkflowId,
-      sessionId: activeInteractiveSession.id,
-      text,
-    });
-    resetEditor();
-    markClean();
-    vscode.setState(null);
-  }, [
-    activeInteractiveSession,
-    activeWorkflowId,
-    markClean,
-    promptText,
-    resetEditor,
-    runDispatchTargets.steer.enabled,
-    vscode,
-  ]);
+  const sendSteerMessage = useCallback(
+    (sessionId: string) => {
+      const destination = runDispatchTargets.steer.find(
+        (target) => target.sessionId === sessionId
+      );
+      if (!destination?.enabled || !activeWorkflowId) return;
+      lastSubmittedTextRef.current = promptText.trim();
+      sendEditorDraftAsSteer(activeWorkflowId, sessionId);
+    },
+    [activeWorkflowId, promptText, runDispatchTargets.steer]
+  );
 
   const runInNewWorkflow = useCallback(() => {
     const currentWorkflowId = useUiStore.getState().activeWorkflowId;
@@ -1665,7 +1641,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         onSendSteerMessage={sendSteerMessage}
         runInParallelTarget={runDispatchTargets.parallel}
         newWorkflowTarget={runDispatchTargets.newWorkflow}
-        steerTarget={runDispatchTargets.steer}
+        steerTargets={runDispatchTargets.steer}
         onQueue={() => executePrompt(ACTION_TYPES.QUEUE)}
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}

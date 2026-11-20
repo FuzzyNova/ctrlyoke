@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AdvancedPermissionsSection } from "@components/settings/AdvancedPermissionsSection";
+import { TrustedExternalRootsRows } from "@components/settings/defaults/TrustedExternalRootsRows";
 import { SETTING_SCOPES, MESSAGE_TYPES } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
@@ -32,10 +32,10 @@ function createSettings(
   };
 }
 
-describe("AdvancedPermissionsSection — allowed external file roots", () => {
+describe("TrustedExternalRootsRows", () => {
   it("renders user-scope roots without decision status controls", () => {
     render(
-      <AdvancedPermissionsSection
+      <TrustedExternalRootsRows
         settings={createSettings({
           trustedExternalRoots: ["/home/user/logs", "/var/log/my-tool"],
         })}
@@ -58,7 +58,7 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
     const onUpdate = vi.fn();
     const user = userEvent.setup();
     render(
-      <AdvancedPermissionsSection
+      <TrustedExternalRootsRows
         settings={createSettings()}
         activeScope={SETTING_SCOPES.USER}
         onUpdate={onUpdate}
@@ -80,7 +80,7 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
   it("shows workspace decisions and posts decision changes without editing the request list", async () => {
     const user = userEvent.setup();
     render(
-      <AdvancedPermissionsSection
+      <TrustedExternalRootsRows
         settings={{
           ...createSettings({ trustedExternalRoots: ["/shared/logs"] }),
           externalFileRootsByScope: {
@@ -110,7 +110,7 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
   it("posts BROWSE_AND_ADD_EXTERNAL_ROOT with the active scope when 'Add folder…' is clicked", async () => {
     const user = userEvent.setup();
     render(
-      <AdvancedPermissionsSection
+      <TrustedExternalRootsRows
         settings={createSettings()}
         activeScope={SETTING_SCOPES.WORKSPACE}
         onUpdate={() => {}}
@@ -130,7 +130,7 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
     const onUpdate = vi.fn();
     const user = userEvent.setup();
     render(
-      <AdvancedPermissionsSection
+      <TrustedExternalRootsRows
         settings={createSettings()}
         activeScope={SETTING_SCOPES.USER}
         onUpdate={onUpdate}

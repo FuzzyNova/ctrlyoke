@@ -1,31 +1,22 @@
 import { randomUUID } from "crypto";
 import {
-  APPROVAL_DECISIONS,
-  HEADLESS_CONTROL_OBSERVATION_KINDS,
   HEADLESS_STEER_DELIVERIES,
   FAILURE_KINDS,
   FAILURE_SOURCES,
-  type ApprovalDecision,
 } from "../../../types/DashboardConstants";
 import { isRecord } from "../../../utils/JsonTypeGuards";
 import { CliTransportError } from "../shared/CliTransportError";
-import type {
-  ControlObservation,
-  ControlWriter,
-  IHeadlessControlChannel,
-} from "../shared/IHeadlessControlChannel";
+import type { ControlWriter } from "../shared/IHeadlessControlChannel";
+import { StreamJsonHeadlessControlChannel } from "../shared/StreamJsonHeadlessControlChannel";
 import {
   QWEN_CONTROL,
   QWEN_EVENT_TYPES,
   QWEN_INITIALIZE_TIMEOUT_MS,
+  QWEN_TOOL_NAMES,
 } from "./QwenProtocolConstants";
 
 /** Qwen Code's stream-json SDK channel for one headless step. */
-export class QwenHeadlessControlChannel implements IHeadlessControlChannel {
-  readonly spawnShape = {};
-  readonly steerDelivery = HEADLESS_STEER_DELIVERIES.QUEUE;
-
-  private writer?: ControlWriter;
+export class QwenHeadlessControlChannel extends StreamJsonHeadlessControlChannel {
   private initializeRequestId?: string;
   private initializeResolve?: () => void;
   private initializeReject?: (error: Error) => void;
@@ -33,8 +24,22 @@ export class QwenHeadlessControlChannel implements IHeadlessControlChannel {
   private readonly userSessionId = randomUUID();
 
   constructor(
-    private readonly initializeTimeoutMs = QWEN_INITIALIZE_TIMEOUT_MS
-  ) {}
+    private readonly initializeTimeoutMs = QWEN_INITIALIZE_TIMEOUT_MS,
+    private readonly canUseToolTimeoutMs?: number
+  ) {
+    super(
+      {
+        requestType: QWEN_CONTROL.REQUEST_TYPE,
+        responseType: QWEN_CONTROL.RESPONSE_TYPE,
+        canUseToolSubtype: QWEN_CONTROL.CAN_USE_TOOL_SUBTYPE,
+        successSubtype: QWEN_CONTROL.SUCCESS_SUBTYPE,
+        denyBehavior: QWEN_CONTROL.DENY_BEHAVIOR,
+        resultType: QWEN_EVENT_TYPES.RESULT,
+        modelQuestionToolNames: [QWEN_TOOL_NAMES.ASK_USER_QUESTION],
+      },
+      HEADLESS_STEER_DELIVERIES.QUEUE
+    );
+  }
 
   async start(writer: ControlWriter): Promise<void> {
     this.writer = writer;
@@ -57,13 +62,16 @@ export class QwenHeadlessControlChannel implements IHeadlessControlChannel {
     });
 
     try {
-      await writer.write(
-        `${JSON.stringify({
-          type: QWEN_CONTROL.REQUEST_TYPE,
-          request_id: requestId,
-          request: { subtype: QWEN_CONTROL.INITIALIZE_SUBTYPE },
-        })}\n`
-      );
+      await this.writeRecord({
+        type: QWEN_CONTROL.REQUEST_TYPE,
+        request_id: requestId,
+        request: {
+          subtype: QWEN_CONTROL.INITIALIZE_SUBTYPE,
+          ...(this.canUseToolTimeoutMs !== undefined
+            ? { timeout: { canUseTool: this.canUseToolTimeoutMs } }
+            : {}),
+        },
+      });
       await initialized;
     } catch (error) {
       this.clearInitializeWait();
@@ -71,21 +79,16 @@ export class QwenHeadlessControlChannel implements IHeadlessControlChannel {
     }
   }
 
-  async sendUserMessage(text: string): Promise<void> {
-    if (!this.writer) {
-      throw new Error("Qwen headless control channel has not started");
-    }
-    await this.writer.write(
-      `${JSON.stringify({
-        type: QWEN_CONTROL.USER_TYPE,
-        session_id: this.userSessionId,
-        message: { role: QWEN_CONTROL.USER_ROLE, content: text },
-        parent_tool_use_id: null,
-      })}\n`
-    );
+  protected createUserMessageRecord(text: string): Record<string, unknown> {
+    return {
+      type: QWEN_CONTROL.USER_TYPE,
+      session_id: this.userSessionId,
+      message: { role: QWEN_CONTROL.USER_ROLE, content: text },
+      parent_tool_use_id: null,
+    };
   }
 
-  observe(record: unknown): ControlObservation[] {
+  override observe(record: unknown) {
     if (!isRecord(record)) return [];
 
     if (record.type === QWEN_CONTROL.RESPONSE_TYPE) {
@@ -110,58 +113,20 @@ export class QwenHeadlessControlChannel implements IHeadlessControlChannel {
           this.finishInitialize();
         }
       }
-      return [];
     }
-
-    if (
-      record.type === QWEN_CONTROL.REQUEST_TYPE &&
-      isRecord(record.request) &&
-      record.request.subtype === QWEN_CONTROL.CAN_USE_TOOL_SUBTYPE &&
-      typeof record.request_id === "string"
-    ) {
-      return [
-        {
-          kind: HEADLESS_CONTROL_OBSERVATION_KINDS.APPROVAL_REQUEST,
-          requestId: record.request_id,
-        },
-      ];
-    }
-
-    if (record.type === QWEN_EVENT_TYPES.RESULT) {
-      return [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }];
-    }
-    return [];
+    return super.observe(record);
   }
 
-  async answerApproval(
-    requestId: string,
-    decision: ApprovalDecision,
-    message?: string
-  ): Promise<void> {
-    if (!this.writer) {
-      throw new Error("Qwen headless control channel has not started");
-    }
-    if (decision !== APPROVAL_DECISIONS.DENY) {
-      throw new Error("Qwen headless approvals only support deny in Stage 1");
-    }
-    await this.writer.write(
-      `${JSON.stringify({
-        type: QWEN_CONTROL.RESPONSE_TYPE,
-        response: {
-          subtype: QWEN_CONTROL.SUCCESS_SUBTYPE,
-          request_id: requestId,
-          response: {
-            behavior: QWEN_CONTROL.DENY_BEHAVIOR,
-            message,
-          },
-        },
-      })}\n`
+  override close(): void {
+    this.finishInitialize(
+      new CliTransportError(
+        "Qwen Code headless initialize was interrupted",
+        FAILURE_KINDS.USER_CANCELLED,
+        undefined,
+        FAILURE_SOURCES.HEADLESS_PARSE
+      )
     );
-  }
-
-  close(): void {
-    this.clearInitializeWait();
-    this.writer = undefined;
+    super.close();
   }
 
   private finishInitialize(error?: Error): void {

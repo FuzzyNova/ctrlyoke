@@ -23,6 +23,8 @@ import type {
 import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
+import { OpenCodeHeadlessControlChannel } from "./OpenCodeHeadlessControlChannel";
+import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
@@ -32,6 +34,7 @@ import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   capabilitySuiteVerification,
+  HEADLESS_STEERING_SUITE_REFERENCE,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -63,7 +66,11 @@ import {
   OPENCODE_RESUMED_PROMPT_DELIVERIES,
   type OpenCodeResumedPromptDelivery,
 } from "./OpenCodeProtocolConstants";
-import { detectOpenCodeV2, OPENCODE_VERSION_COMMAND } from "./OpenCodeVersion";
+import {
+  detectOpenCodeHeadlessControl,
+  detectOpenCodeV2,
+  OPENCODE_VERSION_COMMAND,
+} from "./OpenCodeVersion";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
 import { HARNESS_SHELL_ESCAPE_PREFIX } from "../../../utils/HarnessShellEscape";
 
@@ -114,23 +121,25 @@ function flagValue(args: readonly string[], flag: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined;
 }
 
-// The capability suite finds denied tools still callable:
-// dev/bugs/backlog/opencode-mcp-tool-deny-rules-never-match.md.
 const OPENCODE_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
   mechanism: "translated-cli",
-  verification: {
-    kind: "manual",
-    reference: "src/core/harness/opencode/OpenCodeToolPermissionMapper.ts",
-    basis: "cli-version",
-    verifiedVersions: [">=1.3.16"],
-  },
+  verification: capabilitySuiteVerification([">=1.3.16"]),
 } as const;
 
 const OPENCODE_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
   verification: capabilitySuiteVerification([">=1.3.16"]),
+} as const;
+
+const OPENCODE_HEADLESS_STEERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: capabilitySuiteVerification(
+    [">=2.3.0"],
+    HEADLESS_STEERING_SUITE_REFERENCE
+  ),
 } as const;
 
 /**
@@ -215,7 +224,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     npmPackage: "opencode-ai",
     versionPolicy: {
       minimum: "1.3.16",
-      testedWith: "2.2.7",
+      testedWith: "2.3.2",
       updateCommand: "opencode upgrade",
     },
     shouldStreamHeadlessOutput: true,
@@ -247,6 +256,9 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
         perServerToolFiltering: OPENCODE_MCP_FILTERING_CAPABILITY,
       },
       promptInputs: { images: OPENCODE_IMAGE_INPUT_CAPABILITY },
+      headlessControl: {
+        steering: OPENCODE_HEADLESS_STEERING_CAPABILITY,
+      },
     };
   }
   readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
@@ -335,14 +347,28 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
 
   /** Installed path of the ctrlyoke plugin entry for one CLI generation. */
   static pluginEntryPath(extensionPath: string, openCodeV2: boolean): string {
-    return path.resolve(
+    const entryName = openCodeV2
+      ? OPENCODE_PLUGIN_PATHS.V2_DIRECTORY
+      : OPENCODE_PLUGIN_PATHS.V1_FILE;
+    const packageRootEntry = path.resolve(
       extensionPath,
       "out",
       "scripts",
-      openCodeV2
-        ? OPENCODE_PLUGIN_PATHS.V2_DIRECTORY
-        : OPENCODE_PLUGIN_PATHS.V1_FILE
+      entryName
     );
+    if (fs.existsSync(packageRootEntry)) return packageRootEntry;
+
+    // The bundled CLI's platform adapter lives under <package>/out/platform,
+    // while the build copies plugin assets to <package>/out/scripts. VS Code
+    // adapters receive the package root, so keep the installed-extension path
+    // above as the primary location.
+    const bundledCliEntry = path.resolve(
+      extensionPath,
+      "..",
+      "scripts",
+      entryName
+    );
+    return fs.existsSync(bundledCliEntry) ? bundledCliEntry : packageRootEntry;
   }
 
   /**
@@ -371,6 +397,21 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
       (candidate) => typeof candidate.sessionID === "string"
     );
     return event?.sessionID as string | undefined;
+  }
+
+  async createHeadlessControlChannel(
+    _promptText: string,
+    options: HeadlessControlChannelOptions
+  ): Promise<OpenCodeHeadlessControlChannel | undefined> {
+    const launchArgs = options.context?.launchArgs ?? [];
+    if (
+      !launchArgs.includes(OPENCODE_CLI_FLAGS.STANDALONE) ||
+      launchArgs.includes(OPENCODE_V2_SERVER_FLAG) ||
+      !(await detectOpenCodeHeadlessControl())
+    ) {
+      return undefined;
+    }
+    return OpenCodeHeadlessControlChannel.create();
   }
 
   /**

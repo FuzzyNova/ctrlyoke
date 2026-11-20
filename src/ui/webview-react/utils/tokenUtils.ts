@@ -1,3 +1,6 @@
+import type { CliOutput } from "@root/types/WebviewMessageTypes";
+import { getOutputContextWindow } from "@root/utils/OutputContextWindow";
+
 /**
  * Returns the context window usage percentage (0-100), or undefined if data unavailable.
  */
@@ -29,26 +32,19 @@ interface ContextWindowTokens {
 export function resolveEffectiveContextWindow(params: {
   isCurrent: boolean;
   liveContextWindow?: ContextWindowSnapshot;
-  latestOutputTokens?: ContextWindowTokens;
+  latestOutput?: Pick<CliOutput, "tokens" | "contextWindow"> | null;
   runtimeContextWindow?: ContextWindowTokens;
 }): ContextWindowSnapshot | undefined {
-  const {
-    isCurrent,
-    liveContextWindow,
-    latestOutputTokens,
-    runtimeContextWindow,
-  } = params;
-  const completed = latestOutputTokens?.contextWindowSize
-    ? {
-        used: latestOutputTokens.contextWindowUsed ?? 0,
-        size: latestOutputTokens.contextWindowSize,
-      }
-    : runtimeContextWindow?.contextWindowSize
+  const { isCurrent, liveContextWindow, latestOutput, runtimeContextWindow } =
+    params;
+  const completed =
+    getOutputContextWindow(latestOutput) ??
+    (runtimeContextWindow?.contextWindowSize
       ? {
           used: runtimeContextWindow.contextWindowUsed ?? 0,
           size: runtimeContextWindow.contextWindowSize,
         }
-      : undefined;
+      : undefined);
   return isCurrent && liveContextWindow
     ? liveContextWindow
     : (completed ?? liveContextWindow);

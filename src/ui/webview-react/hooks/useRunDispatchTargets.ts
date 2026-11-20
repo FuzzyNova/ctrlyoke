@@ -3,10 +3,18 @@ import {
   EDITOR_TARGET_KINDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
-  getHarnessDisplayName,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import { useActiveInteractiveSession } from "@hooks/useActiveInteractiveSession";
+import { useSteerTargets } from "@hooks/useSteerTargets";
+import {
+  NO_LIVE_HARNESS,
+  STEER_EXTERNAL_RUN,
+  STEER_NO_CONTENT,
+  STEER_NOT_NEW_PROMPT,
+  formatSteerTargetLabel,
+  formatSteerTargetTitle,
+  getSteerDraftDisabledReason,
+} from "@utils/steerTargets";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -16,13 +24,9 @@ const NO_STEP_RUNNING = "No step is running";
 const FINAL_STEP_UNSUPPORTED = "The final step can't run in parallel";
 const WIDTH_ONE = "Parallel width is 1 — raise `queue.maxParallelSteps`";
 const WORKFLOW_PAUSING = "Workflow is pausing";
-const NO_CONTENT = "Enter a prompt first";
-const NOT_NEW_PROMPT = "Only available for a new prompt";
-const EXTERNAL_RUN = "Read-only — external run";
-const NO_LIVE_HARNESS = "No live harness session for this workflow";
-const STEER_PROMPT_ONLY = "Steering is only available for prompt steps";
 const NEW_WORKFLOW_TITLE =
   "Starts a separate workflow with default settings and this prompt";
+const SEND_STEER_LABEL = "Send Steer Message";
 
 export interface RunDispatchTarget {
   enabled: boolean;
@@ -30,10 +34,21 @@ export interface RunDispatchTarget {
   title: string;
 }
 
+/** One steer item in the Run menu. */
+export interface SteerDispatchTarget extends RunDispatchTarget {
+  label: string;
+  /** Destination session; absent only for the disabled no-destination item. */
+  sessionId?: string;
+}
+
 export interface RunDispatchTargets {
   parallel: RunDispatchTarget;
   newWorkflow: RunDispatchTarget;
-  steer: RunDispatchTarget;
+  /**
+   * One item when there are zero or one live destinations ("Send Steer
+   * Message"), otherwise one item per destination, in selector order.
+   */
+  steer: SteerDispatchTarget[];
 }
 
 /**
@@ -45,7 +60,7 @@ export interface RunDispatchTargets {
 export function useRunDispatchTargets(
   workflowId: string | null
 ): RunDispatchTargets {
-  const activeInteractiveSession = useActiveInteractiveSession(workflowId);
+  const steerTargets = useSteerTargets(workflowId);
   const selectionTarget = useEditorStore((state) => state.selectionTarget);
   const promptText = useEditorStore((state) => state.promptText);
   const scriptCommand = useEditorStore((state) => state.scriptCommand);
@@ -73,18 +88,39 @@ export function useRunDispatchTargets(
     );
 
     const contentReason = !hasContent
-      ? NO_CONTENT
+      ? STEER_NO_CONTENT
       : isExternallyManaged
-        ? EXTERNAL_RUN
+        ? STEER_EXTERNAL_RUN
         : undefined;
-    const parallelBaseReason = !isNewPrompt ? NOT_NEW_PROMPT : contentReason;
-    const steerDisabledReason = !activeInteractiveSession
-      ? NO_LIVE_HARNESS
-      : !isNewPrompt
-        ? NOT_NEW_PROMPT
-        : stepType !== STEP_TYPES.PROMPT
-          ? STEER_PROMPT_ONLY
-          : contentReason;
+    const parallelBaseReason = !isNewPrompt
+      ? STEER_NOT_NEW_PROMPT
+      : contentReason;
+    const steerDraftReason = getSteerDraftDisabledReason({
+      selectionTarget,
+      stepType,
+      promptText,
+      isExternallyManaged,
+    });
+    const steer: SteerDispatchTarget[] =
+      steerTargets.length === 0
+        ? [
+            {
+              label: SEND_STEER_LABEL,
+              enabled: false,
+              disabledReason: NO_LIVE_HARNESS,
+              title: NO_LIVE_HARNESS,
+            },
+          ]
+        : steerTargets.map((target) => ({
+            label:
+              steerTargets.length === 1
+                ? SEND_STEER_LABEL
+                : formatSteerTargetLabel(target),
+            sessionId: target.sessionId,
+            enabled: steerDraftReason === undefined,
+            ...(steerDraftReason ? { disabledReason: steerDraftReason } : {}),
+            title: steerDraftReason ?? formatSteerTargetTitle(target),
+          }));
 
     const activeGroup = parallelGroups.find((group) =>
       activeStepIndices.some(
@@ -95,12 +131,6 @@ export function useRunDispatchTargets(
       activeGroup?.startIndex ?? activeStepIndices[0] ?? currentStep;
     const runningStepNumber = runningStepIndex + 1;
     const enabledTitle = `Runs beside step ${runningStepNumber}; prior context resolves from before step ${runningStepNumber}`;
-    const steerStepNumber =
-      (activeInteractiveSession?.stepIndex ?? runningStepIndex) + 1;
-    const harnessLabel = activeInteractiveSession?.harnessId
-      ? getHarnessDisplayName(activeInteractiveSession.harnessId)
-      : "harness";
-    const steerEnabledTitle = `Sends to the live ${harnessLabel} session (step ${steerStepNumber}). Prompt overrides are ignored.`;
 
     let parallelDisabledReason = parallelBaseReason;
     if (
@@ -143,14 +173,9 @@ export function useRunDispatchTargets(
         ...(contentReason ? { disabledReason: contentReason } : {}),
         title: contentReason ?? NEW_WORKFLOW_TITLE,
       },
-      steer: {
-        enabled: steerDisabledReason === undefined,
-        ...(steerDisabledReason ? { disabledReason: steerDisabledReason } : {}),
-        title: steerDisabledReason ?? steerEnabledTitle,
-      },
+      steer,
     };
   }, [
-    activeInteractiveSession,
     activeStepIndices,
     currentStep,
     effectiveParallelGroupWidth,
@@ -161,6 +186,7 @@ export function useRunDispatchTargets(
     promptText,
     scriptCommand,
     selectionTarget,
+    steerTargets,
     stepType,
     workflowId,
   ]);

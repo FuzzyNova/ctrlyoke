@@ -2682,6 +2682,36 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
+    test("should clear pending background work from a headless stdout task_notification", () => {
+      // Shape captured from Claude Code 2.1.325 `-p --output-format
+      // stream-json`: stdout has no `<task-notification>` text, only this
+      // system record. It clears the launch without awaiting a resumed turn.
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_headless_bg",
+              name: "Bash",
+              input: { command: "node probe.js", run_in_background: true },
+            },
+          ],
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "system",
+        subtype: "task_notification",
+        task_id: "busi6rme3",
+        tool_use_id: "toolu_headless_bg",
+        status: "completed",
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
     test("should clear a stopped background task without waiting for a notification", () => {
       parser.trackBackgroundWorkState({
         type: "assistant",
@@ -3712,6 +3742,57 @@ suite("CopilotLogParser", () => {
       ),
       "other"
     );
+  });
+
+  test("attributes subagent tool events by envelope agentId (Copilot 1.0.114+)", () => {
+    const events = [
+      {
+        type: "tool.execution_start",
+        data: { toolCallId: "spawn-a", toolName: "task", arguments: {} },
+      },
+      {
+        type: "subagent.started",
+        agentId: "agent-a",
+        data: { toolCallId: "spawn-a", agentDisplayName: "Alpha" },
+      },
+      {
+        type: "tool.execution_start",
+        agentId: "agent-a",
+        data: {
+          toolCallId: "child-a",
+          toolName: "powershell",
+          arguments: { command: "echo a" },
+        },
+      },
+      {
+        type: "tool.shell_output",
+        data: { toolCallId: "child-a", text: "a" },
+      },
+    ] as unknown as BaseCliEvent[];
+
+    const output = new CopilotLogParser().extractResponse(events);
+    const attributed = output.events.filter(
+      (event) => event.subagent?.parentToolCallId === "spawn-a"
+    );
+    assert.ok(
+      attributed.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND),
+      "the child's command is attributed to its spawn call"
+    );
+    assert.ok(
+      !output.events.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          event.subagent !== undefined
+      ),
+      "the spawn call itself is not attributed to a subagent"
+    );
+
+    const streaming = new CopilotLogParser();
+    streaming.extractStructuredEventsFromEvent(events[1]);
+    const childStart = streaming.extractStructuredEventsFromEvent(events[2]);
+    const shellOutput = streaming.extractStructuredEventsFromEvent(events[3]);
+    assert.strictEqual(childStart[0].subagent?.parentToolCallId, "spawn-a");
+    assert.strictEqual(shellOutput[0].subagent?.parentToolCallId, "spawn-a");
   });
 
   test("normalizes Copilot tool start, completion, and result triples into one row", () => {

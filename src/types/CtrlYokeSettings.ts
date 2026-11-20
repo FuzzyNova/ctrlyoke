@@ -18,6 +18,9 @@ import {
   type HookEvent,
   type ExecutionMode,
   type PermissionMode,
+  type HeadlessApprovalPolicy,
+  HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
+  HEADLESS_APPROVAL_POLICIES,
   type CtrlYokeMcpMode,
   CTRLYOKE_MCP_MODES,
   PERMISSION_CAPABILITY_KEYS,
@@ -204,6 +207,8 @@ export interface CtrlYokeGlobalSettings {
       mode: PermissionMode;
       allowedTools: string[];
       deniedTools: string[];
+      headlessApprovals: HeadlessApprovalPolicy;
+      headlessApprovalTimeoutSec: number;
     } | null;
     /** Default end condition applied to all new workflows. null/undefined = disabled. */
     endCondition?: EndCondition | null;
@@ -520,6 +525,8 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     sandboxMode: DEFAULT_SANDBOX_MODE,
     toolPermissions: {
       mode: "allowAll",
+      headlessApprovals: HEADLESS_APPROVAL_POLICIES.DENY,
+      headlessApprovalTimeoutSec: HEADLESS_APPROVAL_DEFAULT_TIMEOUT_SEC,
       // Only read in `custom` mode; `allowAll` ignores it.
       allowedTools: [
         "write",

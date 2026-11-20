@@ -8,6 +8,7 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { WebSocket } from "ws";
 import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
+import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
 import {
   CtrlYokeHostedServer,
@@ -139,6 +140,24 @@ suite("CtrlYokeHostedServer listen cleanup", () => {
 
     assert.strictEqual(clientCount, 0);
     assert.strictEqual(internals.heartbeatInterval, undefined);
+  });
+});
+
+suite("CtrlYokeHostedServer dashboard sink parity", () => {
+  // The hosted server forwards each IDashboardSink method by hand, and the hub
+  // calls optional methods with `?.`, so a missing forwarder silently hides
+  // that update from every browser dashboard (headless steer targets and
+  // approval cards were lost this way).
+  test("forwards every update/notify method the panel sink implements", () => {
+    const methodNames = (prototype: object): string[] =>
+      Object.getOwnPropertyNames(prototype).filter((name) =>
+        /^(update|notify)[A-Z]/.test(name)
+      );
+    const hostedMethods = new Set(methodNames(CtrlYokeHostedServer.prototype));
+    const missing = methodNames(PostMessageDashboardSink.prototype).filter(
+      (name) => !hostedMethods.has(name)
+    );
+    assert.deepStrictEqual(missing, []);
   });
 });
 

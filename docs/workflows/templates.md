@@ -72,7 +72,8 @@ variable, the Workspace value wins in that workspace. Linked harness and model v
 
 Each saved value is used to pre-fill the matching field in **New Workflow**. Choose **Add
 template** and **Add value** to add a value from Settings, or pin a value while creating a
-workflow. Blank text clears a saved value. **Clear all** removes every saved value for that
+workflow. Choosing a variable in **Add value** saves it straight away with the template's
+default, which you can then edit. Blank text clears a saved value. **Clear all** removes every saved value for that
 template at the selected scope, returning fields to the other scope or the variable default
 authored by the template. Missing templates and variables that have since been removed remain
 visible until cleared, so stale settings can be cleaned up.
@@ -234,7 +235,7 @@ For optional file variables, avoid writing the placeholder with an `@` prefix. W
 
 You can save a field's current value as a **variable default** from the template picker. Once you change a field, **Save as default** appears at the right of its label. The User/Workspace toggle in the title bar selects where **Save as default** writes; it also selects where **Set as Default** writes the default template setting. The toggle starts on Workspace until a save succeeds, then remembers the scope of the last successful save. With no workspace open, it stays on User.
 
-Saved values override the value declared in the template. Workspace values take precedence over User values, which take precedence over the template's authored value. This is resolved per variable, so a template can use some values saved in Workspace and others saved in User. A **Saved (User)** or **Saved (Workspace)** marker shows the source, and **Clear saved value** removes the value from that scope so the next value in the precedence order applies. Saving the value already inherited at the selected scope clears that scope's override instead of keeping a redundant saved value.
+Saved values override the value declared in the template. Workspace values take precedence over User values, which take precedence over the template's authored value. This is resolved per variable, so a template can use some values saved in Workspace and others saved in User. A **Saved (User)** or **Saved (Workspace)** marker shows the source, and **Clear saved value** removes the value from that scope so the next value in the precedence order applies. A saved value is kept even when it equals the template's current value, so it still applies if a later version of the template changes its default.
 
 A harness and its linked model fields are one unit: they are saved, marked, and cleared together, and resolve from the same scope. The picker draws a box around them, with their shared save or clear action in the box's top edge. Multiline text fields cannot be saved as variable defaults.
 

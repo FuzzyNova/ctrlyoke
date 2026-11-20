@@ -2111,6 +2111,7 @@ describe("WorkflowSwitcher — loaded state", () => {
       address: expect.objectContaining({ workflowKey: "test-0" }),
       enabled: true,
       trigger: { cron: "30 7 * * *" },
+      timeZone: expect.any(String),
     });
     act(() => {
       vi.advanceTimersByTime(321);

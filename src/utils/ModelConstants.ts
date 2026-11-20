@@ -40,6 +40,8 @@ export const COPILOT_CLI_MODEL_IDS = [
   "claude-sonnet-4.6",
   "claude-haiku-5.5",
   "claude-haiku-4.5",
+  "gpt-6.2-sol",
+  "gpt-6.2-astra",
   "gpt-6.1-sol",
   "gpt-6.1-terra",
   "gpt-6-sol",
@@ -79,6 +81,8 @@ export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
   "claude-sonnet-4.6": "Claude Sonnet 4.6",
   "claude-haiku-5.5": "Claude Haiku 5.5",
   "claude-haiku-4.5": "Claude Haiku 4.5",
+  "gpt-6.2-sol": "GPT 6.2 Sol",
+  "gpt-6.2-astra": "GPT 6.2 Astra",
   "gpt-6.1-sol": "GPT 6.1 Sol",
   "gpt-6.1-terra": "GPT 6.1 Terra",
   "gpt-6-sol": "GPT 6 Sol",
@@ -131,9 +135,11 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
  * live discovery only, hidden until the user unhides them.
  */
 export const CODEX_CLI_MODELS = [
+  "gpt-6.2-sol",
+  "gpt-6.2-astra",
+  "gpt-6.1-terra",
   "gpt-6.1-sol",
   "gpt-6-astra",
-  "gpt-6.1-terra",
   "gpt-6-sol",
   "gpt-6-luna",
   "gpt-5.6-sol",
@@ -146,9 +152,11 @@ export const CODEX_CLI_MODELS = [
  * Written by `--discover` alongside CODEX_CLI_MODELS.
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
+  "gpt-6.2-sol": "GPT-6.2-Sol",
+  "gpt-6.2-astra": "GPT-6.2-Astra",
+  "gpt-6.1-terra": "GPT-6.1 Terra",
   "gpt-6.1-sol": "GPT-6.1-Sol",
   "gpt-6-astra": "GPT-6-Astra",
-  "gpt-6.1-terra": "GPT-6.1 Terra",
   "gpt-6-sol": "GPT-6-Sol",
   "gpt-6-luna": "GPT-6-Luna",
   "gpt-5.6-sol": "GPT-5.6-Sol",
@@ -373,6 +381,10 @@ export function getQwenContextWindowSize(_modelId: string): number {
  * Command: npm run sync-models:discover
  */
 export const ANTIGRAVITY_CLI_MODELS = [
+  "gemini-4-neon-high",
+  "gemini-4-neon-xhigh",
+  "gemini-4-neon-medium",
+  "gemini-4-neon-low",
   "gemini-4-argon-medium",
   "gemini-4-argon-high",
   "gemini-4-argon-low",
@@ -380,6 +392,7 @@ export const ANTIGRAVITY_CLI_MODELS = [
   "gemini-4-hydrogen-xhigh",
   "gemini-4-hydrogen-medium",
   "gemini-4-hydrogen-low",
+  "gemini-pro-orchestrator-neon",
   "gemini-pro-orchestrator-g1-pro",
   "gemini-3.8-flash-high",
   "gemini-3.8-flash-medium",
@@ -400,6 +413,10 @@ export const ANTIGRAVITY_CLI_MODELS = [
  * `-thinking` ID suffix — that asymmetry is agy's, not ours.
  */
 export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
+  "gemini-4-neon-high": "Gemini 4 Neon (High)",
+  "gemini-4-neon-xhigh": "Gemini 4 Neon (XHigh)",
+  "gemini-4-neon-medium": "Gemini 4 Neon (Medium)",
+  "gemini-4-neon-low": "Gemini 4 Neon (Low)",
   "gemini-4-argon-medium": "Gemini 4 Argon (Medium)",
   "gemini-4-argon-high": "Gemini 4 Argon (High)",
   "gemini-4-argon-low": "Gemini 4 Argon (Low)",
@@ -407,6 +424,7 @@ export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
   "gemini-4-hydrogen-xhigh": "Gemini 4 Hydrogen (XHigh)",
   "gemini-4-hydrogen-medium": "Gemini 4 Hydrogen (Medium)",
   "gemini-4-hydrogen-low": "Gemini 4 Hydrogen (Low)",
+  "gemini-pro-orchestrator-neon": "Orchestrator (Neon)",
   "gemini-pro-orchestrator-g1-pro": "Orchestrator (Argon)",
   "gemini-3.8-flash-high": "Gemini 3.8 Flash (High)",
   "gemini-3.8-flash-medium": "Gemini 3.8 Flash (Medium)",

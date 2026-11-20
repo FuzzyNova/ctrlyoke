@@ -22,6 +22,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { cloneDefaultTerminalSettings } from "@root/types/CtrlYokeSettings";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
 import { WebviewLog } from "./utils/logger";
+import { ensureCanvasFontWhitespaceFix } from "./utils/canvasFontWhitespaceFix";
 
 export type { Terminal, ITheme };
 
@@ -105,6 +106,16 @@ let currentTerminalSettings: TerminalSettings = cloneDefaultTerminalSettings();
  */
 let currentScreenReaderMode = false;
 
+/**
+ * The host terminal's font family (VS Code's `terminal.integrated.fontFamily`),
+ * sent with INIT and settings updates. "" means use the editor font.
+ */
+let hostTerminalFontFamily = "";
+
+/** Watches `<html>`'s inline theme variables; created with the first terminal. */
+let hostStyleObserver: MutationObserver | null = null;
+let hostStyleRefreshFrame: number | null = null;
+
 function makeKey(workflowId: string, sessionId: string): string {
   return `${workflowId}:${sessionId}`;
 }
@@ -127,12 +138,80 @@ function applyViewerLetterbox(entry: FitRegistryTarget): void {
   entry.domEl.style.marginRight = "auto";
 }
 
+const DEFAULT_TERMINAL_FONT_STACK = '"Cascadia Code", "Courier New", monospace';
+const ENDS_WITH_MONOSPACE = /(^|,)\s*monospace\s*$/i;
+
+/**
+ * Host terminal font, then the editor font, always ending in `monospace`.
+ *
+ * The host font is kept as a preference, never the whole stack: it is often
+ * one font installed only on the VS Code machine (e.g. a Nerd Font), and a
+ * browser on another device without it would otherwise fall back to its
+ * proportional default (Times on iOS). xterm sizes cells from the widest
+ * glyph, so that renders as letters spaced far apart.
+ */
 function readTerminalFontFamily(): string {
-  return (
+  const editorStack =
     getComputedStyle(document.documentElement)
       .getPropertyValue("--vscode-editor-font-family")
-      .trim() || '"Cascadia Code", "Courier New", monospace'
-  );
+      .trim() || DEFAULT_TERMINAL_FONT_STACK;
+  const stack = hostTerminalFontFamily
+    ? `${hostTerminalFontFamily}, ${editorStack}`
+    : editorStack;
+  return ENDS_WITH_MONOSPACE.test(stack) ? stack : `${stack}, monospace`;
+}
+
+function forEachTerminal(apply: (term: Terminal) => void): void {
+  for (const entry of registry.values()) apply(entry.term);
+  if (viewportMeasurementEntry) apply(viewportMeasurementEntry.term);
+}
+
+/**
+ * Re-apply the font family to every terminal and refit if it changed. A
+ * changed font changes cell metrics, so the controller must resize its PTY.
+ */
+function refreshTerminalFontFamily(): void {
+  const fontFamily = readTerminalFontFamily();
+  let changed = false;
+  forEachTerminal((term) => {
+    if (term.options.fontFamily !== fontFamily) {
+      term.options.fontFamily = fontFamily;
+      changed = true;
+    }
+  });
+  if (changed) refitAfterMetricsChange();
+}
+
+/**
+ * Re-read theme colors and the editor font after the host rewrites `<html>`'s
+ * inline `--vscode-*` variables: VS Code does that on a theme or editor-font
+ * change, and the hosted shim on THEME_VARS_UPDATED. xterm only reads them
+ * through its options, so without this live terminals keep the old theme.
+ */
+function refreshFromHostStyles(): void {
+  hostStyleRefreshFrame = null;
+  if (registry.size === 0 && !viewportMeasurementEntry) return;
+  const theme = readVsCodeTheme();
+  const themeKey = JSON.stringify(theme);
+  forEachTerminal((term) => {
+    if (JSON.stringify(term.options.theme ?? {}) !== themeKey) {
+      term.options.theme = theme;
+    }
+  });
+  refreshTerminalFontFamily();
+}
+
+function ensureHostStyleObserver(): void {
+  if (hostStyleObserver || typeof MutationObserver === "undefined") return;
+  hostStyleObserver = new MutationObserver(() => {
+    // A theme switch rewrites hundreds of variables; refresh once per frame.
+    if (hostStyleRefreshFrame !== null) return;
+    hostStyleRefreshFrame = requestAnimationFrame(refreshFromHostStyles);
+  });
+  hostStyleObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["style"],
+  });
 }
 
 function createTerminalOptions(theme: ITheme, settings: TerminalSettings) {
@@ -285,6 +364,9 @@ function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
       webgl.onContextLoss(() => {
         webgl.dispose();
       });
+      // The atlas's font strings start with a space for upright text, which
+      // some Chromium builds reject (glyphs fall back to 10px sans-serif).
+      ensureCanvasFontWhitespaceFix();
       entry.term.loadAddon(webgl);
       WebviewLog.debug(
         `[terminalRegistry.ensureWebglAddonLoaded] WebGL ready in ${Math.round(
@@ -306,7 +388,8 @@ function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
 
 /**
  * Read VS Code terminal CSS variables for xterm.js theming.
- * Called once per create() — theme updates handled via THEME_CHANGED message.
+ * Read at create() and again by refreshFromHostStyles() whenever the host
+ * rewrites the theme variables.
  */
 function readVsCodeTheme(): ITheme {
   const style = getComputedStyle(document.documentElement);
@@ -354,6 +437,7 @@ export const terminalRegistry = {
 
     // xterm/FitAddon are statically imported, so this runs synchronously with no
     // await — concurrent callers can't interleave, hence no pending-create dedup.
+    ensureHostStyleObserver();
     const theme = readVsCodeTheme();
     const settings = this.getTerminalSettings();
     const term = new Terminal({
@@ -510,13 +594,14 @@ export const terminalRegistry = {
   },
 
   /**
-   * Update xterm theme for all live registry entries.
-   * Called when VS Code color theme changes.
+   * Set the host terminal's font family ("" = use the editor font) and apply
+   * it to every live terminal, refitting when the font actually changed.
    */
-  updateTheme(theme: ITheme): void {
-    for (const entry of registry.values()) {
-      entry.term.options.theme = theme;
-    }
+  setHostTerminalFontFamily(fontFamily: string): void {
+    const next = fontFamily.trim();
+    if (next === hostTerminalFontFamily) return;
+    hostTerminalFontFamily = next;
+    refreshTerminalFontFamily();
   },
 
   getTerminalSettings(): TerminalSettings {

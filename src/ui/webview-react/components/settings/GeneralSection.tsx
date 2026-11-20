@@ -18,12 +18,9 @@ import {
   STEP_COLOR_MODE_OPTIONS_META,
   RERUN_CONFIRMATION_MODE_OPTIONS_META,
   OUTPUT_ANNOUNCEMENT_MODE_OPTIONS_META,
-  CTRLYOKE_MCP_MODE_OPTIONS_META,
-  SERVER_THEME_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import { STEP_COLOR_MODES } from "@root/types/DashboardConstants";
-import { RunHistorySection } from "./RunHistorySection";
 import { FontSizeStepper } from "./FontSizeStepper";
 import { EditorFontSizeSetting } from "./EditorFontSizeSetting";
 import { SpellingSection } from "./SpellingSection";
@@ -34,7 +31,6 @@ interface Props {
   activeScope: SettingWriteScope;
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
-  onReload: () => void;
 }
 
 export function GeneralSection({
@@ -42,13 +38,10 @@ export function GeneralSection({
   activeScope,
   onUpdate,
   onReset,
-  onReload,
 }: Props) {
   const general = settings.settings.general;
   const ui = settings.settings.ui;
   const harnessColors = ui.harnessColors;
-  const exec = settings.settings.execution;
-  const runs = settings.settings.runs;
   const sources = settings.sources as Record<string, SettingSource>;
   const isMultiRoot = settings.isMultiRoot;
 
@@ -129,19 +122,6 @@ export function GeneralSection({
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           UI Preferences
         </h3>
-        <SettingInputRow
-          settingKey="server.theme"
-          id="server-theme"
-          {...rowProps}
-        >
-          <CustomSelect
-            id="server-theme"
-            value={settings.settings.server.theme}
-            onChange={(v) => onUpdate("server.theme", v)}
-            schemaPath="server.theme"
-            options={toSelectOptions(SERVER_THEME_OPTIONS_META, "server.theme")}
-          />
-        </SettingInputRow>
         <SettingToggleRow
           settingKey="ui.showCliCommand"
           checked={ui.showCliCommand}
@@ -352,109 +332,6 @@ export function GeneralSection({
           {...rowProps}
         />
       </div>
-      <div className="pt-3 border-t border-panel-border mt-3">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          File Management
-        </h3>
-        <SettingToggleRow
-          settingKey="execution.autoDeleteTempFiles"
-          checked={exec.autoDeleteTempFiles}
-          onChange={(v) => onUpdate("execution.autoDeleteTempFiles", v)}
-          {...rowProps}
-        />
-        <SettingToggleRow
-          settingKey="execution.inlineGeneratedPromptOnStdin"
-          checked={exec.inlineGeneratedPromptOnStdin}
-          onChange={(v) =>
-            onUpdate("execution.inlineGeneratedPromptOnStdin", v)
-          }
-          {...rowProps}
-        />
-      </div>
-      <div className="pt-3 border-t border-panel-border mt-3">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Runs
-        </h3>
-        <SettingInputRow
-          settingKey="runs.maxRuns"
-          id="runs-max-runs"
-          {...rowProps}
-        >
-          <LimitSelect
-            id="runs-max-runs"
-            label={settingLabel("runs.maxRuns")}
-            path="runs.maxRuns"
-            value={runs.maxRuns}
-            onChange={(v) => onUpdate("runs.maxRuns", v)}
-            customFallback={100}
-          />
-        </SettingInputRow>
-        <SettingInputRow
-          settingKey="runs.historySearchCacheMb"
-          id="runs-history-search-cache-mb"
-          {...rowProps}
-        >
-          <LocalNumberInput
-            id="runs-history-search-cache-mb"
-            min={0}
-            value={runs.historySearchCacheMb}
-            onCommit={(v) => onUpdate("runs.historySearchCacheMb", v)}
-            parse={(v) => Math.max(0, parseInt(v, 10) || 0)}
-            className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
-          />
-        </SettingInputRow>
-      </div>
-      <div className="pt-3 border-t border-panel-border mt-3">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          ctrlyoke MCP server
-        </h3>
-        <SettingInputRow
-          settingKey="execution.ctrlyokeMcpMode"
-          id="settings-ctrlyoke-mcp-mode"
-          {...rowProps}
-        >
-          <CustomSelect
-            id="settings-ctrlyoke-mcp-mode"
-            value={settings.settings.execution.ctrlyokeMcpMode}
-            onChange={(v) => onUpdate("execution.ctrlyokeMcpMode", v)}
-            schemaPath="execution.ctrlyokeMcpMode"
-            options={toSelectOptions(
-              CTRLYOKE_MCP_MODE_OPTIONS_META,
-              "execution.ctrlyokeMcpMode"
-            )}
-          />
-        </SettingInputRow>
-      </div>
-      <div className="pt-3 border-t border-panel-border mt-3">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Diagnostics
-        </h3>
-        <SettingToggleRow
-          settingKey="diagnostics.verboseLogging"
-          checked={settings.settings.diagnostics.verboseLogging}
-          onChange={(v) => onUpdate("diagnostics.verboseLogging", v)}
-          {...rowProps}
-        />
-        <SettingToggleRow
-          settingKey="diagnostics.logRawCliOutput"
-          {...{
-            description: !settings.settings.diagnostics.verboseLogging
-              ? "Unavailable — requires diagnostic logs to be enabled."
-              : "Write raw CLI output to a log file for debugging.",
-          }}
-          checked={settings.settings.diagnostics.logRawCliOutput}
-          onChange={(v) => onUpdate("diagnostics.logRawCliOutput", v)}
-          disabled={!settings.settings.diagnostics.verboseLogging}
-          {...rowProps}
-        />
-      </div>
-      <RunHistorySection
-        settings={settings}
-        activeScope={activeScope}
-        onUpdate={onUpdate}
-        onReset={onReset}
-        onReload={onReload}
-      />
     </div>
   );
 }

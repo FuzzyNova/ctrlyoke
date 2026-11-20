@@ -37,19 +37,9 @@ export const ALL_TABS = [
     icon: "codicon-play",
   },
   {
-    id: GLOBAL_SETTINGS_TABS.QUEUE,
-    label: "Queue",
-    icon: "codicon-list-ordered",
-  },
-  {
     id: GLOBAL_SETTINGS_TABS.WORKTREES,
     label: "Worktrees",
     icon: "codicon-worktree-compact",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.COORDINATION,
-    label: "Coordination",
-    icon: "codicon-organization",
   },
   // Output
   {
@@ -68,11 +58,6 @@ export const ALL_TABS = [
     icon: "codicon-git-commit",
   },
   // Security
-  {
-    id: GLOBAL_SETTINGS_TABS.PERMISSIONS,
-    label: "Advanced Permissions",
-    icon: "codicon-shield",
-  },
   { id: GLOBAL_SETTINGS_TABS.SECRETS, label: "Secrets", icon: "codicon-lock" },
   // Integrations
   { id: GLOBAL_SETTINGS_TABS.SERVER, label: "Server", icon: "codicon-server" },
@@ -101,6 +86,12 @@ export const ALL_TABS = [
     id: GLOBAL_SETTINGS_TABS.STATS,
     label: "Stats & Usage",
     icon: "codicon-graph",
+  },
+  // Advanced: run storage, temp files, coordination limits, diagnostics
+  {
+    id: GLOBAL_SETTINGS_TABS.ADVANCED,
+    label: "Advanced",
+    icon: "codicon-wrench",
   },
   // Account
   { id: GLOBAL_SETTINGS_TABS.LICENSE, label: "License", icon: "codicon-key" },

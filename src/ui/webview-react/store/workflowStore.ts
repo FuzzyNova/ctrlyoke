@@ -15,6 +15,7 @@ import {
   type CliOutput,
   type RetryState,
   type ExecutionPhase,
+  type HeadlessApprovalRequestMessage,
   getStreamingChunkKey,
   parseStreamingChunkKey,
   isPromptExecutionPhase,
@@ -124,6 +125,7 @@ import { preserveReferences } from "@utils/structuralSharing";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type { WorkflowProperties } from "./settingsStore";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
+import { withFollowUpContextWindow } from "@root/utils/OutputContextWindow";
 import {
   canCoalesceTextEvents,
   coalesceTextEvents,
@@ -220,26 +222,23 @@ function mergeResumedActivityIntoOutput(
   const existingEvents = existingStructured?.events || [];
   const eventsToMerge = computeStreamingEventsToMerge(existing, incomingEvents);
 
-  return {
+  const merged: CliOutput = {
     ...existing,
     structured: {
       ...existingStructured,
       events: mergeStreamingEvents(existingEvents, eventsToMerge),
       metadata: existingStructured?.metadata || {},
     },
-    tokens:
-      isFollowUp && latestContextWindowSync && existing.tokens
-        ? {
-            ...existing.tokens,
-            contextWindowUsed: latestContextWindowSync.used,
-            contextWindowSize: latestContextWindowSync.size,
-          }
-        : existing.tokens,
     elapsed:
       isFollowUp && existing.timestampMs != null
         ? (Date.now() - existing.timestampMs) / 1000
         : existing.elapsed,
   };
+  // A completed attempt can carry no usage of its own (its turn surfaced only
+  // as a follow-up), so the reading rides beside `tokens`, never inside them.
+  return isFollowUp
+    ? withFollowUpContextWindow(merged, latestContextWindowSync)
+    : merged;
 }
 
 /**
@@ -268,6 +267,13 @@ interface WorkflowState {
   /** Target-attributed semantic activities shared by live output and replay. */
   liveActivityEntries: OutputActivityEntry[];
   retryStates: Record<number, RetryState>;
+  /** Pending headless tool approvals keyed by workflow, then signed step index. */
+  headlessApprovalsByWorkflow: Record<
+    string,
+    Record<number, HeadlessApprovalRequestMessage[]>
+  >;
+  /** Approval answers sent by this client while awaiting the host removal push. */
+  answeredHeadlessApprovalIds: Record<string, true>;
 
   // Streaming state (for incremental output)
   streamingChunks: Record<string, string>;
@@ -405,6 +411,20 @@ interface WorkflowActions {
 
   // Step status management
   setStepStatus: (stepIndex: number, status: StepStatus) => void;
+  updateHeadlessApprovalRequest: (
+    message: HeadlessApprovalRequestMessage
+  ) => void;
+  markHeadlessApprovalAnswered: (
+    workflowId: string,
+    signedStepIndex: number,
+    approvalId: string
+  ) => void;
+  clearHeadlessApprovalsForStep: (
+    workflowId: string,
+    signedStepIndex: number
+  ) => void;
+  clearHeadlessApprovalsForWorkflow: (workflowId: string) => void;
+  clearHeadlessApprovals: () => void;
 
   // History management
   loadHistoryRun: (history: WorkflowOutputHistory) => void;
@@ -545,6 +565,8 @@ const initialState: WorkflowState = {
   liveSequence: 0,
   liveActivityEntries: [],
   retryStates: {},
+  headlessApprovalsByWorkflow: {},
+  answeredHeadlessApprovalIds: {},
   streamingChunks: {},
   finalStepStreamingChunks: {},
   historyOutputs: null,
@@ -1506,6 +1528,152 @@ export const useWorkflowStore = create<
           }))
         ),
 
+      updateHeadlessApprovalRequest: (message) =>
+        set((state) => {
+          const workflowApprovals =
+            state.headlessApprovalsByWorkflow[message.workflowId] ?? {};
+          const stepApprovals = workflowApprovals[message.stepIndex] ?? [];
+          const existingIndex = stepApprovals.findIndex(
+            (approval) => approval.approvalId === message.approvalId
+          );
+          const existing = stepApprovals[existingIndex];
+
+          if (message.isPending) {
+            if (
+              existing &&
+              existing.requestId === message.requestId &&
+              existing.controlSessionId === message.controlSessionId &&
+              existing.toolName === message.toolName &&
+              existing.inputSummary === message.inputSummary &&
+              existing.deadline === message.deadline
+            ) {
+              return {};
+            }
+
+            const nextStepApprovals = [...stepApprovals];
+            if (existingIndex < 0) {
+              nextStepApprovals.push(message);
+            } else {
+              nextStepApprovals[existingIndex] = message;
+            }
+            return {
+              headlessApprovalsByWorkflow: {
+                ...state.headlessApprovalsByWorkflow,
+                [message.workflowId]: {
+                  ...workflowApprovals,
+                  [message.stepIndex]: nextStepApprovals,
+                },
+              },
+            };
+          }
+
+          const nextAnsweredIds = { ...state.answeredHeadlessApprovalIds };
+          delete nextAnsweredIds[message.approvalId];
+          if (existingIndex < 0) {
+            return Object.keys(nextAnsweredIds).length ===
+              Object.keys(state.answeredHeadlessApprovalIds).length
+              ? {}
+              : { answeredHeadlessApprovalIds: nextAnsweredIds };
+          }
+
+          const nextStepApprovals = stepApprovals.filter(
+            (approval) => approval.approvalId !== message.approvalId
+          );
+          const nextWorkflowApprovals = { ...workflowApprovals };
+          if (nextStepApprovals.length === 0) {
+            delete nextWorkflowApprovals[message.stepIndex];
+          } else {
+            nextWorkflowApprovals[message.stepIndex] = nextStepApprovals;
+          }
+          const nextApprovalsByWorkflow = {
+            ...state.headlessApprovalsByWorkflow,
+          };
+          if (Object.keys(nextWorkflowApprovals).length === 0) {
+            delete nextApprovalsByWorkflow[message.workflowId];
+          } else {
+            nextApprovalsByWorkflow[message.workflowId] = nextWorkflowApprovals;
+          }
+          return {
+            headlessApprovalsByWorkflow: nextApprovalsByWorkflow,
+            answeredHeadlessApprovalIds: nextAnsweredIds,
+          };
+        }),
+
+      markHeadlessApprovalAnswered: (workflowId, signedStepIndex, approvalId) =>
+        set((state) => {
+          if (state.answeredHeadlessApprovalIds[approvalId]) return {};
+          const pending = state.headlessApprovalsByWorkflow[workflowId]?.[
+            signedStepIndex
+          ]?.some((approval) => approval.approvalId === approvalId);
+          if (!pending) return {};
+          return {
+            answeredHeadlessApprovalIds: {
+              ...state.answeredHeadlessApprovalIds,
+              [approvalId]: true,
+            },
+          };
+        }),
+
+      clearHeadlessApprovalsForStep: (workflowId, signedStepIndex) =>
+        set((state) => {
+          const workflowApprovals =
+            state.headlessApprovalsByWorkflow[workflowId];
+          const stepApprovals = workflowApprovals?.[signedStepIndex];
+          if (!workflowApprovals || !stepApprovals) return {};
+
+          const nextWorkflowApprovals = { ...workflowApprovals };
+          delete nextWorkflowApprovals[signedStepIndex];
+          const nextApprovalsByWorkflow = {
+            ...state.headlessApprovalsByWorkflow,
+          };
+          if (Object.keys(nextWorkflowApprovals).length === 0) {
+            delete nextApprovalsByWorkflow[workflowId];
+          } else {
+            nextApprovalsByWorkflow[workflowId] = nextWorkflowApprovals;
+          }
+          const nextAnsweredIds = { ...state.answeredHeadlessApprovalIds };
+          for (const approval of stepApprovals) {
+            delete nextAnsweredIds[approval.approvalId];
+          }
+          return {
+            headlessApprovalsByWorkflow: nextApprovalsByWorkflow,
+            answeredHeadlessApprovalIds: nextAnsweredIds,
+          };
+        }),
+
+      clearHeadlessApprovalsForWorkflow: (workflowId) =>
+        set((state) => {
+          const workflowApprovals =
+            state.headlessApprovalsByWorkflow[workflowId];
+          if (!workflowApprovals) return {};
+
+          const nextApprovalsByWorkflow = {
+            ...state.headlessApprovalsByWorkflow,
+          };
+          delete nextApprovalsByWorkflow[workflowId];
+          const nextAnsweredIds = { ...state.answeredHeadlessApprovalIds };
+          for (const approvals of Object.values(workflowApprovals)) {
+            for (const approval of approvals) {
+              delete nextAnsweredIds[approval.approvalId];
+            }
+          }
+          return {
+            headlessApprovalsByWorkflow: nextApprovalsByWorkflow,
+            answeredHeadlessApprovalIds: nextAnsweredIds,
+          };
+        }),
+
+      clearHeadlessApprovals: () =>
+        set((state) =>
+          Object.keys(state.headlessApprovalsByWorkflow).length === 0 &&
+          Object.keys(state.answeredHeadlessApprovalIds).length === 0
+            ? {}
+            : {
+                headlessApprovalsByWorkflow: {},
+                answeredHeadlessApprovalIds: {},
+              }
+        ),
+
       // ============================================================================
       // BULK OPERATIONS
       // ============================================================================
@@ -1837,7 +2005,15 @@ export const useWorkflowStore = create<
         ),
 
       resetWorkflow: () => {
-        withUndoPause(() => set(initialState));
+        // Approval requests belong to their workflows, not the currently
+        // displayed workflow state, so preserve them across view resets.
+        withUndoPause(() =>
+          set((state) => ({
+            ...initialState,
+            headlessApprovalsByWorkflow: state.headlessApprovalsByWorkflow,
+            answeredHeadlessApprovalIds: state.answeredHeadlessApprovalIds,
+          }))
+        );
         useWorkflowStore.temporal.getState().clear();
       },
 
