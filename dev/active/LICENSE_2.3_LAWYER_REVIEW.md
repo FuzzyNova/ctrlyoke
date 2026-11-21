@@ -34,6 +34,44 @@ class litigation and has chosen court-based dispute resolution.
 | Liability                                 | Keep the greater of 12 months' fees or $100 and count authorized reseller payments. Exempt fraud, willful misconduct, gross negligence, and negligent death or personal injury from the disclaimer and cap. Preserve other non-waivable remedies and fee allocations.                                                                                                                                                                         | §§12–13. [Q9](#q9-liability-cap-and-mandatory-remedies)                                                                                                                                            |
 | Adoption and effective date               | Publish the approved v2.3 text and apply it prospectively through the ordinary channels. Keep the v2.2 text in version history. On the confirmed launch facts, there is no outside user or customer migration. Keep the existing versioned Enterprise acceptance for new orders.                                                                                                                                                              | §§0, 16(e). [Q10](#q10-adoption-and-earlier-versions)                                                                                                                                              |
 
+## Round 2: Fuzzy Nova's changes and questions
+
+**Confirmed: courts, not arbitration.** Fuzzy Nova accepts the court-based model in §§16(b)
+and 16(g). A compulsory consumer arbitration clause would need AAA Consumer Clause Registry
+review and an annual registry fee, which is out of proportion for a business with no outside
+customers and minimal telemetry. Fuzzy Nova will revisit dispute resolution in a later version
+if the facts change: for example, a material number of paying customers, broader data
+collection, or a first demand letter. Any change would apply only prospectively under §16(e).
+
+**R1. New §12 paragraph: AI tools and automated actions (added to the draft).** ctrlyoke's core
+function is directing AI agents that run commands and change files. The most foreseeable claim
+is "a workflow deleted my work." v2.2 and the first-pass draft say nothing specific about that
+risk. The new paragraph after the warranty disclaimer states what the tools can do, that the
+user chooses their permissions, and that the user is responsible for review and backups.
+Please approve, revise, or move it (for example, into §4(f) or a separate section).
+
+**R2. Gross-negligence exception in §13.** The draft exempts gross negligence from both the
+disclaimer and the cap. Given R1, a plaintiff whose files were deleted by an agent would plead
+gross negligence to escape the cap. Is this exception required under Texas law for this form
+(for example, because a pre-injury waiver of gross negligence would be unenforceable or would
+undermine the rest of §13), or is it a drafting preference? If it is not required, would you
+narrow it to "to the extent applicable law does not permit it to be limited"? If it is
+required, does R1 adequately support the argument that ordinary agent behavior within the
+permissions a user granted is not gross negligence by Licensor?
+
+**R3. Venue precision in §16(b).** "State or federal courts located in Austin, Texas" could be
+read to include courts sitting in Austin for other counties, or the Texas Business Court's
+Austin division. Would "the state courts of Travis County, Texas, or the United States
+District Court for the Western District of Texas, Austin Division" be clearer? Or is the
+broader wording intentional?
+
+**R4. Jury waiver for Enterprise only (optional).** The draft leaves jury procedure to the
+court's rules for everyone. For negotiated Enterprise orders between businesses, would you
+recommend a conspicuous jury waiver in Enterprise Terms §12? Texas enforces conspicuous,
+knowing and voluntary contractual jury waivers (*In re Prudential Ins. Co. of America*,
+148 S.W.3d 124 (Tex. 2004)). Fuzzy Nova has no strong preference and will follow your
+recommendation, including leaving it out.
+
 ## Companion contribution text for approval
 
 ### Main repository contributor license agreement
