@@ -1344,6 +1344,100 @@ Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELE
       `images/social-preview.html`) is the site and docs `og:image` at
       `/assets/social-preview.png`. Upload the same file to GitHub after the flip (Phase 14).
 
+## Phase 15 — License v2.3 compliance (adopted November 21, 2026)
+
+Counsel approved license v2.3 and its companion text with no changes
+([memo](../implemented/LICENSE_2.3_LAWYER_REVIEW.md)). It is adopted in the repo: `LICENSE.md`
+v2.3, Enterprise Terms 1.1, Privacy Policy 1.7, CLA 1.0, `LICENSE-MIT-0`, versioned archive
+pages (`legal/README.md` is the process for every future version), the Pro and Enterprise
+checkouts recording the accepted versions, and the install-page and MIT-0 notices.
+
+What is left is below. **MUST** items are legal obligations, or steps without which the
+license does not work as written. They cost nothing but time. **OPTIONAL** items are
+risk reduction. Each names the trigger that would make it worth doing, so none needs
+money or a retainer now.
+
+### 15.1 MUST
+
+- [ ] **Push and deploy, then ship a release.** The push deploys `/terms/` v2.3 and the
+      archive pages. The next release puts `LICENSE.md` v2.3 and `LICENSE-MIT-0` in the VSIX
+      and npm package; §5(e) says the MIT-0 file is "distributed with the Software". After
+      the release, run `vsce ls` and `npm pack --dry-run` and confirm both files are in them.
+- [ ] **Test-mode Pro and Enterprise orders** (test mode, no cost). In each order's custom
+      data, confirm `terms_versions` (`eula@2.3; privacy@1.7` for Pro; all four documents for
+      Enterprise), `terms_accepted_at` and `terms_acceptance_method`. Confirm the Pro button
+      still opens the Lemon Squeezy overlay; the agent could not click through it. These
+      records are your proof of assent under §0.
+- [ ] **Confirm provenance of the Open Materials** (10 minutes). Git shows you as the only
+      author of `src/templates/`, `schemas/` and `docs/`. Confirm that nothing there was
+      copied from a third party, and that your rights in it belong to Fuzzy Nova LLC. Then
+      tick the boxes in
+      [`OPEN_MATERIALS_EARLIER_RELEASES_NOTICE.md`](OPEN_MATERIALS_EARLIER_RELEASES_NOTICE.md)
+      and publish it as that file describes (recommended, free; §5(e) already makes the
+      grant).
+- [ ] **EU Cyber Resilience Act vulnerability reporting.** This has applied since
+      **September 11, 2026** to monetized products sold in the EU, ctrlyoke included. It needs
+      no lawyer, only a written runbook and an account:
+  - Register Fuzzy Nova LLC on ENISA's
+    [Single Reporting Platform](https://www.enisa.europa.eu/topics/product-security-and-certification/single-reporting-platform-srp)
+    before you need it. Only notifications submitted there count.
+  - Runbook in `SECURITY.md` or a private doc. When you become aware of an **actively
+    exploited** vulnerability in ctrlyoke, or a **severe incident** affecting its security,
+    file an early warning **within 24 hours**, a notification **within 72 hours**, and a
+    final report **within 14 days** after a fix is available for a vulnerability (**one
+    month** for an incident). Ordinary vulnerability reports that are not being exploited
+    do not trigger this.
+  - Before relying on the details (for example, which national CSIRT a non-EU
+    manufacturer reports to, and any microenterprise relief), check the Commission's July
+    2026 reporting guidance.
+- [ ] **Keep the Privacy Policy accurate** (counsel memo Q3). Check that what `PRIVACY.md`
+      v1.7 says about telemetry and support content still matches what the product sends.
+      Re-check whenever telemetry changes. An inaccurate policy is the exposure, not a missing
+      lawyer.
+- [ ] **CLA before merging any outside PR.** Merge only when the PR's CLA box is checked. The
+      PR description is the acceptance record, so don't edit it away. Optional later: a CLA bot
+      such as CLA Assistant (free) to enforce it.
+- [ ] **Every future legal change goes through `legal/README.md`.** `check:legal` blocks any
+      other path.
+- [ ] **Before December 11, 2027: CRA conformity.** Declare a support period (normally at
+      least five years of security updates), complete conformity assessment and CE marking.
+      Start planning in mid-2027. This is the one item that may need outside help, so decide
+      then, not now.
+
+### 15.2 OPTIONAL (with triggers)
+
+- [ ] **Sanctions geoblock for Pro checkout and activation** (counsel's recommendation,
+      free code work). Lemon Squeezy already screens payments, and OFAC compliance is the
+      underlying duty. Decide whether to build the server-side block. If you skip it, you
+      rely on Lemon Squeezy's screening plus §14.
+- [ ] **Lemon Squeezy EU withdrawal consent** (10 minutes). As merchant of record, Lemon
+      Squeezy owns the consumer sale. Start one EU-address checkout and confirm it shows the
+      digital-content withdrawal acknowledgement.
+- [ ] **Remote-access test matrix** (free). Check local WSL2, container and VM browsers as
+      free use, and second-device forwarding under free, trial and Pro, before the docs claim
+      full enforcement.
+- [ ] **Technology E&O and cyber insurance.** No law requires it. Expect roughly
+      **$1,000–2,000/year** for a solo software company at modest limits, bundled. Buy it
+      when the **first** of these happens: an Enterprise buyer asks for a certificate of
+      insurance; Pro/Enterprise revenue is enough that one defense bill would hurt more than
+      the premium; you receive a demand letter. **Caveat:** these policies are claims-made and
+      exclude circumstances you already knew about, so insurance bought after a problem
+      surfaces will not cover that problem.
+- [ ] **EU counsel.** No retainer needed. The Product Liability Directive (products placed
+      on the market from December 9, 2026) imposes strict liability that no contract can
+      limit, and §13(d)(iv) already says so. It requires no action from you, and the
+      economic-operator question only matters once a claim exists. Engage EU counsel **per
+      matter** if any of these happen: an EU claim or demand, contact from an EU authority,
+      or the 2027 CRA conformity work. For a cheaper one-off answer, add the
+      economic-operator question to your existing counsel's next review round.
+- [ ] **Australian counsel** on the §12 "household kind" point, once Australian Pro
+      sales become material.
+- [ ] **French-language license for Quebec** at the first Quebec Enterprise order on the
+      standard form, or once Quebec sales become material.
+- [ ] **Next lawyer round, whenever you have one anyway:** the plain-language summary
+      (`landing/src/legal/license-summary.md`, never attorney-reviewed), the EU
+      economic-operator question, and the CRA runbook.
+
 ## Summary Table
 
 | Item                                                                       | Status              | Notes                                                                                                                                                                                                                                     |
@@ -1374,6 +1468,7 @@ Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELE
 | Repo visibility flip to public                                             | DONE                | Phase 14 — public October 20, 2026, guardrails applied the same session; fork-PR check passed October 21, 2026 (PR #1)                                                                                                                    |
 | Site launch (`LAUNCHED = true`)                                            | DONE                | Phase 9 — `18c30c73b`, October 20, 2026; `noindex` gone, live checkout links. A live Pro checkout through the site is still open                                                                                                          |
 | Pre-release compatibility window                                           | DONE                | Every item is landed, including the prior-context rework (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 0–3) and blank optional template variables (`TEMPLATE_REQUIRED_VARIABLES_PLAN.md` Phase 2), both 2026-10-13. See the section above        |
+| License v2.3 adoption and compliance                                       | IN PROGRESS         | Phase 15 — adopted in the repo November 21, 2026; MUST items: deploy + release, test orders, provenance sign-off, CRA reporting runbook, privacy accuracy check                                                                           |
 | Vendor-account MFA hardening                                               | DONE                | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                            |
 
 ---
