@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- ctrlyoke is now licensed under version 2.3 of the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms), effective November 21, 2026. Disputes go to the courts (Texas law, Austin venue, with small-claims and consumer protections) instead of binding arbitration. The built-in templates, documentation examples, and schemas are now licensed under MIT-0 (`LICENSE-MIT-0`), including their copies in earlier releases. The competitor restriction now covers reusing ctrlyoke's code in, or building ctrlyoke into, a competing product, not using ctrlyoke as a development tool. The license also adds a risk notice for AI tools and automated actions, express exceptions to the liability limits, and a fault-based indemnity from business users. The Enterprise Subscription Terms (1.1) and Privacy Policy (1.7) were updated to match. Copies obtained earlier stay under the version they came with unless you adopt 2.3.
 - Sending a prompt no longer erases the dashboard's other saved state, such as unsaved file edits in the workspace viewer. Before, that state could be lost if the panel reloaded before it was next saved.
 
 - Tested with Antigravity CLI 1.5.12, which has the known issue above.

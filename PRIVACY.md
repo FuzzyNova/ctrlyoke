@@ -3,8 +3,8 @@
 **Controller:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code extension and companion CLI / MCP server binaries
 **Effective Date:** October 16, 2026
-**Last Updated:** October 20, 2026
-**Version:** 1.6
+**Last Updated:** November 21, 2026
+**Version:** 1.7
 
 ## 1. Scope
 
@@ -150,7 +150,7 @@ Typical retention periods include:
 - **Purchase records:** retained by us and our payment provider as required for tax, accounting, and legal obligations
 - **Transactional license email:** message and delivery data is retained by Resend under our account settings and its applicable retention practices, currently approximately 30 days
 - **Support email:** retained as needed to resolve inquiries and maintain records of correspondence
-- **Enterprise terms-acceptance and arbitration-opt-out records:** retained for the life of the applicable agreement and afterwards as needed for tax, accounting, and evidentiary purposes
+- **Enterprise terms-acceptance records:** retained for the life of the applicable agreement and afterwards as needed for tax, accounting, and evidentiary purposes
 
 Retention periods used by our vendors may differ from our own and may be subject to their policies and configurations. For Enterprise customers, the [ctrlyoke Data Processing Agreement](https://ctrlyoke.dev/dpa) additionally governs return and deletion of Customer Personal Data.
 

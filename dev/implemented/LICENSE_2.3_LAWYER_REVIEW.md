@@ -14,6 +14,11 @@
 
 Reply from counsel: All recommendations and draft is approved.
 
+**Adopted November 21, 2026** as root `LICENSE.md` v2.3, together with the companion Enterprise
+Terms §12 and Privacy Policy §8 wording below. The open items in the
+[publication checklist](#publication-checklist) are release and operations work, not further
+legal review.
+
 **Requested response.** Confirm R1–R4 below, decide the Round 3 proposals R5–R12, and
 approve the v2.3 draft and companion contribution text. If you recommend a change, please identify the clause and give replacement - no change recommended at this time
 wording. The publication checklist lists the release work to close after legal review. v2.2

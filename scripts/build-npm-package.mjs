@@ -54,6 +54,7 @@ export const NPM_PACKAGE_ENTRIES = [
   "bin/ctrlyoke-mcp",
   "bin/ctrlyoke-mcp.cmd",
   "LICENSE.md",
+  "LICENSE-MIT-0",
   "THIRD_PARTY_NOTICES.md",
 ];
 
@@ -79,7 +80,13 @@ export function buildNpmPackageJson(rootPackage) {
       "ctrlyoke-mcp": "out/mcp-server.js",
     },
     engines: { node: rootPackage.engines.node },
-    files: ["out/", "bin/", "LICENSE.md", "THIRD_PARTY_NOTICES.md"],
+    files: [
+      "out/",
+      "bin/",
+      "LICENSE.md",
+      "LICENSE-MIT-0",
+      "THIRD_PARTY_NOTICES.md",
+    ],
   };
 }
 

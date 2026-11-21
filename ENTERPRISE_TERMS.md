@@ -4,9 +4,9 @@
 
 **Product:** ctrlyoke Enterprise (annual site-license subscription)
 
-**Version:** 1.0
+**Version:** 1.1
 
-**Version Date:** September 17, 2026
+**Version Date:** November 21, 2026
 
 **Effective Date:** As to each Customer, the date that Customer accepts these Enterprise Terms as described in Section 2
 
@@ -107,7 +107,7 @@ Customer requiring a purchase order, formal invoice with payment terms, or negot
 
 ## 12. Warranties, Liability, and Disputes
 
-The warranty disclaimers and limitations of liability in EULA Sections 12 and 13 apply to these Enterprise Terms and the subscription. For purposes of the liability cap in EULA Section 13, amounts Customer pays for the Enterprise subscription through Licensor's authorized reseller are treated as amounts paid to Licensor. EULA Sections 16(b) (Governing Law; Venue) and 16(g) (Dispute Resolution; Arbitration) are incorporated into these Enterprise Terms.
+The warranty disclaimers and limitations of liability in EULA Sections 12 and 13 apply to these Enterprise Terms and the subscription. For purposes of the liability cap in EULA Section 13, amounts Customer pays for the Enterprise subscription through Licensor's authorized reseller are treated as amounts paid to Licensor. EULA Sections 16(b) (Governing Law and Venue) and 16(g) (Voluntary Dispute Resolution) apply to disputes under this Agreement.
 
 ## 13. General
 

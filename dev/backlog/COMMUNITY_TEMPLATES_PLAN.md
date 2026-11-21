@@ -9,7 +9,7 @@
 > below. (MIT-0 was chosen over CC0 on 2026-11-21: templates contain scripts, and some
 > corporate legal policies reject CC0 for code because it withholds patent rights.) The legal
 > reasoning, and the license changes that go with it, are in
-> [`LICENSE_2.3_LAWYER_REVIEW.md`](../active/LICENSE_2.3_LAWYER_REVIEW.md).
+> [`LICENSE_2.3_LAWYER_REVIEW.md`](../implemented/LICENSE_2.3_LAWYER_REVIEW.md).
 
 > **2026-10-10 audit:** Not started. Refreshed stale code references
 > (`TemplateManager`, `PromptFileParser`, `McpDiscoveryUtils`,
@@ -72,7 +72,7 @@ The reason is licensing, not engineering:
 
 The engineering cost is small. The templates repo's CI needs the workflow schema from this
 repo (see "CI validation gate"), and the generator/validator scripts live there instead of
-in `scripts/`. Under the proposed license v2.3, `schemas/` is itself MIT-0, so the
+in `scripts/`. Under license v2.3 (adopted 2026-11-21), `schemas/` is itself MIT-0, so the
 templates repo may fetch, cache or vendor the schema freely.
 
 The repository is created and administered by Nathan on GitHub; an agent never creates it.
