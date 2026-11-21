@@ -5,13 +5,17 @@
 
 [Open the complete v2.3 license draft](LICENSE_2.3_DRAFT.md) ·
 [Round 2 recommendations](#round-2-recommendations-for-counsel) ·
+[Round 3 proposals](#round-3-risk-allocation-and-global-markets) ·
+[Jurisdiction flags](#jurisdiction-flags) ·
 [Companion contribution text](#companion-contribution-text-for-approval) ·
 [Publication checklist](#publication-checklist) ·
 [Product and checkout checks](#product-and-checkout-readiness) ·
 [Research and citations](#research-answers-for-counsel)
 
-**Requested response.** Confirm R1–R4 below and approve the v2.3 draft and companion
-contribution text. If you recommend a change, please identify the clause and give replacement
+Reply from counsel: All recommendations and draft is approved.
+
+**Requested response.** Confirm R1–R4 below, decide the Round 3 proposals R5–R12, and
+approve the v2.3 draft and companion contribution text. If you recommend a change, please identify the clause and give replacement - no change recommended at this time
 wording. The publication checklist lists the release work to close after legal review. v2.2
 remains the published version until adoption. The [research answers](#research-answers-for-counsel)
 address Q1–Q10, including the lettered questions. The collapsed appendix preserves the original
@@ -172,6 +176,288 @@ jury waiver changes who tries the case. Class certification remains a separate q
 with jury procedure governed by court rules. Address any waiver and record of assent in the
 specific negotiated order where it would be used.
 
+## Round 3: risk allocation and global markets
+
+**Prepared by Fuzzy Nova for counsel, November 21, 2026. Not yet reviewed by counsel.**
+ctrlyoke is distributed wherever the VS Code Marketplace and npm are available, so the
+standard form will meet mandatory consumer and liability rules in many countries. These
+proposals keep R2's policy (an express gross-negligence exception and the 12-month/$100 cap).
+They change how §13 is worded so that it holds up better in those countries and in Texas.
+The draft already contains R5–R10a and R12. R11 lists options that are not drafted. Each item
+carries a Fuzzy Nova recommendation. The citations
+come from Fuzzy Nova's research and need counsel's verification. National
+transposition of the 2024 EU directives in particular was not checked.
+
+### R5. Wording of the gross-negligence exception (§13(d))
+
+**What changed.**
+
+- The exception now names **Licensor's** liability. The old text exempted "death or personal
+  injury caused by negligence" without saying whose negligence. It could be read to reach
+  injuries caused by the user, a third-party AI tool, or a community template.
+- It covers conduct "of Licensor and of anyone acting on its behalf". Germany (§309 No. 7(b)
+  BGB) and Japan (Consumer Contract Act art. 8) expressly extend the rule to representatives
+  and agents, so an exception limited to "Licensor" would be read narrowly against the drafter.
+- It adds **fraudulent misrepresentation**, because English law does not allow liability for
+  fraud to be excluded and treats misrepresentation as a separate claim. It adds **damage to
+  health**, because §309 No. 7(a) covers "life, body or health".
+- It adds **non-excludable product liability** as item (iv). See R9 and the EU entry in the
+  jurisdiction flags.
+- It adds "as finally determined … under the law governing the claim". The cap then applies
+  unless gross negligence is proved, not merely pleaded. That improves the settlement and
+  insurance position against a pleading that alleges gross negligence only to escape the cap.
+  It also stops a dispute over whether Texas's Chapter 41 definition, or a foreign definition,
+  controls a claim governed by other law.
+
+**Why keep an express exception, globally.** An express list is more enforceable than relying
+on "to the maximum extent permitted by law" alone in the markets most likely to strike the cap:
+
+- **Japan.** Article 8(3) of the Consumer Contract Act, added by the 2022 amendment and in force
+  from June 1, 2023, voids a partial exemption in a consumer contract unless it makes clear
+  that it does not apply to gross negligence. A clause saved only by "to the extent permitted
+  by law" does not do that.
+- **Germany.** §309 No. 7 BGB voids limits for gross negligence and for injury to life, body,
+  or health in standard terms. Under §306 BGB and the case-law ban on _geltungserhaltende
+  Reduktion_, an invalid clause is struck out entirely rather than cut back. §16(c)'s
+  "modified to the minimum extent necessary" therefore will not save the cap for German
+  consumers.
+- **Others.** China (Civil Code art. 506), Korea (Act on the Regulation of Terms and
+  Conditions art. 7), France (Code civil arts. 1170 and 1231-3, _faute lourde ou dolosive_),
+  and Quebec (Civil Code art. 1474, which also applies between businesses) apply the same
+  intentional/gross-fault line.
+- **United States.** New York refuses to enforce exculpatory clauses, including limitation
+  clauses, for grossly negligent conduct (_Sommer v. Federal Signal Corp._, 79 N.Y.2d 540
+  (1992)). California refuses to enforce releases of future gross negligence (_City of Santa
+  Barbara v. Superior Court_, 41 Cal. 4th 747 (2007)). Under _DeSantis v. Wackenhut Corp._,
+  793 S.W.2d 670 (Tex. 1990), which adopts Restatement (Second) of Conflict of Laws §187(2),
+  a court may override the Texas choice of law when another state with a materially greater
+  interest has a fundamental contrary policy. The express exception removes the conflict that
+  would otherwise invite that override.
+
+**Fair notice.** §13 meets both Texas fair-notice requirements from _Dresser Industries v. Page
+Petroleum_, 853 S.W.2d 505, 508–09 (Tex. 1993): it expressly names ordinary negligence and it is
+conspicuous. It meets them whether or not a court applies them to limitation clauses rather
+than releases. The §12 "AI tools and automated actions" paragraph is not conspicuous. A new
+closing sentence says it does not itself limit liability and points to §13. That keeps the
+paragraph from being attacked as a hidden exculpatory term, in Texas or under EU/UK
+transparency rules. The paragraph's evidentiary value on notice and causation (R1) is
+unchanged.
+
+**For counsel to confirm.** Approve §13(d) as redrafted, including "finally determined" and
+"under the law governing the claim".
+
+### R6. Cap structure and trigger (§13(a)–(c))
+
+The section now has lettered subsections, so §12, §13(e), and future Enterprise orders can
+refer to particular limits. §13(a) adds "warranty" and "strict liability" to the listed
+theories, subject to §13(d)(iv). The 12-month look-back now runs from **the event first giving
+rise to liability** rather than from "the claim". Under the old wording a claimant could choose
+the measurement window by deciding when to make the claim, and a perpetual-license buyer's cap
+dropped to $100 a year after purchase whatever the timing of the harm.
+
+**For counsel to confirm.** Approve the restructuring and the new trigger.
+
+### R7. Fallback for consumers where the cap fails (§13(e))
+
+Where a consumer's home law voids the general exclusion and cap (Germany is the clearest case),
+the cap would otherwise disappear entirely (R5). §13(e) substitutes the limitation German
+courts generally accept for standard terms. Liability for slight negligence applies only to
+breach of an essential obligation (_Kardinalpflicht_), which the clause explains in plain
+words as transparency requires, and only for damage typical and foreseeable at contracting.
+It applies only to Consumers and only where §13(b)–(c) fail, so it does not weaken the cap
+anywhere else.
+
+**Recommendation: keep §13(e).** Without it, a German consumer's claim for slight negligence is
+unlimited, because the failed cap cannot be cut back (R5). With it, the claim is limited to
+breach of essential obligations and to typical, foreseeable damage. Those limits matter most
+for the realistic claim, consequential loss from deleted project files. The cost is one
+paragraph that does nothing in any market where the cap holds. It also helps in Austria and
+other markets that follow the same German standard-terms approach. The clause cannot make
+matters worse: if a court rejects it too, the result is the same as deleting it.
+
+**For counsel to confirm.** Approve §13(e) and its plain-language definition of an essential
+obligation, which German transparency rules require.
+
+### R8. Protection for Licensor's personnel (§13(f))
+
+Fuzzy Nova is a single-member LLC. Texas law shields members from the company's contractual
+obligations (Texas Business Organizations Code §101.114, and §21.223 as applied by §101.002).
+It does not shield a person from tort claims based on their own conduct. A user who loses files
+could sue the founder personally in negligence and plead around a cap that protects only
+"Licensor". §13(f) makes members, managers, officers, employees, and contractors express
+beneficiaries of §§12–13, subject to the same exceptions. It applies one combined cap so that
+naming more defendants does not multiply it. Texas enforces third-party-beneficiary terms when
+the contract clearly expresses that intent.
+
+**For counsel to confirm.** Approve §13(f), and confirm the beneficiary wording is effective
+under Texas law.
+
+### R9. Statutory rights, updates, and the Consumer definition (§§1, 9, 12)
+
+- **§1 "Consumer".** A single definition now replaces the two formulations in §16(b). It
+  combines the U.S. phrase "personal, family, or household" with the UK/EU phrase "outside …
+  trade, business, craft, or profession". It deliberately does **not** adopt every statutory
+  definition. The Australian Consumer Law treats a business buying goods under AUD 100,000 as
+  a "consumer" (s. 3), and that business should not gain §16(b)'s home-court option. The
+  statutory-rights sentence in §12 still protects such buyers.
+- **§12 "Statutory rights".** This sentence names the main non-excludable regimes instead of
+  relying on §13's closing sentence. An "as is" disclaimer that does not acknowledge consumer
+  guarantees can itself be misleading conduct under ACL s. 29(1)(m). The ACCC has pursued
+  sellers on that basis. Naming the regimes also meets EU/UK transparency expectations.
+- **§9 updates.** The EU Digital Content Directive (art. 8(2), implemented in Germany as §327f
+  BGB) requires updates, including security updates, that keep paid digital content in
+  conformity. The EU Cyber Resilience Act will add regulatory security-update duties (see the
+  flags below). §9's "no obligation to maintain" now gives way to those duties instead of
+  contradicting them.
+
+**For counsel to confirm.** Approve all three.
+
+### R10. Governing law, sanctions, and language (§§14, 16(b), 16(i))
+
+- **CISG exclusion.** Choosing Texas law does not by itself exclude the CISG, which is federal
+  law and part of Texas law (_BP Oil International v. Empresa Estatal Petroleos de Ecuador_,
+  332 F.3d 333, 337 (5th Cir. 2003)). Whether the CISG reaches software licenses is unsettled,
+  so the exclusion removes an argument for its conformity and remedy rules. The UCITA
+  exclusion is a precaution for Virginia and Maryland.
+- **§14 sanctions.** The old text covered export controls and embargoed countries. It now also
+  covers OFAC sanctions, persons ordinarily resident in or organized under the laws of
+  comprehensively sanctioned countries or regions, and parties owned or controlled by listed
+  persons, consistent with OFAC's 50 Percent Rule.
+- **§16(i) language.** English controls over translations except where law requires otherwise.
+  This does **not** meet Quebec's requirement, described in the flags below.
+
+**For counsel to confirm.** Approve the three additions.
+
+### R10a. Australian Consumer Law remedy limit (§12)
+
+**Recommendation: adopt the drafted §12 paragraph.** For goods not of a kind ordinarily
+acquired for personal, domestic, or household use, ACL s. 64A lets a supplier limit its
+liability for breach of most consumer guarantees to resupplying the goods or paying the cost
+of resupply. "Goods" includes software (ACL s. 2). A tool that orchestrates AI coding
+assistants through workflow files is plausibly not of a household kind, even with a free
+individual tier. The limit matters because an Australian business buying under AUD 100,000 is
+a "consumer" (R9). Without it, that business could claim consequential loss for a guarantee
+breach.
+
+The paragraph:
+
+- states the statutory condition rather than asserting that it is met;
+- excludes the title and possession guarantees in ss. 51–53, which s. 64A does not let a
+  supplier limit;
+- applies "to the extent section 64A permits", so s. 64A(3) still lets a consumer show the
+  limit is not fair or reasonable.
+
+That wording addresses the ACCC's concern that guarantee terms must not misstate consumers'
+rights (s. 29(1)(m)). If the "household kind" condition fails, the paragraph does not apply,
+and the §12 statutory-rights sentence governs.
+
+**For counsel to confirm.** Approve the paragraph, and ideally have Australian counsel confirm
+the "household kind" characterization before Pro sales to Australia become material.
+
+### R11. Options considered and not drafted
+
+| Option                                                     | Status and reason                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mutual cap                                                 | **Not recommended for now.** A one-sided cap counts toward unfairness under EU Directive 93/13 and UK CRA Sch. 2. A mutual cap would limit recovery against a competitor that misuses the code under §4(b). A mutual cap with carve-outs for §4 and IP breaches is the fallback if counsel sees material unfairness risk.                                                        |
+| "Essential basis of the bargain" recital                   | **Not recommended.** It supports reasonableness under UK UCTA s. 11. Under Texas severance analysis, which asks whether the invalid term was essential to the bargain, it could argue against severing a failed cap from the rest of the License.                                                                                                                                |
+| Shortened limitations period                               | **Not permitted.** Texas Civil Practice & Remedies Code §16.070 voids contractual limitations periods shorter than two years.                                                                                                                                                                                                                                                    |
+| Higher evidentiary standard for gross negligence in §13(d) | **Not recommended.** For example, "clear and convincing evidence". It would conflict with foreign consumer law and complicate jury instructions. "Finally determined" achieves most of the benefit.                                                                                                                                                                              |
+| Insurance (business, not license text)                     | **Recommended.** §13(d) leaves gross negligence and product liability uncapped. Technology E&O and cyber coverage is the practical backstop for a single-member LLC. Texas does not categorically bar insuring exemplary damages for gross negligence (_Fairfield Insurance Co. v. Stephens Martin Paving_, 246 S.W.3d 653 (Tex. 2008)), but coverage turns on the policy terms. |
+
+### R12. Indemnity from business users (§13(g))
+
+**Recommendation: adopt a narrow, fault-based indemnity from non-Consumer users.** Fuzzy Nova's
+most likely third-party exposure comes from what users do with the Software, not from its code:
+
+- a user's client sues Fuzzy Nova after a workflow the user wrote damages the client's systems;
+- an AI provider or rights holder names Fuzzy Nova in a claim over content or output a user
+  published;
+- someone sues over a service a user runs on top of ctrlyoke.
+
+§13 caps what Fuzzy Nova owes the user. It does nothing about claims from people who never
+accepted the License. An indemnity is the only term in the License that reaches those claims.
+For a single-member LLC, the defense costs of a weak claim are the real risk, so the clause
+makes the user defend the claim as well as pay any award.
+
+**How it is limited, and why each limit is there.**
+
+| Limit                                                                                                                                                                 | Reason                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Business users only                                                                                                                                                   | Indemnities imposed on consumers are a standard example of an unfair term in EU (Directive 93/13), UK (CRA Sch. 2), and Australian law. Free individual users would also be surprised by them.                                                                                                                                                                                                                                                                                                                        |
+| Four triggers, each tied to the user's own conduct: Your Content and output, breach of §4, unlawful use or breach of third-party AI terms, services offered to others | This keeps the duty in line with what the user controls. It does **not** cover ordinary use of the Software as provided.                                                                                                                                                                                                                                                                                                                                                                                              |
+| Exclusions for IP claims against the Software itself, for Licensor's breach, and for Licensor's own fault                                                             | The user never indemnifies Fuzzy Nova for its own code or conduct. Under Texas's express-negligence and fair-notice rules (_Ethyl Corp. v. Daniel Construction Co._, 725 S.W.2d 705 (Tex. 1987); _Dresser_, 853 S.W.2d at 508–09), an indemnity for the indemnitee's own negligence needs express, conspicuous wording. Excluding it outright, in bold capitals, avoids the question. It also makes the term easier to defend as reasonably necessary to protect a legitimate interest (Australian unfair-terms law). |
+| "To the extent" apportionment                                                                                                                                         | When both the user's workflow and some other cause contribute to the harm, the user pays only the share that arises from a listed trigger.                                                                                                                                                                                                                                                                                                                                                                            |
+| Ordinary defense procedure: notice, the user's control of the defense, consent for settlements that admit Licensor's fault                                            | This is market-standard. A late notice excuses the user only to the extent of actual prejudice, so a technical delay does not forfeit the indemnity.                                                                                                                                                                                                                                                                                                                                                                  |
+| Enterprise Terms or a signed order control                                                                                                                            | Enterprise buyers usually negotiate mutual indemnities. Fuzzy Nova gives no IP indemnity in the standard form. An Enterprise buyer that wants one should get it in its order, priced and capped there.                                                                                                                                                                                                                                                                                                                |
+
+**Not capped.** §13's exclusion and cap limit only Licensor's liability. The indemnity is
+uncapped, as is usual, because its triggers are limited to the user's own conduct.
+
+**Residual risks and recommendations.**
+
+- **Fee recovery: added to the draft.** The first draft covered only amounts awarded in the
+  third-party case. A user who wrongly refused to defend would have left Fuzzy Nova paying for
+  its own defense and for the suit to enforce the indemnity. The new paragraph works as
+  follows:
+  - If the user does not take over the defense within 30 days of notice, or refuses a defense
+    it owes, Fuzzy Nova may defend and settle the claim itself.
+  - The user then reimburses Fuzzy Nova's reasonable defense fees and costs, any reasonable
+    settlement, and the cost of enforcing §13(g).
+  - All of these are limited to the share of the claim the indemnity covers, so
+    apportionment cannot be bypassed.
+  - The reasonableness standard for the settlement replaces the consent right Fuzzy Nova
+    would otherwise need from a user who has walked away.
+  - Texas enforces contractual fee clauses as written. In California, Civil Code §1717 makes a
+    one-sided contractual fee clause reciprocal in actions on the contract, so a user who
+    defeats an enforcement suit there could recover its fees. **Recommendation:** accept
+    that, because it rewards only meritless enforcement.
+- **Australia's unfair-terms penalties. Recommendation: keep §13(g) unchanged, with no
+  Australian carve-out.** The penalty regime covers standard forms with small businesses
+  (fewer than 100 employees or turnover under AUD 10 million). One-sided indemnities are a
+  known target. However, s. 24(1)(b) asks whether a term is reasonably necessary to protect a
+  legitimate interest. A clause limited to the user's own conduct, which excludes Licensor's
+  own fault and IP claims and apportions shared causes, is the version most likely to pass
+  that test. Carving Australia out would give up the protection where third-party claims are
+  as likely as anywhere. Revisit with Australian counsel if Australian revenue becomes
+  material.
+- **Effect on adoption. Recommendation: keep the indemnity uncapped. Do not add a cap for
+  Free Tier businesses.** A cap low enough to reassure a small business would not cover
+  defense costs, which are the main risk the clause addresses. The narrow triggers are the
+  better answer to a legal team's concern. Organizations that need different terms already
+  have the Enterprise path, whose order controls §13(g). Track procurement objections and
+  revisit if they recur.
+- **Collectability. Recommendation: rely on Fuzzy Nova's own insurance (R11). Do not require
+  users to carry insurance.** The indemnity is worth only what the user can pay. An insurance
+  requirement cannot be verified for a free download and would add friction without adding
+  protection. When placing technology E&O coverage, confirm the policy covers defense of
+  claims that arise from a user's workflows.
+
+**For counsel to confirm.** Approve §13(g), including the fee-recovery paragraph, the renamed
+§13 heading ("Limitation of Liability; Indemnity"), and its business-user scope.
+
+### Jurisdiction flags
+
+These are markets where mandatory law can override the standard form. The draft's general
+savings language covers most of them. **Text** marks items that need a license change, already
+drafted unless noted. **Ops** marks items outside the license.
+
+| Market                       | Issue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Action                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **EU: Product Liability**    | Directive (EU) 2024/2853 must be transposed by **December 9, 2026** and applies to products placed on the market after that date. Software is a "product" (art. 4(1)). The exemption for free and open-source software supplied outside a commercial activity does not fit a freemium commercial product. Recoverable damage includes **destruction or corruption of data not used for professional purposes** (art. 6(1)(c)), which is the hobbyist file-loss scenario. Liability is strict and cannot be limited by contract (art. 15). Where the manufacturer is outside the EU, liability can pass to an importer, authorized representative, or fulfilment provider, and in some cases to an online platform (art. 8). | Text: §13(d)(iv). Ops: confirm with EU counsel whether Marketplace and npm distribution creates an EU economic operator, and review product-liability insurance.                                                                                                                                                                                                                                                                                                                                                         |
+| **EU: Cyber Resilience Act** | Regulation (EU) 2024/2847 applies to monetized products with digital elements. Manufacturers' obligations to report actively exploited vulnerabilities and severe incidents apply from **September 11, 2026**. The remaining obligations apply from December 11, 2027, including a declared support period with security updates, normally at least five years.                                                                                                                                                                                                                                                                                                                                                             | Text: §9 carve-out. Ops: a vulnerability-reporting process now, and a support-period and CE-conformity plan before December 2027.                                                                                                                                                                                                                                                                                                                                                                                        |
+| **EU consumers generally**   | Rome I art. 6 keeps home-country mandatory law. Brussels I bis art. 18(2) lets Licensor sue an EU consumer only in their home courts. Digital Content Directive conformity and update rights apply to paid supplies and to some supplies paid for with personal data. Withdrawal rights for digital content are lost only with express consent and acknowledgement (Directive 2011/83 art. 16(m)).                                                                                                                                                                                                                                                                                                                          | Text: §§12, 13(e), 16(b). Ops: confirm that Lemon Squeezy, as merchant of record, captures the withdrawal consent. The EU ODR platform has been discontinued, so do not add an ODR link.                                                                                                                                                                                                                                                                                                                                 |
+| **Germany**                  | §§305–310 BGB control standard terms for consumers. See R5 and R7. Free supplies may be treated as gifts, with liability limited to intent and gross negligence (§521 BGB). That rule does not displace the Product Liability Directive.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Text: §13(d)–(e).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **France**                   | Limits fail for _faute lourde_ or _dol_ (Code civil art. 1231-3). A clause that empties an essential obligation is deemed unwritten (art. 1170). Consumer Code art. R. 212-1 blacklists clauses suppressing the consumer's right to compensation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Covered by §13(d)–(e) and savings language.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **United Kingdom**           | UCTA 1977 s. 2(1) and CRA 2015 s. 65 bar excluding negligent death or personal injury. CRA ss. 31 and 47 protect digital-content rights. Under s. 46, a trader may have to repair or compensate when digital content damages a device or other digital content, and this can apply to free content. "Gross negligence" has no settled meaning in English law, so fraud and negligent personal injury are the core carve-outs.                                                                                                                                                                                                                                                                                               | Text: §§12, 13(d).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Australia / New Zealand**  | ACL consumer guarantees cannot be excluded (s. 64). "Goods" includes software, and "consumer" includes businesses buying under AUD 100,000. Unfair terms in consumer and small-business standard forms have carried civil penalties since November 9, 2023, so an unfair term creates penalty exposure as well as being unenforceable. New Zealand's CGA allows contracting out only between businesses (s. 43).                                                                                                                                                                                                                                                                                                            | Text: §12, including the s. 64A remedy limit (R10a).                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Canada: Quebec**           | Civil Code art. 1474 bars excluding liability for intentional or gross fault and for bodily or moral injury, including between businesses. Art. 3149 preserves consumers' home forum. Under the Charter of the French Language s. 55, as amended by Bill 96 and in force from June 1, 2023, a contract of adhesion must first be presented in French. An English-only form presented to a Quebec adherent can be annulled at the adherent's request, and penalties may apply.                                                                                                                                                                                                                                               | **Recommendation: accept the risk for the standard form now, and publish a French version at a set trigger.** The trigger is the first Quebec Enterprise order on the standard form, or Quebec Pro sales becoming material. A negotiated Enterprise order is not a contract of adhesion, so s. 55 does not apply to it. Annulment is at the adherent's option, and Quebec mandatory law already overrides most of §13 for Quebec users, so the incremental exposure before revenue is small. §16(i) does not resolve it. |
+| **Japan**                    | See R5. Consumer Contract Act art. 8(3) requires a partial exemption to state that it does not apply to gross negligence.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Text: §13(d).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Korea / China**            | Exemptions for intentional or gross fault in standard terms are void (Korea Terms Act art. 7; China Civil Code arts. 497 and 506). China also voids exemptions for personal injury.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Text: §13(d).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Brazil**                   | Consumer Defense Code art. 51(I) voids clauses that exclude or attenuate supplier liability toward individual consumers. Art. 101(I) gives consumers their home forum. Expect the cap to fail for Brazilian individual consumers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Covered by savings language. Accept the residual risk.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **India**                    | The Consumer Protection Act 2019 lets consumer commissions declare "unfair contract" terms (s. 2(46)) null.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Covered by savings language.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **U.S. states**              | New York and California public policy on gross negligence (R5). Some states bar disclaiming implied warranties in consumer sales of goods (for example, Massachusetts and Maryland). Whether downloaded software is "goods" is unsettled. New Jersey's TCCWNA (N.J.S.A. 56:12-16) targets "void in some jurisdictions" phrasing that does not say whether it applies in New Jersey. Exposure fell after _Spade v. Select Comfort_, 232 N.J. 504 (2018), which requires an aggrieved consumer.                                                                                                                                                                                                                               | **Recommendation: no New Jersey-specific sentence.** The draft never uses "some jurisdictions do not allow" phrasing. Its savings language says what applies ("to the extent applicable law prohibits"), and §13(d) lists the exceptions expressly. A state-by-state list would grow stale and invite the same challenge. Counsel to confirm.                                                                                                                                                                            |
+| **Sanctioned markets**       | The Marketplace and npm may be reachable from comprehensively sanctioned regions. Licensing or activating Pro there raises OFAC and EAR questions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Text: §14. Ops: geoblock Pro checkout and activation for comprehensively sanctioned regions. Lemon Squeezy screens payments, but the license server should not rely on that alone.                                                                                                                                                                                                                                                                                                                                       |
+
 ## Companion contribution text for approval
 
 ### Main repository contributor license agreement
@@ -252,7 +538,9 @@ permission for submissions made elsewhere.
    process, and privacy notice against actual behavior. Apply the catalog guidance in
    [Q2](#q2-community-library-coverage-and-installation-exposure) and
    [Q6](#q6-separate-mit-0-contribution-intake-and-removal). Check sales and distribution
-   jurisdictions for independently applicable mandatory terms.
+   jurisdictions for independently applicable mandatory terms, starting with the
+   [jurisdiction flags](#jurisdiction-flags), and close the EU product-liability and Cyber
+   Resilience Act items before the next release after December 9, 2026.
 
 ### Companion wording for publication
 

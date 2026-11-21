@@ -62,6 +62,8 @@ If You operate an independent business, including through a sole proprietorship,
 
 **"Dispute"** means any dispute, claim, or controversy arising out of or relating to this License or the Software.
 
+**"Consumer"** means an individual who acquires or uses the Software wholly or mainly for personal, family, or household purposes, and not for the purposes of their trade, business, craft, or profession.
+
 ## 2. License Grant
 
 Subject to the terms and conditions of this License, Licensor grants You a limited, non-exclusive, non-transferable, non-sublicensable license to:
@@ -220,7 +222,7 @@ If You provide Licensor with feedback, suggestions, or ideas regarding the Softw
 
 ## 9. Support; Updates; Availability
 
-Licensor may provide support, updates, bug fixes, or future features at its sole discretion. Except as expressly stated in a separate written agreement, Licensor has no obligation to maintain, support, or continue offering any feature, version, or service.
+Licensor may provide support, updates, bug fixes, or future features at its sole discretion. Except as expressly stated in a separate written agreement or required by applicable law (for example, a legal obligation to supply security or conformity updates for digital content You paid for), Licensor has no obligation to maintain, support, or continue offering any feature, version, or service.
 
 ## 10. Privacy and Data Processing
 
@@ -236,21 +238,53 @@ If You initiate patent litigation alleging that the Software or any portion of i
 
 **THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL MEET YOUR REQUIREMENTS, OPERATE WITHOUT INTERRUPTION OR ERROR, OR THAT DEFECTS WILL BE CORRECTED.**
 
-**AI tools and automated actions.** The Software directs third-party AI tools and executes scripts and commands as part of Your workflows. Depending on the permissions available in Your environment, these tools and automated actions can read, create, modify, or delete files, run programs, rewrite source-control history, and access networks and services. Available permissions can come from default or inherited settings or from permissions You expressly grant. You are responsible for reviewing workflows and templates before running them, configuring the permissions available to tools and scripts, reviewing resulting actions and output, and maintaining recoverable backups of important files, including work outside version control. Third-party AI tools determine the content they generate and may select actions automatically. Licensor does not guarantee the safety or accuracy of those actions or that content.
+**Statutory rights.** Nothing in this License excludes, restricts, or modifies any guarantee, warranty, right, or remedy that applicable law gives You and does not permit to be excluded, restricted, or modified. Examples include the consumer guarantees under the Australian Consumer Law and the New Zealand Consumer Guarantees Act 1993, the statutory rights under the UK Consumer Rights Act 2015, and the conformity and update rights under national laws implementing Directive (EU) 2019/770. This Section 12 applies only to the extent those laws permit.
 
-## 13. Limitation of Liability
+**Australian Consumer Law remedy.** If You acquire the Software as a consumer under the Australian Consumer Law and the Software is not of a kind ordinarily acquired for personal, domestic, or household use or consumption, Licensor's liability for failing to comply with a consumer guarantee, other than a guarantee under section 51, 52, or 53 of that law, is limited, to the extent section 64A of that law permits, to supplying the Software again or paying the cost of having it supplied again.
 
-**TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE FOLLOWING DAMAGES EXCLUSION AND CAP APPLY TO CLAIMS ARISING OUT OF OR IN CONNECTION WITH THIS LICENSE OR USE OF THE SOFTWARE, WHETHER BASED ON CONTRACT, TORT (INCLUDING LICENSOR'S ORDINARY NEGLIGENCE), OR ANY OTHER LEGAL THEORY.**
+**AI tools and automated actions.** The Software directs third-party AI tools and executes scripts and commands as part of Your workflows. Depending on the permissions available in Your environment, these tools and automated actions can read, create, modify, or delete files, run programs, rewrite source-control history, and access networks and services. Available permissions can come from default or inherited settings or from permissions You expressly grant. You are responsible for reviewing workflows and templates before running them, configuring the permissions available to tools and scripts, reviewing resulting actions and output, and maintaining recoverable backups of important files, including work outside version control. Third-party AI tools determine the content they generate and may select actions automatically. Licensor does not guarantee the safety or accuracy of those actions or that content. This paragraph describes the respective roles of You and Licensor. It does not by itself limit Licensor's liability; Section 13 states those limits and their exceptions.
+
+## 13. Limitation of Liability; Indemnity
+
+### (a) Scope
+
+**SUBJECT TO SECTION 13(d), THE DAMAGES EXCLUSION IN SECTION 13(b) AND THE CAP IN SECTION 13(c) APPLY, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, TO ALL CLAIMS ARISING OUT OF OR IN CONNECTION WITH THIS LICENSE OR USE OF THE SOFTWARE, WHETHER BASED ON CONTRACT, WARRANTY, TORT (INCLUDING LICENSOR'S ORDINARY NEGLIGENCE), STRICT LIABILITY, OR ANY OTHER LEGAL THEORY.**
+
+### (b) Excluded damages
 
 **LICENSOR SHALL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES, INCLUDING SUCH DAMAGES FROM LOSS OF USE, DATA, OR PROFITS, BUSINESS INTERRUPTION, OR PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES, EVEN IF LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.**
 
-**LICENSOR'S TOTAL CUMULATIVE LIABILITY FOR THOSE CLAIMS SHALL NOT EXCEED THE GREATER OF (I) THE AMOUNTS PAID BY YOU TO LICENSOR IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM OR (II) USD $100. FOR THIS CAP, AMOUNTS PAID THROUGH LICENSOR'S AUTHORIZED RESELLER FOR YOUR LICENSE TO THE SOFTWARE COUNT AS AMOUNTS PAID TO LICENSOR.**
+### (c) Cap
 
-**SECTIONS 12 AND 13 DO NOT EXCLUDE OR LIMIT LIABILITY FOR FRAUD, WILLFUL MISCONDUCT, GROSS NEGLIGENCE, OR DEATH OR PERSONAL INJURY CAUSED BY NEGLIGENCE. NOTHING IN THIS LICENSE EXCLUDES OR LIMITS ANY OTHER LIABILITY, REMEDY, OR FEE ALLOCATION TO THE EXTENT APPLICABLE LAW PROHIBITS THAT EXCLUSION OR LIMITATION.**
+**LICENSOR'S TOTAL CUMULATIVE LIABILITY FOR ALL THOSE CLAIMS SHALL NOT EXCEED THE GREATER OF (I) THE AMOUNTS PAID BY YOU TO LICENSOR IN THE TWELVE (12) MONTHS BEFORE THE EVENT FIRST GIVING RISE TO LIABILITY OR (II) USD $100. FOR THIS CAP, AMOUNTS PAID THROUGH LICENSOR'S AUTHORIZED RESELLER FOR YOUR LICENSE TO THE SOFTWARE COUNT AS AMOUNTS PAID TO LICENSOR.**
+
+### (d) Exceptions
+
+**NOTHING IN SECTION 12 OR THIS SECTION 13 EXCLUDES OR LIMITS LICENSOR'S LIABILITY FOR (I) FRAUD OR FRAUDULENT MISREPRESENTATION; (II) WILLFUL MISCONDUCT OR GROSS NEGLIGENCE; (III) DEATH, PERSONAL INJURY, OR DAMAGE TO HEALTH CAUSED BY NEGLIGENCE; OR (IV) LIABILITY UNDER APPLICABLE PRODUCT-LIABILITY LAW THAT CANNOT BE EXCLUDED OR LIMITED BY CONTRACT. ITEMS (I) THROUGH (III) COVER CONDUCT OF LICENSOR AND OF ANYONE ACTING ON ITS BEHALF, AS FINALLY DETERMINED BY A COURT OR OTHER TRIBUNAL OF COMPETENT JURISDICTION UNDER THE LAW GOVERNING THE CLAIM. NOTHING IN THIS LICENSE EXCLUDES OR LIMITS ANY OTHER LIABILITY, REMEDY, OR FEE ALLOCATION TO THE EXTENT APPLICABLE LAW PROHIBITS THAT EXCLUSION OR LIMITATION.**
+
+### (e) Consumers where these limits are restricted
+
+**If You are a Consumer and the mandatory law of Your usual residence does not permit Section 13(b) or 13(c) to apply to Licensor's ordinary negligence, then, to the extent that law permits, Licensor is liable for ordinary negligence only if it breaches an obligation whose performance is essential to the proper performance of this License and on which You may regularly rely, and only for damage that was typical and reasonably foreseeable when You accepted this License. This Section 13(e) does not limit liability described in Section 13(d).**
+
+### (f) Licensor's personnel
+
+Licensor's members, managers, officers, employees, and contractors may rely on Sections 12 and 13 as if each were Licensor. Those Sections limit their liability to the same extent as Licensor's, subject to the same exceptions, and the cap in Section 13(c) applies to all claims against Licensor and those persons combined.
+
+### (g) Indemnity by business users
+
+This Section 13(g) applies only if You are not a Consumer. You will defend Licensor and the persons described in Section 13(f) against any claim, demand, suit, or proceeding brought by a third party (a **Third-Party Claim**) to the extent it arises from (i) Your Content, including output You direct a third-party AI tool to produce and then use, publish, or distribute; (ii) Your breach of Section 4; (iii) Your violation of applicable law or of the terms of a third-party service You access through the Software; or (iv) a product or service You provide to others using the Software. You will pay the damages, costs, and reasonable attorneys' fees finally awarded against them in that Third-Party Claim, and any settlement of it that You agree to.
+
+You have no obligation under this Section 13(g) to the extent a Third-Party Claim arises from (A) a claim that the Software as Licensor provides it infringes or misappropriates a third party's intellectual property rights; (B) Licensor's breach of this License; or (C) the negligence, gross negligence, willful misconduct, or fraud of Licensor or anyone acting on its behalf. **THIS SECTION 13(g) DOES NOT REQUIRE YOU TO INDEMNIFY ANY PERSON FOR THAT PERSON'S OWN NEGLIGENCE.**
+
+Licensor will notify You in writing promptly after it learns of a Third-Party Claim. A delay relieves You of Your obligations only to the extent it materially prejudices Your defense. You may control the defense and settlement with counsel reasonably acceptable to Licensor, and Licensor will cooperate reasonably at Your expense. Licensor may participate through its own counsel at its own expense. You may not settle a Third-Party Claim in a way that admits fault by, or imposes any obligation other than a payment You make on, Licensor or a person described in Section 13(f) without Licensor's prior written consent, which Licensor will not unreasonably withhold.
+
+If You do not assume the defense of a Third-Party Claim covered by this Section 13(g) within thirty (30) days after Licensor's notice, or You refuse a defense this Section 13(g) requires, Licensor may defend and settle that Third-Party Claim with counsel of its choice. You will then reimburse Licensor for the reasonable attorneys' fees and costs of that defense, for any reasonable settlement Licensor makes, and for the reasonable attorneys' fees and costs Licensor incurs in enforcing this Section 13(g). These amounts are limited to the share of the Third-Party Claim that this Section 13(g) requires You to bear.
+
+Enterprise Subscription Terms or a signed order that addresses indemnity control over this Section 13(g).
 
 ## 14. Export Controls
 
-You may not use or export the Software in violation of applicable export laws and regulations, including U.S. Export Administration Regulations. By using the Software, You represent that You are not located in a country subject to a U.S. Government embargo and are not listed on any U.S. Government list of prohibited or restricted parties.
+You may not use, export, re-export, or transfer the Software in violation of applicable export control or economic sanctions laws, including the U.S. Export Administration Regulations and sanctions administered by the U.S. Treasury Department's Office of Foreign Assets Control. By using the Software, You represent that You are not located in, ordinarily resident in, or organized under the laws of a country or region subject to comprehensive U.S. sanctions, and that You are not listed on, or owned or controlled by a party listed on, any U.S. Government list of prohibited or restricted parties.
 
 ## 15. Term and Termination
 
@@ -274,9 +308,9 @@ This License is the entire agreement between the parties regarding the Software 
 
 ### (b) Governing law; venue
 
-This License is governed by the laws of the State of Texas, USA, without regard to conflict-of-law rules. Except as provided in this Section 16(b), and to the extent permitted by applicable law, any court proceeding concerning a Dispute must be brought in a state or federal court of competent jurisdiction in Texas. The parties select a Texas state district court or county court at law in Travis County, Texas, or the United States District Court for the Western District of Texas, Austin Division, as the exclusive venue to the extent the venue selection is enforceable. If the venue selection is unenforceable, applicable law determines venue within the Texas forum. The parties consent to personal jurisdiction in Texas and to venue in the designated courts.
+This License is governed by the laws of the State of Texas, USA, without regard to conflict-of-law rules. The United Nations Convention on Contracts for the International Sale of Goods and any law based on the Uniform Computer Information Transactions Act do not apply to this License. Except as provided in this Section 16(b), and to the extent permitted by applicable law, any court proceeding concerning a Dispute must be brought in a state or federal court of competent jurisdiction in Texas. The parties select a Texas state district court or county court at law in Travis County, Texas, or the United States District Court for the Western District of Texas, Austin Division, as the exclusive venue to the extent the venue selection is enforceable. If the venue selection is unenforceable, applicable law determines venue within the Texas forum. The parties consent to personal jurisdiction in Texas and to venue in the designated courts.
 
-Either party may bring an individual claim in a small-claims court with jurisdiction. If You are a consumer, this choice of law and venue preserves the non-waivable protections of the law of Your usual residence and any forum rights that applicable law does not permit You to waive. If You are an individual and the Dispute concerns Your acquisition or use of the Software primarily for personal, family, or household purposes and Your usual residence was outside the United States when the Dispute arose, either party may bring proceedings in the courts with jurisdiction where You usually reside. You may also use any other forum available to You under mandatory law.
+Either party may bring an individual claim in a small-claims court with jurisdiction. If You are a Consumer, this choice of law and venue preserves the non-waivable protections of the law of Your usual residence and any forum rights that applicable law does not permit You to waive. If You are a Consumer whose usual residence was outside the United States when the Dispute arose, either party may bring proceedings in the courts with jurisdiction where You usually reside. You may also use any other forum available to You under mandatory law.
 
 ### (c) Severability
 
@@ -303,6 +337,10 @@ Either party may invite the other to resolve a Dispute informally. After a Dispu
 ### (h) Assignment
 
 You may not assign or transfer this License or any right under it, by operation of law or otherwise, without Licensor's prior written consent, except that You may assign this License in its entirety to a successor to all or substantially all of Your business or assets, provided that the successor does not Compete with the Software, agrees in writing to be bound by this License, and You notify Licensor within thirty (30) days of the assignment. Licensor may assign this License, in whole or in part, to an affiliate or in connection with a merger, acquisition, reorganization, financing, or sale of all or substantially all of its assets. Any attempted assignment in violation of this Section is void. This License binds and benefits the parties' permitted successors and assigns.
+
+### (i) Language
+
+This License is written in English. Licensor may provide translations for convenience. If a translation conflicts with the English text, the English text controls, except where applicable law requires otherwise.
 
 ---
 
