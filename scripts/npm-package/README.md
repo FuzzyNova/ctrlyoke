@@ -4,6 +4,12 @@ The command-line runner and MCP server for [ctrlyoke](https://ctrlyoke.dev), whi
 structured YAML/JSON/Markdown workflows through AI coding harnesses: Claude Code, Codex,
 Copilot CLI, OpenCode, Qwen Code, and Antigravity.
 
+> **License:** ctrlyoke is source-available commercial software, not open source. By
+> installing or using it, you accept the
+> [ctrlyoke Commercial License](https://ctrlyoke.dev/terms/) included in this package as
+> `LICENSE.md`. It is free for individuals and for organizations under USD $10 million in
+> revenue with fewer than 250 people.
+
 ```sh
 npm install -g ctrlyoke
 ctrlyoke validate my-workflow.ctrlyoke.yaml

@@ -8,6 +8,8 @@ ctrlyoke is a workflow engine for CLI coding agents — Claude Code, Codex, Copi
 
 ![A six-step workflow running in the ctrlyoke dashboard, each step on a different harness, with output streaming beside the step list](https://ctrlyoke.dev/docs/screenshots/readme-demo-900x600.gif)
 
+> **License:** ctrlyoke is source-available commercial software, not open source. By installing, activating, or using it, you accept the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms/) included with it as `LICENSE.md`. It is free for individuals and for organizations under USD $10 million in revenue with fewer than 250 people; see [License](#license).
+
 ---
 
 ## What it does
@@ -377,7 +379,7 @@ or workspace names. Telemetry respects your VS Code `telemetry.telemetryLevel` s
 
 ## License
 
-ctrlyoke is distributed under the commercial license in [LICENSE.md](LICENSE.md).
+ctrlyoke is distributed under the commercial license in [LICENSE.md](LICENSE.md). Earlier versions of the license stay available under **Version history** on [ctrlyoke.dev/terms](https://ctrlyoke.dev/terms/). The built-in workflow templates, documentation examples, and schemas are separately licensed under MIT-0 ([LICENSE-MIT-0](LICENSE-MIT-0)).
 The free tier covers individuals and small teams. Organizations with $10M or more in annual revenue
 or 250 or more staff need a Pro license for each user, or an Enterprise site license; see the
 [Pro license guide](https://ctrlyoke.dev/docs/pro).
