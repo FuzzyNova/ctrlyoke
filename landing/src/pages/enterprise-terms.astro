@@ -1,5 +1,6 @@
 ---
 import LegalPage from "../layouts/LegalPage.astro";
+import LegalVersionHistory from "../components/LegalVersionHistory.astro";
 // Canonical source: repo-root ENTERPRISE_TERMS.md (single source of truth — do not duplicate).
 import { Content } from "../../../ENTERPRISE_TERMS.md";
 ---
@@ -9,4 +10,5 @@ import { Content } from "../../../ENTERPRISE_TERMS.md";
   description="Subscription, billing, renewal, and cancellation terms for the ctrlyoke Enterprise site license."
 >
   <Content />
+  <LegalVersionHistory document="enterprise-terms" />
 </LegalPage>

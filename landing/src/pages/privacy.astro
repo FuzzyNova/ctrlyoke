@@ -1,5 +1,6 @@
 ---
 import LegalPage from "../layouts/LegalPage.astro";
+import LegalVersionHistory from "../components/LegalVersionHistory.astro";
 // Canonical source: repo-root PRIVACY.md (single source of truth — do not duplicate).
 import { Content } from "../../../PRIVACY.md";
 ---
@@ -9,4 +10,5 @@ import { Content } from "../../../PRIVACY.md";
   description="How ctrlyoke and Fuzzy Nova LLC collect, use, and protect your information."
 >
   <Content />
+  <LegalVersionHistory document="privacy" />
 </LegalPage>

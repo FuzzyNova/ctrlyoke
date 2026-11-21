@@ -1,5 +1,6 @@
 ---
 import LegalPage from "../layouts/LegalPage.astro";
+import LegalVersionHistory from "../components/LegalVersionHistory.astro";
 // Canonical source: repo-root DPA.md (single source of truth — do not duplicate).
 import { Content } from "../../../DPA.md";
 ---
@@ -9,4 +10,5 @@ import { Content } from "../../../DPA.md";
   description="The ctrlyoke Data Processing Agreement for Enterprise customers — GDPR, UK GDPR, Swiss FADP, and CCPA terms."
 >
   <Content />
+  <LegalVersionHistory document="dpa" />
 </LegalPage>

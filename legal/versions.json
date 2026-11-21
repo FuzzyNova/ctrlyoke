@@ -1,0 +1,90 @@
+{
+  "documents": [
+    {
+      "id": "eula",
+      "file": "LICENSE.md",
+      "title": "ctrlyoke Commercial License",
+      "route": "/terms/"
+    },
+    {
+      "id": "enterprise-terms",
+      "file": "ENTERPRISE_TERMS.md",
+      "title": "ctrlyoke Enterprise Subscription Terms",
+      "route": "/enterprise-terms/"
+    },
+    {
+      "id": "privacy",
+      "file": "PRIVACY.md",
+      "title": "Privacy Policy",
+      "route": "/privacy/"
+    },
+    {
+      "id": "dpa",
+      "file": "DPA.md",
+      "title": "ctrlyoke Data Processing Agreement",
+      "route": "/dpa/"
+    }
+  ],
+  "versions": [
+    {
+      "document": "eula",
+      "version": "2.1",
+      "published": "2026-09-17",
+      "sha256": "073ae7cd93c0a051a43d9671b2ef1a433916b4311a0c99a63c71cb263f148552"
+    },
+    {
+      "document": "eula",
+      "version": "2.2",
+      "published": "2026-10-13",
+      "sha256": "daeebf62b7e08998ad08b784da7cf6d4403700142748376eb58245061f5c8007"
+    },
+    {
+      "document": "eula",
+      "version": "2.3",
+      "published": "2026-11-21",
+      "sha256": "b4d89cba5cc890feadb19a912db01afaab41e9ecdb6651e973d84ec47821976e"
+    },
+    {
+      "document": "enterprise-terms",
+      "version": "1.0",
+      "published": "2026-09-17",
+      "sha256": "aef78d87a0189d4fb5fb9b54fce23f97c4c377b77fa4b2064c9c7cb4947092e5"
+    },
+    {
+      "document": "enterprise-terms",
+      "version": "1.1",
+      "published": "2026-11-21",
+      "sha256": "bf4b1cd51951a19dc8782ad2fd16ad085958cabcaad6e11f104bb3a0bded6a1f"
+    },
+    {
+      "document": "privacy",
+      "version": "1.4",
+      "published": "2026-09-17",
+      "sha256": "ae063613b847c837ecee3aa1b1bf1d53adeaa9c394a2f419170ab87e0e2d769e"
+    },
+    {
+      "document": "privacy",
+      "version": "1.5",
+      "published": "2026-10-16",
+      "sha256": "1941effc3c477909acb5aab2ebd2f0553efa49f6e3742d718e64853cadbad5aa"
+    },
+    {
+      "document": "privacy",
+      "version": "1.6",
+      "published": "2026-10-20",
+      "sha256": "0815e6916d17836d882f52fb2fd6a31305cdb1067046b1ea80caddfdeeb09ab6"
+    },
+    {
+      "document": "privacy",
+      "version": "1.7",
+      "published": "2026-11-21",
+      "sha256": "d4c7348efd662649a8a1777fc774e48eac03ade899ffac83fca46c0dfd10a8d8"
+    },
+    {
+      "document": "dpa",
+      "version": "1.0",
+      "published": "2026-09-17",
+      "sha256": "562e14687d177650c0a61f75de05437fd700c560147aa12cfee09404634cf4a9"
+    }
+  ]
+}

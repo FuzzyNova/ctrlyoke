@@ -1,5 +1,6 @@
 ---
 import LegalPage from "../layouts/LegalPage.astro";
+import LegalVersionHistory from "../components/LegalVersionHistory.astro";
 import { readLegalDocumentVersion } from "../../../src/license/LemonSqueezyConstants";
 // Canonical source: repo-root LICENSE.md (single source of truth — do not duplicate).
 import { Content } from "../../../LICENSE.md";
@@ -25,4 +26,5 @@ if (summaryFrontmatter.licenseVersion !== licenseVersion) {
     <Summary />
   </div>
   <Content />
+  <LegalVersionHistory document="eula" />
 </LegalPage>

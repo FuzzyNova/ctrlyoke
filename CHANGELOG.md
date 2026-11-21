@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Every published version of the license, Enterprise Terms, Privacy Policy and Data Processing Agreement now has a permanent page on ctrlyoke.dev, such as [ctrlyoke.dev/terms/2.2/](https://ctrlyoke.dev/terms/2.2/), listed under **Version history** on each current page. The Enterprise checkout links the exact versions you accept.
 - A [Known issues](https://ctrlyoke.dev/docs/troubleshooting/known-issues) page in the docs lists harness CLI problems ctrlyoke cannot fix. It starts with agy's `auto` sandbox refusing workspace writes on Windows.
 - A pending step's menu has **Move to Editor**, which puts the step back in the prompt editor and removes it from the queue, and **Send as Steer**, which sends its prompt to a live session instead of running it as a step.
 - The prompt editor's right-click menu has **Recent Prompts**: the last 15 prompts you ran, queued or steered, in any workflow, ready to load back into the editor. Unsent text the editor replaces is kept there too.

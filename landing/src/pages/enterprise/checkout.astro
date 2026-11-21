@@ -20,14 +20,21 @@ import enterpriseTerms from "../../../../ENTERPRISE_TERMS.md?raw";
 import eula from "../../../../LICENSE.md?raw";
 import privacyPolicy from "../../../../PRIVACY.md?raw";
 import dpa from "../../../../DPA.md?raw";
+import { legalVersionUrl, type LegalDocumentId } from "../../legal/archive";
 
 // Recorded with the order, so it must name the exact versions this build serves.
-const acceptedVersions = [
-  `enterprise-terms@${readLegalDocumentVersion(enterpriseTerms, "ENTERPRISE_TERMS.md")}`,
-  `eula@${readLegalDocumentVersion(eula, "LICENSE.md")}`,
-  `privacy@${readLegalDocumentVersion(privacyPolicy, "PRIVACY.md")}`,
-  `dpa@${readLegalDocumentVersion(dpa, "DPA.md")}`,
-].join("; ");
+const versions = {
+  "enterprise-terms": readLegalDocumentVersion(enterpriseTerms, "ENTERPRISE_TERMS.md"),
+  eula: readLegalDocumentVersion(eula, "LICENSE.md"),
+  privacy: readLegalDocumentVersion(privacyPolicy, "PRIVACY.md"),
+  dpa: readLegalDocumentVersion(dpa, "DPA.md"),
+} satisfies Record<LegalDocumentId, string>;
+const acceptedVersions = Object.entries(versions)
+  .map(([id, version]) => `${id}@${version}`)
+  .join("; ");
+// Link the exact versions being accepted, at their permanent URLs, so the
+// recorded versions and the text the signer saw can never drift apart.
+const termsUrl = (id: LegalDocumentId) => legalVersionUrl(id, versions[id]);
 
 const inputClass =
   "w-full rounded-lg border border-white/10 bg-brand-950/70 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 disabled:opacity-50";
@@ -113,10 +120,10 @@ const linkClass = "text-sky-400 underline hover:text-sky-300";
                 class="mt-1 h-4 w-4 shrink-0 accent-sky-400" />
               <span>
                 I am authorized to bind the organization named above, and on its behalf I accept the{" "}
-                <a href="/enterprise-terms/" target="_blank" rel="noopener" class={linkClass}>Enterprise Terms</a>,
-                the <a href="/terms/" target="_blank" rel="noopener" class={linkClass}>ctrlyoke Commercial License (EULA)</a>,
-                and the <a href="/dpa/" target="_blank" rel="noopener" class={linkClass}>Data Processing Agreement</a>,
-                and acknowledge the <a href="/privacy/" target="_blank" rel="noopener" class={linkClass}>Privacy Policy</a>.
+                <a href={termsUrl("enterprise-terms")} target="_blank" rel="noopener" class={linkClass}>Enterprise Terms {versions["enterprise-terms"]}</a>,
+                the <a href={termsUrl("eula")} target="_blank" rel="noopener" class={linkClass}>ctrlyoke Commercial License (EULA) {versions.eula}</a>,
+                and the <a href={termsUrl("dpa")} target="_blank" rel="noopener" class={linkClass}>Data Processing Agreement {versions.dpa}</a>,
+                and acknowledge the <a href={termsUrl("privacy")} target="_blank" rel="noopener" class={linkClass}>Privacy Policy {versions.privacy}</a>.
                 This purchase is for business use. The subscription renews every year until cancelled.
               </span>
             </label>

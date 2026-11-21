@@ -1,0 +1,36 @@
+---
+// "Version history" list under a current legal document: every published
+// version with its permanent link.
+import {
+  formatLegalDate,
+  legalVersionHistory,
+  type LegalDocumentId,
+} from "../legal/archive";
+
+interface Props {
+  document: LegalDocumentId;
+}
+
+const history = legalVersionHistory(Astro.props.document);
+---
+
+<section class="not-prose mt-16 border-t border-white/10 pt-8 text-sm text-slate-400">
+  <h2 class="mb-3 text-base font-semibold text-slate-200">Version history</h2>
+  <p class="mb-4">
+    Every published version stays available at its own permanent link. A copy of ctrlyoke you
+    obtained earlier is governed by the version it came with unless you adopt a later one.
+  </p>
+  <ul class="space-y-1">
+    {
+      history.map((entry, index) => (
+        <li>
+          <a href={entry.url} class="text-sky-400 hover:text-sky-300">
+            Version {entry.version}
+          </a>
+          <span> · published {formatLegalDate(entry.published)}</span>
+          {index === 0 && <span class="text-slate-500"> (current)</span>}
+        </li>
+      ))
+    }
+  </ul>
+</section>

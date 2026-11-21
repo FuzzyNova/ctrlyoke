@@ -1,0 +1,42 @@
+---
+// One published version of a legal document, exactly as published, at its
+// permanent URL. Rendered by each document's `[version].astro` route.
+import LegalPage from "./LegalPage.astro";
+import { formatLegalDate, type ArchivedLegalPageProps } from "../legal/archive";
+
+type Props = ArchivedLegalPageProps;
+
+const { title, currentUrl, entry, supersededBy, Content } = Astro.props;
+---
+
+<LegalPage
+  title={`${title} version ${entry.version} — ctrlyoke`}
+  description={`Version ${entry.version} of the ${title}, as published on ${formatLegalDate(entry.published)}.`}
+>
+  <div class="not-prose mb-10 rounded-xl border border-amber-400/20 bg-amber-400/5 px-6 py-4 text-sm text-slate-300">
+    {
+      supersededBy ? (
+        <p>
+          <strong class="text-slate-100">Archived version {entry.version}</strong>, published{" "}
+          {formatLegalDate(entry.published)} and replaced by{" "}
+          <a href={supersededBy.url} class="text-sky-400 hover:text-sky-300">
+            version {supersededBy.version}
+          </a>{" "}
+          on {formatLegalDate(supersededBy.published)}. It still governs copies of ctrlyoke
+          obtained while it was in effect, unless their holders adopted a later version.{" "}
+          <a href={currentUrl} class="text-sky-400 hover:text-sky-300">
+            Read the current version
+          </a>
+          .
+        </p>
+      ) : (
+        <p>
+          <strong class="text-slate-100">Version {entry.version}</strong>, published{" "}
+          {formatLegalDate(entry.published)}. This is the current version, at its permanent link.
+        </p>
+      )
+    }
+    <p class="mt-2 break-all text-xs text-slate-500">SHA-256 of this text: {entry.sha256}</p>
+  </div>
+  <Content />
+</LegalPage>

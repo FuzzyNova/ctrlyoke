@@ -16,6 +16,8 @@ on:
       - "DPA.md"
       - "ENTERPRISE_TERMS.md"
       - "TRUST_PAGE.md"
+      - "legal/**"
+      - "scripts/legal-archive.mjs"
       - "src/license/**"
       - "netlify/**"
       - "README.md"

@@ -17,7 +17,9 @@ Reply from counsel: All recommendations and draft is approved.
 **Adopted November 21, 2026** as root `LICENSE.md` v2.3, together with the companion Enterprise
 Terms §12 and Privacy Policy §8 wording below. The open items in the
 [publication checklist](#publication-checklist) are release and operations work, not further
-legal review.
+legal review. The exact earlier texts (license 2.1 and 2.2, Enterprise Terms 1.0, Privacy
+Policy 1.4–1.6) are archived at permanent URLs such as `ctrlyoke.dev/terms/2.2/`, and the
+Enterprise checkout now links the versioned texts it records (`legal/README.md`).
 
 **Requested response.** Confirm R1–R4 below, decide the Round 3 proposals R5–R12, and
 approve the v2.3 draft and companion contribution text. If you recommend a change, please identify the clause and give replacement - no change recommended at this time

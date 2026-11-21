@@ -1,0 +1,10 @@
+---
+import ArchivedLegalPage from "../../layouts/ArchivedLegalPage.astro";
+import { archivedVersionPaths } from "../../legal/archive";
+
+export function getStaticPaths() {
+  return archivedVersionPaths("privacy");
+}
+---
+
+<ArchivedLegalPage {...Astro.props} />
