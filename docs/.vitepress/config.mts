@@ -257,7 +257,8 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     footer: {
-      message: "Source-available under the ctrlyoke Commercial License.",
+      message:
+        'Source-available under the <a href="https://ctrlyoke.dev/terms/">ctrlyoke Commercial License</a>. Code and configuration examples in this documentation are licensed under <a href="https://github.com/FuzzyNova/ctrlyoke/blob/main/LICENSE-MIT-0">MIT-0</a>.',
       copyright: "Copyright © Fuzzy Nova LLC",
     },
   },
