@@ -1,7 +1,15 @@
 # Community Templates Plan
 
-**Status:** Proposed — not started (no `community-templates/` directory, no
+**Status:** Proposed — not started (no `FuzzyNova/ctrlyoke-templates` repository, no
 `CommunityTemplate*` code).
+
+> **2026-11-20 decision:** community templates live in a **separate public repository,
+> `FuzzyNova/ctrlyoke-templates`, licensed MIT-0 (MIT No Attribution)**, not in a
+> `community-templates/` directory of this repo. See "Decision: a separate MIT-0 repository"
+> below. (MIT-0 was chosen over CC0 on 2026-11-21: templates contain scripts, and some
+> corporate legal policies reject CC0 for code because it withholds patent rights.) The legal
+> reasoning, and the license changes that go with it, are in
+> [`LICENSE_2.3_LAWYER_REVIEW.md`](../active/LICENSE_2.3_LAWYER_REVIEW.md).
 
 > **2026-10-10 audit:** Not started. Refreshed stale code references
 > (`TemplateManager`, `PromptFileParser`, `McpDiscoveryUtils`,
@@ -39,22 +47,37 @@ writing project-specific variants worth sharing as inspiration (a different
 harness/model split per step, interactive plan/review steps), not necessarily
 as one-size-fits-all built-ins.
 
-## Decision: PR-reviewed repo directory, not Gists or a hosted DB
+## Decision: PR-reviewed GitHub repo, not Gists or a hosted DB
 
-A `community-templates/` directory in this repo. Sharing = a PR adding one
-`.ctrlyoke.yaml` file. This reuses the existing workflow schema
-(`schemas/workflow-schema.json`) as an automatic, CI-enforced correctness gate,
-needs no new backend, and gets free moderation via normal PR review — the same
-trust model as adding a built-in template, just without requiring
-`BUILT_IN_TEMPLATE_IDS`/`manifest.json` edits gatekept to the maintainer.
+Sharing a template means opening a PR that adds one `.ctrlyoke.yaml` file. This reuses the
+workflow schema (`schemas/workflow-schema.json`) as an automatic, CI-enforced correctness
+gate. It needs no new backend, and normal PR review moderates it for free. The trust model is
+the same as for a built-in template, but without the maintainer-only
+`BUILT_IN_TEMPLATE_IDS`/`manifest.json` edits.
 
-## The repo is public
+## Decision: a separate MIT-0 repository (`FuzzyNova/ctrlyoke-templates`)
 
-`FuzzyNova/ctrlyoke` was flipped to public on 2026-10-20
-([`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 14), so public
-unauthenticated fetch (`raw.githubusercontent.com`, jsDelivr's GitHub mirror) of a
-`community-templates/` directory works with no backend. Phases 1 and 2 can both ship
-whenever they are prioritized; no separate public repo or proxy is needed.
+Templates go in their own public repository, not in a directory of `FuzzyNova/ctrlyoke`.
+The reason is licensing, not engineering:
+
+- Everything in `FuzzyNova/ctrlyoke` is under the commercial `LICENSE.md`. A template in a
+  subdirectory of it would need a path-scoped carve-out in the license, a path-scoped
+  exemption from the contributor agreement, and contributors opening PRs against a
+  commercially licensed repository.
+- In a separate repository whose only license is MIT-0, all of that disappears. GitHub's
+  Terms of Service (D.6, "inbound = outbound") license each contribution under the
+  repository's license. Contributors never touch the commercial license. Users can copy a
+  template into any tool, gist or repository without attribution. That is the point of a
+  community library.
+
+The engineering cost is small. The templates repo's CI needs the workflow schema from this
+repo (see "CI validation gate"), and the generator/validator scripts live there instead of
+in `scripts/`. Under the proposed license v2.3, `schemas/` is itself MIT-0, so the
+templates repo may fetch, cache or vendor the schema freely.
+
+The repository is created and administered by Nathan on GitHub; an agent never creates it.
+Both repositories are public, so unauthenticated fetches (`raw.githubusercontent.com`, or
+jsDelivr's GitHub mirror) work with no backend.
 
 ## Non-goals
 
@@ -69,25 +92,52 @@ whenever they are prioritized; no separate public repo or proxy is needed.
 
 ---
 
-## Phase 1 — `community-templates/` directory + CI validation
+## Phase 1 — `ctrlyoke-templates` repository + CI validation
 
-Useful even before
-any in-extension discovery UI exists: contributors can already open PRs and
-maintainers get automatic validation instead of manually eyeballing YAML.
+This is useful even before any discovery UI exists in the extension: contributors can
+already open PRs, and maintainers get automatic validation instead of reading YAML by eye.
 
-### Layout
+Phase 1 has two parts. The `_templateMeta` schema change is made in **this** repo and
+shipped in a ctrlyoke release. Everything else is done in **`FuzzyNova/ctrlyoke-templates`**.
+
+### Layout (`FuzzyNova/ctrlyoke-templates`)
 
 ```
-community-templates/
+LICENSE                                   # MIT-0, verbatim; the only license in the repo
+README.md                                 # what the library is, how to install from ctrlyoke, safety note
+CONTRIBUTING.md                           # submission guidelines; states submissions are MIT-0
+templates/
   <author-handle>-<template-slug>.ctrlyoke.yaml   # one file per template
-  README.md                                        # submission guidelines
+index.json                                # generated, never hand-edited
+scripts/
+  generate-index.mjs
+  validate-templates.mjs
+.github/
+  CODEOWNERS                              # * @nhickster
+  PULL_REQUEST_TEMPLATE.md                # checkbox: "I wrote this, or have the right to submit it, and license it under MIT-0"
+  ISSUE_TEMPLATE/report-template.yml      # report a broken or malicious template
+  workflows/validate.yml
 ```
+
+**Licensing rules for the repo:**
+
+- `LICENSE` is the MIT-0 text, unmodified apart from its copyright line:
+  `Copyright (c) 2026 Fuzzy Nova LLC and ctrlyoke-templates contributors`. Each contributor
+  keeps the copyright in their own template and licenses it under MIT-0. The README and
+  `CONTRIBUTING.md` say so.
+- Every template is MIT-0. Don't accept per-file license overrides: one license for the
+  whole library keeps "copy it anywhere" true and the index simple.
+- Nothing from `FuzzyNova/ctrlyoke` is copied into this repo except the schema fetched at CI
+  time, and that is never committed. Before seeding the library, check that the seed
+  templates contain no commercially licensed code.
+- Turn on branch protection with required code-owner review and the `validate` check,
+  matching the `main` ruleset in this repo (`scripts/apply-github-guardrails.mjs`).
 
 Filename convention `<author>-<slug>` avoids id collisions across independent
 contributors without a central registration step (built-ins don't need this —
 one maintainer, no collisions).
 
-### `_templateMeta` gets two more fields: `author` and `tags`
+### `_templateMeta` gets two more fields: `author` and `tags` (this repo)
 
 Add optional `author?: string` and `tags?: string[]` to `_templateMeta`, parsed
 alongside `name`/`description` in `TemplateManager.parseTemplateMeta`
@@ -101,56 +151,73 @@ downgrades unknown keys to warnings), followed by `npm run schema:update`. This
 is a no-bump additive schema change per `CONTRIBUTING.md`. Built-in `tags` live only in
 `manifest.json` today; `_templateMeta` has no `tags` field yet.
 
-### Generated index, not a hand-maintained manifest
+**Ordering:** this schema change must ship in a ctrlyoke release before the templates repo
+accepts templates that use `author`/`tags`, because that repo validates against the latest
+released schema (below).
 
-Unlike `src/templates/workflows/manifest.json` (hand-edited, fine for nine
-maintainer-controlled files), a community directory with many independent PRs
-would fight over one shared JSON file. Instead: a new
-`scripts/generate-community-templates-index.mjs` (same pattern as
-`scripts/generate-step-palette.mjs`) scans
-`community-templates/*.ctrlyoke.{yaml,yml,json}`, parses each file's
-`_templateMeta`, and emits `community-templates/index.json` — an array of
-`{ id, name, description, author, tags, file }`. Same shape as
-`manifest.json` so Phase 2's client code can share a type.
+### Generated index, not a hand-maintained manifest (templates repo)
 
-### CI validation gate
+`src/templates/workflows/manifest.json` is hand-edited, which is fine for nine files one
+maintainer controls. A community library with many independent PRs would fight over one
+shared JSON file. Instead, `scripts/generate-index.mjs` in the templates repo scans
+`templates/*.ctrlyoke.{yaml,yml,json}`, parses each file's `_templateMeta`, and emits
+`index.json` at the repo root. The index is an array of
+`{ id, name, description, author, tags, file }`, the same shape as `manifest.json`, so
+Phase 2's client code can share a type. The templates repo cannot import ctrlyoke's
+TypeScript, so the index format is versioned. The root object is
+`{ schemaVersion: 1, templates: [...] }`, and `CommunityTemplateService` refuses an
+unknown major version instead of guessing.
 
-New `.github/workflows/community-templates.yml`, triggered on `pull_request`
-with `paths: [community-templates/**]`:
+### CI validation gate (templates repo)
 
-1. `npm ci`.
-2. Run a new `scripts/validate-community-templates.mjs` that, for each changed
-   `.ctrlyoke.*` file, parses it and runs it through the same Ajv validation
-   `PromptFileParser.validateAndNormalize` uses against
-   `schemas/workflow-schema.json` (`src/core/PromptFileParser.ts:311`) —
-   rejects unknown top-level fields, bad `harness` enum values, malformed
-   `_templateMeta`, etc. Also reject: missing `_templateMeta.name` or
-   `description`, a filename that doesn't match
-   `<author>-<slug>.ctrlyoke.yaml`, and an id (derived from filename) already
-   claimed by a different file in `index.json`.
-3. Regenerate `community-templates/index.json` and fail if the committed copy
-   is stale (`git diff --exit-code` after running the generator) — keeps the
-   index honest without trusting contributors to run the script themselves.
-4. Optional light tripwire: flag (warn, don't hard-fail) obviously-dangerous
-   `endCondition.script`/step content (e.g. `rm -rf`, obvious exfil patterns)
-   as a PR comment — the real gate is still human review; this just calls
-   attention to it.
+`.github/workflows/validate.yml`, triggered on `pull_request` and on `push` to `main`:
 
-Add a `CODEOWNERS` line for `community-templates/` so external PRs still
-require maintainer approval to merge — the same trust boundary as any other PR
-today.
+1. Fetch the workflow schema **from ctrlyoke's latest release tag**:
+   `https://raw.githubusercontent.com/FuzzyNova/ctrlyoke/<latest v* tag>/schemas/workflow-schema.json`,
+   resolving the tag through the GitHub API (`releases/latest`). Don't use
+   `ctrlyoke.dev/schema/v1/workflow.json`: it follows this repo's `main`, which can be
+   ahead of the published release. A template that uses a field users can't run yet must
+   fail. Tag schema files referenced by `$ref` are fetched the same way.
+2. `scripts/validate-templates.mjs` parses each changed `.ctrlyoke.*` file and validates it
+   with Ajv against that schema. Keep its options in step with
+   `PromptFileParser.validateAndNormalize` (`src/core/PromptFileParser.ts:311`). It rejects
+   unknown top-level fields, bad `harness` enum values, malformed `_templateMeta`, and so
+   on. It also rejects: a missing `_templateMeta.name` or `description`; a filename that
+   doesn't match `<author>-<slug>.ctrlyoke.yaml`; and an id (derived from the filename)
+   already claimed by a different file in `index.json`.
+3. Regenerate `index.json` and fail if the committed copy is stale (`git diff --exit-code`
+   after running the generator). That keeps the index honest without trusting contributors
+   to run the script themselves.
+4. Optionally, a light tripwire: flag obviously dangerous `endCondition.script`/step content
+   (such as `rm -rf` or obvious exfiltration patterns) as a PR comment, warning rather than
+   failing. Human review is still the real gate; this just draws attention to it.
+5. A scheduled weekly run of the same validation against the newest release tag. It catches
+   templates that a ctrlyoke schema bump made invalid, and the fix is a migration PR in the
+   templates repo.
+
+`CODEOWNERS` (`* @nhickster`) and branch protection make every external PR need maintainer
+approval, the same trust boundary as this repo.
+
+### Changes in this repo besides the schema
+
+- Add a `DOCS_URLS`/constant entry for the templates repo URLs (index, per-file raw URL,
+  GitHub "view source" URL, report-issue URL). Phase 2 is the only consumer; keep the URLs
+  single-sourced in `DashboardConstants.ts`.
+- Add a docs page (or a section of the templates guide) on sharing a template: open a PR
+  against `FuzzyNova/ctrlyoke-templates`; submissions are MIT-0.
 
 ---
 
 ## Phase 2 — Discovery & Import
 
-The repo is public, so this phase has no external blocker. It depends only on
-Phase 1 producing `community-templates/index.json`.
+This phase depends only on Phase 1 having produced `index.json` in
+`FuzzyNova/ctrlyoke-templates`.
 
 ### Fetch source
 
 Serve `index.json` and each template file from jsDelivr's GitHub mirror
-(`https://cdn.jsdelivr.net/gh/FuzzyNova/ctrlyoke@main/community-templates/...`)
+(`https://cdn.jsdelivr.net/gh/FuzzyNova/ctrlyoke-templates@main/index.json` and
+`.../templates/<file>`)
 rather than `api.github.com` — the same reasoning
 `McpDiscoveryUtils.fetchMcpRegistry` (`src/utils/McpDiscoveryUtils.ts:1119`)
 gives for hitting a purpose-built endpoint directly: no auth, no per-IP rate
@@ -240,6 +307,9 @@ Templates tab → Discover page
         exists in the target scope
       — "View source" link to the GitHub file (opens externally, never
         fetched into the webview)
+      — a one-line notice above the list: community templates are written by
+        third parties, can run commands, and should be reviewed before running
+        (matches the proposed license Section 5(e) disclaimer)
       — after install: "Set defaults" link → Defaults page, with the new
         template's card added
 ```
@@ -258,7 +328,7 @@ from the drawer's active scope.
 
 ## Seed templates
 
-Templates to have in `community-templates/` when Phase 1 ships, so the gallery
+Templates to have in `ctrlyoke-templates` when Phase 1 ships, so the gallery
 isn't empty on day one and contributors have real examples to copy. These are
 ideas that were deliberately kept out of the built-ins to keep that set lean.
 
@@ -275,6 +345,10 @@ ideas that were deliberately kept out of the built-ins to keep that set lean.
 
 - **Repo-hosted, PR-reviewed sharing**, not Gists or a hosted DB — reuses
   schema validation as the safety gate, no new backend for Phase 1.
+- **A separate MIT-0 repository (`FuzzyNova/ctrlyoke-templates`)**, not a directory of
+  this repo (2026-11-20). It keeps the community library out of the commercial license
+  entirely, so no path-scoped license carve-out or CLA exemption is needed. Its CI
+  validates against the schema of the latest ctrlyoke release tag.
 - **Generated `index.json`, not a hand-edited manifest** — avoids merge
   conflicts across independent community PRs; the built-ins' hand-maintained
   `manifest.json` stays as-is (low churn, single maintainer).
@@ -308,9 +382,8 @@ ideas that were deliberately kept out of the built-ins to keep that set lean.
 ## Verification
 
 `npm run typecheck`, `npm run lint`, `npm test` for Phase 2's new
-store/component/service. Phase 1's CI workflow is its own verification (a
-deliberately-broken test PR against `community-templates/` should fail the
-new workflow). Manual check for Phase 2: install a template from the index
+store/component/service. Phase 1's CI workflow is its own verification: a deliberately
+broken test PR against `FuzzyNova/ctrlyoke-templates` should fail `validate.yml`. Manual check for Phase 2: install a template from the index
 into both Workspace and User scope, confirm it appears in the New Workflow
 template picker (`TemplateManager.discoverCustomTemplates`) immediately
 without a reload.
