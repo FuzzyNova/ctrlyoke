@@ -95,6 +95,18 @@ export function legalVersionHistory(id: LegalDocumentId): LegalVersion[] {
     .reverse();
 }
 
+/** A document's current version (the build check guarantees it is the root file's). */
+export function currentLegalVersion(id: LegalDocumentId): LegalVersion {
+  return legalVersionHistory(id)[0];
+}
+
+/** `eula@2.3; privacy@1.7`: the accepted-versions record checkout sends to Lemon Squeezy. */
+export function acceptedVersionsRecord(
+  ids: readonly LegalDocumentId[]
+): string {
+  return ids.map((id) => `${id}@${currentLegalVersion(id).version}`).join("; ");
+}
+
 export interface ArchivedLegalPageProps {
   title: string;
   currentUrl: string;

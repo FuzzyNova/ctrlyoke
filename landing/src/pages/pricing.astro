@@ -2,7 +2,19 @@
 import Layout from "../layouts/Layout.astro";
 import Cta from "../components/Cta.astro";
 import LemonCheckout from "../components/LemonCheckout.astro";
-import { MARKETPLACE_URL, CHECKOUT_URL, ENTERPRISE_CHECKOUT_PATH, LS_OVERLAY_CLASS } from "../config";
+import { MARKETPLACE_URL, CHECKOUT_URL, ENTERPRISE_CHECKOUT_PATH, LAUNCHED } from "../config";
+import {
+  CHECKOUT_TERMS_FIELD,
+  PRO_ACCEPTANCE_METHOD,
+} from "../../../src/license/LemonSqueezyConstants";
+import { acceptedVersionsRecord, currentLegalVersion } from "../legal/archive";
+
+// The Pro buyer accepts the EULA here, before the Lemon Squeezy handoff, and
+// the order records which versions (counsel memo Q10: Lemon Squeezy's form
+// shows only its own Buyer Terms).
+const eula = currentLegalVersion("eula");
+const privacy = currentLegalVersion("privacy");
+const proAcceptedVersions = acceptedVersionsRecord(["eula", "privacy"]);
 
 const freeTier = [
   "Works with all 6 supported CLIs: Copilot, Claude Code, Codex, OpenCode, Qwen, Antigravity (installed separately)",
@@ -134,13 +146,40 @@ const faq = [
           <span class="mb-1 text-slate-400">one-time</span>
         </div>
         <p class="mb-6 text-sm text-slate-400">One payment. The license never expires.</p>
-        <Cta
-          href={CHECKOUT_URL}
-          class={`${LS_OVERLAY_CLASS} mb-8 block rounded-lg bg-sky-400 py-3 text-center font-semibold text-brand-950 hover:bg-sky-300 transition-colors`}
-          comingSoonLabel="Coming soon — $59"
-        >
-          Buy Pro — $59
-        </Cta>
+        {
+          LAUNCHED ? (
+            <form action={CHECKOUT_URL} method="get" class="mb-8" data-pro-checkout>
+              <label class="mb-3 flex items-start gap-2.5 text-left text-xs leading-relaxed text-slate-400">
+                <input type="checkbox" required class="mt-0.5 h-4 w-4 shrink-0 accent-sky-400" />
+                <span>
+                  I accept the{" "}
+                  <a href={eula.url} target="_blank" rel="noopener" class="text-sky-400 underline hover:text-sky-300">
+                    ctrlyoke Commercial License (EULA) {eula.version}
+                  </a>{" "}
+                  and acknowledge the{" "}
+                  <a href={privacy.url} target="_blank" rel="noopener" class="text-sky-400 underline hover:text-sky-300">
+                    Privacy Policy {privacy.version}
+                  </a>
+                  .
+                </span>
+              </label>
+              <button
+                type="submit"
+                class="block w-full rounded-lg bg-sky-400 py-3 text-center font-semibold text-brand-950 hover:bg-sky-300 transition-colors"
+              >
+                Buy Pro — $59
+              </button>
+            </form>
+          ) : (
+            <Cta
+              href={CHECKOUT_URL}
+              class="mb-8 block rounded-lg bg-sky-400 py-3 text-center font-semibold text-brand-950"
+              comingSoonLabel="Coming soon — $59"
+            >
+              Buy Pro — $59
+            </Cta>
+          )
+        }
         <p class="mb-6 text-center text-xs text-slate-500">
           14-day free trial of the browser dashboard on other devices included — no card required to start.
           <br />30-day money-back guarantee.
@@ -254,3 +293,28 @@ const faq = [
 
   <LemonCheckout />
 </Layout>
+
+<script
+  define:vars={{
+    field: CHECKOUT_TERMS_FIELD,
+    acceptedVersions: proAcceptedVersions,
+    acceptanceMethod: PRO_ACCEPTANCE_METHOD,
+  }}
+>
+  // The form's own GET submit is the no-JavaScript fallback: the browser still
+  // requires the checkbox, but nothing is recorded on the order.
+  const form = document.querySelector("[data-pro-checkout]");
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const url = new URL(form.action);
+    const custom = {
+      [field.ACCEPTED_AT]: new Date().toISOString(),
+      [field.ACCEPTED_VERSIONS]: acceptedVersions,
+      [field.ACCEPTANCE_METHOD]: acceptanceMethod,
+    };
+    for (const [key, value] of Object.entries(custom)) {
+      url.searchParams.set(`checkout[custom][${key}]`, value);
+    }
+    window.openLemonCheckout(url.toString());
+  });
+</script>

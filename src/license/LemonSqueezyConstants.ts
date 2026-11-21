@@ -55,6 +55,17 @@ export const ENTERPRISE_CHECKOUT_FIELD = {
   ACCEPTANCE_METHOD: "terms_acceptance_method",
 } as const;
 
+/**
+ * The terms-acceptance subset of the checkout custom data, which the Pro
+ * checkout on ctrlyoke.dev/pricing records too, so a Pro order also shows
+ * which EULA and Privacy Policy versions the buyer accepted.
+ */
+export const CHECKOUT_TERMS_FIELD = {
+  ACCEPTED_AT: ENTERPRISE_CHECKOUT_FIELD.ACCEPTED_AT,
+  ACCEPTED_VERSIONS: ENTERPRISE_CHECKOUT_FIELD.ACCEPTED_VERSIONS,
+  ACCEPTANCE_METHOD: ENTERPRISE_CHECKOUT_FIELD.ACCEPTANCE_METHOD,
+} as const;
+
 /** Fields the webhook requires before it treats an Enterprise order as having a complete acceptance record. */
 export const ENTERPRISE_CHECKOUT_REQUIRED_FIELDS = [
   ENTERPRISE_CHECKOUT_FIELD.LEGAL_NAME,
@@ -68,6 +79,8 @@ export const ENTERPRISE_CHECKOUT_REQUIRED_FIELDS = [
 
 export const ENTERPRISE_ACCEPTANCE_METHOD =
   "checkbox+checkout:ctrlyoke.dev/enterprise/checkout";
+
+export const PRO_ACCEPTANCE_METHOD = "checkbox+checkout:ctrlyoke.dev/pricing";
 
 /** Days of advance notice ENTERPRISE_TERMS.md §4(b) promises before each annual renewal. */
 export const ENTERPRISE_RENEWAL_NOTICE_DAYS = 30;
