@@ -4,16 +4,18 @@
 **first pass counsel reviewed and made recommendations on behalf of Fuzzy Nova LLC · November 21, 2026**
 
 [Open the complete v2.3 license draft](LICENSE_2.3_DRAFT.md) ·
+[Round 2 recommendations](#round-2-recommendations-for-counsel) ·
 [Companion contribution text](#companion-contribution-text-for-approval) ·
 [Publication checklist](#publication-checklist) ·
 [Product and checkout checks](#product-and-checkout-readiness) ·
 [Research and citations](#research-answers-for-counsel)
 
-**Requested response.** Approve the v2.3 draft and companion contribution text as written,
-or identify the row or clause you would change and give the replacement wording. The
-recommendations below resolve the original policy questions. The publication checklist
-lists the release work to close after legal review. v2.2 remains the published version until
-adoption.
+**Requested response.** Confirm R1–R4 below and approve the v2.3 draft and companion
+contribution text. If you recommend a change, please identify the clause and give replacement
+wording. The publication checklist lists the release work to close after legal review. v2.2
+remains the published version until adoption. The [research answers](#research-answers-for-counsel)
+address Q1–Q10, including the lettered questions. The collapsed appendix preserves the original
+proposals and questions for reference.
 
 **Fuzzy Nova's launch facts.** ctrlyoke has had no public marketing or sales. Fuzzy Nova
 reports that the Marketplace and npm downloads were its own and that there are no known
@@ -34,43 +36,141 @@ class litigation and has chosen court-based dispute resolution.
 | Liability                                 | Keep the greater of 12 months' fees or $100 and count authorized reseller payments. Exempt fraud, willful misconduct, gross negligence, and negligent death or personal injury from the disclaimer and cap. Preserve other non-waivable remedies and fee allocations.                                                                                                                                                                         | §§12–13. [Q9](#q9-liability-cap-and-mandatory-remedies)                                                                                                                                            |
 | Adoption and effective date               | Publish the approved v2.3 text and apply it prospectively through the ordinary channels. Keep the v2.2 text in version history. On the confirmed launch facts, there is no outside user or customer migration. Keep the existing versioned Enterprise acceptance for new orders.                                                                                                                                                              | §§0, 16(e). [Q10](#q10-adoption-and-earlier-versions)                                                                                                                                              |
 
-## Round 2: Fuzzy Nova's changes and questions
+## Round 2 recommendations for counsel
 
-**Confirmed: courts, not arbitration.** Fuzzy Nova accepts the court-based model in §§16(b)
-and 16(g). A compulsory consumer arbitration clause would need AAA Consumer Clause Registry
-review and an annual registry fee, which is out of proportion for a business with no outside
-customers and minimal telemetry. Fuzzy Nova will revisit dispute resolution in a later version
-if the facts change: for example, a material number of paying customers, broader data
-collection, or a first demand letter. Any change would apply only prospectively under §16(e).
+**Fuzzy Nova chose courts by default.** Fuzzy Nova accepts the class-litigation exposure of
+the court-based model in §§16(b) and 16(g). For an AAA-administered consumer arbitration
+clause, Rule R-12 provides for clause review, a review fee, and an annual registry fee. That
+expense and administration are disproportionate on the stated launch facts of no outside
+customers and minimal telemetry. Revisit if the business gains a material number of paying
+customers, expands data collection, or receives its first demand letter. Apply any later
+revision prospectively under §16(e).
+[AAA Consumer Arbitration Rules, R-12](https://www.adr.org/media/yawntdvs/2025_consumer_arbitration_rules.pdf).
 
-**R1. New §12 paragraph: AI tools and automated actions (added to the draft).** ctrlyoke's core
-function is directing AI agents that run commands and change files. The most foreseeable claim
-is "a workflow deleted my work." v2.2 and the first-pass draft say nothing specific about that
-risk. The new paragraph after the warranty disclaimer states what the tools can do, that the
-user chooses their permissions, and that the user is responsible for review and backups.
-Please approve, revise, or move it (for example, into §4(f) or a separate section).
+### R1. AI tools and automated actions in §12
 
-**R2. Gross-negligence exception in §13.** The draft exempts gross negligence from both the
-disclaimer and the cap. Given R1, a plaintiff whose files were deleted by an agent would plead
-gross negligence to escape the cap. Is this exception required under Texas law for this form
-(for example, because a pre-injury waiver of gross negligence would be unenforceable or would
-undermine the rest of §13), or is it a drafting preference? If it is not required, would you
-narrow it to "to the extent applicable law does not permit it to be limited"? If it is
-required, does R1 adequately support the argument that ordinary agent behavior within the
-permissions a user granted is not gross negligence by Licensor?
+**Recommendation.** Keep the new paragraph in §12 next to the warranty disclaimer. It
+describes the risk of lost work, including files outside version control, and assigns workflow
+review, permission configuration, and backup responsibilities to the user. The draft accounts
+for defaults and inherited permissions as well as express approvals. ctrlyoke directs the
+tools and executes workflow scripts, and third-party AI tools may choose actions automatically.
+[Workflow permissions](../../docs/workflows/permissions.md),
+[Script steps](../../docs/workflows/script-steps.md).
 
-**R3. Venue precision in §16(b).** "State or federal courts located in Austin, Texas" could be
-read to include courts sitting in Austin for other counties, or the Texas Business Court's
-Austin division. Would "the state courts of Travis County, Texas, or the United States
-District Court for the Western District of Texas, Austin Division" be clearer? Or is the
-broader wording intentional?
+**Effect of the warning.** Evidence that the user received it can support notice. The actual
+permissions, workflow actions, and available backups bear on who caused the deletion and how
+much loss followed. For claims subject to Texas Chapter 33, allocation of responsibility
+depends on conduct that caused or contributed to the harm. The warning itself sets no
+allocation. §13 governs the monetary limits and exceptions.
+[Texas Civil Practice & Remedies Code §§33.002–33.003](https://tcss.legis.texas.gov/resources/CP/htm/CP.33.htm).
 
-**R4. Jury waiver for Enterprise only (optional).** The draft leaves jury procedure to the
-court's rules for everyone. For negotiated Enterprise orders between businesses, would you
-recommend a conspicuous jury waiver in Enterprise Terms §12? Texas enforces conspicuous,
-knowing and voluntary contractual jury waivers (*In re Prudential Ins. Co. of America*,
-148 S.W.3d 124 (Tex. 2004)). Fuzzy Nova has no strong preference and will follow your
-recommendation, including leaving it out.
+**For counsel to confirm.** Approve the risk disclosure and its placement in §12.
+
+### R2. Gross negligence and the §13 cap
+
+**Recommendation.** Keep the express gross-negligence exception to both §§12 and 13 in the
+standard license. Keep the greater of twelve months' fees or $100. The draft now makes the
+damages exclusion and cap expressly applicable to ordinary negligence and claims arising from
+use of the Software, subject to the exceptions and mandatory law.
+
+**Texas authority.** In _Zachry_, the Texas Supreme Court refused to enforce a prospective
+exclusion of delay damages for deliberate, wrongful interference and cited Texas public policy
+against pre-injury waivers of gross negligence. The case involved a provision that eliminated
+the relevant damages, and the court did not decide whether a meaningful compensatory cap may
+apply to proven gross negligence. The Dallas Court of Appeals upheld a $350 alarm-monitoring
+cap against a public-policy challenge that invoked allegations of gross negligence. The
+customer had the option to buy greater protection, and the court applied the cap to negligence
+and contract claims and preserved certain DTPA claims. _Bombardier_ upheld a negotiated
+exemplary-damages waiver for fraud between sophisticated parties that preserved actual damages.
+These decisions leave enforceability of this standard software form's cap for proven gross
+negligence unresolved. A $100 cap for free or low-fee users could leave very little remedy for
+the loss of a project. The express exception reduces the risk of a challenge to the limitation
+without conceding that gross negligence occurred.
+[_Zachry Construction Corp. v. Port of Houston Authority_, 449 S.W.3d 98, 116–18 (Tex. 2014)](https://dev-search.txcourts.gov/SearchMedia.aspx?DT=OPINION&MediaID=47793855-609b-433a-8073-624295a31f1b&MediaVersionID=f3f9e0a5-d4dd-481b-9991-a759dd2101d6&coa=cossup),
+[_Arthur's Garage, Inc. v. Racal-Chubb Security Systems, Inc._, 997 S.W.2d 803, 809–13 (Tex. App.—Dallas 1999)](https://syfert.com/texas/cases/997-s-w-2d-803/arthurs-garage-inc-v-racal-chubb-security-systems-inc),
+[_Bombardier Aerospace Corp. v. SPEP Aircraft Holdings, LLC_, 572 S.W.3d 213, 230–34 (Tex. 2019)](https://www.txcourts.gov/media/1443450/170578.pdf).
+
+**Application to deleted files.** Texas's Chapter 41 standard looks for an objectively
+extreme risk and actual awareness coupled with conscious indifference. A cap exception can
+prompt a gross-negligence allegation. An unexpected deletion within the tool's available
+permissions, standing alone, does not establish those elements as to Fuzzy Nova. Evidence
+that Fuzzy Nova knew a defect could bypass a sandbox and consciously disregarded the risk
+could change the analysis. The warning helps document the disclosed risk and the user's role.
+The claim still turns on the facts, including duty and causation. The economic-loss analysis
+also depends on whether the alleged duty exists independently of the contract and whether
+the harm extends beyond the subject of the contract. Chapter 41 requires clear and convincing
+proof of gross negligence to award exemplary damages on that basis.
+[Texas Civil Practice & Remedies Code §§41.001(11), 41.003](https://tcss.legis.texas.gov/resources/CP/pdf/CP.41.pdf),
+[_Sharyland Water Supply Corp. v. City of Alton_, 354 S.W.3d 407, 415–20 (Tex. 2011)](https://law.justia.com/cases/texas/supreme-court/2011/09-0223-65.html).
+
+**Direct loss and severability.** Texas classifies contract damages based on how the loss
+follows from the breach. Reasonable costs of restoring or reconstructing deleted files may
+be direct if they are a natural and necessary result of the breach at issue and otherwise
+recoverable. Profits lost on a separate downstream project may be consequential. The phrase
+“including such damages” ties §13's examples to the listed categories, so the exclusion
+does not independently exclude direct loss just because it involves data. Otherwise
+recoverable direct loss is capped, subject to §13's exceptions. If one limit fails,
+§16(c) supports preserving the other as a distinct provision. Texas severance still depends
+on whether the remaining agreement can function and whether the invalid term was essential
+to the bargain. Where Article 2 applies, §2.719 separately addresses failure of an exclusive
+or limited remedy's essential purpose and unconscionable consequential-damages exclusions.
+[_Dallas/Fort Worth International Airport Board v. Vizant Technologies_, 576 S.W.3d 362, 373 (Tex. 2019)](https://www.txcourts.gov/media/1444083/180059.pdf),
+[_Signature Industrial Services v. International Paper_, 638 S.W.3d 179, 186–87 (Tex. 2022)](https://www.txcourts.gov/media/1453476/200396.pdf),
+[_Venture Cotton Cooperative v. Freeman_, 435 S.W.3d 222, 230–31 (Tex. 2014)](https://dev-search.txcourts.gov/SearchMedia.aspx?DT=OPINION&MediaID=d4a94d95-5448-4bc4-8f14-15625a4a789a&MediaVersionID=cebda089-5041-4736-9726-236a626370e8&coa=cossup),
+[Texas Business & Commerce Code §2.719](https://tcss.legis.texas.gov/resources/BC/htm/BC.2.htm#2.719).
+
+**For counsel to confirm.** Approve the express exception and separate limits for the standard
+form. A signed Enterprise order that needs a negotiated cap for gross negligence could
+expressly override §13's cap exception for compensatory damages only and preserve the other
+exceptions. Possible wording is “The aggregate cap for compensatory damages caused by gross
+negligence is [negotiated amount], solely to the extent applicable law permits that cap.”
+
+### R3. Venue in §16(b)
+
+**Recommendation.** Use the revised §16(b). It selects Texas as the forum and separately
+names the Texas state district courts and county courts at law in Travis County and the U.S.
+District Court for the Western District of Texas, Austin Division, for venue. The existing
+small-claims, consumer, and mandatory-law exceptions apply. If applicable law prevents
+enforcing the choice of venue, ordinary venue rules apply within the Texas forum.
+[Travis County civil district courts](https://www.traviscountytx.gov/courts/civil/district),
+[28 U.S.C. §124(d)(1)](https://uscode.house.gov/us/usc/119-118/t28/s124/).
+
+**Texas venue and removal.** In _Dr. Mylissa's Medical Boutique_, a Texas appellate court
+enforced the Texas forum selection while declining to enforce the Travis County venue term
+in a similar clause for a transaction outside §15.020. That statute generally requires a
+written transaction with at least $1 million in stated consideration and excludes personal,
+family, and household transactions. In _South Shore ER_, the Texas Business Court applied
+the county-venue rule and also reasoned that county selection alone would not prevent
+Business Court removal. Chapter 25A expressly covers certain disputes relating to software
+licensing or performance where the amount in controversy exceeds $5 million, subject to
+its calculation rules and exceptions. That route can apply without a separate forum agreement.
+Leave Business Court removal to statute in the standard form. An order that expressly changes
+the forum or available removal deserves deal-specific review.
+[_Dr. Mylissa's Medical Boutique LLC v. Balboa Capital Corp._, No. 02-25-00271-CV, 2025 WL 3119021, at *6 (Tex. App.—Fort Worth Nov. 6, 2025)](https://law.justia.com/cases/texas/second-court-of-appeals/2025/02-25-00271-cv.html),
+[_In re Texas Association of School Boards, Inc._, 169 S.W.3d 653, 660 (Tex. 2005)](https://law.justia.com/cases/texas/supreme-court/2005/2000598.html),
+[_South Shore ER, LLC v. Bashiri_, 2026 Tex. Bus. 39, ¶¶25–43 (Tex. Bus. Ct. June 11, 2026)](https://www.txcourts.gov/media/1462877/26-bc11a-0039-south-shore-er-v-bashiri-2026-tex-bus-39.pdf),
+[Texas Civil Practice & Remedies Code §15.020](https://tcss.legis.texas.gov/resources/CP/htm/CP.15.htm),
+[Texas Government Code §§25A.004, 25A.006](https://tcss.legis.texas.gov/resources/GV/htm/GV.25A.htm).
+
+**For counsel to confirm.** Approve the Texas forum and venue language with statutory removal
+available where applicable.
+
+### R4. Optional Enterprise jury waiver
+
+**Recommendation.** Leave a jury waiver out of the standard license and standard Enterprise
+Terms. If a specific negotiated business order warrants one, put a mutual waiver under a
+separate bold heading near the signatures and record both parties' assent. Texas recognizes
+knowing and voluntary contractual jury waivers, and a conspicuous clause is prima facie
+evidence of knowing and voluntary assent. The Fifth Circuit also considers the circumstances,
+including bargaining power, sophistication, an opportunity to negotiate, and placement. A
+jury waiver changes who tries the case. Class certification remains a separate question.
+[_In re Prudential Insurance Co. of America_, 148 S.W.3d 124, 132–34 (Tex. 2004)](https://law.justia.com/cases/texas/supreme-court/2004/2000462.html),
+[_In re Bank of America, N.A._, 278 S.W.3d 342, 344–46 (Tex. 2009)](https://law.justia.com/cases/texas/supreme-court/2009/2001339.html),
+[_Pizza Hut, L.L.C. v. Pandya_, 79 F.4th 535, 540–45 (5th Cir. 2023)](https://www.ca5.uscourts.gov/opinions/pub/22/22-40555-CV0.pdf).
+
+**For counsel to confirm.** Fuzzy Nova has no strong preference. Approve the standard terms
+with jury procedure governed by court rules. Address any waiver and record of assent in the
+specific negotiated order where it would be used.
 
 ## Companion contribution text for approval
 
@@ -128,7 +228,7 @@ permission for submissions made elsewhere.
    published as adopted. Update root `LICENSE.md` and the
    [website summary](../../landing/src/legal/license-summary.md) together. The
    [terms page](../../landing/src/pages/terms.astro) imports the root license and rejects a
-   summary for a different version. Preserve the exact v2.2 text in version history and
+   summary for a different version. Preserve the exact earlier terms in version history and
    record the change under **Changed** in [CHANGELOG.md](../../CHANGELOG.md). The disclosed
    launch facts call for ordinary publication and distribution. AAA registration, customer
    notification, re-acceptance, and opt-out migration are outside this release.
@@ -136,7 +236,9 @@ permission for submissions made elsewhere.
    use the companion wording below. Update [Privacy Policy §8](../../PRIVACY.md#8-data-retention)
    using the replacement retention entry below. Publish the updated documents with versioned
    checkout links and confirm the bundle records the applicable EULA and Enterprise Terms
-   versions. Publish the court-based wording in the plain-language summary.
+   versions. Add conspicuous EULA notice at the Individual Pro purchase entry point as described
+   in [Q10](#q10-adoption-and-earlier-versions). Publish the court-based wording in the
+   plain-language summary.
 3. **Confirm rights and package MIT-0.** Check historical provenance and publish the dated
    earlier-copy permission for the cleared materials. Publish `LICENSE-MIT-0` with
    `Copyright (c) 2026 Fuzzy Nova LLC` and add scope notices. The
@@ -147,8 +249,9 @@ permission for submissions made elsewhere.
 4. **Verify the product matches the terms.** Test local WSL2, container, and VM dashboard
    access and second-device forwarding. Before enabling community import, verify the
    publisher and write-path disclosures, explicit import, separate execution, removal
-   process, and privacy notice against actual behavior. Evaluate §512 for Fuzzy Nova's
-   role once the catalog architecture is known. Check current sales and distribution
+   process, and privacy notice against actual behavior. Apply the catalog guidance in
+   [Q2](#q2-community-library-coverage-and-installation-exposure) and
+   [Q6](#q6-separate-mit-0-contribution-intake-and-removal). Check sales and distribution
    jurisdictions for independently applicable mandatory terms.
 
 ### Companion wording for publication
@@ -165,12 +268,13 @@ permission for submissions made elsewhere.
 
 **Website summary, Disputes**
 
-> Texas law governs the license. The usual venue is state or federal court in Austin,
-> Texas. Eligible small claims can be brought in a small-claims court with jurisdiction.
-> Consumers keep their mandatory protections and forum rights. Consumers who usually live
-> outside the United States can also use the courts where they usually live for disputes
-> about personal or household use. After a dispute arises, both sides can agree in writing
-> to mediation or arbitration.
+> Texas law governs the license. The ordinary forum is Texas. The license designates
+> state district courts and county courts at law in Travis County and the federal district
+> court's Austin Division, subject to applicable venue rules. Eligible small claims can be
+> brought in a small-claims court with jurisdiction. Consumers keep their mandatory protections
+> and forum rights. Consumers who usually live outside the United States can also use the
+> courts where they usually live for disputes about personal or household use. After a dispute
+> arises, both sides can agree in writing to mediation or arbitration.
 
 ## Product and checkout readiness
 
@@ -190,8 +294,9 @@ classifies as local.
 - **Checkout and distribution.** The existing first-party Enterprise form already links
   the full terms and records the signer's action and document versions. Keep that form for
   future orders. v2.3 requires no separate dispute-resolution choice, arbitration record,
-  or arbitration-specific install or activation step. Individual Pro can continue to link
-  to Lemon Squeezy. Publish the applicable version and ordinary license notice for the
+  or arbitration-specific install or activation step. Individual Pro can continue through
+  Lemon Squeezy with the first-party license notice described in [Q10](#q10-adoption-and-earlier-versions).
+  Publish the applicable version and ordinary license notice for the
   Marketplace, npm, CLI, MCP, and source channels. Run one test-mode Enterprise order
   after updating the legal documents and verify the linked text and versions that reach
   the order. The local smoke test verified the handoff up to Lemon Squeezy.
@@ -271,17 +376,22 @@ expectations. It cannot eliminate claims based on Fuzzy Nova's own conduct, misl
 about review or safety, a faulty installer, or non-waivable consumer rights. Keep the product
 interface accurate about who supplied a template, what installation writes, and when things
 execute. In particular, inspect the planned integration for automatic execution, path writes,
-and import behavior before representing that templates are safe or reviewed. Determine whether
-fetching directly from GitHub passes user information to GitHub and whether the Privacy Policy
-needs updating before launch. The feature and repository are described as proposed in the
-[community templates plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md).
+and import behavior before representing that templates are safe or reviewed. The plan specifies
+unauthenticated requests from the ctrlyoke process to jsDelivr's GitHub mirror for the index and
+selected files. jsDelivr says it may collect source IP, requested CDN URLs, and other request
+metadata. Those URLs can identify a selected public template. Add this data flow to the privacy
+notice before enabling the feature and confirm the actual recipient and metadata after
+implementation. Disclose GitHub separately if the implementation contacts GitHub directly.
+The repository's public GitHub API endpoint returned 404 during this review, so this analysis
+uses the planned design.
+[Community templates plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md),
+[jsDelivr Privacy Policy, §§2 and 9](https://github.com/jsdelivr/jsdelivr/blob/master/Privacy%20Policy.md).
 
 **Recommendation.** Approve §5(e)'s disclaimer and retain mandatory consumer guarantees. In
 the import flow identify the publisher, state where files will be written, require an explicit
-import action, and keep execution separate. Make no safety or review promise beyond what the
-product actually verifies. Keep the library outside the release bundle. Where applicable,
-update the privacy notice for GitHub requests before enabling import. The EU digital content
-regime is one reason mandatory consumer protections belong in the draft.
+import action, and keep execution separate. Describe the checks the product actually performs.
+Keep the library outside the release bundle. The EU digital content regime is one reason
+mandatory consumer protections belong in the draft.
 [Directive (EU) 2019/770, arts. 3, 8, 14 and 22](https://eur-lex.europa.eu/eli/dir/2019/770/oj),
 [FTC Avast complaint and order, illustrating exposure from software privacy representations](https://www.ftc.gov/system/files/ftc_gov/pdf/202_3033_-_avast_final_consent_package.pdf).
 
@@ -300,6 +410,15 @@ specific past-sharing dispute separately and omit any historical material that F
 lacks authority to relicense.
 [17 U.S.C. §§101 and 106](https://copyright.gov/title17/92chap1.html),
 [17 U.S.C. §204](https://uscode.house.gov/us/usc/t17/s204/).
+
+**Repository evidence.** All 12 local release tags reachable from the current branch contain
+`src/templates/`, `schemas/`, and `docs/`. The copies at `v0.1.1` and `v0.1.2` carry
+license v2.1. The ten tags from `v0.2.0` through `v0.8.0` carry v2.2. A Git history pass over
+those paths across the current branch and tags found one author email under two display names.
+That is an authorship lead. Final clearance still depends on the origin of copied examples and
+any rights held by the individual author that Fuzzy Nova needs authority to license. Confirm
+the covered files and distributed tags before posting the notice, including any distributed
+v2.1 copies.
 
 ### Q3. Your Content and AI output
 
@@ -398,12 +517,18 @@ through the product independently of GitHub's removal process. Triage copyright,
 content, secrets, and other reports, preserve the submission record, and consider warning users
 if an installed version presents a credible risk. Removing a template from the catalog does
 not remove old copies or itself cancel permission previously granted for legitimate copies.
-**Recommendation.** Launch with a public reporting contact and a documented way to delist or
-block an imported template. Use GitHub's process for material it hosts. Assume Fuzzy Nova has
-no independent §512 safe harbor for planning purposes. Once the catalog architecture is
-settled, assess whether §512(c) or (d) applies to Fuzzy Nova and complete the applicable steps
-before relying on it, including a designated agent where required, notice and counter-notice,
-repeat-infringer procedures, and responding to actual knowledge.
+**Recommendation.** Use GitHub's process for material it hosts and give users a public
+reporting contact for the software catalog. The plan calls for a maintainer-reviewed GitHub
+repository with a generated index and direct requests from the ctrlyoke process to jsDelivr.
+Section 512(d) is the closer statutory fit for the catalog's directory and links. Section
+512(c) concerns storage at a user's direction on a system operated or controlled by or for the
+provider. Whether either protects Fuzzy Nova depends on its role in curating and delivering the
+templates and its compliance with the applicable conditions. Continue planning without an
+independent safe harbor. Delist the entry and account for stale index or file caches so the
+software can stop offering a reported template promptly. Section 512 addresses copyright
+claims. Harm caused by executing a template remains governed by the applicable liability rules.
+[Community templates plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md),
+[17 U.S.C. §512(c), (d) and (i)](https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap5-sec512.htm),
 [U.S. Copyright Office, §512 safe harbors](https://www.copyright.gov/512/),
 [GitHub DMCA Takedown Policy](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy).
 
@@ -456,16 +581,22 @@ establish license eligibility. Employment and tax status depend on separate rule
 
 ### Q8. Court proceedings and voluntary resolution
 
-**Recommendation.** Adopt the court-based text in §§16(b) and (g). Keep Texas governing law and
-Austin as the ordinary venue, preserve eligible small claims and non-waivable consumer
-protections, and allow consumers usually resident outside the U.S. to use their home courts.
+**Recommendation.** Adopt the court-based text in §§16(b) and (g). Keep Texas governing law,
+the Texas forum, and the venue language in [R3](#r3-venue-in-16b). Preserve eligible small
+claims and non-waivable consumer protections, and allow consumers usually resident outside
+the U.S. to use their home courts.
 Either party may propose informal resolution. The parties can agree in writing to mediation
 or arbitration after a dispute arises. The license imposes no waiting period to file suit.
+Statutory rules still apply. For example, the Texas DTPA generally requires 60 days' written
+notice before filing a damages suit, with exceptions for certain limitations deadlines and
+counterclaims. A party may also seek court-ordered mediation under that statute.
+[Texas Business & Commerce Code §§17.505–17.5051](https://tcss.legis.texas.gov/resources/BC/htm/BC.17.htm#17.505).
 
 Fuzzy Nova accepts that a claimant can seek class treatment where applicable law permits it.
-The court decides certification under the applicable rules. The draft has no advance class
-or jury waiver. This gives up the class-waiver protection that accompanies valid individual
-arbitration and avoids maintaining a compulsory arbitration process for claims under v2.3.
+The court decides certification under the applicable rules. [R4](#r4-optional-enterprise-jury-waiver)
+addresses jury waivers for negotiated Enterprise orders. The court-based model gives up the
+class-waiver protection that accompanies valid individual arbitration and avoids maintaining a
+compulsory arbitration process for claims under v2.3.
 [_AT&T Mobility v. Concepcion_, 563 U.S. 333 (2011)](https://www.govinfo.gov/app/details/USREPORTS-563/USREPORTS-563-333),
 [Federal Rules of Civil Procedure, Rule 23](https://www.uscourts.gov/forms-rules/current-rules-practice-procedure/federal-rules-civil-procedure),
 [_Atlantic Marine Construction v. U.S. District Court_, 571 U.S. 49 (2013)](https://www.govinfo.gov/app/details/USREPORTS-571/USREPORTS-571-49),
@@ -503,10 +634,24 @@ applicability depends on the particular software transaction.
 **Recommendation.** Keep the dollar cap and explicitly exempt fraud, willful misconduct,
 gross negligence, and death or personal injury caused by negligence from both §§12 and 13.
 Preserve other non-waivable remedies. Let the DPA and signed Enterprise Orders control in
-their respective areas under the existing order of precedence. These explicit exceptions
-are a drafting recommendation for the standard form. In `Bombardier`, the Texas Supreme Court
-enforced a specific waiver of exemplary damages for fraud in a negotiated transaction between
-sophisticated parties. [_Bombardier Aerospace v. SPEP Aircraft Holdings_, 572 S.W.3d 213, 230–34 (Tex. 2019)](https://www.txcourts.gov/media/1443450/170578.pdf).
+their respective areas under the existing order of precedence. [R2](#r2-gross-negligence-and-the-13-cap)
+explains why the standard form keeps the gross-negligence exception and gives counsel an option
+for a negotiated Enterprise order.
+
+**Consumer data loss outside the U.S.** In the EU, national laws implementing Directive
+2019/770 can cover paid digital content and some free supplies where consumers provide personal
+data. The data exception concerns processing exclusively to supply the product or comply with
+legal requirements. Recital 25 also distinguishes collection of metadata alone, with scope
+depending on national contract law. Verify the data and national rules before determining Free
+Tier coverage. In the UK, Consumer Rights Act §46 can require repair or compensation when the
+supplied digital content damages the consumer's device or other digital content and reasonable
+care and skill would have avoided that kind of damage. It can apply to free content supplied
+under a contract. Section 47(6) points to the §62 fairness test for limits on §46 liability.
+Retain the mandatory-law savings language and describe the cap as qualified in consumer-facing
+summaries.
+[Directive (EU) 2019/770, recital 25 and arts. 3, 14 and 22](https://eur-lex.europa.eu/eli/dir/2019/770/oj),
+[UK Consumer Rights Act 2015, §§33, 46, 47 and 62](https://www.legislation.gov.uk/ukpga/2015/15/pdfs/ukpga_20150015_en.pdf?view=extent),
+[ctrlyoke Privacy Policy, §3.1](../../PRIVACY.md#31-usage-telemetry).
 
 The privacy-related question
 depends on facts and jurisdiction, including actual data collection, recipients and claims
@@ -528,6 +673,34 @@ re-acceptance campaign, or opt-out migration. Use normal notice of the new licen
 existing versioned legal bundle at future Enterprise checkouts.
 [Published v2.2 license](../../LICENSE.md#e-updates-to-license),
 [Enterprise checkout](../../landing/src/pages/enterprise/checkout.astro).
+
+If an outside v2.2 user is later identified, §16(e) keeps v2.2 with the copy they obtained
+unless they adopt a later version. Start any existing dispute analysis with that version,
+including its §16(g), any opt-out, and enforceability in the applicable jurisdiction. For a
+later adoption, clearly identify the new terms and record affirmative acceptance for future
+use. Use a separate agreement to resolve any already-arisen dispute. Texas modification law
+requires notice and acceptance, and AAA Rule R-12 provides a case-specific expedited review
+route for a previously unsubmitted consumer clause if a covered filing actually occurs.
+[_Hathaway v. General Mills, Inc._, 711 S.W.2d 227, 228–29 (Tex. 1986)](https://law.justia.com/cases/texas/supreme-court/1986/c-4481-0.html),
+[AAA Consumer Arbitration Rules, R-12(f)](https://www.adr.org/media/yawntdvs/2025_consumer_arbitration_rules.pdf).
+
+**Notice and proof of assent under §0.** The Enterprise form presents an affirmative checkbox
+and records document versions. Its EULA link currently points to the live terms page. Archive
+the exact texts associated with each recorded version. A browser check of the public Individual
+Pro purchase path found the EULA link in a separate pricing section. The hosted Lemon Squeezy
+payment form displayed the reseller's Buyer Terms and Privacy Policy links. It showed no link to
+the ctrlyoke EULA or acceptance of that EULA in the initial form. To rely on purchase-based
+assent, put the versioned EULA link and acceptance language at the first-party purchase entry
+point. Prefer an affirmative control that records the accepted version before the reseller
+handoff. On installation channels, show the terms or give a conspicuous link and acceptance notice
+before download or first use. A copy in the package preserves the version received, while proof
+of notice before the relevant action remains important for assent based on installation or use.
+The signed-in clickwrap decision in _Klebba_ supports affirmative acceptance under Texas law.
+[Public pricing page](https://ctrlyoke.dev/pricing/),
+[Public Individual Pro checkout](https://ctrlyoke.lemonsqueezy.com/checkout/buy/5216b82f-8571-4ce4-9e8f-37659c88aea1),
+[Enterprise checkout](../../landing/src/pages/enterprise/checkout.astro),
+[_Klebba v. Netgear, Inc._, No. 1:18-cv-00438-RP, slip op. at 6–9 (W.D. Tex. Feb. 5, 2019)](https://www.govinfo.gov/content/pkg/USCOURTS-txwd-1_18-cv-00438/pdf/USCOURTS-txwd-1_18-cv-00438-0.pdf).
+
 ---
 
 <details>
@@ -535,9 +708,9 @@ existing versioned legal bundle at future Enterprise checkouts.
 
 ## How to read this
 
-Each change below gives the current text (or "new"), the proposed text, and why it is proposed.
-The questions marked **Q** are the ones we most need counsel to answer. Changes 4 (contribution
-mechanism) and 7 (dispute resolution) are where we most need precise wording.
+The proposals and questions below are the original brief. The
+[research answers](#research-answers-for-counsel) explain which recommendations went forward,
+and the [Round 2 recommendations](#round-2-recommendations-for-counsel) give the current approval items.
 
 Background on the product, because several changes depend on it:
 
