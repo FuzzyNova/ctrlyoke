@@ -1,0 +1,14 @@
+---
+import LegalPage from "../layouts/LegalPage.astro";
+import LegalVersionHistory from "../components/LegalVersionHistory.astro";
+// Canonical source: repo-root CLA.md (single source of truth — do not duplicate).
+import { Content } from "../../../CLA.md";
+---
+
+<LegalPage
+  title="Contributor License Agreement — ctrlyoke"
+  description="The ctrlyoke Contributor License Agreement for pull requests and other contributions to the ctrlyoke repository."
+>
+  <Content />
+  <LegalVersionHistory document="cla" />
+</LegalPage>

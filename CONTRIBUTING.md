@@ -32,7 +32,7 @@ Plain [Conventional Commits](https://www.conventionalcommits.org/) style (`feat:
 1. Fork the repo and branch from `main`.
 2. Make your change, adding or updating tests alongside it (`src/test/**` for core/orchestration/harness changes, `src/ui/webview-react/test/**` for React dashboard changes).
 3. Run `npm test` and `npm run lint` locally before opening a PR. CI (`.github/workflows/ci.yml`) runs everything `npm test` does, plus typecheck, lint, format and a production build, on every PR, and it must pass before the PR can merge. Workflows on a first-time contributor's PR start only after a maintainer approves them.
-4. Open a PR against `main` with a clear description of the change and why it's needed. Fill in the PR template's checklist. Submitting a PR grants the contribution license in [`LICENSE.md` §5(c)](LICENSE.md#c-contributions), and every PR needs a code owner's review.
+4. Open a PR against `main` with a clear description of the change and why it's needed. Fill in the PR template's checklist. Submitting a PR grants the contribution license in [`LICENSE.md` §5(c)](LICENSE.md#c-contributions). Before we can merge your first PR, you must accept the [ctrlyoke Contributor License Agreement](CLA.md) by checking its box in the PR template, which states "I agree to the ctrlyoke Contributor License Agreement v1.0 for my contributions." The PR description keeps that record. You can also send the same statement to `licensing@ctrlyoke.dev`. Every PR needs a code owner's review.
 
 Small, focused PRs are easier to review than large ones — if you're planning something big (a new harness, a major refactor), consider opening an issue first to discuss the approach.
 

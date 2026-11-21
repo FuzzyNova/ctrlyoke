@@ -23,6 +23,12 @@
       "file": "DPA.md",
       "title": "ctrlyoke Data Processing Agreement",
       "route": "/dpa/"
+    },
+    {
+      "id": "cla",
+      "file": "CLA.md",
+      "title": "ctrlyoke Contributor License Agreement",
+      "route": "/cla/"
     }
   ],
   "versions": [
@@ -85,6 +91,12 @@
       "version": "1.0",
       "published": "2026-09-17",
       "sha256": "562e14687d177650c0a61f75de05437fd700c560147aa12cfee09404634cf4a9"
+    },
+    {
+      "document": "cla",
+      "version": "1.0",
+      "published": "2026-11-21",
+      "sha256": "7f972cd9d1fa72b11c0c616fc0a972b61a88cff1578c471d7c6189139355c6e1"
     }
   ]
 }

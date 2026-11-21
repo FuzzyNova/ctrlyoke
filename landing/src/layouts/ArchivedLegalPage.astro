@@ -2,11 +2,15 @@
 // One published version of a legal document, exactly as published, at its
 // permanent URL. Rendered by each document's `[version].astro` route.
 import LegalPage from "./LegalPage.astro";
-import { formatLegalDate, type ArchivedLegalPageProps } from "../legal/archive";
+import {
+  COPY_STAYS_ON_ITS_VERSION,
+  formatLegalDate,
+  type ArchivedLegalPageProps,
+} from "../legal/archive";
 
 type Props = ArchivedLegalPageProps;
 
-const { title, currentUrl, entry, supersededBy, Content } = Astro.props;
+const { document, title, currentUrl, entry, supersededBy, Content } = Astro.props;
 ---
 
 <LegalPage
@@ -22,8 +26,9 @@ const { title, currentUrl, entry, supersededBy, Content } = Astro.props;
           <a href={supersededBy.url} class="text-sky-400 hover:text-sky-300">
             version {supersededBy.version}
           </a>{" "}
-          on {formatLegalDate(supersededBy.published)}. It still governs copies of ctrlyoke
-          obtained while it was in effect, unless their holders adopted a later version.{" "}
+          on {formatLegalDate(supersededBy.published)}.{" "}
+          {COPY_STAYS_ON_ITS_VERSION.has(document) &&
+            "It still governs copies of ctrlyoke obtained while it was in effect, unless their holders adopted a later version. "}
           <a href={currentUrl} class="text-sky-400 hover:text-sky-300">
             Read the current version
           </a>

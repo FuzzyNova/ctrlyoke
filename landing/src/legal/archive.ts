@@ -10,7 +10,8 @@ import {
   findLegalArchiveProblems,
 } from "../../../scripts/legal-archive.mjs";
 
-export type LegalDocumentId = "eula" | "enterprise-terms" | "privacy" | "dpa";
+export type LegalDocumentId =
+  "eula" | "enterprise-terms" | "privacy" | "dpa" | "cla";
 
 interface LegalDocument {
   id: LegalDocumentId;
@@ -41,8 +42,9 @@ const archivedModules = import.meta.glob<MarkdownModule>(
     eager: true,
   }
 );
+// Every root file in legal/versions.json `documents` (Vite needs a literal pattern).
 const currentRaw = import.meta.glob<string>(
-  "../../../{LICENSE,ENTERPRISE_TERMS,PRIVACY,DPA}.md",
+  "../../../{LICENSE,ENTERPRISE_TERMS,PRIVACY,DPA,CLA}.md",
   {
     query: "?raw",
     import: "default",
@@ -107,7 +109,17 @@ export function acceptedVersionsRecord(
   return ids.map((id) => `${id}@${currentLegalVersion(id).version}`).join("; ");
 }
 
+/**
+ * EULA §16(e) keeps each copy of ctrlyoke under the license version it came
+ * with. The other documents carry no such rule (for example, EULA §10 applies
+ * the then-current Privacy Policy), so only the EULA's pages say it.
+ */
+export const COPY_STAYS_ON_ITS_VERSION: ReadonlySet<LegalDocumentId> = new Set([
+  "eula",
+]);
+
 export interface ArchivedLegalPageProps {
+  document: LegalDocumentId;
   title: string;
   currentUrl: string;
   entry: LegalVersion;
@@ -122,6 +134,7 @@ export function archivedVersionPaths(id: LegalDocumentId) {
   const history = legalVersionHistory(id);
   return history.map((entry, index) => {
     const props: ArchivedLegalPageProps = {
+      document: id,
       title: doc.title,
       currentUrl: doc.route,
       entry,

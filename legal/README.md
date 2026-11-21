@@ -1,6 +1,6 @@
 # Legal document versions
 
-ctrlyoke has four versioned legal documents. Each lives at the repo root, where the
+ctrlyoke has five versioned legal documents. Each lives at the repo root, where the
 site, the VSIX and the npm package read it:
 
 | Document                      | Root file             | Current page         | Archived versions              |
@@ -9,12 +9,14 @@ site, the VSIX and the npm package read it:
 | Enterprise Subscription Terms | `ENTERPRISE_TERMS.md` | `/enterprise-terms/` | `/enterprise-terms/<version>/` |
 | Privacy Policy                | `PRIVACY.md`          | `/privacy/`          | `/privacy/<version>/`          |
 | Data Processing Agreement     | `DPA.md`              | `/dpa/`              | `/dpa/<version>/`              |
+| Contributor License Agreement | `CLA.md`              | `/cla/`              | `/cla/<version>/`              |
 
 Every version that has been published stays online at its permanent URL, for example
 [ctrlyoke.dev/terms/2.2/](https://ctrlyoke.dev/terms/2.2/). The license ties each copy of
-ctrlyoke to the version in effect when it was obtained (EULA §16(e)), and an Enterprise
-order records the versions its signer accepted (`eula@2.3; privacy@1.7; …`), so those
-exact texts must stay retrievable. The Enterprise checkout links the versioned URLs.
+ctrlyoke to the version in effect when it was obtained (EULA §16(e)). Pro and Enterprise
+orders record the versions the buyer accepted (`eula@2.3; privacy@1.7; …`), and a
+contributor's pull request records the CLA version they agreed to, so those exact texts
+must stay retrievable. Both checkouts link the versioned URLs.
 
 ## How the archive works
 
@@ -68,8 +70,10 @@ as archived. The next release ships the new text in the VSIX and npm package.
 ## Adding a new legal document
 
 1. Give the root document a `**Version:** x.y` line.
-2. Add it to `documents` in `versions.json` and to `LegalDocumentId` in
-   `landing/src/legal/archive.ts`.
+2. Add it to `documents` in `versions.json`. In `landing/src/legal/archive.ts`, add it to
+   `LegalDocumentId` and to the `currentRaw` glob pattern.
 3. Add its current page with `<LegalVersionHistory>` and a `[version].astro` route, copying
-   the existing ones (for example `landing/src/pages/dpa/`).
-4. Run `npm run legal:archive`.
+   the existing ones (for example `landing/src/pages/cla.astro` and `landing/src/pages/cla/`).
+4. Add the root file to the `paths` filters in `.github/workflows/deploy.yml` and
+   `deploy-preview.yml`, so a change to it redeploys the site.
+5. Run `npm run legal:archive`.

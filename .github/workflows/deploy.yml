@@ -19,6 +19,7 @@ on:
       - "PRIVACY.md"
       - "DPA.md"
       - "ENTERPRISE_TERMS.md"
+      - "CLA.md"
       - "TRUST_PAGE.md"
       - "legal/**"
       - "scripts/legal-archive.mjs"
