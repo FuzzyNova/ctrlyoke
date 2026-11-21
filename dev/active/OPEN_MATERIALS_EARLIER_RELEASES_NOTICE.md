@@ -10,12 +10,19 @@ the dated notice it asks for.
       tags: one author, Nathan Hickey, under two display names (`Nathan` and
       `Nathan Hickey`), one email. The only co-author trailers name GitHub Copilot, an AI
       tool, not a rights holder.
-- [ ] Nathan confirms that no template, agent definition, skill, condition script, schema
-      or documentation example was copied or adapted from a third-party source, or lists
-      the ones that were so they can be left out of the notice.
-- [ ] Nathan confirms that he wrote those materials for Fuzzy Nova LLC, or has assigned or
-      licensed his rights in them to it (counsel: "any rights held by the individual author
-      that Fuzzy Nova needs authority to license").
+- [ ] **No third-party material.** Nathan confirms that no template, agent definition,
+      skill, condition script, schema or documentation example was pasted in or adapted
+      from an outside source, such as another project's template, a harness's own docs, or a
+      blog or forum snippet, whether he or an agent did the pasting. Otherwise he lists the
+      ones that were, so they can be left out of the notice. Files AI agents wrote for
+      ctrlyoke at Nathan's direction are not third-party material: the AI vendors' terms give
+      the output to the user, and any part that is not protected by copyright needs no
+      license (the notice grants only rights Fuzzy Nova LLC has).
+- [ ] **Fuzzy Nova LLC holds Nathan's rights.** Work from before the LLC existed (commits
+      from June 2026) belongs to Nathan personally unless he assigned it. Confirm that a
+      founder IP assignment, or an IP clause in the operating agreement, covers it (business
+      Drive, `Formation & Legal/`), or sign one (counsel: "any rights held by the individual
+      author that Fuzzy Nova needs authority to license").
 
 ## Publishing
 

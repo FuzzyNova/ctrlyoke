@@ -1369,8 +1369,9 @@ money or a retainer now.
       still opens the Lemon Squeezy overlay; the agent could not click through it. These
       records are your proof of assent under §0.
 - [ ] **Confirm provenance of the Open Materials** (10 minutes). Git shows you as the only
-      author of `src/templates/`, `schemas/` and `docs/`. Confirm that nothing there was
-      copied from a third party, and that your rights in it belong to Fuzzy Nova LLC. Then
+      human author of `src/templates/`, `schemas/` and `docs/`; agent-written files are
+      fine. Confirm that nothing there was pasted in from an outside source, and that a
+      founder IP assignment gives your rights in pre-LLC work to Fuzzy Nova LLC. Then
       tick the boxes in
       [`OPEN_MATERIALS_EARLIER_RELEASES_NOTICE.md`](OPEN_MATERIALS_EARLIER_RELEASES_NOTICE.md)
       and publish it as that file describes (recommended, free; §5(e) already makes the
