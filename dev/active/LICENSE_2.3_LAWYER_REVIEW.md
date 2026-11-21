@@ -1,8 +1,499 @@
-# ctrlyoke Commercial License: proposed v2.3 changes (for counsel review)
+# ctrlyoke Commercial License v2.3 approval memo
 
-**Status:** Draft, not adopted. `LICENSE.md` (v2.2, effective October 13, 2026) is unchanged.
-**Prepared for:** outside counsel, on behalf of Fuzzy Nova LLC
-**Date:** November 20, 2026
+**Prepared for outside counsel on behalf of Fuzzy Nova LLC · November 21, 2026**
+**first pass counsel reviewed and made recommendations on behalf of Fuzzy Nova LLC · November 21, 2026**
+
+[Open the complete v2.3 license draft](LICENSE_2.3_DRAFT.md) ·
+[Companion contribution text](#companion-contribution-text-for-approval) ·
+[Publication checklist](#publication-checklist) ·
+[Product and checkout checks](#product-and-checkout-readiness) ·
+[Research and citations](#research-answers-for-counsel)
+
+**Requested response.** Approve the v2.3 draft and companion contribution text as written,
+or identify the row or clause you would change and give the replacement wording. The
+recommendations below resolve the original policy questions. The publication checklist
+lists the release work to close after legal review. v2.2 remains the published version until
+adoption.
+
+**Fuzzy Nova's launch facts.** ctrlyoke has had no public marketing or sales. Fuzzy Nova
+reports that the Marketplace and npm downloads were its own and that there are no known
+outside users, customers, or Enterprise orders. On those facts, adopt v2.3 for future
+distribution and use with no customer migration. Fuzzy Nova accepts the possibility of
+class litigation and has chosen court-based dispute resolution.
+
+## Counsel recommended decisions:
+
+| Topic                                     | Recommended decision                                                                                                                                                                                                                                                                                                                                                                                                                          | Draft and support                                                                                                                                                                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Built-in templates, examples, and schemas | Use MIT-0, with one packaged license and scope notices. Include verified materials in earlier releases in a new, prospective permission independent of v2.3 assent. Add a limited express patent grant for claims Fuzzy Nova can license. Leave past claims to case-by-case handling.                                                                                                                                                         | §§1, 5(e), 11, 15(c), 16(e). [Q1](#q1-mit-0-incorporation-placement-and-patents), [Q2a](#q2a-earlier-copies-and-16e)                                                                               |
+| Community library and user content        | Keep the library separately licensed under MIT-0, use the import disclaimer, and preserve mandatory consumer protection. Keep content rights with their existing holders, with narrow handling for voluntarily submitted material and existing privacy and DPA terms.                                                                                                                                                                         | §§5(e), 7(c), 10, 12–13. [Q2](#q2-community-library-coverage-and-installation-exposure), [Q3](#q3-your-content-and-ai-output)                                                                      |
+| Competition and assignment                | Permit internal development of competing products and independent implementation. Restrict protectable code reuse and product integration. Keep the competitor restriction on automatic assignment, with written consent available. Reserve immediate termination under §4(b) for knowing, material violations. Allow other material §4(b) breaches the ordinary 30-day cure.                                                                 | §§4(b), 5(b), 15(b), 16(h). [Q4](#q4-nonliteral-copying-and-legitimate-competition)                                                                                                                |
+| Contribution intake                       | Require the standalone non-exclusive CLA before merging outside contributions into the main repository. Obtain a limited patent sublicense right for submissions to Open Materials only. For the separate library, use GitHub D.6, an authority confirmation, and a removal process. Plan without relying on a Fuzzy Nova §512 safe harbor.                                                                                                   | §5(c) and [companion text](#companion-contribution-text-for-approval). [Q5](#q5-standalone-contributor-assent-and-license-vs-assignment), [Q6](#q6-separate-mit-0-contribution-intake-and-removal) |
+| Remote use and contractor eligibility     | Treat browsers on the same local physical host as local, and browser access from a second device through a relay as remote. Apply both existing commercial thresholds separately to each covered entity. Use client-controlled development or more than six months of substantially full-time work as the workforce tests, including through intermediaries. The draft fixes the counting dates and accepts the residual worker-rotation gap. | §§1, 3, 4(c), 6(d). [Remote access check](#remote-access-implementation-check), [Q7](#q7-contractor-workforce-tests-and-the-intermediary-gap)                                                      |
+| Dispute resolution                        | Use courts by default for consumers and businesses. Keep Texas law and Austin venue with the small-claims and consumer protections in the draft. Keep informal resolution optional and permit mediation or arbitration by written agreement after a dispute arises. Accept the possibility of class litigation and leave jury and class procedures to the applicable court rules.                                                             | §§16(b), 16(g). [Q8](#q8-court-proceedings-and-voluntary-resolution), [Q8a](#q8a-provider-and-fee-decision), [Q8b](#q8b-who-decides-threshold-questions)                                           |
+| Liability                                 | Keep the greater of 12 months' fees or $100 and count authorized reseller payments. Exempt fraud, willful misconduct, gross negligence, and negligent death or personal injury from the disclaimer and cap. Preserve other non-waivable remedies and fee allocations.                                                                                                                                                                         | §§12–13. [Q9](#q9-liability-cap-and-mandatory-remedies)                                                                                                                                            |
+| Adoption and effective date               | Publish the approved v2.3 text and apply it prospectively through the ordinary channels. Keep the v2.2 text in version history. On the confirmed launch facts, there is no outside user or customer migration. Keep the existing versioned Enterprise acceptance for new orders.                                                                                                                                                              | §§0, 16(e). [Q10](#q10-adoption-and-earlier-versions)                                                                                                                                              |
+
+## Companion contribution text for approval
+
+### Main repository contributor license agreement
+
+**ctrlyoke Contributor License Agreement · Version 1.0**
+
+This agreement is between Fuzzy Nova LLC and the individual or entity affirmatively
+accepting it. If you accept for an entity, you represent that you are authorized to bind it.
+
+A **Contribution** is material you intentionally submit to the canonical ctrlyoke
+repository for inclusion in the project. This agreement covers Contributions you submit
+after acceptance and earlier Contributions you expressly identify in a written or
+electronic confirmation. You retain ownership of your Contributions.
+You grant Fuzzy Nova LLC a perpetual, irrevocable, worldwide, non-exclusive, royalty-free
+license to reproduce, modify, create derivative works of, display, perform, distribute,
+sublicense, and commercially use your Contributions as part of ctrlyoke or a derivative
+or successor product. For a Contribution submitted for inclusion in Open Materials
+identified by the project, or later designated as Open Materials with your express
+consent, that grant includes distribution and sublicensing under MIT-0.
+
+For a Contribution covered by the preceding Open Materials sentence, you also grant
+Fuzzy Nova LLC a perpetual, irrevocable, worldwide, non-exclusive, royalty-free patent
+license, with the right to sublicense on the same terms to recipients of those materials.
+The grant covers only patent claims you can license that are necessarily infringed by
+that Contribution as accepted into Open Materials. It permits making, having made, using,
+offering to sell, selling, and importing the Contribution, including in modified form to
+the extent the same claim is necessarily infringed by the accepted, unmodified
+Contribution. The grant excludes claims infringed only by later modification or by
+combination with other materials.
+
+You represent that you have authority to grant these rights and that your Contribution
+does not violate any third-party rights. Identify any third-party material included in a
+Contribution and disclose the terms that apply before submission. Fuzzy Nova LLC may
+decline a Contribution. This agreement governs contribution rights independently of the
+commercial license for using ctrlyoke.
+
+**Suggested acceptance control.** “I agree to the ctrlyoke Contributor License Agreement
+v1.0 for my contributions.”
+
+### Separate community library PR confirmation
+
+> I have the right to submit this contribution, and I make it available under this
+> repository's MIT No Attribution License (MIT-0). I have identified any third-party
+> material included in the contribution and its applicable terms.
+
+The community repository should link its root MIT-0 text and identify the reporting
+contact in its contribution instructions. Reject submissions with incompatible additional
+terms. Use GitHub's repository-license rule for GitHub PRs, and obtain equivalent written
+permission for submissions made elsewhere.
+
+## Publication checklist
+
+1. **Adopt and date the license.** Use the calendar date the approved v2.3 text is first
+   published as adopted. Update root `LICENSE.md` and the
+   [website summary](../../landing/src/legal/license-summary.md) together. The
+   [terms page](../../landing/src/pages/terms.astro) imports the root license and rejects a
+   summary for a different version. Preserve the exact v2.2 text in version history and
+   record the change under **Changed** in [CHANGELOG.md](../../CHANGELOG.md). The disclosed
+   launch facts call for ordinary publication and distribution. AAA registration, customer
+   notification, re-acceptance, and opt-out migration are outside this release.
+2. **Align related legal text.** In [Enterprise Terms §12](../../ENTERPRISE_TERMS.md#12-warranties-liability-and-disputes)
+   use the companion wording below. Update [Privacy Policy §8](../../PRIVACY.md#8-data-retention)
+   using the replacement retention entry below. Publish the updated documents with versioned
+   checkout links and confirm the bundle records the applicable EULA and Enterprise Terms
+   versions. Publish the court-based wording in the plain-language summary.
+3. **Confirm rights and package MIT-0.** Check historical provenance and publish the dated
+   earlier-copy permission for the cleared materials. Publish `LICENSE-MIT-0` with
+   `Copyright (c) 2026 Fuzzy Nova LLC` and add scope notices. The
+   [npm package build](../../scripts/build-npm-package.mjs) has explicit copy and package
+   lists, and the [VSIX allowlist](../../.vscodeignore) names other license filenames.
+   Inspect the actual archives. Require the CLA bot check for new outside authors and
+   keep acceptance records for contributions the project relies on.
+4. **Verify the product matches the terms.** Test local WSL2, container, and VM dashboard
+   access and second-device forwarding. Before enabling community import, verify the
+   publisher and write-path disclosures, explicit import, separate execution, removal
+   process, and privacy notice against actual behavior. Evaluate §512 for Fuzzy Nova's
+   role once the catalog architecture is known. Check current sales and distribution
+   jurisdictions for independently applicable mandatory terms.
+
+### Companion wording for publication
+
+**Enterprise Terms §12, replacement for its final sentence**
+
+> EULA Sections 16(b) (Governing Law and Venue) and 16(g) (Voluntary Dispute Resolution)
+> apply to disputes under this Agreement.
+
+**Privacy Policy §8, replacement retention entry**
+
+> **Enterprise terms-acceptance records:** retained for the life of the applicable agreement
+> and afterwards as needed for tax, accounting, and evidentiary purposes.
+
+**Website summary, Disputes**
+
+> Texas law governs the license. The usual venue is state or federal court in Austin,
+> Texas. Eligible small claims can be brought in a small-claims court with jurisdiction.
+> Consumers keep their mandatory protections and forum rights. Consumers who usually live
+> outside the United States can also use the courts where they usually live for disputes
+> about personal or household use. After a dispute arises, both sides can agree in writing
+> to mediation or arbitration.
+
+## Product and checkout readiness
+
+**First pass, November 21, 2026.** The landing site built with the current v2.2 terms. I
+exercised the built Enterprise form with synthetic data and intercepted the handoff locally
+before Lemon Squeezy. The unchecked form was blocked. The checked form sent the v2.2
+terms bundle version, signer, timestamp, and acceptance method in checkout custom data.
+All 123 focused hosted-server and license-service tests passed. A local Windows-to-Ubuntu WSL2 probe using mirrored
+networking also confirmed the Linux server sees an IPv4 loopback peer, which ctrlyoke
+classifies as local.
+[Enterprise form](../../landing/src/pages/enterprise/checkout.astro),
+[hosted-server tests](../../src/test/unit/CtrlYokeHostedServer.test.ts),
+[bind tests](../../src/test/unit/CtrlYokeHostedServerPortFallback.test.ts),
+[license-service tests](../../src/test/unit/LicenseService.test.ts),
+[loopback classification](../../src/utils/NetworkUtils.ts)
+
+- **Checkout and distribution.** The existing first-party Enterprise form already links
+  the full terms and records the signer's action and document versions. Keep that form for
+  future orders. v2.3 requires no separate dispute-resolution choice, arbitration record,
+  or arbitration-specific install or activation step. Individual Pro can continue to link
+  to Lemon Squeezy. Publish the applicable version and ordinary license notice for the
+  Marketplace, npm, CLI, MCP, and source channels. Run one test-mode Enterprise order
+  after updating the legal documents and verify the linked text and versions that reach
+  the order. The local smoke test verified the handoff up to Lemon Squeezy.
+  [Enterprise form](../../landing/src/pages/enterprise/checkout.astro),
+  [checkout fields](../../src/license/LemonSqueezyConstants.ts),
+  [pricing page](../../landing/src/pages/pricing.astro)
+- **Remote access and contractor eligibility.** Current code gates non-loopback binds and
+  non-loopback clients using Pro/trial state. The observed WSL2 configuration works with
+  the draft's same-host rule. Other WSL2 configurations, containers, VMs, and relays can
+  yield a socket peer address that does not describe the physical browser. The tests cover
+  the ordinary gate and default fallback. **Recommendation:** retain the physical-location
+  contract rule and describe its enforcement as network-address based. Verify a free local
+  browser in each supported setup and a direct second-device browser under free, trial and
+  Pro before claiming full runtime parity. Leave company revenue, worker counts, and
+  commercial eligibility to the contractual self-assessment already specified in §3.
+  [Hosted server gate](../../src/server/CtrlYokeHostedServer.ts),
+  [license draft](LICENSE_2.3_DRAFT.md#3-free-tier-eligibility)
+- **Packaging, community templates, and the contributor agreement.** Both package formats
+  ship the commercial license and runtime template/schema content. The VSIX allowlist
+  and npm build have no `LICENSE-MIT-0` entry. The landing site imports the live root
+  license and checks the summary's version. The local template catalog exists, while
+  the dedicated community-library import remains planned. The current PR template has a
+  contribution checkbox and no enforced standalone CLA appears in the source tree.
+  **Recommendation:** package and inspect the MIT-0 file on adoption, publish the
+  revised summary and archived terms, and configure the contributor check separately.
+  Verify the community import disclosures when that feature is implemented.
+  [VSIX allowlist](../../.vscodeignore),
+  [npm build](../../scripts/build-npm-package.mjs),
+  [terms page](../../landing/src/pages/terms.astro),
+  [community template plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md),
+  [PR template](../../.github/PULL_REQUEST_TEMPLATE.md)
+
+## Research answers for counsel
+
+**Scope.** Prepared November 21, 2026. The analysis starts with U.S. federal and Texas law and
+addresses material consumer-law exceptions. The recommendations use Fuzzy Nova's confirmed
+launch facts and chosen court-based model. The release steps are in the
+[publication checklist](#publication-checklist).
+
+### Q1. MIT-0 incorporation, placement, and patents
+
+Use the official MIT-0 text verbatim in one root `LICENSE-MIT-0` and define the covered materials
+in §1 and §5(e). The OSI text expressly permits copying, modification, redistribution and
+commercial reuse, with no requirement that recipients preserve a copyright or license notice.
+There is no need to reproduce the full text per file. Include short scope notices in
+`src/templates/` and `schemas/` and a notice for documentation examples, and ship the root
+license with the VSIX and npm artifact. Prefer SPDX identifiers or a nearby scope notice for
+standalone files where useful and where comments are supported. Copied templates and public
+schema endpoints should have an easy-to-find canonical license reference, even though recipients
+need not carry it forward. The draft defines the types of covered files, including schema
+archives, rather than licensing every future file that happens to appear under those directories.
+Flag separately licensed content and avoid marking runtime implementation or borrowed code as
+MIT-0. CC0 §4(a) expressly excludes patents, while MIT-0 leaves them unaddressed.
+[OSI MIT-0 text](https://opensource.org/license/mit-0),
+[SPDX MIT-0 entry](https://spdx.org/licenses/MIT-0.html),
+[CC0 §4(a)](https://creativecommons.org/publicdomain/zero/1.0/legalcode.en).
+
+Existing §11 is a poor fit for downstream template use. It covers patents necessarily infringed
+by use of the commercial Software, on narrower and non-sublicensable terms. The draft adds a
+separate, permissive grant directly to each Open Materials recipient for claims Fuzzy Nova can
+license that are necessarily infringed by those materials as distributed. That gives users
+express patent permission for ordinary reuse, including the covered part of a modified copy, and
+avoids depending on a fact-specific implied license. It makes no promise about other parties'
+patents or claims triggered solely by a user's additions. **Recommendation.** Approve the irrevocable grant in §5(e). Require a compatible, limited
+patent sublicense right for main-repository contributions destined for Open Materials, using
+the CLA below. Keep ordinary commercial-code contributions copyright-only under the standard
+CLA. Review separate contributor rights before relicensing older material.
+[35 U.S.C. §271](https://uscode.house.gov/us/usc/t35/s271/),
+[_TransCore v. Electronic Transaction Consultants_, 563 F.3d 1271, 1278–80 (Fed. Cir. 2009)](https://law.justia.com/cases/federal/appellate-courts/cafc/08-1430/08-1430-2011-03-27.html).
+
+### Q2. Community library coverage and installation exposure
+
+The separate repository and its own MIT-0 license define the inbound and outbound rights in the
+library. The draft expressly preserves that boundary when ctrlyoke lists, downloads, or installs
+a contribution, and applies §§12–13 to ctrlyoke's own integration. That helps with warranty
+expectations. It cannot eliminate claims based on Fuzzy Nova's own conduct, misleading claims
+about review or safety, a faulty installer, or non-waivable consumer rights. Keep the product
+interface accurate about who supplied a template, what installation writes, and when things
+execute. In particular, inspect the planned integration for automatic execution, path writes,
+and import behavior before representing that templates are safe or reviewed. Determine whether
+fetching directly from GitHub passes user information to GitHub and whether the Privacy Policy
+needs updating before launch. The feature and repository are described as proposed in the
+[community templates plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md).
+
+**Recommendation.** Approve §5(e)'s disclaimer and retain mandatory consumer guarantees. In
+the import flow identify the publisher, state where files will be written, require an explicit
+import action, and keep execution separate. Make no safety or review promise beyond what the
+product actually verifies. Keep the library outside the release bundle. Where applicable,
+update the privacy notice for GitHub requests before enabling import. The EU digital content
+regime is one reason mandatory consumer protections belong in the draft.
+[Directive (EU) 2019/770, arts. 3, 8, 14 and 22](https://eur-lex.europa.eu/eli/dir/2019/770/oj),
+[FTC Avast complaint and order, illustrating exposure from software privacy representations](https://www.ftc.gov/system/files/ftc_gov/pdf/202_3033_-_avast_final_consent_package.pdf).
+
+### Q2a. Earlier copies and §16(e)
+
+Give recipients of earlier releases a new, independent permission. That lets them rely on the
+MIT-0 grant while keeping the commercial terms that already govern their copies. The draft
+expressly decouples the grant from v2.3 assent, and its scope is limited to rights Licensor
+actually holds. Publish the grant in a stable, dated repository or release notice that users of
+old tags can find. Identify the materials and releases it covers. Check historical sources
+against outside contributions or separate notices before making the offer. A new permission
+supports use of older copies from the date of the grant. It does not clearly resolve liability
+for pre-grant redistribution. **Recommendation.** Publish a dated, prospective permission
+for the verified materials in earlier copies. Do not add a release of past claims. Treat any
+specific past-sharing dispute separately and omit any historical material that Fuzzy Nova
+lacks authority to relicense.
+[17 U.S.C. §§101 and 106](https://copyright.gov/title17/92chap1.html),
+[17 U.S.C. §204](https://uscode.house.gov/us/usc/t17/s204/).
+
+### Q3. Your Content and AI output
+
+Use “You retain whatever rights You have” between these two parties. It avoids promising that
+the user owns employer or client content, that a shared project grants rights in someone else's
+material, or that a purely AI-generated output is protected. The U.S. Copyright Office says
+prompts alone ordinarily do not supply the required human authorship under today's systems.
+Human-authored material, creative selection or arrangement, and human modifications can still
+qualify. Model terms allocate rights between the model vendor and its customer where those
+rights exist. A vendor's ownership clause cannot create copyright or guarantee unique or
+noninfringing output. OpenAI is one example, and the applicable terms depend on the harness
+and account.
+[U.S. Copyright Office, AI Copyrightability Report, pp. ii–iii, 17–28](https://www.copyright.gov/ai/Copyright-and-Artificial-Intelligence-Part-2-Copyrightability-Report.pdf),
+[17 U.S.C. §§101, 102 and 201](https://copyright.gov/title17/index.html),
+[OpenAI Terms of Use, Content](https://openai.com/policies/terms-of-use/).
+
+The draft includes outputs, logs, settings and other project materials. It preserves the
+separate permissions for contributions, feedback, voluntarily submitted support content, and
+applicable processing under §10 and the DPA. The [Privacy Policy](../../PRIVACY.md) says that
+workflow content and prompts are not intentionally collected, and that VS Code extension
+telemetry can include redacted errors and pseudonymous identifiers. **Recommendation.** Approve
+§7(c) as drafted. Keep support access purpose-limited, retain the DPA where applicable, and
+check that the privacy description matches actual handling before publication.
+
+### Q4. Nonliteral copying and legitimate competition
+
+Potentially yes. Nonliteral copying can infringe where a competitor actually copies protected
+expression, for example an original selection or arrangement of implementation elements,
+and the filtered expression is substantially similar. A court filters ideas, methods of
+operation, interfaces or elements dictated by compatibility or efficiency, and public-domain
+material. Access and matching features alone do not prove infringement. An independent
+implementation of publicly documented behavior or formats ordinarily falls outside copyright
+protection for the code. Patents and, for genuinely secret material, trade secrets are distinct.
+Use copyright's “protectable expression” standard to limit §4(b)(i), preserve §4(b)(ii)'s
+separate bar on incorporating the Software into a competing product, and expressly allow
+ordinary internal use to develop that product subject to normal tier eligibility.
+[17 U.S.C. §102(b)](https://copyright.gov/title17/92chap1.html#102),
+[_Engineering Dynamics v. Structural Software_, 26 F.3d 1335, 1342–47 (5th Cir. 1994)](https://law.justia.com/cases/federal/appellate-courts/F3/26/1335/618781/),
+[_Computer Associates v. Altai_, 982 F.2d 693, 706–12 (2d Cir. 1992)](https://law.justia.com/cases/federal/appellate-courts/F2/982/693/137252/),
+[_SAS Institute v. World Programming_, 64 F.4th 1319 (Fed. Cir. 2023)](https://www.govinfo.gov/content/pkg/USCOURTS-ca13-21-01542/pdf/USCOURTS-ca13-21-01542-0.pdf),
+[Texas Civil Practice & Remedies Code §134A.002](https://tcss.legis.texas.gov/resources/CP/pdf/CP.134A.pdf).
+
+**Recommendation.** Keep §16(h)'s competitor-assignment condition as a limit on automatic
+assignment in a business transfer. Written consent remains available. Under §15(b), reserve
+immediate termination under §4(b) for knowing, material violations. Apply the existing
+30-day notice-and-cure process to other material violations, including inadvertent inclusion.
+[Texas Business & Commerce Code §§15.05 and 15.50](https://statutes.capitol.texas.gov/Docs/BC/htm/BC.15.htm).
+
+### Q5. Standalone contributor assent and license vs. assignment
+
+Use a standalone non-exclusive CLA with conspicuous text and an affirmative authenticated
+acceptance before merge. It can bind a contributor directly regardless of whether they have
+installed ctrlyoke or agreed to the EULA. Keep §5(c) and the PR reminder as complementary
+notice. The merge check should cover each contributing author, including co-authors and authors
+added on later pushes, with controlled exceptions for company-authored changes and any automated
+accounts. Preserve the contributor's stable GitHub ID, signature or recorded action, timestamp,
+CLA version and immutable text, and related PR or commits. Check the bot's retention and export
+capabilities and require its specific check through a ruleset. A GitHub identity helps prove
+assent but does not establish rights in employer-owned or copied work. Ask for authority or
+corporate acceptance when the contributor cannot grant those rights personally. Record consent
+from existing contributors if their earlier grant is insufficient for a planned use.
+[Texas Business & Commerce Code §§322.007 and 322.009](https://statutes.capitol.texas.gov/Docs/BC/htm/BC.322.htm),
+[E-SIGN, 15 U.S.C. §7001](https://uscode.house.gov/us/usc/119-124/t15/s7001/),
+[_Aerotek v. Boyd_, 624 S.W.3d 199, 204–09 (Tex. 2021)](https://law.justia.com/cases/texas/supreme-court/2021/20-0290.html),
+[CLA Assistant](https://github.com/cla-assistant/cla-assistant),
+[GitHub required status checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets).
+
+A broad non-exclusive license is sufficient for incorporating, modifying, distributing,
+sublicensing and commercializing the submitted code, assuming contributors actually own or
+control the necessary rights. Include the right to sublicense under MIT-0 for contributions to
+Open Materials, and align its patent terms with §5(e). Contributors keep ownership.
+Consider an assignment or exclusive arrangement only if Fuzzy Nova needs ownership or standing
+to bring its own copyright infringement action over a contribution. Copyright transfers
+generally need a signed writing under §204(a), while §101 excludes non-exclusive licenses from
+“transfer of copyright ownership.” **Recommendation.** Approve the standalone non-exclusive CLA
+below and make its versioned check mandatory for outside contributions. Preserve acceptance
+records for as long as Fuzzy Nova distributes or relies on the contribution. §5(c) in the
+draft expressly addresses MIT-0 distribution and allows the separate CLA.
+[17 U.S.C. §§101, 201, 204 and 501(b)](https://copyright.gov/title17/index.html).
+
+### Q6. Separate MIT-0 contribution intake and removal
+
+GitHub Terms D.6 generally licenses a contribution under the repository's license when the
+repository contains notice of that license, subject to any separate agreement. For ordinary
+GitHub PRs to a single-license MIT-0 library, use a root MIT-0 license, an express contribution
+rule, and a PR confirmation that the submitter has authority and licenses the contribution under
+MIT-0. Treat the checkbox as additional evidence. Review provenance and separate-license
+dependencies before merging. For submissions that arrive outside GitHub or where ownership is
+unclear, obtain an express grant or decline the submission. Fuzzy Nova would need a separate
+agreement if it wanted rights beyond MIT-0, including an express contributor patent grant.
+[GitHub Terms of Service D.5–D.7](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#d-user-generated-content),
+[OSI MIT-0 text](https://opensource.org/license/mit-0).
+
+Publish a reporting and removal contact, with a way to delist a template and stop offering it
+through the product independently of GitHub's removal process. Triage copyright, malicious
+content, secrets, and other reports, preserve the submission record, and consider warning users
+if an installed version presents a credible risk. Removing a template from the catalog does
+not remove old copies or itself cancel permission previously granted for legitimate copies.
+**Recommendation.** Launch with a public reporting contact and a documented way to delist or
+block an imported template. Use GitHub's process for material it hosts. Assume Fuzzy Nova has
+no independent §512 safe harbor for planning purposes. Once the catalog architecture is
+settled, assess whether §512(c) or (d) applies to Fuzzy Nova and complete the applicable steps
+before relying on it, including a designated agent where required, notice and counter-notice,
+repeat-infringer procedures, and responding to actual knowledge.
+[U.S. Copyright Office, §512 safe harbors](https://www.copyright.gov/512/),
+[GitHub DMCA Takedown Policy](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy).
+
+### Remote access implementation check
+
+The draft treats the browser's actual location as controlling. A browser on the Windows host of
+a local WSL2 instance is local use. A laptop browser reaching a cloud-hosted dashboard by port
+forwarding is Remote Dashboard Access, even if it uses a `localhost` URL. A VS Code in-editor
+panel is outside the Hosted Dashboard definition, including in Codespaces. The current
+[hosted server](../../src/server/CtrlYokeHostedServer.ts) treats a connection as local when
+the socket peer address is loopback, and otherwise asks the Pro/trial gate. Reading the code
+does not establish how Windows-to-WSL, same-host containers or VMs, or a same-host relay present
+the peer address under each configuration. Test WSL2 defaults and mirrored networking, local
+containers and VMs, and forwarding from a second device before claiming implementation
+matches the text. Guest networking may gate intended local use, and loopback-terminating
+forwarding from a second device may leave the prohibition to self-assessment.
+[Microsoft WSL networking guidance](https://learn.microsoft.com/en-us/windows/wsl/networking),
+[VS Code remote port forwarding](https://code.visualstudio.com/docs/remote/ssh#_forwarding-a-port-creating-ssh-tunnel).
+
+### Q7. Contractor workforce tests and the intermediary gap
+
+These can work as contract-specific eligibility tests. They need a clear subject, measurement
+period, and exception for ordinary client collaboration. The draft looks through one-person
+LLCs and staffing intermediaries, covers a development environment supplied or managed on
+behalf of the client, and treats repository or ticket-system access alone as insufficient. It
+starts the duration test after more than six consecutive months of work at or close to the
+client's normal full-time schedule for comparable work. Routine leave or changing an
+intermediary does not reset the clock. Both revenue and headcount apply. A contractor may
+trigger Pro through their own firm, the client, or another qualifying entity under the
+definition. An applicable Enterprise license satisfies the client requirement only as stated
+in §6(d) and the relevant order.
+
+This implements the intended distinctions: a short project on the freelancer's own equipment
+generally uses the freelancer's metrics, a client-controlled cloud IDE can trigger the client
+test from the start, and a full-time contractor on personal equipment becomes subject to the
+client test after six months. A short engagement on personal equipment with ordinary repo access
+still falls outside the workforce definition even if a large company procures it through an
+LLC. Deliberate rotation of different workers can still avoid the duration test if their
+development environments are independent. **Recommendation.** Accept that gap and keep the
+two observable tests without a separate anti-avoidance clause. Apply both thresholds to
+each covered business entity separately, including the contractor's own business. Use the
+last completed fiscal year for revenue, actual revenue to date for a new business, and
+headcount as of use, with a reasonable payroll-record proxy. Count employees and direct
+contract workers once per entity. Count workers engaged through intermediaries when they
+meet a workforce test based on their actual work, even if they do not use ctrlyoke. For
+multiple clients, measure each client that meets a workforce test. The tests
+establish license eligibility. Employment and tax status depend on separate rules.
+[IRS employee and independent contractor factors](https://www.irs.gov/taxtopics/tc762),
+[Texas Workforce Commission coverage and worker classification](https://efte.twc.texas.gov/ui_law_coverage_issues.html).
+
+### Q8. Court proceedings and voluntary resolution
+
+**Recommendation.** Adopt the court-based text in §§16(b) and (g). Keep Texas governing law and
+Austin as the ordinary venue, preserve eligible small claims and non-waivable consumer
+protections, and allow consumers usually resident outside the U.S. to use their home courts.
+Either party may propose informal resolution. The parties can agree in writing to mediation
+or arbitration after a dispute arises. The license imposes no waiting period to file suit.
+
+Fuzzy Nova accepts that a claimant can seek class treatment where applicable law permits it.
+The court decides certification under the applicable rules. The draft has no advance class
+or jury waiver. This gives up the class-waiver protection that accompanies valid individual
+arbitration and avoids maintaining a compulsory arbitration process for claims under v2.3.
+[_AT&T Mobility v. Concepcion_, 563 U.S. 333 (2011)](https://www.govinfo.gov/app/details/USREPORTS-563/USREPORTS-563-333),
+[Federal Rules of Civil Procedure, Rule 23](https://www.uscourts.gov/forms-rules/current-rules-practice-procedure/federal-rules-civil-procedure),
+[_Atlantic Marine Construction v. U.S. District Court_, 571 U.S. 49 (2013)](https://www.govinfo.gov/app/details/USREPORTS-571/USREPORTS-571-49),
+[Rome I, art. 6](https://eur-lex.europa.eu/eli/reg/2008/593/oj),
+[Brussels I bis, arts. 17–19](https://eur-lex.europa.eu/legal-content/en/ALL/?uri=CELEX%3A32012R1215).
+
+### Q8a. Provider and fee decision
+
+**Recommendation.** Choose a provider only if both parties agree after a dispute arises.
+The standard terms do not name a provider, so v2.3 requires no consumer clause registration
+or annual registry fee. Any voluntary mediation or arbitration would have the fees the
+parties agree to for that case.
+[AAA Consumer Rules R-12](https://www.adr.org/media/yawntdvs/2025_consumer_arbitration_rules.pdf).
+
+### Q8b. Who decides threshold questions
+
+**Recommendation.** Leave threshold and procedural questions to the court hearing the case
+under its ordinary rules. The draft contains no delegation, batching, or filing-delay
+provision. If the parties later agree to arbitrate a particular dispute, that later
+agreement can specify the procedure and decision-maker.
+
+### Q9. Liability cap and mandatory remedies
+
+Keep the higher of twelve months' fees or $100. A lower cap would buy little in individual
+claims. Regulatory remedies and non-waivable statutory rights remain subject to applicable
+law. The draft expressly counts Software license payments through the authorized reseller
+for all customers, consistent with [Enterprise Terms §12](../../ENTERPRISE_TERMS.md#12-warranties-liability-and-disputes).
+It also preserves required fee allocations and mandatory remedies. In Texas, a general
+consumer form usually cannot waive DTPA rights under §17.42. If Article 2 applies to a
+transaction, §2.719 also raises unconscionability and essential-purpose questions. Its
+applicability depends on the particular software transaction.
+[Texas Business & Commerce Code §17.42](https://statutes.capitol.texas.gov/Docs/BC/htm/BC.17.htm#17.42),
+[Texas Business & Commerce Code §2.719](https://statutes.capitol.texas.gov/Docs/BC/htm/BC.2.htm#2.719).
+
+**Recommendation.** Keep the dollar cap and explicitly exempt fraud, willful misconduct,
+gross negligence, and death or personal injury caused by negligence from both §§12 and 13.
+Preserve other non-waivable remedies. Let the DPA and signed Enterprise Orders control in
+their respective areas under the existing order of precedence. These explicit exceptions
+are a drafting recommendation for the standard form. In `Bombardier`, the Texas Supreme Court
+enforced a specific waiver of exemplary damages for fraud in a negotiated transaction between
+sophisticated parties. [_Bombardier Aerospace v. SPEP Aircraft Holdings_, 572 S.W.3d 213, 230–34 (Tex. 2019)](https://www.txcourts.gov/media/1443450/170578.pdf).
+
+The privacy-related question
+depends on facts and jurisdiction, including actual data collection, recipients and claims
+with private enforcement. Texas's Data Privacy and Security Act delegates enforcement to the
+attorney general and creates no private right of action. Other statutes and common-law claims
+can differ. Product and telemetry practices determine much of the underlying exposure.
+[Texas Business & Commerce Code Chapter 541, §§541.151 and 541.156](https://tcss.legis.texas.gov/resources/BC/htm/BC.541.htm),
+[FTC Avast final consent package](https://www.ftc.gov/system/files/ftc_gov/pdf/202_3033_-_avast_final_consent_package.pdf).
+
+### Q10. Adoption and earlier versions
+
+The published v2.2 terms name AAA and §16(e) ties the terms for a copy to the version in
+effect when obtained unless a user adopts a later version. Fuzzy Nova confirms that it did
+not submit v2.2 to AAA and has no outside users, sales, or Enterprise customers to move.
+
+**Recommendation.** Publish v2.3 prospectively when approved and keep the prior version in
+version history. The launch facts call for no v2.2 registry filing, customer notice,
+re-acceptance campaign, or opt-out migration. Use normal notice of the new license and the
+existing versioned legal bundle at future Enterprise checkouts.
+[Published v2.2 license](../../LICENSE.md#e-updates-to-license),
+[Enterprise checkout](../../landing/src/pages/enterprise/checkout.astro).
+---
+
+<details>
+<summary>Superseded proposals and original question wording</summary>
 
 ## How to read this
 
@@ -332,9 +823,9 @@ below.
 
 **Why.** Under AAA consumer rules the business pays most of the filing and arbitrator fees,
 which can be thousands of dollars per claim even when the claim has no merit, and coordinated
-mass-arbitration campaigns exploit exactly that. But for a *single* claim, arbitration is not
+mass-arbitration campaigns exploit exactly that. But for a _single_ claim, arbitration is not
 clearly more expensive than court: legal fees dominate either way, and court adds discovery,
-motion practice and a possible jury. Arbitration's distinctive cost is the *mass* filing
+motion practice and a possible jury. Arbitration's distinctive cost is the _mass_ filing
 scenario. Its distinctive benefit is the class-action waiver, which is generally enforceable
 inside arbitration and much weaker in court. For this product the most realistic class-action
 theory is a privacy claim about telemetry, not a licensing dispute. Dropping arbitration would
@@ -348,17 +839,17 @@ class actions are least likely and drops it where they are most likely).
 
 **What changes compared with v2.2:**
 
-| Subsection | Status |
-|---|---|
-| (1) Informal resolution | Expanded: personally signed notice, an individual conference, a 60-day window, and tolling of limitation periods |
-| (2) Scope and exceptions | Unchanged in substance |
-| (3) Rules, location, enforcement | Unchanged in substance |
-| (4) Fees | New: states the fee position, plus fee awards for frivolous claims |
-| (5) Individual claims; jury and class waiver | Unchanged |
-| (6) Mass filings | New |
-| (7) Opt-out | Unchanged |
-| (8) Severance | Expanded: a court stay while arbitration proceeds |
-| (9) Future changes | New |
+| Subsection                                   | Status                                                                                                           |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| (1) Informal resolution                      | Expanded: personally signed notice, an individual conference, a 60-day window, and tolling of limitation periods |
+| (2) Scope and exceptions                     | Unchanged in substance                                                                                           |
+| (3) Rules, location, enforcement             | Unchanged in substance                                                                                           |
+| (4) Fees                                     | New: states the fee position, plus fee awards for frivolous claims                                               |
+| (5) Individual claims; jury and class waiver | Unchanged                                                                                                        |
+| (6) Mass filings                             | New                                                                                                              |
+| (7) Opt-out                                  | Unchanged                                                                                                        |
+| (8) Severance                                | Expanded: a court stay while arbitration proceeds                                                                |
+| (9) Future changes                           | New                                                                                                              |
 
 Section 0 (the notice pointing to Section 16(g)), Section 16(b), and `ENTERPRISE_TERMS.md`
 Section 12 (which incorporates Sections 16(b) and 16(g)) need no change.
@@ -478,7 +969,7 @@ Section 12 (which incorporates Sections 16(b) and 16(g)) need no change.
 Texas state courts and the Fifth Circuit? The batching was kept deliberately moderate:
 batches run in parallel, each claim is decided individually, there are no binding test cases,
 and limitation periods are tolled. That is meant to avoid the problems that led the Ninth
-Circuit to refuse to enforce one mass-arbitration protocol in *Heckman v. Live Nation* (2024).
+Circuit to refuse to enforce one mass-arbitration protocol in _Heckman v. Live Nation_ (2024).
 Are the thresholds (25 demands in 180 days; batches of 50; 60 days of meet-and-confer; written
 submissions for claims of $25,000 or less) sensible?
 
@@ -533,3 +1024,5 @@ Software's repository. As a result:
   library is outside this License and disclaims its contents.
 
 The engineering plan is in `dev/backlog/COMMUNITY_TEMPLATES_PLAN.md`.
+
+</details>
