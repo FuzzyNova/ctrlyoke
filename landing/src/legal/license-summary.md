@@ -2,7 +2,7 @@
 # The LICENSE.md version this summary was checked against. terms.astro fails
 # the build when LICENSE.md moves to another version, so a license change
 # can't ship without this summary being reviewed against it.
-licenseVersion: "2.3"
+licenseVersion: "2.4"
 ---
 
 ## Plain-language summary
@@ -16,6 +16,8 @@ This summary is here to help you read the license. It is not the license and doe
 - **Students and academic researchers**, whatever the size of their school. This does not cover the institution's own commercial use.
 
 When you use ctrlyoke for work, the size limit applies to every organization involved: the one that employs or engages you, any organization you use it for (such as a client), and companies under common control with them.
+
+You can volunteer for a public project under an OSI-approved license without counting the company behind it just because it benefits. The usual organization rules still apply if the company or someone acting for it pays or hires you for that work.
 
 The free tier includes running workflows, custom hooks, the MCP and agent managers, the CLI and MCP server, and the dashboard on the computer ctrlyoke runs on, including when you reach that computer over remote desktop or SSH. A browser on the same physical computer as a local WSL installation, container, or virtual machine running ctrlyoke counts as that computer. Scripted and CI/CD use is allowed too, as long as whoever it runs for is eligible.
 
@@ -37,6 +39,7 @@ The free tier includes running workflows, custom hooks, the MCP and agent manage
 - **Redistribute ctrlyoke** in source or compiled form. You can't publish releases, packages, or binaries from a fork.
 - **Reuse its code in a competitor**, or build ctrlyoke into one. A competitor is a product or service whose main or substantial feature is orchestrating multi-step AI coding-assistant workflows through structured files. You can still use ctrlyoke as an internal development tool, including while building a competing product, and you're free to implement the same ideas and documented formats independently.
 - **Get around the license checks**, use Pro features without a license or an active trial, or restart or stack trials.
+- If you accidentally break the license-check, Pro use, or trial rules in a way that could end your license, you have 30 days from our written notice to stop the use or get a Pro license that covers it. You can fix the breach without paying for past use.
 - **Offer ctrlyoke as a hosted service** to other people. Running it on your own machines and network for your own work is fine, including remote dashboard access for your own use (a Pro feature).
 - **Call it open source.** ctrlyoke is source-available under a commercial license.
 - **Remove** copyright notices, proprietary notices, or logos from the commercial software.

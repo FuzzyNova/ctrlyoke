@@ -2,8 +2,8 @@
 
 **Licensor:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code Extension and companion binaries
-**Effective Date:** November 21, 2026
-**Version:** 2.3
+**Effective Date:** November 22, 2026
+**Version:** 2.4
 
 ## 0. Acceptance
 
@@ -55,6 +55,8 @@ Any material identified as subject to separate third-party terms remains subject
 (iv) any legal entity under common control with You or with an entity described in clauses (i) through (iii). **Control** means ownership of more than fifty percent (50%) of the outstanding shares or beneficial ownership of an entity.
 
 If You operate an independent business, including through a sole proprietorship, Your own business is also Your Organization for that use. If You are a legal entity, clause (ii) applies to the work and working environment of each individual who uses the Software on Your behalf for a client. Each applicable organization is assessed under Section 3.
+
+Clause (iii) does not apply to a legal entity merely because You use the Software to prepare contributions to a Public Open-Source Project that the entity owns, sponsors, maintains, or uses, unless that entity, or another person acting on its behalf, pays or engages You for that work. The independent-client exception in clause (iii) and clauses (i), (ii), and (iv) continue to apply. A **Public Open-Source Project** is a project whose source code is publicly available under a license approved by the Open Source Initiative.
 
 **"Compete"** means developing, marketing, offering, or providing a product or service in which the orchestration of multi-step AI coding-assistant workflows through structured files is a primary or substantial feature.
 
@@ -292,7 +294,7 @@ This License is effective from the date You first install, use, or access the So
 
 ### (b) Termination for breach
 
-This License terminates if You materially breach any of its terms and fail to cure the breach within thirty (30) days after written notice from Licensor. A breach of Section 4(a) or 4(c), or a knowing and material breach of Section 4(b), terminates this License immediately without notice. Upon termination You must cease using the Software and destroy all copies of it in Your possession or control, except to the extent retention is required by law. Termination does not require You to destroy Open Materials, Your Content, or materials You may keep under separate third-party terms. This exception does not authorize retaining any part of the Software included in those materials unless You have a separate right to do so.
+This License terminates if You materially breach any of its terms and fail to cure the breach within thirty (30) days after written notice from Licensor. A breach of Section 4(a), a knowing breach of Section 4(c), or a knowing and material breach of Section 4(b) terminates this License immediately without notice. For purposes of this Section 15(b), a breach of Section 4(c) is knowing if You (i) deliberately circumvent, disable, or defeat the Software's license verification mechanisms, (ii) restart, extend, or obtain an additional Evaluation Trial knowing that doing so exceeds the limits in Section 4(c), or (iii) continue to use a Pro Tier capability after You actually know that the use requires a valid, unrevoked Pro License or an active Evaluation Trial and that You have neither. A material breach of Section 4(c) that is not knowing is subject to the thirty (30) day cure period above. For purposes of termination, You cure the breach if, by the end of that period, You have stopped the affected use or obtained a valid Pro License that covers that use. Either option cures the breach without payment for past use. For the breach identified in Licensor's written notice, that notice and Your continuation of the same use during the cure period, by themselves, are insufficient to establish a knowing breach. Upon termination You must cease using the Software and destroy all copies of it in Your possession or control, except to the extent retention is required by law. Termination does not require You to destroy Open Materials, Your Content, or materials You may keep under separate third-party terms. This exception does not authorize retaining any part of the Software included in those materials unless You have a separate right to do so.
 
 ### (c) Survival
 

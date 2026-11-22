@@ -97,6 +97,12 @@
       "version": "1.0",
       "published": "2026-11-21",
       "sha256": "7f972cd9d1fa72b11c0c616fc0a972b61a88cff1578c471d7c6189139355c6e1"
+    },
+    {
+      "document": "eula",
+      "version": "2.4",
+      "published": "2026-11-22",
+      "sha256": "254001945f5302cc069533e73422702e79c22f457b3037ba34722a8486fda1a5"
     }
   ]
 }

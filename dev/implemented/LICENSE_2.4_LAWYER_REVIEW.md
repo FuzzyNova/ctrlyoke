@@ -8,6 +8,11 @@
 
 Counsel as approved the draft and made recommendations below on 11/22/2026
 
+**Adopted November 22, 2026** as root `LICENSE.md` v2.4, archived at `legal/archive/eula/2.4.md`,
+together with the plain-language summary changes below. v2.3 stays at its permanent URL. The
+open items in the [adoption checklist](#adoption-checklist-fuzzy-nova) (test-mode checkouts and
+the CLA Assistant setup) are release and operations work, not further legal review.
+
 **Facts.** v2.3 was adopted and published on November 21, 2026. Fuzzy Nova reports that
 no ctrlyoke release (VSIX or npm) has shipped with v2.3 and that there are no customers or
 Enterprise orders. Both changes below narrow the licensee's exposure. [Current terms](https://ctrlyoke.dev/terms/)
