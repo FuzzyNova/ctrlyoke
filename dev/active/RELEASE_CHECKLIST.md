@@ -1369,7 +1369,8 @@ money or a retainer now.
       and npm package; §5(e) says the MIT-0 file is "distributed with the Software". After
       the release, run `vsce ls` and `npm pack --dry-run` and confirm both files are in them.
 - [ ] **Test-mode Pro and Enterprise orders** (test mode, no cost). In each order's custom
-      data, confirm `terms_versions` (`eula@2.3; privacy@1.7` for Pro; all four documents for
+      data, confirm `terms_versions` (`eula@2.4; privacy@1.7` for Pro, since license v2.4 was
+      adopted November 22, 2026; all four documents for
       Enterprise), `terms_accepted_at` and `terms_acceptance_method`. Confirm the Pro button
       still opens the Lemon Squeezy overlay; the agent could not click through it. These
       records are your proof of assent under §0.
@@ -1398,9 +1399,26 @@ money or a retainer now.
       v1.7 says about telemetry and support content still matches what the product sends.
       Re-check whenever telemetry changes. An inaccurate policy is the exposure, not a missing
       lawyer.
-- [ ] **CLA before merging any outside PR.** Merge only when the PR's CLA box is checked. The
-      PR description is the acceptance record, so don't edit it away. Optional later: a CLA bot
-      such as CLA Assistant (free) to enforce it.
+- [x] **CLA before merging any outside PR.** Set up November 22, 2026 per the
+      [v2.4 memo](../implemented/LICENSE_2.4_LAWYER_REVIEW.md#cla-acceptance-record): the hosted
+      CLA Assistant (cla-assistant.io) presents CLA v1.0 from a dedicated Gist, signing was
+      tested on a fork PR, and the `main` ruleset requires its `license/cla` status (any
+      source, since CLA Assistant posts a commit status, not an app check). Exempt accounts: the maintainer and
+      `dependabot[bot]` only. Don't exempt the FuzzyNova org, because that would exempt any
+      future org member who has signed nothing. Ongoing:
+  - Export the signatures from cla-assistant.io periodically and keep them with the Gist
+    revision. Changing the Gist makes every contributor sign again, so a new CLA version
+    goes through `legal/README.md` and then a new Gist.
+  - Where someone signs for a company, record the entity and the signer's authority.
+  - Earlier checkbox and email acceptances stay valid. For a contribution merged before its
+    author accepted the CLA, get a written confirmation that names it (for example, by PR
+    URL) before relying on the CLA for it.
+- [ ] **Next counsel question (no rush): CLA Assistant follow-ups.** (1) Should the next
+      `PRIVACY.md` version cover CLA signature records (GitHub username, signing time) held
+      by cla-assistant.io? Until then, its privacy-policy consent field is left blank.
+      (2) CLA Assistant's fixed PR comment says "Like many open source projects". The PR
+      template states that ctrlyoke is source-available, and the hosted service's comment
+      text can't be changed.
 - [ ] **Every future legal change goes through `legal/README.md`.** `check:legal` blocks any
       other path.
 - [ ] **Before December 11, 2027: CRA conformity.** Declare a support period (normally at
