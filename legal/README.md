@@ -36,6 +36,15 @@ must stay retrievable. Both checkouts link the versioned URLs.
 
 The rules live in [`scripts/legal-archive.mjs`](../scripts/legal-archive.mjs).
 
+A version counts as published once it is pushed to `main`, which deploys the site. Until
+then, an approved but unpushed version may still be replaced: delete its archive file and
+`versions.json` entry, update the root document, and run `npm run legal:archive` again.
+
+## Other legal notices
+
+- [`OPEN_MATERIALS_EARLIER_RELEASES.md`](OPEN_MATERIALS_EARLIER_RELEASES.md) (November 21, 2026) extends the MIT-0 grant for Open Materials to releases v0.1.1 through v0.8.0. Dated
+  notices like this are never edited; publish a correction as a new dated notice.
+
 ## Releasing a new version (for example, license 2.4)
 
 **1. Draft.** Write the draft and the counsel memo in `dev/active/` (for example

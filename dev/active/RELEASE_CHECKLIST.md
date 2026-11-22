@@ -1359,11 +1359,9 @@ money or a retainer now.
 
 ### 15.1 MUST
 
-- [ ] **Before pushing: counsel's go-ahead on the MIT-0 grant.** Ask Fuzzy Nova's counsel
-      on the open IP matter (business Drive, `Formation & Legal/`) whether an irrevocable
-      public MIT-0 grant on the templates, schemas and docs examples raises any concern.
-      Both v2.3 §5(e) and the earlier-releases notice make that grant. The v2.3 commits stay
-      local until then.
+- [x] **Before pushing: counsel's go-ahead on the MIT-0 grant.** Given November 21, 2026:
+      counsel on the open IP matter cleared the license updates and the MIT-0 grant. Any
+      update that matter needs is to the (unpublished) IP assignment, not the license.
 - [ ] **Push and deploy, then ship a release.** The push deploys `/terms/` v2.3 and the
       archive pages. The next release puts `LICENSE.md` v2.3 and `LICENSE-MIT-0` in the VSIX
       and npm package; §5(e) says the MIT-0 file is "distributed with the Software". After
@@ -1375,10 +1373,10 @@ money or a retainer now.
       records are your proof of assent under §0.
 - [x] **Confirm provenance of the Open Materials** (November 21, 2026). Nothing was copied
       from outside sources, and the signed IP Assignment Agreement (September 17, 2026) gives
-      ctrlyoke, including its templates, schemas and docs, to Fuzzy Nova LLC. After
-      counsel's go-ahead above, publish
-      [`OPEN_MATERIALS_EARLIER_RELEASES_NOTICE.md`](OPEN_MATERIALS_EARLIER_RELEASES_NOTICE.md)
-      as that file describes (recommended, free; §5(e) already makes the grant).
+      ctrlyoke, including its templates, schemas and docs, to Fuzzy Nova LLC. The dated notice is
+      published as
+      [`legal/OPEN_MATERIALS_EARLIER_RELEASES.md`](../../legal/OPEN_MATERIALS_EARLIER_RELEASES.md).
+      Mention it in the next release's notes.
 - [ ] **EU Cyber Resilience Act vulnerability reporting.** This has applied since
       **September 11, 2026** to monetized products sold in the EU, ctrlyoke included. It needs
       no lawyer, only a written runbook and an account:
