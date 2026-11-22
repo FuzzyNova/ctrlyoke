@@ -42,8 +42,9 @@ contributor to fix the commit author, or, once you've checked who wrote it, add 
    limited to `FuzzyNova/ctrlyoke`, with **Commit statuses: Read and write**, **Pull
    requests: Read and write** and **Issues: Read and write** (PR comments use the issues
    API). Set it to expire, and note the date in `dev/active/RELEASE_CHECKLIST.md`.
-2. **Sheet.** In Google Drive, create a private Sheet named `ctrlyoke CLA acceptances`. Don't
-   share it.
+2. **Sheet.** Signed in as the Workspace account that receives `licensing@` mail (it reads
+   that Gmail), create a private Sheet named `ctrlyoke CLA acceptances` in the Fuzzy Nova
+   Drive folder `Contracts & Agreements/Contributor License Agreements/`. Don't share it.
 3. **Script.** In the Sheet, open **Extensions → Apps Script**, replace `Code.gs` with this
    folder's `Code.gs`, and save. Under **Project Settings → Script properties**, add
    `GITHUB_TOKEN`, and set the time zone to yours.

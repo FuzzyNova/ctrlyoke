@@ -1421,7 +1421,9 @@ money or a retainer now.
         console → Account → Account settings → Legal and compliance → Security and Privacy
         Additional Terms.
   - [ ] Write the legitimate interests assessment (memo item 3) and the CLA retention
-        procedure (memo item 4). A page each, kept with the legal records, not in this repo.
+        procedure (memo item 4). A page each, in the Fuzzy Nova Drive folder
+        `Contracts & Agreements/Contributor License Agreements/` beside the
+        `ctrlyoke CLA acceptances` Sheet, not in this repo.
   - [ ] Deploy the CLA intake script, following
         [`legal/cla-intake/README.md`](../../legal/cla-intake/README.md) (token, private
         Sheet, `setup`, `cla-verified` label). It posts the acceptance request on each PR, so
