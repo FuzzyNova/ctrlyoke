@@ -1408,36 +1408,36 @@ money or a retainer now.
       CLA Assistant's only signature was the `TuringTheServer` test account. Steps:
   - [x] Counsel approved the email plan; Privacy Policy 1.8 adopted. `CONTRIBUTING.md`, the PR
         template, `license-summary.md`, `legal/README.md` and `TRUST_PAGE.md` updated.
-  - [ ] **Taking down CLA Assistant:** confirm it still holds only the test signature, then
-        unlink `FuzzyNova/ctrlyoke` and remove the required `license/cla` status from the
-        `main` ruleset. If a real signature has appeared, keep its export and follow the
-        fallback in memo item 2. Delete local copies of the test signature exports.
-        Code-owner review stays required and is the CLA gate until the `cla` status below is
-        live.
+  - [x] Unlinked `FuzzyNova/ctrlyoke` in CLA Assistant (November 22, 2026).
+  - [ ] **Finish taking down CLA Assistant:**
+    - [ ] Delete the repository webhook unlinking left behind
+          (`https://cla-assistant.io/github/webhook/ctrlyoke`, repo Settings → Webhooks).
+    - [ ] Remove `license/cla` from the `main` ruleset's required status checks. Until then,
+          every outside PR is blocked on a check nothing posts.
+    - [ ] Revoke the CLA assistant OAuth app: github.com/settings/applications →
+          **Authorized OAuth Apps**, on the maintainer and `TuringTheServer` accounts, and
+          under the FuzzyNova org's **Third-party access** if listed.
+    - [ ] Delete local copies of the test signature exports. The Gist can stay or go: the
+          CLA text is archived in `legal/archive/cla/1.0.md`.
   - [ ] Confirm the Google Workspace Cloud Data Processing Addendum is accepted: Admin
         console → Account → Account settings → Legal and compliance → Security and Privacy
         Additional Terms.
   - [ ] Write the legitimate interests assessment (memo item 3) and the CLA retention
         procedure (memo item 4). A page each, kept with the legal records, not in this repo.
-  - [ ] Save this as a GitHub saved reply (Settings → Saved replies). Replace `PR_URL` in
-        the link with the PR's URL each time you post it:
-
-        ```markdown
-        Thanks for the contribution. Before we can merge this pull request, please [email your acceptance](mailto:licensing@ctrlyoke.dev?subject=ctrlyoke%20CLA%20acceptance&body=I%20accept%20the%20ctrlyoke%20Contributor%20License%20Agreement%20v1.0%20for%20PR_URL.%20My%20GitHub%20username%20is%20) of the [ctrlyoke Contributor License Agreement v1.0](https://ctrlyoke.dev/cla/1.0/) to `licensing@ctrlyoke.dev`, then reply here to say you have sent it. Please don't post your email address or organization name here. ctrlyoke is source-available, not open source. Our [contributor privacy notice](https://ctrlyoke.dev/privacy/#36-contributions-and-contributor-license-agreement-records) explains how we handle your acceptance.
-        ```
-
-  - [ ] Optional: deploy the CLA Apps Script (memo item 2) on the `licensing@` mailbox,
-        then require its `cla` status in the `main` ruleset.
-  - [ ] Test the full flow with `TuringTheServer`: saved reply, email, confirming PR comment,
-        code-owner approval (and the `cla` status, once deployed).
+  - [ ] Deploy the CLA intake script, following
+        [`legal/cla-intake/README.md`](../../legal/cla-intake/README.md) (token, private
+        Sheet, `setup`, `cla-verified` label). It posts the acceptance request on each PR, so
+        no saved reply is needed.
+  - [ ] Test the full flow with `TuringTheServer` (README step 6), then require `cla` in the
+        `main` ruleset. Then add one sentence to `CONTRIBUTING.md` saying the `cla` check
+        turns green once the acceptance is recorded.
+  - [ ] Record the GitHub token's expiry date here and renew it before then: (not set yet).
   - [ ] Place a test-mode Pro and Enterprise order and check that each records `privacy@1.8`.
-  - **Ongoing, per outside contributor:** post the saved reply. When the email arrives,
-    check that the username matches the PR author and that they confirmed on the PR, then
-    file the email under a `CLA` label in Workspace and approve. Once the script is live it
-    does this, and you only review what it flags: entity acceptances, and emails it can't
-    match to a PR author. One acceptance covers their later PRs. For a company, the email
-    must name the entity and include the authority statement. For a contribution merged
-    before its author accepted, get a written confirmation that names it by PR URL.
+  - **Ongoing:** handle what the script flags (`CLA/needs-review` emails: entity
+    acceptances, mismatches, unauthenticated senders) by setting the row's Status in the
+    Sheet, and add `cla-verified` to a PR only after checking a commit author it couldn't
+    match. Review the Sheet yearly under Privacy Policy §8. For a contribution merged before
+    its author accepted, get a written confirmation that names it by PR URL.
 - [ ] **Every future legal change goes through `legal/README.md`.** `check:legal` blocks any
       other path.
 - [ ] **Before December 11, 2027: CRA conformity.** Declare a support period (normally at
