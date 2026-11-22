@@ -6,7 +6,7 @@
 [Open the complete v2.4 license draft](LICENSE_2.4_DRAFT.md) ·
 [Previous memo (v2.3)](../implemented/LICENSE_2.3_LAWYER_REVIEW.md)
 
-Counsel as approved the draft and made recommendations below on 11/22/2026
+Counsel has approved the draft and made recommendations below on 11/22/2026
 
 **Adopted November 22, 2026** as root `LICENSE.md` v2.4, archived at `legal/archive/eula/2.4.md`,
 together with the plain-language summary changes below. v2.3 stays at its permanent URL. The
