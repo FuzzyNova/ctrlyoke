@@ -1410,10 +1410,10 @@ money or a retainer now.
         template, `license-summary.md`, `legal/README.md` and `TRUST_PAGE.md` updated.
   - [x] Unlinked `FuzzyNova/ctrlyoke` in CLA Assistant (November 22, 2026).
   - [ ] **Finish taking down CLA Assistant:**
-    - [ ] Delete the repository webhook unlinking left behind
-          (`https://cla-assistant.io/github/webhook/ctrlyoke`, repo Settings → Webhooks).
-    - [ ] Remove `license/cla` from the `main` ruleset's required status checks. Until then,
-          every outside PR is blocked on a check nothing posts.
+    - [x] Deleted the repository webhook unlinking left behind (November 22, 2026).
+    - [x] Removed `license/cla` from the `main` ruleset's required status checks; only
+          `fast-checks` and code-owner review remain (November 22, 2026).
+    - [x] Created the `cla-verified` PR label (November 22, 2026).
     - [ ] Revoke the CLA assistant OAuth app: github.com/settings/applications →
           **Authorized OAuth Apps**, on the maintainer and `TuringTheServer` accounts, and
           under the FuzzyNova org's **Third-party access** if listed.
