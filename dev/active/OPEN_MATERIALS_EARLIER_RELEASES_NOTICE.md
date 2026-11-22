@@ -10,7 +10,7 @@ the dated notice it asks for.
       tags: one author, Nathan Hickey, under two display names (`Nathan` and
       `Nathan Hickey`), one email. The only co-author trailers name GitHub Copilot, an AI
       tool, not a rights holder.
-- [ ] **No third-party material.** Nathan confirms that no template, agent definition,
+- [x] **No third-party material.** Confirmed by Nathan, November 21, 2026. Nathan confirms that no template, agent definition,
       skill, condition script, schema or documentation example was pasted in or adapted
       from an outside source, such as another project's template, a harness's own docs, or a
       blog or forum snippet, whether he or an agent did the pasting. Otherwise he lists the
@@ -18,15 +18,19 @@ the dated notice it asks for.
       ctrlyoke at Nathan's direction are not third-party material: the AI vendors' terms give
       the output to the user, and any part that is not protected by copyright needs no
       license (the notice grants only rights Fuzzy Nova LLC has).
-- [ ] **Fuzzy Nova LLC holds Nathan's rights.** Work from before the LLC existed (commits
-      from June 2026) belongs to Nathan personally unless he assigned it. Confirm that a
-      founder IP assignment, or an IP clause in the operating agreement, covers it (business
-      Drive, `Formation & Legal/`), or sign one (counsel: "any rights held by the individual
-      author that Fuzzy Nova needs authority to license").
+- [x] **Fuzzy Nova LLC holds Nathan's rights.** Confirmed November 21, 2026: the signed
+      IP Assignment Agreement (effective September 14, 2026, signed September 17, 2026;
+      business Drive, `Formation & Legal/`) assigns ctrlyoke to Fuzzy Nova LLC, naming its
+      schemas, built-in templates and documentation in Schedule A. It also covers later work
+      on ctrlyoke (§1.4) and ratifies grants made before the LLC existed (§1.5).
+- [ ] **Hold for counsel's go-ahead.** Before publishing this notice, or pushing license
+      v2.3, whose §5(e) makes the same grant, Nathan confirms with Fuzzy Nova's counsel on
+      an open IP matter (business Drive, `Formation & Legal/`) that an irrevocable public
+      MIT-0 grant raises no concern.
 
 ## Publishing
 
-Once both boxes are checked, move the notice below to `legal/OPEN_MATERIALS_EARLIER_RELEASES.md`
+Once every box is checked, move the notice below to `legal/OPEN_MATERIALS_EARLIER_RELEASES.md`
 (`git mv`), set its date to the publication date, add it to the release notes of the next
 release, and link it from `legal/README.md`. It is not a versioned document, so it is not
 added to `legal/versions.json`. Publish corrections as a new dated notice rather than
