@@ -402,15 +402,19 @@ function requestAcceptance_(pr, missing) {
 }
 
 function requestCommentBody_(prUrl, contributors) {
-  const link = (login) => {
-    const body =
-      `I accept the ctrlyoke Contributor License Agreement v${CONFIG.claVersion} for ` +
-      `${prUrl}. My GitHub username is ${login}.`;
-    return (
-      `mailto:${CONFIG.mailbox}?subject=${encodeURIComponent(CONFIG.emailSubject)}` +
-      `&body=${encodeURIComponent(body)}`
-    );
-  };
+  const acceptanceText = (login) =>
+    `I accept the ctrlyoke Contributor License Agreement v${CONFIG.claVersion} for ` +
+    `${prUrl}. My GitHub username is ${login}.`;
+  const link = (login) =>
+    `mailto:${CONFIG.mailbox}?subject=${encodeURIComponent(CONFIG.emailSubject)}` +
+    `&body=${encodeURIComponent(acceptanceText(login))}`;
+  // Many browsers have no mailto handler set up, so the link can open nothing.
+  const fallback =
+    `If the link doesn't open your email, send this to \`${CONFIG.mailbox}\` with the ` +
+    `subject \`${CONFIG.emailSubject}\`:\n\n` +
+    contributors
+      .map((c) => "```text\n" + acceptanceText(c.login) + "\n```")
+      .join("\n\n");
   const mentions = contributors.map((c) => "@" + c.login).join(", ");
   const claLink = `[ctrlyoke Contributor License Agreement v${CONFIG.claVersion}](${CONFIG.claUrl})`;
   const ask =
@@ -428,6 +432,8 @@ function requestCommentBody_(prUrl, contributors) {
   return [
     `<!-- ${REQUEST_MARKER}: ${contributors.map((c) => c.id).join(",")} -->`,
     `${mentions} Thanks for the contribution. Before we can merge this pull request, ${ask}`,
+    "",
+    fallback,
     "",
     "Please don't post your email address or organization name here. ctrlyoke is " +
       "source-available, not open source. Our " +
