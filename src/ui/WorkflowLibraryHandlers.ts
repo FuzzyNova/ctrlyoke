@@ -877,6 +877,21 @@ export class WorkflowLibraryHandlers {
     }
   }
 
+  /** Install downloaded template content as a custom template. */
+  installTemplateContent(
+    templateName: string,
+    scope: TemplateScope,
+    format: WorkflowFileFormat,
+    content: string
+  ): Promise<{ path: string; templateId: string }> {
+    return this.templateManager.installTemplateContent(
+      templateName,
+      scope,
+      format,
+      content
+    );
+  }
+
   /** Load template metadata without opening the New Workflow modal. */
   async handleTemplateCatalogRequest(
     postMessage?: PostMessageFn

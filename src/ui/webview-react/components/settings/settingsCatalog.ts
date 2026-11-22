@@ -54,6 +54,14 @@ const STATIC_SETTINGS_CATALOG = {
       "Values pre-filled when you create a workflow from a template.",
     keywords: ["template", "saved value", "defaults"],
   },
+  "landmark:templates.discover": {
+    id: "landmark:templates.discover",
+    tab: GLOBAL_SETTINGS_TABS.TEMPLATES,
+    label: "Community templates",
+    description:
+      "Browse and install workflow templates shared by other ctrlyoke users.",
+    keywords: ["community", "discover", "install", "share", "gallery"],
+  },
   "general.defaultTemplate": {
     id: "general.defaultTemplate",
     path: "general.defaultTemplate",

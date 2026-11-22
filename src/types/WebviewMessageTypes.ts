@@ -3174,6 +3174,50 @@ export interface McpRegistrySearchResultMessage {
   error?: string;
 }
 
+/** One template listed in the community library's generated `index.json`. */
+export interface CommunityTemplateEntry {
+  /** The file's basename (`<author>-<slug>`); also the installed template's name. */
+  id: string;
+  name: string;
+  description: string;
+  author?: string;
+  tags: string[];
+  /** File name inside the library's `templates/` folder. */
+  file: string;
+}
+
+/** Webview → Extension: list the community library. */
+export interface RequestCommunityTemplateIndexMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX;
+  /** Download the index again instead of answering from this session's copy. */
+  refresh?: boolean;
+}
+
+/** Extension → Webview: the community library, or why it could not be read. */
+export interface CommunityTemplateIndexResultMessage {
+  type: typeof MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT;
+  templates: CommunityTemplateEntry[];
+  error?: string;
+}
+
+/** Webview → Extension: download, validate and install one community template. */
+export interface InstallCommunityTemplateMessage {
+  type: typeof MESSAGE_TYPES.INSTALL_COMMUNITY_TEMPLATE;
+  id: string;
+  scope: SettingWriteScope;
+}
+
+/** Extension → Webview: how a community template install ended. */
+export interface CommunityTemplateInstallResultMessage {
+  type: typeof MESSAGE_TYPES.COMMUNITY_TEMPLATE_INSTALL_RESULT;
+  id: string;
+  scope: SettingWriteScope;
+  success: boolean;
+  error?: string;
+  /** The installed template's id (`custom:<scope>:<id>`), on success. */
+  localTemplateId?: string;
+}
+
 export interface RequestMcpConfigPreviewMessage {
   type: typeof MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW;
   mcpServerName: string;
@@ -3857,6 +3901,8 @@ export type IncomingMessage =
   | McpRegistryServersUpdateMessage
   | McpLocalScanResultMessage
   | McpRegistrySearchResultMessage
+  | CommunityTemplateIndexResultMessage
+  | CommunityTemplateInstallResultMessage
   | LspServersUpdateMessage
   | LspLocalScanResultMessage
   | LspInstallProgressMessage

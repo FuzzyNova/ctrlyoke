@@ -9,6 +9,7 @@ import {
   TEMPLATE_SCOPES,
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
   WORKFLOW_FILE_FORMATS,
+  buildCustomTemplateId,
   type SettingWriteScope,
 } from "../../types/DashboardConstants";
 import { MockPlatform } from "../helpers/mockHarness";
@@ -489,7 +490,7 @@ suite("TemplateManager variable metadata", () => {
   suite("custom template ID scope encoding", () => {
     test("buildCustomTemplateId round-trips through parseCustomTemplateId", () => {
       const tm = makeManager();
-      const workspaceId = tm.buildCustomTemplateId(
+      const workspaceId = buildCustomTemplateId(
         TEMPLATE_SCOPES.WORKSPACE,
         "my-template"
       );
@@ -499,7 +500,7 @@ suite("TemplateManager variable metadata", () => {
         name: "my-template",
       });
 
-      const userId = tm.buildCustomTemplateId(
+      const userId = buildCustomTemplateId(
         TEMPLATE_SCOPES.USER,
         "shared-template"
       );
@@ -771,6 +772,129 @@ suite("TemplateManager variable metadata", () => {
           "custom:workspace:yml-template",
         ]
       );
+    });
+
+    suite("installTemplateContent", () => {
+      const communityTemplate = [
+        "# Shared by a community author; comments survive install.",
+        "_templateMeta:",
+        "  name: Review Branch",
+        "  description: Review the branch",
+        "  author: octocat",
+        "  tags: [review, git]",
+        "  variables:",
+        "    harness:",
+        "      type: harness",
+        "      default: claude-cli",
+        "harness: '{harness}'",
+        "steps:",
+        "  - prompt: Review ~diff",
+        "",
+      ].join("\n");
+
+      test("writes valid content verbatim and returns its custom id", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+
+        const installed = await tm.installTemplateContent(
+          "octocat-review-branch",
+          TEMPLATE_SCOPES.USER,
+          WORKFLOW_FILE_FORMATS.YAML,
+          communityTemplate
+        );
+
+        assert.deepStrictEqual(installed, {
+          path: path.join(templateDir, "octocat-review-branch.ctrlyoke.yaml"),
+          templateId: "custom:user:octocat-review-branch",
+        });
+        assert.strictEqual(
+          await fs.promises.readFile(installed.path, "utf-8"),
+          communityTemplate
+        );
+      });
+
+      test("discovers author and tags from _templateMeta", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        await fs.promises.writeFile(
+          path.join(templateDir, "octocat-review-branch.ctrlyoke.yaml"),
+          communityTemplate,
+          "utf-8"
+        );
+
+        const [template] = await tm.discoverTemplatesInDir(
+          templateDir,
+          TEMPLATE_SCOPES.USER
+        );
+
+        assert.strictEqual(template.author, "octocat");
+        assert.deepStrictEqual(template.tags, ["review", "git"]);
+      });
+
+      test("rejects content that fails the workflow schema", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+
+        await assert.rejects(
+          tm.installTemplateContent(
+            "bad-harness",
+            TEMPLATE_SCOPES.USER,
+            WORKFLOW_FILE_FORMATS.YAML,
+            "_templateMeta:\n  name: Bad\nharness: not-a-harness\nsteps:\n  - prompt: hi\n"
+          )
+        );
+        assert.deepStrictEqual(await fs.promises.readdir(templateDir), []);
+      });
+
+      test("rejects content without _templateMeta or that does not parse", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+
+        await assert.rejects(
+          tm.installTemplateContent(
+            "plain",
+            TEMPLATE_SCOPES.USER,
+            WORKFLOW_FILE_FORMATS.YAML,
+            "steps:\n  - prompt: hi\n"
+          ),
+          /no _templateMeta/
+        );
+        await assert.rejects(
+          tm.installTemplateContent(
+            "broken",
+            TEMPLATE_SCOPES.USER,
+            WORKFLOW_FILE_FORMATS.YAML,
+            "steps: [\n"
+          ),
+          /not valid YAML/
+        );
+        assert.deepStrictEqual(await fs.promises.readdir(templateDir), []);
+      });
+
+      test("never overwrites an existing template", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const existing = path.join(
+          templateDir,
+          "octocat-review-branch.ctrlyoke.json"
+        );
+        await fs.promises.writeFile(existing, "{}", "utf-8");
+
+        await assert.rejects(
+          tm.installTemplateContent(
+            "octocat-review-branch",
+            TEMPLATE_SCOPES.USER,
+            WORKFLOW_FILE_FORMATS.YAML,
+            communityTemplate
+          ),
+          /Template already exists/
+        );
+        assert.strictEqual(await fs.promises.readFile(existing, "utf-8"), "{}");
+      });
     });
 
     test("rejects a duplicate basename even when the formats differ", async () => {

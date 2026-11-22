@@ -465,6 +465,8 @@ export type ProFeature = (typeof PRO_FEATURES)[keyof typeof PRO_FEATURES];
 export const DOCS_URLS = {
   ROOT: "https://ctrlyoke.dev/docs",
   CLI_REFERENCE: "https://ctrlyoke.dev/docs/cli/ctrlyoke",
+  COMMUNITY_TEMPLATES:
+    "https://ctrlyoke.dev/docs/workflows/templates#community-templates",
 } as const;
 
 /**
@@ -495,6 +497,43 @@ export const DATA_SOURCES = {
     operator: "Vercel",
   },
 } as const;
+
+/**
+ * The community template library: a public, PR-reviewed GitHub repository
+ * (MIT-0) whose generated `index.json` the Templates tab's Discover page lists.
+ * Files are read through jsDelivr's GitHub mirror, which needs no auth and has
+ * no per-IP API rate limit; GitHub itself is only linked to, never fetched.
+ */
+export const COMMUNITY_TEMPLATES = {
+  label: "ctrlyoke-templates",
+  repo: "FuzzyNova/ctrlyoke-templates",
+  branch: "main",
+  /** Host every index and template download goes to. */
+  cdnHost: "cdn.jsdelivr.net",
+  /** Repository folder holding one `<author>-<slug>.ctrlyoke.yaml` per template. */
+  templatesDir: "templates",
+  indexFile: "index.json",
+  /** Major `schemaVersion` of `index.json` this ctrlyoke reads. */
+  indexSchemaVersion: 1,
+} as const;
+
+/** Largest template file ctrlyoke downloads or installs from someone else. */
+export const MAX_INSTALLED_TEMPLATE_BYTES = 256 * 1024;
+
+/** Base URL the community library is downloaded from. */
+export const COMMUNITY_TEMPLATES_CDN_BASE_URL = `https://${COMMUNITY_TEMPLATES.cdnHost}/gh/${COMMUNITY_TEMPLATES.repo}@${COMMUNITY_TEMPLATES.branch}`;
+
+/** Links into the community template repository on GitHub. */
+export const COMMUNITY_TEMPLATES_URLS = {
+  REPO: `https://github.com/${COMMUNITY_TEMPLATES.repo}`,
+  CONTRIBUTING: `https://github.com/${COMMUNITY_TEMPLATES.repo}/blob/${COMMUNITY_TEMPLATES.branch}/CONTRIBUTING.md`,
+  REPORT_ISSUE: `https://github.com/${COMMUNITY_TEMPLATES.repo}/issues/new?template=report-template.yml`,
+} as const;
+
+/** The GitHub page showing one community template's source. */
+export function getCommunityTemplateSourceUrl(file: string): string {
+  return `${COMMUNITY_TEMPLATES_URLS.REPO}/blob/${COMMUNITY_TEMPLATES.branch}/${COMMUNITY_TEMPLATES.templatesDir}/${encodeURIComponent(file)}`;
+}
 
 /** Verdicts a skills.sh security audit provider can return. */
 export const SKILL_AUDIT_STATUSES = {
@@ -951,6 +990,12 @@ export const MESSAGE_TYPES = {
   MCP_REGISTRY_SEARCH_RESULT: "mcpRegistrySearchResult", // Extension -> Webview: { servers: RegistryMcpEntry[], nextCursor?, error? }
   REQUEST_MCP_CONFIG_PREVIEW: "requestMcpConfigPreview", // Webview -> Extension: request a /mcp:<name> reference's resolved server config for the preview modal
   MCP_CONFIG_PREVIEW_RESULT: "mcpConfigPreviewResult", // Extension -> Webview: { mcpServerName, content, found } JSON for modal
+
+  // Community templates (Templates tab → Discover) — Webview ↔ Extension
+  REQUEST_COMMUNITY_TEMPLATE_INDEX: "requestCommunityTemplateIndex", // Webview -> Extension: { refresh? }
+  COMMUNITY_TEMPLATE_INDEX_RESULT: "communityTemplateIndexResult", // Extension -> Webview: { templates, error? }
+  INSTALL_COMMUNITY_TEMPLATE: "installCommunityTemplate", // Webview -> Extension: { id, scope }
+  COMMUNITY_TEMPLATE_INSTALL_RESULT: "communityTemplateInstallResult", // Extension -> Webview: { id, scope, success, error?, localTemplateId? }
 
   // Language server manager — Webview ↔ Extension
   REQUEST_LSP_SERVERS: "requestLspServers",
@@ -4597,6 +4642,14 @@ export const TEMPLATE_SCOPES = {
 
 export type TemplateScope =
   (typeof TEMPLATE_SCOPES)[keyof typeof TEMPLATE_SCOPES];
+
+/** A custom template's catalog id: `custom:<scope>:<file basename>`. */
+export function buildCustomTemplateId(
+  scope: TemplateScope,
+  name: string
+): string {
+  return `custom:${scope}:${name}`;
+}
 
 /** Provenance for a template variable's effective default. */
 export const TEMPLATE_VARIABLE_DEFAULT_SOURCES = {

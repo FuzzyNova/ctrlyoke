@@ -1075,6 +1075,14 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "string",
         "description": "Short explanation shown in the template picker."
       },
+      "author": {
+        "valueKind": "string",
+        "description": "Who wrote the template, such as a GitHub handle. Shown in the community template gallery. Free text; ctrlyoke does not verify it."
+      },
+      "tags": {
+        "valueKind": "array",
+        "description": "Short keywords for filtering the community template gallery, such as `review` or `testing`."
+      },
       "variables": {
         "valueKind": "object",
         "description": "Metadata for placeholders used by this template, keyed by variable name."

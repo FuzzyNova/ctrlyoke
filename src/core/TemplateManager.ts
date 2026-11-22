@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as jsYaml from "js-yaml";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { getCtrlYokeUserTemplateDir } from "../utils/HarnessDirectoryUtils";
 import {
@@ -13,6 +14,8 @@ import {
   WORKFLOW_FILE_FORMATS,
   TEMPLATE_SCOPES,
   TEMPLATE_IDS,
+  MAX_INSTALLED_TEMPLATE_BYTES,
+  buildCustomTemplateId,
   type TemplateVariableType,
   type DiscoverySource,
   type WorkflowFileFormat,
@@ -122,12 +125,18 @@ export interface TemplateInfo {
     DiscoverySource,
     typeof DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE
   >;
+  /** `_templateMeta.author`: free text crediting who wrote a shared template. */
+  author?: string;
+  /** `_templateMeta.tags`: gallery keywords. */
+  tags?: string[];
 }
 
 /** Parsed shape of a `_templateMeta` block in a template file */
 interface ParsedTemplateMeta {
   name?: string;
   description?: string;
+  author?: string;
+  tags?: string[];
   variables: Record<string, Partial<Omit<TemplateVariable, "name">>>;
 }
 
@@ -223,6 +232,12 @@ export class TemplateManager {
       if (typeof meta["name"] === "string") result.name = meta["name"];
       if (typeof meta["description"] === "string")
         result.description = meta["description"];
+      if (typeof meta["author"] === "string") result.author = meta["author"];
+      if (
+        Array.isArray(meta["tags"]) &&
+        meta["tags"].every((tag) => typeof tag === "string")
+      )
+        result.tags = meta["tags"] as string[];
 
       const variablesMeta = meta["variables"];
       if (
@@ -384,11 +399,6 @@ export class TemplateManager {
     return scope === TEMPLATE_SCOPES.USER
       ? this.getUserTemplatesPath()
       : this.getCustomTemplatesPath();
-  }
-
-  /** Build a custom template ID: `custom:<scope>:<name>`. */
-  private buildCustomTemplateId(scope: TemplateScope, name: string): string {
-    return `custom:${scope}:${name}`;
   }
 
   /**
@@ -912,6 +922,65 @@ export class TemplateManager {
   }
 
   /**
+   * Install a template someone else wrote (a community template downloaded
+   * from the network) as a new custom template. The content is untrusted, so
+   * it must parse, declare `_templateMeta`, and pass the workflow schema
+   * before anything is written; it is then written byte for byte, so the
+   * author's comments and layout survive.
+   *
+   * @param templateName Name for the installed template (its file basename)
+   * @param scope Where to store the template
+   * @param format Format the content is written in
+   * @param content Raw template file content
+   * @returns Path and id of the installed template
+   */
+  async installTemplateContent(
+    templateName: string,
+    scope: TemplateScope,
+    format: WorkflowFileFormat,
+    content: string
+  ): Promise<{ path: string; templateId: string }> {
+    if (Buffer.byteLength(content, "utf-8") > MAX_INSTALLED_TEMPLATE_BYTES) {
+      throw new Error(
+        `Template is larger than ${MAX_INSTALLED_TEMPLATE_BYTES / 1024} KB`
+      );
+    }
+    let parsed: unknown;
+    try {
+      parsed = loadYamlDocument(content, { schema: WORKFLOW_YAML_SCHEMA });
+    } catch (error) {
+      throw new Error(
+        `Template is not valid ${format === WORKFLOW_FILE_FORMATS.JSON ? "JSON" : "YAML"}: ${getErrorMessage(error)}`
+      );
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Template is not a workflow object");
+    }
+    const meta = (parsed as Record<string, unknown>)["_templateMeta"];
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
+      throw new Error("Template has no _templateMeta block");
+    }
+    // Throws on any schema error; unknown keys from a newer schema are only
+    // warnings, the same leniency the template loader applies.
+    this.promptFileParser.getSchemaWarnings(parsed);
+
+    const fullPath = await this.prepareCustomTemplatePath(
+      templateName,
+      scope,
+      format
+    );
+    // `wx` so a file created since the collision check is never overwritten.
+    await fs.promises.writeFile(fullPath, content, {
+      encoding: "utf-8",
+      flag: "wx",
+    });
+    return {
+      path: fullPath,
+      templateId: buildCustomTemplateId(scope, templateName),
+    };
+  }
+
+  /**
    * Discover custom templates from both the workspace (.ctrlyoke/templates/)
    * and user (~/.ctrlyoke/templates/) directories.
    */
@@ -965,7 +1034,7 @@ export class TemplateManager {
             const content = await fs.promises.readFile(fullPath, "utf-8");
             const meta = this.parseTemplateMeta(content);
             const extracted = this.extractVariables(content);
-            const templateId = this.buildCustomTemplateId(source, name);
+            const templateId = buildCustomTemplateId(source, name);
             const variables = this.mergeTemplateVariables(
               extracted,
               meta.variables,
@@ -980,6 +1049,8 @@ export class TemplateManager {
               variables,
               isBuiltIn: false,
               source,
+              ...(meta.author ? { author: meta.author } : {}),
+              ...(meta.tags ? { tags: meta.tags } : {}),
             });
             seenNames.add(name);
           } catch (error) {

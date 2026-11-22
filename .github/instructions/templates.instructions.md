@@ -33,6 +33,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 <manifests>
 - Keep `workflows/manifest.json` in sync with the actual workflow files it exposes; `TemplateImporter` trusts its `file` names when copying.
 - The workflow manifest is the curated import surface. Adding/removing a built-in workflow also requires updating `TemplateManager.BUILT_IN_TEMPLATE_IDS`.
+- Community templates (Settings → Templates → Discover) come from a separate repository, `FuzzyNova/ctrlyoke-templates`, whose generated `index.json` is a cross-repo contract: its `schemaVersion` (`INDEX_SCHEMA_VERSION` in that repo's `scripts/lib.mjs`) must equal `COMMUNITY_TEMPLATES.indexSchemaVersion`, and `CommunityTemplateClient` refuses any other value rather than guessing. That repo's CI validates against the workflow schema of the latest **release tag**, so a new `_templateMeta` field is usable there only after a ctrlyoke release ships it.
 </manifests>
 
 <agentsAndScripts>

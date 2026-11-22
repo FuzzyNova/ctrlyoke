@@ -77,6 +77,8 @@ import type {
   ResolveRunDefinitionChangeMessage,
   RequestMcpConfigPreviewMessage,
   RequestMcpRegistrySearchMessage,
+  RequestCommunityTemplateIndexMessage,
+  InstallCommunityTemplateMessage,
   SaveMcpRegistryServerMessage,
   UndoPromptChangesMessage,
   RedoPromptChangesMessage,
@@ -137,6 +139,7 @@ import type {
 } from "../utils/PromptDiagnosticRules";
 import { HarnessFileMessageService } from "./HarnessFileMessageService";
 import { McpManagerService } from "./McpManagerService";
+import { CommunityTemplateService } from "./CommunityTemplateService";
 import { LanguageServerManagerService } from "./LanguageServerManagerService";
 import { SecretRegistryService } from "./SecretRegistryService";
 import { TerminalMessageHandlers } from "./TerminalMessageHandlers";
@@ -238,6 +241,10 @@ const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
   MESSAGE_TYPES.REQUEST_REGISTRY_SKILL_LOCATION,
   MESSAGE_TYPES.INSTALL_REGISTRY_SKILL,
   MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK,
+  // Community template downloads wait on the network; an install only adds
+  // a new file to a custom-template folder.
+  MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX,
+  MESSAGE_TYPES.INSTALL_COMMUNITY_TEMPLATE,
 ]);
 
 /**
@@ -410,6 +417,7 @@ export class DashboardMessageRouter {
   private readonly promptEditorSupport: PromptEditorSupportService;
   private readonly harnessFiles: HarnessFileMessageService;
   private readonly mcpManager: McpManagerService;
+  private readonly communityTemplates: CommunityTemplateService;
   readonly languageServerManager: LanguageServerManagerService;
   private readonly terminalHandlers: TerminalMessageHandlers;
   private readonly workflowStepHandlers: WorkflowStepHandlers;
@@ -475,6 +483,12 @@ export class DashboardMessageRouter {
       async () => this.callbacks.onHarnessFilesChanged?.()
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
+    this.communityTemplates = new CommunityTemplateService({
+      installTemplateContent: (name, scope, format, content) =>
+        this.serializer.installTemplateContent(name, scope, format, content),
+      refreshTemplateCatalog: (ctx) =>
+        this.serializer.handleTemplateCatalogRequest(ctx.postMessage),
+    });
     this.languageServerManager = new LanguageServerManagerService(() =>
       this.getWorkspaceRoot()
     );
@@ -2538,6 +2552,26 @@ export class DashboardMessageRouter {
     table.set(MESSAGE_TYPES.TEMPLATE_CATALOG_REQUEST, (_message, ctx) => {
       this.serializer.handleTemplateCatalogRequest(ctx.postMessage);
     });
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX,
+      async (message, ctx) => {
+        await this.communityTemplates.handleRequestIndex(
+          ctx,
+          message as RequestCommunityTemplateIndexMessage
+        );
+      }
+    );
+
+    table.set(
+      MESSAGE_TYPES.INSTALL_COMMUNITY_TEMPLATE,
+      async (message, ctx) => {
+        await this.communityTemplates.handleInstall(
+          ctx,
+          message as InstallCommunityTemplateMessage
+        );
+      }
+    );
 
     table.set(MESSAGE_TYPES.TEMPLATE_SELECTED, (message, ctx) => {
       this.serializer.handleTemplateSelected(

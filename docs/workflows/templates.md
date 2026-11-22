@@ -247,3 +247,56 @@ There are two ways to create one:
 
 - In the template picker, click **New template...**, or run the **Create New Custom Template** command, which opens the same form. Choose a name, a location (workspace or user), and a format (YAML or JSON). ctrlyoke copies the currently selected template as the starting point, carrying any saved variable values into the copy as its authored defaults. Select **Template Starter** first to get an example of every variable type.
 - In the Save Workflow dialog, turn on **Save as Template**. This saves the workflow's current values as-is; edit the file afterward to replace fixed values with `{placeholder}` variables.
+
+## Community templates {#community-templates}
+
+Templates shared by other ctrlyoke users live in the public
+[ctrlyoke-templates](https://github.com/FuzzyNova/ctrlyoke-templates) library. Every template
+in it is reviewed in a pull request and checked against the workflow schema before it is
+listed.
+
+### Installing a community template {#install-community-template}
+
+Open **Settings → Templates** and choose **Discover** in the page bar at the bottom. The page
+lists the library, which you can filter by name, author, or tag. **View source** opens a
+template's file on GitHub.
+
+**Install** copies the template into the scope shown in the drawer's title bar: **User**
+installs to `~/.ctrlyoke/templates/`, **Workspace** to `.ctrlyoke/templates/`. ctrlyoke checks
+the downloaded file against the workflow schema before writing it, and never replaces a
+template you already have with the same name. An installed template is an ordinary custom
+template: it appears in **New Workflow** and in **Defaults** straight away, and **Set
+defaults** on its row opens its saved-values card. Editing your copy does not change the
+library, and a later change to the library does not change your copy.
+
+::: warning Review before you run
+Community templates are written by third parties. A template can run shell commands in
+condition scripts and script steps, and can ask an AI harness to change your files. Read a
+template's source before you run a workflow made from it.
+:::
+
+The list is downloaded from `cdn.jsdelivr.net` the first time you open **Discover**, and
+**Refresh** downloads it again. Changes merged into the library can take up to about 12 hours
+to appear.
+
+### Sharing a template {#share-community-template}
+
+To share a template, open a pull request against
+[FuzzyNova/ctrlyoke-templates](https://github.com/FuzzyNova/ctrlyoke-templates) that adds one
+file, `templates/<your-github-handle>-<template-name>.ctrlyoke.yaml`. The library's
+contributing guide describes the checks it must pass. Templates in the library are licensed
+under MIT-0, so anyone may copy and adapt them without attribution.
+
+Two optional `_templateMeta` fields describe a shared template in the gallery:
+
+```yaml
+_templateMeta:
+  name: Review Branch
+  description: Review the current branch against its base and fix what the review finds.
+  author: your-github-handle
+  tags: [review, git]
+steps:
+  - prompt: Review ~diff and fix any problems you find.
+```
+
+`author` is free text that ctrlyoke does not verify. `tags` are short keywords for filtering.

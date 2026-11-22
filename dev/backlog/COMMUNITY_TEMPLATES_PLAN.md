@@ -1,7 +1,30 @@
 # Community Templates Plan
 
-**Status:** Proposed — not started (no `FuzzyNova/ctrlyoke-templates` repository, no
-`CommunityTemplate*` code).
+**Status:** In progress. The ctrlyoke side is implemented (2026-11-21); the templates
+repository is prepared locally but not yet published.
+
+> **2026-11-21 implementation:** In this repo: `_templateMeta.author`/`tags` (schema, no bump;
+> parsed into `TemplateInfo`), `TemplateManager.installTemplateContent`,
+> `src/utils/CommunityTemplateClient.ts` (jsDelivr fetch, `index.json` parsing and
+> sanitizing, `CTRLYOKE_COMMUNITY_TEMPLATES_URL` override for a fork or a local static
+> server), `src/ui/CommunityTemplateService.ts` (off-queue router handlers), the four message
+> types, `communityTemplatesStore.ts`, and the Templates tab's **Defaults**/**Discover** page
+> bar with `CommunityTemplatesPage.tsx`. Docs: `docs/workflows/templates.md#community-templates`
+> and a `cdn.jsdelivr.net` row in `docs/guide/privacy.md`.
+>
+> The `FuzzyNova/ctrlyoke-templates` content (layout below, the Review Branch seed, generator,
+> strict validator, CI workflow) was scaffolded in a sibling folder, `C:\dev\ctrlyoke-templates`.
+> Counsel cleared the MIT-0 grant on 2026-11-21 (`RELEASE_CHECKLIST.md` §15.1), which covers
+> publishing the library. **Remaining, all Nathan's:** (1) create the repository, push the
+> scaffold, and turn on branch protection (required code-owner review and the `validate`
+> check); (2) ship a ctrlyoke release containing the `author`/`tags` schema change before the
+> library accepts templates that use them; the seed template omits them for that reason. Until
+> the repository exists, **Discover** shows its offline state (the index 404s).
+>
+> Deviations from the plan below: the CI tripwire reports GitHub annotations instead of a PR
+> comment (no token with write access needed); templates must use `.ctrlyoke.yaml` (the client
+> also accepts `.yml`/`.json` should the rule ever relax); an index entry's `author` comes only
+> from `_templateMeta.author`, because a handle can itself contain hyphens.
 
 > **2026-11-20 decision:** community templates live in a **separate public repository,
 > `FuzzyNova/ctrlyoke-templates`, licensed MIT-0 (MIT No Attribution)**, not in a

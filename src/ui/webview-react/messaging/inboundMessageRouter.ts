@@ -70,6 +70,7 @@ import { useTerminalStore } from "@store/terminalStore";
 import { useHarnessFileStore } from "@store/harnessFileStore";
 import { useMcpManagerStore } from "@store/mcpManagerStore";
 import { useSkillsRegistryStore } from "@store/skillsRegistryStore";
+import { useCommunityTemplatesStore } from "@store/communityTemplatesStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { useHistoryTrashStore } from "@store/historyTrashStore";
@@ -2150,6 +2151,18 @@ export function createMessageHandlers(
         message.error,
         message.nextCursor
       );
+  };
+
+  // --------------------------------------------------------------------------
+  // Community templates - Templates tab → Discover
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT] = (message) => {
+    useCommunityTemplatesStore
+      .getState()
+      .setIndexResult(message.templates ?? [], message.error);
+  };
+  handlers[MESSAGE_TYPES.COMMUNITY_TEMPLATE_INSTALL_RESULT] = (message) => {
+    useCommunityTemplatesStore.getState().setInstallResult(message);
   };
 
   // --------------------------------------------------------------------------

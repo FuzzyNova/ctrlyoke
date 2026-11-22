@@ -1335,6 +1335,18 @@ Display name shown in the template picker. Not substituted: This structural fiel
 
 Short explanation shown in the template picker.
 
+### `author` {#template-metadata-author}
+
+- **Type:** `string`
+
+Who wrote the template, such as a GitHub handle. Shown in the community template gallery. Free text; ctrlyoke does not verify it.
+
+### `tags` {#template-metadata-tags}
+
+- **Type:** `string[]`
+
+Short keywords for filtering the community template gallery, such as `review` or `testing`.
+
 ### `variables` {#template-metadata-variables}
 
 - **Type:** map of [Template variable](#template-variable)
