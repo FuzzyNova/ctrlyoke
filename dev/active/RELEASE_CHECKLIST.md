@@ -1399,25 +1399,45 @@ money or a retainer now.
       v1.7 says about telemetry and support content still matches what the product sends.
       Re-check whenever telemetry changes. An inaccurate policy is the exposure, not a missing
       lawyer.
-- [x] **CLA before merging any outside PR.** Set up November 22, 2026 per the
-      [v2.4 memo](../implemented/LICENSE_2.4_LAWYER_REVIEW.md#cla-acceptance-record): the hosted
-      CLA Assistant (cla-assistant.io) presents CLA v1.0 from a dedicated Gist, signing was
-      tested on a fork PR, and the `main` ruleset requires its `license/cla` status (any
-      source, since CLA Assistant posts a commit status, not an app check). Exempt accounts: the maintainer and
-      `dependabot[bot]` only. Don't exempt the FuzzyNova org, because that would exempt any
-      future org member who has signed nothing. Ongoing:
-  - Export the signatures from cla-assistant.io periodically and keep them with the Gist
-    revision. Changing the Gist makes every contributor sign again, so a new CLA version
-    goes through `legal/README.md` and then a new Gist.
-  - Where someone signs for a company, record the entity and the signer's authority.
-  - Earlier checkbox and email acceptances stay valid. For a contribution merged before its
-    author accepted the CLA, get a written confirmation that names it (for example, by PR
-    URL) before relying on the CLA for it.
-- [ ] **Counsel review: Privacy Policy 1.8 for CLA records.** Draft and questions are in
-      [`PRIVACY_1.8_DRAFT.md`](PRIVACY_1.8_DRAFT.md) and
-      [`PRIVACY_1.8_LAWYER_REVIEW.md`](PRIVACY_1.8_LAWYER_REVIEW.md). Until it is adopted,
-      CLA Assistant's privacy-policy consent field stays blank. Adopt it through
-      `legal/README.md`.
+- [ ] **CLA before merging any outside PR: accept by email, not CLA Assistant.** CLA
+      Assistant was set up November 22, 2026 per the
+      [v2.4 memo](../implemented/LICENSE_2.4_LAWYER_REVIEW.md#cla-acceptance-record) and
+      dropped the same day. SAP showing its signer records to Fuzzy Nova in the U.S. is an EU
+      data transfer with no safeguard we can document. Counsel approved email acceptance and
+      Privacy Policy 1.8 ([memo item 2](../implemented/PRIVACY_1.8_LAWYER_REVIEW.md#2-replace-hosted-signing-with-acceptance-by-email)).
+      CLA Assistant's only signature was the `TuringTheServer` test account. Steps:
+  - [x] Counsel approved the email plan; Privacy Policy 1.8 adopted. `CONTRIBUTING.md`, the PR
+        template, `license-summary.md`, `legal/README.md` and `TRUST_PAGE.md` updated.
+  - [ ] **Taking down CLA Assistant:** confirm it still holds only the test signature, then
+        unlink `FuzzyNova/ctrlyoke` and remove the required `license/cla` status from the
+        `main` ruleset. If a real signature has appeared, keep its export and follow the
+        fallback in memo item 2. Delete local copies of the test signature exports.
+        Code-owner review stays required and is the CLA gate until the `cla` status below is
+        live.
+  - [ ] Confirm the Google Workspace Cloud Data Processing Addendum is accepted: Admin
+        console → Account → Account settings → Legal and compliance → Security and Privacy
+        Additional Terms.
+  - [ ] Write the legitimate interests assessment (memo item 3) and the CLA retention
+        procedure (memo item 4). A page each, kept with the legal records, not in this repo.
+  - [ ] Save this as a GitHub saved reply (Settings → Saved replies). Replace `PR_URL` in
+        the link with the PR's URL each time you post it:
+
+        ```markdown
+        Thanks for the contribution. Before we can merge this pull request, please [email your acceptance](mailto:licensing@ctrlyoke.dev?subject=ctrlyoke%20CLA%20acceptance&body=I%20accept%20the%20ctrlyoke%20Contributor%20License%20Agreement%20v1.0%20for%20PR_URL.%20My%20GitHub%20username%20is%20) of the [ctrlyoke Contributor License Agreement v1.0](https://ctrlyoke.dev/cla/1.0/) to `licensing@ctrlyoke.dev`, then reply here to say you have sent it. Please don't post your email address or organization name here. ctrlyoke is source-available, not open source. Our [contributor privacy notice](https://ctrlyoke.dev/privacy/#36-contributions-and-contributor-license-agreement-records) explains how we handle your acceptance.
+        ```
+
+  - [ ] Optional: deploy the CLA Apps Script (memo item 2) on the `licensing@` mailbox,
+        then require its `cla` status in the `main` ruleset.
+  - [ ] Test the full flow with `TuringTheServer`: saved reply, email, confirming PR comment,
+        code-owner approval (and the `cla` status, once deployed).
+  - [ ] Place a test-mode Pro and Enterprise order and check that each records `privacy@1.8`.
+  - **Ongoing, per outside contributor:** post the saved reply. When the email arrives,
+    check that the username matches the PR author and that they confirmed on the PR, then
+    file the email under a `CLA` label in Workspace and approve. Once the script is live it
+    does this, and you only review what it flags: entity acceptances, and emails it can't
+    match to a PR author. One acceptance covers their later PRs. For a company, the email
+    must name the entity and include the authority statement. For a contribution merged
+    before its author accepted, get a written confirmation that names it by PR URL.
 - [ ] **Every future legal change goes through `legal/README.md`.** `check:legal` blocks any
       other path.
 - [ ] **Before December 11, 2027: CRA conformity.** Declare a support period (normally at

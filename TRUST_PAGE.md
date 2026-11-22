@@ -37,14 +37,14 @@ Full detail, including legal bases and retention periods, is in our [Privacy Pol
 
 ## Who we rely on
 
-| Vendor                               | Role                                       |
-| ------------------------------------ | ------------------------------------------ |
-| Keygen                               | License issuance and verification          |
-| Lemon Squeezy                        | Payments, merchant of record, tax handling |
-| Resend                               | Transactional email (license-key delivery) |
-| Netlify                              | Website and serverless-function hosting    |
-| Google Workspace                     | Business and support email                 |
-| Microsoft Azure Application Insights | Telemetry processing                       |
+| Vendor                               | Role                                                           |
+| ------------------------------------ | -------------------------------------------------------------- |
+| Keygen                               | License issuance and verification                              |
+| Lemon Squeezy                        | Payments, merchant of record, tax handling                     |
+| Resend                               | Transactional email (license-key delivery)                     |
+| Netlify                              | Website and serverless-function hosting                        |
+| Google Workspace                     | Business, support, and contributor agreement email and records |
+| Microsoft Azure Application Insights | Telemetry processing                                           |
 
 Each provider is disclosed in our [Privacy Policy](https://ctrlyoke.dev/privacy). The [Data Processing Agreement](https://ctrlyoke.dev/dpa) separately identifies the Sub-processors used when we process Customer Personal Data on an Enterprise customer's behalf, and commits us to giving Enterprise customers at least 30 days' notice before a new or replacement Sub-processor starts processing, with a right to object. Other providers, such as Lemon Squeezy in its merchant-of-record role, may act as independent controllers under their own terms.
 

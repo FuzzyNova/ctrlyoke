@@ -52,7 +52,7 @@ The built-in workflow templates, agent definitions, skills, and example conditio
 
 - The source code is public so you can read it. That doesn't give you any rights beyond the license.
 - You can fork it with GitHub's fork button to evaluate it, review its security, adapt it for internal use, or prepare a contribution. A fork stays under this license.
-- If you send a pull request or other contribution, you give Fuzzy Nova a permanent license to use it in ctrlyoke and future products, and you confirm it's yours to give. A contribution to the MIT-0 materials can be shared under MIT-0. We may ask you to sign a separate Contributor License Agreement first, and today we do: the CLA Assistant bot links to it on your first pull request.
+- If you send a pull request or other contribution, you give Fuzzy Nova a permanent license to use it in ctrlyoke and future products, and you confirm it's yours to give. A contribution to the MIT-0 materials can be shared under MIT-0. We may ask you to sign a separate Contributor License Agreement first, and today we do: on your first pull request, a maintainer links it and asks you to accept it by email.
 - The license never turns into an open-source license at a later date.
 
 ### AI tools are yours to bring

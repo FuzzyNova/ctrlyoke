@@ -103,6 +103,12 @@
       "version": "2.4",
       "published": "2026-11-22",
       "sha256": "254001945f5302cc069533e73422702e79c22f457b3037ba34722a8486fda1a5"
+    },
+    {
+      "document": "privacy",
+      "version": "1.8",
+      "published": "2026-11-22",
+      "sha256": "4795c17c3d10093e7992e972144fcb3edc95a13614b122f465da9b39ea5a3658"
     }
   ]
 }

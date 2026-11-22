@@ -3,12 +3,12 @@
 **Controller:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code extension and companion CLI / MCP server binaries
 **Effective Date:** October 16, 2026
-**Last Updated:** November 21, 2026
-**Version:** 1.7
+**Last Updated:** November 22, 2026
+**Version:** 1.8
 
 ## 1. Scope
 
-This Privacy Policy explains how Fuzzy Nova LLC (**Fuzzy Nova**, **we**, **us**, or **our**) collects, uses, discloses, and protects information when you use the ctrlyoke VS Code extension and companion binaries (the **Software**), visit [ctrlyoke.dev](https://ctrlyoke.dev), or contact us for support, sales, billing, or security matters.
+This Privacy Policy explains how Fuzzy Nova LLC (**Fuzzy Nova**, **we**, **us**, or **our**) collects, uses, discloses, and protects information when you use the ctrlyoke VS Code extension and companion binaries (the **Software**), visit [ctrlyoke.dev](https://ctrlyoke.dev), contribute to the ctrlyoke repository, or contact us for support, sales, billing, or security matters.
 
 This Privacy Policy does not cover the third-party AI coding assistants, services, or model providers that you connect to through the Software, including GitHub Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity CLI. Those tools run on your machine under your own accounts and credentials and send your prompts and code to their own providers. They are governed by their own privacy policies and terms, which you should review before using the Software with a given harness.
 
@@ -88,6 +88,16 @@ Our website, [ctrlyoke.dev](https://ctrlyoke.dev), is hosted on **Netlify**. Net
 
 Netlify also hosts the serverless provisioning function that receives authenticated purchase and subscription events from Lemon Squeezy. That function processes the purchaser's name and email address, product, order, and subscription identifiers, and related license data to issue, deliver, renew, suspend, and support licenses through Keygen and Resend.
 
+### 3.6 Contributions and Contributor License Agreement records
+
+If you submit a pull request or other contribution to the ctrlyoke repository on GitHub, we receive your GitHub username and the other information GitHub shows with your contribution, such as your commit author name and email address. Public repository activity is visible to others. GitHub explains how it handles that information in its [Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+
+Before merging a contribution, we generally require acceptance of the [ctrlyoke Contributor License Agreement](https://ctrlyoke.dev/cla). You accept it by emailing Fuzzy Nova at `licensing@ctrlyoke.dev` from your own email address. In that message, give your GitHub username, the pull request link, and a statement accepting the applicable agreement version. Before we merge, we also ask you to comment on the pull request, from the GitHub account that submitted it, that you have emailed your acceptance. That comment is public, so it should not include your email address or organization name. We keep the sender address, your username, the pull request link, the agreement version, the time we received your acceptance, and the message as evidence of the rights granted in your contribution.
+
+If you sign for an organization, include its legal name and confirm in the acceptance email that you are authorized to bind it. We keep that information with the acceptance record.
+
+We keep these records to show that we have the rights described in the Contributor License Agreement for each contribution we use and to identify who granted them.
+
 ## 4. How We Use Information
 
 We use the information we collect to:
@@ -96,6 +106,7 @@ We use the information we collect to:
 - process purchases and issue receipts
 - deliver license keys and other transactional service messages
 - deliver support, billing, security, and sales communications
+- review and accept contributions, and keep records of the rights granted under the Contributor License Agreement
 - understand aggregate usage and improve the Software
 - detect and prevent fraud, abuse, and license violations
 - comply with legal obligations
@@ -106,8 +117,8 @@ We do **not** sell personal data, and we do not use personal data for third-part
 
 Where applicable law requires a legal basis for processing, we rely on one or more of the following:
 
-- **Performance of a contract** — to provide the Software, activate licenses, and fulfill purchases
-- **Legitimate interests** — to secure and improve the Software, prevent abuse, and respond to support requests
+- **Performance of a contract** — to provide the Software, activate licenses, fulfill purchases, and process information necessary to enter into or perform the Contributor License Agreement when you are a party to it
+- **Legitimate interests** — to secure and improve the Software, prevent abuse, respond to support requests, review contributions, verify the authority of people signing for organizations, and keep evidence of the rights granted in contributions
 - **Legal obligation** — to maintain records and comply with tax, accounting, or other legal requirements
 - **Consent** — where applicable law requires it and we have requested it; your VS Code telemetry setting separately controls whether the Software sends telemetry
 
@@ -115,14 +126,14 @@ Where applicable law requires a legal basis for processing, we rely on one or mo
 
 We use trusted vendors to help operate ctrlyoke. Depending on the service and processing purpose, a provider may act as our processor or as an independent controller under its own terms:
 
-| Provider                             | Purpose                                           | Data categories                                                                                                                                                                                                       |
-| ------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Microsoft Azure Application Insights | Telemetry processing                              | Telemetry events and redacted error reports; pseudonymous machine, device, and per-launch session identifiers; software, OS, device, and remote-environment metadata; source IP during ingestion and derived location |
-| Keygen LLC                           | License issuance and verification                 | Name and email in license metadata; license key/status; machine identifier and operating system platform; IP address and request metadata during online license operations                                            |
-| Lemon Squeezy                        | Payments, authorized reseller, merchant of record | Name, email address, billing country, payment and order metadata; Enterprise legal-entity and terms-acceptance data where supported                                                                                   |
-| Plus Five Five, Inc. (Resend)        | Transactional email and license-key delivery      | Recipient name and email address, license key, message content, delivery metadata                                                                                                                                     |
-| Netlify, Inc.                        | Website and serverless-function hosting           | Purchase/license provisioning data processed by the webhook; server logs, IP addresses, request metadata                                                                                                              |
-| Google Workspace                     | Business and support email                        | Email addresses and message content                                                                                                                                                                                   |
+| Provider                             | Purpose                                                        | Data categories                                                                                                                                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Microsoft Azure Application Insights | Telemetry processing                                           | Telemetry events and redacted error reports; pseudonymous machine, device, and per-launch session identifiers; software, OS, device, and remote-environment metadata; source IP during ingestion and derived location |
+| Keygen LLC                           | License issuance and verification                              | Name and email in license metadata; license key/status; machine identifier and operating system platform; IP address and request metadata during online license operations                                            |
+| Lemon Squeezy                        | Payments, authorized reseller, merchant of record              | Name, email address, billing country, payment and order metadata; Enterprise legal-entity and terms-acceptance data where supported                                                                                   |
+| Plus Five Five, Inc. (Resend)        | Transactional email and license-key delivery                   | Recipient name and email address, license key, message content, delivery metadata                                                                                                                                     |
+| Netlify, Inc.                        | Website and serverless-function hosting                        | Purchase/license provisioning data processed by the webhook; server logs, IP addresses, request metadata                                                                                                              |
+| Google Workspace                     | Business, support, and contributor agreement email and records | Email addresses and message content, including GitHub username, pull request link, agreement version, acceptance statement, and organization name and authority confirmation where applicable                         |
 
 We may also disclose information:
 
@@ -151,12 +162,15 @@ Typical retention periods include:
 - **Transactional license email:** message and delivery data is retained by Resend under our account settings and its applicable retention practices, currently approximately 30 days
 - **Support email:** retained as needed to resolve inquiries and maintain records of correspondence
 - **Enterprise terms-acceptance records:** retained for the life of the applicable agreement and afterwards as needed for tax, accounting, and evidentiary purposes
+- **Contributor License Agreement records:** we keep the records needed to show our rights while we use or distribute the contributions they cover. We review these records periodically and when we stop using or distributing the contributions. After that, we keep only the records we need for applicable legal obligations or to establish, exercise, or defend legal claims, and delete them when they are no longer needed
 
 Retention periods used by our vendors may differ from our own and may be subject to their policies and configurations. For Enterprise customers, the [ctrlyoke Data Processing Agreement](https://ctrlyoke.dev/dpa) additionally governs return and deletion of Customer Personal Data.
 
 ## 9. International Transfers
 
 We and our vendors may process information in the United States and other countries that may not have the same data protection laws as your jurisdiction.
+
+Fuzzy Nova is based in the United States and handles contributor agreement emails and records from here. They are stored with our email provider, Google Workspace.
 
 Where required by law, cross-border transfers rely on appropriate safeguards such as Standard Contractual Clauses or comparable legal mechanisms. Additional region-specific transfer terms may apply where required.
 
@@ -176,6 +190,8 @@ Depending on where you live, you may have rights to:
 To exercise these rights, contact us at `privacy@ctrlyoke.dev`. If you are in the EU/EEA, the UK, or Switzerland, you may instead contact our data protection representative, DataRep (see Section 14). We may need to verify your identity before acting on your request.
 
 Because some information is held by our vendors, we may need to coordinate with them to fulfill your request.
+
+When you ask us to delete a Contributor License Agreement record, we may retain the information necessary to establish, exercise, or defend legal claims where applicable law permits.
 
 ### California notice
 
