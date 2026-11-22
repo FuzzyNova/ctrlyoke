@@ -1414,11 +1414,9 @@ money or a retainer now.
     - [x] Removed `license/cla` from the `main` ruleset's required status checks; only
           `fast-checks` and code-owner review remain (November 22, 2026).
     - [x] Created the `cla-verified` PR label (November 22, 2026).
-    - [ ] Revoke the CLA assistant OAuth app: github.com/settings/applications →
-          **Authorized OAuth Apps**, on the maintainer and `TuringTheServer` accounts, and
-          under the FuzzyNova org's **Third-party access** if listed.
-    - [ ] Delete local copies of the test signature exports. The Gist can stay or go: the
-          CLA text is archived in `legal/archive/cla/1.0.md`.
+    - [x] Revoked the CLA assistant OAuth app (November 22, 2026). No signature exports were
+          ever downloaded, and the only signature was the test account's. The Gist can stay
+          or go: the CLA text is archived in `legal/archive/cla/1.0.md`.
   - [ ] Confirm the Google Workspace Cloud Data Processing Addendum is accepted: Admin
         console → Account → Account settings → Legal and compliance → Security and Privacy
         Additional Terms.
