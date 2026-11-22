@@ -1362,7 +1362,9 @@ money or a retainer now.
 - [x] **Before pushing: counsel's go-ahead on the MIT-0 grant.** Given November 21, 2026:
       counsel on the open IP matter cleared the license updates and the MIT-0 grant. Any
       update that matter needs is to the (unpublished) IP assignment, not the license.
-- [ ] **Push and deploy, then ship a release.** The push deploys `/terms/` v2.3 and the
+- [ ] **Push and deploy, then ship a release.** _Pushed and deployed November 21, 2026
+      (`14758e6ae`, deploy run `44969129971`); `/terms/` v2.3, the archive pages and the Pro
+      acceptance record are verified live. The release is still open._ The push deploys `/terms/` v2.3 and the
       archive pages. The next release puts `LICENSE.md` v2.3 and `LICENSE-MIT-0` in the VSIX
       and npm package; §5(e) says the MIT-0 file is "distributed with the Software". After
       the release, run `vsce ls` and `npm pack --dry-run` and confirm both files are in them.
