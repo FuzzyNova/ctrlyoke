@@ -1413,12 +1413,11 @@ money or a retainer now.
   - Earlier checkbox and email acceptances stay valid. For a contribution merged before its
     author accepted the CLA, get a written confirmation that names it (for example, by PR
     URL) before relying on the CLA for it.
-- [ ] **Next counsel question (no rush): CLA Assistant follow-ups.** (1) Should the next
-      `PRIVACY.md` version cover CLA signature records (GitHub username, signing time) held
-      by cla-assistant.io? Until then, its privacy-policy consent field is left blank.
-      (2) CLA Assistant's fixed PR comment says "Like many open source projects". The PR
-      template states that ctrlyoke is source-available, and the hosted service's comment
-      text can't be changed.
+- [ ] **Counsel review: Privacy Policy 1.8 for CLA records.** Draft and questions are in
+      [`PRIVACY_1.8_DRAFT.md`](PRIVACY_1.8_DRAFT.md) and
+      [`PRIVACY_1.8_LAWYER_REVIEW.md`](PRIVACY_1.8_LAWYER_REVIEW.md). Until it is adopted,
+      CLA Assistant's privacy-policy consent field stays blank. Adopt it through
+      `legal/README.md`.
 - [ ] **Every future legal change goes through `legal/README.md`.** `check:legal` blocks any
       other path.
 - [ ] **Before December 11, 2027: CRA conformity.** Declare a support period (normally at

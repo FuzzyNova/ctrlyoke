@@ -14,8 +14,10 @@ site, the VSIX and the npm package read it:
 Every version that has been published stays online at its permanent URL, for example
 [ctrlyoke.dev/terms/2.2/](https://ctrlyoke.dev/terms/2.2/). The license ties each copy of
 ctrlyoke to the version in effect when it was obtained (EULA §16(e)). Pro and Enterprise
-orders record the versions the buyer accepted (`eula@2.3; privacy@1.7; …`), and a
-contributor's pull request records the CLA version they agreed to, so those exact texts
+orders record the versions the buyer accepted (`eula@2.4; privacy@1.7; …`), and
+contributors sign the CLA through CLA Assistant (cla-assistant.io), which records the
+version each contributor signed from its Gist. Earlier contributors accepted it with a
+checkbox in their pull request description, which remains their record. Those exact texts
 must stay retrievable. Both checkouts link the versioned URLs.
 
 ## How the archive works
@@ -75,6 +77,9 @@ as archived. The next release ships the new text in the VSIX and npm package.
 - Give any notice the documents require. For example, Enterprise Terms changes reach an
   existing Enterprise customer at renewal, after 30 days' notice to its billing contact.
 - Work through the open items in the counsel memo's publication checklist.
+- For a new CLA version, create a new Gist with the archived text byte for byte and point
+  CLA Assistant at it. Export the existing signatures first: changing the Gist asks every
+  contributor to sign again.
 
 ## Adding a new legal document
 
