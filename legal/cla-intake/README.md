@@ -52,9 +52,12 @@ contributor to fix the commit author, or, once you've checked who wrote it, add 
    Sheets, external requests, triggers and sending email). It creates the `Acceptances`
    tab, both Gmail labels, and the five-minute trigger.
 5. **Label.** Create a `cla-verified` label in the GitHub repository.
-6. **Test** with the test account: open a fork PR, wait for the request comment, send the
+6. **Spam filter.** In that Gmail, create a filter for `to:licensing@ctrlyoke.dev` with
+   **Never send it to Spam**. First-time senders to a new address often land in Spam. The
+   script searches Spam too, but you'll want to see these emails in the inbox.
+7. **Test** with the test account: open a fork PR, wait for the request comment, send the
    pre-filled email, reply on the PR, and check that `cla` turns green.
-7. **Require it.** In the `main` ruleset's required status checks, add `cla`.
+8. **Require it.** In the `main` ruleset's required status checks, add `cla`.
 
 ## Changing it
 

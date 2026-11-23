@@ -83,6 +83,10 @@ function setup() {
   sheet
     .getRange(2, COL["Status"] + 1, sheet.getMaxRows() - 1, 1)
     .setDataValidation(statusRule);
+  // Plain text, or Sheets turns "1.0" into the number 1.
+  sheet
+    .getRange(2, COL["CLA version"] + 1, sheet.getMaxRows() - 1, 1)
+    .setNumberFormat("@");
 
   [CONFIG.labelRecorded, CONFIG.labelReview].forEach(
     (name) => GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name)
@@ -112,8 +116,10 @@ function runClaIntake() {
 // ---------------------------------------------------------------------------------------
 
 function processNewEmails_() {
+  // Gmail search skips Spam unless asked. Acceptances misfiled there still count: the
+  // sender-authentication and PR checks below apply to them like any other email.
   const query =
-    `{to:${CONFIG.mailbox} deliveredto:${CONFIG.mailbox}} ` +
+    `in:anywhere -in:trash {to:${CONFIG.mailbox} deliveredto:${CONFIG.mailbox}} ` +
     `"Contributor License Agreement" ` +
     `-label:${CONFIG.labelRecorded.replace("/", "-")} ` +
     `-label:${CONFIG.labelReview.replace("/", "-")} newer_than:180d`;
@@ -460,7 +466,19 @@ function dataRows_(sheet) {
 }
 
 function appendRow_(row) {
-  acceptanceSheet_().appendRow(row);
+  const sheet = acceptanceSheet_();
+  sheet.appendRow(row);
+  // appendRow converts "1.0" to the number 1, so write the version again as text.
+  sheet
+    .getRange(sheet.getLastRow(), COL["CLA version"] + 1)
+    .setNumberFormat("@")
+    .setValue(String(row[COL["CLA version"]]));
+}
+
+/** True when a Sheet cell holds the current CLA version, as text or as a number. */
+function isCurrentClaVersion_(value) {
+  if (typeof value === "number") return value === Number(CONFIG.claVersion);
+  return String(value).trim() === CONFIG.claVersion;
 }
 
 /** Includes rows a person changed from needs-review to accepted by hand. */
@@ -469,7 +487,7 @@ function acceptedUserIds_() {
   dataRows_(acceptanceSheet_()).forEach((row) => {
     if (
       row[COL["Status"]] === STATUS.accepted &&
-      String(row[COL["CLA version"]]) === CONFIG.claVersion &&
+      isCurrentClaVersion_(row[COL["CLA version"]]) &&
       row[COL["GitHub user ID"]]
     ) {
       ids.add(Number(row[COL["GitHub user ID"]]));
