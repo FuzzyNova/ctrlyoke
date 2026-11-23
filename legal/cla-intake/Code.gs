@@ -135,6 +135,10 @@ function processNewEmails_() {
     try {
       const row = evaluateAcceptance_(message, thread);
       appendRow_(row);
+      console.log(
+        `New acceptance email: @${row[COL["GitHub login"]] || "?"} -> ` +
+          `${row[COL["Status"]]}${row[COL["Note"]] ? ` (${row[COL["Note"]]})` : ""}`
+      );
       thread.addLabel(
         row[COL["Status"]] === STATUS.needsReview ? review : recorded
       );
@@ -279,8 +283,12 @@ function recheckAwaitingConfirmation_() {
     if (!prNumber || !userId) return;
     try {
       const comment = findConfirmationComment_(prNumber, userId);
-      if (!comment) return;
       const r = i + 2;
+      console.log(
+        `Row ${r}: awaiting confirmation on PR #${prNumber}, ` +
+          (comment ? "comment found, now accepted" : "no comment yet")
+      );
+      if (!comment) return;
       sheet.getRange(r, COL["Status"] + 1).setValue(STATUS.accepted);
       sheet.getRange(r, COL["Note"] + 1).setValue("");
       sheet
@@ -351,6 +359,11 @@ function updatePullRequest_(pr, accepted) {
     }
     description = parts.join("; ");
   }
+  console.log(
+    `PR #${pr.number}: contributors ` +
+      contributors.known.map((c) => `@${c.login} (${c.id})`).join(", ") +
+      ` -> ${state}: ${description}`
+  );
   setCommitStatus_(pr.head.sha, state, description.slice(0, 140));
   if (missing.length) requestAcceptance_(pr, missing);
 }
@@ -484,15 +497,23 @@ function isCurrentClaVersion_(value) {
 /** Includes rows a person changed from needs-review to accepted by hand. */
 function acceptedUserIds_() {
   const ids = new Set();
-  dataRows_(acceptanceSheet_()).forEach((row) => {
-    if (
-      row[COL["Status"]] === STATUS.accepted &&
-      isCurrentClaVersion_(row[COL["CLA version"]]) &&
-      row[COL["GitHub user ID"]]
-    ) {
-      ids.add(Number(row[COL["GitHub user ID"]]));
+  dataRows_(acceptanceSheet_()).forEach((row, i) => {
+    const status = row[COL["Status"]];
+    const version = row[COL["CLA version"]];
+    const userId = row[COL["GitHub user ID"]];
+    const counts =
+      status === STATUS.accepted && isCurrentClaVersion_(version) && userId;
+    if (counts) {
+      ids.add(Number(userId));
+      return;
     }
+    // JSON shows hidden differences such as a trailing space or a number vs text.
+    console.log(
+      `Row ${i + 2} not counted: status ${JSON.stringify(status)}, version ` +
+        `${JSON.stringify(version)}, user ID ${JSON.stringify(userId)}`
+    );
   });
+  console.log(`Accepted user IDs: ${Array.from(ids).join(", ") || "none"}`);
   return ids;
 }
 
