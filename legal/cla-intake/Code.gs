@@ -488,10 +488,20 @@ function appendRow_(row) {
     .setValue(String(row[COL["CLA version"]]));
 }
 
-/** True when a Sheet cell holds the current CLA version, as text or as a number. */
+/**
+ * True when a Sheet cell holds the current CLA version. Sheets may have stored "1.0" as
+ * the number 1 or the text "1", so versions are compared part by part with a missing
+ * minor part read as 0 ("1" equals "1.0", "1.10" does not equal "1.1").
+ */
 function isCurrentClaVersion_(value) {
-  if (typeof value === "number") return value === Number(CONFIG.claVersion);
-  return String(value).trim() === CONFIG.claVersion;
+  const parts = (v) => {
+    const m = String(v)
+      .trim()
+      .match(/^v?(\d+)(?:\.(\d+))?$/i);
+    return m ? `${Number(m[1])}.${Number(m[2] || 0)}` : null;
+  };
+  const current = parts(CONFIG.claVersion);
+  return current !== null && parts(value) === current;
 }
 
 /** Includes rows a person changed from needs-review to accepted by hand. */
