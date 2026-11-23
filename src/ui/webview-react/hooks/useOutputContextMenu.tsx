@@ -1,8 +1,12 @@
 import { useState, useCallback } from "react";
 import {
   ContextMenu,
+  type ContextMenuEntry,
   type ContextMenuState,
 } from "../components/shared/ContextMenu";
+import { findOutputRowKey } from "@utils/outputDom";
+import type { OutputRenderRow } from "@utils/outputRows";
+import { describeRowDetails } from "@utils/outputRowDetails";
 import { writeClipboardText } from "@utils/clipboard";
 import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 import type { OutputMessage } from "@utils/outputProjection";
@@ -91,12 +95,71 @@ function buildCopyAllText(
   return parts.join("\n\n---\n\n");
 }
 
+/**
+ * The row under the pointer: the clicked element when there is one, else
+ * whatever sits at the point (a touch long press reports only coordinates).
+ */
+function findRowAt(
+  x: number,
+  y: number,
+  target: EventTarget | null | undefined,
+  rows: readonly OutputRenderRow[]
+): OutputRenderRow | undefined {
+  const element =
+    target instanceof Element
+      ? target
+      : typeof document.elementFromPoint === "function"
+        ? document.elementFromPoint(x, y)
+        : null;
+  const rowKey = findOutputRowKey(element);
+  return rowKey === undefined
+    ? undefined
+    : rows.find((row) => row.key === rowKey);
+}
+
+/**
+ * The Details submenu: the row's start time, duration and step (or a step
+ * header's whole description), one item per line that copies that line, and a
+ * Copy Details item for all of them. Kept in a submenu so the menu stays as
+ * short as it was, and so nothing appears until it is asked for.
+ */
+function buildDetailsEntry(details: readonly string[] | undefined) {
+  const submenu: ContextMenuEntry[] = details
+    ? [
+        ...details.map((line) => ({
+          label: line,
+          icon: "codicon-copy",
+          disabled: false,
+          title: "Copy this line",
+          onClick: () => void writeClipboardText(line),
+        })),
+        { type: "divider" as const },
+        {
+          label: "Copy Details",
+          icon: "codicon-copy",
+          disabled: false,
+          onClick: () => void writeClipboardText(details.join("\n")),
+        },
+      ]
+    : [];
+  return {
+    label: "Details",
+    icon: "codicon-info",
+    disabled: !details,
+    title: "When this line started, how long it took, and its step",
+    disabledTitle: "No details for this line",
+    submenu,
+  };
+}
+
 interface UseOutputContextMenuOptions {
   anchorScrollFractions?: Map<string, number>;
   allMessages: OutputMessage[];
   hiddenTargetKeys: readonly string[];
   stepScrollFractions: Map<string, number>;
   lastCliIndexPerStep: Map<string, number>;
+  /** The rendered output rows, for the Details of the row under the pointer. */
+  rows: readonly OutputRenderRow[];
   /** Workflow steps, used to name each section of Copy All Responses. */
   steps: readonly WorkflowStep[];
   finalStep: WorkflowStep | null;
@@ -109,6 +172,7 @@ export function useOutputContextMenu({
   hiddenTargetKeys,
   stepScrollFractions,
   lastCliIndexPerStep,
+  rows,
   steps,
   finalStep,
   onOpenFind,
@@ -116,9 +180,18 @@ export function useOutputContextMenu({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const openContextMenu = useCallback(
-    (x: number, y: number, scrollContainer: HTMLDivElement) => {
+    (
+      x: number,
+      y: number,
+      scrollContainer: HTMLDivElement,
+      target?: EventTarget | null
+    ) => {
       // Capture selection before the menu click clears it
       const selectedText = window.getSelection()?.toString() ?? "";
+      const hoveredRow = findRowAt(x, y, target, rows);
+      const hoveredRowDetails = hoveredRow
+        ? describeRowDetails(hoveredRow)
+        : undefined;
 
       const containerRect = scrollContainer.getBoundingClientRect();
       const clickPixelPos = y - containerRect.top + scrollContainer.scrollTop;
@@ -236,6 +309,8 @@ export function useOutputContextMenu({
               onOpenFind();
             },
           },
+          { type: "divider" },
+          buildDetailsEntry(hoveredRowDetails),
         ],
       });
     },
@@ -245,6 +320,7 @@ export function useOutputContextMenu({
       hiddenTargetKeys,
       stepScrollFractions,
       lastCliIndexPerStep,
+      rows,
       steps,
       finalStep,
       onOpenFind,

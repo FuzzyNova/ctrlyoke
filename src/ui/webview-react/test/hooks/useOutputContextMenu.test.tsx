@@ -5,10 +5,15 @@ import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import type { OutputMessage } from "@utils/outputProjection";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import {
+  CLI_EVENT_TYPES,
   OUTPUT_MESSAGE_TYPES,
+  OUTPUT_ROW_KINDS,
   SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
+import type { CliEvent } from "@root/types/CliOutputTypes";
 import type { WorkflowStep } from "@store/workflowStore";
+import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
+import { formatTimestamp } from "@utils/time";
 
 function makeCliMessage(
   index: number,
@@ -39,14 +44,32 @@ const messages = [
   makeCliMessage(2, "visible output three", 3),
 ];
 
+const timedRow: StructuredEventRow = {
+  key: "timed-row",
+  rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+  target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
+  estimateSize: 10,
+  event: {
+    type: CLI_EVENT_TYPES.BASH_COMMAND,
+    data: {},
+    timestamp: 1_000,
+    completedTimestamp: 1_250,
+  } as CliEvent,
+  eventIndex: 0,
+  rawTextOutput: false,
+  hideDiff: false,
+};
+
 function TestHarness({
   allMessages = messages,
   hiddenTargetKeys = ["queue:1"],
   steps = [],
+  rows = [timedRow],
 }: {
   allMessages?: OutputMessage[];
   hiddenTargetKeys?: string[];
   steps?: WorkflowStep[];
+  rows?: OutputRenderRow[];
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastCliIndexPerStep = new Map(
@@ -65,6 +88,7 @@ function TestHarness({
       ])
     ),
     lastCliIndexPerStep,
+    rows,
     steps,
     finalStep: null,
     onOpenFind: vi.fn(),
@@ -78,6 +102,15 @@ function TestHarness({
         >
           Open menu
         </button>
+        <div data-row-key={timedRow.key}>
+          <button
+            onClick={(event) =>
+              openContextMenu(20, 20, scrollContainerRef.current!, event.target)
+            }
+          >
+            Open menu on row
+          </button>
+        </div>
       </div>
       {outputContextMenuPortal}
     </>
@@ -226,6 +259,39 @@ describe("useOutputContextMenu", () => {
     const copiedText = writeText.mock.lastCall![0] as string;
     expect(copiedText).toContain("Command:\nnpm test");
     expect(copiedText).toContain("Output:\nall passed");
+  });
+
+  it("lists the row's start, duration and step under Details and copies them", () => {
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu on row" }));
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Details" }));
+    expect(
+      screen.getByRole("menuitem", {
+        name: `Started: ${formatTimestamp(1_000)}`,
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Step 2" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Took: 250ms" }));
+    expect(writeText).toHaveBeenLastCalledWith("Took: 250ms");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu on row" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Details" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Details" }));
+    expect(writeText).toHaveBeenLastCalledWith(
+      [`Started: ${formatTimestamp(1_000)}`, "Took: 250ms", "Step 2"].join("\n")
+    );
+  });
+
+  it("disables Details when the pointer is not over a row with timing", () => {
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    const details = screen.getByRole("menuitem", { name: "Details" });
+    expect(details).toBeDisabled();
+    expect(details).toHaveAttribute("title", "No details for this line");
   });
 
   it("keeps real step numbers when output arrives out of order", () => {

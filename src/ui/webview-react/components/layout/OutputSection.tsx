@@ -1470,6 +1470,7 @@ const OutputSectionInner: React.FC = () => {
     hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
     stepScrollFractions,
     lastCliIndexPerStep,
+    rows,
     steps,
     finalStep,
     onOpenFind: handleOpenFind,

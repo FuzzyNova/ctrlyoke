@@ -20,13 +20,13 @@ function formatElapsed(durationMs: number): string {
 }
 
 /**
- * Hover metadata for a row: when it started, how long the operation took, and
- * which step it belongs to. Rendered as a native `title` so it adds no height
- * and leaves the row-height estimates untouched. Undefined when the row has no
- * timing to show. A step header describes the whole step instead (see
- * `describeCliHeader`).
+ * Details of a row, one line each: when it started, how long the operation
+ * took, and which step it belongs to. Shown in the output context menu's
+ * Details submenu rather than as a hover tooltip, which kept covering the text
+ * under a resting pointer. Undefined when the row has no timing to show. A
+ * step header describes the whole step instead (see `describeCliHeader`).
  */
-export function describeRowTiming(row: OutputRenderRow): string | undefined {
+export function describeRowDetails(row: OutputRenderRow): string[] | undefined {
   if (row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER) {
     return describeCliHeader(row);
   }
@@ -49,15 +49,15 @@ export function describeRowTiming(row: OutputRenderRow): string | undefined {
       row.target.index
     )
   );
-  return lines.join("\n");
+  return lines;
 }
 
 /**
  * Everything a step header shows, whatever the header itself has room for: a
  * narrow pane drops the timestamp, shortens the change link and clips the
- * harness/model, so this tooltip is where all of it stays readable.
+ * harness/model, so the Details submenu is where all of it stays readable.
  */
-function describeCliHeader(row: CliHeaderRow): string {
+function describeCliHeader(row: CliHeaderRow): string[] {
   const { output } = row;
   const lines: string[] = [];
   if (output.timestampMs) {
@@ -83,5 +83,5 @@ function describeCliHeader(row: CliHeaderRow): string {
 
   const changes = row.promptUndo?.summary;
   if (changes && changes.total > 0) lines.push(changes.title);
-  return lines.join("\n");
+  return lines;
 }

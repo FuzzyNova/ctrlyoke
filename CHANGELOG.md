@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- An output line's start time, duration and step no longer pop up as a tooltip
+  wherever the pointer rests. Right-click the line and open **Details** to see
+  them, and choose one to copy it.
+
 ## [0.9.0] - 2026-11-22
 
 ### Added

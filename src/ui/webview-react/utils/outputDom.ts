@@ -14,6 +14,23 @@ import { WebviewLog } from "./logger";
 export const OUTPUT_ROW_CONTAINER_SELECTOR = "[data-output-row-container]";
 /** The box the autoscroll glide clips while it translates the row container. */
 export const OUTPUT_GLIDE_CLIP_SELECTOR = "[data-output-glide-clip]";
+/**
+ * Names the row a pinned sticky-header copy shows. It is not `data-row-key`,
+ * which scroll anchoring and measurement treat as a row in the stream.
+ */
+export const OUTPUT_STICKY_ROW_KEY_ATTRIBUTE = "data-sticky-row-key";
+
+/** Key of the output row (stream or sticky copy) that contains `element`. */
+export function findOutputRowKey(element: Element | null): string | undefined {
+  const rowElement = element?.closest(
+    `[data-row-key], [${OUTPUT_STICKY_ROW_KEY_ATTRIBUTE}]`
+  );
+  return (
+    rowElement?.getAttribute("data-row-key") ??
+    rowElement?.getAttribute(OUTPUT_STICKY_ROW_KEY_ATTRIBUTE) ??
+    undefined
+  );
+}
 
 export interface ViewportRowAnchor {
   rowKey: string;
