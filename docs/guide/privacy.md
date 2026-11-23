@@ -4,9 +4,10 @@ ctrlyoke runs on your machine. Your prompts, code and AI output stay between you
 CLIs you choose to run; ctrlyoke doesn't send them to us. This page is the practical summary. The
 [Privacy Policy](https://ctrlyoke.dev/privacy) is the authoritative text.
 
-## What never leaves your machine
+## What ctrlyoke never sends to us {#what-never-leaves-your-machine}
 
-ctrlyoke doesn't send any of this to Fuzzy Nova:
+ctrlyoke doesn't send any of this to Fuzzy Nova. Optional features you choose to use can
+contact other services directly; see [Other network requests](#other-network-requests).
 
 - prompt text, workflow files, and AI output
 - source code, file contents, file paths, and workspace or repository names
