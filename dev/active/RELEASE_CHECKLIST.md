@@ -1369,9 +1369,10 @@ money or a retainer now.
       and npm package; §5(e) says the MIT-0 file is "distributed with the Software". After
       the release, run `vsce ls` and `npm pack --dry-run` and confirm both files are in them.
 - [ ] **Test-mode Pro and Enterprise orders** (test mode, no cost). In each order's custom
-      data, confirm `terms_versions` (`eula@2.4; privacy@1.7` for Pro, since license v2.4 was
-      adopted November 22, 2026; all four documents for
-      Enterprise), `terms_accepted_at` and `terms_acceptance_method`. Confirm the Pro button
+      data, confirm `terms_versions`: `eula@2.4; privacy@1.8` for Pro, and
+      `enterprise-terms@1.1; eula@2.4; privacy@1.8; dpa@1.0` for Enterprise (license v2.4
+      and privacy v1.8 were adopted November 22, 2026). Also confirm `terms_accepted_at`
+      and `terms_acceptance_method`. Confirm the Pro button
       still opens the Lemon Squeezy overlay; the agent could not click through it. These
       records are your proof of assent under §0.
 - [x] **Confirm provenance of the Open Materials** (November 21, 2026). Nothing was copied
@@ -1420,10 +1421,11 @@ money or a retainer now.
   - [ ] Confirm the Google Workspace Cloud Data Processing Addendum is accepted: Admin
         console → Account → Account settings → Legal and compliance → Security and Privacy
         Additional Terms.
-  - [ ] Write the legitimate interests assessment (memo item 3) and the CLA retention
-        procedure (memo item 4). A page each, in the Fuzzy Nova Drive folder
+  - [x] Wrote the legitimate interests assessment (memo item 3) and the CLA retention
+        procedure (memo item 4), in the Fuzzy Nova Drive folder
         `Contracts & Agreements/Contributor License Agreements/` beside the
-        `ctrlyoke CLA acceptances` Sheet, not in this repo.
+        `ctrlyoke CLA acceptances` Sheet, not in this repo (November 22, 2026). The
+        retention procedure's yearly review runs each November with the token renewal.
   - [x] Deployed the CLA intake script, following
         [`legal/cla-intake/README.md`](../../legal/cla-intake/README.md) (token, private
         Sheet, `setup`, `cla-verified` label). It posts the acceptance request on each PR, so
@@ -1438,7 +1440,8 @@ money or a retainer now.
         (README step 6). The test acceptance had landed in Spam (November 22, 2026).
   - [ ] Renew the CLA intake GitHub token before it expires on **November 23, 2027**, then
         update `GITHUB_TOKEN` in the script's properties and the date here.
-  - [ ] Place a test-mode Pro and Enterprise order and check that each records `privacy@1.8`.
+  - [ ] Place a test-mode Pro and Enterprise order and check that each records `privacy@1.8`
+        (the **Test-mode Pro and Enterprise orders** item above lists the full strings).
   - **Ongoing:** handle what the script flags (`CLA/needs-review` emails: entity
     acceptances, mismatches, unauthenticated senders) by setting the row's Status in the
     Sheet, and add `cla-verified` to a PR only after checking a commit author it couldn't
