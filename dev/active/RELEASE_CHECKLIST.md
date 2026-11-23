@@ -1424,13 +1424,18 @@ money or a retainer now.
         procedure (memo item 4). A page each, in the Fuzzy Nova Drive folder
         `Contracts & Agreements/Contributor License Agreements/` beside the
         `ctrlyoke CLA acceptances` Sheet, not in this repo.
-  - [ ] Deploy the CLA intake script, following
+  - [x] Deployed the CLA intake script, following
         [`legal/cla-intake/README.md`](../../legal/cla-intake/README.md) (token, private
         Sheet, `setup`, `cla-verified` label). It posts the acceptance request on each PR, so
-        no saved reply is needed.
-  - [ ] Test the full flow with `TuringTheServer` (README step 6), then require `cla` in the
-        `main` ruleset. Then add one sentence to `CONTRIBUTING.md` saying the `cla` check
-        turns green once the acceptance is recorded.
+        no saved reply is needed (November 22, 2026).
+  - [x] Tested the full flow with `TuringTheServer` on PR #22: request comment, email,
+        PR reply, Sheet row `accepted`, `cla` success. Dependabot PR #20 passed as exempt.
+        Required `cla` in the `main` ruleset beside `fast-checks`, and added the "turns
+        green" sentence to `CONTRIBUTING.md` (November 22, 2026).
+  - [ ] Clean up the test: close PR #22 unmerged, delete its row from the Sheet, and remove
+        the `CLA/recorded` label from the test email.
+  - [ ] Add the Gmail filter `to:licensing@ctrlyoke.dev` → **Never send it to Spam** (README
+        step 6). The test acceptance landed in Spam.
   - [ ] Record the GitHub token's expiry date here and renew it before then: (not set yet).
   - [ ] Place a test-mode Pro and Enterprise order and check that each records `privacy@1.8`.
   - **Ongoing:** handle what the script flags (`CLA/needs-review` emails: entity
