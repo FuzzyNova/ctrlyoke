@@ -257,9 +257,10 @@ listed.
 
 ### Installing a community template {#install-community-template}
 
-Open **Settings → Templates** and choose **Discover** in the page bar at the bottom. The page
-lists the library, which you can filter by name, author, or tag. **View source** opens a
-template's file on GitHub.
+Open **Settings → Templates**. The **Community templates** column sits beside **Defaults** on a
+wide screen and below it on a narrow one. Choose **Browse community templates** to list the
+library, which you can then filter by name, author, or tag. **View source** opens a template's
+file on GitHub.
 
 **Install** copies the template into the scope shown in the drawer's title bar: **User**
 installs to `~/.ctrlyoke/templates/`, **Workspace** to `.ctrlyoke/templates/`. ctrlyoke checks
@@ -275,8 +276,9 @@ condition scripts and script steps, and can ask an AI harness to change your fil
 template's source before you run a workflow made from it.
 :::
 
-The list is downloaded from `cdn.jsdelivr.net` the first time you open **Discover**, and
-**Refresh** downloads it again. Changes merged into the library can take up to about 12 hours
+Nothing is downloaded until you choose **Browse community templates**. The list then comes from
+`cdn.jsdelivr.net`, stays loaded until you reload the window, and **Refresh** downloads it
+again. Changes merged into the library can take up to about 12 hours
 to appear.
 
 ### Sharing a template {#share-community-template}

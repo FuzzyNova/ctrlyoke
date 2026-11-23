@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import type { SettingWriteScope } from "@/types/messages";
 import {
   COMMUNITY_TEMPLATES,
@@ -17,7 +17,7 @@ import { Icon } from "../shared/Icon";
 
 interface Props {
   activeScope: SettingWriteScope;
-  /** Switch to the Defaults page with this installed template's card open. */
+  /** Open this installed template's card in the Defaults column. */
   onSetDefaults: (templateId: string) => void;
 }
 
@@ -40,9 +40,12 @@ const ROW_BUTTON_CLASS =
   "shrink-0 rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
- * Settings → Templates → Discover: browse the community template library and
- * install a template into the drawer's active scope. The list is read through
- * the extension host when the page first opens; nothing is downloaded before.
+ * Settings → Templates, Community templates column: browse the community
+ * template library and install a template into the drawer's active scope. The
+ * list is read through the extension host only when the user asks for it
+ * (**Browse community templates** or **Refresh**), never when the tab opens:
+ * like the MCP registry and skills.sh, nothing reaches a third party until the
+ * user chooses to browse.
  */
 export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
   const templates = useCommunityTemplatesStore((state) => state.templates);
@@ -58,10 +61,6 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
     (state) => state.installTemplate
   );
   const catalog = useUiStore((state) => state.templateCatalog);
-
-  useEffect(() => {
-    requestIndex();
-  }, [requestIndex]);
 
   const installedIds = useMemo(
     () => new Set(catalog.map((template) => template.id)),
@@ -114,25 +113,42 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
         </span>
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filter by name, author or tag…"
-          aria-label="Filter community templates"
-          className="min-w-[220px] flex-1 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
-        />
-        <button
-          type="button"
-          onClick={() => requestIndex(true)}
-          disabled={isLoading}
-          className={ROW_BUTTON_CLASS}
-          title="Download the list again"
-        >
-          Refresh
-        </button>
-      </div>
+      {templates === undefined && !isLoading && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => requestIndex()}
+            className={ROW_BUTTON_CLASS}
+          >
+            Browse community templates
+          </button>
+          <span className="text-xxs text-description-fg">
+            Downloads the list from {COMMUNITY_TEMPLATES.cdnHost}.
+          </span>
+        </div>
+      )}
+
+      {templates !== undefined && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter by name, author or tag…"
+            aria-label="Filter community templates"
+            className="min-w-[220px] flex-1 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
+          />
+          <button
+            type="button"
+            onClick={() => requestIndex(true)}
+            disabled={isLoading}
+            className={ROW_BUTTON_CLASS}
+            title="Download the list again"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
 
       {isLoading && (
         <p className="flex items-center gap-1.5 text-xs text-description-fg">

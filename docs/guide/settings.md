@@ -134,8 +134,9 @@ workflow's own roots are added to.
 each template. The drawer's User/Workspace scope switch applies here too. Saved values fill in
 when you create a workflow from that template; variable defaults authored by the template
 remain available when you clear a saved value. See
-[Templates](/workflows/templates#saved-variable-values). Its **Discover** page, in the page bar
-at the bottom, installs templates from the community library into the selected scope; see
+[Templates](/workflows/templates#saved-variable-values). Its **Community templates** column, beside
+**Defaults** on a wide screen and below it on a narrow one, installs templates from the community
+library into the selected scope; see
 [Community templates](/workflows/templates#community-templates).
 
 If a settings file was written by a newer version of ctrlyoke, the drawer shows **These settings

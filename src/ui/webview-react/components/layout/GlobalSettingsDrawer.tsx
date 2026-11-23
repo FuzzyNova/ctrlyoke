@@ -124,6 +124,7 @@ export function GlobalSettingsDrawer() {
   const isFullWidthSettingsTab =
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER ||
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER ||
+    effectiveActiveTab === GLOBAL_SETTINGS_TABS.TEMPLATES ||
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.LANGUAGE_SERVERS;
 
   useEffect(() => {
@@ -415,8 +416,10 @@ export function GlobalSettingsDrawer() {
             The "workflow" tab renders WorkflowDefaultsSection which owns its
             own scrolling and uses h-full + DrawerTabBar pinned at the bottom.
             It must be a direct flex child so h-full resolves to a definite
-            size; the "templates" tab's TemplatesSection does the same. MCP also gets the full available width so its wide layout can
-            use equal columns; all other tabs use the standard width cap. */}
+            size. The two-column tabs (MCP, Agent & Skills, Templates) and
+            Language Servers get the full available width so their wide
+            layouts can use equal columns; all other tabs use the standard
+            width cap. */}
             {fullSettings &&
             effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKFLOW ? (
               <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -429,14 +432,6 @@ export function GlobalSettingsDrawer() {
                   searchActive={hasSearchQuery}
                   {...sectionProps}
                 />
-              </div>
-            ) : fullSettings &&
-              effectiveActiveTab === GLOBAL_SETTINGS_TABS.TEMPLATES ? (
-              // Templates owns its scrolling too: its page bar is pinned at
-              // the bottom like Workflow Defaults'.
-              <div className="flex-1 flex flex-col min-h-0 min-w-0">
-                {noSearchMatchesNotice}
-                <TemplatesSection settings={fullSettings} {...sectionProps} />
               </div>
             ) : (
               <div
@@ -453,6 +448,13 @@ export function GlobalSettingsDrawer() {
                   {fullSettings &&
                     effectiveActiveTab === GLOBAL_SETTINGS_TABS.GENERAL && (
                       <GeneralSection
+                        settings={fullSettings}
+                        {...sectionProps}
+                      />
+                    )}
+                  {fullSettings &&
+                    effectiveActiveTab === GLOBAL_SETTINGS_TABS.TEMPLATES && (
+                      <TemplatesSection
                         settings={fullSettings}
                         {...sectionProps}
                       />

@@ -3,6 +3,17 @@
 **Status:** In progress. The ctrlyoke side is implemented (2026-11-21); the templates
 repository is prepared locally but not yet published.
 
+> **2026-11-22 layout change:** the Templates tab no longer has a **Defaults**/**Discover** page
+> bar. It now uses the MCP Manager's two-column layout: **Defaults** beside **Community
+> templates** at `lg` and wider, stacked below that, inside the drawer's standard full-width
+> scroll container. A page bar hid the library behind a second click, and the only reason for it
+> was consistency with Workflow Defaults' page bar. Because the column is now visible as soon as
+> the tab opens, the index is fetched only when the user chooses **Browse community templates**
+> (or **Refresh**), never on mount: like the MCP registry and skills.sh, no third party is
+> contacted until the user asks to browse (`docs/guide/privacy.md`). `TEMPLATES_PAGES`/
+> `TEMPLATES_TABS` were removed. Mentions of the Discover page and
+> page bar below are historical.
+>
 > **2026-11-21 implementation:** In this repo: `_templateMeta.author`/`tags` (schema, no bump;
 > parsed into `TemplateInfo`), `TemplateManager.installTemplateContent`,
 > `src/utils/CommunityTemplateClient.ts` (jsDelivr fetch, `index.json` parsing and

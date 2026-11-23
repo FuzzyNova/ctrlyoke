@@ -93,9 +93,19 @@ describe("CommunityTemplatesPage", () => {
   });
   afterEach(() => cleanup());
 
-  it("downloads the index once, when the page first opens", () => {
+  it("downloads nothing until the user chooses to browse, then only once", () => {
     const { unmount } = render(
       <CommunityTemplatesPage activeScope="user" onSetDefaults={vi.fn()} />
+    );
+    expect(sent(MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX)).toHaveLength(
+      0
+    );
+    expect(
+      screen.queryByRole("searchbox", { name: "Filter community templates" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Browse community templates" })
     );
     expect(sent(MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX)).toEqual([
       [MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX, {}],
@@ -110,6 +120,9 @@ describe("CommunityTemplatesPage", () => {
     expect(sent(MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX)).toHaveLength(
       1
     );
+    expect(
+      screen.queryByRole("button", { name: "Browse community templates" })
+    ).not.toBeInTheDocument();
   });
 
   it("lists templates with author, tags and source, and filters them", () => {
@@ -243,7 +256,7 @@ describe("CommunityTemplatesPage", () => {
   });
 });
 
-describe("TemplatesSection pages", () => {
+describe("TemplatesSection columns", () => {
   const postMessage = vi.fn();
   const settings: FullGlobalSettings = {
     settings: CTRLYOKE_SETTINGS_DEFAULTS,
@@ -278,27 +291,24 @@ describe("TemplatesSection pages", () => {
     );
   }
 
-  it("switches between Defaults and Discover with the page bar", () => {
+  it("shows Defaults and Community templates side by side, with no page bar", () => {
     mount();
     expect(screen.getByTestId("templates-section")).toBeInTheDocument();
+    expect(screen.getByTestId("community-templates-page")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Defaults" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Community templates" })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    // Opening the tab contacts no third party; browsing is a deliberate click.
     expect(sent(MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX)).toHaveLength(
       0
     );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Discover" }));
-    expect(screen.getByTestId("community-templates-page")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Community Templates" })
-    ).toBeInTheDocument();
-    expect(sent(MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX)).toHaveLength(
-      1
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Defaults" }));
-    expect(screen.getByTestId("templates-section")).toBeInTheDocument();
   });
 
-  it("Set defaults opens the installed template's card on Defaults", () => {
+  it("Set defaults opens the installed template's card in Defaults", () => {
     seedIndex([REVIEW]);
     useUiStore.setState({ templateCatalog: [installedTemplate(REVIEW.id)] });
     useCommunityTemplatesStore.setState({
@@ -307,7 +317,6 @@ describe("TemplatesSection pages", () => {
       },
     });
     mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Discover" }));
     fireEvent.click(screen.getByRole("button", { name: "Set defaults" }));
 
     expect(
@@ -321,9 +330,10 @@ describe("TemplatesSection pages", () => {
       globalSettings: { ...globalSettings, workspaceRoot: "" },
     });
     mount("workspace");
-    fireEvent.click(screen.getByRole("tab", { name: "Discover" }));
     expect(
-      screen.getByText("Open a workspace to install Workspace templates.")
+      screen.getByText(
+        "Open a workspace to edit Workspace template values or install Workspace templates."
+      )
     ).toBeInTheDocument();
     expect(sent(MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX)).toHaveLength(
       0
