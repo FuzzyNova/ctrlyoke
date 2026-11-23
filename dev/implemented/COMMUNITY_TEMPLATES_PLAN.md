@@ -1,8 +1,34 @@
 # Community Templates Plan
 
-**Status:** In progress. The ctrlyoke side is implemented (2026-11-21); the templates
-repository is prepared locally but not yet published.
+**Status:** Implemented (2026-11-22). Both phases are done, and the library is live.
 
+> **2026-11-22 completion check:** `FuzzyNova/ctrlyoke-templates` is public (MIT-0) with the
+> scaffold pushed and the Review Branch seed listed in `index.json`. ctrlyoke's own
+> `CommunityTemplateClient` downloads the live index and template through jsDelivr. Guardrails
+> (checked with `gh`): an active `main` ruleset requires one approving review with code-owner
+> review (`* @nhickster`), stale-review dismissal and last-push approval, squash merges only,
+> the `validate` status check (strict), and blocks deletion and force-pushes; repository admins
+> may bypass, as on `FuzzyNova/ctrlyoke`. Actions run read-only and need approval for every
+> outside contributor; secret scanning with push protection and Dependabot security updates are
+> on. `validate.yml` runs on pull requests, pushes to `main`, weekly and on demand. Its last two
+> runs passed. Each community row also gained the **Report** link (open question 3), which opens
+> the library's report form with the template's id in the title.
+>
+> **One follow-up after the 0.9.0 release:** the library validates against the latest ctrlyoke
+> release, and 0.8.0 lacks `_templateMeta.author`/`tags`. Once 0.9.0 is tagged, the seed (and
+> new submissions) may add them. Nothing needs to change in this repository for that.
+
+> **2026-11-22 layout change:** the Templates tab no longer has a **Defaults**/**Discover** page
+> bar. It now uses the MCP Manager's two-column layout: **Defaults** beside **Community
+> templates** at `lg` and wider, stacked below that, inside the drawer's standard full-width
+> scroll container. A page bar hid the library behind a second click, and the only reason for it
+> was consistency with Workflow Defaults' page bar. Because the column is now visible as soon as
+> the tab opens, the index is fetched only when the user chooses **Browse community templates**
+> (or **Refresh**), never on mount: like the MCP registry and skills.sh, no third party is
+> contacted until the user asks to browse (`docs/guide/privacy.md`). `TEMPLATES_PAGES`/
+> `TEMPLATES_TABS` were removed. Mentions of the Discover page and
+> page bar below are historical.
+>
 > **2026-11-21 implementation:** In this repo: `_templateMeta.author`/`tags` (schema, no bump;
 > parsed into `TemplateInfo`), `TemplateManager.installTemplateContent`,
 > `src/utils/CommunityTemplateClient.ts` (jsDelivr fetch, `index.json` parsing and
@@ -19,7 +45,8 @@ repository is prepared locally but not yet published.
 > scaffold, and turn on branch protection (required code-owner review and the `validate`
 > check); (2) ship a ctrlyoke release containing the `author`/`tags` schema change before the
 > library accepts templates that use them; the seed template omits them for that reason. Until
-> the repository exists, **Discover** shows its offline state (the index 404s).
+> the repository exists, **Discover** shows its offline state (the index 404s). _(Both done or
+> superseded; see the completion check above.)_
 >
 > Deviations from the plan below: the CI tripwire reports GitHub annotations instead of a PR
 > comment (no token with write access needed); templates must use `.ctrlyoke.yaml` (the client

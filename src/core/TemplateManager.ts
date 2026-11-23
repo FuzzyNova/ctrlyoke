@@ -981,6 +981,26 @@ export class TemplateManager {
   }
 
   /**
+   * Delete one custom template file from a scope's templates directory. Only
+   * the file named `<templateName>.ctrlyoke.{yaml,yml,json}` in that directory
+   * can be removed, so a caller can never name an arbitrary path.
+   *
+   * @returns Path of the deleted file
+   */
+  async uninstallCustomTemplate(
+    templateName: string,
+    scope: TemplateScope
+  ): Promise<string> {
+    this.validateTemplateName(templateName);
+    const templatePath = await this.findCustomTemplatePath(scope, templateName);
+    if (!templatePath) {
+      throw new Error(`Template is not installed: ${templateName}`);
+    }
+    await fs.promises.unlink(templatePath);
+    return templatePath;
+  }
+
+  /**
    * Discover custom templates from both the workspace (.ctrlyoke/templates/)
    * and user (~/.ctrlyoke/templates/) directories.
    */

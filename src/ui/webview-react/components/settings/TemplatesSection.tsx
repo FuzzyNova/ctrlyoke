@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   HARNESS_IDS,
   MESSAGE_TYPES,
@@ -7,7 +7,6 @@ import {
 } from "@/types/messages";
 import {
   DASHBOARD_HOST_CAPABILITIES,
-  GLOBAL_SETTINGS_TABS,
   SETTING_WRITE_SCOPE_LABELS,
   TEMPLATE_VARIABLE_TYPES,
   TEMPLATE_SOURCES,
@@ -26,15 +25,6 @@ import { Icon } from "../shared/Icon";
 import { CustomSelect } from "../shared/CustomSelect";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
-import { PageTitle } from "../shared/PageTitle";
-import { SegmentedTabBar } from "../shared/SegmentedTabBar";
-import {
-  TEMPLATES_PAGES,
-  TEMPLATES_TABS,
-  type TemplatesPage,
-} from "@/types/drawerPages";
-import { SettingsSearchContext } from "./SettingsSearchContext";
-import { SETTINGS_CATALOG_ENTRIES } from "./settingsCatalog";
 import { CommunityTemplatesPage } from "./CommunityTemplatesPage";
 
 interface Props {
@@ -78,27 +68,20 @@ function isMultiline(variable: TemplateVariable): boolean {
   );
 }
 
-/** Settings-search entries that live on the Discover page. */
-const DISCOVER_SEARCH_IDS: ReadonlySet<string> = new Set([
-  "landmark:templates.discover",
-]);
-
-const TEMPLATES_PAGE_TITLES: Record<TemplatesPage, string> = {
-  [TEMPLATES_PAGES.DEFAULTS]: "Templates",
-  [TEMPLATES_PAGES.DISCOVER]: "Community Templates",
-};
+const COLUMN_HEADING_CLASS =
+  "flex min-h-6 items-center text-xxs font-semibold uppercase tracking-wide text-description-fg";
 
 /**
- * Settings → Templates. Two pages share the drawer's User/Workspace scope:
- * **Defaults** (default template and saved variable values) and **Discover**
- * (install community templates). An installed template is an ordinary custom
- * template, so Discover can hand it straight to Defaults.
+ * Settings → Templates, laid out like the MCP and Agent & Skills managers: your
+ * templates' defaults (default template and saved variable values) beside the
+ * community library on wide screens, stacked on narrow ones. Both columns write
+ * to the drawer's User/Workspace scope. An installed community template is an
+ * ordinary custom template, so its **Set defaults** link opens its card in the
+ * defaults column.
  */
 export function TemplatesSection(props: Props) {
   const vscode = useVsCodeApi();
-  const [page, setPage] = useState<TemplatesPage>(TEMPLATES_PAGES.DEFAULTS);
   const [openCardFor, setOpenCardFor] = useState<string | null>(null);
-  const { activeMatchId } = useContext(SettingsSearchContext);
   const workspaceRoot = useSettingsStore(
     (state) => state.globalSettings.workspaceRoot
   );
@@ -109,74 +92,50 @@ export function TemplatesSection(props: Props) {
     vscode.postMessage({ type: MESSAGE_TYPES.TEMPLATE_CATALOG_REQUEST });
   }, [vscode]);
 
-  // A settings-search match on the other page brings that page forward.
-  useEffect(() => {
-    const entry = SETTINGS_CATALOG_ENTRIES.find(
-      (candidate) => candidate.id === activeMatchId
+  if (noWorkspace) {
+    return (
+      <div className="p-4 text-sm text-description-fg">
+        Open a workspace to edit Workspace template values or install Workspace
+        templates.
+      </div>
     );
-    if (!activeMatchId || entry?.tab !== GLOBAL_SETTINGS_TABS.TEMPLATES) return;
-    setPage(
-      DISCOVER_SEARCH_IDS.has(activeMatchId)
-        ? TEMPLATES_PAGES.DISCOVER
-        : TEMPLATES_PAGES.DEFAULTS
-    );
-  }, [activeMatchId]);
+  }
 
   return (
-    <div className="flex flex-col h-full">
-      <div
-        data-settings-content-scroll
-        className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-2 pb-4"
-      >
-        <div className="max-w-2xl">
-          <PageTitle title={TEMPLATES_PAGE_TITLES[page]} />
-          {noWorkspace ? (
-            <div className="p-4 text-sm text-description-fg">
-              {page === TEMPLATES_PAGES.DISCOVER
-                ? "Open a workspace to install Workspace templates."
-                : "Open a workspace to edit Workspace template values."}
-            </div>
-          ) : page === TEMPLATES_PAGES.DISCOVER ? (
-            <CommunityTemplatesPage
-              activeScope={props.activeScope}
-              onSetDefaults={(templateId) => {
-                setOpenCardFor(templateId);
-                setPage(TEMPLATES_PAGES.DEFAULTS);
-              }}
-            />
-          ) : (
-            <TemplateDefaultsPage
-              {...props}
-              openCardFor={openCardFor}
-              onCardOpened={() => setOpenCardFor(null)}
-            />
-          )}
-        </div>
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+      <div className="min-w-0 space-y-2">
+        <h3 className={COLUMN_HEADING_CLASS}>Defaults</h3>
+        <TemplateDefaultsPanel
+          {...props}
+          openCardFor={openCardFor}
+          onCardOpened={() => setOpenCardFor(null)}
+        />
       </div>
-      <SegmentedTabBar
-        tabs={TEMPLATES_TABS}
-        activeTab={page}
-        onTabChange={setPage}
-        ariaLabel="Templates"
-      />
+      <div className="min-w-0 space-y-2">
+        <h3 className={COLUMN_HEADING_CLASS}>Community templates</h3>
+        <CommunityTemplatesPage
+          activeScope={props.activeScope}
+          onSetDefaults={setOpenCardFor}
+        />
+      </div>
     </div>
   );
 }
 
-interface DefaultsPageProps extends Props {
+interface DefaultsPanelProps extends Props {
   /** A template whose card should be added and opened, then reported done. */
   openCardFor: string | null;
   onCardOpened: () => void;
 }
 
-function TemplateDefaultsPage({
+function TemplateDefaultsPanel({
   settings,
   activeScope,
   onUpdate,
   onReset,
   openCardFor,
   onCardOpened,
-}: DefaultsPageProps) {
+}: DefaultsPanelProps) {
   const vscode = useVsCodeApi();
   const templates = useUiStore((state) => state.templateCatalog);
   const hostCapabilities = useUiStore((state) => state.hostCapabilities);
@@ -496,7 +455,7 @@ function TemplateDefaultsPage({
             ? template.source !== TEMPLATE_SOURCES.USER
             : template.source === TEMPLATE_SOURCES.USER)
     );
-  // Discover's "Set defaults" opens the installed template's card once the
+  // A community template's "Set defaults" opens the installed template's card once the
   // refreshed catalog lists it.
   useEffect(() => {
     if (!openCardFor || !templatesById.has(openCardFor)) return;

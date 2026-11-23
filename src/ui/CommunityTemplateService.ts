@@ -4,8 +4,12 @@ import type {
   InstallCommunityTemplateMessage,
   RequestCommunityTemplateIndexMessage,
   SettingWriteScope,
+  UninstallCommunityTemplateMessage,
 } from "../types/WebviewMessageTypes";
-import type { WorkflowFileFormat } from "../types/DashboardConstants";
+import {
+  buildCustomTemplateId,
+  type WorkflowFileFormat,
+} from "../types/DashboardConstants";
 import {
   CommunityTemplateClient,
   getCommunityTemplateFormat,
@@ -14,7 +18,7 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import { Log } from "../utils/Log";
 import type { DashboardClientContext } from "./DashboardClientContext";
 
-/** What the service needs from the template library to install a download. */
+/** What the service needs from the template library to install and uninstall. */
 export interface CommunityTemplateInstaller {
   installTemplateContent(
     templateName: string,
@@ -22,14 +26,24 @@ export interface CommunityTemplateInstaller {
     format: WorkflowFileFormat,
     content: string
   ): Promise<{ path: string; templateId: string }>;
+  /** Delete an installed template from one scope; returns the deleted path. */
+  uninstallTemplate(
+    templateName: string,
+    scope: SettingWriteScope
+  ): Promise<string>;
+  /** Clear a template's saved variable values and send refreshed settings. */
+  clearSavedValues(
+    templateId: string,
+    ctx: DashboardClientContext
+  ): Promise<void>;
   /** Send the client the refreshed template catalog after an install. */
   refreshTemplateCatalog(ctx: DashboardClientContext): Promise<void>;
 }
 
 /**
- * Community template handlers for the Templates tab's Discover page: list the
- * library's `index.json` and install one template into a custom-template
- * scope. The index is kept for the session once read; errors are not, so a
+ * Community template handlers for Settings → Templates: list the library's
+ * `index.json`, install one template into a custom-template scope, and
+ * uninstall it again. The index is kept for the session once read; errors are not, so a
  * retry downloads again.
  */
 export class CommunityTemplateService {
@@ -115,6 +129,46 @@ export class CommunityTemplateService {
       Log.warn(`[CommunityTemplates] installing "${id}" failed:`, msg);
       ctx.emit({
         type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_INSTALL_RESULT,
+        id,
+        scope,
+        success: false,
+        error: msg,
+      });
+    }
+  }
+
+  /**
+   * Delete an installed community template from one scope, and optionally its
+   * saved variable values. Unlike install, the index is not consulted: the
+   * template manager only deletes the file of that name in the scope's
+   * templates folder, and a template that has left the library can still go.
+   */
+  async handleUninstall(
+    ctx: DashboardClientContext,
+    message: UninstallCommunityTemplateMessage
+  ): Promise<void> {
+    const { id, scope, clearSavedValues } = message;
+    try {
+      const removed = await this.installer.uninstallTemplate(id, scope);
+      Log.info(`[CommunityTemplates] uninstalled "${id}" from ${removed}`);
+      if (clearSavedValues) {
+        await this.installer.clearSavedValues(
+          buildCustomTemplateId(scope, id),
+          ctx
+        );
+      }
+      ctx.emit({
+        type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_UNINSTALL_RESULT,
+        id,
+        scope,
+        success: true,
+      });
+      await this.installer.refreshTemplateCatalog(ctx);
+    } catch (error) {
+      const msg = getErrorMessage(error);
+      Log.warn(`[CommunityTemplates] uninstalling "${id}" failed:`, msg);
+      ctx.emit({
+        type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_UNINSTALL_RESULT,
         id,
         scope,
         success: false,

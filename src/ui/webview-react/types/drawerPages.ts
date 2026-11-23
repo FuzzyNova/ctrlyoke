@@ -64,21 +64,3 @@ export function drawerPageTitle(page: DrawerPage): string {
 export function drawerPageDefaultsTitle(page: DrawerPage): string {
   return `${DRAWER_PAGE_TITLES[page]} Defaults`;
 }
-
-/** Pages of Settings → Templates, switched by the page bar at its foot. */
-export const TEMPLATES_PAGES = {
-  DEFAULTS: "defaults",
-  DISCOVER: "discover",
-} as const;
-
-export type TemplatesPage =
-  (typeof TEMPLATES_PAGES)[keyof typeof TEMPLATES_PAGES];
-
-export const TEMPLATES_TABS: readonly {
-  id: TemplatesPage;
-  label: string;
-  codicon: string;
-}[] = [
-  { id: TEMPLATES_PAGES.DEFAULTS, label: "Defaults", codicon: "settings" },
-  { id: TEMPLATES_PAGES.DISCOVER, label: "Discover", codicon: "globe" },
-];

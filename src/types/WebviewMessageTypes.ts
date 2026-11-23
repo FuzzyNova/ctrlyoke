@@ -3218,6 +3218,24 @@ export interface CommunityTemplateInstallResultMessage {
   localTemplateId?: string;
 }
 
+/** Webview → Extension: delete an installed community template from one scope. */
+export interface UninstallCommunityTemplateMessage {
+  type: typeof MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE;
+  id: string;
+  scope: SettingWriteScope;
+  /** Also clear the template's saved variable values, in both settings scopes. */
+  clearSavedValues: boolean;
+}
+
+/** Extension → Webview: how a community template uninstall ended. */
+export interface CommunityTemplateUninstallResultMessage {
+  type: typeof MESSAGE_TYPES.COMMUNITY_TEMPLATE_UNINSTALL_RESULT;
+  id: string;
+  scope: SettingWriteScope;
+  success: boolean;
+  error?: string;
+}
+
 export interface RequestMcpConfigPreviewMessage {
   type: typeof MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW;
   mcpServerName: string;
@@ -3903,6 +3921,7 @@ export type IncomingMessage =
   | McpRegistrySearchResultMessage
   | CommunityTemplateIndexResultMessage
   | CommunityTemplateInstallResultMessage
+  | CommunityTemplateUninstallResultMessage
   | LspServersUpdateMessage
   | LspLocalScanResultMessage
   | LspInstallProgressMessage

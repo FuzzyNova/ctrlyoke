@@ -164,11 +164,22 @@ suite("CommunityTemplateService", () => {
       format: WorkflowFileFormat;
       content: string;
     }> = [];
+    const uninstalls: Array<{ name: string; scope: SettingWriteScope }> = [];
+    const cleared: string[] = [];
     let refreshes = 0;
+    let uninstallError: Error | undefined;
     const installer: CommunityTemplateInstaller = {
       installTemplateContent: async (name, scope, format, content) => {
         installs.push({ name, scope, format, content });
         return { path: `/t/${name}`, templateId: `custom:${scope}:${name}` };
+      },
+      uninstallTemplate: async (name, scope) => {
+        if (uninstallError) throw uninstallError;
+        uninstalls.push({ name, scope });
+        return `/t/${name}`;
+      },
+      clearSavedValues: async (templateId) => {
+        cleared.push(templateId);
       },
       refreshTemplateCatalog: async () => {
         refreshes++;
@@ -186,8 +197,13 @@ suite("CommunityTemplateService", () => {
       ctx,
       posted,
       installs,
+      uninstalls,
+      cleared,
       requested,
       refreshes: () => refreshes,
+      failUninstall: (error: Error) => {
+        uninstallError = error;
+      },
     };
   }
 
@@ -268,5 +284,63 @@ suite("CommunityTemplateService", () => {
     assert.ok(!requested.some((url) => url.includes("/templates/")));
     assert.strictEqual(posted[0].success, false);
     assert.match(posted[0].error, /not in the community template index/);
+  });
+
+  test("uninstalls from one scope without touching the network or saved values", async () => {
+    const { service, ctx, posted, uninstalls, cleared, requested, refreshes } =
+      setup(routes);
+
+    await service.handleUninstall(ctx, {
+      type: MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE,
+      id: REVIEW_ENTRY.id,
+      scope: SETTING_SCOPES.USER,
+      clearSavedValues: false,
+    });
+
+    assert.deepStrictEqual(uninstalls, [
+      { name: REVIEW_ENTRY.id, scope: SETTING_SCOPES.USER },
+    ]);
+    assert.deepStrictEqual(cleared, []);
+    assert.deepStrictEqual(requested, []);
+    assert.deepStrictEqual(posted, [
+      {
+        type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_UNINSTALL_RESULT,
+        id: REVIEW_ENTRY.id,
+        scope: SETTING_SCOPES.USER,
+        success: true,
+      },
+    ]);
+    assert.strictEqual(refreshes(), 1);
+  });
+
+  test("clears the uninstalled template's saved values when asked", async () => {
+    const { service, ctx, cleared } = setup(routes);
+
+    await service.handleUninstall(ctx, {
+      type: MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE,
+      id: REVIEW_ENTRY.id,
+      scope: SETTING_SCOPES.WORKSPACE,
+      clearSavedValues: true,
+    });
+
+    assert.deepStrictEqual(cleared, [`custom:workspace:${REVIEW_ENTRY.id}`]);
+  });
+
+  test("reports a failed uninstall and keeps the saved values", async () => {
+    const { service, ctx, posted, cleared, refreshes, failUninstall } =
+      setup(routes);
+    failUninstall(new Error("Template is not installed: x"));
+
+    await service.handleUninstall(ctx, {
+      type: MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE,
+      id: REVIEW_ENTRY.id,
+      scope: SETTING_SCOPES.USER,
+      clearSavedValues: true,
+    });
+
+    assert.deepStrictEqual(cleared, []);
+    assert.strictEqual(refreshes(), 0);
+    assert.strictEqual(posted[0].success, false);
+    assert.match(posted[0].error, /not installed/);
   });
 });

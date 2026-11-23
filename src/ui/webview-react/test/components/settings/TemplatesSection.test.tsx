@@ -475,7 +475,9 @@ describe("TemplatesSection", () => {
     cleanup();
     mount({ scope: "workspace", workspaceRoot: "", templates: [] });
     expect(
-      screen.getByText("Open a workspace to edit Workspace template values.")
+      screen.getByText(
+        "Open a workspace to edit Workspace template values or install Workspace templates."
+      )
     ).toBeInTheDocument();
   });
 

@@ -2154,7 +2154,7 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
-  // Community templates - Templates tab → Discover
+  // Community templates - Settings → Templates, Community templates column
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT] = (message) => {
     useCommunityTemplatesStore
@@ -2163,6 +2163,9 @@ export function createMessageHandlers(
   };
   handlers[MESSAGE_TYPES.COMMUNITY_TEMPLATE_INSTALL_RESULT] = (message) => {
     useCommunityTemplatesStore.getState().setInstallResult(message);
+  };
+  handlers[MESSAGE_TYPES.COMMUNITY_TEMPLATE_UNINSTALL_RESULT] = (message) => {
+    useCommunityTemplatesStore.getState().setUninstallResult(message);
   };
 
   // --------------------------------------------------------------------------
