@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-22
+
 ### Added
 
 - Every published version of the license, Enterprise Terms, Privacy Policy and Data Processing Agreement now has a permanent page on ctrlyoke.dev, such as [ctrlyoke.dev/terms/2.2/](https://ctrlyoke.dev/terms/2.2/), listed under **Version history** on each current page. The Enterprise checkout links the exact versions you accept.
