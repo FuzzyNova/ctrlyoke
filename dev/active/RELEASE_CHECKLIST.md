@@ -1432,11 +1432,12 @@ money or a retainer now.
         PR reply, Sheet row `accepted`, `cla` success. Dependabot PR #20 passed as exempt.
         Required `cla` in the `main` ruleset beside `fast-checks`, and added the "turns
         green" sentence to `CONTRIBUTING.md` (November 22, 2026).
-  - [ ] Clean up the test: close PR #22 unmerged, delete its row from the Sheet, and remove
-        the `CLA/recorded` label from the test email.
-  - [ ] Add the Gmail filter `to:licensing@ctrlyoke.dev` → **Never send it to Spam** (README
-        step 6). The test acceptance landed in Spam.
-  - [ ] Record the GitHub token's expiry date here and renew it before then: (not set yet).
+  - [x] PR #22 was merged, so `TuringTheServer`'s Sheet row and acceptance email are the
+        record for a merged contribution. Keep both.
+  - [x] Added the Gmail filter `to:licensing@ctrlyoke.dev` → **Never send it to Spam**
+        (README step 6). The test acceptance had landed in Spam (November 22, 2026).
+  - [ ] Renew the CLA intake GitHub token before it expires on **November 23, 2027**, then
+        update `GITHUB_TOKEN` in the script's properties and the date here.
   - [ ] Place a test-mode Pro and Enterprise order and check that each records `privacy@1.8`.
   - **Ongoing:** handle what the script flags (`CLA/needs-review` emails: entity
     acceptances, mismatches, unauthenticated senders) by setting the row's Status in the
