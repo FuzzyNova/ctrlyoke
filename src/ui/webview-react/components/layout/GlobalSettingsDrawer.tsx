@@ -79,9 +79,16 @@ export function GlobalSettingsDrawer() {
     },
     [drawerRef]
   );
-  const [activeScope, setActiveScope] = useState<SettingWriteScope>(
+  const [selectedScope, setActiveScope] = useState<SettingWriteScope>(
     SETTING_SCOPES.USER
   );
+  // In the home directory the workspace file is the user file, so there is
+  // only one layer to edit.
+  const workspaceLayerSharedWithUser =
+    fullSettings?.workspaceLayerSharedWithUser === true;
+  const activeScope = workspaceLayerSharedWithUser
+    ? SETTING_SCOPES.USER
+    : selectedScope;
   const [shouldRender, setShouldRender] = useState(globalSettingsOpen);
   // Drives the slide transform separately from `globalSettingsOpen` so a fresh
   // mount first paints off-screen (translate-y-full) and only then slides in.
@@ -309,14 +316,23 @@ export function GlobalSettingsDrawer() {
           </span>
 
           {/* Scope toggle */}
-          <ScopeToggle
-            className="ml-2"
-            ariaLabel="Settings scope"
-            value={activeScope}
-            onChange={setActiveScope}
-            iconOnly={isNarrow}
-            options={SETTING_SCOPE_OPTIONS}
-          />
+          {workspaceLayerSharedWithUser ? (
+            <span
+              className="ml-2 text-xs text-description-fg"
+              title="ctrlyoke is running in your home directory, so this workspace's settings file is your user settings file."
+            >
+              User (home directory)
+            </span>
+          ) : (
+            <ScopeToggle
+              className="ml-2"
+              ariaLabel="Settings scope"
+              value={activeScope}
+              onChange={setActiveScope}
+              iconOnly={isNarrow}
+              options={SETTING_SCOPE_OPTIONS}
+            />
+          )}
         </div>
 
         <div className="flex items-center gap-1">

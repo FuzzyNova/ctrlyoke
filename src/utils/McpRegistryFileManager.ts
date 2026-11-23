@@ -34,6 +34,7 @@ import {
 } from "./McpToolDefinitions";
 import { hasErrnoCode } from "./ErrorUtils";
 import { isStringArray, isStringRecord } from "./JsonTypeGuards";
+import { isUserHomeWorkspace } from "./ProjectStatePaths";
 
 function isBooleanOrStringArray(
   value: unknown
@@ -432,7 +433,12 @@ export class McpRegistryFileManager {
   }
 
   private getRequiredScopePath(scope: SettingWriteScope): string {
-    const filePath = this.getScopePath(scope);
+    // In the home directory the workspace registry is the user registry, so
+    // a workspace-scope write lands in the one real file.
+    const filePath =
+      scope === SETTING_SCOPES.WORKSPACE && this.isHomeWorkspace()
+        ? this.getScopePath(SETTING_SCOPES.USER)
+        : this.getScopePath(scope);
     if (filePath) return filePath;
 
     throw new Error(
@@ -446,10 +452,19 @@ export class McpRegistryFileManager {
     if (scope === SETTING_SCOPES.USER) {
       return getCtrlYokeUserMcpRegistryPath();
     }
-    if (!this.workspaceRoot) {
+    // No separate workspace layer in the home directory: reading the user
+    // registry twice would list each server in both scopes.
+    if (!this.workspaceRoot || this.isHomeWorkspace()) {
       return null;
     }
     return getCtrlYokeWorkspaceMcpRegistryPath(this.workspaceRoot);
+  }
+
+  private isHomeWorkspace(): boolean {
+    return (
+      this.workspaceRoot !== undefined &&
+      isUserHomeWorkspace(this.workspaceRoot)
+    );
   }
 }
 

@@ -957,6 +957,7 @@ export class AntigravityHarnessAdapter implements IHarnessAdapter {
           {
             path: path.join(workspaceRoot, ".agents", "mcp_config.json"),
             description: "Register Antigravity MCP servers",
+            workspaceHarnessConfig: true,
             apply: async () => {
               await AntigravityHarnessAdapter.mcpTracker.registerServers(
                 workflowKey,

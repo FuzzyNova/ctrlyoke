@@ -1434,6 +1434,100 @@ suite("FileConfigBackend", () => {
     assert.strictEqual(service.get("ui").showCliCommand, false);
   });
 
+  suite(
+    "workspace settings file is the user settings file (home directory)",
+    () => {
+      function createSharedService(content: object): {
+        service: CtrlYokeConfigService;
+        configPath: string;
+      } {
+        const configPath = path.join(tmpDir, "settings.json");
+        fs.writeFileSync(configPath, JSON.stringify(content), "utf-8");
+        const service = new CtrlYokeConfigService();
+        service.setUserBackend(new FileConfigBackend(configPath));
+        service.setWorkspaceBackend(
+          new FileConfigBackend(
+            `${tmpDir}${path.sep}nested${path.sep}..${path.sep}settings.json`,
+            tmpDir
+          )
+        );
+        return { service, configPath };
+      }
+
+      test("reports one layer, with every value sourced from user", () => {
+        const { service } = createSharedService({
+          ui: { showCliCommand: false },
+        });
+
+        assert.strictEqual(service.isWorkspaceLayerSharedWithUser(), true);
+        assert.strictEqual(
+          service.getLeafSources()["ui.showCliCommand"],
+          "user"
+        );
+        assert.strictEqual(service.resolve("ui").source, "user");
+        assert.strictEqual(service.getScoped("ui", "workspace"), undefined);
+        assert.strictEqual(service.get("ui").showCliCommand, false);
+      });
+
+      test("applies a workspace-scope write to the one shared file as user", async () => {
+        const { service, configPath } = createSharedService({
+          ui: { showCliCommand: false },
+        });
+
+        await service.set("ui.showCliCommand", true, "workspace");
+
+        assert.strictEqual(
+          JSON.parse(fs.readFileSync(configPath, "utf-8")).ui.showCliCommand,
+          true
+        );
+        assert.strictEqual(
+          service.getLeafSources()["ui.showCliCommand"],
+          "user"
+        );
+      });
+
+      test("accepts user-only settings written at workspace scope", async () => {
+        const { service, configPath } = createSharedService({});
+
+        await service.set(
+          "storage.runHistoryLocation",
+          "workspace",
+          "workspace"
+        );
+
+        assert.strictEqual(
+          JSON.parse(fs.readFileSync(configPath, "utf-8")).storage
+            .runHistoryLocation,
+          "workspace"
+        );
+      });
+
+      test("never withholds the user's own sensitive values as workspace requests", () => {
+        const { service } = createSharedService({
+          terminal: { shellExecutable: "pwsh" },
+        });
+
+        assert.deepStrictEqual(
+          service.getWorkspaceSensitiveSettingStates(),
+          []
+        );
+        assert.strictEqual(service.get("terminal").shellExecutable, "pwsh");
+      });
+
+      test("separate files keep two layers", () => {
+        const service = new CtrlYokeConfigService();
+        service.setUserBackend(
+          new FileConfigBackend(path.join(tmpDir, "user.json"))
+        );
+        service.setWorkspaceBackend(
+          new FileConfigBackend(path.join(tmpDir, "workspace.json"), tmpDir)
+        );
+
+        assert.strictEqual(service.isWorkspaceLayerSharedWithUser(), false);
+      });
+    }
+  );
+
   test("round-trips step color mode and harness color settings", async () => {
     const configPath = path.join(tmpDir, "settings.json");
     const backend = new FileConfigBackend(configPath);

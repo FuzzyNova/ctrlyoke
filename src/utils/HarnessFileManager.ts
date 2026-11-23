@@ -47,7 +47,7 @@ import {
   SkillDiscovery,
 } from "./SkillDiscovery";
 import { McpToolSkillGenerator } from "./McpToolSkillGenerator";
-import { pathsEqual } from "./PathCasing";
+import { pathsEqual, resolvedPathKey } from "./PathCasing";
 
 // ============================================================================
 // Public Types
@@ -280,6 +280,41 @@ async function copySkill(
 }
 
 /**
+ * Keys of every user-scope directory for `type`. A workspace directory that is
+ * also one of these (the workspace is the home directory, so
+ * `<root>/.ctrlyoke/agents` is `~/.ctrlyoke/agents`) is listed only as user:
+ * otherwise each file shows up in both scopes, and deleting the "workspace"
+ * copy deletes the only copy.
+ */
+function userScopeDirKeys(type: HarnessFileType): Set<string> {
+  const dirs =
+    type === HARNESS_FILE_TYPES.AGENT
+      ? [
+          getCtrlYokeUserAgentDir(),
+          getAgentsUserAgentDir(),
+          ...getVSCodeUserAgentDirs(),
+          ...getAllHarnessIds().flatMap((id) => getHarnessUserAgentDirs(id)),
+        ]
+      : [
+          getCtrlYokeUserSkillDir(),
+          getAgentsUserSkillDir(),
+          ...getAllHarnessIds().flatMap((id) => getHarnessUserSkillDirs(id)),
+        ];
+  return new Set(dirs.map((dir) => resolvedPathKey(dir)));
+}
+
+/** Whether a scan of `dir` at `scope` duplicates a user-scope directory. */
+function isWorkspaceAliasOfUserDir(
+  dir: string,
+  scope: SettingWriteScope,
+  userDirKeys: ReadonlySet<string>
+): boolean {
+  return (
+    scope === SETTING_SCOPES.WORKSPACE && userDirKeys.has(resolvedPathKey(dir))
+  );
+}
+
+/**
  * Collect all agent locations across all harness workspace dirs, user dirs, and .ctrlyoke/.
  */
 async function collectAgentLocations(
@@ -306,12 +341,14 @@ async function collectAgentLocations(
     byName.get(name)!.locations.push(loc);
   };
 
+  const userDirKeys = userScopeDirKeys(HARNESS_FILE_TYPES.AGENT);
   const scanAgentDir = async (
     dir: string,
     targetId: AnyTargetId,
     scope: SettingWriteScope,
     scannedSet?: Set<string>
   ) => {
+    if (isWorkspaceAliasOfUserDir(dir, scope, userDirKeys)) return;
     const normalized = path.normalize(dir);
     if (scannedSet) {
       if (scannedSet.has(normalized)) return;
@@ -448,12 +485,14 @@ async function collectSkillLocations(
     return fs.existsSync(path.join(dir, name, "SKILL.md"));
   };
 
+  const userDirKeys = userScopeDirKeys(HARNESS_FILE_TYPES.SKILL);
   const scanSkillDir = async (
     dir: string,
     targetId: AnyTargetId,
     scope: SettingWriteScope,
     scannedSet?: Set<string>
   ) => {
+    if (isWorkspaceAliasOfUserDir(dir, scope, userDirKeys)) return;
     const normalized = path.normalize(dir);
     if (scannedSet) {
       if (scannedSet.has(normalized)) return;

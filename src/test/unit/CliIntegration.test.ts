@@ -1792,6 +1792,7 @@ suite("CliIntegration", () => {
       mcpApplication: { cliArgs: [], mutations: [], diagnostics: [] },
       effectiveToolPermissions: undefined,
       diagnostics: [],
+      homeWorkspaceDiagnostics: [],
       tempFilePaths: [],
     });
     (integration as any).executionPlanBuilder.apply = async () => {};

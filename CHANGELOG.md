@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- When ctrlyoke runs in your home directory, the workspace `.ctrlyoke/` folder is your user `~/.ctrlyoke/`, so ctrlyoke now treats them as one layer. Settings, MCP Manager and Agents & Skills Manager offer only the **User** scope. Settings no longer show every user value as a workspace override, and resetting or removing one no longer deletes it from your user files. Steps still write the harness config they need, such as Antigravity's `.agents/mcp_config.json` and Copilot's `.github/hooks/` files, and these now land in your user folders. When a step does this, a warning in the output and in dry run names the files.
+
 ## [0.9.0] - 2026-11-22
 
 ### Added

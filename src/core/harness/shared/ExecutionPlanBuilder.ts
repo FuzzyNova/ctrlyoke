@@ -42,6 +42,7 @@ import {
 import { sandboxUnsupportedDiagnostic } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import { harnessSettingSandbox } from "./SandboxCapabilities";
+import { createHomeWorkspaceConfigDiagnostics } from "./HomeWorkspaceConfigDiagnostic";
 import type {
   EffectiveSandbox,
   SandboxApplication,
@@ -84,6 +85,12 @@ export interface ExecutionPlan {
     ResolvedProperties["toolPermissions"] | undefined;
   readonly effectiveSandbox?: EffectiveSandbox;
   readonly diagnostics: HarnessAdapterPreparation["diagnostics"];
+  /**
+   * Warnings that this launch writes user-scope harness config because the
+   * workspace is the home directory. Also part of `diagnostics`; kept apart
+   * so a real run can report them in the output, not only in dry run.
+   */
+  readonly homeWorkspaceDiagnostics: HarnessAdapterPreparation["diagnostics"];
   readonly tempFilePaths: string[];
   /** Hook environment files stay available for the lifetime of their hook config. */
   readonly deferredHookEnvironmentFilePaths: string[];
@@ -464,6 +471,11 @@ export class ExecutionPlanBuilder {
       this.deps.provider.config.name,
       completeArgs
     );
+    const homeWorkspaceDiagnostics = createHomeWorkspaceConfigDiagnostics(
+      this.deps.provider.config.harnessId,
+      workspaceRoot,
+      mutations
+    );
 
     return {
       resolvedCommand,
@@ -480,7 +492,9 @@ export class ExecutionPlanBuilder {
         ...sandboxApplication.diagnostics,
         ...hookPreparations.flatMap((application) => application.diagnostics),
         ...permissionApplication.diagnostics,
+        ...homeWorkspaceDiagnostics,
       ],
+      homeWorkspaceDiagnostics,
       tempFilePaths,
       deferredHookEnvironmentFilePaths,
     };

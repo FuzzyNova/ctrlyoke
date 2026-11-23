@@ -14,6 +14,13 @@ export interface PreparedMutation {
   readonly ownedKeys?: string[];
   /** Human-readable description for process-local or merged-file mutations. */
   readonly description?: string;
+  /**
+   * True when `path` is a harness config file found by its place in the
+   * workspace (`<root>/.agents/mcp_config.json`, `<root>/.github/hooks/…`),
+   * not a ctrlyoke temp file. In the home directory such a file sits in the
+   * user's own config folders, so the plan warns that the step edits them.
+   */
+  readonly workspaceHarnessConfig?: boolean;
   /** Apply the mutation immediately before the consuming process starts. */
   readonly apply: () => Promise<void>;
   /** Release the mutation after the consuming process exits, when supported. */

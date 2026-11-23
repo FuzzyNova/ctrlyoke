@@ -51,6 +51,20 @@ describe("GlobalSettingsDrawer", () => {
     expect(screen.getByText("Statusline Tracking")).toBeInTheDocument();
   });
 
+  it("offers only the user scope when the workspace settings file is the user file", () => {
+    useSettingsStore.setState({
+      fullGlobalSettings: {
+        ...fullSettings,
+        workspaceLayerSharedWithUser: true,
+      },
+    });
+
+    render(<GlobalSettingsDrawer />);
+
+    expect(screen.queryByRole("button", { name: "Workspace" })).toBeNull();
+    expect(screen.getByText("User (home directory)")).toBeInTheDocument();
+  });
+
   it("draws the Templates tab with the From template Lucide glyph", () => {
     render(<GlobalSettingsDrawer />);
 

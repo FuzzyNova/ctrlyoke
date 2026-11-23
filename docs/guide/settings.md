@@ -16,6 +16,15 @@ what it does, see the [settings reference](/reference/settings).
 
 Both files are optional. A setting that neither file names uses its built-in default.
 
+If you open your home directory as the workspace, both rows name the same file,
+`~/.ctrlyoke/settings.json`. ctrlyoke then treats it as your user settings only. The Settings
+drawer shows **User (home directory)** instead of the scope switch, and MCP Manager and Agents &
+Skills Manager list your files once, as user. Steps still write the harness config they find by
+its place in the workspace, such as Antigravity's `.agents/mcp_config.json` or Copilot's
+`.github/hooks/` files. In the home directory those files sit in your user folders, where other
+sessions of that harness can see them until the step ends. A warning in the step output and in
+dry run lists them. Open a project folder to keep those edits inside the project.
+
 The files accept comments and trailing commas. Saving a setting from the Settings drawer rewrites
 the file as plain JSON, so comments in it don't survive an edit from the dashboard. VS Code
 validates both files against ctrlyoke's settings schema as you type. Changes made by hand, the CLI,

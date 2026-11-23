@@ -69,6 +69,8 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   HOOK_EVENT_PARTIAL: "compatibility.hooks.event.partial",
   HOOK_EVENT_UNVERIFIED: "compatibility.hooks.event.unverified",
   SECRETS_UNRESOLVED: "secrets.unresolved",
+  /** The workspace is the home directory, so workspace harness config is user config. */
+  HOME_WORKSPACE_USER_CONFIG: "workspace.homeDirectory.userConfig",
 } as const;
 
 export type CapabilityFidelity =

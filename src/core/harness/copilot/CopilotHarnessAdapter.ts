@@ -818,6 +818,7 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       // not a partial merge into an existing settings file.
       ownedKeys: [],
       description,
+      workspaceHarnessConfig: true,
       apply: async () => {
         await this.createHookFile(content, hookPath);
       },

@@ -1,4 +1,6 @@
 import { isRecord as isPlainObject } from "../utils/JsonTypeGuards";
+import { pathsEqual } from "../utils/PathCasing";
+import { canonicalStatePath } from "../utils/ProjectStatePaths";
 import type {
   CtrlYokeGlobalSettings,
   PartialCtrlYokeSettings,
@@ -334,6 +336,11 @@ export class CtrlYokeConfigService {
     requests: WorkspaceSensitiveSettingRequest[];
   };
   private workspaceIdentityMemo?: { root: string; identity: string };
+  private sharedLayerMemo?: {
+    user: ConfigBackend | undefined;
+    workspace: ConfigBackend | undefined;
+    shared: boolean;
+  };
   private mergedSettingsCache?: {
     settings: CtrlYokeGlobalSettings;
     userSettings: PartialCtrlYokeSettings | undefined;
@@ -408,6 +415,32 @@ export class CtrlYokeConfigService {
         ? this.workspaceSettingsTrust.getDecision(identity, request)
         : undefined,
     }));
+  }
+
+  /**
+   * True when the workspace settings file is the user settings file, which
+   * happens when ctrlyoke runs in the home directory. There is then no
+   * separate workspace layer: workspace reads are empty, every source is
+   * "user", and a workspace-scope write is applied at user scope. Treating
+   * the one file as two layers would label every user value "workspace", and
+   * resetting one of them there would delete the user's value.
+   */
+  isWorkspaceLayerSharedWithUser(): boolean {
+    const user = this.userBackend;
+    const workspace = this.workspaceBackend;
+    const memo = this.sharedLayerMemo;
+    if (memo && memo.user === user && memo.workspace === workspace) {
+      return memo.shared;
+    }
+    const shared =
+      user?.filePath !== undefined &&
+      workspace?.filePath !== undefined &&
+      pathsEqual(
+        canonicalStatePath(user.filePath),
+        canonicalStatePath(workspace.filePath)
+      );
+    this.sharedLayerMemo = { user, workspace, shared };
+    return shared;
   }
 
   /** Absolute path of the active user-scope settings.json backend, when configured. */
@@ -558,8 +591,14 @@ export class CtrlYokeConfigService {
   async set(
     path: string,
     value: unknown,
-    scope: SettingWriteScope
+    requestedScope: SettingWriteScope
   ): Promise<void> {
+    // One file, one layer: see isWorkspaceLayerSharedWithUser().
+    const scope =
+      requestedScope === SETTING_SCOPES.WORKSPACE &&
+      this.isWorkspaceLayerSharedWithUser()
+        ? SETTING_SCOPES.USER
+        : requestedScope;
     const forbiddenRoot =
       scope === SETTING_SCOPES.WORKSPACE
         ? getWorkspaceForbiddenSettingRoot(path)
@@ -700,7 +739,9 @@ export class CtrlYokeConfigService {
    * backends' cached objects (both return the same object until written).
    */
   private getWorkspaceSensitiveSettingRequests(): WorkspaceSensitiveSettingRequest[] {
-    if (!this.workspaceBackend) return [];
+    if (!this.workspaceBackend || this.isWorkspaceLayerSharedWithUser()) {
+      return [];
+    }
     const workspace = this.workspaceBackend.getAll();
     const user = this.userBackend?.getAll();
     const memo = this.sensitiveRequestsMemo;
@@ -763,7 +804,7 @@ export class CtrlYokeConfigService {
 
   /** Return workspace settings after removing forbidden user/machine paths. */
   private getForbiddenFilteredWorkspaceSettings(): PartialCtrlYokeSettings {
-    if (!this.workspaceBackend) {
+    if (!this.workspaceBackend || this.isWorkspaceLayerSharedWithUser()) {
       return {};
     }
 

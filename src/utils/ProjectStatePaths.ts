@@ -27,6 +27,21 @@ export function ctrlyokeStateHome(): string {
 }
 
 /**
+ * True when `<workspaceRoot>/.ctrlyoke` is the user's own `~/.ctrlyoke`,
+ * i.e. ctrlyoke was opened in the home directory. The workspace layer
+ * (settings, MCP registry, agents, skills) is then the user layer, and a
+ * harness's project config folder (`<root>/.qwen`, `<root>/.codex`, ...) is
+ * that harness's global config. Uses `os.homedir()`, not `CTRLYOKE_HOME`:
+ * user settings never move with the state-home override.
+ */
+export function isUserHomeWorkspace(workspaceRoot: string): boolean {
+  return pathsEqual(
+    canonicalStatePath(workspaceRoot),
+    canonicalStatePath(os.homedir())
+  );
+}
+
+/**
  * `projectKey` is pure in its resolved input, and every run-history path
  * (`runsRoot`, `lineageDir`, `runDir`, …) recomputes it, so listing history
  * hashed the same root once per entry. A process sees a handful of roots, so

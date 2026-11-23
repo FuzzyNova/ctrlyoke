@@ -1353,23 +1353,25 @@ export class CliIntegration extends HarnessIntegration {
     for (const tempFilePath of executionPlan.tempFilePaths) {
       session.addTempFilePath(tempFilePath);
     }
-    const routedDiagnostics =
-      executionPlan.permissionApplication.diagnostics.map((diagnostic) => {
-        const workflowContext = session.workflowContext;
-        if (!workflowContext) {
-          return diagnostic;
-        }
-        return {
-          ...diagnostic,
-          consumer:
-            workflowContext.promptIndex < workflowContext.allPrompts.length
-              ? {
-                  kind: FINAL_STEP_PHASES.QUEUE,
-                  stepIndex: workflowContext.promptIndex,
-                }
-              : { kind: FINAL_STEP_PHASES.FINAL_STEP },
-        };
-      });
+    const routedDiagnostics = [
+      ...executionPlan.permissionApplication.diagnostics,
+      ...executionPlan.homeWorkspaceDiagnostics,
+    ].map((diagnostic) => {
+      const workflowContext = session.workflowContext;
+      if (!workflowContext) {
+        return diagnostic;
+      }
+      return {
+        ...diagnostic,
+        consumer:
+          workflowContext.promptIndex < workflowContext.allPrompts.length
+            ? {
+                kind: FINAL_STEP_PHASES.QUEUE,
+                stepIndex: workflowContext.promptIndex,
+              }
+            : { kind: FINAL_STEP_PHASES.FINAL_STEP },
+      };
+    });
     for (const diagnostic of routedDiagnostics) {
       Log.warn(`[PermissionCompatibility] ${diagnostic.message}`);
     }

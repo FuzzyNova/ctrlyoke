@@ -2069,6 +2069,12 @@ export interface FullGlobalSettings {
    * of its stored value — the settings UI shows the toggle as forced-on.
    */
   isMultiRoot: boolean;
+  /**
+   * True when the workspace's `.ctrlyoke/settings.json` is the user's own
+   * (ctrlyoke opened in the home directory). There is no separate workspace
+   * layer, so the settings UI offers only the user scope.
+   */
+  workspaceLayerSharedWithUser?: boolean;
 }
 
 export type { TerminalSettings } from "./CtrlYokeSettings";

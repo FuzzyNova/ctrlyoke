@@ -173,6 +173,48 @@ suite("HarnessFileManager", () => {
     );
   });
 
+  test("lists a workspace dir that is also the user dir only once, as user", async () => {
+    // The home-directory case: <root>/.ctrlyoke/agents is ~/.ctrlyoke/agents.
+    const sharedDir = path.join(workspaceRoot, ".ctrlyoke", "agents");
+    const original = Object.getOwnPropertyDescriptor(
+      HarnessDirectoryUtils,
+      "getCtrlYokeUserAgentDir"
+    );
+    Object.defineProperty(HarnessDirectoryUtils, "getCtrlYokeUserAgentDir", {
+      configurable: true,
+      value: () => sharedDir,
+    });
+
+    try {
+      await fs.mkdir(sharedDir, { recursive: true });
+      await fs.writeFile(
+        path.join(sharedDir, "reviewer.agent.md"),
+        "---\nname: reviewer\n---\n"
+      );
+
+      const files = await HarnessFileManager.resolveAllLocations(
+        workspaceRoot,
+        HARNESS_FILE_TYPES.AGENT
+      );
+      const reviewer = files.find((file) => file.name === "reviewer");
+
+      assert.deepStrictEqual(
+        reviewer?.locations
+          .filter(({ path: filePath }) => filePath.startsWith(sharedDir))
+          .map(({ harnessId, scope }) => ({ harnessId, scope })),
+        [{ harnessId: SPECIAL_TARGET_IDS.CTRLYOKE, scope: SETTING_SCOPES.USER }]
+      );
+    } finally {
+      if (original) {
+        Object.defineProperty(
+          HarnessDirectoryUtils,
+          "getCtrlYokeUserAgentDir",
+          original
+        );
+      }
+    }
+  });
+
   suite("installSkillFiles", () => {
     const origin = {
       registry: "skills.sh",

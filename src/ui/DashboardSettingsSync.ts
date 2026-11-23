@@ -1149,6 +1149,8 @@ export class DashboardSettingsSync {
           spellingWordsByScope: ConfigurationUtils.getSpellingWordsByScope(),
           runHistoryPath: this.getResolvedRunHistoryPath(),
           isMultiRoot: this.host.getNamedRoots().length > 1,
+          workspaceLayerSharedWithUser:
+            configService.isWorkspaceLayerSharedWithUser(),
           licenseAccess: this.licenseAccess,
         },
         commitMessageGeneration: commitMessageGenerationTracker.getLastRecord(),
