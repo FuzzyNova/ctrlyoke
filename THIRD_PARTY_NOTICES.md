@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-This product includes third-party software and assets. This inventory was audited on **2026-11-19** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
+This product includes third-party software and assets. This inventory was audited on **2026-11-23** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
 
 ## Commercial Distribution
 
@@ -83,15 +83,15 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `@emnapi/core`                              | `1.11.2`        | `MIT`                         | Copyright (c) 2021-present Toyobayashi                                                                                                                                      |
 | `@emnapi/runtime`                           | `1.11.2`        | `MIT`                         | Copyright (c) 2021-present Toyobayashi                                                                                                                                      |
 | `@emnapi/wasi-threads`                      | `1.2.2`         | `MIT`                         | Copyright (c) 2021-present Toyobayashi                                                                                                                                      |
-| `@hono/node-server`                         | `2.1.9`         | `MIT`                         | Copyright (c) 2022 - present, Yusuke Wada and Hono contributors                                                                                                             |
+| `@hono/node-server`                         | `2.1.11`        | `MIT`                         | Copyright (c) 2022 - present, Yusuke Wada and Hono contributors                                                                                                             |
 | `@iconify/types`                            | `2.0.0`         | `MIT`                         | Copyright (c) 2021 - 2022 Vjacheslav Trushkin / Iconify OÜ                                                                                                                  |
 | `@iconify/utils`                            | `3.1.7`         | `MIT`                         | Copyright (c) 2021-PRESENT Vjacheslav Trushkin                                                                                                                              |
-| `@lezer/common`                             | `1.5.5`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/common`                             | `1.5.6`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
 | `@lezer/cpp`                                | `1.1.6`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
 | `@lezer/css`                                | `1.3.9`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
 | `@lezer/highlight`                          | `1.2.5`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
 | `@lezer/html`                               | `1.3.13`        | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/java`                               | `1.1.5`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/java`                               | `1.2.0`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
 | `@lezer/json`                               | `1.0.3`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>, Arun Srinivasan <rulfzid@gmail.com>, and others                                                           |
 | `@lezer/lr`                                 | `1.4.12`        | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
 | `@lezer/markdown`                           | `1.8.1`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
@@ -109,7 +109,7 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `@microsoft/applicationinsights-web-basic`  | `3.4.6`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
 | `@microsoft/dynamicproto-js`                | `2.0.5`         | `MIT`                         | Microsoft Application Insights Team                                                                                                                                         |
 | `@modelcontextprotocol/sdk`                 | `1.32.2`        | `MIT`                         | Copyright (c) 2024 Anthropic, PBC                                                                                                                                           |
-| `@napi-rs/canvas`                           | `1.1.1`         | `MIT`                         | Copyright (c) 2020 lynweklm@gmail.com                                                                                                                                       |
+| `@napi-rs/canvas`                           | `1.2.0`         | `MIT`                         | Copyright (c) 2020 lynweklm@gmail.com                                                                                                                                       |
 | `@napi-rs/wasm-runtime`                     | `1.2.7`         | `MIT`                         | LongYinan                                                                                                                                                                   |
 | `@nevware21/ts-async`                       | `0.5.5`         | `MIT`                         | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
 | `@nevware21/ts-utils`                       | `0.16.0`        | `MIT`                         | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
@@ -127,8 +127,8 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `@peculiar/x509`                            | `1.14.3`        | `MIT`                         | Copyright (c) Peculiar Ventures. All rights reserved.                                                                                                                       |
 | `@pushforge/builder`                        | `2.0.5`         | `MIT`                         | Copyright (c) 2025 David Raphi                                                                                                                                              |
 | `@resvg/resvg-wasm`                         | `2.6.2`         | `MPL-2.0`                     | resvg-js contributors                                                                                                                                                       |
-| `@tanstack/react-virtual`                   | `3.14.26`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
-| `@tanstack/virtual-core`                    | `3.19.11`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tanstack/react-virtual`                   | `3.14.28`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tanstack/virtual-core`                    | `3.19.13`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
 | `@tybys/wasm-util`                          | `0.10.5`        | `MIT`                         | Copyright (c) 2022-present Toyobayashi                                                                                                                                      |
 | `@types/body-parser`                        | `1.19.6`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/connect`                            | `3.4.38`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
@@ -271,7 +271,7 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `diff`                                      | `9.0.0`         | `BSD-3-Clause`                | Copyright (c) 2009-2015, Kevin Decker <kpdecker@gmail.com>                                                                                                                  |
 | `diff-match-patch`                          | `1.0.5`         | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
 | `dijkstrajs`                                | `1.0.3`         | `MIT`                         | Copyright (C) 2008                                                                                                                                                          |
-| `dompurify`                                 | `3.4.18`        | `(MPL-2.0 OR Apache-2.0)`     | Dr.-Ing. Mario Heiderich, Cure53 <mario@cure53.de> (https://cure53.de/)                                                                                                     |
+| `dompurify`                                 | `3.5.0`         | `(MPL-2.0 OR Apache-2.0)`     | Dr.-Ing. Mario Heiderich, Cure53 <mario@cure53.de> (https://cure53.de/)                                                                                                     |
 | `elkjs`                                     | `0.12.1`        | `EPL-2.0 OR GPL-3.0-or-later` | Ulf Rüegg                                                                                                                                                                   |
 | `entities`                                  | `9.0.0`         | `BSD-2-Clause`                | Copyright (c) Felix Böhm                                                                                                                                                    |
 | `es-toolkit`                                | `1.53.2`        | `MIT`                         | Copyright (c) 2024 Viva Republica, Inc.                                                                                                                                     |
@@ -296,7 +296,7 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `hast-util-to-parse5`                       | `8.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `hast-util-whitespace`                      | `3.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `hastscript`                                | `9.0.3`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hono`                                      | `4.13.19`       | `MIT`                         | Copyright (c) 2021 - present, Yusuke Wada and Hono contributors                                                                                                             |
+| `hono`                                      | `4.13.20`       | `MIT`                         | Copyright (c) 2021 - present, Yusuke Wada and Hono contributors                                                                                                             |
 | `html-url-attributes`                       | `3.0.1`         | `MIT`                         | Copyright (c) Titus Wormer                                                                                                                                                  |
 | `html-void-elements`                        | `3.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `http-errors`                               | `2.0.1`         | `MIT`                         | Copyright (c) 2014 Jonathan Ong me@jongleberry.com                                                                                                                          |
@@ -327,25 +327,25 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `longest-streak`                            | `3.1.0`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
 | `loose-envify`                              | `1.4.0`         | `MIT`                         | Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>                                                                                                                        |
 | `lru-cache`                                 | `11.5.3`        | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me>                                                                                                                                               |
-| `lucide-react`                              | `1.76.0`        | `ISC`                         | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
+| `lucide-react`                              | `1.77.0`        | `ISC`                         | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
 | `markdown-table`                            | `3.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `marked`                                    | `15.0.12`       | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
 | `marked`                                    | `16.4.2`        | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
 | `marked`                                    | `18.2.1`        | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
-| `mdast-util-find-and-replace`               | `3.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-find-and-replace`               | `3.0.5`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-from-markdown`                  | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm`                            | `3.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-gfm-autolink-literal`           | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-gfm-autolink-literal`           | `2.1.2`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm-footnote`                   | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm-strikethrough`              | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm-table`                      | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm-task-list-item`             | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-mdx-expression`                 | `2.0.1`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-mdx-jsx`                        | `3.2.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-mdx-jsx`                        | `3.2.2`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-mdxjs-esm`                      | `2.0.1`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `mdast-util-phrasing`                       | `4.1.0`         | `MIT`                         | Copyright (c) 2017 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `mdast-util-to-hast`                        | `13.2.2`        | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-to-markdown`                    | `2.2.3`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-to-markdown`                    | `2.2.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-to-string`                      | `4.0.0`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `mermaid`                                   | `12.3.0`        | `MIT`                         | Copyright (c) 2014 - 2022 Knut Sveidqvist                                                                                                                                   |
 | `micromark-core-commonmark`                 | `2.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
@@ -390,7 +390,7 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `path-key`                                  | `3.1.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `path-scurry`                               | `3.0.0`         | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me)                                                                                                                         |
 | `pdfjs-dist`                                | `6.5.438`       | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
-| `pkce-challenge`                            | `5.0.1`         | `MIT`                         | Copyright (c) 2019                                                                                                                                                          |
+| `pkce-challenge`                            | `5.0.2`         | `MIT`                         | Copyright (c) 2019                                                                                                                                                          |
 | `pkijs`                                     | `3.4.3`         | `BSD-3-Clause`                | Copyright (c) 2014, GlobalSign                                                                                                                                              |
 | `pngjs`                                     | `5.0.0`         | `MIT`                         | Alexandre Paré, Gaurav Mali, Gusts Kaksis, Kuba Niegowski, Luke Page, Pietajan De Potter, Steven Sojka, liangzeng, Michael Vogt, Xin-Xin Wang, toriningen, Eugene Kulabuhov |
 | `points-on-curve`                           | `0.2.0`         | `MIT`                         | Copyright (c) 2020 Preet Shihn                                                                                                                                              |
@@ -429,11 +429,11 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `space-separated-tokens`                    | `2.0.2`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `streamdown`                                | `2.8.0`         | `Apache-2.0`                  | Copyright 2023 Vercel, Inc.                                                                                                                                                 |
 | `string-width`                              | `4.2.3`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `stringify-entities`                        | `4.0.4`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
+| `stringify-entities`                        | `4.0.5`         | `MIT`                         | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
 | `strip-ansi`                                | `6.0.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `style-to-object`                           | `2.0.2`         | `MIT`                         | Copyright (c) 2017 Menglin "Mark" Xu <mark@remarkablemark.org>                                                                                                              |
 | `stylis`                                    | `4.4.0`         | `MIT`                         | Copyright (c) 2016-present Sultan Tarimo                                                                                                                                    |
-| `tailwind-merge`                            | `3.7.0`         | `MIT`                         | Copyright (c) 2021 Dany Castillo                                                                                                                                            |
+| `tailwind-merge`                            | `3.7.1`         | `MIT`                         | Copyright (c) 2021 Dany Castillo                                                                                                                                            |
 | `tinyexec`                                  | `1.3.1`         | `MIT`                         | Copyright (c) 2024 Tinylibs                                                                                                                                                 |
 | `tree-kill`                                 | `1.2.2`         | `MIT`                         | Copyright (c) 2018 Peter Krumins                                                                                                                                            |
 | `ts-dedent`                                 | `2.3.0`         | `MIT`                         | Copyright (c) 2018 Tamino Martinius                                                                                                                                         |
@@ -452,9 +452,9 @@ The production dependency tree contains **420 packages**. Each package is listed
 | `vfile`                                     | `6.0.3`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `vfile-location`                            | `5.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `vfile-message`                             | `4.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `vscode-jsonrpc`                            | `10.0.0`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `vscode-languageserver-protocol`            | `3.18.5`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `vscode-languageserver-types`               | `3.18.5`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `vscode-jsonrpc`                            | `10.0.1`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `vscode-languageserver-protocol`            | `3.18.6`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `vscode-languageserver-types`               | `3.18.6`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
 | `warning`                                   | `4.0.3`         | `MIT`                         | Copyright (c) 2013-present, Facebook, Inc.                                                                                                                                  |
 | `web-namespaces`                            | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `which`                                     | `2.0.2`         | `ISC`                         | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
@@ -546,7 +546,7 @@ SOFTWARE.
 
 ### License text 3: Apache-2.0
 
-Packages: @chevrotain/cst-dts-gen@13.2.0, @chevrotain/gast@13.2.0, @chevrotain/regexp-to-ast@13.2.0, @chevrotain/types@13.2.0, @chevrotain/utils@13.2.0, chevrotain@13.2.0, diff-match-patch@1.0.5, dompurify@3.4.18
+Packages: @chevrotain/cst-dts-gen@13.2.0, @chevrotain/gast@13.2.0, @chevrotain/regexp-to-ast@13.2.0, @chevrotain/types@13.2.0, @chevrotain/utils@13.2.0, chevrotain@13.2.0, diff-match-patch@1.0.5, dompurify@3.5.0
 
 ```text
                                  Apache License
@@ -894,7 +894,7 @@ SOFTWARE.
 
 ### License text 9: MIT
 
-Packages: @hono/node-server@2.1.9
+Packages: @hono/node-server@2.1.11
 
 ```text
 MIT License
@@ -978,7 +978,7 @@ SOFTWARE.
 
 ### License text 12: MIT
 
-Packages: @lezer/common@1.5.5, @lezer/css@1.3.9, @lezer/highlight@1.2.5, @lezer/html@1.3.13, @lezer/lr@1.4.12, @lezer/php@1.0.6, @lezer/rust@1.0.3
+Packages: @lezer/common@1.5.6, @lezer/css@1.3.9, @lezer/highlight@1.2.5, @lezer/html@1.3.13, @lezer/lr@1.4.12, @lezer/php@1.0.6, @lezer/rust@1.0.3
 
 ```text
 MIT License
@@ -1006,7 +1006,7 @@ THE SOFTWARE.
 
 ### License text 13: MIT
 
-Packages: @lezer/cpp@1.1.6, @lezer/java@1.1.5, @lezer/markdown@1.8.1, @lezer/python@1.1.19
+Packages: @lezer/cpp@1.1.6, @lezer/java@1.2.0, @lezer/markdown@1.8.1, @lezer/python@1.1.19
 
 ```text
 MIT License
@@ -1202,7 +1202,7 @@ SOFTWARE.
 
 ### License text 20: MIT
 
-Packages: @napi-rs/canvas@1.1.1
+Packages: @napi-rs/canvas@1.2.0
 
 ```text
 MIT License
@@ -1438,7 +1438,7 @@ No license text file was present in the package. Declared license: `MPL-2.0`.
 
 ### License text 28: MIT
 
-Packages: @tanstack/react-virtual@3.14.26, @tanstack/virtual-core@3.19.11
+Packages: @tanstack/react-virtual@3.14.28, @tanstack/virtual-core@3.19.13
 
 ```text
 MIT License
@@ -3302,7 +3302,7 @@ THE SOFTWARE.
 
 ### License text 81: MIT
 
-Packages: decode-named-character-reference@1.3.0, hast-util-from-parse5@8.0.4, hast-util-raw@9.2.1, hast-util-sanitize@5.0.2, hast-util-to-jsx-runtime@2.3.7, hast-util-to-parse5@8.0.1, hastscript@9.0.3, markdown-table@3.1.0, mdast-util-find-and-replace@3.0.4, mdast-util-from-markdown@2.1.0, mdast-util-gfm@3.1.0, mdast-util-gfm-autolink-literal@2.1.0, mdast-util-gfm-footnote@2.1.0, mdast-util-gfm-strikethrough@2.0.1, mdast-util-gfm-table@2.0.1, mdast-util-gfm-task-list-item@2.0.1, mdast-util-mdx-jsx@3.2.1, mdast-util-to-hast@13.2.2, mdast-util-to-markdown@2.2.3, micromark-core-commonmark@2.0.4, micromark-extension-gfm-table@2.1.2, micromark-factory-destination@2.0.1, micromark-factory-label@2.0.1, micromark-factory-space@2.1.0, micromark-factory-title@2.0.1, micromark-factory-whitespace@2.0.1, micromark-util-character@2.1.1, micromark-util-chunked@2.0.1, micromark-util-classify-character@2.0.1, micromark-util-combine-extensions@2.0.1, micromark-util-decode-string@2.0.1, micromark-util-edit-map@1.0.0, micromark-util-html-tag-name@2.0.1, micromark-util-normalize-identifier@2.0.1, micromark-util-resolve-all@2.0.1, micromark-util-sanitize-uri@2.0.1, micromark-util-subtokenize@2.1.0, micromark-util-symbol@2.0.1, micromark-util-types@2.0.3, remark-gfm@4.0.1, remark-rehype@11.1.2, unist-util-visit@5.2.0, unist-util-visit-parents@6.1.0, vfile-location@5.0.4, vfile-message@4.0.4
+Packages: decode-named-character-reference@1.3.0, hast-util-from-parse5@8.0.4, hast-util-raw@9.2.1, hast-util-sanitize@5.0.2, hast-util-to-jsx-runtime@2.3.7, hast-util-to-parse5@8.0.1, hastscript@9.0.3, markdown-table@3.1.0, mdast-util-find-and-replace@3.0.5, mdast-util-from-markdown@2.1.0, mdast-util-gfm@3.1.0, mdast-util-gfm-autolink-literal@2.1.2, mdast-util-gfm-footnote@2.1.0, mdast-util-gfm-strikethrough@2.0.1, mdast-util-gfm-table@2.0.1, mdast-util-gfm-task-list-item@2.0.1, mdast-util-mdx-jsx@3.2.2, mdast-util-to-hast@13.2.2, mdast-util-to-markdown@2.2.4, micromark-core-commonmark@2.0.4, micromark-extension-gfm-table@2.1.2, micromark-factory-destination@2.0.1, micromark-factory-label@2.0.1, micromark-factory-space@2.1.0, micromark-factory-title@2.0.1, micromark-factory-whitespace@2.0.1, micromark-util-character@2.1.1, micromark-util-chunked@2.0.1, micromark-util-classify-character@2.0.1, micromark-util-combine-extensions@2.0.1, micromark-util-decode-string@2.0.1, micromark-util-edit-map@1.0.0, micromark-util-html-tag-name@2.0.1, micromark-util-normalize-identifier@2.0.1, micromark-util-resolve-all@2.0.1, micromark-util-sanitize-uri@2.0.1, micromark-util-subtokenize@2.1.0, micromark-util-symbol@2.0.1, micromark-util-types@2.0.3, remark-gfm@4.0.1, remark-rehype@11.1.2, unist-util-visit@5.2.0, unist-util-visit-parents@6.1.0, vfile-location@5.0.4, vfile-message@4.0.4
 
 ```text
 (The MIT License)
@@ -4128,7 +4128,7 @@ SOFTWARE.
 
 ### License text 101: MIT
 
-Packages: hono@4.13.19
+Packages: hono@4.13.20
 
 ```text
 MIT License
@@ -4719,7 +4719,7 @@ terms above.
 
 ### License text 119: MIT
 
-Packages: longest-streak@3.1.0, stringify-entities@4.0.4
+Packages: longest-streak@3.1.0
 
 ```text
 (The MIT License)
@@ -4838,7 +4838,7 @@ software or this license, under any kind of legal claim.***
 
 ### License text 122: ISC
 
-Packages: lucide-react@1.76.0
+Packages: lucide-react@1.77.0
 
 ```text
 ISC License
@@ -5208,7 +5208,7 @@ SOFTWARE.
 
 ### License text 131: MIT
 
-Packages: parse-entities@4.0.2, property-information@7.2.0
+Packages: parse-entities@4.0.2, property-information@7.2.0, stringify-entities@4.0.5
 
 ```text
 (The MIT License)
@@ -5474,7 +5474,7 @@ Packages: pdfjs-dist@6.5.438
 
 ### License text 135: MIT
 
-Packages: pkce-challenge@5.0.1
+Packages: pkce-challenge@5.0.2
 
 ```text
 MIT License
@@ -6277,7 +6277,7 @@ SOFTWARE.
 
 ### License text 163: MIT
 
-Packages: tailwind-merge@3.7.0
+Packages: tailwind-merge@3.7.1
 
 ```text
 MIT License
@@ -6586,7 +6586,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### License text 174: MIT
 
-Packages: vscode-jsonrpc@10.0.0, vscode-languageserver-protocol@3.18.5, vscode-languageserver-types@3.18.5
+Packages: vscode-jsonrpc@10.0.1, vscode-languageserver-protocol@3.18.6, vscode-languageserver-types@3.18.6
 
 ```text
 Copyright (c) Microsoft Corporation
