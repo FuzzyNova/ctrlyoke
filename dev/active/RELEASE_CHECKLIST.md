@@ -1424,7 +1424,7 @@ money or a retainer now.
         procedure (memo item 4). A page each, in the Fuzzy Nova Drive folder
         `Contracts & Agreements/Contributor License Agreements/` beside the
         `ctrlyoke CLA acceptances` Sheet, not in this repo.
-  - [ ] Deploy the CLA intake script, following
+  - [x] Deploy the CLA intake script, following
         [`legal/cla-intake/README.md`](../../legal/cla-intake/README.md) (token, private
         Sheet, `setup`, `cla-verified` label). It posts the acceptance request on each PR, so
         no saved reply is needed.
