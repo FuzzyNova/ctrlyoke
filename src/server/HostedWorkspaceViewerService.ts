@@ -133,6 +133,7 @@ import { pathsEqual } from "../utils/PathCasing";
 import { streamFileLines } from "../utils/TextLines";
 import {
   COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
+  homeWorkspacePathFilter,
   iterateSearchFiles,
 } from "../utils/WorkspaceSearchFileWalker";
 import {
@@ -1010,12 +1011,14 @@ export class HostedWorkspaceViewerService {
   ): AsyncGenerator<WorkspaceSearchCandidate[]> {
     for (const { fsPath } of roots) {
       const root = path.resolve(fsPath);
+      const homePrivate = homeWorkspacePathFilter(root);
       for await (const relativeFiles of this.searchRootFiles(
         root,
         includeGitIgnored
       )) {
         const candidates: WorkspaceSearchCandidate[] = [];
         for (const relativeFile of relativeFiles) {
+          if (homePrivate(relativeFile)) continue;
           const absolutePath = path.resolve(root, relativeFile);
           if (!isPathWithinDirectory(absolutePath, root)) continue;
           candidates.push({

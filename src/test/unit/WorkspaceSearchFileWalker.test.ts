@@ -4,9 +4,12 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import {
+  isHomePrivateSearchPath,
   isSearchPathIgnored,
+  iterateSearchFiles,
   walkSearchFiles,
 } from "../../utils/WorkspaceSearchFileWalker";
+import { useFakeUserHome } from "../helpers/fakeUserHome";
 
 suite("WorkspaceSearchFileWalker", () => {
   test("walks files relative to the root and skips generated directories", async () => {
@@ -160,6 +163,56 @@ suite("WorkspaceSearchFileWalker", () => {
       assert.strictEqual(result.truncated, true);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("matches home-private paths from the home root only", () => {
+    assert.strictEqual(isHomePrivateSearchPath(".ssh/id_ed25519"), true);
+    assert.strictEqual(isHomePrivateSearchPath(".ssh"), true);
+    assert.strictEqual(isHomePrivateSearchPath(".local/share/x"), true);
+    assert.strictEqual(
+      isHomePrivateSearchPath("OneDrive - Contoso/a.txt"),
+      true
+    );
+    assert.strictEqual(isHomePrivateSearchPath(".ctrlyoke/projects/p/x"), true);
+    assert.strictEqual(
+      isHomePrivateSearchPath(".ctrlyoke/settings.json"),
+      false
+    );
+    assert.strictEqual(isHomePrivateSearchPath(".local/bin/tool"), false);
+    assert.strictEqual(isHomePrivateSearchPath("dev/app/.cache/x"), false);
+    assert.strictEqual(isHomePrivateSearchPath(".sshx/notes.md"), false);
+  });
+
+  test("skips home-private paths only when the root is the home directory", async () => {
+    const home = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-search-home-")
+    );
+    try {
+      await fs.mkdir(path.join(home, ".ssh"));
+      await fs.mkdir(path.join(home, "AppData", "Local"), { recursive: true });
+      await fs.mkdir(path.join(home, "notes"));
+      await fs.writeFile(path.join(home, ".ssh", "id_rsa"), "key");
+      await fs.writeFile(path.join(home, "AppData", "Local", "a.db"), "db");
+      await fs.writeFile(path.join(home, ".npmrc"), "token");
+      await fs.writeFile(path.join(home, "notes", "todo.md"), "todo");
+
+      const outsideHome = await walkSearchFiles(home, Date.now(), 100, 10_000);
+      assert.strictEqual(outsideHome.files.length, 4);
+
+      const restore = useFakeUserHome(home);
+      try {
+        const walked = await walkSearchFiles(home, Date.now(), 100, 10_000);
+        assert.deepStrictEqual(walked.files, [path.join("notes", "todo.md")]);
+        const iterated: string[] = [];
+        for await (const files of iterateSearchFiles(home))
+          iterated.push(...files);
+        assert.deepStrictEqual(iterated, [path.join("notes", "todo.md")]);
+      } finally {
+        restore();
+      }
+    } finally {
+      await fs.rm(home, { recursive: true, force: true });
     }
   });
 });

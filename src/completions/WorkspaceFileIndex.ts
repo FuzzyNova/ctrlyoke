@@ -5,6 +5,7 @@ import { Worker } from "worker_threads";
 import {
   COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
   DEFAULT_SKIP_DIRECTORIES,
+  homeWorkspacePathFilter,
   isSearchPathIgnored,
   walkSearchFiles,
   type SearchWalkResult,
@@ -381,10 +382,15 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
       roots.map(async (root) => {
         try {
           const files: string[] = [];
+          const homePrivate = homeWorkspacePathFilter(root.path);
           for await (const chunk of this.dependencies.getGitFilesIncludingNestedRepos(
             root.path
           )) {
-            files.push(...chunk.filter((file) => !file.endsWith("/")));
+            files.push(
+              ...chunk.filter(
+                (file) => !file.endsWith("/") && !homePrivate(file)
+              )
+            );
           }
           this.rootsWithoutGit.delete(root.path);
           return this.prefix(root, files, roots);
@@ -554,7 +560,12 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
         rebuild = true;
         continue;
       }
-      if (isSearchPathIgnored(relative, skip, this.respectGitignore)) continue;
+      if (
+        isSearchPathIgnored(relative, skip, this.respectGitignore) ||
+        homeWorkspacePathFilter(root.path)(relative)
+      ) {
+        continue;
+      }
       if (change.kind === WORKSPACE_FILE_CHANGE_KINDS.DELETE) {
         removed.push(this.prefix(root, [relative])[0]);
       } else if (change.kind === WORKSPACE_FILE_CHANGE_KINDS.CREATE) {

@@ -4,6 +4,7 @@ import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { WorkspaceInitializer } from "../../core/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { useFakeUserHome } from "../helpers/fakeUserHome";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("WorkspaceInitializer", () => {
@@ -182,5 +183,80 @@ suite("WorkspaceInitializer", () => {
       await fs.promises.readFile(gitignorePath, "utf8"),
       userContent
     );
+  });
+
+  suite("home directory workspace", () => {
+    let restoreHome: (() => void) | undefined;
+
+    teardown(() => {
+      restoreHome?.();
+      restoreHome = undefined;
+    });
+
+    function createHomeWorkspace(): string {
+      const home = createWorkspace();
+      restoreHome = useFakeUserHome(home);
+      return home;
+    }
+
+    test("does not count a .ctrlyoke folder holding only user state as initialized", async () => {
+      const home = createHomeWorkspace();
+      fs.mkdirSync(path.join(home, PATH_CONSTANTS.CTRLYOKE_DIR));
+      fs.writeFileSync(
+        path.join(home, PATH_CONSTANTS.CTRLYOKE_DIR, "settings.json"),
+        "{}"
+      );
+
+      assert.strictEqual(WorkspaceInitializer.isInitialized(home), false);
+      assert.strictEqual(
+        await WorkspaceInitializer.initializeIfNeeded(home),
+        true
+      );
+      assert.strictEqual(WorkspaceInitializer.isInitialized(home), true);
+      assert.strictEqual(
+        await WorkspaceInitializer.initializeIfNeeded(home),
+        false
+      );
+    });
+
+    test("ignores user-only state and keeps authored files trackable", async () => {
+      const home = createHomeWorkspace();
+      await WorkspaceInitializer.initializeIfNeeded(home);
+      const lines = fs
+        .readFileSync(
+          path.join(home, PATH_CONSTANTS.CTRLYOKE_DIR, ".gitignore"),
+          "utf8"
+        )
+        .split("\n");
+      const ignoreAll = lines.indexOf("/*");
+      assert.ok(ignoreAll > lines.indexOf(".gitignore"));
+      for (const reinclude of [
+        "!/templates/",
+        "!/skills/",
+        "!/settings.json",
+        "!/*.ctrlyoke.yaml",
+        "!/*.prompt.md",
+      ]) {
+        assert.ok(lines.indexOf(reinclude) > ignoreAll, reinclude);
+      }
+    });
+
+    test("appends the home rules to a .gitignore generated before them", async () => {
+      const home = createHomeWorkspace();
+      const ctrlyokeDir = path.join(home, PATH_CONSTANTS.CTRLYOKE_DIR);
+      fs.mkdirSync(ctrlyokeDir);
+      fs.writeFileSync(
+        path.join(ctrlyokeDir, ".gitignore"),
+        "# generated\n.runs/\n.gitignore\n"
+      );
+
+      assert.strictEqual(WorkspaceInitializer.isInitialized(home), true);
+      await WorkspaceInitializer.initializeIfNeeded(home);
+      const lines = fs
+        .readFileSync(path.join(ctrlyokeDir, ".gitignore"), "utf8")
+        .split("\n");
+      assert.ok(lines.indexOf("/*") > lines.indexOf(".gitignore"));
+      assert.ok(lines.indexOf("!/settings.json") > lines.indexOf("/*"));
+    });
   });
 });

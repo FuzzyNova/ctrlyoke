@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-23 by claude-cli, reviewing ctrlyoke run from the home directory
 - **Area:** `src/core/orchestration/WorkspaceInitializer.ts`, `src/extension.ts`, `src/utils/WorktreeUtils.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit. In the home directory only `.ctrlyoke/.gitignore` marks ctrlyoke initialized, that file ignores every top-level entry except authored ones, and the worktree fallback inside a home-rooted checkout now asks for `worktrees.root`.
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-23 by claude-cli, reviewing ctrlyoke run from the home directory
 - **Area:** `src/core/harness/opencode/OpenCodeHarnessAdapter.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit. The fallback stays a late write; the adapter reports its files through `consumeLateWorkspaceConfigWrites` and `CliIntegration` raises the same home-directory warning after the plan applies.
 
 ## Symptom
 

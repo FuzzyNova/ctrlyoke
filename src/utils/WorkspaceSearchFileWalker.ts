@@ -1,6 +1,102 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { Dirent } from "fs";
+import { foldPathForCompare } from "./PathCasing";
+import { isUserHomeWorkspace } from "./ProjectStatePaths";
+
+/**
+ * Home-relative paths never indexed or searched when the workspace is the
+ * user's home directory: OS profile and sync folders (huge, and opening a
+ * cloud-synced file can download it), credential stores, package caches and
+ * harness state. Matched from the root only, so a project's own `.cache/` or
+ * `Library/` deeper in the tree is unaffected.
+ */
+const HOME_WORKSPACE_SKIPPED_PATHS = [
+  // OS profile folders
+  "AppData",
+  "Library",
+  "Application Data",
+  "Local Settings",
+  ".cache",
+  ".local/share",
+  ".local/state",
+  ".Trash",
+  "Dropbox",
+  "Google Drive",
+  "iCloud Drive",
+  // Credentials and keys
+  ".ssh",
+  ".gnupg",
+  ".aws",
+  ".azure",
+  ".kube",
+  ".docker",
+  ".config/gcloud",
+  ".config/gh",
+  ".npmrc",
+  ".netrc",
+  "_netrc",
+  ".git-credentials",
+  ".pypirc",
+  // Package stores and toolchains
+  ".npm",
+  ".pnpm-store",
+  ".yarn",
+  ".nuget",
+  ".cargo",
+  ".rustup",
+  ".gradle",
+  ".m2",
+  ".nvm",
+  ".pyenv",
+  ".conda",
+  ".vscode",
+  ".vscode-server",
+  ".vscode-insiders",
+  "go/pkg",
+  // Harness and ctrlyoke state
+  ".claude",
+  ".claude.json",
+  ".codex",
+  ".copilot",
+  ".qwen",
+  ".gemini",
+  ".config/opencode",
+  ".ctrlyoke/projects",
+  ".ctrlyoke/worktrees",
+  ".ctrlyoke/secret-index",
+].map((entry) => foldPathForCompare(entry));
+
+/** Home-level folder name prefixes skipped the same way (`OneDrive - Contoso`). */
+const HOME_WORKSPACE_SKIPPED_PREFIXES = ["OneDrive"].map((entry) =>
+  foldPathForCompare(entry)
+);
+
+/** True when a home-relative path is one `HOME_WORKSPACE_SKIPPED_PATHS` excludes. */
+export function isHomePrivateSearchPath(relativePath: string): boolean {
+  const normalized = foldPathForCompare(
+    relativePath.replace(/\\/g, "/").replace(/^(\.\/)+/, "")
+  );
+  const first = normalized.split("/", 1)[0];
+  return (
+    HOME_WORKSPACE_SKIPPED_PATHS.some(
+      (entry) => normalized === entry || normalized.startsWith(`${entry}/`)
+    ) ||
+    HOME_WORKSPACE_SKIPPED_PREFIXES.some((prefix) => first.startsWith(prefix))
+  );
+}
+
+/**
+ * The root-relative exclusion for one search root: `isHomePrivateSearchPath`
+ * when the root is the user's home directory, otherwise nothing. Every
+ * listing of a root (walk, watcher, Git list) applies it, because a dotfiles
+ * repository's `git ls-files --others` lists the whole home directory too.
+ */
+export function homeWorkspacePathFilter(
+  rootPath: string
+): (relativePath: string) => boolean {
+  return isUserHomeWorkspace(rootPath) ? isHomePrivateSearchPath : () => false;
+}
 
 export const DEFAULT_SKIP_DIRECTORIES = new Set([
   ".git",
@@ -54,6 +150,7 @@ export async function walkSearchFiles(
   signal?: AbortSignal
 ): Promise<SearchWalkResult> {
   const root = path.resolve(rootPath);
+  const homePrivate = homeWorkspacePathFilter(root);
   const pending = [root];
   let next = 0;
   const files: string[] = [];
@@ -82,18 +179,19 @@ export async function walkSearchFiles(
         truncated = true;
         break;
       }
+      const relativePath = path.relative(
+        root,
+        path.join(directory, entry.name)
+      );
+      if (homePrivate(relativePath)) continue;
       if (
         entry.isDirectory() &&
         !skipDirectories.has(entry.name) &&
-        !isSearchPathIgnored(
-          path.relative(root, path.join(directory, entry.name)),
-          skipDirectories,
-          excludeCtrlYokeLogs
-        )
+        !isSearchPathIgnored(relativePath, skipDirectories, excludeCtrlYokeLogs)
       ) {
         pending.push(path.join(directory, entry.name));
       } else if (entry.isFile()) {
-        files.push(path.relative(root, path.join(directory, entry.name)));
+        files.push(relativePath);
       }
     }
     if (onFiles && files.length > firstNewFile) {
@@ -122,6 +220,7 @@ export async function* iterateSearchFiles(
   excludeCtrlYokeLogs = true
 ): AsyncGenerator<string[]> {
   const root = path.resolve(rootPath);
+  const homePrivate = homeWorkspacePathFilter(root);
   const pending = startDirectories.map((directory) =>
     path.resolve(root, directory)
   );
@@ -140,6 +239,7 @@ export async function* iterateSearchFiles(
         root,
         path.join(directory, entry.name)
       );
+      if (homePrivate(relativePath)) continue;
       if (
         entry.isDirectory() &&
         !skipDirectories.has(entry.name) &&

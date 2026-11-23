@@ -78,6 +78,7 @@ import {
   spawnIdentityFields,
 } from "../../types/ExecutionSpawnIdentity";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
+import { createHomeWorkspaceConfigDiagnosticsForPaths } from "./shared/HomeWorkspaceConfigDiagnostic";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
@@ -1353,36 +1354,23 @@ export class CliIntegration extends HarnessIntegration {
     for (const tempFilePath of executionPlan.tempFilePaths) {
       session.addTempFilePath(tempFilePath);
     }
-    const routedDiagnostics = [
+    this.reportStepDiagnostics(session, [
       ...executionPlan.permissionApplication.diagnostics,
       ...executionPlan.homeWorkspaceDiagnostics,
-    ].map((diagnostic) => {
-      const workflowContext = session.workflowContext;
-      if (!workflowContext) {
-        return diagnostic;
-      }
-      return {
-        ...diagnostic,
-        consumer:
-          workflowContext.promptIndex < workflowContext.allPrompts.length
-            ? {
-                kind: FINAL_STEP_PHASES.QUEUE,
-                stepIndex: workflowContext.promptIndex,
-              }
-            : { kind: FINAL_STEP_PHASES.FINAL_STEP },
-      };
-    });
-    for (const diagnostic of routedDiagnostics) {
-      Log.warn(`[PermissionCompatibility] ${diagnostic.message}`);
-    }
-    session.workflowContext?.reportCompatibilityDiagnostics?.(
-      routedDiagnostics
-    );
+    ]);
     try {
       await this.executionPlanBuilder.apply(executionPlan);
     } finally {
       this.notifyStatuslineInstall(
         this.provider.consumeStatuslineInstallResult?.()
+      );
+      this.reportStepDiagnostics(
+        session,
+        createHomeWorkspaceConfigDiagnosticsForPaths(
+          this.provider.config.harnessId,
+          workspaceRoot,
+          this.provider.consumeLateWorkspaceConfigWrites?.() ?? []
+        )
       );
     }
     const executionSidecar = this.startProviderExecutionSidecar(
@@ -1417,6 +1405,33 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     return success;
+  }
+
+  /** Log a launch's diagnostics and report them against the running step. */
+  private reportStepDiagnostics(
+    session: CliExecutionSession,
+    diagnostics: readonly CompatibilityDiagnostic[]
+  ): void {
+    if (diagnostics.length === 0) return;
+    const workflowContext = session.workflowContext;
+    const routedDiagnostics = diagnostics.map((diagnostic) =>
+      workflowContext
+        ? {
+            ...diagnostic,
+            consumer:
+              workflowContext.promptIndex < workflowContext.allPrompts.length
+                ? {
+                    kind: FINAL_STEP_PHASES.QUEUE,
+                    stepIndex: workflowContext.promptIndex,
+                  }
+                : { kind: FINAL_STEP_PHASES.FINAL_STEP },
+          }
+        : diagnostic
+    );
+    for (const diagnostic of routedDiagnostics) {
+      Log.warn(`[PermissionCompatibility] ${diagnostic.message}`);
+    }
+    workflowContext?.reportCompatibilityDiagnostics?.(routedDiagnostics);
   }
 
   private notifyStatuslineInstall(

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-23 by claude-cli, reviewing ctrlyoke run from the home directory
 - **Area:** `src/utils/WorkspaceSearchFileWalker.ts`, `src/completions/WorkspaceFileIndex.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit. A root-anchored home skip list (`isHomePrivateSearchPath`) is applied to the walk, the Git listing, watcher changes and hosted search. The optional "large home" notice was not added.
 
 ## Symptom
 

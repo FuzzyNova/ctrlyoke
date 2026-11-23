@@ -398,6 +398,27 @@ suite("WorktreeUtils", function () {
     );
   });
 
+  test("asks for worktrees.root when the checkout contains the home directory", async () => {
+    const home = await makeDirectory("home-checkout");
+    const calls: string[] = [];
+    await assert.rejects(
+      resolveWorktreeRoot({
+        sourceCheckoutRoot: home,
+        homeDirectory: home,
+        commonDirectory: path.join(home, ".git"),
+        createDirectory: async (root) => {
+          calls.push(root);
+          const error = new Error("read-only") as NodeJS.ErrnoException;
+          error.code = "EACCES";
+          throw error;
+        },
+      }),
+      /contains your home directory.*Set "worktrees\.root"/
+    );
+    // Only the sibling was attempted; nothing was created inside the checkout.
+    assert.strictEqual(calls.length, 1);
+  });
+
   test("never falls through an invalid explicit root", async () => {
     const parent = await makeDirectory("explicit");
     const source = path.join(parent, "repo");

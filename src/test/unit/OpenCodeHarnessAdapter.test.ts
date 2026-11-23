@@ -947,6 +947,17 @@ suite("OpenCodeHarnessAdapter", () => {
         JSON.parse(provider.getInteractiveSpawnEnv().OPENCODE_CONFIG_CONTENT!),
         { plugin: [] }
       );
+      // The host reports fallback files once, for the home-directory warning.
+      assert.deepStrictEqual(provider.consumeLateWorkspaceConfigWrites(), [
+        path.join(
+          workspaceRoot,
+          ".opencode",
+          "plugin",
+          "ctrlyoke-completion-hook.ts"
+        ),
+        path.join(workspaceRoot, ".opencode", "plugin", "ctrlyoke-hooks.json"),
+      ]);
+      assert.deepStrictEqual(provider.consumeLateWorkspaceConfigWrites(), []);
 
       await provider.cleanupWorkspaceArtifacts(workspaceRoot);
       await assert.rejects(

@@ -357,6 +357,14 @@ export interface IHarnessAdapter {
   consumeStatuslineInstallResult?(): StatuslineInstallResult | undefined;
 
   /**
+   * Consume the workspace-located harness config files the last plan apply
+   * wrote without a `workspaceHarnessConfig` mutation of their own (a
+   * fallback chosen during apply). The host warns about them like tagged
+   * mutations when the workspace is the home directory.
+   */
+  consumeLateWorkspaceConfigWrites?(): readonly string[];
+
+  /**
    * True when the CLI's model must be given absolute file references, even in
    * a single-root workspace without `ui.useAbsolutePathReferences`.
    */

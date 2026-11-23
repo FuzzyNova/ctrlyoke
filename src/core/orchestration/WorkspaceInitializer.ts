@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { isUserHomeWorkspace } from "../../utils/ProjectStatePaths";
+import { getCtrlYokeFileGlobs } from "../../utils/WorkflowFileKind";
 import { SCOPE_STORAGE_CATEGORIES } from "./ExecutionRootScope";
 
 const GITIGNORE_HEADER = [
@@ -80,16 +82,39 @@ const WORKSPACE_INITIALIZER_UNSAFE_ENTRIES =
     ({ blockWhenTracked }) => blockWhenTracked
   ).map(({ entry }) => entry);
 
-const GITIGNORE_ENTRIES = WORKSPACE_INITIALIZER_RUNTIME_ENTRIES;
-
 const GITIGNORE_SELF_ENTRY = ".gitignore";
 
-const GITIGNORE_CONTENT = [
-  GITIGNORE_HEADER,
-  ...GITIGNORE_ENTRIES,
-  GITIGNORE_SELF_ENTRY,
-  "",
-].join("\n");
+/**
+ * Extra rules for a home-directory workspace, where `.ctrlyoke/` is also the
+ * user's own state folder (`projects/`, `worktrees/`, trust stores, secret
+ * index, launchers, LSP installs, ...). A dotfiles repository rooted at the
+ * home directory would otherwise see all of it. Listing that state entry by
+ * entry would drift as stores are added, so every top-level entry is ignored
+ * and only the authored ones the header names are re-included. They follow
+ * the self entry, so an earlier generated file gains them in this order.
+ */
+const HOME_GITIGNORE_ENTRIES: readonly string[] = [
+  "/*",
+  ...[
+    PATH_CONSTANTS.TEMPLATES_DIR,
+    PATH_CONSTANTS.SCRIPTS_DIR,
+    PATH_CONSTANTS.AGENTS_DIR,
+    PATH_CONSTANTS.SKILLS_DIR,
+    PATH_CONSTANTS.MCP_DIR,
+  ].map((directory) => `!/${directory}/`),
+  `!/${PATH_CONSTANTS.SETTINGS_FILE}`,
+  ...getCtrlYokeFileGlobs().map((glob) => `!/${glob.replace(/^\*\*\//, "")}`),
+];
+
+function gitignoreEntries(workspaceRoot: string): readonly string[] {
+  const entries = [
+    ...WORKSPACE_INITIALIZER_RUNTIME_ENTRIES,
+    GITIGNORE_SELF_ENTRY,
+  ];
+  return isUserHomeWorkspace(workspaceRoot)
+    ? [...entries, ...HOME_GITIGNORE_ENTRIES]
+    : entries;
+}
 
 /**
  * Return true for a repository-relative path inside a generated runtime entry
@@ -149,10 +174,14 @@ export class WorkspaceInitializer {
    *   - A `.ctrlyoke.yaml`, `.ctrlyoke.yml`, or `.ctrlyoke.json` file exists
    *     at the workspace root (committed ctrlyoke workflow files — implicit opt-in).
    *
+   * In the home directory `.ctrlyoke/` is the user's own state folder and
+   * exists as soon as user settings do, so only the `.gitignore` that
+   * initialization writes counts there.
+   *
    * This check is synchronous and cheap (fs.existsSync only).
    */
   static isInitialized(workspaceRoot: string): boolean {
-    if (fs.existsSync(path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR))) {
+    if (fs.existsSync(WorkspaceInitializer.initializedMarker(workspaceRoot))) {
       return true;
     }
     return (
@@ -176,12 +205,17 @@ export class WorkspaceInitializer {
    */
   static async initializeIfNeeded(workspaceRoot: string): Promise<boolean> {
     const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
-    const isNew = !fs.existsSync(ctrlyokeDir);
+    const isNew = !fs.existsSync(
+      WorkspaceInitializer.initializedMarker(workspaceRoot)
+    );
 
     await fs.promises.mkdir(ctrlyokeDir, { recursive: true });
 
-    const gitignorePath = path.join(ctrlyokeDir, ".gitignore");
-    await WorkspaceInitializer.ensureGitignore(gitignorePath);
+    const gitignorePath = path.join(ctrlyokeDir, GITIGNORE_SELF_ENTRY);
+    await WorkspaceInitializer.ensureGitignore(
+      gitignorePath,
+      gitignoreEntries(workspaceRoot)
+    );
 
     if (isNew) {
       Log.info(
@@ -219,9 +253,28 @@ export class WorkspaceInitializer {
     Log.info("[WorkspaceInitializer] ctrlyoke: Workspace re-initialized");
   }
 
-  private static async ensureGitignore(gitignorePath: string): Promise<void> {
+  /**
+   * The path whose existence means "initialized": `.ctrlyoke/` itself, or in
+   * the home directory (where `.ctrlyoke/` already holds user state) the
+   * `.gitignore` that initialization writes into it.
+   */
+  private static initializedMarker(workspaceRoot: string): string {
+    const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
+    return isUserHomeWorkspace(workspaceRoot)
+      ? path.join(ctrlyokeDir, GITIGNORE_SELF_ENTRY)
+      : ctrlyokeDir;
+  }
+
+  private static async ensureGitignore(
+    gitignorePath: string,
+    entries: readonly string[]
+  ): Promise<void> {
     if (!fs.existsSync(gitignorePath)) {
-      await fs.promises.writeFile(gitignorePath, GITIGNORE_CONTENT, "utf8");
+      await fs.promises.writeFile(
+        gitignorePath,
+        [GITIGNORE_HEADER, ...entries, ""].join("\n"),
+        "utf8"
+      );
       return;
     }
 
@@ -236,7 +289,7 @@ export class WorkspaceInitializer {
       return;
     }
 
-    const missingEntries = GITIGNORE_ENTRIES.filter(
+    const missingEntries = entries.filter(
       (entry) => !currentEntries.has(entry)
     );
 

@@ -18,7 +18,7 @@ import { withFileLock } from "./FileLockUtils";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { pathsEqual } from "./PathCasing";
-import { ConfigurationUtils } from "./ConfigurationUtils";
+import { CONFIG_KEYS, ConfigurationUtils } from "./ConfigurationUtils";
 import { worktreeDirectoryNameError } from "./WorktreeConfigShape";
 import {
   WORKTREE_DIRECTORY_KINDS,
@@ -404,6 +404,13 @@ export async function resolveWorktreeRoot(
   }
   const identity = createRepositoryIdentity(repositoryName, common);
   const fallback = path.join(home, ".ctrlyoke", "worktrees", identity);
+  // A checkout rooted at (or above) the home directory, such as a dotfiles
+  // repository, contains every per-user folder, so no automatic root works.
+  if (isPathWithinDirectory(fallback, source)) {
+    throw new Error(
+      `Cannot place managed worktrees for ${source}: it contains your home directory, so the sibling folder is unavailable and the fallback (${path.dirname(fallback)}) would be inside the checkout. Set "${CONFIG_KEYS.WORKTREES_ROOT}" to a folder outside it.`
+    );
+  }
   await createDirectory(fallback);
   await assertWorktreePlacement({
     sourceCheckoutRoot: source,

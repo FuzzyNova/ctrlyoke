@@ -303,6 +303,8 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
   private pendingUserHooksEnv: string | undefined;
   /** Artifacts created only by the documented fallback path. */
   private fallbackPluginArtifactPaths: string[] = [];
+  /** Fallback files written by the latest apply, not yet reported to the host. */
+  private unreportedFallbackPluginPaths: string[] = [];
   /**
    * Prompt for the plugin to submit to a resumed session. Set by
    * buildInteractiveArgs() and read by getInteractiveSpawnEnv(), which every
@@ -906,6 +908,12 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     };
   }
 
+  consumeLateWorkspaceConfigWrites(): readonly string[] {
+    const paths = this.unreportedFallbackPluginPaths;
+    this.unreportedFallbackPluginPaths = [];
+    return paths;
+  }
+
   async cleanupWorkspaceArtifacts(
     _workspaceRoot: string,
     _workingFilePath?: string
@@ -1218,12 +1226,14 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     await fs.promises.mkdir(pluginDir, { recursive: true });
     await fs.promises.copyFile(sourcePath, pluginPath);
     this.fallbackPluginArtifactPaths.push(pluginPath);
+    this.unreportedFallbackPluginPaths.push(pluginPath);
 
     const serializedUserHooks = this.serializeUserHooks(userHooks);
     if (serializedUserHooks !== undefined) {
       const sidecarPath = path.join(pluginDir, "ctrlyoke-hooks.json");
       await fs.promises.writeFile(sidecarPath, serializedUserHooks, "utf8");
       this.fallbackPluginArtifactPaths.push(sidecarPath);
+      this.unreportedFallbackPluginPaths.push(sidecarPath);
     }
 
     // An auto-scanned fallback plugin must not remain in the inline list.

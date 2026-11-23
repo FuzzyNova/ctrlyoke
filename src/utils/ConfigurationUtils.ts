@@ -250,6 +250,9 @@ export const PATH_CONSTANTS = {
   /** Scripts directory name (subdirectory of CTRLYOKE_DIR) */
   SCRIPTS_DIR: "scripts",
 
+  /** ctrlyoke settings file name (inside CTRLYOKE_DIR, user and workspace) */
+  SETTINGS_FILE: "settings.json",
+
   /**
    * Prompts directory name (subdirectory of CTRLYOKE_DIR).
    * Generated store for prompt bodies composed in the dashboard, **gitignored**

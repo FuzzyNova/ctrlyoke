@@ -25,6 +25,13 @@ its place in the workspace, such as Antigravity's `.agents/mcp_config.json` or C
 sessions of that harness can see them until the step ends. A warning in the step output and in
 dry run lists them. Open a project folder to keep those edits inside the project.
 
+A few other things change in the home directory. `@` file search skips private and bulky folders
+such as `.ssh`, `.aws`, `AppData`, `Library`, OneDrive and package caches. If your home directory
+is a Git repository (a dotfiles setup), the `.ctrlyoke/.gitignore` written when you initialize
+ctrlyoke there keeps only your settings, workflows, templates, scripts, agents, skills and MCP
+registry visible to Git. Managed worktrees of that repository need `worktrees.root` set to a
+folder outside your home directory.
+
 The files accept comments and trailing commas. Saving a setting from the Settings drawer rewrites
 the file as plain JSON, so comments in it don't survive an edit from the dashboard. VS Code
 validates both files against ctrlyoke's settings schema as you type. Changes made by hand, the CLI,

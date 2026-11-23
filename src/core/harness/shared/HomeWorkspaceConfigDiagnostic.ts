@@ -27,12 +27,29 @@ export function createHomeWorkspaceConfigDiagnostics(
   workspaceRoot: string | undefined,
   mutations: readonly PreparedMutation[]
 ): CompatibilityDiagnostic[] {
+  return createHomeWorkspaceConfigDiagnosticsForPaths(
+    harnessId,
+    workspaceRoot,
+    mutations
+      .filter((mutation) => mutation.workspaceHarnessConfig && mutation.path)
+      .map((mutation) => mutation.path!)
+  );
+}
+
+/**
+ * The same warning for files written outside the plan's tagged mutations,
+ * such as a fallback an adapter decides on only while the plan is applied
+ * (`IHarnessAdapter.consumeLateWorkspaceConfigWrites`).
+ */
+export function createHomeWorkspaceConfigDiagnosticsForPaths(
+  harnessId: HarnessId,
+  workspaceRoot: string | undefined,
+  filePaths: readonly string[]
+): CompatibilityDiagnostic[] {
   if (!workspaceRoot || !isUserHomeWorkspace(workspaceRoot)) return [];
   const files = [
     ...new Set(
-      mutations
-        .filter((mutation) => mutation.workspaceHarnessConfig && mutation.path)
-        .map((mutation) => formatHomePath(workspaceRoot, mutation.path!))
+      filePaths.map((filePath) => formatHomePath(workspaceRoot, filePath))
     ),
   ];
   if (files.length === 0) return [];
