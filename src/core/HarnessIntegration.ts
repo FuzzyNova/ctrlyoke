@@ -50,7 +50,7 @@ import type {
   PriorContextTranscriptEntry,
   PriorContextText,
 } from "./PriorContextTranscript";
-import { boundPriorContextText } from "./PriorContextTranscript";
+import { boundPriorContextText, utf8Bytes } from "./PriorContextTranscript";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import {
@@ -127,7 +127,7 @@ function summarizePriorContextItem(item: PriorContextItem): PriorContextItem {
       .join("\n");
     summary.summaryScriptOutput = boundPriorContextText(
       combined,
-      PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES,
+      PRIOR_CONTEXT_LIMITS.SCRIPT_OUTPUT_TAIL_BYTES,
       PRIOR_CONTEXT_TRUNCATION.TAIL
     );
     summary.scriptOutput = {
@@ -275,66 +275,103 @@ export function buildPriorContextXmlFromItems(
   const sortedItems = contextItems
     .map(summarizePriorContextItem)
     .sort((a, b) => a.index - b.index);
-  const steps = sortedItems
-    .map((item) => {
-      const nameAttr = item.name
-        ? ` name="${escapeXmlAttribute(item.name)}"`
-        : "";
-      const detailAttr =
-        item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
-          ? ` detail="${PRIOR_CONTEXT_DETAILS.SUMMARY}"`
-          : "";
-      // A script finalStep has a verdict but no scriptOutput, so this is
-      // rendered in both arms below.
-      const verdictSection = item.scriptVerdict
-        ? buildScriptVerdictXml(item.scriptVerdict)
-        : "";
-      const earlierAttempts = item.earlierAttempts
-        ? `<earlierAttempts count="${item.earlierAttempts.count}">\n${renderFilesChanged(item.earlierAttempts.filesChanged)}\n</earlierAttempts>\n`
-        : "";
-      if (item.scriptOutput) {
-        const scriptTypeAttr = item.type
-          ? ` type="${escapeXmlAttribute(item.type)}"`
-          : ` type="${STEP_TYPES.SCRIPT}"`;
-        const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
-        const stdoutSection = item.scriptOutput.stdout.trim()
-          ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
-          : "";
-        const stderrSection = item.scriptOutput.stderr.trim()
-          ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
-          : "";
-        const exitCodeSection =
-          item.scriptOutput.exitCode !== undefined
-            ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
-            : "";
-        const filesChanged =
-          item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
-            ? `${renderFilesChanged(item.filesChanged)}\n`
-            : "";
-        return `<step index="${item.index + 1}"${scriptTypeAttr}${nameAttr}${detailAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
-      }
-      const typeAttr = item.type
-        ? ` type="${escapeXmlAttribute(item.type)}"`
-        : "";
-      const promptSection = item.prompt
-        ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
-        : "";
-      const transcript = item.transcript
-        ? item.transcript.map(renderPriorContextEntry).join("\n")
-        : item.text !== undefined
-          ? item.text.trim()
-          : "";
-      const filesChanged = item.filesChanged
-        ? item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
-          ? renderFilesChanged(item.filesChanged)
-          : ""
-        : "";
-      const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse) : ""}>\n${transcript}\n</response>\n`;
-      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}${detailAttr}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
-    })
-    .join("\n");
+  const steps = applySummaryBudget(
+    sortedItems.map((item) => ({ item, xml: renderPriorContextStep(item) }))
+  ).join("\n");
 
   return `<priorContext>\n${steps}\n</priorContext>`;
+}
+
+/** The `<step>` element's attributes, shared by a rendered and an omitted step. */
+function priorContextStepAttributes(item: PriorContextItem): string {
+  const typeAttr = item.type
+    ? ` type="${escapeXmlAttribute(item.type)}"`
+    : item.scriptOutput
+      ? ` type="${STEP_TYPES.SCRIPT}"`
+      : "";
+  const nameAttr = item.name ? ` name="${escapeXmlAttribute(item.name)}"` : "";
+  const detailAttr =
+    item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+      ? ` detail="${PRIOR_CONTEXT_DETAILS.SUMMARY}"`
+      : "";
+  return `index="${item.index + 1}"${typeAttr}${nameAttr}${detailAttr}`;
+}
+
+/**
+ * Keep the summary steps of one prior-context block within
+ * `SUMMARY_BUDGET_BYTES`. Over budget, the earliest summary steps are replaced
+ * whole by an empty `<step … omitted="all" omittedBytes="…"/>` until the rest
+ * fit. The latest summary step is always kept, and full-detail steps are
+ * neither counted nor omitted: the author asked for them in full.
+ *
+ * Whole steps are dropped rather than every step trimmed evenly: each summary
+ * is already bounded per step, and trimming further would cut the prompt head
+ * and the closing text of every step, the parts a summary exists to keep.
+ */
+function applySummaryBudget(
+  steps: { item: PriorContextItem; xml: string }[]
+): string[] {
+  const rendered = steps.map(({ xml }) => xml);
+  const summaryPositions = steps.flatMap(({ item }, position) =>
+    item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? [position] : []
+  );
+  let total = summaryPositions.reduce(
+    (sum, position) => sum + utf8Bytes(rendered[position]),
+    0
+  );
+  for (const position of summaryPositions.slice(0, -1)) {
+    if (total <= PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES) break;
+    const bytes = utf8Bytes(rendered[position]);
+    const stub = `<step ${priorContextStepAttributes(steps[position].item)} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
+    rendered[position] = stub;
+    total -= bytes - utf8Bytes(stub);
+  }
+  return rendered;
+}
+
+function renderPriorContextStep(item: PriorContextItem): string {
+  const attributes = priorContextStepAttributes(item);
+  // A script finalStep has a verdict but no scriptOutput, so this is
+  // rendered in both arms below.
+  const verdictSection = item.scriptVerdict
+    ? buildScriptVerdictXml(item.scriptVerdict)
+    : "";
+  const earlierAttempts = item.earlierAttempts
+    ? `<earlierAttempts count="${item.earlierAttempts.count}">\n${renderFilesChanged(item.earlierAttempts.filesChanged)}\n</earlierAttempts>\n`
+    : "";
+  if (item.scriptOutput) {
+    const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+    const stdoutSection = item.scriptOutput.stdout.trim()
+      ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
+      : "";
+    const stderrSection = item.scriptOutput.stderr.trim()
+      ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
+      : "";
+    const exitCodeSection =
+      item.scriptOutput.exitCode !== undefined
+        ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
+        : "";
+    const filesChanged =
+      item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+        ? `${renderFilesChanged(item.filesChanged)}\n`
+        : "";
+    return `<step ${attributes}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
+  }
+  const promptSection = item.prompt
+    ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
+    : "";
+  const transcript = item.transcript
+    ? item.transcript.map(renderPriorContextEntry).join("\n")
+    : item.text !== undefined
+      ? item.text.trim()
+      : "";
+  const filesChanged = item.filesChanged
+    ? item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+      ? renderFilesChanged(item.filesChanged)
+      : ""
+    : "";
+  const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse) : ""}>\n${transcript}\n</response>\n`;
+  return `<step ${attributes}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
 }
 
 function renderFilesChanged(

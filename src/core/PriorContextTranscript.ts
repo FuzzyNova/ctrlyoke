@@ -113,7 +113,7 @@ export type PriorContextTranscriptEntry =
 
 const encoder = new TextEncoder();
 
-function utf8Bytes(text: string): number {
+export function utf8Bytes(text: string): number {
   return encoder.encode(text).byteLength;
 }
 

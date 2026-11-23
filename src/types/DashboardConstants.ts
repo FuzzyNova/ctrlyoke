@@ -5108,10 +5108,19 @@ export const PRIOR_CONTEXT_LIMITS = {
   TOOL_RESULT_TAIL_BYTES: 1024,
   TOOL_ARGUMENTS_HEAD_BYTES: 512,
   DIFF_BYTES: 65536,
-  // summary form
-  PROMPT_HEAD_BYTES: 2048,
-  OUTPUT_TAIL_BYTES: 4096,
-  WORKFLOW_BUDGET_BYTES: 24576,
+  // summary form (per step)
+  /** Head of a step's authored prompt, or of a script step's command. */
+  PROMPT_HEAD_BYTES: 8192,
+  /** Tail of a prompt step's text (TEXT events only). */
+  OUTPUT_TAIL_BYTES: 16384,
+  /** Tail of a script step's stdout and stderr combined. */
+  SCRIPT_OUTPUT_TAIL_BYTES: 4096,
+  /**
+   * Total for every summary step in one prompt's prior context (about 100k
+   * tokens). When it is exceeded, the earliest summary steps are omitted whole,
+   * and the latest one is always kept. Full-detail steps are not counted.
+   */
+  SUMMARY_BUDGET_BYTES: 409600,
 } as const;
 
 export const PRIOR_CONTEXT_TRUNCATION = {
@@ -5119,6 +5128,8 @@ export const PRIOR_CONTEXT_TRUNCATION = {
   TAIL: "tail",
   OMITTED_START: "start",
   OMITTED_END: "end",
+  /** A whole step left out by the summary budget. */
+  OMITTED_ALL: "all",
 } as const;
 
 export const PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS = {

@@ -17,8 +17,8 @@ Shipped:
   detail follows the kind (`$previous:summary`, `$step:summary:1,3-5`, `$all:summary`, …;
   `PRIOR_CONTEXT_SUMMARY_SEGMENT`), `priorContextDetail: full | summary` is in the schema and
   `CtrlYokeTypes.ts`, `summarizePriorContextItem` (`HarnessIntegration.ts`) applies
-  `PRIOR_CONTEXT_LIMITS` (`DashboardConstants.ts`, which already reserves
-  `WORKFLOW_BUDGET_BYTES: 24576` for the workflow arm), and the editor, completions,
+  `PRIOR_CONTEXT_LIMITS` (`DashboardConstants.ts`; `SUMMARY_BUDGET_BYTES: 409600` already
+  caps all the summary steps in one prompt, earliest omitted whole first), and the editor, completions,
   diagnostics, renumbering (`src/core/StepReferenceShifts.ts`) and docs support it.
 
 Not shipped (everything else in this plan): `STEP_TYPES.WORKFLOW`, `subWorkflowStep`, Phase 0's
@@ -661,9 +661,9 @@ truncation markers shipped with
 [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../implemented/PRIOR_CONTEXT_DETAIL_PLAN.md). What this plan
 still adds is the **workflow** row of the summary table:
 
-| Step kind | Summary                                                                                                                                                                                                             |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workflow  | Metadata in full; each child step's summary by the existing rules, within a **24 KB budget per workflow step** (`PRIOR_CONTEXT_LIMITS.WORKFLOW_BUDGET_BYTES`, already defined); the earliest steps are elided first |
+| Step kind | Summary                                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workflow  | Metadata in full; each child step's summary by the existing rules, within the summary budget (`PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES`, 400 KB, applied by `applySummaryBudget`); the earliest steps are omitted whole first |
 
 - **Workflow budget.** Render the metadata and every child step's summary. While the total is
   over the budget, replace the earliest remaining child step with one status line
@@ -959,7 +959,7 @@ WORKFLOW_REF: "workflow",
 // SCRIPT_STEP_COPY_FIELDS.
 
 // D12 constants (PRIOR_CONTEXT_DETAILS, PRIOR_CONTEXT_SUMMARY_SEGMENT,
-// PRIOR_CONTEXT_LIMITS incl. WORKFLOW_BUDGET_BYTES, PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL)
+// PRIOR_CONTEXT_LIMITS incl. SUMMARY_BUDGET_BYTES, PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL)
 // already exist.
 ```
 
@@ -1128,7 +1128,8 @@ Parsing, merging (per-index detail, full wins), the per-kind summarizer, and ren
   recursively for nested workflow steps.
 - **Rendering.** `buildPriorContextXmlFromItems` (`HarnessIntegration.ts`) stays the single
   renderer for live injection and the editor preview (`PriorContextPreviewBuilder.ts`).
-  `summarizePriorContextItem` gains the workflow arm and its `WORKFLOW_BUDGET_BYTES` budget.
+  `summarizePriorContextItem` gains the workflow arm; its children go through the existing
+  `applySummaryBudget` (`SUMMARY_BUDGET_BYTES`).
 
 ---
 
@@ -1501,7 +1502,7 @@ finalStep:
 | Host without `subWorkflowHost`                                    | Step fails with "not supported in this host"                                                                                                  |
 | Root file is only a workflow step                                 | Valid one-step queue; append more workflows while it runs (D8)                                                                                |
 | `$previous` after a workflow step                                 | Metadata plus every child step's full output, recursively (D12a)                                                                              |
-| `$step:summary:N` over a very long child                          | 24 KB budget; earliest child steps elided to status lines, the last always kept (D12b)                                                        |
+| `$step:summary:N` over a very long child                          | 400 KB summary budget; earliest child steps omitted whole (`omitted="all"`), the last always kept                                             |
 | Child run history deleted before a later reference                | Metadata with `<childRunUnavailable/>`; not an error                                                                                          |
 | Inline child references `$previous` or a numeric `sessionId`      | Validation error naming the run boundary (D13)                                                                                                |
 | Inline child holds `steps`, `parallel`, or `type: workflow`       | Schema error; use a file (D13)                                                                                                                |

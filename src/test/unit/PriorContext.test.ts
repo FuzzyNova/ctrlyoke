@@ -326,6 +326,65 @@ suite("prior-context XML", () => {
     assert.ok(!xml.includes("omit command"));
   });
 
+  test("caps a summary script step's output by the script tail, not the text tail", () => {
+    const stdout = `${"s".repeat(PRIOR_CONTEXT_LIMITS.SCRIPT_OUTPUT_TAIL_BYTES + 40)}\nlast`;
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        detail: "summary",
+        scriptOutput: { command: "npm test", stdout, stderr: "", exitCode: 0 },
+      },
+    ]);
+
+    assert.ok(
+      xml.includes(
+        `<stdout omitted="start" omittedBytes="${Buffer.byteLength(stdout) - PRIOR_CONTEXT_LIMITS.SCRIPT_OUTPUT_TAIL_BYTES}">`
+      ),
+      xml.slice(0, 300)
+    );
+  });
+
+  test("omits the earliest whole summary steps once the summary budget is spent", () => {
+    const stepText = "r".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES);
+    const stepCount =
+      Math.ceil(
+        PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES /
+          PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES
+      ) + 3;
+    const fullText = "f".repeat(PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES);
+    const xml = buildPriorContextXmlFromItems([
+      { index: 0, name: "full step", text: fullText, detail: "full" },
+      ...Array.from({ length: stepCount }, (_, offset) => ({
+        index: offset + 1,
+        name: `step ${offset + 1}`,
+        prompt: `prompt ${offset + 1}`,
+        text: stepText,
+        detail: "summary" as const,
+      })),
+    ]);
+
+    // Full-detail steps are neither counted nor omitted.
+    assert.ok(xml.includes(fullText));
+    // The earliest summary step is replaced whole, keeping its identity.
+    assert.match(
+      xml,
+      /<step index="2" name="step 1" detail="summary" omitted="all" omittedBytes="\d+"\/>/
+    );
+    // The latest summary step is always kept.
+    assert.ok(xml.includes(`<prompt>\nprompt ${stepCount}\n</prompt>`));
+    const keptSummaryBytes = [
+      ...xml.matchAll(/<step [^>]*detail="summary"[^/>]*>[\s\S]*?<\/step>/g),
+    ].reduce((sum, [step]) => sum + Buffer.byteLength(step), 0);
+    assert.ok(keptSummaryBytes <= PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES);
+    // Only as many steps as needed are omitted: one more would have fit.
+    const omittedCount = [...xml.matchAll(/omitted="all"/g)].length;
+    assert.ok(omittedCount > 0 && omittedCount < stepCount);
+    assert.ok(
+      keptSummaryBytes + Buffer.byteLength(stepText) >
+        PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES
+    );
+  });
+
   test("maps inline references to the resolver's canonical context selectors", () => {
     assert.strictEqual(
       inlinePriorContextRefToPriorContext({ kind: "previous" }),

@@ -42,6 +42,12 @@
 >   `$allFinalStep:summary`. The rule is kind, then an optional `:summary`, then the arguments.
 >   Read every `$summary:<selector>` in this plan as that form. The editor flags the old order
 >   with a quick fix to the new one.
+> - **Limits raised after implementation (2026-11-23):** summary `PROMPT_HEAD_BYTES` is 8192 and
+>   `OUTPUT_TAIL_BYTES` is 16384; script output has its own `SCRIPT_OUTPUT_TAIL_BYTES` (4096).
+>   `WORKFLOW_BUDGET_BYTES` became `SUMMARY_BUDGET_BYTES` (409600, about 100k tokens), which now
+>   caps every summary step in one prompt: the earliest are omitted whole
+>   (`<step … omitted="all" omittedBytes="…"/>`), the latest is always kept, and full-detail
+>   steps don't count. The 2 KB / 4 KB / 24 KB figures below are superseded.
 >
 > The file and line citations below describe the code as it was before implementation.
 >

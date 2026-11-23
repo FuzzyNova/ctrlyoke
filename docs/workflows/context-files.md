@@ -113,8 +113,12 @@ A script step's output includes its pass/fail verdict; see
 Add `:summary` after the kind of any selector, before its arguments, to request a deterministic
 excerpt: `$previous:summary`, `$previous:summary:3`, `$all:summary`,
 `$finalStep:summary`, `$allFinalStep:summary`, or `$step:summary:1,3-5`.
-The excerpt contains the authored prompt head, changed files, and text tail.
-It does not call an AI model. Use it for hand-offs and commit-style prompts
+The excerpt contains the first 8 KB of the authored prompt, the changed files, and the last
+16 KB of the step's text; a script step keeps its command head and the last 4 KB of its output.
+It does not call an AI model. All the summary steps in one prompt share a budget of 400 KB
+(about 100k tokens). Past that, the earliest summary steps are left out whole and rendered as an
+empty `<step … omitted="all"/>` element that keeps their number and name, and the latest summary
+step is always kept. Steps referenced in full detail don't count toward this budget. Use it for hand-offs and commit-style prompts
 where the full transcript would add noise. Keep the full form for review work
 that needs diffs, commands, or tool-call details.
 
