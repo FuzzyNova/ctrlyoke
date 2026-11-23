@@ -18,6 +18,14 @@
 > release, and 0.8.0 lacks `_templateMeta.author`/`tags`. Once 0.9.0 is tagged, the seed (and
 > new submissions) may add them. Nothing needs to change in this repository for that.
 
+> **2026-11-22 naming change:** the `<author>-<slug>` file-name convention below was dropped.
+> Credit now lives in `_templateMeta.author`, and names are first come, first served (the
+> filesystem already makes ids unique). The validator instead rejects an id that matches one of
+> ctrlyoke's built-in templates, read from `manifest.json` at the same release tag, and enforces
+> the client's display limits on `name`, `description`, `author` and `tags`. The seed became
+> `review-branch.ctrlyoke.yaml` with `author`/`tags`, so it validates only once 0.9.0 is the
+> latest release.
+
 > **2026-11-22 layout change:** the Templates tab no longer has a **Defaults**/**Discover** page
 > bar. It now uses the MCP Manager's two-column layout: **Defaults** beside **Community
 > templates** at `lg` and wider, stacked below that, inside the drawer's standard full-width

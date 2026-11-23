@@ -33,7 +33,7 @@ const MAX_TAGS = 10;
 const MAX_TAG_LENGTH = 40;
 
 /**
- * A template id is its file basename, `<author>-<slug>`, and becomes the
+ * A template id is its file basename, such as `review-branch`, and becomes the
  * installed file's name, so it is held to a portable, path-free shape.
  */
 const TEMPLATE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/;

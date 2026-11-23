@@ -3176,7 +3176,7 @@ export interface McpRegistrySearchResultMessage {
 
 /** One template listed in the community library's generated `index.json`. */
 export interface CommunityTemplateEntry {
-  /** The file's basename (`<author>-<slug>`); also the installed template's name. */
+  /** The file's basename (such as `review-branch`); also the installed template's name. */
   id: string;
   name: string;
   description: string;

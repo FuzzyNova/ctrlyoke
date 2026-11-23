@@ -302,7 +302,7 @@ to appear.
 
 To share a template, open a pull request against
 [FuzzyNova/ctrlyoke-templates](https://github.com/FuzzyNova/ctrlyoke-templates) that adds one
-file, `templates/<your-github-handle>-<template-name>.ctrlyoke.yaml`. The library's
+file, `templates/<template-name>.ctrlyoke.yaml`. The library's
 contributing guide describes the checks it must pass. Templates in the library are licensed
 under MIT-0, so anyone may copy and adapt them without attribution.
 

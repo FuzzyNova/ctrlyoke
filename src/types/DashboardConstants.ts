@@ -510,7 +510,7 @@ export const COMMUNITY_TEMPLATES = {
   branch: "main",
   /** Host every index and template download goes to. */
   cdnHost: "cdn.jsdelivr.net",
-  /** Repository folder holding one `<author>-<slug>.ctrlyoke.yaml` per template. */
+  /** Repository folder holding one `<template-name>.ctrlyoke.yaml` per template. */
   templatesDir: "templates",
   indexFile: "index.json",
   /** Major `schemaVersion` of `index.json` this ctrlyoke reads. */
