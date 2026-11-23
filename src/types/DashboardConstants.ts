@@ -535,6 +535,15 @@ export function getCommunityTemplateSourceUrl(file: string): string {
   return `${COMMUNITY_TEMPLATES_URLS.REPO}/blob/${COMMUNITY_TEMPLATES.branch}/${COMMUNITY_TEMPLATES.templatesDir}/${encodeURIComponent(file)}`;
 }
 
+/**
+ * The library's "Report a template" issue form, titled with the template's id.
+ * The title is prefilled rather than the form's `template` field, because
+ * GitHub reads a `template` query parameter as the form's file name.
+ */
+export function getCommunityTemplateReportUrl(id: string): string {
+  return `${COMMUNITY_TEMPLATES_URLS.REPORT_ISSUE}&title=${encodeURIComponent(`Report: ${id}`)}`;
+}
+
 /** Verdicts a skills.sh security audit provider can return. */
 export const SKILL_AUDIT_STATUSES = {
   PASS: "pass",

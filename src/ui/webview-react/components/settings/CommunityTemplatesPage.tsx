@@ -5,6 +5,7 @@ import {
   COMMUNITY_TEMPLATES_URLS,
   SETTING_WRITE_SCOPE_LABELS,
   buildCustomTemplateId,
+  getCommunityTemplateReportUrl,
   getCommunityTemplateSourceUrl,
 } from "@root/types/DashboardConstants";
 import type { CommunityTemplateEntry } from "@root/types/WebviewMessageTypes";
@@ -229,6 +230,15 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
                       title={`View ${entry.file} on GitHub`}
                     >
                       View source
+                    </a>
+                    <a
+                      href={getCommunityTemplateReportUrl(entry.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-link-fg hover:underline"
+                      title={`Report a problem with ${entry.name} to the library's maintainers`}
+                    >
+                      Report
                     </a>
                   </div>
                   {install?.error && (

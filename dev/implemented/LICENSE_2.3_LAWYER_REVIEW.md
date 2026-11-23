@@ -621,7 +621,7 @@ classifies as local.
   [VSIX allowlist](../../.vscodeignore),
   [npm build](../../scripts/build-npm-package.mjs),
   [terms page](../../landing/src/pages/terms.astro),
-  [community template plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md),
+  [community template plan](COMMUNITY_TEMPLATES_PLAN.md),
   [PR template](../../.github/PULL_REQUEST_TEMPLATE.md)
 
 ## Research answers for counsel
@@ -679,7 +679,7 @@ notice before enabling the feature and confirm the actual recipient and metadata
 implementation. Disclose GitHub separately if the implementation contacts GitHub directly.
 The repository's public GitHub API endpoint returned 404 during this review, so this analysis
 uses the planned design.
-[Community templates plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md),
+[Community templates plan](COMMUNITY_TEMPLATES_PLAN.md),
 [jsDelivr Privacy Policy, §§2 and 9](https://github.com/jsdelivr/jsdelivr/blob/master/Privacy%20Policy.md).
 
 **Recommendation.** Approve §5(e)'s disclaimer and retain mandatory consumer guarantees. In
@@ -822,7 +822,7 @@ templates and its compliance with the applicable conditions. Continue planning w
 independent safe harbor. Delist the entry and account for stale index or file caches so the
 software can stop offering a reported template promptly. Section 512 addresses copyright
 claims. Harm caused by executing a template remains governed by the applicable liability rules.
-[Community templates plan](../backlog/COMMUNITY_TEMPLATES_PLAN.md),
+[Community templates plan](COMMUNITY_TEMPLATES_PLAN.md),
 [17 U.S.C. §512(c), (d) and (i)](https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap5-sec512.htm),
 [U.S. Copyright Office, §512 safe harbors](https://www.copyright.gov/512/),
 [GitHub DMCA Takedown Policy](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy).
@@ -1529,6 +1529,6 @@ Software's repository. As a result:
 - the License needs no clause on template contributions. Section 5(e) only states that the
   library is outside this License and disclaims its contents.
 
-The engineering plan is in `dev/backlog/COMMUNITY_TEMPLATES_PLAN.md`.
+The engineering plan is in `dev/implemented/COMMUNITY_TEMPLATES_PLAN.md`.
 
 </details>

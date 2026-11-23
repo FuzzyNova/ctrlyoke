@@ -139,6 +139,10 @@ describe("CommunityTemplatesPage", () => {
       "href",
       `https://github.com/FuzzyNova/ctrlyoke-templates/blob/main/templates/${REVIEW.file}`
     );
+    expect(within(row).getByRole("link", { name: "Report" })).toHaveAttribute(
+      "href",
+      `https://github.com/FuzzyNova/ctrlyoke-templates/issues/new?template=report-template.yml&title=Report%3A%20${REVIEW.id}`
+    );
     expect(screen.getByRole("note")).toHaveTextContent(/third parties/);
 
     fireEvent.change(screen.getByLabelText("Filter community templates"), {

@@ -1,7 +1,7 @@
 # Template Variable Defaults Plan
 
 **Status:** Implemented. Phases 1–3 are complete. The "Follow-up — community templates" section
-below is owned by `../backlog/COMMUNITY_TEMPLATES_PLAN.md` and is not part of this plan.
+below is owned by `COMMUNITY_TEMPLATES_PLAN.md` and is not part of this plan.
 
 ## Goal
 
@@ -546,13 +546,15 @@ overlay on the source; the user may still use the built-in.
 
 ## Follow-up — community templates in the Templates tab
 
-[`COMMUNITY_TEMPLATES_PLAN.md`](../backlog/COMMUNITY_TEMPLATES_PLAN.md) Phase 2 (Discovery & Import) puts
+[`COMMUNITY_TEMPLATES_PLAN.md`](COMMUNITY_TEMPLATES_PLAN.md) Phase 2 (Discovery & Import) puts
 its browse-and-install UI in the **Templates** tab instead of a separate Community Templates
 tab. That plan owns the design (fetch source, `CommunityTemplateService`, store, install
 validation). This section only records the shared layout so Phase 2 here doesn't paint it into a
 corner:
 
-- **Pages.** When community import lands, the tab gets a page bar at the bottom like
+- **Pages.** _(Superseded 2026-11-22: the tab shipped with a page bar, then moved to the MCP
+  Manager's two-column layout, Defaults beside Community templates; see
+  `COMMUNITY_TEMPLATES_PLAN.md`.)_ When community import lands, the tab gets a page bar at the bottom like
   **Workflow Defaults**: **Defaults** (everything Phase 2 builds) and **Discover** (community
   browse and install). Use the generic `SegmentedTabBar` with a Templates-specific page set.
   `DrawerTabBar` is hard-wired to the Workflow Defaults pages (`DRAWER_TABS`). Phase 2 ships

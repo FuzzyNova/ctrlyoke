@@ -260,7 +260,8 @@ listed.
 Open **Settings → Templates**. The **Community templates** column sits beside **Defaults** on a
 wide screen and below it on a narrow one. Choose **Browse community templates** to list the
 library, which you can then filter by name, author, or tag. **View source** opens a template's
-file on GitHub.
+file on GitHub, and **Report** opens an issue form in the library for a template that is
+broken, misleading or unsafe.
 
 **Install** copies the template into the scope shown in the drawer's title bar: **User**
 installs to `~/.ctrlyoke/templates/`, **Workspace** to `.ctrlyoke/templates/`. ctrlyoke checks
