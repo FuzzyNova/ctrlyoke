@@ -14,9 +14,10 @@
 > runs passed. Each community row also gained the **Report** link (open question 3), which opens
 > the library's report form with the template's id in the title.
 >
-> **One follow-up after the 0.9.0 release:** the library validates against the latest ctrlyoke
-> release, and 0.8.0 lacks `_templateMeta.author`/`tags`. Once 0.9.0 is tagged, the seed (and
-> new submissions) may add them. Nothing needs to change in this repository for that.
+> **0.9.0 follow-up (done 2026-11-23):** the library validates against the latest ctrlyoke
+> release, and 0.8.0 lacked `_templateMeta.author`/`tags`. After 0.9.0 was released, the
+> renamed `review-branch` seed with `author`/`tags` was pushed; `validate` passed against
+> v0.9.0, and jsDelivr serves the new index.
 
 > **2026-11-22 naming change:** the `<author>-<slug>` file-name convention below was dropped.
 > Credit now lives in `_templateMeta.author`, and names are first come, first served (the
