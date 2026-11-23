@@ -7,7 +7,7 @@ import {
 } from "@root/types/DashboardConstants";
 import type { CliEvent } from "@root/types/CliOutputTypes";
 import { getHarnessDisplayName } from "@/types/messages";
-import { describeRowTiming } from "@utils/outputRowTiming";
+import { describeRowDetails } from "@utils/outputRowDetails";
 import { formatTimestamp } from "@utils/time";
 import type {
   CliHeaderRow,
@@ -35,9 +35,14 @@ function eventRow(
   };
 }
 
-describe("describeRowTiming", () => {
+/** The lines joined, so a check can look for text anywhere in them. */
+function detailsText(row: OutputRenderRow): string | undefined {
+  return describeRowDetails(row)?.join("\n");
+}
+
+describe("describeRowDetails", () => {
   it("reports start, duration and step for a completed event", () => {
-    const text = describeRowTiming(
+    const text = detailsText(
       eventRow({ timestamp: 1_000, completedTimestamp: 39_200 })
     );
     expect(text).toContain("Started:");
@@ -46,14 +51,14 @@ describe("describeRowTiming", () => {
   });
 
   it("shows sub-second durations in milliseconds", () => {
-    const text = describeRowTiming(
+    const text = detailsText(
       eventRow({ timestamp: 1_000, completedTimestamp: 1_250 })
     );
     expect(text).toContain("Took: 250ms");
   });
 
   it("omits the duration when the event never completed", () => {
-    const text = describeRowTiming(eventRow({ timestamp: 1_000 }));
+    const text = detailsText(eventRow({ timestamp: 1_000 }));
     expect(text).toContain("Started:");
     expect(text).not.toContain("Took:");
   });
@@ -69,13 +74,11 @@ describe("describeRowTiming", () => {
       animated: false,
       timestampMs: 5_000,
     };
-    const text = describeRowTiming(row);
+    const text = detailsText(row);
     expect(text).toContain("Started:");
     expect(text).toContain("Step 1");
     expect(text).not.toContain("Took:");
-    expect(
-      describeRowTiming({ ...row, timestampMs: undefined })
-    ).toBeUndefined();
+    expect(detailsText({ ...row, timestampMs: undefined })).toBeUndefined();
   });
 
   describe("step headers", () => {
@@ -109,7 +112,7 @@ describe("describeRowTiming", () => {
     }
 
     it("names the start, step, attempt, harness, model and changes", () => {
-      const text = describeRowTiming(
+      const text = detailsText(
         headerRow({
           promptUndo: {
             workspacePath: "/repo",
@@ -138,7 +141,7 @@ describe("describeRowTiming", () => {
 
     it("names a condition script by its condition", () => {
       const row = headerRow({ attemptIndex: 0, runIndex: 0 });
-      const text = describeRowTiming({
+      const text = detailsText({
         ...row,
         output: {
           ...row.output,
@@ -154,11 +157,11 @@ describe("describeRowTiming", () => {
   });
 
   it("returns undefined without a start time or for other row kinds", () => {
-    expect(describeRowTiming(eventRow({}))).toBeUndefined();
+    expect(detailsText(eventRow({}))).toBeUndefined();
     const other = {
       ...eventRow({ timestamp: 1 }),
       rowKind: OUTPUT_ROW_KINDS.STATS,
     } as unknown as OutputRenderRow;
-    expect(describeRowTiming(other)).toBeUndefined();
+    expect(detailsText(other)).toBeUndefined();
   });
 });

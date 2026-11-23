@@ -37,6 +37,7 @@ import {
   shouldRenderScrollSeekPlaceholder,
 } from "./OutputScrollSeekPlaceholder";
 import { OUTPUT_STICKY_TOP_CSS_VAR } from "@components/output/outputStyles";
+import { OUTPUT_STICKY_ROW_KEY_ATTRIBUTE } from "@utils/outputDom";
 import { Icon } from "../../shared/Icon";
 import { useOutputViewportSteps } from "@hooks/useOutputViewportSteps";
 
@@ -106,10 +107,12 @@ interface OutputPaneProps {
     expanded: boolean
   ) => void;
   onAttemptGroupToggle: (groupKey: string) => void;
+  /** `target` is the element clicked, which names the row for Details. */
   onContextMenuOpen: (
     x: number,
     y: number,
-    scrollContainer: HTMLDivElement
+    scrollContainer: HTMLDivElement,
+    target: EventTarget | null
   ) => void;
   onDiffCollapsedChange: (
     rowKey: string,
@@ -364,7 +367,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
         onCopyCapture={handleCopyCapture}
         onContextMenu={(e) => {
           e.preventDefault();
-          onContextMenuOpen(e.clientX, e.clientY, e.currentTarget);
+          onContextMenuOpen(e.clientX, e.clientY, e.currentTarget, e.target);
         }}
       >
         {workspaceWorktreeOwnership && (
@@ -411,9 +414,22 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
                 >
                   {/* The same rows the stream renders, so the copy lines up
                     exactly with the real header when it scrolls back in. */}
-                  {renderOutputRow(stickyRows.headerRow, props, true)}
+                  <div
+                    {...{
+                      [OUTPUT_STICKY_ROW_KEY_ATTRIBUTE]:
+                        stickyRows.headerRow.key,
+                    }}
+                  >
+                    {renderOutputRow(stickyRows.headerRow, props, true)}
+                  </div>
                   {stickyRows.previewRow && (
-                    <div style={STICKY_PREVIEW_CLIP_STYLE}>
+                    <div
+                      style={STICKY_PREVIEW_CLIP_STYLE}
+                      {...{
+                        [OUTPUT_STICKY_ROW_KEY_ATTRIBUTE]:
+                          stickyRows.previewRow.key,
+                      }}
+                    >
                       {renderOutputRow(stickyRows.previewRow, props, true)}
                     </div>
                   )}

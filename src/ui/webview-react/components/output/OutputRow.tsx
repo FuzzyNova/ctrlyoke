@@ -109,7 +109,6 @@ import {
 } from "@utils/promptUndo";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { formatClockDuration } from "@utils/time";
-import { describeRowTiming } from "@utils/outputRowTiming";
 import {
   OUTPUT_STEP_HEADING_LEVEL,
   STEP_HEADING_STATES,
@@ -2355,7 +2354,6 @@ function OutputRowComponent({
         .join(" ")}
       style={stepColorBarStyle}
       data-step-color-bar={row.stepColor ? "true" : undefined}
-      title={describeRowTiming(row)}
     >
       {content}
     </div>

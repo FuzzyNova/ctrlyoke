@@ -138,6 +138,10 @@ Each command below is named after the step it copies from. On a script step,
     skipped, and the item says how many.
   - **Copy Step Response** and **Copy Step Transcript**: the step under the
     pointer.
+  - **Details**: when the line under the pointer started, how long it took
+    and which step it belongs to. On a step header, it also lists the
+    attempt, harness, model and changed files. Choose a line to copy it, or
+    **Copy Details** to copy them all.
 - For whole-run transcripts, use **Export output to markdown**.
 - **Export output to markdown** opens **Export Output**, with these options:
   - **Include CLI command**: the command each prompt step ran.
