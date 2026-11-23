@@ -7,7 +7,7 @@ entry here means that release was tested with the issue present.
 
 ## Antigravity: `auto` permission mode cannot write the workspace on Windows {#antigravity-auto-sandbox}
 
-**Affects:** Antigravity CLI (`agy`) on Windows, confirmed on 1.5.12. It worked on 1.5.8; the releases in between were not checked.
+**Affects:** Antigravity CLI (`agy`) on Windows, confirmed on 1.5.12 and 1.5.14. It worked on 1.5.8; the releases in between were not checked.
 
 In `auto` permission mode, agy runs shell commands inside its own terminal sandbox. On Windows that
 sandbox can refuse an approved command's write to the workspace with `EPERM`, so a command such as

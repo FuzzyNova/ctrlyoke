@@ -329,7 +329,7 @@ export class CodexHarnessAdapter implements IHarnessAdapter {
       // `--enable hooks`, which older releases reject at startup) and added
       // the `hooks.state` trust hash CodexInlineHooksBuilder writes.
       minimum: "0.129.0",
-      testedWith: "0.170.0",
+      testedWith: "0.171.0",
       updateCommand: "codex update",
     },
     shouldStreamHeadlessOutput: true,
