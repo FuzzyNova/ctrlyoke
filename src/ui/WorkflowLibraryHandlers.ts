@@ -892,6 +892,37 @@ export class WorkflowLibraryHandlers {
     );
   }
 
+  /** Delete one installed custom template; returns the deleted file's path. */
+  uninstallCustomTemplate(
+    templateName: string,
+    scope: TemplateScope
+  ): Promise<string> {
+    return this.templateManager.uninstallCustomTemplate(templateName, scope);
+  }
+
+  /**
+   * Clear every saved variable value for one template, in both User and
+   * Workspace settings. Only a scope that holds values is written, so a
+   * missing workspace never fails the call.
+   */
+  async clearTemplateVariableDefaults(
+    templateId: string,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    for (const scope of [SETTING_SCOPES.USER, SETTING_SCOPES.WORKSPACE]) {
+      const saved = configService.getScoped("templates", scope)
+        ?.variableDefaults?.[templateId];
+      const names = Object.keys(saved ?? {});
+      if (names.length === 0) continue;
+      await this.handleSetTemplateVariableDefaults(
+        templateId,
+        Object.fromEntries(names.map((name) => [name, null])),
+        scope,
+        postMessage
+      );
+    }
+  }
+
   /** Load template metadata without opening the New Workflow modal. */
   async handleTemplateCatalogRequest(
     postMessage?: PostMessageFn

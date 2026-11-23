@@ -1000,11 +1000,13 @@ export const MESSAGE_TYPES = {
   REQUEST_MCP_CONFIG_PREVIEW: "requestMcpConfigPreview", // Webview -> Extension: request a /mcp:<name> reference's resolved server config for the preview modal
   MCP_CONFIG_PREVIEW_RESULT: "mcpConfigPreviewResult", // Extension -> Webview: { mcpServerName, content, found } JSON for modal
 
-  // Community templates (Templates tab → Discover) — Webview ↔ Extension
+  // Community templates (Templates tab, Community templates column) — Webview ↔ Extension
   REQUEST_COMMUNITY_TEMPLATE_INDEX: "requestCommunityTemplateIndex", // Webview -> Extension: { refresh? }
   COMMUNITY_TEMPLATE_INDEX_RESULT: "communityTemplateIndexResult", // Extension -> Webview: { templates, error? }
   INSTALL_COMMUNITY_TEMPLATE: "installCommunityTemplate", // Webview -> Extension: { id, scope }
   COMMUNITY_TEMPLATE_INSTALL_RESULT: "communityTemplateInstallResult", // Extension -> Webview: { id, scope, success, error?, localTemplateId? }
+  UNINSTALL_COMMUNITY_TEMPLATE: "uninstallCommunityTemplate", // Webview -> Extension: { id, scope, clearSavedValues }
+  COMMUNITY_TEMPLATE_UNINSTALL_RESULT: "communityTemplateUninstallResult", // Extension -> Webview: { id, scope, success, error? }
 
   // Language server manager — Webview ↔ Extension
   REQUEST_LSP_SERVERS: "requestLspServers",

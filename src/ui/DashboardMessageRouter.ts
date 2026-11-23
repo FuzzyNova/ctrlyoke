@@ -79,6 +79,7 @@ import type {
   RequestMcpRegistrySearchMessage,
   RequestCommunityTemplateIndexMessage,
   InstallCommunityTemplateMessage,
+  UninstallCommunityTemplateMessage,
   SaveMcpRegistryServerMessage,
   UndoPromptChangesMessage,
   RedoPromptChangesMessage,
@@ -486,6 +487,18 @@ export class DashboardMessageRouter {
     this.communityTemplates = new CommunityTemplateService({
       installTemplateContent: (name, scope, format, content) =>
         this.serializer.installTemplateContent(name, scope, format, content),
+      uninstallTemplate: (name, scope) =>
+        this.serializer.uninstallCustomTemplate(name, scope),
+      clearSavedValues: async (templateId, ctx) => {
+        await this.serializer.clearTemplateVariableDefaults(
+          templateId,
+          ctx.postMessage
+        );
+        // Settings → Templates reads per-scope values from the full payload.
+        await this.settingsSync.handleGlobalSettingsLoadRequest(
+          ctx.postMessage
+        );
+      },
       refreshTemplateCatalog: (ctx) =>
         this.serializer.handleTemplateCatalogRequest(ctx.postMessage),
     });
@@ -2569,6 +2582,16 @@ export class DashboardMessageRouter {
         await this.communityTemplates.handleInstall(
           ctx,
           message as InstallCommunityTemplateMessage
+        );
+      }
+    );
+
+    table.set(
+      MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE,
+      async (message, ctx) => {
+        await this.communityTemplates.handleUninstall(
+          ctx,
+          message as UninstallCommunityTemplateMessage
         );
       }
     );

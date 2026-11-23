@@ -3,6 +3,7 @@ import { MESSAGE_TYPES, type SettingWriteScope } from "@/types/messages";
 import type {
   CommunityTemplateEntry,
   CommunityTemplateInstallResultMessage,
+  CommunityTemplateUninstallResultMessage,
 } from "@root/types/WebviewMessageTypes";
 import { sendMessage } from "@messaging/sendMessage";
 
@@ -16,6 +17,7 @@ export function getCommunityInstallKey(
 
 export interface CommunityTemplateInstallState {
   installing?: boolean;
+  uninstalling?: boolean;
   error?: string;
   /** The installed template's id, once the install succeeded. */
   localTemplateId?: string;
@@ -36,6 +38,12 @@ export interface CommunityTemplatesState {
   setQuery: (query: string) => void;
   installTemplate: (id: string, scope: SettingWriteScope) => void;
   setInstallResult: (result: CommunityTemplateInstallResultMessage) => void;
+  uninstallTemplate: (
+    id: string,
+    scope: SettingWriteScope,
+    clearSavedValues: boolean
+  ) => void;
+  setUninstallResult: (result: CommunityTemplateUninstallResultMessage) => void;
 }
 
 export const useCommunityTemplatesStore = create<CommunityTemplatesState>()(
@@ -78,6 +86,30 @@ export const useCommunityTemplatesStore = create<CommunityTemplatesState>()(
           [getCommunityInstallKey(result.scope, result.id)]: result.success
             ? { localTemplateId: result.localTemplateId }
             : { error: result.error ?? "Install failed" },
+        },
+      })),
+
+    uninstallTemplate: (id, scope, clearSavedValues) => {
+      const key = getCommunityInstallKey(scope, id);
+      const current = get().installs[key];
+      if (current?.installing || current?.uninstalling) return;
+      set((state) => ({
+        installs: { ...state.installs, [key]: { uninstalling: true } },
+      }));
+      sendMessage(MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE, {
+        id,
+        scope,
+        clearSavedValues,
+      });
+    },
+
+    setUninstallResult: (result) =>
+      set((state) => ({
+        installs: {
+          ...state.installs,
+          [getCommunityInstallKey(result.scope, result.id)]: result.success
+            ? {}
+            : { error: result.error ?? "Uninstall failed" },
         },
       })),
   })

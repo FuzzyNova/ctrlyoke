@@ -897,6 +897,46 @@ suite("TemplateManager variable metadata", () => {
       });
     });
 
+    suite("uninstallCustomTemplate", () => {
+      test("deletes only the named template in that scope's folder", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const target = path.join(
+          templateDir,
+          "octocat-review-branch.ctrlyoke.yaml"
+        );
+        const other = path.join(templateDir, "keep-me.ctrlyoke.yaml");
+        await fs.promises.writeFile(target, "steps: []", "utf-8");
+        await fs.promises.writeFile(other, "steps: []", "utf-8");
+
+        const removed = await tm.uninstallCustomTemplate(
+          "octocat-review-branch",
+          TEMPLATE_SCOPES.USER
+        );
+
+        assert.strictEqual(removed, target);
+        assert.deepStrictEqual(await fs.promises.readdir(templateDir), [
+          "keep-me.ctrlyoke.yaml",
+        ]);
+      });
+
+      test("rejects a missing template and a name that could leave the folder", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+
+        await assert.rejects(
+          tm.uninstallCustomTemplate("absent", TEMPLATE_SCOPES.USER),
+          /Template is not installed/
+        );
+        await assert.rejects(
+          tm.uninstallCustomTemplate("../escape", TEMPLATE_SCOPES.USER),
+          /Invalid characters/
+        );
+      });
+    });
+
     test("rejects a duplicate basename even when the formats differ", async () => {
       const tm = makeManager();
       const templateDir = makeTempDir();

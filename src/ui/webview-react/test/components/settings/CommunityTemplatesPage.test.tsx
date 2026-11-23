@@ -84,6 +84,7 @@ function resetStores() {
     installs: {},
   });
   useUiStore.setState({ templateCatalog: [] });
+  useSettingsStore.setState({ fullGlobalSettings: null });
 }
 
 describe("CommunityTemplatesPage", () => {
@@ -157,16 +158,20 @@ describe("CommunityTemplatesPage", () => {
     expect(screen.getByText(/No community templates match/)).toBeVisible();
   });
 
-  it("installs into the active scope and shows Installed once the catalog has it", () => {
+  it("installs into the active scope and offers Uninstall once the catalog has it", () => {
     seedIndex([REVIEW]);
     render(
       <CommunityTemplatesPage activeScope="workspace" onSetDefaults={vi.fn()} />
     );
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Install Review Branch to Workspace templates",
-      })
+    const install = screen.getByRole("button", {
+      name: "Install Review Branch to Workspace templates",
+    });
+    expect(install).toHaveTextContent("Install to Workspace");
+    expect(install).toHaveAttribute(
+      "title",
+      `.ctrlyoke/templates/${REVIEW.file}`
     );
+    fireEvent.click(install);
     expect(sent(MESSAGE_TYPES.INSTALL_COMMUNITY_TEMPLATE)).toEqual([
       [
         MESSAGE_TYPES.INSTALL_COMMUNITY_TEMPLATE,
@@ -189,12 +194,128 @@ describe("CommunityTemplatesPage", () => {
         templateCatalog: [installedTemplate(REVIEW.id, "workspace")],
       });
     });
+    const uninstall = screen.getByRole("button", {
+      name: "Uninstall Review Branch from Workspace templates",
+    });
+    expect(uninstall).toBeEnabled();
+    expect(uninstall).toHaveTextContent("Uninstall from Workspace");
+    expect(screen.getByRole("button", { name: "Set defaults" })).toBeVisible();
+  });
+
+  it("badges every scope a template is installed in", () => {
+    seedIndex([REVIEW, FIX]);
+    useUiStore.setState({
+      templateCatalog: [
+        installedTemplate(REVIEW.id, "workspace"),
+        installedTemplate(REVIEW.id, "user"),
+        installedTemplate(FIX.id, "user"),
+      ],
+    });
+    render(
+      <CommunityTemplatesPage activeScope="user" onSetDefaults={vi.fn()} />
+    );
+    expect(
+      within(
+        screen.getByTestId(`community-template-${REVIEW.id}`)
+      ).getByLabelText("Installed in Workspace and User templates")
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId(`community-template-${FIX.id}`)).getByLabelText(
+        "Installed in User templates"
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("uninstalls from the active scope after confirming, keeping saved values unless asked", () => {
+    seedIndex([REVIEW]);
+    useUiStore.setState({
+      templateCatalog: [installedTemplate(REVIEW.id, "user")],
+    });
+    useSettingsStore.setState({
+      fullGlobalSettings: {
+        settings: CTRLYOKE_SETTINGS_DEFAULTS,
+        sources: {},
+        isMultiRoot: false,
+        templateVariableDefaultsByScope: {
+          user: { [`custom:user:${REVIEW.id}`]: { testCommand: "npm t" } },
+          workspace: {},
+        },
+      },
+    });
+    render(
+      <CommunityTemplatesPage activeScope="user" onSetDefaults={vi.fn()} />
+    );
+
+    const open = () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Uninstall Review Branch from User templates",
+        })
+      );
+    open();
+    const dialog = screen.getByRole("dialog", {
+      name: "Uninstall Review Branch?",
+    });
+    expect(dialog).toHaveTextContent(`~/.ctrlyoke/templates/${REVIEW.file}`);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(sent(MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE)).toHaveLength(0);
+
+    open();
+    const checkbox = screen.getByRole("checkbox", {
+      name: "Also clear its saved values",
+    });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+    expect(sent(MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE)).toEqual([
+      [
+        MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE,
+        { id: REVIEW.id, scope: "user", clearSavedValues: true },
+      ],
+    ]);
     expect(
       screen.getByRole("button", {
-        name: "Review Branch is installed in Workspace templates",
+        name: "Uninstall Review Branch from User templates",
       })
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Set defaults" })).toBeVisible();
+    ).toHaveTextContent("Uninstalling…");
+
+    act(() => {
+      useCommunityTemplatesStore.getState().setUninstallResult({
+        type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_UNINSTALL_RESULT,
+        id: REVIEW.id,
+        scope: "user",
+        success: true,
+      });
+      useUiStore.setState({ templateCatalog: [] });
+    });
+    expect(
+      screen.getByRole("button", {
+        name: "Install Review Branch to User templates",
+      })
+    ).toBeEnabled();
+  });
+
+  it("offers no saved-values choice when the template has none", () => {
+    seedIndex([REVIEW]);
+    useUiStore.setState({
+      templateCatalog: [installedTemplate(REVIEW.id, "user")],
+    });
+    render(
+      <CommunityTemplatesPage activeScope="user" onSetDefaults={vi.fn()} />
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Uninstall Review Branch from User templates",
+      })
+    );
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+    expect(sent(MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE)).toEqual([
+      [
+        MESSAGE_TYPES.UNINSTALL_COMMUNITY_TEMPLATE,
+        { id: REVIEW.id, scope: "user", clearSavedValues: false },
+      ],
+    ]);
   });
 
   it("treats a copy in the other scope as not installed here", () => {

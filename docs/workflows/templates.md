@@ -263,13 +263,29 @@ library, which you can then filter by name, author, or tag. **View source** open
 file on GitHub, and **Report** opens an issue form in the library for a template that is
 broken, misleading or unsafe.
 
-**Install** copies the template into the scope shown in the drawer's title bar: **User**
-installs to `~/.ctrlyoke/templates/`, **Workspace** to `.ctrlyoke/templates/`. ctrlyoke checks
+**Install to User** or **Install to Workspace** copies the template into the scope shown in the
+drawer's title bar: **User** installs to `~/.ctrlyoke/templates/`, **Workspace** to
+`.ctrlyoke/templates/`. Hover the button to see the file it will write. ctrlyoke checks
 the downloaded file against the workflow schema before writing it, and never replaces a
 template you already have with the same name. An installed template is an ordinary custom
 template: it appears in **New Workflow** and in **Defaults** straight away, and **Set
 defaults** on its row opens its saved-values card. Editing your copy does not change the
 library, and a later change to the library does not change your copy.
+
+A **User** or **Workspace** badge beside a template's name shows each scope it is installed in,
+so a template installed in both shows both.
+
+### Uninstalling a community template {#uninstall-community-template}
+
+When a template is installed in the scope shown in the title bar, its button reads **Uninstall
+from User** or **Uninstall from Workspace**. It removes only that scope's copy; switch scopes to
+remove the other. ctrlyoke asks first, because uninstalling deletes the file and any changes you
+made to it. Workflows already created from the template are not affected.
+
+Saved values are kept unless you tick **Also clear its saved values** in that dialog, which
+appears when the template has any. Kept values come back if you install the template again.
+Until then, **Defaults** shows the template's card as **(template not found)**, where **Clear
+all** removes them.
 
 ::: warning Review before you run
 Community templates are written by third parties. A template can run shell commands in
