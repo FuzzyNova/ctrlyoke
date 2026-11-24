@@ -272,6 +272,13 @@ export const PATH_CONSTANTS = {
   /** Temp directory name (subdirectory of CTRLYOKE_DIR) */
   TEMP_DIR: "temp",
 
+  /**
+   * Filename prefix of the per-prompt Claude `--settings` files written to
+   * TEMP_DIR. Shared by the writer (ClaudeHarnessAdapter) and the orphan
+   * sweep (TempFileManager), which reaps files a dead extension host left.
+   */
+  CLAUDE_HOOK_SETTINGS_PREFIX: "claude-hook-settings-",
+
   /** Workspace-local observed/provider usage directory name (subdirectory of CTRLYOKE_DIR) */
   USAGE_DIR: ".usage",
 

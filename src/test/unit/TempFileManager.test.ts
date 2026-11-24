@@ -5,6 +5,7 @@ import { suite, test, afterEach } from "mocha";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { MAX_OUTPUT_SNAPSHOT_BYTES } from "../../types/DashboardConstants";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("TempFileManager", () => {
   let workspaceRoot: string;
@@ -248,6 +249,39 @@ suite("TempFileManager", () => {
         "attachment-folder image must never be swept"
       );
       createdFiles.push(freshImg, unrelated, attachImg);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("cleanupOrphanedFiles — Claude hook settings", () => {
+    test("sweeps old claude-hook-settings files; spares fresh ones", async () => {
+      manager = freshManager();
+      await manager.ensureTempDir();
+      const tempDir = path.join(workspaceRoot, ".ctrlyoke", "temp");
+      const oldSettings = path.join(
+        tempDir,
+        `${PATH_CONSTANTS.CLAUDE_HOOK_SETTINGS_PREFIX}old-run-p0.json`
+      );
+      const freshSettings = path.join(
+        tempDir,
+        `${PATH_CONSTANTS.CLAUDE_HOOK_SETTINGS_PREFIX}live-run-p1.json`
+      );
+      await fs.promises.writeFile(oldSettings, "{}");
+      await fs.promises.writeFile(freshSettings, "{}");
+      const past = new Date(Date.now() - 25 * 60 * 60 * 1000);
+      await fs.promises.utimes(oldSettings, past, past);
+
+      await manager.cleanupOrphanedFiles();
+
+      assert.ok(
+        !fs.existsSync(oldSettings),
+        "orphaned hook settings should be swept"
+      );
+      assert.ok(
+        fs.existsSync(freshSettings),
+        "fresh hook settings may belong to a live run and must remain"
+      );
+      createdFiles.push(freshSettings);
     });
   });
 

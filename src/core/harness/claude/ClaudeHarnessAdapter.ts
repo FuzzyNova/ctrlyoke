@@ -602,7 +602,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
       stem = String(Date.now());
     }
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
-    return `claude-hook-settings-${safeStem}-p${promptIndex}.json`;
+    return `${PATH_CONSTANTS.CLAUDE_HOOK_SETTINGS_PREFIX}${safeStem}-p${promptIndex}.json`;
   }
 
   /**

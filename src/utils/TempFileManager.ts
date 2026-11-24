@@ -347,7 +347,13 @@ export class TempFileManager {
             file.startsWith(this.PASTED_IMAGE_PREFIX) ||
             file.startsWith(this.AGY_STATUSLINE_PREFIX) ||
             file.startsWith(this.AGY_PERMISSION_PREFIX) ||
-            file.startsWith(this.CLAUDE_STATUSLINE_PREFIX);
+            file.startsWith(this.CLAUDE_STATUSLINE_PREFIX) ||
+            // Per-prompt `--settings` files are deleted in-session only via
+            // the adapter's in-memory list, so a run whose terminal outlived
+            // the extension host (reload, crash, window closed) leaves them.
+            // A running Claude has already read its file, so age-based
+            // reaping is safe even for a terminal kept open past 24h.
+            file.startsWith(PATH_CONSTANTS.CLAUDE_HOOK_SETTINGS_PREFIX);
           if (!isTempFile) {
             continue;
           }
