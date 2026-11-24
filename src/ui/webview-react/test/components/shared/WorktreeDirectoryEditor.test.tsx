@@ -59,7 +59,7 @@ describe("WorktreeDirectoryEditor", () => {
     ).toBe(false);
   });
 
-  it("shows each directory with the branch it holds", async () => {
+  it("shows each directory with the branch it holds and its path inside the row", async () => {
     const user = userEvent.setup();
     const { content } = renderEditor();
 
@@ -82,6 +82,7 @@ describe("WorktreeDirectoryEditor", () => {
             label: "bug-fix",
             insertText: "bug-fix",
             detail: "on fix-race-condition",
+            documentation: "C:/repo.worktrees/bug-fix",
           },
         ],
         seq: request.seq,
@@ -89,6 +90,10 @@ describe("WorktreeDirectoryEditor", () => {
       until: () => {
         expect(screen.getByText("bug-fix")).toBeInTheDocument();
         expect(screen.getByText("on fix-race-condition")).toBeInTheDocument();
+        const path = screen.getByText("C:/repo.worktrees/bug-fix");
+        expect(path).toHaveAttribute("title", "C:/repo.worktrees/bug-fix");
+        expect(path.closest("li")).not.toBeNull();
+        expect(document.querySelector(".cm-completionInfo")).toBeNull();
       },
     });
   });

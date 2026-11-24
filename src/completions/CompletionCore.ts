@@ -41,6 +41,7 @@ import {
   getStashList,
   searchCommitsByMessage,
   type CommitInfo,
+  type LocalBranchSummary,
   type StashInfo,
 } from "../utils/GitUtils";
 
@@ -74,6 +75,11 @@ export interface PlainCompletionItem {
   icon?: string;
   /** Non-insertable informational row in dashboard completion lists. */
   status?: boolean;
+  /**
+   * Set only on branch completion items: the tracking state the dashboard
+   * renders as a posh-git style status after the branch name.
+   */
+  branch?: LocalBranchSummary;
 }
 
 export interface FileCompletionOptions {

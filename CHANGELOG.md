@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Summary prior context (`$previous:summary`, `$all:summary`, `priorContextDetail: summary`) now keeps much more of each step: the first 8 KB of its prompt instead of 2 KB, and the last 16 KB of its text instead of 4 KB. Script steps keep the last 4 KB of their output, as before. Summary steps in one prompt now share a budget of 400 KB, about 100k tokens. When that is exceeded, the earliest summary steps are left out whole and marked `omitted="all"`, and the latest is always kept. Steps referenced in full detail don't count toward the budget.
 - Claude hook settings files (`.ctrlyoke/temp/claude-hook-settings-*.json`) left behind when VS Code was closed or reloaded with a Claude terminal still open are now deleted after 24 hours, like ctrlyoke's other orphaned temp files.
 - Clicking or tapping into a branch or worktree directory field now opens its list of suggestions right away, so you can pick a branch without typing first. Moving into the field with Tab still leaves the list closed.
+- Branch suggestions now show each branch's upstream status the way posh-git does (`≡` in sync, `↓` behind, `↑` ahead, `×` upstream gone) and how long ago its last commit was, instead of "Existing branch" on every row. Worktree directory suggestions show the directory's full path on a second line in the list, instead of in a separate box beside it.
 
 ## [0.9.0] - 2026-11-22
 

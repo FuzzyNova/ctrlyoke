@@ -2181,20 +2181,72 @@ export async function currentBranch(dir: string): Promise<string | null> {
 }
 
 /** Return local branch names, sorted by most recent commit. */
-export async function listLocalBranches(repoRoot: string): Promise<string[]> {
+/** A local branch with the tracking state posh-git shows beside its name. */
+export interface LocalBranchSummary {
+  name: string;
+  /** Short upstream name (e.g. `origin/main`); absent when nothing is tracked. */
+  upstream?: string;
+  /** Commits on the branch that its upstream lacks. */
+  ahead: number;
+  /** Commits on the upstream that the branch lacks. */
+  behind: number;
+  /** The configured upstream no longer exists on the remote. */
+  upstreamGone: boolean;
+  /** Committer date of the branch tip, in epoch milliseconds. */
+  committedAtMs?: number;
+}
+
+const BRANCH_SUMMARY_FIELD_SEPARATOR = "\t";
+
+function parseUpstreamTrack(
+  track: string
+): Pick<LocalBranchSummary, "ahead" | "behind" | "upstreamGone"> {
+  return {
+    ahead: Number(/ahead (\d+)/.exec(track)?.[1] ?? 0),
+    behind: Number(/behind (\d+)/.exec(track)?.[1] ?? 0),
+    upstreamGone: track === "gone",
+  };
+}
+
+/**
+ * Local branches, most recently committed first, with their upstream
+ * tracking state. One `for-each-ref` reads it all from the refs Git already
+ * stores, so it costs no more than listing the names alone; ahead/behind are
+ * relative to the last fetch.
+ */
+export async function listLocalBranches(
+  repoRoot: string
+): Promise<LocalBranchSummary[]> {
   try {
     const { stdout } = await execGit([
       "-C",
       repoRoot,
       "for-each-ref",
       "--sort=-committerdate",
-      "--format=%(refname:short)",
+      `--format=${[
+        "%(refname:short)",
+        "%(upstream:short)",
+        "%(upstream:track,nobracket)",
+        "%(committerdate:unix)",
+      ].join(BRANCH_SUMMARY_FIELD_SEPARATOR)}`,
       "refs/heads",
     ]);
     return stdout
       .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
+      .map((line) => line.trimEnd())
+      .filter(Boolean)
+      .map((line) => {
+        const [name, upstream, track, committedAtSeconds] = line.split(
+          BRANCH_SUMMARY_FIELD_SEPARATOR
+        );
+        const committedAt = Number(committedAtSeconds);
+        return {
+          name: name.trim(),
+          ...(upstream ? { upstream } : {}),
+          ...parseUpstreamTrack(track ?? ""),
+          ...(committedAt > 0 ? { committedAtMs: committedAt * 1000 } : {}),
+        };
+      });
   } catch {
     return [];
   }

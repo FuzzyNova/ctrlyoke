@@ -61,13 +61,15 @@ suite("BranchCompletionHelpers", function () {
       items.map((item) => ({
         label: item.label,
         insertText: item.insertText,
-        detail: item.detail,
+        branchName: item.branch?.name,
+        upstream: item.branch?.upstream,
       })),
       [
         {
           label: "feat/one",
           insertText: "feat/one",
-          detail: "Existing branch",
+          branchName: "feat/one",
+          upstream: undefined,
         },
       ]
     );

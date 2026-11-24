@@ -698,11 +698,31 @@ suite("GitUtils worktree plumbing", function () {
   test("lists local branches in Git's recency order", async () => {
     runGit(["branch", "feature"]);
 
-    const branches = await listLocalBranches(workspaceRoot);
+    const branches = (await listLocalBranches(workspaceRoot)).map(
+      (summary) => summary.name
+    );
     const branch = await currentBranch(workspaceRoot);
 
     assert.ok(branches.includes("feature"));
     assert.ok(branch !== null && branches.includes(branch));
+  });
+
+  test("reports each local branch's upstream tracking state", async () => {
+    runGit(["branch", "base"]);
+    runGit(["checkout", "-b", "tracking", "--track", "base"]);
+    await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "ahead\n");
+    runGit(["commit", "-am", "Ahead of base"]);
+
+    const summaries = await listLocalBranches(workspaceRoot);
+    const base = summaries.find((summary) => summary.name === "base");
+    const tracking = summaries.find((summary) => summary.name === "tracking");
+
+    assert.strictEqual(base?.upstream, undefined);
+    assert.strictEqual(base?.upstreamGone, false);
+    assert.ok((base?.committedAtMs ?? 0) > 0);
+    assert.strictEqual(tracking?.upstream, "base");
+    assert.strictEqual(tracking?.ahead, 1);
+    assert.strictEqual(tracking?.behind, 0);
   });
 
   test("detects and commits changes through argv-only Git calls", async () => {

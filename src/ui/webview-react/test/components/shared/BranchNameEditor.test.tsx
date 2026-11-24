@@ -128,14 +128,47 @@ describe("BranchNameEditor", () => {
           {
             label: "feat/new",
             insertText: "feat/new",
-            detail: "Existing branch",
+            branch: {
+              name: "feat/new",
+              upstream: "origin/feat/new",
+              ahead: 2,
+              behind: 1,
+              upstreamGone: false,
+              committedAtMs: Date.now() - 3 * 24 * 60 * 60 * 1000,
+            },
+          },
+          {
+            label: "feat/synced",
+            insertText: "feat/synced",
+            branch: {
+              name: "feat/synced",
+              upstream: "origin/feat/synced",
+              ahead: 0,
+              behind: 0,
+              upstreamGone: false,
+            },
+          },
+          {
+            label: "feat/merged",
+            insertText: "feat/merged",
+            branch: {
+              name: "feat/merged",
+              upstream: "origin/feat/merged",
+              ahead: 0,
+              behind: 0,
+              upstreamGone: true,
+            },
           },
         ],
         seq: request.seq,
       }),
       until: () => {
         expect(screen.getByText("feat/new")).toBeInTheDocument();
-        expect(screen.getByText("Existing branch")).toBeInTheDocument();
+        expect(screen.getByText("↓1")).toBeInTheDocument();
+        expect(screen.getByText("↑2")).toBeInTheDocument();
+        expect(screen.getByText("3 days ago")).toBeInTheDocument();
+        expect(screen.getByText("≡")).toBeInTheDocument();
+        expect(screen.getByText("×")).toBeInTheDocument();
       },
     });
   });

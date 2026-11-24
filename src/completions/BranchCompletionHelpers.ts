@@ -26,11 +26,11 @@ export async function getBranchCompletions(
   const branches = await branchCache.get(repoRoot);
   const prefix = filterText.toLocaleLowerCase();
   return branches
-    .filter((branch) => branch.toLocaleLowerCase().startsWith(prefix))
+    .filter((branch) => branch.name.toLocaleLowerCase().startsWith(prefix))
     .map((branch) => ({
-      label: branch,
+      label: branch.name,
       kind: COMPLETION_ITEM_KINDS.REFERENCE,
-      insertText: branch,
-      detail: "Existing branch",
+      insertText: branch.name,
+      branch,
     }));
 }

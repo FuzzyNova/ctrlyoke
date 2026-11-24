@@ -1,12 +1,20 @@
-import type { CompletionResult } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  type Completion,
+  type CompletionResult,
+} from "@codemirror/autocomplete";
+import { EditorView } from "@codemirror/view";
 import { useCompletionRequest } from "@hooks/useCompletionRequest";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { WebviewLog } from "@utils/logger";
+import { SCM_CHANGE_COUNT_COLOR_CLASS } from "@utils/scmStatus";
+import { formatRelativeTimeVerbose } from "@utils/time";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import type {
   BranchListResponseMessage,
   WorktreeDirectoryListResponseMessage,
 } from "@root/types/WebviewMessageTypes";
+import type { LocalBranchSummary } from "@root/utils/GitUtils";
 import { SingleLineCompletionEditor } from "./SingleLineCompletionEditor";
 import type { SingleLineCompletionEditorProps } from "./SingleLineCompletionEditor";
 
@@ -32,11 +40,25 @@ export type GitListEditorProps = Omit<
   "completionSource"
 >;
 
+/** A dropdown option carrying the extra rows this editor renders itself. */
+interface GitListCompletion extends Completion {
+  branch?: LocalBranchSummary;
+  /** Shown as a second, muted line (e.g. a worktree's full path). */
+  secondaryLine?: string;
+}
+
 // Matches the control-surface typography (Tailwind `text-xs`, as used by
 // cy-select-trigger/CustomSelect and the other form inputs this editor sits
 // beside) instead of the VS Code *editor* font size the CodeMirror theme
 // defaults to. Callers can still override via props.fontSize.
 const CONTROL_FONT_SIZE = "0.75rem";
+
+const BRANCH_STATUS_CLASS = "cm-gitListBranchStatus";
+const SECONDARY_LINE_CLASS = "cm-gitListSecondaryLine";
+
+// After the label (50) and CodeMirror's own detail (80).
+const BRANCH_STATUS_POSITION = 60;
+const SECONDARY_LINE_POSITION = 90;
 
 function parseGitListResponse(
   kind: GitListKind,
@@ -62,15 +84,112 @@ function buildGitListCompletionResult(
   return {
     from: 0,
     filter: false,
-    options: items.map((item, index) => ({
+    options: items.map((item, index): GitListCompletion => ({
       label: item.label,
       detail: item.detail,
-      info: item.documentation,
+      // Rendered inside the row rather than as CodeMirror's `info`, which
+      // floats a separate box beside the dropdown.
+      secondaryLine: item.documentation,
+      branch: item.branch,
       apply: item.insertText,
       boost: -index,
     })),
   };
 }
+
+function appendText(parent: HTMLElement, text: string, className: string) {
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = text;
+  parent.appendChild(span);
+}
+
+/**
+ * posh-git's upstream markers (`≡` in sync, `↓behind ↑ahead`, `×` upstream
+ * gone), colored like `WorktreeGitStatus`, then the tip commit's age.
+ */
+function renderBranchStatus(completion: Completion): Node | null {
+  const branch = (completion as GitListCompletion).branch;
+  if (!branch) return null;
+
+  const status = document.createElement("span");
+  status.className = BRANCH_STATUS_CLASS;
+  if (branch.upstreamGone) {
+    appendText(status, "×", SCM_CHANGE_COUNT_COLOR_CLASS.deleted);
+  } else if (branch.upstream) {
+    if (branch.ahead === 0 && branch.behind === 0) {
+      appendText(status, "≡", "text-description-fg");
+    }
+    if (branch.behind > 0) {
+      appendText(
+        status,
+        `↓${branch.behind}`,
+        SCM_CHANGE_COUNT_COLOR_CLASS.deleted
+      );
+    }
+    if (branch.ahead > 0) {
+      appendText(
+        status,
+        `↑${branch.ahead}`,
+        SCM_CHANGE_COUNT_COLOR_CLASS.added
+      );
+    }
+  }
+  const age = formatRelativeTimeVerbose(branch.committedAtMs);
+  if (age) appendText(status, age, "text-description-fg");
+
+  status.title = [
+    branch.upstreamGone
+      ? `Upstream ${branch.upstream ?? "branch"} is gone`
+      : branch.upstream
+        ? `Tracks ${branch.upstream}: ${branch.ahead} ahead, ${branch.behind} behind`
+        : "No upstream branch",
+    age ? `Last commit ${age.toLocaleLowerCase()}` : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return status.childElementCount > 0 ? status : null;
+}
+
+function renderSecondaryLine(completion: Completion): Node | null {
+  const text = (completion as GitListCompletion).secondaryLine;
+  if (!text) return null;
+
+  const line = document.createElement("div");
+  line.className = SECONDARY_LINE_CLASS;
+  line.textContent = text;
+  // The line truncates in a narrow dropdown; hovering shows all of it.
+  line.title = text;
+  return line;
+}
+
+// Scoped through the editor's theme class, which CodeMirror also puts on the
+// tooltip container, so these rules reach the dropdown mounted on <body>.
+const gitListOptionTheme = EditorView.theme({
+  [`.${BRANCH_STATUS_CLASS}`]: {
+    display: "inline-flex",
+    gap: "0.5em",
+    marginLeft: "0.85em",
+  },
+  [`.${SECONDARY_LINE_CLASS}`]: {
+    color: "var(--vscode-descriptionForeground)",
+    fontSize: "0.9em",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    paddingTop: "1px",
+  },
+});
+
+const gitListOptionExtensions = [
+  autocompletion({
+    addToOptions: [
+      { render: renderBranchStatus, position: BRANCH_STATUS_POSITION },
+      { render: renderSecondaryLine, position: SECONDARY_LINE_POSITION },
+    ],
+  }),
+  gitListOptionTheme,
+];
 
 /**
  * Single-line field whose whole value is one Git name the host lists. Free
@@ -111,6 +230,7 @@ export function GitListCompletionEditor({
       openCompletionsOnPointerFocus={
         props.openCompletionsOnPointerFocus ?? true
       }
+      extensions={[...gitListOptionExtensions, ...(props.extensions ?? [])]}
       completionSource={completionSource}
     />
   );
