@@ -1805,6 +1805,8 @@ export interface HarnessDetectionRetryResultMessage {
   type: typeof MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT;
   requestId: string;
   success: boolean;
+  /** On success: every harness whose CLI answered the re-detection. */
+  availableHarnesses?: HarnessId[];
   error?: string;
 }
 

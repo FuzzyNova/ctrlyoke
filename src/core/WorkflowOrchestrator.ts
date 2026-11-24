@@ -177,6 +177,8 @@ import {
   type UserInteractionPort,
 } from "../ui/UserInteractionPort";
 import { TypedEmitter } from "../utils/TypedEmitter";
+import { refreshProcessSearchPath } from "../utils/SearchPathRefresh";
+import { refreshModelRegistry } from "../utils/ModelRegistry";
 
 const PANEL_READY_GRACE_PERIOD_MS = 1_000;
 /**
@@ -633,6 +635,11 @@ export class WorkflowOrchestrator {
   private readonly workspaceStatsService?: WorkspaceStatsService;
   private readonly integrationFactory: IntegrationFactory;
   private executionOverride?: ExecutionHarnessOverride;
+  /** Seam for tests: re-reads PATH so CLIs installed after launch are found. */
+  private refreshSearchPath: () => Promise<unknown> = () =>
+    refreshProcessSearchPath();
+  /** Seam for tests: re-discovers model lists for newly detected harnesses. */
+  private refreshModels: () => Promise<void> = () => refreshModelRegistry();
   private readonly compatibilityRegistry: HarnessCapabilityRegistry;
   private readonly platform: PlatformAdapter;
   private readonly dashboardHostActions: DashboardHostActions;
@@ -848,15 +855,7 @@ export class WorkflowOrchestrator {
     this.runViewPublisher = this.createRunViewPublisher();
 
     // Wire harness status subscriptions
-    const allIntegrations: Array<[HarnessId, CliIntegration]> = [
-      [HARNESS_IDS.COPILOT_CLI, this.copilotCliIntegration],
-      [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
-      [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
-      [HARNESS_IDS.OPENCODE_CLI, this.openCodeCliIntegration],
-      [HARNESS_IDS.QWEN_CLI, this.qwenCliIntegration],
-      [HARNESS_IDS.ANTIGRAVITY_CLI, this.antigravityCliIntegration],
-    ];
-    for (const [harnessId, integration] of allIntegrations) {
+    for (const [harnessId, integration] of this.getDetectorIntegrations()) {
       this.disposableRegistry.add(
         integration.onDidChangeStatus((status) => {
           const isDetectionResult =
@@ -5165,8 +5164,52 @@ export class WorkflowOrchestrator {
   // Harness / integration status
   // ─────────────────────────────────────────────────────────────────────────
 
-  async retryHarnessDetection(): Promise<void> {
-    await this.getDefaultIntegration().retryDetection();
+  /**
+   * Re-detect every harness CLI, not only the default one: a user who installs
+   * a different CLI than the configured default must see it picked up (and the
+   * "No CLI coding agent" guidance dismissed) without restarting the host.
+   * Resolves to the harnesses that are available afterwards.
+   *
+   * PATH is refreshed first: an installer that adds a new directory (agy's
+   * `~/.local/bin`) to the shell profile is otherwise invisible to this
+   * already-running process, and detection fails however often it is retried.
+   */
+  async retryHarnessDetection(): Promise<HarnessId[]> {
+    await this.refreshSearchPath();
+    const integrations = this.getDetectorIntegrations();
+    const readyBefore = new Set(
+      integrations
+        .filter(([, integration]) => integration.isReady())
+        .map(([harnessId]) => harnessId)
+    );
+    await Promise.all(
+      integrations.map(([, integration]) => integration.retryDetection())
+    );
+    const available = integrations
+      .filter(([, integration]) => integration.isReady())
+      .map(([harnessId]) => harnessId);
+    if (available.some((harnessId) => !readyBefore.has(harnessId))) {
+      // Startup discovery fell back to the static list for a CLI that was
+      // missing then; ask the newly found one for its real models.
+      void this.refreshModels().catch((error) =>
+        Log.warn(
+          `[WorkflowOrchestrator] Model discovery after harness retry failed: ${getErrorMessage(error)}`
+        )
+      );
+    }
+    return available;
+  }
+
+  /** The detector singleton of every harness, in `HARNESS_IDS` order. */
+  private getDetectorIntegrations(): Array<[HarnessId, CliIntegration]> {
+    return [
+      [HARNESS_IDS.COPILOT_CLI, this.copilotCliIntegration],
+      [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
+      [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
+      [HARNESS_IDS.OPENCODE_CLI, this.openCodeCliIntegration],
+      [HARNESS_IDS.QWEN_CLI, this.qwenCliIntegration],
+      [HARNESS_IDS.ANTIGRAVITY_CLI, this.antigravityCliIntegration],
+    ];
   }
 
   // ─────────────────────────────────────────────────────────────────────────

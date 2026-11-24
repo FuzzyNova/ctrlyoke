@@ -1,4 +1,4 @@
-import React, { useId, useState, useRef, useEffect } from "react";
+import React, { useId, useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { usePickerListbox } from "@hooks/usePickerListbox";
@@ -7,21 +7,18 @@ import { DropdownPortal } from "./DropdownPortal";
 import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import {
   HARNESS_STATUS_STRINGS,
-  MESSAGE_TYPES,
   type HarnessId,
   type HarnessStatusString,
 } from "../../types/messages";
 import {
   HARNESS_DISPLAY_ORDER,
   INHERIT_DEFAULT_OPTION,
-  USER_FEEDBACK_SEVERITY,
   type PickerShortcutTarget,
 } from "@root/types/DashboardConstants";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { getVsCodeApi } from "@hooks/useVsCodeApi";
-import { notifyUser } from "@utils/notifyUser";
+import { useHarnessDetectionRetry } from "@hooks/useHarnessDetectionRetry";
+import { HARNESS_DISPLAY_NAMES } from "@utils/harnessDisplayNames";
 import { withPickerShortcutHint } from "@utils/platform";
-import { useUiStore } from "@store/uiStore";
 import { HarnessIcon } from "./HarnessIcon";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import {
@@ -38,28 +35,13 @@ import {
   schemaTitle,
 } from "@utils/schemaPropertyLabels";
 import { BULK_MIXED_OPTION } from "@store/editorStore";
-import { HARNESS_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import { useUsagePercentDirection } from "@hooks/useUsagePercentDirection";
 import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 
-// ─── Display names (official product names) ──────────────────────────────────
-
-export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> =
-  Object.fromEntries(
-    Object.values(HARNESS_OPTIONS_META).map(({ value, label }) => [
-      value,
-      label,
-    ])
-  ) as Record<HarnessId, string>;
+export { HARNESS_DISPLAY_NAMES };
 
 // The selected harness can never be hidden (canHide enforces this).
 const NON_HIDEABLE: HarnessId[] = [];
-let retryRequestCounter = 0;
-
-function nextRetryRequestId(): string {
-  retryRequestCounter += 1;
-  return `harness-detection-retry-${Date.now()}-${retryRequestCounter}`;
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -301,9 +283,11 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     ? `${id}-listbox`
     : `harness-listbox-${reactId.replace(/:/g, "")}`;
   const [showHidden, setShowHidden] = useState(false);
-  const [retrying, setRetrying] = useState(false);
-  const pendingRetryRequest = useRef<string | null>(null);
-  const retryResult = useUiStore((state) => state.harnessDetectionRetryResult);
+  const { retrying, retry } = useHarnessDetectionRetry(
+    value === INHERIT_DEFAULT_OPTION || value === BULK_MIXED_OPTION
+      ? undefined
+      : (value as HarnessId)
+  );
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(180);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -324,38 +308,9 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     percentDirection
   );
 
-  useEffect(() => {
-    if (!retryResult || retryResult.requestId !== pendingRetryRequest.current) {
-      return;
-    }
-
-    pendingRetryRequest.current = null;
-    setRetrying(false);
-    useUiStore.getState().setHarnessDetectionRetryResult(null);
-    if (retryResult.success) {
-      notifyUser(
-        "Harness detection retry completed",
-        USER_FEEDBACK_SEVERITY.SUCCESS
-      );
-    } else {
-      notifyUser(
-        retryResult.error || "Harness detection retry failed",
-        USER_FEEDBACK_SEVERITY.ERROR
-      );
-    }
-  }, [retryResult]);
-
   const handleRetry = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (retrying) return;
-
-    const requestId = nextRetryRequestId();
-    pendingRetryRequest.current = requestId;
-    setRetrying(true);
-    getVsCodeApi().postMessage({
-      type: MESSAGE_TYPES.RETRY_HARNESS_DETECTION,
-      requestId,
-    });
+    retry();
   };
 
   const closeDropdown = () => {

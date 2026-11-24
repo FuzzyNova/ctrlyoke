@@ -63,8 +63,12 @@ dashboard. It disappears once a harness is detected.
 
 ![The No CLI coding agent is available panel below the dashboard header, listing all six harnesses with their Windows install commands and a copy button on each row](/screenshots/harness-preflight-missing-660x1270.png){.panel-shot}
 
-Install a harness, sign in with its own CLI, then let ctrlyoke check again: reload the window, or
-click **Retry** next to the harness picker.
+Install a harness, sign in with its own CLI, then click **Check again** in the panel (or **Retry**
+next to the harness picker). Either one checks every supported CLI again, not only the selected
+harness, and a message names the harnesses it found. You don't need to restart VS Code. If an
+installer added a new folder to your shell profile or Windows user `Path`, the check reads `PATH`
+the way a new terminal would and picks it up. If it still finds nothing, run the CLI's `--version`
+in a new terminal to confirm it is installed and on your `PATH`.
 
 The harness picker marks each harness with a status dot:
 

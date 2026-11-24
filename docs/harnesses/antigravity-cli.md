@@ -26,7 +26,7 @@ gives the install command. If it is installed but older than the minimum, it sti
 picker shows an amber dot and the update command, a workflow that uses it warns when it starts, and a failed step repeats that command. After
 installing or updating, click **Retry harness detection** in the harness picker. If no harness CLI
 is available at all, the dashboard shows a **No CLI coding agent is available** panel with the
-install command for every harness.
+install command for every harness and a **Check again** button.
 
 ## Install
 

@@ -23,6 +23,7 @@ import type {
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
+import { HARNESS_IDS } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { MessageBatchMessage } from "../../types/WebviewMessageTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
@@ -352,6 +353,76 @@ suite("WorkflowOrchestrator panel READY grace period", () => {
     await orchestrator.setDashboardReady(panelSend);
 
     assert.deepStrictEqual(replayed, ["late-panel-view"]);
+  });
+});
+
+suite("WorkflowOrchestrator harness detection retry", () => {
+  /**
+   * Stubs every detector: `ready` holds the harnesses whose CLI answers, and
+   * a retry flips each one listed in `becomesReady` to answering.
+   */
+  function createRetryHarness(ready: Set<string>, becomesReady: string[]) {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    const retried: string[] = [];
+    let modelRefreshes = 0;
+    internal.refreshSearchPath = async () => {
+      // Detection must run against the refreshed PATH, never before it.
+      assert.strictEqual(retried.length, 0);
+      retried.push("path");
+    };
+    internal.refreshModels = async () => {
+      modelRefreshes += 1;
+    };
+    const integrations: Array<[string, any]> = [
+      ["copilot", internal.copilotCliIntegration],
+      ["claude", internal.claudeCliIntegration],
+      ["codex", internal.codexCliIntegration],
+      ["opencode", internal.openCodeCliIntegration],
+      ["qwen", internal.qwenCliIntegration],
+      ["antigravity", internal.antigravityCliIntegration],
+    ];
+    for (const [name, integration] of integrations) {
+      integration.retryDetection = async () => {
+        retried.push(name);
+        if (becomesReady.includes(name)) ready.add(name);
+      };
+      integration.isReady = () => ready.has(name);
+    }
+    return { orchestrator, retried, getModelRefreshes: () => modelRefreshes };
+  }
+
+  test("refreshes PATH, then re-detects every harness and reports the available ones", async () => {
+    const { orchestrator, retried, getModelRefreshes } = createRetryHarness(
+      new Set(),
+      ["claude"]
+    );
+
+    const available = await orchestrator.retryHarnessDetection();
+
+    assert.strictEqual(getModelRefreshes(), 1);
+    assert.strictEqual(retried[0], "path");
+    assert.deepStrictEqual(retried.slice(1).sort(), [
+      "antigravity",
+      "claude",
+      "codex",
+      "copilot",
+      "opencode",
+      "qwen",
+    ]);
+    assert.deepStrictEqual(available, [HARNESS_IDS.CLAUDE_CLI]);
+  });
+
+  test("leaves model discovery alone when no harness newly appeared", async () => {
+    const { orchestrator, getModelRefreshes } = createRetryHarness(
+      new Set(["claude"]),
+      []
+    );
+
+    assert.deepStrictEqual(await orchestrator.retryHarnessDetection(), [
+      HARNESS_IDS.CLAUDE_CLI,
+    ]);
+    assert.strictEqual(getModelRefreshes(), 0);
   });
 });
 

@@ -115,6 +115,8 @@ export interface ToastItem {
 export interface HarnessDetectionRetryResult {
   requestId: string;
   success: boolean;
+  /** On success: every harness whose CLI answered the re-detection. */
+  availableHarnesses?: HarnessId[];
   error?: string;
 }
 

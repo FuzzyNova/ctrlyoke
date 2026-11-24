@@ -332,7 +332,14 @@ function createRequiredToolsDirectory(source) {
   return target;
 }
 
-/** Removes every PATH entry that holds a harness CLI, in place. */
+// Keep in sync with DEV_HIDDEN_PATH_ENTRIES_ENV in src/utils/SearchPathRefresh.ts.
+const HIDDEN_PATH_ENTRIES_ENV = "CTRLYOKE_DEV_HIDDEN_PATH_ENTRIES";
+
+/**
+ * Removes every PATH entry that holds a harness CLI, in place, and names them
+ * in HIDDEN_PATH_ENTRIES_ENV: a harness retry re-reads PATH from the login
+ * shell, which would otherwise put them straight back.
+ */
 function stripHarnessesFromPath(environment) {
   // A spread copy of process.env loses Windows' case-insensitive lookup, and
   // Windows usually spells the variable `Path`.
@@ -340,6 +347,7 @@ function stripHarnessesFromPath(environment) {
     Object.keys(environment).find((key) => key.toUpperCase() === "PATH") ??
     "PATH";
   const kept = [];
+  const hidden = [];
   for (const directory of (environment[pathKey] ?? "").split(path.delimiter)) {
     const harness = directory && directoryHolds(directory, HARNESS_BINARIES);
     if (!harness) {
@@ -353,11 +361,14 @@ function stripHarnessesFromPath(environment) {
         `shadowing harness PATH entry (${harness}) with required tools only: ${directory}`
       );
       kept.push(createRequiredToolsDirectory(directory));
+      hidden.push(directory);
       continue;
     }
     console.log(`hiding harness PATH entry (${harness}): ${directory}`);
+    hidden.push(directory);
   }
   environment[pathKey] = kept.join(path.delimiter);
+  environment[HIDDEN_PATH_ENTRIES_ENV] = hidden.join(path.delimiter);
 }
 
 function buildEnvironment(mode, { noHarnesses }) {
@@ -379,6 +390,7 @@ function buildEnvironment(mode, { noHarnesses }) {
   } else {
     delete environment.CTRLYOKE_DEV_ISOLATED_SECRETS;
   }
+  delete environment[HIDDEN_PATH_ENTRIES_ENV];
   if (noHarnesses) stripHarnessesFromPath(environment);
   return environment;
 }

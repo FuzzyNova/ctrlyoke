@@ -131,7 +131,7 @@ describe("HarnessDropdown", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows pending state and reports a successful retry", async () => {
+  it("shows pending state and reports the retried harness as available", async () => {
     render(
       <HarnessDropdown
         value={HARNESS_IDS.COPILOT_CLI}
@@ -163,17 +163,51 @@ describe("HarnessDropdown", () => {
     useUiStore.getState().setHarnessDetectionRetryResult({
       requestId: request.requestId,
       success: true,
+      availableHarnesses: [HARNESS_IDS.COPILOT_CLI],
     });
 
     await waitFor(() => {
       expect(notifyUserMock).toHaveBeenCalledWith(
-        "Harness detection retry completed",
+        "Copilot CLI is available.",
         "success"
       );
     });
     expect(
       screen.getByRole("button", { name: "Retry harness detection" })
     ).toBeEnabled();
+  });
+
+  it("warns when the retried harness is still missing but another was found", async () => {
+    render(
+      <HarnessDropdown
+        value={HARNESS_IDS.ANTIGRAVITY_CLI}
+        onChange={vi.fn()}
+        harnessStatus={{
+          [HARNESS_IDS.ANTIGRAVITY_CLI]: {
+            available: false,
+            status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry harness detection" })
+    );
+    const calls = vi.mocked(window.vscodeApi!.postMessage).mock.calls;
+    const request = calls[calls.length - 1]?.[0] as { requestId: string };
+    useUiStore.getState().setHarnessDetectionRetryResult({
+      requestId: request.requestId,
+      success: true,
+      availableHarnesses: [HARNESS_IDS.CLAUDE_CLI],
+    });
+
+    await waitFor(() => {
+      expect(notifyUserMock).toHaveBeenCalledWith(
+        "Antigravity CLI is still not available. Detected: Claude Code.",
+        "warning"
+      );
+    });
   });
 
   it("reports a failed retry and clears pending state", async () => {
@@ -427,6 +461,89 @@ describe("HarnessDropdown", () => {
 
     expect(screen.getByText("Install codex-cli")).toBeInTheDocument();
     expect(screen.getByText("Install claude-cli")).toBeInTheDocument();
+  });
+
+  it("re-detects every harness from preflight and disappears once one is found", async () => {
+    const unavailable = Object.fromEntries(
+      Object.values(HARNESS_IDS).map((id) => [
+        id,
+        {
+          available: false,
+          status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+          installCommand: `Install ${id}`,
+        },
+      ])
+    ) as typeof originalHarnessStatus;
+    useSettingsStore.setState({ harnessStatus: unavailable });
+
+    render(<HarnessPreflightPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+
+    expect(
+      screen.getByRole("button", { name: "Checking for CLI coding agents" })
+    ).toBeDisabled();
+    const calls = vi.mocked(window.vscodeApi!.postMessage).mock.calls;
+    const request = calls[calls.length - 1]?.[0] as {
+      type: string;
+      requestId: string;
+    };
+    expect(request.type).toBe(MESSAGE_TYPES.RETRY_HARNESS_DETECTION);
+
+    act(() => {
+      useSettingsStore.setState({
+        harnessStatus: {
+          ...unavailable,
+          [HARNESS_IDS.CLAUDE_CLI]: {
+            available: true,
+            status: HARNESS_STATUS_STRINGS.AVAILABLE,
+          },
+        },
+      });
+      useUiStore.getState().setHarnessDetectionRetryResult({
+        requestId: request.requestId,
+        success: true,
+        availableHarnesses: [HARNESS_IDS.CLAUDE_CLI],
+      });
+    });
+
+    await waitFor(() => {
+      expect(notifyUserMock).toHaveBeenCalledWith(
+        "Detected: Claude Code.",
+        "success"
+      );
+    });
+    expect(
+      screen.queryByText("No CLI coding agent is available")
+    ).not.toBeInTheDocument();
+  });
+
+  it("warns from preflight when re-detection still finds nothing", async () => {
+    useSettingsStore.setState({
+      harnessStatus: Object.fromEntries(
+        Object.values(HARNESS_IDS).map((id) => [
+          id,
+          { available: false, status: HARNESS_STATUS_STRINGS.UNAVAILABLE },
+        ])
+      ) as typeof originalHarnessStatus,
+    });
+
+    render(<HarnessPreflightPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    const calls = vi.mocked(window.vscodeApi!.postMessage).mock.calls;
+    const request = calls[calls.length - 1]?.[0] as { requestId: string };
+    useUiStore.getState().setHarnessDetectionRetryResult({
+      requestId: request.requestId,
+      success: true,
+      availableHarnesses: [],
+    });
+
+    await waitFor(() => {
+      expect(notifyUserMock).toHaveBeenCalledWith(
+        "No CLI coding agent was found. Install one, make sure it is on your PATH, then check again.",
+        "warning"
+      );
+    });
+    expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled();
   });
 });
 

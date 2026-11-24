@@ -1653,6 +1653,7 @@ suite("DashboardMessageRouter — harness detection retry", () => {
       {
         retryHarnessDetection: async () => {
           retryCount += 1;
+          return [HARNESS_IDS.CLAUDE_CLI];
         },
       },
       (message) => panelMessages.push(message)
@@ -1675,6 +1676,7 @@ suite("DashboardMessageRouter — harness detection retry", () => {
         type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
         requestId: "retry-1",
         success: true,
+        availableHarnesses: [HARNESS_IDS.CLAUDE_CLI],
       },
     ]);
     assert.deepStrictEqual(panelMessages, []);

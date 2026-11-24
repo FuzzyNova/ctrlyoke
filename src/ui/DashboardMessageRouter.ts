@@ -2858,11 +2858,12 @@ export class DashboardMessageRouter {
         if (!orchestrator) {
           throw new Error("ctrlyoke is still starting up — try again shortly");
         }
-        await orchestrator.retryHarnessDetection();
+        const availableHarnesses = await orchestrator.retryHarnessDetection();
         ctx.emit({
           type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
           requestId: request.requestId,
           success: true,
+          availableHarnesses,
         });
       } catch (error) {
         const errorMessage = getErrorMessage(error);

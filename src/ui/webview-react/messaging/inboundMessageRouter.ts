@@ -99,6 +99,7 @@ import { announceAwaitingInput } from "@store/announcerStore";
 import {
   NOTIFICATION_SEVERITY,
   DERIVED_NOTIFICATION_EVENTS,
+  isHarnessId,
   NOTIFICATION_KINDS,
   USER_FEEDBACK_SEVERITY,
   UX_SNAPSHOT_STATUSES,
@@ -662,6 +663,9 @@ export function createMessageHandlers(
     useUiStore.getState().setHarnessDetectionRetryResult({
       requestId: message.requestId,
       success: message.success === true,
+      ...(Array.isArray(message.availableHarnesses)
+        ? { availableHarnesses: message.availableHarnesses.filter(isHarnessId) }
+        : {}),
       ...(typeof message.error === "string" ? { error: message.error } : {}),
     });
   };

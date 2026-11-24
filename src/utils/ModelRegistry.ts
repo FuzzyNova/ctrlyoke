@@ -162,6 +162,19 @@ export async function initializeModelRegistry(): Promise<void> {
 }
 
 /**
+ * Discover every harness's models again, e.g. after a harness CLI installed
+ * since startup was detected: its list is otherwise the static fallback until
+ * the host restarts. Subscribers of {@link onModelsLoaded} get the new lists.
+ */
+export async function refreshModelRegistry(): Promise<void> {
+  if (initializationPromise) {
+    await initializationPromise;
+  }
+  isInitialized = false;
+  await initializeModelRegistry();
+}
+
+/**
  * Query Copilot CLI-supported models by parsing 'copilot help config' output
  *
  * Uses `copilot help config` instead of `copilot --help` because:
