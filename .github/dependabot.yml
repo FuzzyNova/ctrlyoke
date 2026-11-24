@@ -43,6 +43,11 @@ updates:
       # own Node. See dev/backlog/CHOKIDAR_6_UPGRADE.md.
       - dependency-name: chokidar
         update-types: ["version-update:semver-major"]
+      # Blocked: 31.x rewrote CSS computed styles, failing 13 dashboard UI
+      # style assertions (PR #25). Dev-only (Vitest). Unblocked when those
+      # tests are fixed. See dev/backlog/JSDOM_31_UPGRADE.md.
+      - dependency-name: jsdom
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         applies-to: version-updates
