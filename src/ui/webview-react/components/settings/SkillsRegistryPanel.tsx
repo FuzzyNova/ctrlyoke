@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { COLUMN_HEADING_CLASS } from "../shared/headingStyles";
 import {
   SKILLS_REGISTRY_MIN_INSTALLS_OPTIONS,
   SKILLS_REGISTRY_MIN_QUERY_LENGTH,
@@ -571,9 +572,7 @@ export function SkillsRegistryPanel({
       {/* min-h-6 matches the Managed skills header beside it, so both
           columns' first boxes start at the same height. */}
       <div className="flex min-h-6 flex-wrap items-center gap-2">
-        <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-          Discover &amp; import
-        </div>
+        <div className={COLUMN_HEADING_CLASS}>Discover &amp; import</div>
         {skillsShCopies > 0 && (
           <div className="ml-auto">
             <SkillUpdateCheckControl copies={skillsShCopies} />
@@ -715,7 +714,7 @@ export function SkillsRegistryPanel({
             <>
               {isTop && (
                 <div
-                  className="text-xxs font-semibold uppercase tracking-wide text-description-fg"
+                  className={COLUMN_HEADING_CLASS}
                   title={`A snapshot of the ${SKILLS_SH.label} all-time leaderboard bundled with ctrlyoke. Install counts are as of that date; search for live results.`}
                 >
                   Top skills on {SKILLS_SH.label}
@@ -938,9 +937,7 @@ function SkillInstallReviewModal({
         )}
 
         <div className="space-y-1">
-          <div className="text-xxs font-semibold uppercase tracking-wide">
-            Files from GitHub
-          </div>
+          <div className={COLUMN_HEADING_CLASS}>Files from GitHub</div>
           {!locationState || locationState.loading ? (
             <div className="flex items-center gap-1.5">
               <Icon name="loading" className="codicon-modifier-spin text-xxs" />
@@ -974,7 +971,7 @@ function SkillInstallReviewModal({
         </div>
 
         <div className="space-y-1">
-          <div className="text-xxs font-semibold uppercase tracking-wide">
+          <div className={COLUMN_HEADING_CLASS}>
             Security audits from {SKILLS_SH.label}
           </div>
           {!auditResult ? (

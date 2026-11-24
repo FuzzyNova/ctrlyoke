@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { COLUMN_HEADING_CLASS } from "./headingStyles";
 
 type HeadingLevel = 2 | 3 | 4;
 
@@ -34,7 +35,7 @@ export function PageTitle({
     >
       <Heading
         title={tooltip}
-        className={`text-xs font-semibold uppercase tracking-wide text-description-fg${tooltip ? " cursor-help" : ""}`}
+        className={`${COLUMN_HEADING_CLASS}${tooltip ? " cursor-help" : ""}`}
       >
         {title}
       </Heading>

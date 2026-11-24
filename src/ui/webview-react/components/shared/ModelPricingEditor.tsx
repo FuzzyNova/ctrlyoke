@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { COLUMN_HEADING_CLASS } from "./headingStyles";
 import type {
   CtrlYokeGlobalSettings,
   ModelPricingOverride,
@@ -225,9 +226,7 @@ export const ModelPricingEditor: React.FC<{
             </div>
 
             <div className="space-y-2 border-b border-panel-border pb-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-description-fg">
-                Add model
-              </div>
+              <div className={COLUMN_HEADING_CLASS}>Add model</div>
               {modelOptions.length > 0 && (
                 <CustomSelect
                   value={modelDraft}

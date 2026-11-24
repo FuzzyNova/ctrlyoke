@@ -24,6 +24,7 @@ import {
   SettingToggleRow,
 } from "@components/shared";
 import { Icon } from "../shared/Icon";
+import { COLUMN_HEADING_CLASS } from "../shared/headingStyles";
 
 interface SecretsSectionProps {
   settings: FullGlobalSettings;
@@ -529,7 +530,7 @@ export function SecretsSection({
         ) : (
           <div className="space-y-2">
             <div
-              className={`hidden gap-3 px-3 text-xxs font-semibold uppercase tracking-wide text-description-fg md:grid ${SECRET_GRID_COLUMNS}`}
+              className={`hidden gap-3 px-3 ${COLUMN_HEADING_CLASS} md:grid ${SECRET_GRID_COLUMNS}`}
             >
               <span>Name</span>
               <span>State</span>
@@ -549,9 +550,7 @@ export function SecretsSection({
         )}
 
         <div className="border-t border-panel-border pt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg mb-3">
-            Secret Redaction
-          </h3>
+          <h3 className={`${COLUMN_HEADING_CLASS} mb-3`}>Secret Redaction</h3>
           <SettingToggleRow
             settingKey="permissions.heuristicSecretRedactionEnabled"
             checked={

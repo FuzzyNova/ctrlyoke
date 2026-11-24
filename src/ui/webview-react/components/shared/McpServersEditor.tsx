@@ -2,6 +2,7 @@ import {
   INHERIT_DEFAULT_OPTION,
   MCP_SERVER_IDS,
 } from "@root/types/DashboardConstants";
+import { COLUMN_HEADING_CLASS } from "./headingStyles";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_CLAIM_PATHS_TOOL_NAME,
@@ -282,9 +283,7 @@ function ServerDetails({ server }: { server: ListedServer }) {
 
       {server.managed ? (
         <div className="space-y-1">
-          <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-            Installed In
-          </div>
+          <div className={COLUMN_HEADING_CLASS}>Installed In</div>
           <div className="flex flex-wrap gap-1">
             {uniqueScopes.map((scope) => (
               <ScopeBadge
@@ -357,9 +356,7 @@ function McpServersPanel({
       className={`flex min-w-0 flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
     >
       <div className="flex flex-col gap-1">
-        <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
-          Built-in
-        </div>
+        <div className={COLUMN_HEADING_CLASS}>Built-in</div>
         <div
           className={`flex flex-col rounded-sm border transition-colors ${
             ctrlyokeEnabled
@@ -404,7 +401,7 @@ function McpServersPanel({
             <div className="flex flex-col gap-1 border-t border-panel-border px-2 pb-1.5 pt-1">
               {CTRLYOKE_TOOL_GROUP_LABELS.map(([group, groupLabel]) => (
                 <div key={group} className="flex flex-col gap-0.5">
-                  <div className="px-1 text-xxs font-semibold uppercase tracking-wide text-description-fg">
+                  <div className={`px-1 ${COLUMN_HEADING_CLASS}`}>
                     {groupLabel}
                   </div>
                   {CTRLYOKE_USER_TOOLS.filter(
@@ -454,9 +451,7 @@ function McpServersPanel({
       <div
         className={`flex flex-col gap-1${fillHeight ? " flex-1 min-h-0" : ""}`}
       >
-        <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
-          Installed Servers
-        </div>
+        <div className={COLUMN_HEADING_CLASS}>Installed Servers</div>
 
         {isLoadingManagedServers && managedServers === undefined && (
           <div className="flex items-center gap-1.5 px-1 text-xs text-description-fg">

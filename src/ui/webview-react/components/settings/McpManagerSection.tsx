@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { COLUMN_HEADING_CLASS } from "../shared/headingStyles";
 import {
   MCP_MANAGER_DISCOVERY_TABS,
   MCP_MANAGER_REMOTE_SORTS,
@@ -400,9 +401,7 @@ function ServerDetails({
           ))}
       </div>
       <div className="space-y-1">
-        <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-          Locations
-        </div>
+        <div className={COLUMN_HEADING_CLASS}>Locations</div>
         {locations.map((location) => (
           <div
             key={`${location.kind}:${location.targetId}:${location.scope}:${location.path}`}
@@ -852,10 +851,8 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-            Managed servers
-          </div>
-          <span className="text-xxs text-description-fg">
+          <div className={COLUMN_HEADING_CLASS}>Managed servers</div>
+          <span className="text-xs text-description-fg">
             {managedServers?.length ?? 0} total
           </span>
         </div>
@@ -1147,9 +1144,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
       </div>
 
       <div className="min-w-0 space-y-2">
-        <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-          Discover &amp; import
-        </div>
+        <div className={COLUMN_HEADING_CLASS}>Discover &amp; import</div>
 
         <div className="flex flex-wrap gap-1">
           <button
@@ -1228,7 +1223,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
               <div className="space-y-2">
                 {groupedLocalServers.map((group) => (
                   <div key={group.source} className="space-y-1.5">
-                    <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
+                    <div className={COLUMN_HEADING_CLASS}>
                       {formatLocalSourceLabel(group.source)}
                     </div>
                     {group.entries.map((entry) => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { COLUMN_HEADING_CLASS } from "../shared/headingStyles";
 import {
   MESSAGE_TYPES,
   SETTING_SCOPES,
@@ -303,9 +304,7 @@ export function LanguageServersSection({ activeScope }: Props) {
       </p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="min-w-0 space-y-3 rounded-sm border border-panel-border p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg">
-            Configured
-          </h3>
+          <h3 className={COLUMN_HEADING_CLASS}>Configured</h3>
           <div className="space-y-1.5 rounded-sm border border-panel-border p-2">
             <div className="text-xs font-semibold text-foreground">
               Languages
@@ -683,9 +682,7 @@ export function LanguageServersSection({ activeScope }: Props) {
           )}
         </section>
         <section className="min-w-0 space-y-3 rounded-sm border border-panel-border p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg">
-            Discover
-          </h3>
+          <h3 className={COLUMN_HEADING_CLASS}>Discover</h3>
           <div className="flex items-center gap-1">
             <div
               className="flex gap-1"

@@ -1,4 +1,5 @@
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import { COLUMN_HEADING_CLASS } from "../shared/headingStyles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   FocusEvent,
@@ -588,9 +589,7 @@ export function TerminalControlBarEditor({
       >
         <div>
           <div className="flex items-center justify-between gap-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-description-fg">
-              Control bar items
-            </h4>
+            <h4 className={COLUMN_HEADING_CLASS}>Control bar items</h4>
             <Button
               type="button"
               variant="secondary"
@@ -637,9 +636,7 @@ export function TerminalControlBarEditor({
         </DndContext>
 
         <div className="border-t border-panel-border pt-2">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-description-fg">
-            Shortcut list
-          </h4>
+          <h4 className={`mb-1 ${COLUMN_HEADING_CLASS}`}>Shortcut list</h4>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -679,9 +676,7 @@ export function TerminalControlBarEditor({
         </div>
 
         <div className="border-t border-panel-border pt-2">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-description-fg">
-            Hidden items
-          </h4>
+          <h4 className={`mb-1 ${COLUMN_HEADING_CLASS}`}>Hidden items</h4>
           <div className="space-y-1" aria-label="Hidden control bar items">
             {hiddenItems.map((item) => (
               <div

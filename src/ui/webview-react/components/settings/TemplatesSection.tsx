@@ -22,6 +22,7 @@ import { defaultModelForHarness } from "@utils/harnessChangeCascade";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { TemplateVariableField } from "../workflow/TemplateVariableField";
 import { Icon } from "../shared/Icon";
+import { COLUMN_HEADING_CLASS } from "../shared/headingStyles";
 import { CustomSelect } from "../shared/CustomSelect";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
@@ -68,8 +69,7 @@ function isMultiline(variable: TemplateVariable): boolean {
   );
 }
 
-const COLUMN_HEADING_CLASS =
-  "flex min-h-6 items-center text-xxs font-semibold uppercase tracking-wide text-description-fg";
+const TEMPLATES_COLUMN_HEADING_CLASS = `flex min-h-6 items-center ${COLUMN_HEADING_CLASS}`;
 
 /**
  * Settings → Templates, laid out like the MCP and Agent & Skills managers: your
@@ -104,7 +104,7 @@ export function TemplatesSection(props: Props) {
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
       <div className="min-w-0 space-y-2">
-        <h3 className={COLUMN_HEADING_CLASS}>Defaults</h3>
+        <h3 className={TEMPLATES_COLUMN_HEADING_CLASS}>Defaults</h3>
         <TemplateDefaultsPanel
           {...props}
           openCardFor={openCardFor}
@@ -112,7 +112,7 @@ export function TemplatesSection(props: Props) {
         />
       </div>
       <div className="min-w-0 space-y-2">
-        <h3 className={COLUMN_HEADING_CLASS}>Community templates</h3>
+        <h3 className={TEMPLATES_COLUMN_HEADING_CLASS}>Community templates</h3>
         <CommunityTemplatesPage
           activeScope={props.activeScope}
           onSetDefaults={setOpenCardFor}

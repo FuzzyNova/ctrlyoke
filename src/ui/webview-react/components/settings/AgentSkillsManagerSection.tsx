@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
+import { COLUMN_HEADING_CLASS } from "../shared/headingStyles";
 import { useHarnessFileStore } from "@store/harnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@messaging/sendMessage";
@@ -741,10 +742,8 @@ export function AgentSkillsManagerSection({
       >
         <div className="min-w-0 space-y-2">
           <div className="flex min-h-6 flex-wrap items-center gap-2">
-            <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-              Managed {activeType}s
-            </div>
-            <span className="text-xxs text-description-fg">
+            <div className={COLUMN_HEADING_CLASS}>Managed {activeType}s</div>
+            <span className="text-xs text-description-fg">
               {managedFiles.length} total
             </span>
           </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { COLUMN_HEADING_CLASS } from "../../shared/headingStyles";
 import {
   DATA_SOURCES,
   HARNESS_IDS,
@@ -464,10 +465,7 @@ function HarnessShare({
   return (
     <section className="space-y-3" aria-labelledby="harness-share-heading">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4
-          id="harness-share-heading"
-          className="text-xs font-semibold uppercase tracking-wide text-description-fg"
-        >
+        <h4 id="harness-share-heading" className={COLUMN_HEADING_CLASS}>
           Harness share
         </h4>
         <ScopeToggle
