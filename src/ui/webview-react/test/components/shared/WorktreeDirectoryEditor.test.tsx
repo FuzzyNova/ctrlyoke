@@ -3,7 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorktreeDirectoryEditor } from "@components/shared/WorktreeDirectoryEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import { answerLatestRequestUntil } from "../../fixtures/completionRequests";
+import {
+  answerLatestRequestUntil,
+  focusByKeyboard,
+} from "../../fixtures/completionRequests";
 
 function renderEditor() {
   const result = render(
@@ -39,7 +42,7 @@ describe("WorktreeDirectoryEditor", () => {
     const user = userEvent.setup();
     const { content } = renderEditor();
 
-    await user.click(content);
+    focusByKeyboard(content);
     await user.type(content, "bug");
 
     await waitFor(() => {
@@ -60,7 +63,7 @@ describe("WorktreeDirectoryEditor", () => {
     const user = userEvent.setup();
     const { content } = renderEditor();
 
-    await user.click(content);
+    focusByKeyboard(content);
     await user.type(content, "bug");
 
     await answerLatestRequestUntil<{

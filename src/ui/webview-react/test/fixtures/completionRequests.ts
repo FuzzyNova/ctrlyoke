@@ -29,6 +29,19 @@ export function latestPostedMessage<T = Record<string, unknown>>(
   throw new Error("No posted message matched the predicate");
 }
 
+/**
+ * Focus a completion field the way Tab does, before typing into it.
+ *
+ * Git-name fields open their dropdown when a click focuses them, which posts
+ * an empty-filter request before the first keystroke. CodeMirror then holds
+ * the typed text until that request is answered, so a test that clicks, types
+ * and waits for the typed filter waits forever. `user.type` still clicks the
+ * field, but a click on a field that already has focus opens nothing.
+ */
+export function focusByKeyboard(content: HTMLElement): void {
+  content.focus();
+}
+
 interface AnswerLatestRequestOptions<TRequest extends { seq: number }> {
   postMessage: Mock;
   /** Selects the completion requests this answer is for. */

@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -30,16 +30,16 @@ function renderEditor(
   return { ...result, content };
 }
 
-describe("SingleLineCompletionEditor", () => {
-  beforeAll(() => {
-    if (!Range.prototype.getClientRects) {
-      Object.defineProperty(Range.prototype, "getClientRects", {
-        configurable: true,
-        value: () => [],
-      });
-    }
-  });
+beforeAll(() => {
+  if (!Range.prototype.getClientRects) {
+    Object.defineProperty(Range.prototype, "getClientRects", {
+      configurable: true,
+      value: () => [],
+    });
+  }
+});
 
+describe("SingleLineCompletionEditor", () => {
   it("renders its accessibility attributes on the focusable content element", () => {
     const { container, content } = renderEditor({
       className: "dynamic-validation-border",
@@ -176,6 +176,69 @@ describe("SingleLineCompletionEditor", () => {
     expect(content).toHaveAttribute("contenteditable", "false");
     expect(onChange).not.toHaveBeenCalled();
     expect(disabledCompletionSource).not.toHaveBeenCalled();
+  });
+});
+
+describe("SingleLineCompletionEditor openCompletionsOnPointerFocus", () => {
+  function pointerFocusSource() {
+    return vi.fn(
+      (_context: CompletionContext): CompletionResult | null => null
+    );
+  }
+
+  it("requests completions when a click moves focus into the field", async () => {
+    const user = userEvent.setup();
+    const source = pointerFocusSource();
+    const { content } = renderEditor({
+      openCompletionsOnPointerFocus: true,
+      completionSource: source,
+    });
+
+    await user.click(content);
+
+    await waitFor(() => expect(source).toHaveBeenCalled());
+    expect(source.mock.calls[0]?.[0].explicit).toBe(true);
+  });
+
+  it("does not request completions on keyboard focus", async () => {
+    const user = userEvent.setup();
+    const source = pointerFocusSource();
+    const { content } = renderEditor({
+      openCompletionsOnPointerFocus: true,
+      completionSource: source,
+    });
+
+    await user.tab();
+    expect(document.activeElement).toBe(content);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(source).not.toHaveBeenCalled();
+  });
+
+  it("does not reopen on a click into a field that already has focus", async () => {
+    const user = userEvent.setup();
+    const source = pointerFocusSource();
+    const { content } = renderEditor({
+      openCompletionsOnPointerFocus: true,
+      completionSource: source,
+    });
+
+    content.focus();
+    await user.click(content);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(source).not.toHaveBeenCalled();
+  });
+
+  it("leaves a click alone when the option is off", async () => {
+    const user = userEvent.setup();
+    const source = pointerFocusSource();
+    const { content } = renderEditor({ completionSource: source });
+
+    await user.click(content);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(source).not.toHaveBeenCalled();
   });
 });
 

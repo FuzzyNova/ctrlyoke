@@ -4,6 +4,7 @@ import {
   autocompletion,
   closeCompletion,
   completionStatus,
+  startCompletion,
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
@@ -55,6 +56,13 @@ export interface SingleLineCompletionEditorProps {
    * `EDITOR_FONT_SIZE` for a code editor that follows `ui.editorFontSize`.
    */
   fontSize?: string;
+  /**
+   * Opens the completion dropdown when a click or tap moves focus into the
+   * field. Keyboard focus (Tab) never opens it, and neither does a click on a
+   * field that already has focus. Suits fields whose suggestions are useful
+   * before anything is typed, such as a branch picker.
+   */
+  openCompletionsOnPointerFocus?: boolean;
   "aria-label"?: string;
   "aria-describedby"?: string;
   completionSource: (
@@ -321,6 +329,7 @@ export function SingleLineCompletionEditor({
   wrapSingleLine = false,
   extensions = [],
   fontSize,
+  openCompletionsOnPointerFocus = false,
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedby,
   completionSource,
@@ -332,6 +341,9 @@ export function SingleLineCompletionEditor({
   const onBlurRef = useRef(onBlur);
   const completionSourceRef = useRef(completionSource);
   const disabledRef = useRef(disabled);
+  const openCompletionsOnPointerFocusRef = useRef(
+    openCompletionsOnPointerFocus
+  );
   const initialPropsRef = useRef({
     id,
     ariaLabel,
@@ -349,10 +361,17 @@ export function SingleLineCompletionEditor({
   onBlurRef.current = onBlur;
   completionSourceRef.current = completionSource;
   disabledRef.current = disabled;
+  openCompletionsOnPointerFocusRef.current = openCompletionsOnPointerFocus;
 
   useEffect(() => {
     const parent = editorRef.current;
     if (!parent) return;
+
+    // Set by a pointerdown on an unfocused field and consumed by the click
+    // that follows it. The dropdown opens on that click rather than on focus:
+    // `focus` cannot tell a tap from Tab, and CodeMirror moves the selection
+    // during pointerdown, which would close a dropdown opened any earlier.
+    let pointerFocusPending = false;
 
     const initialProps = initialPropsRef.current;
     const contentAttributes = {
@@ -423,6 +442,24 @@ export function SingleLineCompletionEditor({
           },
           paste: (event, editorView) =>
             handlePaste(event, editorView, multiline),
+          pointerdown: (_event, editorView) => {
+            pointerFocusPending = !editorView.hasFocus;
+            return false;
+          },
+          click: (_event, editorView) => {
+            const openOnThisClick = pointerFocusPending;
+            pointerFocusPending = false;
+            if (
+              openOnThisClick &&
+              openCompletionsOnPointerFocusRef.current &&
+              !disabledRef.current &&
+              editorView.hasFocus &&
+              completionStatus(editorView.state) === null
+            ) {
+              startCompletion(editorView);
+            }
+            return false;
+          },
         }),
         autocompletion({
           override: [

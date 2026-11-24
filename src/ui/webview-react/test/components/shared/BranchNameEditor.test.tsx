@@ -4,7 +4,10 @@ import type { ComponentProps } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BranchNameEditor } from "@components/shared/BranchNameEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import { answerLatestRequestUntil } from "../../fixtures/completionRequests";
+import {
+  answerLatestRequestUntil,
+  focusByKeyboard,
+} from "../../fixtures/completionRequests";
 
 function renderEditor(
   props: Partial<ComponentProps<typeof BranchNameEditor>> = {}
@@ -55,7 +58,7 @@ describe("BranchNameEditor", () => {
     const onChange = vi.fn();
     const { content } = renderEditor({ onChange });
 
-    await user.click(content);
+    focusByKeyboard(content);
     await user.type(content, "feature/new");
 
     expect(onChange).toHaveBeenLastCalledWith("feature/new");
@@ -65,7 +68,7 @@ describe("BranchNameEditor", () => {
     const user = userEvent.setup();
     const { content } = renderEditor();
 
-    await user.click(content);
+    focusByKeyboard(content);
     await user.type(content, "feat/");
 
     await waitFor(() => {
@@ -77,11 +80,37 @@ describe("BranchNameEditor", () => {
     });
   });
 
-  it("turns a matching response into suggestions", async () => {
+  it("lists every branch when a click focuses the empty field", async () => {
     const user = userEvent.setup();
     const { content } = renderEditor();
 
     await user.click(content);
+
+    await answerLatestRequestUntil<{
+      type: string;
+      filterText: string;
+      seq: number;
+    }>({
+      postMessage,
+      isRequest: (message) =>
+        message.type === MESSAGE_TYPES.BRANCH_LIST_REQUEST &&
+        message.filterText === "",
+      respond: (request) => ({
+        type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
+        items: [{ label: "main", insertText: "main" }],
+        seq: request.seq,
+      }),
+      until: () => {
+        expect(screen.getByText("main")).toBeInTheDocument();
+      },
+    });
+  });
+
+  it("turns a matching response into suggestions", async () => {
+    const user = userEvent.setup();
+    const { content } = renderEditor();
+
+    focusByKeyboard(content);
     await user.type(content, "feat/");
 
     await answerLatestRequestUntil<{
@@ -115,7 +144,7 @@ describe("BranchNameEditor", () => {
     const user = userEvent.setup();
     const { content } = renderEditor();
 
-    await user.click(content);
+    focusByKeyboard(content);
     await user.type(content, "new-branch");
 
     await waitFor(() => {

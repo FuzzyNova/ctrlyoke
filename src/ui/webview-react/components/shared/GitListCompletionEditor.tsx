@@ -106,6 +106,11 @@ export function GitListCompletionEditor({
     <SingleLineCompletionEditor
       {...props}
       fontSize={props.fontSize ?? CONTROL_FONT_SIZE}
+      // The host lists every name for an empty field, so a click or tap can
+      // show the choices before anything is typed.
+      openCompletionsOnPointerFocus={
+        props.openCompletionsOnPointerFocus ?? true
+      }
       completionSource={completionSource}
     />
   );
