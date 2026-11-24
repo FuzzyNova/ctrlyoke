@@ -2197,6 +2197,8 @@ export interface LocalBranchSummary {
 }
 
 const BRANCH_SUMMARY_FIELD_SEPARATOR = "\t";
+/** `%(upstream:track,nobracket)` output when the upstream branch was deleted. */
+const UPSTREAM_TRACK_GONE = "gone";
 
 function parseUpstreamTrack(
   track: string
@@ -2204,7 +2206,7 @@ function parseUpstreamTrack(
   return {
     ahead: Number(/ahead (\d+)/.exec(track)?.[1] ?? 0),
     behind: Number(/behind (\d+)/.exec(track)?.[1] ?? 0),
-    upstreamGone: track === "gone",
+    upstreamGone: track === UPSTREAM_TRACK_GONE,
   };
 }
 
