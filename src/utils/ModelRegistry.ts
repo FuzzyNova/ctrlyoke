@@ -25,6 +25,7 @@ import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import { promises as fsPromises } from "fs";
 import {
+  COPILOT_AUTO_MODEL,
   COPILOT_CLI_MODEL_IDS,
   OPENCODE_CLI_FALLBACK_MODELS,
   ANTIGRAVITY_CLI_MODELS,
@@ -706,7 +707,9 @@ export function getCliSupportedModelIdsSync(): string[] {
  * @returns true if model is supported by CLI
  */
 export function isCliModelSupported(modelId: string): boolean {
-  return cachedCopilotCliModelIds.includes(modelId);
+  return (
+    modelId === COPILOT_AUTO_MODEL || cachedCopilotCliModelIds.includes(modelId)
+  );
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   getAntigravityModelLabelSync,
 } from "./ModelRegistry";
 import {
+  COPILOT_AUTO_MODEL,
   getModelDisplayName,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "./ModelConstants";
@@ -30,6 +31,7 @@ export function buildHarnessModelOptions(): Record<
 
   const copilotCliOptions = [
     noneOption,
+    { value: COPILOT_AUTO_MODEL, label: "Auto" },
     ...cliModelIds
       .filter((id) => !hiddenModels.has(id))
       .map((id) => ({

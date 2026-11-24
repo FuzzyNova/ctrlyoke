@@ -61,6 +61,14 @@ export const COPILOT_CLI_MODEL_IDS = [
 ] as const;
 
 /**
+ * Copilot's `auto` model, which picks a model per prompt. `copilot --model auto`
+ * works, but `copilot help config` does not list it, so it is not in
+ * COPILOT_CLI_MODEL_IDS (that array is rewritten wholesale by discovery).
+ * The dropdown and `--model` validation add it on top of the discovered list.
+ */
+export const COPILOT_AUTO_MODEL = "auto";
+
+/**
  * Copilot CLI model display names.
  *
  * Auto-derived from COPILOT_CLI_MODEL_IDS by `npm run sync-models` — see
