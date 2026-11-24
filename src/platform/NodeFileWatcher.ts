@@ -7,6 +7,11 @@ import type {
   FileWatcher,
   FileWatcherFactory,
 } from "../core/HostPorts";
+import { Log } from "../utils/Log";
+import { getErrnoCode, getErrorMessage } from "../utils/ErrorUtils";
+
+/** chokidar's `watch`, injectable so tests can reach the underlying watcher. */
+export type ChokidarWatch = typeof watch;
 
 function normalizeAbsolutePath(filePath: string): string {
   return path.normalize(path.resolve(filePath));
@@ -16,9 +21,11 @@ function normalizeAbsolutePath(filePath: string): string {
 class NodeFileWatcher implements FileWatcher {
   private readonly subscriptions = new Set<Disposable>();
   private readonly watcher: FSWatcher;
+  /** Error codes already warned about, so an EMFILE storm logs once. */
+  private readonly reportedErrorCodes = new Set<string>();
   private disposed = false;
 
-  constructor(basePath: string, glob: string) {
+  constructor(basePath: string, glob: string, watchFn: ChokidarWatch) {
     const normalizedBasePath = normalizeAbsolutePath(basePath);
     const segments = glob.split("/");
     const hasRecursiveGlob = glob.includes("**");
@@ -34,7 +41,7 @@ class NodeFileWatcher implements FileWatcher {
           minimatch(relativePath, pattern, { dot: true }) ||
           minimatch(`${relativePath}/sentinel`, pattern, { dot: true })
       );
-    this.watcher = watch(
+    this.watcher = watchFn(
       isLiteralBasename
         ? path.join(normalizedBasePath, glob)
         : normalizedBasePath,
@@ -73,6 +80,20 @@ class NodeFileWatcher implements FileWatcher {
         } as Partial<Record<typeof eventName, Set<(filePath: string) => void>>>
       )[eventName];
       for (const listener of listeners ?? []) listener(absolutePath);
+    });
+    // chokidar emits `error` for fs failures other than ENOENT/ENOTDIR
+    // (EACCES, EPERM, EMFILE, ...). An EventEmitter `error` with no listener
+    // throws, which would take down the CLI or MCP server, so a watch failure
+    // is logged and the watcher keeps serving the paths it can still see.
+    this.watcher.on("error", (error) => {
+      const code = getErrnoCode(error) ?? "unknown";
+      const message = `[NodeFileWatcher] Watch error (${code}) under ${normalizedBasePath} for "${glob}": ${getErrorMessage(error)}`;
+      if (this.reportedErrorCodes.has(code)) {
+        Log.debug(message);
+        return;
+      }
+      this.reportedErrorCodes.add(code);
+      Log.warn(message);
     });
   }
 
@@ -119,7 +140,9 @@ class NodeFileWatcher implements FileWatcher {
 }
 
 export class NodeFileWatcherFactory implements FileWatcherFactory {
+  constructor(private readonly watchFn: ChokidarWatch = watch) {}
+
   create(basePath: string, glob: string): FileWatcher {
-    return new NodeFileWatcher(basePath, glob);
+    return new NodeFileWatcher(basePath, glob, this.watchFn);
   }
 }

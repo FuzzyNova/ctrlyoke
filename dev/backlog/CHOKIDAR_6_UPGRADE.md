@@ -4,7 +4,7 @@
 
 ## Why it's blocked
 
-chokidar 6.0.0 declares `engines.node: ">= 22.22"`. ctrlyoke's `engines.node` floor is `>=22.12.0`, and chokidar runs on the user's own Node: `src/platform/NodeFileWatcher.ts` (via `NodeHostServices`) is the file watcher for the standalone CLI and MCP server. Taking 6.x would break users on Node 22.12–22.21. Dependabot PR #16 was closed for this reason.
+chokidar 6.0.0 declares `engines.node: ">= 22.22"`. ctrlyoke's `engines.node` floor is `>=22.12.0`, and chokidar runs on the user's own Node: `src/platform/NodeFileWatcher.ts` (via `NodeHostServices`) is the file watcher for the standalone hosted server, `ctrlyoke server`. Taking 6.x would break users on Node 22.12–22.21. Dependabot PR #16 was closed for this reason.
 
 ## What unblocks it
 
@@ -18,4 +18,4 @@ From the 6.0.0 release notes, the parts that touch `NodeFileWatcher`:
 - `ignored` is no longer applied to directories above a watched path. Ours is a function over paths relative to `basePath`; confirm it still filters as expected when the watched path is a literal basename.
 - `close()` is now terminal and `add()` throws after it. We never re-add after dispose, but verify.
 - `getWatched()` returns a null-prototype object (unused today).
-- Errors from `add()` now arrive as `error` events instead of unhandled rejections. `NodeFileWatcher` registers no `error` listener today, and an unhandled `error` event on an EventEmitter throws, so add one (logging through `Log`) as part of the upgrade.
+- Errors from `add()` now arrive as `error` events instead of unhandled rejections. `NodeFileWatcher` already has an `error` listener that logs them (once per error code per watcher), so check only that these new events read sensibly in that log line.
