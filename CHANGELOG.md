@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hosted server identity proofs are bound to the responding port, preventing relayed probes from identifying a port squatter as a sibling server.
+- The public standalone shim sends a same-origin resource policy so unrelated sites cannot embed its workspace-specific script.
 - Runner-lock heartbeats retry transient file-sharing rename failures and clean up temporary files.
 - Copilot `--model auto` attempts now record the model Copilot selected and avoid pricing an unresolved alias as another provider's model.
 - Prior-context summary budgets now retain the newest final-step pass and omit older queue steps first, including when context comes from an addressed run.

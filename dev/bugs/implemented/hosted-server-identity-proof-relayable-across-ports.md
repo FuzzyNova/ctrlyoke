@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced with a temporary Mocha test against real servers)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`createServerIdentityProof` ~230-238, `SERVER_IDENTITY_ROUTE_PATH` handler ~1308-1318, EADDRINUSE fallback ~3396-3414, `probeExistingServer` ~3549-3598), `src/extension.ts` (`onSiblingServerDetected` ~1815)
-- **Severity:** medium (security: token disclosure to a local port squatter; bypasses the fix for `hosted-server-port-probe-sends-token-to-port-owner`)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -231,10 +231,11 @@ function escapeHtmlAttribute(value: string): string {
 function createServerIdentityProof(
   token: string,
   nonce: string,
-  workspaceRoot: string
+  workspaceRoot: string,
+  port: number
 ): string {
   return createHmac("sha256", token)
-    .update(`${nonce}\n${resolvedPathKey(workspaceRoot)}`)
+    .update(`${nonce}\n${resolvedPathKey(workspaceRoot)}\n${port}`)
     .digest("hex");
 }
 
@@ -1312,7 +1313,12 @@ export class CtrlYokeHostedServer
         return;
       }
       res.json({
-        proof: createServerIdentityProof(this.token, nonce, this.workspaceRoot),
+        proof: createServerIdentityProof(
+          this.token,
+          nonce,
+          this.workspaceRoot,
+          this.port
+        ),
       });
     });
     // Serve static assets (CSS/JS/fonts) without token — they are not sensitive and
@@ -1322,6 +1328,7 @@ export class CtrlYokeHostedServer
       res.locals.skipSecretRedaction = true;
       res
         .type("application/javascript")
+        .set("Cross-Origin-Resource-Policy", "same-origin")
         .send(buildHostedStandaloneShimScript(this.workspaceKey));
     });
     // Cert download — no token required so iOS users can fetch and install it
@@ -3581,7 +3588,8 @@ export class CtrlYokeHostedServer
                   createServerIdentityProof(
                     this.token,
                     nonce,
-                    this.workspaceRoot
+                    this.workspaceRoot,
+                    port
                   )
                 )
               );

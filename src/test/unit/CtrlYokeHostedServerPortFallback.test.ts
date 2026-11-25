@@ -1,6 +1,10 @@
 import * as assert from "assert";
 import { EventEmitter } from "events";
-import { createServer as createHttpServer, Server as HttpServer } from "http";
+import {
+  createServer as createHttpServer,
+  request as httpRequest,
+  Server as HttpServer,
+} from "http";
 import * as fs from "fs";
 import { suite, test } from "mocha";
 import * as path from "path";
@@ -376,6 +380,53 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
       });
     } finally {
       second?.dispose();
+      sibling.dispose();
+    }
+  });
+
+  test("does not report a relay to a genuine sibling on another port", async () => {
+    const token = "relayed-sibling-server-token";
+    const sibling = createHostedServer(0, token);
+    let relay: HttpServer | undefined;
+    let second: CtrlYokeHostedServer | undefined;
+    let detectedSibling = false;
+    try {
+      const siblingUrl = await sibling.listen();
+      if (!siblingUrl) throw new Error("Sibling server did not start");
+      const siblingPort = Number(new URL(siblingUrl).port);
+      relay = createHttpServer((incoming, outgoing) => {
+        const forwarded = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: siblingPort,
+            path: incoming.url,
+            method: incoming.method,
+            headers: incoming.headers,
+          },
+          (response) => {
+            outgoing.writeHead(response.statusCode ?? 500, response.headers);
+            response.pipe(outgoing);
+          }
+        );
+        forwarded.on("error", () => {
+          outgoing.statusCode = 502;
+          outgoing.end();
+        });
+        incoming.pipe(forwarded);
+      });
+      const relayPort = await listenHttpServer(relay);
+      second = createHostedServer(relayPort, token, () => {
+        detectedSibling = true;
+      });
+
+      const secondUrl = await second.listen();
+
+      assert.ok(secondUrl);
+      assert.strictEqual(detectedSibling, false);
+      assert.notStrictEqual(Number(new URL(secondUrl).port), relayPort);
+    } finally {
+      second?.dispose();
+      if (relay) await closeHttpServer(relay);
       sibling.dispose();
     }
   });

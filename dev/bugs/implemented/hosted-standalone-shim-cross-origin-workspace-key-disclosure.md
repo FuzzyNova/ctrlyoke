@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent; read-only, not run in a browser)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`/standalone-shim.js` route ~1320-1326), `src/server/HostedStandaloneShimScript.ts` (~19-49), `src/server/standalone-shim.js`, `src/utils/ProjectStatePaths.ts` (~116-123)
-- **Severity:** low (security: cross-origin information disclosure)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
