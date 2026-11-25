@@ -96,6 +96,36 @@ suite("ProjectStateLifecycle", () => {
     assert.ok(output.some((line) => line.includes("UNKNOWN")));
   });
 
+  test("prune keeps repositories on unmounted POSIX volumes", async function () {
+    if (process.platform === "win32") {
+      this.skip();
+    }
+    for (const mountContainer of ["/Volumes", "/mnt"]) {
+      const suffix = Math.random().toString(16).slice(2);
+      const missingVolume = `${mountContainer}/ctrlyoke-missing-${Date.now()}-${suffix}`;
+      const project = await makeProject(
+        `unmounted-${path.basename(mountContainer)}-${suffix}`
+      );
+      const metadataPath = path.join(project.projectRoot, "project.json");
+      const metadata = JSON.parse(
+        await fs.readFile(metadataPath, "utf8")
+      ) as Record<string, unknown>;
+      metadata.statePath = `${missingVolume}/repo`;
+      await fs.writeFile(metadataPath, JSON.stringify(metadata));
+
+      const inspections = await inspectUserProjects();
+      const inspection = inspections.find(
+        (item) => item.projectRoot === project.projectRoot
+      );
+      assert.strictEqual(inspection?.statePathStatus, "unknown");
+
+      const output: string[] = [];
+      await pruneHistoryCommand({ yes: true }, makeIo(output, false));
+      assert.ok(await fs.stat(project.projectRoot));
+      assert.ok(output.some((line) => line.includes("UNKNOWN")));
+    }
+  });
+
   test("prune refuses a project containing a live runner", async () => {
     const project = await makeProject("running");
     await fs.rm(project.stateRoot, { recursive: true, force: true });

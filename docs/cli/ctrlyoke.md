@@ -620,7 +620,8 @@ history:
 ctrlyoke history prune --yes
 ```
 
-Inaccessible repository paths are reported as unknown and are never deleted.
+Inaccessible repository paths, including repositories on volumes that are not
+mounted, are reported as unknown and are never deleted.
 Projects with a live or indeterminate `runner.json` are also refused. The
 command scans the user project registry under `<ctrlyokeStateHome>/projects/`
 and does not need a workspace to be open.

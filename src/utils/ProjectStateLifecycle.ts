@@ -30,6 +30,8 @@ import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 export { ProjectStateLifecycleError, type ProjectRunnerStatus };
 
+const POSIX_MOUNT_CONTAINERS = ["/Volumes", "/mnt", "/media", "/run/media"];
+
 export type ProjectStatePathStatus =
   (typeof PROJECT_STATE_PATH_STATUSES)[keyof typeof PROJECT_STATE_PATH_STATUSES];
 
@@ -382,6 +384,12 @@ async function classifyStatePath(
       while (parent !== path.dirname(parent)) {
         try {
           const parentStats = await fs.stat(parent);
+          if (
+            parentStats.isDirectory() &&
+            isPosixMountContainer(parent)
+          ) {
+            return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
+          }
           return parentStats.isDirectory()
             ? PROJECT_STATE_PATH_STATUSES.MISSING
             : PROJECT_STATE_PATH_STATUSES.UNKNOWN;
@@ -397,6 +405,15 @@ async function classifyStatePath(
     }
     return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
   }
+}
+
+function isPosixMountContainer(parent: string): boolean {
+  const normalizedParent = path.posix.normalize(parent);
+  if (POSIX_MOUNT_CONTAINERS.includes(normalizedParent)) {
+    return true;
+  }
+  return /^\/media\/[^/]+$/.test(normalizedParent) ||
+    /^\/run\/media\/[^/]+$/.test(normalizedParent);
 }
 
 async function refuseLiveOrUnknownRunner(

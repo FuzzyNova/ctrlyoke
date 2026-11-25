@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced with `node out/cli.js` and a macOS disk image)
 - **Area:** `src/utils/ProjectStateLifecycle.ts` (`classifyStatePath` ~365-399)
-- **Severity:** high (permanent loss of run history, contradicting the documented guarantee)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
