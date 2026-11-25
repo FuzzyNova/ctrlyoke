@@ -17,6 +17,15 @@ import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
+/** Stable options for producing patches that must be portable across user Git config. */
+export const GIT_PATCH_FORMAT_OPTIONS = [
+  "--no-color",
+  GIT_DIFF_NO_EXT_DIFF_OPTION,
+  "--no-textconv",
+  "--src-prefix=a/",
+  "--dst-prefix=b/",
+] as const;
+
 /** Return a Git pathspec that addresses exactly the supplied path. */
 export function literalGitPathspec(filePath: string): string {
   return `:(literal)${filePath}`;

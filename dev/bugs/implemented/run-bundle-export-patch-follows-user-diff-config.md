@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (reproduced with plain git 2.56.1)
 - **Area:** `src/core/orchestration/RunBundleExporter.ts` (`collectWorkspaceChanges`, ~283-329)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

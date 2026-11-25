@@ -61,6 +61,7 @@ import {
 import {
   execGit,
   execGitBuffer,
+  GIT_PATCH_FORMAT_OPTIONS,
   isNotGitRepositoryError,
 } from "../../utils/GitUtils";
 import { settleInterruptedRun } from "../../utils/InterruptedRunSettlement";
@@ -310,7 +311,14 @@ async function collectWorkspaceChanges(
     });
     const [{ stdout: patch }, { stdout: namesText }] = await Promise.all([
       execGitBuffer(
-        ["diff", "--cached", "--binary", "--full-index", baseCommit],
+        [
+          "diff",
+          "--cached",
+          "--binary",
+          "--full-index",
+          ...GIT_PATCH_FORMAT_OPTIONS,
+          baseCommit,
+        ],
         {
           cwd: executionRoot,
           env,

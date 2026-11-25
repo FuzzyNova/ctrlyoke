@@ -158,6 +158,41 @@ suite("RunBundleExporter secrets", () => {
     );
   });
 
+  test("exports a patch unaffected by repository diff settings", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.STOPPED,
+      currentIndex: 0,
+      steps: [{ prompt: "next" }],
+    });
+    const baseCommit = (
+      await execGit(["rev-parse", "HEAD"], { cwd: workspace })
+    ).stdout.trim();
+    await fs.writeFile(path.join(workspace, "base.txt"), "changed\n");
+    await execGit(["config", "color.ui", "always"], { cwd: workspace });
+    await execGit(["config", "diff.noprefix", "true"], { cwd: workspace });
+    await execGit(["config", "diff.external", "false"], { cwd: workspace });
+
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "configured-diff.ctrlyokerun"),
+      exportedByVersion: "test",
+      secrets: { workspaceRoot: workspace, environment: {} },
+    });
+    const checkout = path.join(root, "base-checkout");
+    await fs.mkdir(checkout);
+    await execGit(["clone", "--quiet", workspace, checkout], { cwd: root });
+    await execGit(["checkout", "--quiet", baseCommit], { cwd: checkout });
+    await fs.writeFile(
+      path.join(root, "changes.patch"),
+      await fs.readFile(path.join(exported.bundleDir, RUN_BUNDLE_FILES.CHANGES))
+    );
+    await execGit(["apply", "--check", path.join(root, "changes.patch")], {
+      cwd: checkout,
+    });
+  });
+
   test("excludes its in-workspace output from the patch, including force re-exports", async () => {
     const run = await createRun({
       state: EXECUTION_STATES.STOPPED,
