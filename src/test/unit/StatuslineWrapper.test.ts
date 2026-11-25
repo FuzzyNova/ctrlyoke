@@ -1091,6 +1091,38 @@ suite("Shared statusline wrappers", function () {
     assert.strictEqual(settings.percentDirection, "remaining");
   });
 
+  test("reads comments, trailing commas, and a BOM in user settings JSONC", async () => {
+    await createHome();
+    const settingsPath = path.join(tempHome, ".ctrlyoke", "settings.json");
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+    for (const prefix of ["", "\uFEFF"]) {
+      await fs.writeFile(
+        settingsPath,
+        `${prefix}{\n  // Statusline is disabled by the user\n  "schemaVersion": 2,\n  "statusLine": { "byHarness": { "claude-cli": { "enabled": false, "customCommand": "echo hi" } } },\n}`
+      );
+      const settings = shared.resolveStatusLineSettings(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        tempHome
+      );
+      assert.strictEqual(settings.enabled, false);
+      assert.strictEqual(settings.customCommand, "echo hi");
+    }
+  });
+
+  test("disables the statusline for a newer schema in JSONC settings", async () => {
+    await createHome();
+    await fs.mkdir(path.join(tempHome, ".ctrlyoke"), { recursive: true });
+    await fs.writeFile(
+      path.join(tempHome, ".ctrlyoke", "settings.json"),
+      `/* settings from a newer ctrlyoke */\n{"schemaVersion": ${CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS] + 1},}\n`
+    );
+    const settings = shared.resolveStatusLineSettings(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      tempHome
+    );
+    assert.strictEqual(settings.enabled, false);
+  });
+
   test("uses a workspace percent direction over the user fallback", async () => {
     await createHome();
     tempDirectory = await fs.mkdtemp(
@@ -1166,6 +1198,35 @@ suite("Shared statusline wrappers", function () {
       });
       assert.strictEqual(settings.percentDirection, "remaining");
     }
+  });
+
+  test("an unparsable project settings file stops the cwd ancestor walk", async () => {
+    await createHome();
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-workspace-")
+    );
+    const projectDirectory = path.join(tempDirectory, "project");
+    await fs.mkdir(path.join(projectDirectory, ".ctrlyoke"), {
+      recursive: true,
+    });
+    await fs.mkdir(path.join(tempDirectory, ".ctrlyoke"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(projectDirectory, ".ctrlyoke", "settings.json"),
+      "{malformed"
+    );
+    await fs.writeFile(
+      path.join(tempDirectory, ".ctrlyoke", "settings.json"),
+      '{"usageTracking":{"percentDirection":"remaining"}}'
+    );
+
+    const settings = shared.resolveStatusLineSettings(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      tempHome,
+      { payload: { cwd: projectDirectory } }
+    );
+    assert.strictEqual(settings.percentDirection, "used");
   });
 
   test("loads the shared formatter sibling and uses it in a child process", async () => {

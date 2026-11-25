@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude, code review and reproduction)
 - **Area:** `src/scripts/ctrlyoke-statusline-wrapper.js` (`readSettingsFile`, `findWorkspaceSettingsFromCwd`), `src/config/JsoncObjectFile.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -109,6 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The statusline wrapper now reads settings with the same JSONC rules as the extension, including comments, trailing commas and a leading BOM. Invalid project settings stop cwd ancestor lookup, and settings from a newer schema still disable the statusline.
+
 - An interactive step that finished just as VS Code briefly stalled no longer loses its reply. ctrlyoke could stop reading the harness's session log before the last record arrived, so the step showed no token count or context-window gauge, and its reply appeared later as a follow-up.
 - A step's context-window gauge now reflects the latest follow-up turn, such as a resumed background task, after the dashboard reloads, not only while it is open. A step whose reply arrived only as a follow-up now shows its context window too.
 - Dashboard terminals that are already open now switch to a new VS Code color theme or editor font when you change it, instead of keeping the old one until a new terminal opens.
