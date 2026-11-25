@@ -272,6 +272,11 @@ template: it appears in **New Workflow** and in **Defaults** straight away, and 
 defaults** on its row opens its saved-values card. Editing your copy does not change the
 library, and a later change to the library does not change your copy.
 
+If a custom template already uses the library entry's name, the row says **Name taken** and
+does not offer install, defaults, or uninstall actions. This protects templates you authored
+yourself; rename or remove that template in the template manager before installing the library
+copy.
+
 A **User** or **Workspace** badge beside a template's name shows each scope it is installed in,
 so a template installed in both shows both.
 
@@ -281,6 +286,8 @@ When a template is installed in the scope shown in the title bar, its button rea
 from User** or **Uninstall from Workspace**. It removes only that scope's copy; switch scopes to
 remove the other. ctrlyoke asks first, because uninstalling deletes the file and any changes you
 made to it. Workflows already created from the template are not affected.
+Only copies recorded as installed from the community library can be removed here. Older copies
+without install information are left in place and can be removed from the template manager.
 
 Saved values are kept unless you tick **Also clear its saved values** in that dialog, which
 appears when the template has any. Kept values come back if you install the template again.

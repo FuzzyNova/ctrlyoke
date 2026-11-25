@@ -242,6 +242,7 @@ export interface TemplateInfo {
   isBuiltIn: boolean;
   /** Where a custom template was discovered; undefined for built-ins. */
   source?: "user" | "workspace";
+  communityInstallFile?: string;
 }
 
 /**

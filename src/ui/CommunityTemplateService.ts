@@ -8,6 +8,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import {
   buildCustomTemplateId,
+  WORKFLOW_FILE_FORMATS,
   type WorkflowFileFormat,
 } from "../types/DashboardConstants";
 import {
@@ -24,7 +25,8 @@ export interface CommunityTemplateInstaller {
     templateName: string,
     scope: SettingWriteScope,
     format: WorkflowFileFormat,
-    content: string
+    content: string,
+    communityInstallFile: string
   ): Promise<{ path: string; templateId: string }>;
   /** Delete an installed template from one scope; returns the deleted path. */
   uninstallTemplate(
@@ -111,7 +113,8 @@ export class CommunityTemplateService {
         entry.id,
         scope,
         format,
-        content
+        content,
+        `${entry.id}.ctrlyoke.${format === WORKFLOW_FILE_FORMATS.JSON ? WORKFLOW_FILE_FORMATS.JSON : WORKFLOW_FILE_FORMATS.YAML}`
       );
       Log.info(
         `[CommunityTemplates] installed "${entry.id}" to ${installed.path}`

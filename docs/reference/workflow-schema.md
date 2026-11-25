@@ -1347,6 +1347,12 @@ Who wrote the template, such as a GitHub handle. Shown in the community template
 
 Short keywords for filtering the community template gallery, such as `review` or `testing`.
 
+### `communityInstallFile` {#template-metadata-communityinstallfile}
+
+- **Type:** `string`
+
+Internal filename recorded when ctrlyoke installs this template from the community library.
+
 ### `variables` {#template-metadata-variables}
 
 - **Type:** map of [Template variable](#template-variable)

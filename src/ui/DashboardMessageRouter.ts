@@ -487,10 +487,16 @@ export class DashboardMessageRouter {
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
     this.communityTemplates = new CommunityTemplateService({
-      installTemplateContent: (name, scope, format, content) =>
-        this.serializer.installTemplateContent(name, scope, format, content),
+      installTemplateContent: (name, scope, format, content, installFile) =>
+        this.serializer.installTemplateContent(
+          name,
+          scope,
+          format,
+          content,
+          installFile
+        ),
       uninstallTemplate: (name, scope) =>
-        this.serializer.uninstallCustomTemplate(name, scope),
+        this.serializer.uninstallCommunityTemplate(name, scope),
       clearSavedValues: async (templateId, ctx) => {
         await this.serializer.clearTemplateVariableDefaults(
           templateId,

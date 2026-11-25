@@ -937,6 +937,35 @@ suite("TemplateManager variable metadata", () => {
       });
     });
 
+    suite("uninstallCommunityTemplate", () => {
+      test("refuses an unmarked same-id template and deletes the exact marked file", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const target = path.join(templateDir, "review.ctrlyoke.yaml");
+        await fs.promises.writeFile(
+          target,
+          "_templateMeta:\n  name: User authored\nsteps: []\n",
+          "utf-8"
+        );
+        await assert.rejects(
+          tm.uninstallCommunityTemplate("review", TEMPLATE_SCOPES.USER),
+          /not recorded as a community install/
+        );
+        assert.ok(await fs.promises.stat(target));
+        await fs.promises.writeFile(
+          target,
+          "_templateMeta:\n  communityInstallFile: review.ctrlyoke.yaml\nsteps: []\n",
+          "utf-8"
+        );
+        assert.strictEqual(
+          await tm.uninstallCommunityTemplate("review", TEMPLATE_SCOPES.USER),
+          target
+        );
+        await assert.rejects(fs.promises.stat(target));
+      });
+    });
+
     test("rejects a duplicate basename even when the formats differ", async () => {
       const tm = makeManager();
       const templateDir = makeTempDir();

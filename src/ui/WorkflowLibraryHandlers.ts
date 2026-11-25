@@ -882,13 +882,15 @@ export class WorkflowLibraryHandlers {
     templateName: string,
     scope: TemplateScope,
     format: WorkflowFileFormat,
-    content: string
+    content: string,
+    communityInstallFile?: string
   ): Promise<{ path: string; templateId: string }> {
     return this.templateManager.installTemplateContent(
       templateName,
       scope,
       format,
-      content
+      content,
+      communityInstallFile
     );
   }
 
@@ -898,6 +900,13 @@ export class WorkflowLibraryHandlers {
     scope: TemplateScope
   ): Promise<string> {
     return this.templateManager.uninstallCustomTemplate(templateName, scope);
+  }
+
+  uninstallCommunityTemplate(
+    name: string,
+    scope: TemplateScope
+  ): Promise<string> {
+    return this.templateManager.uninstallCommunityTemplate(name, scope);
   }
 
   /**

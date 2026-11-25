@@ -129,6 +129,7 @@ export interface TemplateInfo {
   author?: string;
   /** `_templateMeta.tags`: gallery keywords. */
   tags?: string[];
+  communityInstallFile?: string;
 }
 
 /** Parsed shape of a `_templateMeta` block in a template file */
@@ -137,6 +138,7 @@ interface ParsedTemplateMeta {
   description?: string;
   author?: string;
   tags?: string[];
+  communityInstallFile?: string;
   variables: Record<string, Partial<Omit<TemplateVariable, "name">>>;
 }
 
@@ -233,6 +235,8 @@ export class TemplateManager {
       if (typeof meta["description"] === "string")
         result.description = meta["description"];
       if (typeof meta["author"] === "string") result.author = meta["author"];
+      if (typeof meta["communityInstallFile"] === "string")
+        result.communityInstallFile = meta["communityInstallFile"];
       if (
         Array.isArray(meta["tags"]) &&
         meta["tags"].every((tag) => typeof tag === "string")
@@ -938,7 +942,8 @@ export class TemplateManager {
     templateName: string,
     scope: TemplateScope,
     format: WorkflowFileFormat,
-    content: string
+    content: string,
+    communityInstallFile?: string
   ): Promise<{ path: string; templateId: string }> {
     if (Buffer.byteLength(content, "utf-8") > MAX_INSTALLED_TEMPLATE_BYTES) {
       throw new Error(
@@ -964,6 +969,14 @@ export class TemplateManager {
     // warnings, the same leniency the template loader applies.
     this.promptFileParser.getSchemaWarnings(parsed);
 
+    if (communityInstallFile) {
+      const metadata = meta as Record<string, unknown>;
+      metadata.communityInstallFile = communityInstallFile;
+      content =
+        format === WORKFLOW_FILE_FORMATS.JSON
+          ? `${JSON.stringify(parsed, null, 2)}\n`
+          : jsYaml.dump(parsed);
+    }
     const fullPath = await this.prepareCustomTemplatePath(
       templateName,
       scope,
@@ -998,6 +1011,35 @@ export class TemplateManager {
     }
     await fs.promises.unlink(templatePath);
     return templatePath;
+  }
+
+  async uninstallCommunityTemplate(
+    templateName: string,
+    scope: TemplateScope
+  ): Promise<string> {
+    this.validateTemplateName(templateName);
+    const directory = this.getTemplatesPathForScope(scope);
+    if (!directory)
+      throw new Error(`Template is not installed: ${templateName}`);
+    for (const extension of CUSTOM_TEMPLATE_EXTENSIONS) {
+      const expectedFile = `${templateName}${extension}`;
+      const templatePath = path.join(directory, expectedFile);
+      let content: string;
+      try {
+        content = await fs.promises.readFile(templatePath, "utf-8");
+      } catch {
+        continue;
+      }
+      if (
+        this.parseTemplateMeta(content).communityInstallFile === expectedFile
+      ) {
+        await fs.promises.unlink(templatePath);
+        return templatePath;
+      }
+    }
+    throw new Error(
+      `Template "${templateName}" is not recorded as a community install and was not deleted. Delete it from the template manager if you want to remove it.`
+    );
   }
 
   /**
@@ -1071,6 +1113,9 @@ export class TemplateManager {
               source,
               ...(meta.author ? { author: meta.author } : {}),
               ...(meta.tags ? { tags: meta.tags } : {}),
+              ...(meta.communityInstallFile
+                ? { communityInstallFile: meta.communityInstallFile }
+                : {}),
             });
             seenNames.add(name);
           } catch (error) {

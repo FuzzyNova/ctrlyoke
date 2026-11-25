@@ -1083,6 +1083,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "array",
         "description": "Short keywords for filtering the community template gallery, such as `review` or `testing`."
       },
+      "communityInstallFile": {
+        "valueKind": "string",
+        "description": "Internal filename recorded when ctrlyoke installs this template from the community library."
+      },
       "variables": {
         "valueKind": "object",
         "description": "Metadata for placeholders used by this template, keyed by variable name."

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against compiled `out/`)
 - **Area:** `src/ui/webview-react/components/settings/CommunityTemplatesPage.tsx` (~87-90, 228, 318-321, 358-364), `src/ui/CommunityTemplateService.ts` (`handleUninstall` ~146), `src/core/TemplateManager.ts` (`uninstallCustomTemplate` ~990-1000, `getCustomTemplateExtension` ~444), `src/utils/CommunityTemplateClient.ts` (~42)
-- **Severity:** high (irreversible data loss)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

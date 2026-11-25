@@ -137,6 +137,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.worktreeNotice": "Durable notice recorded when an inherited worktree default degraded to ordinary execution",
   "_templateMeta": "Marks the file as a reusable template and describes its placeholders. Removed when the template is instantiated. Not substituted: This structural field or identity value stays as authored.",
   "_templateMeta.author": "Who wrote the template, such as a GitHub handle. Shown in the community template gallery. Free text; ctrlyoke does not verify it.",
+  "_templateMeta.communityInstallFile": "Internal filename recorded when ctrlyoke installs this template from the community library.",
   "_templateMeta.description": "Short explanation shown in the template picker.",
   "_templateMeta.name": "Display name shown in the template picker. Not substituted: This structural field or identity value stays as authored.",
   "_templateMeta.tags": "Short keywords for filtering the community template gallery, such as `review` or `testing`.",
