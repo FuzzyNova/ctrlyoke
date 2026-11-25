@@ -487,6 +487,12 @@ export class DashboardMessageRouter {
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
     this.communityTemplates = new CommunityTemplateService({
+      hasUnmarkedCommunityInstallCandidate: (name, scope, expectedFile) =>
+        this.serializer.hasUnmarkedCommunityInstallCandidate(
+          name,
+          scope,
+          expectedFile
+        ),
       installTemplateContent: (name, scope, format, content, installFile) =>
         this.serializer.installTemplateContent(
           name,

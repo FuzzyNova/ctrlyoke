@@ -993,6 +993,43 @@ export class TemplateManager {
     };
   }
 
+  /** Check for a local pre-provenance copy without needing library content. */
+  async hasUnmarkedCommunityInstallCandidate(
+    templateName: string,
+    scope: TemplateScope,
+    expectedFile: string
+  ): Promise<boolean> {
+    this.validateTemplateName(templateName);
+    const directory = this.getTemplatesPathForScope(scope);
+    if (!directory) return false;
+    let content: string;
+    try {
+      content = await fs.promises.readFile(
+        path.join(directory, expectedFile),
+        "utf-8"
+      );
+    } catch {
+      return false;
+    }
+    let parsed: unknown;
+    try {
+      // This is only a download hint, not a validity check. The exact-byte
+      // migration gate below decides whether any file can actually be marked.
+      parsed = jsYaml.load(content);
+    } catch {
+      return true;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return true;
+    const metadata = (parsed as Record<string, unknown>)["_templateMeta"];
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return true;
+    return (
+      typeof (metadata as Record<string, unknown>).communityInstallFile !==
+      "string"
+    );
+  }
+
   /** Mark an exact, pre-provenance community copy as an install in place. */
   async markLegacyCommunityInstall(
     templateName: string,

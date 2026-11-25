@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The community template index appears before legacy-install checks; templates are downloaded in parallel only for scopes with an unmarked local copy.
 - Parallel workflows now allow sibling `$step:N` tokens written inside inline or fenced code, where the runtime leaves them literal.
 - Timeline appends interrupted by a crash before the run manifest was updated are rolled back on the next append, so event sequence numbers stay unique.
 - MCP step additions and edits reject unknown harness ids even when harness capabilities have not been detected.

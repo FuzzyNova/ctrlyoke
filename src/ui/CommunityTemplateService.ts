@@ -22,6 +22,11 @@ import type { DashboardClientContext } from "./DashboardClientContext";
 
 /** What the service needs from the template library to install and uninstall. */
 export interface CommunityTemplateInstaller {
+  hasUnmarkedCommunityInstallCandidate(
+    templateName: string,
+    scope: SettingWriteScope,
+    expectedFile: string
+  ): Promise<boolean>;
   installTemplateContent(
     templateName: string,
     scope: SettingWriteScope,
@@ -81,43 +86,20 @@ export class CommunityTemplateService {
   ): Promise<void> {
     try {
       const templates = await this.getIndex(message.refresh === true);
-      // Upgrade pre-marker copies only after proving their bytes still match
-      // the current library version. A download failure leaves the catalog usable.
-      let migratedAny = false;
-      for (const entry of templates) {
-        const format = getCommunityTemplateFormat(entry.id, entry.file);
-        if (!format) continue;
-        try {
-          const content = await this.client.fetchTemplate(entry);
-          const migrated = await Promise.all([
-            this.installer.markLegacyCommunityInstall(
-              entry.id,
-              SETTING_SCOPES.USER,
-              format,
-              getCommunityInstallFileName(entry.id, entry.file),
-              content
-            ),
-            this.installer.markLegacyCommunityInstall(
-              entry.id,
-              SETTING_SCOPES.WORKSPACE,
-              format,
-              getCommunityInstallFileName(entry.id, entry.file),
-              content
-            ),
-          ]);
-          migratedAny ||= migrated.some(Boolean);
-        } catch (error) {
-          Log.warn(
-            `[CommunityTemplates] legacy install check failed for "${entry.id}":`,
-            getErrorMessage(error)
-          );
-        }
-      }
-      if (migratedAny) await this.installer.refreshTemplateCatalog(ctx);
       ctx.emit({
         type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT,
         templates,
       });
+      // Migration is background work. Only download when a scope has a likely
+      // legacy copy; markLegacyCommunityInstall still verifies exact bytes.
+      void this.migrateLegacyCommunityInstalls(ctx, templates).catch(
+        (error) => {
+          Log.warn(
+            "[CommunityTemplates] legacy install migration failed:",
+            getErrorMessage(error)
+          );
+        }
+      );
     } catch (error) {
       const msg = getErrorMessage(error);
       Log.warn("[CommunityTemplates] index fetch failed:", msg);
@@ -126,6 +108,77 @@ export class CommunityTemplateService {
         templates: [],
         error: msg,
       });
+    }
+  }
+
+  private async migrateLegacyCommunityInstalls(
+    ctx: DashboardClientContext,
+    templates: CommunityTemplateEntry[]
+  ): Promise<void> {
+    const migrations = templates.flatMap((entry) => {
+      const format = getCommunityTemplateFormat(entry.id, entry.file);
+      if (!format) return [];
+      const expectedFile = getCommunityInstallFileName(entry.id, entry.file);
+      return [{ entry, format, expectedFile }];
+    });
+    const candidates = await Promise.all(
+      migrations.map(async (migration) => {
+        const scopes = [SETTING_SCOPES.USER, SETTING_SCOPES.WORKSPACE];
+        const checks = await Promise.all(
+          scopes.map(async (scope) => ({
+            scope,
+            candidate:
+              await this.installer.hasUnmarkedCommunityInstallCandidate(
+                migration.entry.id,
+                scope,
+                migration.expectedFile
+              ),
+          }))
+        );
+        return {
+          ...migration,
+          scopes: checks
+            .filter((check) => check.candidate)
+            .map((check) => check.scope),
+        };
+      })
+    );
+    let migratedAny = false;
+    await Promise.all(
+      candidates
+        .filter(({ scopes }) => scopes.length > 0)
+        .map(async ({ entry, format, expectedFile, scopes }) => {
+          try {
+            const content = await this.client.fetchTemplate(entry);
+            const migrated = await Promise.all(
+              scopes.map((scope) =>
+                this.installer.markLegacyCommunityInstall(
+                  entry.id,
+                  scope,
+                  format,
+                  expectedFile,
+                  content
+                )
+              )
+            );
+            migratedAny ||= migrated.some(Boolean);
+          } catch (error) {
+            Log.warn(
+              `[CommunityTemplates] legacy install check failed for "${entry.id}":`,
+              getErrorMessage(error)
+            );
+          }
+        })
+    );
+    if (migratedAny) {
+      try {
+        await this.installer.refreshTemplateCatalog(ctx);
+      } catch (error) {
+        Log.warn(
+          "[CommunityTemplates] catalog refresh after migration failed:",
+          getErrorMessage(error)
+        );
+      }
     }
   }
 

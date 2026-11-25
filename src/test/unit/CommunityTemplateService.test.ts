@@ -155,7 +155,10 @@ suite("CommunityTemplateClient", () => {
 });
 
 suite("CommunityTemplateService", () => {
-  function setup(routes: Record<string, { status?: number; body: string }>) {
+  function setup(
+    routes: Record<string, { status?: number; body: string }>,
+    candidateScopes: SettingWriteScope[] = []
+  ) {
     const { fetchFn, requested } = fakeFetch(routes);
     const posted: any[] = [];
     const installs: Array<{
@@ -169,11 +172,21 @@ suite("CommunityTemplateService", () => {
       scope: SettingWriteScope;
       content: string;
     }> = [];
+    const candidateChecks: Array<{
+      name: string;
+      scope: SettingWriteScope;
+      file: string;
+    }> = [];
     const uninstalls: Array<{ name: string; scope: SettingWriteScope }> = [];
     const cleared: string[] = [];
     let refreshes = 0;
     let uninstallError: Error | undefined;
+    let markLegacyResult = false;
     const installer: CommunityTemplateInstaller = {
+      hasUnmarkedCommunityInstallCandidate: async (name, scope, file) => {
+        candidateChecks.push({ name, scope, file });
+        return candidateScopes.includes(scope);
+      },
       installTemplateContent: async (name, scope, format, content) => {
         installs.push({ name, scope, format, content });
         return { path: `/t/${name}`, templateId: `custom:${scope}:${name}` };
@@ -186,7 +199,7 @@ suite("CommunityTemplateService", () => {
         content
       ) => {
         legacyChecks.push({ name, scope, content });
-        return false;
+        return markLegacyResult;
       },
       uninstallTemplate: async (name, scope) => {
         if (uninstallError) throw uninstallError;
@@ -213,12 +226,16 @@ suite("CommunityTemplateService", () => {
       posted,
       installs,
       legacyChecks,
+      candidateChecks,
       uninstalls,
       cleared,
       requested,
       refreshes: () => refreshes,
       failUninstall: (error: Error) => {
         uninstallError = error;
+      },
+      markLegacy: (result: boolean) => {
+        markLegacyResult = result;
       },
     };
   }
@@ -229,7 +246,8 @@ suite("CommunityTemplateService", () => {
   };
 
   test("answers index requests from the session cache until refreshed", async () => {
-    const { service, ctx, posted, requested } = setup(routes);
+    const { service, ctx, posted, requested, candidateChecks, legacyChecks } =
+      setup(routes);
     const request = { type: MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX };
 
     await service.handleRequestIndex(ctx, request);
@@ -244,9 +262,99 @@ suite("CommunityTemplateService", () => {
       type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT,
       templates: [REVIEW_ENTRY],
     });
+    assert.strictEqual(
+      requested.filter((url) => url.includes("/templates/")).length,
+      0
+    );
+    assert.strictEqual(candidateChecks.length, 6);
+    assert.strictEqual(legacyChecks.length, 0);
   });
 
-  test("keeps the index available when a legacy template check cannot reach the library", async () => {
+  test("migrates only candidate scopes after emitting the index", async () => {
+    const {
+      service,
+      ctx,
+      posted,
+      candidateChecks,
+      legacyChecks,
+      refreshes,
+      markLegacy,
+    } = setup(routes, [SETTING_SCOPES.USER, SETTING_SCOPES.WORKSPACE]);
+    markLegacy(true);
+    await service.handleRequestIndex(ctx, {
+      type: MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX,
+    });
+    assert.strictEqual(
+      posted[0].type,
+      MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT
+    );
+    for (let i = 0; i < 10 && legacyChecks.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.deepStrictEqual(candidateChecks.slice(0, 2), [
+      {
+        name: REVIEW_ENTRY.id,
+        scope: SETTING_SCOPES.USER,
+        file: REVIEW_ENTRY.file,
+      },
+      {
+        name: REVIEW_ENTRY.id,
+        scope: SETTING_SCOPES.WORKSPACE,
+        file: REVIEW_ENTRY.file,
+      },
+    ]);
+    assert.deepStrictEqual(legacyChecks, [
+      {
+        name: REVIEW_ENTRY.id,
+        scope: SETTING_SCOPES.USER,
+        content: "content",
+      },
+      {
+        name: REVIEW_ENTRY.id,
+        scope: SETTING_SCOPES.WORKSPACE,
+        content: "content",
+      },
+    ]);
+    for (let i = 0; i < 10 && refreshes() === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.strictEqual(refreshes(), 1);
+  });
+
+  test("emits the index when a candidate template download fails", async () => {
+    const unavailableRoutes = {
+      [`${BASE_URL}/index.json`]: {
+        body: JSON.stringify(index([REVIEW_ENTRY])),
+      },
+    };
+    const { service, ctx, posted, candidateChecks, legacyChecks, requested } =
+      setup(unavailableRoutes, [SETTING_SCOPES.USER]);
+    await service.handleRequestIndex(ctx, {
+      type: MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX,
+    });
+    assert.strictEqual(
+      posted[0].type,
+      MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT
+    );
+    assert.deepStrictEqual(posted[0].templates, [REVIEW_ENTRY]);
+    for (let i = 0; i < 10 && candidateChecks.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    for (
+      let i = 0;
+      i < 10 && !requested.some((url) => url.includes("/templates/"));
+      i++
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.strictEqual(
+      requested.some((url) => url.includes("/templates/")),
+      true
+    );
+    assert.strictEqual(legacyChecks.length, 0);
+  });
+
+  test("keeps the index available without legacy candidate copies", async () => {
     const unavailableRoutes = {
       [`${BASE_URL}/index.json`]: {
         body: JSON.stringify(index([REVIEW_ENTRY])),

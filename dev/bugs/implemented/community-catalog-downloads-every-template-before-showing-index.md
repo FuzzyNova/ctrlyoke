@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (review of 5a6d6686d)
 - **Area:** `src/ui/CommunityTemplateService.ts` (`handleRequestIndex` ~78-130)
-- **Severity:** medium (the library page gets slower as the library grows, and waits up to the per-request download timeout per entry when the CDN is slow)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

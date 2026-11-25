@@ -965,6 +965,47 @@ suite("TemplateManager variable metadata", () => {
     });
 
     suite("uninstallCommunityTemplate", () => {
+      test("detects only existing unmarked community install candidates", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const target = path.join(templateDir, "review.ctrlyoke.yaml");
+        assert.strictEqual(
+          await tm.hasUnmarkedCommunityInstallCandidate(
+            "review",
+            TEMPLATE_SCOPES.USER,
+            "review.ctrlyoke.yaml"
+          ),
+          false
+        );
+        await fs.promises.writeFile(
+          target,
+          "_templateMeta:\n  name: Review\nsteps: []\n",
+          "utf-8"
+        );
+        assert.strictEqual(
+          await tm.hasUnmarkedCommunityInstallCandidate(
+            "review",
+            TEMPLATE_SCOPES.USER,
+            "review.ctrlyoke.yaml"
+          ),
+          true
+        );
+        await fs.promises.writeFile(
+          target,
+          "_templateMeta:\n  communityInstallFile: review.ctrlyoke.yaml\nsteps: []\n",
+          "utf-8"
+        );
+        assert.strictEqual(
+          await tm.hasUnmarkedCommunityInstallCandidate(
+            "review",
+            TEMPLATE_SCOPES.USER,
+            "review.ctrlyoke.yaml"
+          ),
+          false
+        );
+      });
+
       test("marks only a byte-identical legacy community template", async () => {
         const tm = makeManager();
         const templateDir = makeTempDir();
