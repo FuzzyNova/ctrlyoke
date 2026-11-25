@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Timeline appends interrupted by a crash before the run manifest was updated are rolled back on the next append, so event sequence numbers stay unique.
 - MCP step additions and edits reject unknown harness ids even when harness capabilities have not been detected.
 - Hosted server identity proofs are bound to the responding port, preventing relayed probes from identifying a port squatter as a sibling server.
 - The public standalone shim sends a same-origin resource policy so unrelated sites cannot embed its workspace-specific script.

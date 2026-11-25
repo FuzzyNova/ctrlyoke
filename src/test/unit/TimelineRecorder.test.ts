@@ -227,6 +227,164 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.nextSequence, 3);
   });
 
+  /** Simulate a crash after the events append but before the manifest write. */
+  function uncommittedLine(sequence: number, message: string): string {
+    return `${JSON.stringify({
+      ...createStatusEventDraft(115, message),
+      workflowId: "wf-timeline",
+      runId: 1,
+      sequence,
+    })}\n`;
+  }
+
+  function statusMessages(
+    events: Awaited<ReturnType<TimelineRecorder["readEvents"]>>
+  ): string[] {
+    return events.map((event) =>
+      event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED
+        ? event.payload.statusMessage.message
+        : event.eventType
+    );
+  }
+
+  test("drops complete lines the manifest never counted before appending", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    await fs.appendFile(eventsPath, uncommittedLine(2, "uncommitted"));
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(120, "after restart"),
+    ]);
+
+    const events = await recorder.readEvents(manifestPath);
+    const manifest = await recorder.readManifest(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+    assert.deepStrictEqual(statusMessages(events), [
+      "durable",
+      "after restart",
+    ]);
+    assert.strictEqual(manifest.eventCount, events.length);
+    assert.strictEqual(manifest.nextSequence, 3);
+  });
+
+  test("rolls back a whole uncommitted batch cut off by a torn final line", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    await fs.appendFile(
+      eventsPath,
+      `${uncommittedLine(2, "batch-a")}${uncommittedLine(3, "batch-b")}{"eventType":"par`
+    );
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(120, "after restart"),
+    ]);
+
+    const events = await recorder.readEvents(manifestPath);
+    const manifest = await recorder.readManifest(manifestPath);
+    assert.deepStrictEqual(statusMessages(events), [
+      "durable",
+      "after restart",
+    ]);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+    assert.strictEqual(manifest.eventCount, 2);
+  });
+
+  test("drops uncommitted lines before committing a definition revision", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    await fs.appendFile(eventsPath, uncommittedLine(2, "uncommitted"));
+
+    const result = await recorder.commitDefinitionRevisionIfNewer(
+      manifestPath,
+      2,
+      buildDefinitionSnapshot("revision two", [{ prompt: "step" }]),
+      120
+    );
+
+    assert.strictEqual(result.committed, true);
+    const events = await recorder.readEvents(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+    assert.strictEqual(
+      events[1]?.eventType,
+      TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+    );
+  });
+
+  test("never truncates committed records, including ones spanning several tail-scan chunks", async () => {
+    // Sizes chosen so committed records straddle 64 KiB chunk boundaries, and a
+    // range of padding lengths so some record boundary lands exactly on one.
+    const drafts: WorkflowTimelineEventDraft[] = [];
+    for (let index = 0; index < 12; index++) {
+      drafts.push(
+        createStatusEventDraft(110 + index, "y".repeat(20 * 1024 + index * 7))
+      );
+    }
+    drafts.push(createStatusEventDraft(130, "z".repeat(150 * 1024)));
+    for (const draft of drafts) {
+      await recorder.appendEvents(manifestPath, [draft]);
+    }
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    const before = await fs.readFile(eventsPath);
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(140, "next"),
+    ]);
+
+    const after = await fs.readFile(eventsPath);
+    assert.ok(after.subarray(0, before.length).equals(before));
+    const events = await recorder.readEvents(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      Array.from({ length: drafts.length + 1 }, (_, index) => index + 1)
+    );
+  });
+
+  test("keeps the committed record before a multi-chunk uncommitted line whose newline sits on a chunk boundary", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    // An uncommitted line of exactly two chunks minus one byte puts the durable
+    // record's newline at byte 0 of the second chunk the scan reads.
+    const chunkBytes = 64 * 1024;
+    const base = uncommittedLine(2, "");
+    const line = uncommittedLine(
+      2,
+      "u".repeat(2 * chunkBytes - 1 - Buffer.byteLength(base))
+    );
+    assert.strictEqual(Buffer.byteLength(line), 2 * chunkBytes - 1);
+    await fs.appendFile(eventsPath, line);
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(120, "after restart"),
+    ]);
+
+    const events = await recorder.readEvents(manifestPath);
+    assert.deepStrictEqual(statusMessages(events), [
+      "durable",
+      "after restart",
+    ]);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+  });
+
   test("reads legacy string versions and stamps the integer baseline on write", async () => {
     const manifest = JSON.parse(
       await fs.readFile(manifestPath, "utf8")

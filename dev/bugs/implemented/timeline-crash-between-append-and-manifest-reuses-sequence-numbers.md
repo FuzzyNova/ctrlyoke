@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against compiled `out/core/orchestration/TimelineRecorder.js`)
 - **Area:** `src/core/orchestration/TimelineRecorder.ts` (`truncateTornEventsTail` ~120, `appendEventLinesAndCommitManifest` ~205-235, `appendEvents` ~340-345, `commitDefinitionRevisionIfNewer` ~403-410)
-- **Severity:** medium (silent timeline corruption after a crash; history search and the dashboard drop events)
+- **Resolution:** fixed in this commit (the tail scan landed in 6a01803f8; this commit fixes its chunk-boundary bug, adds tests and moves the report)
 
 ## Symptom
 
