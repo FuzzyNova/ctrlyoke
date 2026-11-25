@@ -4043,6 +4043,70 @@ suite("CopilotLogParser", () => {
       assert.strictEqual(response.metadata.model, "gpt-6-luna");
     });
 
+    test("ignores sub-agent usage records when resolving Copilot auto", () => {
+      const response = parser.extractResponse([
+        {
+          type: "session.start",
+          data: { sessionId: "copilot-auto-session", selectedModel: "auto" },
+          timestamp: "2026-01-17T10:00:00Z",
+        },
+        {
+          type: "session.usage_record",
+          data: {
+            usage: {
+              model: "gpt-6-luna",
+              initiator: "user",
+              accounting: { sourceSessionId: "copilot-auto-session" },
+            },
+          },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+        {
+          type: "session.usage_record",
+          data: {
+            usage: {
+              model: "claude-haiku-5.5",
+              initiator: "sub-agent",
+              accounting: { sourceSessionId: "copilot-subagent-session" },
+            },
+          },
+          timestamp: "2026-01-17T10:00:03Z",
+        },
+        {
+          type: "session.usage_record",
+          data: {
+            usage: {
+              model: "claude-haiku-5.5",
+              accounting: { sourceSessionId: "copilot-subagent-session" },
+            },
+          },
+          timestamp: "2026-01-17T10:00:04Z",
+        },
+      ] as unknown as BaseCliEvent[]);
+
+      assert.strictEqual(response.metadata.model, "gpt-6-luna");
+    });
+
+    test("reports an explicitly requested Copilot model despite other usage models", () => {
+      const response = parser.extractResponse([
+        {
+          type: "session.start",
+          data: {
+            sessionId: "copilot-session",
+            selectedModel: "claude-opus-5.5",
+          },
+          timestamp: "2026-01-17T10:00:00Z",
+        },
+        {
+          type: "session.usage_record",
+          data: { usage: { model: "claude-haiku-5.5" } },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+      ] as unknown as BaseCliEvent[]);
+
+      assert.strictEqual(response.metadata.model, "claude-opus-5.5");
+    });
+
     test("should aggregate multi-event responses", () => {
       const events = [
         {
