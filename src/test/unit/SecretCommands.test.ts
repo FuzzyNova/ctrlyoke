@@ -422,6 +422,73 @@ suite("Secret command JSON output", () => {
     assert.deepStrictEqual(failureIo.errors, []);
   });
 
+  test("check JSON reports unapproved grants and accompanying missing values", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-check-json-grants-")
+    );
+    try {
+      const trustStore = new SecretGrantsTrustStore(
+        path.join(tempRoot, "trust.json")
+      );
+      const workflow: PromptFile = {
+        secrets: ["MY_TOKEN"],
+        steps: [{ name: "deploy", prompt: "deploy" }],
+      };
+      const missingIo = new TestIo();
+      const missingResult = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        { json: true },
+        {
+          ...workflowDependencies(new InMemorySecretStore(), workflow),
+          secretGrantsTrustStore: trustStore,
+        },
+        missingIo
+      );
+      assert.strictEqual(missingResult, 2);
+      const missingEnvelope = JSON.parse(missingIo.output[0]) as {
+        schemaVersion: number;
+        success: boolean;
+        error: { message: string };
+        filesChecked: string[];
+        missingNames: string[];
+        unapprovedGrants: string[];
+      };
+      assert.strictEqual(missingEnvelope.schemaVersion, 1);
+      assert.strictEqual(missingEnvelope.success, false);
+      assert.match(
+        missingEnvelope.error.message,
+        /Secret grant "MY_TOKEN".*not been approved/
+      );
+      assert.deepStrictEqual(missingEnvelope.filesChecked, [
+        path.resolve("workflow.ctrlyoke.yaml"),
+      ]);
+      assert.deepStrictEqual(missingEnvelope.missingNames, ["MY_TOKEN"]);
+      assert.deepStrictEqual(missingEnvelope.unapprovedGrants, ["MY_TOKEN"]);
+
+      const presentIo = new TestIo();
+      const presentResult = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        { json: true },
+        {
+          ...workflowDependencies(new InMemorySecretStore(), workflow, {
+            MY_TOKEN: "present",
+          }),
+          secretGrantsTrustStore: trustStore,
+        },
+        presentIo
+      );
+      assert.strictEqual(presentResult, 2);
+      const presentEnvelope = JSON.parse(presentIo.output[0]) as {
+        missingNames: string[];
+        unapprovedGrants: string[];
+      };
+      assert.deepStrictEqual(presentEnvelope.missingNames, []);
+      assert.deepStrictEqual(presentEnvelope.unapprovedGrants, ["MY_TOKEN"]);
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   test("trust-secret-grants suppresses the text list without a TTY", async () => {
     const tempRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-secret-json-grants-")

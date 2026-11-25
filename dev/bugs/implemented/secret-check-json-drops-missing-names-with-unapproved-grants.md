@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced with `node out/cli.js`)
 - **Area:** `src/cli/SecretCommands.ts` (`checkSecretsCommand` catch ~271-281)
-- **Severity:** low (CI scripts reading `--json` get a result that contradicts its own error message)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

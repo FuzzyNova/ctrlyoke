@@ -11,6 +11,7 @@ import {
 } from "../platform/NodePlatformAdapter";
 import {
   MissingSecretsError,
+  UnapprovedSecretGrantsError,
   getWorkflowSecretGrants,
   preflightWorkflowSecrets,
 } from "../utils/SecretResolver";
@@ -276,7 +277,15 @@ export async function checkSecretsCommand(
       error instanceof MissingSecretsError ? 1 : 2,
       error instanceof MissingSecretsError
         ? { filesChecked: [filePath], missingNames: error.secretNames }
-        : { filesChecked: [filePath], missingNames: [] }
+        : error instanceof UnapprovedSecretGrantsError
+          ? {
+              filesChecked: [filePath],
+              missingNames: [
+                ...new Set(error.missingSecrets.map(({ name }) => name)),
+              ],
+              unapprovedGrants: error.secretNames,
+            }
+          : { filesChecked: [filePath], missingNames: [] }
     );
     return error instanceof MissingSecretsError ? 1 : 2;
   }

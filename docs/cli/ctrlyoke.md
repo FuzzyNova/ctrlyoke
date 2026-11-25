@@ -577,7 +577,9 @@ one.
 The `secret` commands and `trust-secret-grants` support `--json`, which emits
 one versioned result line. Success results include the command data; `secret
 check` reports the checked file and missing secret names. Failures use the
-standard JSON error envelope and preserve the command's exit code.
+standard JSON error envelope and preserve the command's exit code. When grants
+are unapproved, the failure also includes `unapprovedGrants` with those secret
+names; `missingNames` lists any accompanying missing values.
 
 ## `ctrlyoke license`
 
