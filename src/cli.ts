@@ -168,6 +168,7 @@ import {
   CLI_CLOSED_PIPE_EXIT_CODE,
   exitQuietlyOnClosedPipe,
   isClosedPipeError,
+  stopWorkflowOnClosedPipe,
 } from "./cli/CliClosedPipe";
 import { registerStepCommands } from "./cli/StepCommandDefinitions";
 import { registerSecretCommands } from "./cli/SecretCommandDefinitions";
@@ -1480,7 +1481,7 @@ async function runCommand(
   // shutdown() requests a stop and waits for the execution to settle, which
   // guarantees the runner lock has been released before exit.
   let interrupted = false;
-  installTwoStageShutdown({
+  const triggerGracefulShutdown = installTwoStageShutdown({
     signals: process,
     signalNames: [PROCESS_SIGNALS.INTERRUPT, PROCESS_SIGNALS.TERMINATE],
     exit: process.exit,
@@ -1517,6 +1518,8 @@ async function runCommand(
       interrupted = true;
     },
   });
+  stopWorkflowOnClosedPipe(process.stdout, triggerGracefulShutdown);
+  stopWorkflowOnClosedPipe(process.stderr, triggerGracefulShutdown);
 
   try {
     if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN) {

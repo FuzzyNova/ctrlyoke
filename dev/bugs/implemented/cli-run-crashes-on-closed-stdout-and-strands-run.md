@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude, running the compiled CLI)
 - **Area:** `src/cli.ts` (`run`/`rerun`/`append`/`continue` execution path, ~1480-1530), `src/cli/CliClosedPipe.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

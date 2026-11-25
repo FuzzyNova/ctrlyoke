@@ -17,7 +17,7 @@ suite("Two-stage signal shutdown", () => {
       clearTimeout: () => undefined,
     };
     let started = false;
-    installTwoStageShutdown({
+    const triggerShutdown = installTwoStageShutdown({
       signals: {
         once: (signal, listener) => listeners.set(signal, listener),
         off: (signal) => listeners.delete(signal),
@@ -43,7 +43,7 @@ suite("Two-stage signal shutdown", () => {
       },
     });
 
-    listeners.get(PROCESS_SIGNALS.INTERRUPT)?.();
+    triggerShutdown();
     await Promise.resolve();
     await Promise.resolve();
 
