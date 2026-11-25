@@ -416,6 +416,73 @@ suite("PromptFileResolver", () => {
     }
   });
 
+  test("blocks file and directory symlinks that resolve outside trusted roots", async () => {
+    const outsideRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-outside-")
+    );
+    temporaryDirectories.push(outsideRoot);
+    const secret = path.join(outsideRoot, "secret.prompt.md");
+    await fs.writeFile(secret, "secret", "utf8");
+    await fs.mkdir(path.join(workspaceRoot, "prompts"), { recursive: true });
+    await fs.symlink(
+      secret,
+      path.join(workspaceRoot, "prompts", "x.prompt.md")
+    );
+    await fs.symlink(outsideRoot, path.join(workspaceRoot, "linkdir"), "dir");
+
+    const resolver = new PromptFileResolver({
+      workspaceRoot,
+      trustedRoots: [workspaceRoot],
+    });
+    for (const reference of [
+      "./prompts/x.prompt.md",
+      "./linkdir/secret.prompt.md",
+    ]) {
+      await assert.rejects(
+        resolver.resolvePromptValue(reference),
+        /resolves outside the workspace and was blocked/
+      );
+    }
+    const sync = resolver.resolvePathSync("./prompts/x.prompt.md");
+    assert.strictEqual(sync.status, PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE);
+    if (sync.status === PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE) {
+      assert.match(
+        String(sync.error),
+        /resolves outside the workspace and was blocked/
+      );
+    }
+  });
+
+  test("allows symlinks back inside and into an approved external root", async () => {
+    const inside = path.join(workspaceRoot, "inside.prompt.md");
+    const approvedRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-approved-")
+    );
+    temporaryDirectories.push(approvedRoot);
+    const approvedFile = path.join(approvedRoot, "approved.prompt.md");
+    await fs.writeFile(inside, "inside", "utf8");
+    await fs.writeFile(approvedFile, "approved", "utf8");
+    await fs.symlink(inside, path.join(workspaceRoot, "inside-link.prompt.md"));
+    await fs.symlink(
+      approvedFile,
+      path.join(workspaceRoot, "approved-link.prompt.md")
+    );
+
+    const resolver = new PromptFileResolver({
+      workspaceRoot,
+      trustedRoots: [workspaceRoot],
+      approvedExternalRoots: [approvedRoot],
+    });
+    assert.strictEqual(
+      await resolver.resolvePromptValue("./inside-link.prompt.md"),
+      "inside"
+    );
+    assert.strictEqual(
+      await resolver.resolvePromptValue("./approved-link.prompt.md"),
+      "approved"
+    );
+  });
+
   test("allows a UI prompt-file read from its own state root without widening workspace roots", async () => {
     const ownStateRoot = path.join(
       path.dirname(workspaceRoot),

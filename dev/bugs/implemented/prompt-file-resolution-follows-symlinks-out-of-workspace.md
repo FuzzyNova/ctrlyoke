@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, reproduced against `out/`)
 - **Area:** `src/core/PromptFileResolver.ts`
-- **Severity:** high (security: a cloned repo can make a step send any readable file outside the workspace to the AI harness)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

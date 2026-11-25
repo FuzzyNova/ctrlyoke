@@ -18,6 +18,11 @@ import {
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
+import {
+  RealpathContainmentChecker,
+  isPathWithinAnyDirectory,
+  realpathOrSelf,
+} from "../utils/PathSecurity";
 
 export interface PromptFileResolverOptions {
   workspaceRoot?: string;
@@ -106,6 +111,9 @@ export class PromptFileResolver {
   private readonly sourceCheckoutRoot?: string;
   private readonly approvedExternalRoots?: readonly string[];
   private readonly allowWorkflowRelativeReferences: boolean;
+  private readonly containmentChecker?: RealpathContainmentChecker;
+  private readonly sourceRuntimeContainmentChecker?: RealpathContainmentChecker;
+  private readonly containmentRoots?: readonly string[];
 
   constructor(options: PromptFileResolverOptions = {}) {
     this.workspaceRoot = options.workspaceRoot;
@@ -114,6 +122,22 @@ export class PromptFileResolver {
     this.ownStateRoots = options.ownStateRoots;
     this.sourceCheckoutRoot = options.sourceCheckoutRoot;
     this.approvedExternalRoots = options.approvedExternalRoots;
+    const containmentRoots = [
+      ...(options.trustedRoots ?? []),
+      ...(options.approvedExternalRoots ?? []),
+      ...(options.ownStateRoots ?? []),
+    ];
+    if (containmentRoots.length > 0) {
+      this.containmentRoots = containmentRoots;
+      this.containmentChecker = new RealpathContainmentChecker(
+        containmentRoots
+      );
+    }
+    if (options.sourceCheckoutRoot) {
+      this.sourceRuntimeContainmentChecker = new RealpathContainmentChecker([
+        options.sourceCheckoutRoot,
+      ]);
+    }
     this.allowWorkflowRelativeReferences =
       options.allowWorkflowRelativeReferences ?? true;
   }
@@ -270,10 +294,18 @@ export class PromptFileResolver {
       if (!this.isCandidateAllowed(candidate)) {
         continue;
       }
-
+      const containment = this.checkCandidateSync(candidate);
+      if (!containment.allowed) {
+        return this.blockedResolution(
+          candidate,
+          candidates,
+          containment.resolvedPath
+        );
+      }
+      const readablePath = containment.resolvedPath;
       let stats: fs.Stats;
       try {
-        stats = fs.statSync(candidate);
+        stats = fs.statSync(readablePath);
       } catch (error) {
         if (
           hasErrnoCode(error, NODE_ERROR_CODES.ENOENT, NODE_ERROR_CODES.ENOTDIR)
@@ -282,7 +314,7 @@ export class PromptFileResolver {
         }
         return {
           status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
-          path: candidate,
+          path: readablePath,
           candidates,
           error,
         };
@@ -293,16 +325,16 @@ export class PromptFileResolver {
       }
 
       try {
-        fs.accessSync(candidate, fs.constants.R_OK);
+        fs.accessSync(readablePath, fs.constants.R_OK);
         return {
           status: PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED,
-          path: candidate,
+          path: readablePath,
           candidates,
         };
       } catch (error) {
         return {
           status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
-          path: candidate,
+          path: readablePath,
           candidates,
           error,
         };
@@ -386,6 +418,24 @@ export class PromptFileResolver {
     sourceRuntimeFallbackCandidate?: string
   ): Promise<PromptFilePathResolution> {
     for (const candidate of candidates) {
+      const isSourceRuntimeCandidate =
+        candidate === sourceRuntimeFallbackCandidate ||
+        !this.isCandidateAllowed(candidate);
+      const sourceRuntimeAllowed = isSourceRuntimeCandidate
+        ? await this.isCandidateAllowedAsync(candidate, true)
+        : true;
+      if (!sourceRuntimeAllowed) continue;
+      const containment = isSourceRuntimeCandidate
+        ? await this.sourceRuntimeContainmentChecker?.check(candidate)
+        : await this.checkCandidate(candidate);
+      if (!containment) continue;
+      if (!containment.allowed) {
+        return this.blockedResolution(
+          candidate,
+          candidates,
+          containment.resolvedPath
+        );
+      }
       const allowed = await this.isCandidateAllowedAsync(
         candidate,
         candidate === sourceRuntimeFallbackCandidate
@@ -393,10 +443,11 @@ export class PromptFileResolver {
       if (!allowed) {
         continue;
       }
+      const readablePath = containment.resolvedPath;
 
       let stats: fs.Stats;
       try {
-        stats = await fsp.stat(candidate);
+        stats = await fsp.stat(readablePath);
       } catch (error) {
         if (
           hasErrnoCode(error, NODE_ERROR_CODES.ENOENT, NODE_ERROR_CODES.ENOTDIR)
@@ -405,7 +456,7 @@ export class PromptFileResolver {
         }
         return {
           status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
-          path: candidate,
+          path: readablePath,
           candidates,
           error,
         };
@@ -416,16 +467,16 @@ export class PromptFileResolver {
       }
 
       try {
-        await fsp.access(candidate, fs.constants.R_OK);
+        await fsp.access(readablePath, fs.constants.R_OK);
         return {
           status: PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED,
-          path: candidate,
+          path: readablePath,
           candidates,
         };
       } catch (error) {
         return {
           status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
-          path: candidate,
+          path: readablePath,
           candidates,
           error,
         };
@@ -513,6 +564,44 @@ export class PromptFileResolver {
       ownStateRoots: this.ownStateRoots,
       approvedExternalRoots: this.approvedExternalRoots ?? [],
     }).allowed;
+  }
+
+  private async checkCandidate(
+    candidate: string
+  ): Promise<{ resolvedPath: string; allowed: boolean }> {
+    return this.containmentChecker
+      ? this.containmentChecker.check(candidate)
+      : { resolvedPath: candidate, allowed: true };
+  }
+
+  private checkCandidateSync(candidate: string): {
+    resolvedPath: string;
+    allowed: boolean;
+  } {
+    if (!this.containmentRoots) {
+      return { resolvedPath: candidate, allowed: true };
+    }
+    const resolvedPath = realpathOrSelf(candidate);
+    const realRoots = this.containmentRoots.map(realpathOrSelf);
+    return {
+      resolvedPath,
+      allowed: isPathWithinAnyDirectory(resolvedPath, realRoots),
+    };
+  }
+
+  private blockedResolution(
+    candidate: string,
+    candidates: readonly string[],
+    resolvedPath: string
+  ): PromptFilePathResolution {
+    return {
+      status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
+      path: candidate,
+      candidates,
+      error: new Error(
+        `Prompt file reference resolves outside the workspace and was blocked: "${resolvedPath}". Add the target folder to permissions.trustedExternalRoots to allow it`
+      ),
+    };
   }
 }
 
