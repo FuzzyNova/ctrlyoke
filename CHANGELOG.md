@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Headless Qwen usage now includes the process-wide stdout result total and correctly prices cached input tokens.
 - `import --continue` now reports the imported run, continues it in the same process, and preserves a single JSON result with the continuation exit code.
 - PowerShell command quoting now escapes ASCII and typographic single-quote characters in script invocations, previews, and Windows CLI lookup.
 - The prompt editor preserves dirty step edits in Recent Prompts and protects non-empty script drafts when replacing editor content.

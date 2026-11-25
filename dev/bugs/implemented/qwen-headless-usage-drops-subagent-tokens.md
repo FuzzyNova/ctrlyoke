@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, reproduced with a scratch unit test)
 - **Area:** `src/core/harness/qwen/QwenHarnessAdapter.ts`, `src/core/harness/qwen/QwenLogParser.ts`
-- **Severity:** medium (undercounts tokens and cost on every headless qwen-cli step that delegates to subagents; shipped since v0.3.0)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

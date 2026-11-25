@@ -58,6 +58,7 @@ import {
 } from "./QwenSystemSettings";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
+import { QwenHeadlessUsageAccumulator } from "./QwenHeadlessUsageAccumulator";
 import { QwenHeadlessControlChannel } from "./QwenHeadlessControlChannel";
 import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
 import { versionSatisfies } from "../../../utils/HarnessVersion";
@@ -303,6 +304,17 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
     };
   }
   readonly logParser = new QwenLogParser();
+  private readonly headlessUsage = new QwenHeadlessUsageAccumulator((usage) =>
+    this.logParser.setHeadlessResultUsage(usage)
+  );
+
+  observeHeadlessStdout(chunk: string): void {
+    this.headlessUsage.ingest(chunk);
+  }
+
+  finishHeadlessStdout(): void {
+    this.headlessUsage.flush();
+  }
 
   /**
    * qwen3.5-flash resolved a relative `.ctrlyoke/temp/...` reference against a
@@ -868,6 +880,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * @returns Headless mode arguments
    */
   buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
+    this.headlessUsage.reset();
     this.logParser.setSubagentUsageEnabled(false);
     // Stream-json SDK mode requires stdin control messages: the coordinator sends
     // initialize, waits for its response, then sends the first user message.
@@ -910,6 +923,7 @@ export class QwenHarnessAdapter implements IHarnessAdapter {
    * @returns Complete arguments array
    */
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+    this.headlessUsage.reset();
     this.logParser.setSubagentUsageEnabled(true);
     return ["-i", promptText, ...baseArgs];
   }

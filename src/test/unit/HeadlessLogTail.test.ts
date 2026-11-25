@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
 import type { CliEvent, UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
@@ -6,6 +8,7 @@ import { HeadlessLogTail } from "../../core/harness/shared/HeadlessLogTail";
 import { AntigravityHarnessAdapter } from "../../core/harness/antigravity/AntigravityHarnessAdapter";
 import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapter";
 import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
+import { QWEN_EVENT_TYPES } from "../../core/harness/qwen/QwenProtocolConstants";
 import { SubagentSourceFollower } from "../../core/harness/shared/SubagentSourceFollower";
 import type {
   BaseCliEvent,
@@ -94,6 +97,67 @@ class TrackingSubagentSourceFollower extends SubagentSourceFollower {
 }
 
 suite("HeadlessLogTail", () => {
+  test("Qwen headless stdout result usage overrides log accumulation", async () => {
+    const fixtureRoot = path.resolve(
+      __dirname,
+      "../../../src/test/fixtures/qwen"
+    );
+    const stdout = fs.readFileSync(
+      path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
+      "utf8"
+    );
+    const sessionEvents = fs
+      .readFileSync(
+        path.join(fixtureRoot, "headless-golden.session.jsonl"),
+        "utf8"
+      )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as BaseCliEvent);
+    const provider = new QwenHarnessAdapter();
+    provider.buildHeadlessArgs([], "prompt");
+    const fake = createParser({ reads: [sessionEvents] });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      onStdoutChunkObserved: provider.observeHeadlessStdout.bind(provider),
+      onStdoutEnded: provider.finishHeadlessStdout.bind(provider),
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 0,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk(stdout);
+    const { events } = await tail.finish();
+    const output = provider.logParser.extractResponse(events);
+    const resultUsage = JSON.parse(
+      stdout
+        .split("\n")
+        .find((line) => JSON.parse(line).type === QWEN_EVENT_TYPES.RESULT)!
+    ).usage;
+
+    assert.strictEqual(
+      output.metadata.usage?.inputTokens,
+      resultUsage.input_tokens
+    );
+    assert.strictEqual(
+      output.metadata.usage?.outputTokens,
+      resultUsage.output_tokens
+    );
+    assert.strictEqual(
+      output.metadata.usage?.totalTokens,
+      resultUsage.total_tokens
+    );
+    assert.strictEqual(
+      output.metadata.usage?.cachedInputTokens,
+      resultUsage.cache_read_input_tokens
+    );
+    assert.strictEqual(output.metadata.usage?.totalConfidence, "provider");
+  });
+
   test("reads the log on each stdout tick and streams parsed events", async () => {
     const event = { type: "text", text: "from log" };
     const fake = createParser({ reads: [[], [event]] });
