@@ -335,6 +335,19 @@ describe("moveStepToNewStepDraft", () => {
     expect(store().scriptCommand).toBe("npm test");
     expect(store().selectionTarget.kind).toBe("newPrompt");
   });
+
+  it("keeps a replaced script draft when restoring a failed steer", () => {
+    store().setStepType(STEP_TYPES.SCRIPT);
+    store().setScriptCommand("npm run deploy -- --prod");
+
+    store().moveStepToNewStepDraft(0, makePromptStep(), false, true);
+
+    expect(store().promptText).toBe("Do something useful");
+    expect(store().savedNewPromptState).toMatchObject({
+      stepType: STEP_TYPES.SCRIPT,
+      scriptCommand: "npm run deploy -- --prod",
+    });
+  });
 });
 
 describe("loadRecentPrompt", () => {
@@ -357,6 +370,19 @@ describe("loadRecentPrompt", () => {
 
     expect(store().promptText).toBe("earlier prompt");
     expect(usePromptHistoryStore.getState().entries).toEqual([]);
+  });
+
+  it("remembers dirty edits to an existing step before replacing them", () => {
+    store().enterEditMode(0, makePromptStep({ prompt: "saved text" }));
+    store().setPromptText("unsaved careful edit");
+
+    store().loadRecentPrompt("earlier prompt");
+
+    expect(store().promptText).toBe("earlier prompt");
+    expect(usePromptHistoryStore.getState().entries[0]).toMatchObject({
+      text: "unsaved careful edit",
+      kind: PROMPT_HISTORY_KINDS.DRAFT,
+    });
   });
 });
 

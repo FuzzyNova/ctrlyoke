@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The prompt editor preserves dirty step edits in Recent Prompts and protects non-empty script drafts when replacing editor content.
 - Custom templates no longer inherit community install markers, and community install provenance preserves YAML comments and formatting.
 - MCP step preset lookup rejects inherited object property names, preserving the run's authored gates.
 - Stale-lock normalization settles a recovered run before a successor can acquire its runner lock.

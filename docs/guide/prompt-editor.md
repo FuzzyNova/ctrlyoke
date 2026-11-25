@@ -78,8 +78,9 @@ so it selects a complete reference such as `@src/app.ts` at once.
 **Recent Prompts** lists the last 15 prompts you ran, queued or steered from
 the editor, newest first, in every workflow. Choose one to put it back in the
 editor, for example to send a prompt you queued in the wrong workflow again in
-the right one. If the editor holds unsent text, that text is added to the list
-before it is replaced, so you can switch back to it. The list is kept per
+the right one. If the editor holds unsent text, including edits to an existing
+step that have not been updated, that text is added to the list before it is
+replaced, so you can switch back to it. The list is kept per
 dashboard: the VS Code panel and each browser have their own.
 
 To take back a step that is still waiting in the queue, use **Move to Editor**

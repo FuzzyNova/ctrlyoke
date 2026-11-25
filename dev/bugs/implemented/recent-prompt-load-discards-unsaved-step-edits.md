@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, failing vitest written)
 - **Area:** `src/ui/webview-react/store/editorStore.ts`
-- **Severity:** medium (silent loss of user-typed text)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

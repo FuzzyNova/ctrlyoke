@@ -397,7 +397,8 @@ function readPersistedNewStepDraft(
 
 /**
  * Keep unsent prompt text the editor is about to replace in Recent Prompts.
- * A script draft has no prompt text and is left alone.
+ * Script drafts are preserved by their caller because prompt history stores
+ * prompt text only.
  */
 function rememberReplacedPromptDraft(
   draft: Pick<NewStepDraftFields, "promptText" | "stepType"> | null
@@ -454,12 +455,13 @@ interface EditorActions {
   moveStepToNewStepDraft: (
     index: number,
     step: WorkflowStep,
-    restorePendingEdit?: boolean
+    restorePendingEdit?: boolean,
+    preserveReplacedScriptDraft?: boolean
   ) => void;
   /**
    * Replace the editor's prompt text with a Recent Prompts entry. Unsent text
-   * in a new prompt is kept in Recent Prompts first; an existing step's text
-   * is still in the step, so it is simply edited.
+   * in a new prompt is kept in Recent Prompts first; dirty edits to an
+   * existing step are also kept.
    */
   loadRecentPrompt: (text: string) => void;
   cancelEdit: () => void;
@@ -934,14 +936,25 @@ export const useEditorStore = create<
     }
   },
 
-  moveStepToNewStepDraft: (index, step, restorePendingEdit = true) => {
+  moveStepToNewStepDraft: (
+    index,
+    step,
+    restorePendingEdit = true,
+    preserveReplacedScriptDraft = false
+  ) => {
     const before = get();
-    rememberReplacedPromptDraft(
+    const replacedDraft =
       before.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
         ? before
         : (before.savedNewPromptState ??
-            readPersistedNewStepDraft(getVsCodeApi()))
-    );
+          readPersistedNewStepDraft(getVsCodeApi()));
+    rememberReplacedPromptDraft(replacedDraft);
+    const preservedScriptDraft =
+      preserveReplacedScriptDraft &&
+      replacedDraft?.stepType === STEP_TYPES.SCRIPT &&
+      replacedDraft.scriptCommand.trim().length > 0
+        ? restoreNewStepDraft(replacedDraft)
+        : null;
 
     // Loading the step through edit mode reuses its step-to-editor mapping
     // and picks up unsaved edits cached for it; the editor then leaves edit
@@ -957,7 +970,7 @@ export const useEditorStore = create<
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null,
       originalPromptData: null,
-      savedNewPromptState: null,
+      savedNewPromptState: preservedScriptDraft,
       isDirty: true,
       pendingEdits,
     });
@@ -968,6 +981,13 @@ export const useEditorStore = create<
     const state = get();
     if (state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) {
       rememberReplacedPromptDraft(state);
+    } else if (
+      state.originalPromptData &&
+      "prompt" in state.originalPromptData &&
+      state.promptText !== state.originalPromptData.prompt &&
+      state.promptText.trim().length > 0
+    ) {
+      usePromptHistoryStore.getState().rememberDraft(state.promptText);
     }
     set({ promptText: text, isDirty: true });
   },

@@ -1086,6 +1086,35 @@ describe("StepEditor — Send Steer Message", () => {
     );
   });
 
+  it("keeps a script draft when restoring a failed queued-step steer", () => {
+    const queuedStep = {
+      type: STEP_TYPES.PROMPT,
+      name: "Queued step",
+      prompt: "queued steer text",
+      enabled: true,
+    } as WorkflowStep;
+    useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+    useEditorStore.getState().setScriptCommand("npm run deploy -- --prod");
+    render(<StepEditor />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+            text: "queued steer text",
+            origin: { kind: "queuedStep", stepIndex: 2, step: queuedStep },
+          },
+        })
+      );
+    });
+
+    expect(useEditorStore.getState().savedNewPromptState).toMatchObject({
+      stepType: STEP_TYPES.SCRIPT,
+      scriptCommand: "npm run deploy -- --prod",
+    });
+  });
+
   it("keeps another step's in-progress edit when restoring a failed queued steer", () => {
     const editedStep = {
       type: STEP_TYPES.PROMPT,

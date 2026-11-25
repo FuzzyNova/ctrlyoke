@@ -4,6 +4,7 @@ import type {
   ContextMenuSubmenu,
 } from "../components/shared/ContextMenu";
 import { selectionTargetKey, useEditorStore } from "@store/editorStore";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
@@ -304,20 +305,32 @@ export function buildQueuedStepHandoffMenuItems({
   const removeStep = () =>
     sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { indices: [stepIndex] });
 
+  const editorState = useEditorStore.getState();
+  const replacedDraft =
+    editorState.selectionTarget.kind === "newPrompt"
+      ? editorState
+      : editorState.savedNewPromptState;
+  const scriptDraftWouldBeReplaced =
+    replacedDraft?.stepType === STEP_TYPES.SCRIPT &&
+    replacedDraft.scriptCommand.trim().length > 0;
+  const moveDisabledReason =
+    removeDisabledReason ??
+    (scriptDraftWouldBeReplaced
+      ? "Save or clear the script draft before moving a step into the editor"
+      : undefined);
   const moveToEditor: ContextMenuItem = {
     label: "Move to Editor",
     icon: "codicon-edit",
-    disabled: removeDisabledReason !== undefined,
+    disabled: moveDisabledReason !== undefined,
     title: "Load this step into the prompt editor and remove it from the queue",
-    disabledTitle: removeDisabledReason,
+    disabledTitle: moveDisabledReason,
     onClick: () => {
-      if (removeDisabledReason !== undefined) return;
+      if (moveDisabledReason !== undefined) return;
       useEditorStore.getState().moveStepToNewStepDraft(stepIndex, step);
       removeStep();
     },
   };
 
-  const editorState = useEditorStore.getState();
   const queuedEdit =
     editorState.pendingEdits[
       selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index: stepIndex })

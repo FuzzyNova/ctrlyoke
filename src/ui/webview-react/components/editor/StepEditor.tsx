@@ -869,7 +869,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         if (origin?.kind === STEER_ORIGIN_KINDS.QUEUED_STEP) {
           useEditorStore
             .getState()
-            .moveStepToNewStepDraft(origin.stepIndex, origin.step, false);
+            .moveStepToNewStepDraft(origin.stepIndex, origin.step, false, true);
           return;
         }
         const restored =

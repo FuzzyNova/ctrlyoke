@@ -747,6 +747,19 @@ describe("useStepContextMenu", () => {
       });
     });
 
+    it("disables Move to Editor while a non-empty script draft would be replaced", () => {
+      useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+      useEditorStore.getState().setScriptCommand("npm run deploy -- --prod");
+      openMenuOnQueuedStep();
+
+      const move = screen.getByRole("menuitem", { name: "Move to Editor" });
+      expect(move).toBeDisabled();
+      expect(move).toHaveAttribute(
+        "title",
+        "Save or clear the script draft before moving a step into the editor"
+      );
+    });
+
     it("steers the step's prompt to the only live session and removes it", () => {
       openHeadlessTarget(0);
       openMenuOnQueuedStep();
