@@ -85,6 +85,23 @@ suite("SecretStore", () => {
     );
   });
 
+  test("canonicalizes symlinked workspace roots before hashing", async () => {
+    const parent = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-secret-link-"));
+    const target = path.join(parent, "target");
+    const alias = path.join(parent, "alias");
+    await fs.mkdir(target);
+    try {
+      await fs.symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+      assert.strictEqual(workspaceSecretHash(target), workspaceSecretHash(alias));
+      assert.strictEqual(
+        workspaceSecretKeyForRoot(target, "TOKEN"),
+        workspaceSecretKeyForRoot(alias, "TOKEN")
+      );
+    } finally {
+      await fs.rm(parent, { recursive: true, force: true });
+    }
+  });
+
   test("recognizes only managed secret and metadata keys for migration", () => {
     assert.strictEqual(
       isManagedSecretStorageKey(userSecretKey("API_KEY")),

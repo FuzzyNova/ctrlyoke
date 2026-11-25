@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent)
 - **Area:** `src/platform/SecretKey.ts`
-- **Severity:** medium (a secret set for a project can read back as missing for the same project)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

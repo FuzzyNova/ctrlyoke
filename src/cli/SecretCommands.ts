@@ -21,6 +21,7 @@ import {
 } from "../config/SecretGrantsTrustStore";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import {
+  legacyWorkspaceSecretKeyForRoot,
   userSecretKey,
   workspaceSecretKeyForRoot,
 } from "../platform/SecretKey";
@@ -185,7 +186,11 @@ export async function removeSecretCommand(
   }
 
   const key = secretKeyForScope(scope, workspaceRoot, name);
-  const value = await dependencies.secretStore.get(key);
+  const legacyKey = scope === SETTING_SCOPES.WORKSPACE
+    ? legacyWorkspaceSecretKeyForRoot(workspaceRoot, name)
+    : key;
+  const value = await dependencies.secretStore.get(key) ??
+    (legacyKey === key ? undefined : await dependencies.secretStore.get(legacyKey));
   if (value === undefined) {
     const otherScope =
       scope === SETTING_SCOPES.USER
@@ -207,6 +212,7 @@ export async function removeSecretCommand(
     return;
   }
   await dependencies.secretStore.delete(key);
+  if (legacyKey !== key) await dependencies.secretStore.delete(legacyKey);
   writeSecretSuccess(
     options.json,
     io,

@@ -1,5 +1,8 @@
 import { INTERACTIVE_TERMINAL_MODES } from "../../types/DashboardConstants";
 import * as assert from "assert";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import { suite, test } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
@@ -7,6 +10,7 @@ import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapt
 import type { SecretStore } from "../../platform/SecretStore";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import {
+  legacyWorkspaceSecretKeyForRoot,
   userSecretKey,
   workspaceSecretKeyForRoot,
 } from "../../platform/SecretKey";
@@ -117,6 +121,64 @@ suite("SecretResolver", () => {
       WORKSPACE: "workspace-value",
       USER: "user-value",
     });
+  });
+
+  test("migrates a legacy workspace key when resolving through a symlink", async () => {
+    const parent = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-secret-migrate-"));
+    const target = path.join(parent, "target");
+    const alias = path.join(parent, "alias");
+    await fs.mkdir(target);
+    try {
+      await fs.symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+      const store = new InMemorySecretStore({
+        [legacyWorkspaceSecretKeyForRoot(alias, "LEGACY_TOKEN")]: "secret-value",
+      });
+      const resolved = await resolveSecretEnvironment(["LEGACY_TOKEN"], {
+        workspaceRoot: alias,
+        secretStore: store,
+        environment: {},
+      });
+      assert.deepStrictEqual(resolved, { LEGACY_TOKEN: "secret-value" });
+      assert.strictEqual(
+        await store.get(workspaceSecretKeyForRoot(target, "LEGACY_TOKEN")),
+        "secret-value"
+      );
+      assert.strictEqual(
+        await store.get(legacyWorkspaceSecretKeyForRoot(alias, "LEGACY_TOKEN")),
+        undefined
+      );
+    } finally {
+      await fs.rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test("reads a workspace secret set through another symlink spelling", async () => {
+    const parent = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-alias-")
+    );
+    const target = path.join(parent, "target");
+    const alias = path.join(parent, "alias");
+    await fs.mkdir(target);
+    try {
+      await fs.symlink(
+        target,
+        alias,
+        process.platform === "win32" ? "junction" : "dir"
+      );
+      const store = new InMemorySecretStore({
+        [workspaceSecretKeyForRoot(alias, "ALIAS_TOKEN")]: "secret-value",
+      });
+      assert.deepStrictEqual(
+        await resolveSecretEnvironment(["ALIAS_TOKEN"], {
+          workspaceRoot: target,
+          secretStore: store,
+          environment: {},
+        }),
+        { ALIAS_TOKEN: "secret-value" }
+      );
+    } finally {
+      await fs.rm(parent, { recursive: true, force: true });
+    }
   });
 
   test("rejects a missing managed or environment secret without exposing a value", async () => {

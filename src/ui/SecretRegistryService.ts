@@ -21,6 +21,8 @@ import {
 import {
   userSecretKey,
   userSecretMetadataKey,
+  legacyWorkspaceSecretKeyForRoot,
+  legacyWorkspaceSecretMetadataKeyForRoot,
   workspaceSecretKeyForRoot,
   workspaceSecretMetadataKeyForRoot,
 } from "../platform/SecretKey";
@@ -281,14 +283,27 @@ export class SecretRegistryService {
 
     const workspaceRoot = this.options.getWorkspaceRoot();
     const [workspaceValue, userValue] = await Promise.all([
-      workspaceRoot
-        ? this.options.secretStore.get(
-            workspaceSecretKeyForRoot(workspaceRoot, name)
-          )
-        : undefined,
+      workspaceRoot ? this.readWorkspaceValue(workspaceRoot, name) : undefined,
       this.options.secretStore.get(userSecretKey(name)),
     ]);
     return workspaceValue !== undefined || userValue !== undefined;
+  }
+
+  private async readWorkspaceValue(
+    workspaceRoot: string,
+    name: string
+  ): Promise<string | undefined> {
+    const key = workspaceSecretKeyForRoot(workspaceRoot, name);
+    const value = await this.options.secretStore.get(key);
+    if (value !== undefined) return value;
+    const legacyKey = legacyWorkspaceSecretKeyForRoot(workspaceRoot, name);
+    if (legacyKey === key) return undefined;
+    const legacyValue = await this.options.secretStore.get(legacyKey);
+    if (legacyValue !== undefined) {
+      await this.options.secretStore.store(key, legacyValue);
+      await this.options.secretStore.delete(legacyKey);
+    }
+    return legacyValue;
   }
 
   async list(
@@ -363,8 +378,16 @@ export class SecretRegistryService {
     assertWriteScope(scope);
     validateSecretName(name);
     this.registryCache.delete(scope);
-    await this.options.secretStore.delete(this.secretKey(scope, name));
-    await this.options.secretStore.delete(this.metadataKey(scope, name));
+    await Promise.all([
+      this.options.secretStore.delete(this.secretKey(scope, name)),
+      this.options.secretStore.delete(this.metadataKey(scope, name)),
+      ...(scope === SETTING_SCOPES.WORKSPACE
+        ? [
+            this.options.secretStore.delete(this.legacySecretKey(name)),
+            this.options.secretStore.delete(this.legacyMetadataKey(name)),
+          ]
+        : []),
+    ]);
   }
 
   /** Workspace secrets exist only while a folder is open. */
@@ -421,6 +444,17 @@ export class SecretRegistryService {
       : workspaceSecretMetadataKeyForRoot(this.requireWorkspaceRoot(), name);
   }
 
+  private legacySecretKey(name: string): string {
+    return legacyWorkspaceSecretKeyForRoot(this.requireWorkspaceRoot(), name);
+  }
+
+  private legacyMetadataKey(name: string): string {
+    return legacyWorkspaceSecretMetadataKeyForRoot(
+      this.requireWorkspaceRoot(),
+      name
+    );
+  }
+
   private requireWorkspaceRoot(): string {
     const root = this.options.getWorkspaceRoot();
     if (!root) {
@@ -439,7 +473,9 @@ export class SecretRegistryService {
       if (
         candidate &&
         isValidSecretName(candidate) &&
-        key === this.secretKey(scope, candidate)
+        (key === this.secretKey(scope, candidate) ||
+          (scope === SETTING_SCOPES.WORKSPACE &&
+            key === this.legacySecretKey(candidate)))
       ) {
         names.add(candidate);
       }
@@ -469,6 +505,9 @@ export class SecretRegistryService {
     const keys = missing.flatMap((name) => [
       this.secretKey(scope, name),
       this.metadataKey(scope, name),
+      ...(scope === SETTING_SCOPES.WORKSPACE
+        ? [this.legacySecretKey(name), this.legacyMetadataKey(name)]
+        : []),
     ]);
     const values = this.options.secretStore.getMany
       ? await this.options.secretStore.getMany(keys)
@@ -481,11 +520,33 @@ export class SecretRegistryService {
           )
         );
     for (const name of missing) {
+      const valueKey = this.secretKey(scope, name);
+      const metadataKey = this.metadataKey(scope, name);
+      const legacyValueKey = scope === SETTING_SCOPES.WORKSPACE
+        ? this.legacySecretKey(name)
+        : valueKey;
+      const legacyMetadataKey = scope === SETTING_SCOPES.WORKSPACE
+        ? this.legacyMetadataKey(name)
+        : metadataKey;
+      let value = values.get(valueKey);
+      let metadataValue = values.get(metadataKey);
+      if (value === undefined && legacyValueKey !== valueKey) {
+        value = values.get(legacyValueKey);
+        if (value !== undefined) {
+          await this.options.secretStore.store(valueKey, value);
+          await this.options.secretStore.delete(legacyValueKey);
+        }
+      }
+      if (metadataValue === undefined && legacyMetadataKey !== metadataKey) {
+        metadataValue = values.get(legacyMetadataKey);
+        if (metadataValue !== undefined) {
+          await this.options.secretStore.store(metadataKey, metadataValue);
+          await this.options.secretStore.delete(legacyMetadataKey);
+        }
+      }
       snapshot.credentials.set(name, {
-        isSet: values.get(this.secretKey(scope, name)) !== undefined,
-        metadata: parseSecretMetadata(
-          values.get(this.metadataKey(scope, name))
-        ),
+        isSet: value !== undefined,
+        metadata: parseSecretMetadata(metadataValue),
       });
     }
     return snapshot;
