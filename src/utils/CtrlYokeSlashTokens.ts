@@ -3,7 +3,10 @@ import {
   type CtrlYokeSlashTokenKind,
 } from "../types/DashboardConstants";
 import { maskCodeRanges } from "./FileReferenceParser";
-import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
+import {
+  NOT_AFTER_BOUNDARY,
+  NOT_AFTER_PATH_SEPARATOR,
+} from "./ReferenceBoundary";
 
 // A name may contain `.`, `_`, and `-` internally but must start and end on an
 // alphanumeric, so ordinary sentence punctuation is not swallowed into it:
@@ -15,14 +18,14 @@ const TOKEN_NAME_PATTERN = "[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?";
 // final period in `/skill:commit.`.
 const TOKEN_BOUNDARY_PATTERN = "[a-zA-Z0-9:]|[._-][a-zA-Z0-9:]";
 const TOKEN_PATTERN = new RegExp(
-  `${NOT_AFTER_BOUNDARY}(?<![\\/.:])\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})(?!${TOKEN_BOUNDARY_PATTERN})`,
+  `${NOT_AFTER_BOUNDARY}${NOT_AFTER_PATH_SEPARATOR}\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})(?!${TOKEN_BOUNDARY_PATTERN})`,
   "gu"
 );
 // A partial token at the end of the text being typed, with the same start
 // boundary as TOKEN_PATTERN so completion opens exactly where a finished token
 // would be recognised (after whitespace, `"`, `(`, never inside a path).
 const PARTIAL_TOKEN_AT_END_PATTERN = new RegExp(
-  `${NOT_AFTER_BOUNDARY}(?<![\\/.:])\\/[a-zA-Z0-9:._-]*$`,
+  `${NOT_AFTER_BOUNDARY}${NOT_AFTER_PATH_SEPARATOR}\\/[a-zA-Z0-9:._-]*$`,
   "u"
 );
 const COMPLETE_TOKEN_PATTERN = new RegExp(

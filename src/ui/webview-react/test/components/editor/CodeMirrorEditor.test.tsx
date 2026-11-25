@@ -2131,6 +2131,23 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
     });
   });
 
+  it.each(["notes:", "done.", "dir/", "dir\\"])(
+    "prepends a space before an @ reference inserted directly after %s",
+    (docText) => {
+      const result = buildPromptReferenceInsertion(
+        docText,
+        {
+          requestId: "insert-separator",
+          references: ["@src/app.ts"],
+          mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+        },
+        { from: docText.length, to: docText.length }
+      );
+
+      expect(result.text).toBe(" @src/app.ts ");
+    }
+  );
+
   it("recognizes astral Unicode letters as filename-legal before the cursor", () => {
     const text = "𐐀";
     const result = buildPromptReferenceInsertion(
