@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `history show` treats recorded condition and worktree-setup script results as terminal, including in existing run histories.
 - Workflow discovery, file search, the hosted file viewer and run export work in folders that are not git repositories when Git runs in a non-English locale.
 - Script step comparison fields now accept whole-value variable placeholders without failing schema validation.
 - Merged settings now reflect workspace trust decisions changed by another process without requiring a settings-file update.

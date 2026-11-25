@@ -595,6 +595,11 @@ export class RunOutputResolver {
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
           state.value.scriptOutput = event.scriptOutput;
+          // Phase scripts have no ATTEMPT_TERMINATED timeline record. Their
+          // execution record is written only after the process has finished.
+          if (event.attempt.phase !== undefined) {
+            state.terminated = true;
+          }
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
           state.value.terminalState = event.terminalState;
@@ -652,6 +657,15 @@ export class RunOutputResolver {
     key: string
   ): RunOutputResolverAttemptEvent {
     const appendsOutput = state.continuation && !state.value.output;
+    if (
+      state.value.phase !== undefined &&
+      state.value.scriptOutput &&
+      !state.value.terminalState
+    ) {
+      state.value.terminalState = state.value.output?.scriptVerdict
+        ? "completed"
+        : "cancelled";
+    }
     return {
       kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
       attempt: this.finishAttemptState(state, key, appendsOutput),
