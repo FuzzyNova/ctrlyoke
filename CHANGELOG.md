@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Git branch suggestions keep bare names when tags collide, and ambiguous worktree directory suggestions insert full paths.
 - Harness detection retries no longer freeze other dashboard actions while CLI checks run.
 
 ## [0.10.0] - 2026-11-24

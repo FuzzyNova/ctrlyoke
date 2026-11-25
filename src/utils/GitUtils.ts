@@ -2226,7 +2226,7 @@ export async function listLocalBranches(
       "for-each-ref",
       "--sort=-committerdate",
       `--format=${[
-        "%(refname:short)",
+        "%(refname:lstrip=2)",
         "%(upstream:short)",
         "%(upstream:track,nobracket)",
         "%(committerdate:unix)",

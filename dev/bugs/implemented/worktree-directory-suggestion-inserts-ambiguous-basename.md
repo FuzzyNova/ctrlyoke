@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude, code review of e2356239f)
 - **Area:** `src/completions/WorktreeDirectoryCompletionHelpers.ts`, `src/core/orchestration/WorktreeManager.ts` (`listWorktreeDirectories`), `src/utils/WorktreeUtils.ts` (`resolveWorktreeDirectory`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

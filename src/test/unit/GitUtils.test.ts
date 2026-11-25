@@ -707,6 +707,18 @@ suite("GitUtils worktree plumbing", function () {
     assert.ok(branch !== null && branches.includes(branch));
   });
 
+  test("lists the bare local branch name when a tag shares its name", async () => {
+    runGit(["branch", "release"]);
+    runGit(["tag", "release"]);
+
+    const branches = (await listLocalBranches(workspaceRoot)).map(
+      (summary) => summary.name
+    );
+
+    assert.ok(branches.includes("release"));
+    assert.ok(!branches.includes("heads/release"));
+  });
+
   test("reports each local branch's upstream tracking state", async () => {
     runGit(["branch", "base"]);
     runGit(["checkout", "-b", "tracking", "--track", "base"]);

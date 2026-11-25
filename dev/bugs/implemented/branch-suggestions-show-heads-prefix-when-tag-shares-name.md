@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude, code review of e2356239f)
 - **Area:** `src/utils/GitUtils.ts` (`listLocalBranches`), `src/completions/BranchCompletionHelpers.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
