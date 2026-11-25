@@ -79,6 +79,7 @@ export const COPILOT_AUTO_MODEL = "auto";
  * generated title-case form.
  */
 export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
+  [COPILOT_AUTO_MODEL]: "Auto",
   "claude-sonnet-5.5": "Claude Sonnet 5.5",
   "claude-sonnet-5": "Claude Sonnet 5",
   "claude-fable-5.2": "Claude Fable 5.2",

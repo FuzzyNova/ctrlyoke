@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced with a real `copilot --model auto` session log)
 - **Area:** `src/core/harness/copilot/CopilotLogParser.ts` (~752-755, ~1063), `src/core/WorkflowExecutor.ts` (~3959-3966), `src/utils/ModelPricing.ts` (~215-239), `src/utils/ModelPricingRegistry.ts` (`resolveModelPricingFromRegistry`), `src/utils/ModelConstants.ts` (`COPILOT_AUTO_MODEL`, `getHarnessModelDisplayName` ~502-518)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

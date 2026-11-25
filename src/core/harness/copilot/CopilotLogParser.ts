@@ -725,6 +725,8 @@ export class CopilotLogParser extends BaseLogParser {
     const outputEvents: CliEvent[] = [];
     let sessionId: string | undefined;
     let model: string | undefined;
+    let resolvedAutoModel: string | undefined;
+    let latestUsageModel: string | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
     let cachedInputTokens = 0;
@@ -752,6 +754,20 @@ export class CopilotLogParser extends BaseLogParser {
       if (event.type === "session.start" && event.data) {
         sessionId = event.data.sessionId;
         model = event.data.selectedModel;
+      }
+
+      if (
+        event.type === COPILOT_EVENT_TYPES.AUTO_MODE_RESOLVED &&
+        typeof event.data?.chosenModel === "string"
+      ) {
+        resolvedAutoModel = event.data.chosenModel;
+      }
+
+      if (
+        event.type === "session.usage_record" &&
+        typeof event.data?.usage?.model === "string"
+      ) {
+        latestUsageModel = event.data.usage.model;
       }
 
       // Headless stdout carries the session identity in its final result event
@@ -1060,7 +1076,9 @@ export class CopilotLogParser extends BaseLogParser {
       events: outputEvents,
       metadata: {
         sessionId,
-        model: (model ?? this.resolvedModel) || undefined,
+        model:
+          (resolvedAutoModel ?? latestUsageModel ?? model ?? this.resolvedModel) ||
+          undefined,
         harness: HARNESS_IDS.COPILOT_CLI,
         error: reportedError,
         errorType: reportedErrorType,

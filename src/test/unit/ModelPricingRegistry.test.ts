@@ -48,6 +48,22 @@ const fixture: ModelPricingRegistryData = {
 };
 
 suite("ModelPricingRegistry", () => {
+  test("does not resolve Copilot auto through another provider's exact model key", () => {
+    const result = resolveModelPricingFromRegistry(
+      {
+        ...fixture,
+        providers: {
+          ...fixture.providers,
+          morph: { auto: { input: 0.85, output: 1.55 } },
+        },
+      },
+      HARNESS_IDS.COPILOT_CLI,
+      "auto"
+    );
+
+    assert.strictEqual(result, undefined);
+  });
+
   test("resolves Copilot CLI models against the github-copilot provider bucket", () => {
     const result = resolveModelPricingFromRegistry(
       fixture,

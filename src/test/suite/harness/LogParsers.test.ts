@@ -4009,6 +4009,40 @@ suite("CopilotLogParser", () => {
   });
 
   suite("extractResponse", () => {
+    test("uses Copilot's auto mode resolved model", () => {
+      const response = parser.extractResponse([
+        {
+          type: "session.start",
+          data: { sessionId: "copilot-auto-session", selectedModel: "auto" },
+          timestamp: "2026-01-17T10:00:00Z",
+        },
+        {
+          type: "session.auto_mode_resolved",
+          data: { chosenModel: "gpt-6-luna", autoTier: "balance" },
+          timestamp: "2026-01-17T10:00:01Z",
+        },
+      ] as unknown as BaseCliEvent[]);
+
+      assert.strictEqual(response.metadata.model, "gpt-6-luna");
+    });
+
+    test("falls back to the latest usage record model for Copilot auto", () => {
+      const response = parser.extractResponse([
+        {
+          type: "session.start",
+          data: { sessionId: "copilot-auto-session", selectedModel: "auto" },
+          timestamp: "2026-01-17T10:00:00Z",
+        },
+        {
+          type: "session.usage_record",
+          data: { usage: { model: "gpt-6-luna" } },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+      ] as unknown as BaseCliEvent[]);
+
+      assert.strictEqual(response.metadata.model, "gpt-6-luna");
+    });
+
     test("should aggregate multi-event responses", () => {
       const events = [
         {
