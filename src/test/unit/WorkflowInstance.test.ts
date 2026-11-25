@@ -4156,7 +4156,10 @@ suite("WorkflowInstance append-and-continue", () => {
         steps,
         tempWorkspace
       );
-      instance.promptQueue.loadPrompts({ steps, maxSteps: 1 }, workingFilePath);
+      instance.promptQueue.loadPrompts(
+        { steps, maxSteps: "{{cap}}" as unknown as number, vars: { cap: "1" } },
+        workingFilePath
+      );
 
       await instance.executeEphemeralPrompt("over cap", {}, ACTION_TYPES.QUEUE);
 

@@ -705,6 +705,51 @@ suite("RunContinuationService topology append transaction", () => {
     );
   });
 
+  test("enforces a templated cap for ordinary and active-group appends", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-topology-templated-limit-")
+    );
+    await seedRun([{ prompt: "existing" }]);
+    const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    source.maxSteps = "{{cap}}" as unknown as number;
+    source.vars = { cap: "1" };
+    await writeTrustedRunFile(runPath, source);
+
+    await assert.rejects(
+      RunContinuationService.appendStepsToRun(
+        workspace, workflowKey, runRef, [{ prompt: "over cap" }], 1, 100,
+        new WorkflowLineageRepository()
+      ),
+      /this run has 1\/1 steps \(workflow maxSteps: 1\)/
+    );
+
+    source._runtime = {
+      currentIndex: 0,
+      executionState: EXECUTION_STATES.RUNNING,
+      activeParallelGroup: {
+        groupId: "active",
+        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+      },
+    };
+    source.steps = [...(source.steps ?? []), { prompt: "existing sibling" }];
+    source.steps[0] = { ...source.steps[0], _runtime: { startedAt: 1 } };
+    source.vars = { cap: "2" };
+    source.parallelGroups = [
+      { id: "active", startIndex: 0, endIndex: 1, failFast: false },
+    ];
+    await writeTrustedRunFile(runPath, source);
+    await assert.rejects(
+      RunContinuationService.appendStepsToActiveParallelGroup(
+        workspace, workflowKey, runRef, [{ prompt: "over cap" }], 1, 100,
+        new WorkflowLineageRepository(),
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        3
+      ),
+      /this run has 2\/2 steps \(workflow maxSteps: 2\)/
+    );
+  });
+
   test("serializes concurrent appends as whole batches", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-concurrent-")

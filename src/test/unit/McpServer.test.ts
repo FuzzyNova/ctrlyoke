@@ -3986,6 +3986,25 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(status.metadata.remainingSteps, -1);
   });
 
+  test("workflow_status resolves a templated maxSteps cap", async () => {
+    const server = await setup();
+    const run = await createRun("templated-status-cap", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.maxSteps = "{{cap}}" as unknown as number;
+    workingFile.vars = { cap: "5" };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.strictEqual(status.metadata.maxSteps, 5);
+    assert.strictEqual(status.metadata.remainingSteps, 3);
+  });
+
   test("includes a persisted guardrail stop reason in workflow_status", async () => {
     const server = await setup();
     const run = await createRun(

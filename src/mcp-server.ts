@@ -81,6 +81,7 @@ import * as WorkflowPaths from "./utils/WorkflowPaths";
 import {
   getGlobalMaxSteps,
   getMaxParallelSteps,
+  resolveWorkflowMaxSteps,
   resolveEffectiveMaxSteps,
 } from "./utils/QueueLimitUtils";
 import { isUnlimited } from "./utils/LimitUtils";
@@ -1374,7 +1375,7 @@ export class CtrlYokeMCPServer {
     ).length;
 
     const maxSteps = resolveEffectiveMaxSteps(
-      queueData.maxSteps,
+      resolveWorkflowMaxSteps(queueData),
       getGlobalMaxSteps()
     );
 

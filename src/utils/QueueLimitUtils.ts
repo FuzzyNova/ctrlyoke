@@ -3,6 +3,9 @@ import {
   UNLIMITED_LIMIT,
 } from "../types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
+import type { PromptFile } from "../types/CtrlYokeTypes";
+import { VAR_SUBSTITUTION_PHASES } from "./VarSubstitutionPolicy";
+import { VarSubstitutor } from "./VarSubstitutor";
 
 /**
  * Read the workflow step limit from the environment supplied to a harness's MCP
@@ -22,6 +25,17 @@ export function getGlobalMaxSteps(): number {
 
 export type EffectiveMaxStepsSource =
   "workflow maxSteps" | "setting queue.maxSteps";
+
+/** Resolve a run file's run-start `maxSteps` using its persisted variables. */
+export function resolveWorkflowMaxSteps(
+  workflow: PromptFile
+): number | undefined {
+  return VarSubstitutor.substituteWorkflowRootView(
+    workflow,
+    workflow.vars ?? {},
+    VAR_SUBSTITUTION_PHASES.RUN_START
+  ).maxSteps;
+}
 
 /** An explicit workflow value, including -1, overrides the global setting. */
 export function resolveEffectiveMaxSteps(

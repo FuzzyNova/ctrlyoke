@@ -32,6 +32,7 @@ import { runStateWriteOptions } from "../../utils/RunStateWrites";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import {
   getEffectiveMaxStepsSource,
+  resolveWorkflowMaxSteps,
   resolveEffectiveMaxSteps,
 } from "../../utils/QueueLimitUtils";
 import { buildQueueSizeLimitAgentMessage } from "../../utils/GuardrailStopMessages";
@@ -450,7 +451,7 @@ export class RunContinuationService {
         // Resolve against the run file read under this lock, so workflow edits
         // take effect at the next append and concurrent appends cannot pass
         // against stale counts.
-        const workflowMaxSteps = source.maxSteps;
+        const workflowMaxSteps = resolveWorkflowMaxSteps(source);
         const effectiveMaxSteps = resolveEffectiveMaxSteps(
           workflowMaxSteps,
           globalMaxSteps
@@ -699,7 +700,7 @@ export class RunContinuationService {
         }
 
         const currentQueueSize = sourceTopology.steps.length;
-        const workflowMaxSteps = source.maxSteps;
+        const workflowMaxSteps = resolveWorkflowMaxSteps(source);
         const effectiveMaxSteps = resolveEffectiveMaxSteps(
           workflowMaxSteps,
           globalMaxSteps

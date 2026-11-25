@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Workflow `maxSteps` placeholders now enforce the run-wide limit on appended steps and report numeric limits in MCP status.
 - Run bundle imports refuse newer workflow definition, run file, and timeline schemas before creating history.
 - Prompt-file resolution follows symbolic links only when their targets remain inside trusted workspace, state, or approved external roots.
 - An `@` directly after `/`, `\`, `.` or `:` (as in a URL or `docs/@types`) no longer starts a file reference, and inserted references to paths ending in punctuation are quoted so the punctuation stays part of the path; the prompt editor adds a space when it inserts a reference right after one of those characters.

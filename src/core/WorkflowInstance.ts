@@ -125,6 +125,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { exceedsLimit } from "../utils/LimitUtils";
 import {
   getEffectiveMaxStepsSource,
+  resolveWorkflowMaxSteps,
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
 import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
@@ -2993,7 +2994,9 @@ export class WorkflowInstance
       }
 
       const newSize = currentSize + parsed.steps.length;
-      const workflowMaxSteps = this.promptQueue.getWorkflowFile().maxSteps;
+      const workflowMaxSteps = resolveWorkflowMaxSteps(
+        this.promptQueue.getWorkflowFile()
+      );
       const maxSteps = resolveEffectiveMaxSteps(
         workflowMaxSteps,
         ConfigurationUtils.getGlobalMaxSteps()
@@ -3887,7 +3890,9 @@ export class WorkflowInstance
   }
 
   private getStepLimitError(additionalSteps: number): string | undefined {
-    const workflowMaxSteps = this.promptQueue.getWorkflowFile().maxSteps;
+    const workflowMaxSteps = resolveWorkflowMaxSteps(
+      this.promptQueue.getWorkflowFile()
+    );
     const maxSteps = resolveEffectiveMaxSteps(
       workflowMaxSteps,
       ConfigurationUtils.getGlobalMaxSteps()
