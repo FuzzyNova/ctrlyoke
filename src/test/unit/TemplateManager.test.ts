@@ -814,6 +814,33 @@ suite("TemplateManager variable metadata", () => {
         );
       });
 
+      test("records the community install file and the marked copy uninstalls", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+
+        const installed = await tm.installTemplateContent(
+          "octocat-review-branch",
+          TEMPLATE_SCOPES.USER,
+          WORKFLOW_FILE_FORMATS.YAML,
+          communityTemplate,
+          "octocat-review-branch.ctrlyoke.yaml"
+        );
+
+        const written = await fs.promises.readFile(installed.path, "utf-8");
+        assert.match(
+          written,
+          /^ {2}communityInstallFile: octocat-review-branch\.ctrlyoke\.yaml$/m
+        );
+        assert.strictEqual(
+          await tm.uninstallCommunityTemplate(
+            "octocat-review-branch",
+            TEMPLATE_SCOPES.USER
+          ),
+          installed.path
+        );
+      });
+
       test("discovers author and tags from _templateMeta", async () => {
         const tm = makeManager();
         const templateDir = makeTempDir();

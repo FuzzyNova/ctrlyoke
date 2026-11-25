@@ -972,10 +972,10 @@ export class TemplateManager {
     if (communityInstallFile) {
       const metadata = meta as Record<string, unknown>;
       metadata.communityInstallFile = communityInstallFile;
-      content =
-        format === WORKFLOW_FILE_FORMATS.JSON
-          ? `${JSON.stringify(parsed, null, 2)}\n`
-          : jsYaml.dump(parsed);
+      content = this.serializeTemplate(
+        parsed as Record<string, unknown>,
+        format
+      );
     }
     const fullPath = await this.prepareCustomTemplatePath(
       templateName,

@@ -8,7 +8,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import {
   buildCustomTemplateId,
-  WORKFLOW_FILE_FORMATS,
+  getCommunityInstallFileName,
   type WorkflowFileFormat,
 } from "../types/DashboardConstants";
 import {
@@ -114,7 +114,7 @@ export class CommunityTemplateService {
         scope,
         format,
         content,
-        `${entry.id}.ctrlyoke.${format === WORKFLOW_FILE_FORMATS.JSON ? WORKFLOW_FILE_FORMATS.JSON : WORKFLOW_FILE_FORMATS.YAML}`
+        getCommunityInstallFileName(entry.id, entry.file)
       );
       Log.info(
         `[CommunityTemplates] installed "${entry.id}" to ${installed.path}`

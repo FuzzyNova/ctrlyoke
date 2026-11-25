@@ -5,8 +5,8 @@ import {
   COMMUNITY_TEMPLATES_URLS,
   SETTING_SCOPES,
   SETTING_WRITE_SCOPE_LABELS,
-  WORKFLOW_FILE_FORMATS,
   buildCustomTemplateId,
+  getCommunityInstallFileName,
   getCommunityTemplateReportUrl,
   getCommunityTemplateSourceUrl,
 } from "@root/types/DashboardConstants";
@@ -222,7 +222,10 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
             const localId = buildCustomTemplateId(activeScope, entry.id);
             const install =
               installs[getCommunityInstallKey(activeScope, entry.id)];
-            const expectedFile = `${entry.id}.${entry.file.endsWith(`.ctrlyoke.${WORKFLOW_FILE_FORMATS.JSON}`) ? `ctrlyoke.${WORKFLOW_FILE_FORMATS.JSON}` : `ctrlyoke.${WORKFLOW_FILE_FORMATS.YAML}`}`;
+            const expectedFile = getCommunityInstallFileName(
+              entry.id,
+              entry.file
+            );
             const localTemplate = catalog.find(
               (template) => template.id === localId
             );
@@ -375,7 +378,7 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
             Deletes{" "}
             <code className="font-mono text-foreground">
               {scopeDir}/
-              {`${confirming.id}.${confirming.file.endsWith(`.ctrlyoke.${WORKFLOW_FILE_FORMATS.JSON}`) ? `ctrlyoke.${WORKFLOW_FILE_FORMATS.JSON}` : `ctrlyoke.${WORKFLOW_FILE_FORMATS.YAML}`}`}
+              {getCommunityInstallFileName(confirming.id, confirming.file)}
             </code>{" "}
             from your {scopeLabel} templates. Changes you made to this copy are
             lost. Workflows already created from it are not affected.

@@ -536,6 +536,18 @@ export function getCommunityTemplateSourceUrl(file: string): string {
 }
 
 /**
+ * The file name a community install writes (and records as
+ * `_templateMeta.communityInstallFile`): JSON entries stay `.ctrlyoke.json`,
+ * every YAML entry (`.yaml` or `.yml`) is written as `.ctrlyoke.yaml`.
+ */
+export function getCommunityInstallFileName(id: string, file: string): string {
+  const format = file.endsWith(`.ctrlyoke.${WORKFLOW_FILE_FORMATS.JSON}`)
+    ? WORKFLOW_FILE_FORMATS.JSON
+    : WORKFLOW_FILE_FORMATS.YAML;
+  return `${id}.ctrlyoke.${format}`;
+}
+
+/**
  * The library's "Report a template" issue form, titled with the template's id.
  * The title is prefilled rather than the form's `template` field, because
  * GitHub reads a `template` query parameter as the form's file name.
