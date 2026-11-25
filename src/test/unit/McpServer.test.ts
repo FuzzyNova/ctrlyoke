@@ -2894,6 +2894,49 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
+  test("rejects inherited condition preset names without changing the run file", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-prototype-names",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = { committed: { script: "git status" } };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    for (const name of ["constructor", "__proto__"]) {
+      const beforeAppend = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ prompt: "must reject", endCondition: { use: name } }],
+        }),
+        /unknown condition preset/
+      );
+      assert.strictEqual(
+        await fs.readFile(run.runFilePath, "utf8"),
+        beforeAppend
+      );
+
+      const beforeEdit = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 0,
+          updates: { endCondition: { use: name } },
+        }),
+        /unknown condition preset/
+      );
+      assert.strictEqual(
+        await fs.readFile(run.runFilePath, "utf8"),
+        beforeEdit
+      );
+    }
+  });
+
   test("caps preset retries and validates declared parameter values", async () => {
     const server = await setup();
     const run = await createRun(

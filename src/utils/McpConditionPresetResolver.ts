@@ -21,6 +21,17 @@ const MCP_CONDITION_PARAM_MAX_LENGTH = 4096;
 
 type ConditionField = "endCondition" | "preCondition";
 
+/** Resolve only presets explicitly declared by the workflow. */
+function getDeclaredConditionPreset(
+  workingFile: WorkingFile,
+  name: string
+): ConditionPreset | undefined {
+  const conditions = workingFile.conditions;
+  return conditions && Object.hasOwn(conditions, name)
+    ? conditions[name]
+    : undefined;
+}
+
 /**
  * Describe every preset the workflow declares, in declaration order. This is
  * the only way an MCP caller learns which names `use` accepts, so the
@@ -80,8 +91,7 @@ export function materializeMcpConditionPreset(
   reference: McpConditionPresetUse,
   defaultMaxRetries = 0
 ): EndCondition | PreCondition {
-  const conditions = workingFile.conditions ?? {};
-  const preset = conditions[reference.use];
+  const preset = getDeclaredConditionPreset(workingFile, reference.use);
   if (!preset) {
     throw new Error(
       `${field}: unknown condition preset '${reference.use}'. Available presets: ${formatPresetList(workingFile)}. ${MCP_WORKFLOW_STATUS_TOOL_NAME} lists each preset under metadata.conditionPresets.`

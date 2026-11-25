@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent)
 - **Area:** `src/utils/McpConditionPresetResolver.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
