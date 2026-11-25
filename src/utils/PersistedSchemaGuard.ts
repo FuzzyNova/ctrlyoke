@@ -212,6 +212,11 @@ export function prepareRunFileForWrite<T extends { _runtime?: object }>(
   workingFile: T,
   filePath: string
 ): T {
+  assertWritableSchema(
+    PERSISTED_STORES.WORKFLOW_DEFINITION,
+    workingFile,
+    filePath
+  );
   if (workingFile._runtime) {
     assertWritableSchema(
       PERSISTED_STORES.RUN_FILE,

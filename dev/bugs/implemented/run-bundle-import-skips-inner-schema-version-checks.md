@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, reproduced against `out/`)
 - **Area:** `src/core/orchestration/RunBundleReader.ts`, `src/core/orchestration/RunBundleImporter.ts`, `src/utils/PersistedSchemaGuard.ts`
-- **Severity:** medium (latent until the next workflow-definition or timeline format bump; then a silent downgrade of imported runs)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

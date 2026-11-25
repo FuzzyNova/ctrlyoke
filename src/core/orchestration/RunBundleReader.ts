@@ -17,6 +17,10 @@ import {
 } from "../../utils/RunBundlePaths";
 import { LineTooLongError, streamFileLines } from "../../utils/TextLines";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
+import {
+  assertWritableSchema,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
 /**
  * Reads a run bundle (dev/implemented/RUN_EXPORT_PLAN.md §3) into memory, with its
@@ -117,9 +121,17 @@ export async function readRunBundleHeader(
 
   const resolve = createWorkspacePathResolver(workspaceRoot);
   const load = <T>(value: unknown): T => mapJsonStrings(value, resolve) as T;
-  const runManifest = load<RunBundleRunManifest>(
-    await readJson(resolvedDir, RUN_BUNDLE_FILES.MANIFEST, maxBundleFileBytes)
+  const rawRunManifest = await readJson(
+    resolvedDir,
+    RUN_BUNDLE_FILES.MANIFEST,
+    maxBundleFileBytes
   );
+  assertWritableSchema(
+    PERSISTED_STORES.TIMELINE,
+    rawRunManifest,
+    path.join(resolvedDir, RUN_BUNDLE_FILES.MANIFEST)
+  );
+  const runManifest = load<RunBundleRunManifest>(rawRunManifest);
   if (
     !Number.isSafeInteger(runManifest.nextSequence) ||
     runManifest.nextSequence < 1 ||
@@ -129,13 +141,31 @@ export async function readRunBundleHeader(
       "manifest.json contains invalid run metadata."
     );
   }
-  const definition = load<Record<string, unknown>>(
-    await readJson(resolvedDir, RUN_BUNDLE_FILES.DEFINITION, maxBundleFileBytes)
+  const rawDefinition = await readJson(
+    resolvedDir,
+    RUN_BUNDLE_FILES.DEFINITION,
+    maxBundleFileBytes
   );
+  assertWritableSchema(
+    PERSISTED_STORES.WORKFLOW_DEFINITION,
+    rawDefinition,
+    path.join(resolvedDir, RUN_BUNDLE_FILES.DEFINITION)
+  );
+  const definition = load<Record<string, unknown>>(rawDefinition);
   const runtime = await readOptionalJson(
     resolvedDir,
     RUN_BUNDLE_FILES.RUNTIME,
     maxBundleFileBytes
+  );
+  assertWritableSchema(
+    PERSISTED_STORES.WORKFLOW_DEFINITION,
+    runtime,
+    path.join(resolvedDir, RUN_BUNDLE_FILES.RUNTIME)
+  );
+  assertWritableSchema(
+    PERSISTED_STORES.RUN_FILE,
+    runtime && (runtime as { _runtime?: unknown })._runtime,
+    path.join(resolvedDir, RUN_BUNDLE_FILES.RUNTIME)
   );
   const continuation = manifest.continuation as
     RunBundleContinuation | undefined;
