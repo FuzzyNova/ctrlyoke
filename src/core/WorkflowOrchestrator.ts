@@ -638,6 +638,7 @@ export class WorkflowOrchestrator {
   /** Seam for tests: re-reads PATH so CLIs installed after launch are found. */
   private refreshSearchPath: () => Promise<unknown> = () =>
     refreshProcessSearchPath();
+  private harnessDetectionRetryPromise?: Promise<HarnessId[]>;
   /** Seam for tests: re-discovers model lists for newly detected harnesses. */
   private refreshModels: () => Promise<void> = () => refreshModelRegistry();
   private readonly compatibilityRegistry: HarnessCapabilityRegistry;
@@ -5174,7 +5175,28 @@ export class WorkflowOrchestrator {
    * `~/.local/bin`) to the shell profile is otherwise invisible to this
    * already-running process, and detection fails however often it is retried.
    */
-  async retryHarnessDetection(): Promise<HarnessId[]> {
+  retryHarnessDetection(): Promise<HarnessId[]> {
+    if (this.harnessDetectionRetryPromise) {
+      return this.harnessDetectionRetryPromise;
+    }
+    const retryPromise = this.performHarnessDetectionRetry();
+    this.harnessDetectionRetryPromise = retryPromise;
+    void retryPromise.then(
+      () => {
+        if (this.harnessDetectionRetryPromise === retryPromise) {
+          this.harnessDetectionRetryPromise = undefined;
+        }
+      },
+      () => {
+        if (this.harnessDetectionRetryPromise === retryPromise) {
+          this.harnessDetectionRetryPromise = undefined;
+        }
+      }
+    );
+    return retryPromise;
+  }
+
+  private async performHarnessDetectionRetry(): Promise<HarnessId[]> {
     await this.refreshSearchPath();
     const integrations = this.getDetectorIntegrations();
     const readyBefore = new Set(

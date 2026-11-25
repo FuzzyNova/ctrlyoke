@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude, code review of 1a02f8d4f)
 - **Area:** `src/ui/DashboardMessageRouter.ts`, `src/core/WorkflowOrchestrator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

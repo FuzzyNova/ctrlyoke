@@ -225,6 +225,8 @@ const SLOW_ROUTE_WAIT_MS = 1000;
  * still replies only to a client that is connected when it finishes.
  */
 const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  // Harness probes can spawn shells and several CLI processes.
+  MESSAGE_TYPES.RETRY_HARNESS_DETECTION,
   // Forwarded client log lines. Queued, they were timestamped when the queue
   // reached them (seconds late behind a slow handler) and a chatty client
   // delayed every other client's commands.

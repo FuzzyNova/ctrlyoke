@@ -424,6 +424,33 @@ suite("WorkflowOrchestrator harness detection retry", () => {
     ]);
     assert.strictEqual(getModelRefreshes(), 0);
   });
+
+  test("shares one in-flight harness detection retry", async () => {
+    const { orchestrator, retried } = createRetryHarness(new Set(), []);
+    let releaseDetection!: () => void;
+    const detectionPending = new Promise<void>((resolve) => {
+      releaseDetection = resolve;
+    });
+    const internal = orchestrator as any;
+    const integrations = internal.getDetectorIntegrations();
+    let detectionRuns = 0;
+    for (const [, integration] of integrations) {
+      integration.retryDetection = async () => {
+        detectionRuns += 1;
+        await detectionPending;
+      };
+    }
+
+    const first = orchestrator.retryHarnessDetection();
+    const second = orchestrator.retryHarnessDetection();
+    assert.strictEqual(first, second);
+    await Promise.resolve();
+    assert.strictEqual(detectionRuns, integrations.length);
+
+    releaseDetection();
+    await Promise.all([first, second]);
+    assert.strictEqual(retried.filter((entry) => entry === "path").length, 1);
+  });
 });
 
 suite("WorkflowOrchestrator running workflow count", () => {
