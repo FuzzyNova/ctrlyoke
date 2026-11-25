@@ -39,6 +39,10 @@ const GIT_MAX_BUFFER = 50 * 1024 * 1024;
 /** Whole-repository `ls-files` listings: large monorepos can exceed 100 MB. */
 const GIT_WHOLE_REPO_LISTING_MAX_BUFFER = 500 * 1024 * 1024;
 const GIT_SUBMODULE_MODE = "160000";
+/** Keep diagnostics parseable for Git probes whose failures have fallback behavior. */
+function gitProbeEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, LC_ALL: "C" };
+}
 const execFilePromisified = promisify(execFile);
 
 interface GitTimeoutOverrides {
@@ -952,7 +956,7 @@ export async function getBlobBytes(
     sizeResult = await execFileAsync(
       "git",
       ["-C", repoRoot, "cat-file", "-s", objectSpec],
-      { encoding: "buffer" }
+      { encoding: "buffer", env: gitProbeEnv() }
     );
   } catch (error) {
     const stderr =
@@ -1544,6 +1548,7 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
       cwd: repoRoot,
       timeout: getGitWholeRepoTimeoutMs(),
       maxBuffer: GIT_WHOLE_REPO_LISTING_MAX_BUFFER,
+      env: gitProbeEnv(),
     }
   );
   return parseGitNulSeparatedPaths(stdout);
@@ -1662,7 +1667,7 @@ export async function getGitTrackedAndUntrackedFiles(
       "--exclude-standard",
       "-z",
     ],
-    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER, env: gitProbeEnv() }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1673,7 +1678,7 @@ export async function getGitUntrackedFiles(
 ): Promise<string[]> {
   const { stdout } = await execGit(
     ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "-z"],
-    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER, env: gitProbeEnv() }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1700,7 +1705,7 @@ export async function getGitIgnoredEntries(
       "--directory",
       "-z",
     ],
-    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER, env: gitProbeEnv() }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
