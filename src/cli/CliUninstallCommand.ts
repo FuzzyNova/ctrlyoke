@@ -10,7 +10,7 @@ import {
 } from "../utils/CtrlyokeInstallations";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { INSTALLATION_KIND_LABELS } from "./CliAboutCommand";
-import { CLI_USAGE_EXIT_CODE } from "./CliExitCode";
+import { CLI_USAGE_EXIT_CODE, reportCliError } from "./CliExitCode";
 
 export const CLI_UNINSTALL_JSON_SCHEMA_VERSION = 1;
 
@@ -119,18 +119,38 @@ export async function uninstallCommand(
   packageRoot: string,
   options: { json?: boolean },
   writeOut: (message: string) => void,
-  writeErr: (message: string) => void
+  writeErr: (message: string) => void,
+  uninstallIntegration: (
+    root: string
+  ) => Promise<PackageUninstallResult> = uninstallPackageIntegration
 ): Promise<number> {
   // The bundled copy shares the extension's package root, so forgetting it
   // would forget the extension while it is still installed.
   if (isBundledInExtension(packageRoot)) {
-    writeErr(BUNDLED_CLI_UNINSTALL_MESSAGE);
+    if (options.json) {
+      reportCliError(BUNDLED_CLI_UNINSTALL_MESSAGE, {
+        json: true,
+        writeOut,
+        writeErr,
+        exit: () => {},
+      });
+    } else {
+      writeErr(BUNDLED_CLI_UNINSTALL_MESSAGE);
+    }
     return CLI_USAGE_EXIT_CODE;
   }
   const info = buildCliUninstallInfo(
-    await uninstallPackageIntegration(packageRoot)
+    await uninstallIntegration(packageRoot)
   );
-  writeOut(options.json ? JSON.stringify(info) : formatCliUninstallInfo(info));
+  const output =
+    info.failedHarnesses.length > 0 && options.json
+      ? {
+          ...info,
+          success: false,
+          error: { message: formatCliUninstallFailures(info) },
+        }
+      : info;
+  writeOut(options.json ? JSON.stringify(output) : formatCliUninstallInfo(info));
   if (info.failedHarnesses.length > 0) {
     if (!options.json) {
       writeErr(formatCliUninstallFailures(info));

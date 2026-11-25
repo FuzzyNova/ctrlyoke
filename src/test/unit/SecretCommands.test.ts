@@ -597,6 +597,51 @@ suite("Secret command handlers", () => {
     assert.strictEqual(await store.get(userSecretKey("API_TOKEN")), undefined);
   });
 
+  test("reports an absent secret and points to the scope where it exists", async () => {
+    const store = new InMemorySecretStore();
+    await store.store(
+      workspaceSecretKeyForRoot("/workspace", "API_TOKEN"),
+      "secret-value"
+    );
+    const io = new TestIo();
+
+    await removeSecretCommand(
+      "API_TOKEN",
+      { yes: true },
+      dependencies(store),
+      io
+    );
+
+    assert.strictEqual(
+      await store.get(workspaceSecretKeyForRoot("/workspace", "API_TOKEN")),
+      "secret-value"
+    );
+    assert.deepStrictEqual(io.output, [
+      "No secret API_TOKEN is stored at user scope. A secret with this name is stored at workspace scope; pass --scope workspace to remove it.",
+    ]);
+  });
+
+  test("reports a missing secret without changing the store", async () => {
+    const store = new InMemorySecretStore();
+    const io = new TestIo();
+
+    await removeSecretCommand(
+      "MISSING_TOKEN",
+      { yes: true, json: true },
+      dependencies(store),
+      io
+    );
+
+    assert.deepStrictEqual(JSON.parse(io.output[0]), {
+      schemaVersion: 1,
+      success: true,
+      name: "MISSING_TOKEN",
+      scope: "user",
+      removed: false,
+    });
+    assert.deepStrictEqual(io.errors, []);
+  });
+
   test("lists safe metadata and never prints managed values", async () => {
     const store = new InMemorySecretStore();
     await store.store(userSecretKey("MANAGED_TOKEN"), "value-must-not-print");

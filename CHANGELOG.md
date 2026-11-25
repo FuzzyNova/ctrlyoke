@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `secret rm` now reports `removed: false` when the name is absent from the selected scope and points to the other scope when it holds that name.
+- `uninstall --json` now includes the standard error envelope for bundled-CLI refusals and adds `success: false` and `error.message` when harness settings cannot be updated.
 - Community templates installed before install provenance was recorded are recognised and marked when their files still match the library; edited or unavailable copies remain untouched.
 
 ### Fixed

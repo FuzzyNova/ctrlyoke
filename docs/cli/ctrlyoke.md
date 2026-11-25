@@ -477,9 +477,12 @@ needs the status line, and it removes it when it is uninstalled itself.
 
 Your settings and run history are kept. The command exits `2` if a harness
 settings file can't be updated (for example, it isn't valid JSON); fix that
-file and run it again. From VS Code's integrated terminal, `ctrlyoke` is the copy
-bundled with the extension, and this command refuses to run there; uninstall the
-extension instead. `--json` prints one JSON object with a `schemaVersion` field.
+file and run it again. In JSON mode, this failure also includes
+`success: false` and `error.message` alongside the uninstall details. From
+VS Code's integrated terminal, `ctrlyoke` is the copy bundled with the
+extension, and this command refuses to run there; uninstall the extension
+instead. In JSON mode that refusal uses the standard error envelope.
+`--json` prints one JSON object with a `schemaVersion` field.
 See [Uninstall](/guide/installation#uninstall).
 
 ## `ctrlyoke trust-workflow-external-roots`
@@ -549,6 +552,11 @@ prints names, scope, set state, and source (`managed`, `environment`, or
 `unavailable`) only. There is intentionally no `secret get` command. `--scope`
 defaults to `user`. `secret rm <NAME>` asks for confirmation unless you pass
 `--yes`.
+
+Removing a name that is not stored in the selected scope succeeds with
+`removed: false` in JSON, or a message naming that scope in text mode. If the
+name is stored in the other scope, the text message tells you which `--scope`
+to pass.
 
 Managed secrets use the host OS credential store. On this machine, the
 dashboard, CLI, and hosted server share those secrets. The extension falls back

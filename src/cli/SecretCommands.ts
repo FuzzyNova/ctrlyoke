@@ -184,9 +184,29 @@ export async function removeSecretCommand(
     return;
   }
 
-  await dependencies.secretStore.delete(
-    secretKeyForScope(scope, workspaceRoot, name)
-  );
+  const key = secretKeyForScope(scope, workspaceRoot, name);
+  const value = await dependencies.secretStore.get(key);
+  if (value === undefined) {
+    const otherScope =
+      scope === SETTING_SCOPES.USER
+        ? SETTING_SCOPES.WORKSPACE
+        : SETTING_SCOPES.USER;
+    const otherValue = await dependencies.secretStore.get(
+      secretKeyForScope(otherScope, workspaceRoot, name)
+    );
+    const hint =
+      otherValue === undefined
+        ? ""
+        : ` A secret with this name is stored at ${otherScope} scope; pass --scope ${otherScope} to remove it.`;
+    writeSecretSuccess(
+      options.json,
+      io,
+      { name, scope, removed: false },
+      `No secret ${name} is stored at ${scope} scope.${hint}`
+    );
+    return;
+  }
+  await dependencies.secretStore.delete(key);
   writeSecretSuccess(
     options.json,
     io,

@@ -42,6 +42,66 @@ suite("CliUninstallCommand", () => {
     }
   });
 
+  test("writes the shared JSON error envelope for the bundled CLI", async () => {
+    const extension = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-uninstall-json-")
+    );
+    try {
+      await fs.writeFile(
+        path.join(extension, "package.json"),
+        JSON.stringify({ engines: { vscode: "^1.106.0" } })
+      );
+      const out: string[] = [];
+      const err: string[] = [];
+
+      const exitCode = await uninstallCommand(
+        extension,
+        { json: true },
+        (message) => out.push(message),
+        (message) => err.push(message)
+      );
+
+      assert.strictEqual(exitCode, CLI_USAGE_EXIT_CODE);
+      assert.deepStrictEqual(JSON.parse(out[0]), {
+        schemaVersion: 1,
+        success: false,
+        error: { message: BUNDLED_CLI_UNINSTALL_MESSAGE },
+      });
+      assert.deepStrictEqual(err, []);
+    } finally {
+      await fs.rm(extension, { recursive: true, force: true });
+    }
+  });
+
+  test("adds a JSON error envelope to harness update failures", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const exitCode = await uninstallCommand(
+      "/npm/ctrlyoke",
+      { json: true },
+      (message) => out.push(message),
+      (message) => err.push(message),
+      async () => ({
+        otherInstallations: [],
+        restored: [],
+        failed: [{ harnessId: HARNESS_IDS.CLAUDE_CLI, message: "bad JSON" }],
+        launcherRemoved: false,
+      })
+    );
+
+    assert.strictEqual(exitCode, CLI_USAGE_EXIT_CODE);
+    const result = JSON.parse(out[0]) as Record<string, unknown>;
+    assert.strictEqual(result.success, false);
+    assert.match(
+      (result.error as { message: string }).message,
+      /Could not update Claude Code's settings: bad JSON/
+    );
+    assert.deepStrictEqual(result.failedHarnesses, [
+      { harnessId: HARNESS_IDS.CLAUDE_CLI, message: "bad JSON" },
+    ]);
+    assert.deepStrictEqual(err, []);
+  });
+
   test("names the installations that keep the statusline", () => {
     const info = buildCliUninstallInfo({
       otherInstallations: [
