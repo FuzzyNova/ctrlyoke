@@ -453,6 +453,65 @@ suite("PromptFileResolver", () => {
     }
   });
 
+  test("resolves through a symlinked workspace path and keeps the reference path", async () => {
+    const linkParent = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-linked-ws-")
+    );
+    temporaryDirectories.push(linkParent);
+    const linkedWorkspace = path.join(linkParent, "ws");
+    await fs.symlink(workspaceRoot, linkedWorkspace, "dir");
+    await fs.mkdir(path.join(workspaceRoot, "wf"), { recursive: true });
+    await fs.mkdir(path.join(workspaceRoot, "shared"), { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceRoot, "x.prompt.md"),
+      "root prompt",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, "shared", "y.prompt.md"),
+      "shared prompt",
+      "utf8"
+    );
+    await fs.symlink(
+      path.join(workspaceRoot, "shared", "y.prompt.md"),
+      path.join(workspaceRoot, "y-link.prompt.md")
+    );
+    const definitionPath = path.join(linkedWorkspace, "wf", "w.ctrlyoke.yaml");
+    const resolver = new PromptFileResolver({
+      workspaceRoot: linkedWorkspace,
+      trustedRoots: [linkedWorkspace],
+    });
+
+    // A missing workflow-relative candidate is skipped, not blocked, so the
+    // workspace-relative candidate is still found.
+    const sync = resolver.resolvePathSync("./x.prompt.md", definitionPath);
+    assert.strictEqual(sync.status, PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED);
+    if (sync.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+      assert.strictEqual(sync.path, path.join(linkedWorkspace, "x.prompt.md"));
+    }
+    assert.strictEqual(
+      resolver.resolvePathSync("./missing.prompt.md", definitionPath).status,
+      PROMPT_FILE_RESOLUTION_STATUSES.MISSING
+    );
+
+    // An in-workspace link resolves to the link path, not its target.
+    for (const resolution of [
+      resolver.resolvePathSync("./y-link.prompt.md"),
+      await resolver.resolvePath("./y-link.prompt.md"),
+    ]) {
+      assert.strictEqual(
+        resolution.status,
+        PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED
+      );
+      if (resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+        assert.strictEqual(
+          resolution.path,
+          path.join(linkedWorkspace, "y-link.prompt.md")
+        );
+      }
+    }
+  });
+
   test("allows symlinks back inside and into an approved external root", async () => {
     const inside = path.join(workspaceRoot, "inside.prompt.md");
     const approvedRoot = await fs.mkdtemp(
