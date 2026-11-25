@@ -61,7 +61,7 @@ artifact when you need to debug a failed run.
 | `2`  | Usage or parse error, unapproved external roots or secret grants, newer state | Fix the pipeline configuration          |
 | `3`  | The harness CLI could not be found                                            | Install it or fix `PATH`                |
 | `4`  | A step timed out outside a configured execution guardrail                     | Inspect the step failure                |
-| `5`  | Interrupted (`SIGINT`/`SIGTERM`, for example a cancelled job)                 | Nothing; the runner lock is freed       |
+| `5`  | Interrupted (`SIGINT`/`SIGTERM` or a closed output pipe)                      | Nothing; the runner lock is freed       |
 | `6`  | A configured execution guardrail stopped the run                              | Inspect `stopReason` in the JSON result |
 
 A harness that is installed but not signed in fails its step, so the run exits `1`, not `3`.
