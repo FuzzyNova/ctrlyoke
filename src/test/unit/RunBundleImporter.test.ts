@@ -612,7 +612,24 @@ suite("RunBundleImporter", () => {
   });
 
   test("rewrites exported attachment references in continuation prompts", async () => {
+    await fs.writeFile(path.join(workspace, "note.md"), "workspace note\n");
     await makeContinuableBundle(undefined, true);
+    const definition = JSON.parse(
+      await fs.readFile(path.join(bundle, "workflow.ctrlyoke.json"), "utf8")
+    ) as { steps: Array<{ prompt: string }> };
+    definition.steps[2].prompt += "; compare with @note.md";
+    await fs.writeFile(
+      path.join(bundle, "workflow.ctrlyoke.json"),
+      JSON.stringify(definition)
+    );
+    const runtime = JSON.parse(
+      await fs.readFile(path.join(bundle, "run.ctrlyoke.json"), "utf8")
+    ) as { steps: Array<{ prompt: string }> };
+    runtime.steps[2].prompt += "; compare with @note.md";
+    await fs.writeFile(
+      path.join(bundle, "run.ctrlyoke.json"),
+      JSON.stringify(runtime)
+    );
     await fs.rm(path.join(workspace, ".ctrlyoke", "attachments", "note.md"));
     const result = await importer.importRun({
       workspaceRoot: workspace,
@@ -631,6 +648,8 @@ suite("RunBundleImporter", () => {
     };
     const prompt = runFile.steps[2].prompt;
     assert.match(prompt, /assets\/app\.css/);
+    assert.match(prompt, /@note\.md/);
+    assert.doesNotMatch(prompt, /attachments\/note\.md; compare/);
     const reference = parseAtReferences(prompt).find((item) =>
       item.path.includes("note.md")
     );

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against compiled `out/`)
 - **Area:** `src/core/orchestration/RunBundleExporter.ts` (`collectWorkspaceChanges` ~283-314, staging ~436-442), `src/cli/RunExportCommand.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

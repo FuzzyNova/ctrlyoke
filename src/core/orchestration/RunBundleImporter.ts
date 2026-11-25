@@ -413,11 +413,11 @@ export class RunBundleImporter {
         const workspaceRelative = path
           .relative(realWorkspace, destination)
           .replace(/\\/g, "/");
-        const normalizedAssetPath = bundleSegments.join("/");
-        replacements.set(
-          normalizeReferenceAssetPath(normalizedAssetPath),
-          workspaceRelative
-        );
+        const normalizedAssetPath = asset.path;
+        const referenceAssetPath =
+          normalizeReferenceAssetPath(normalizedAssetPath);
+        if (referenceAssetPath)
+          replacements.set(referenceAssetPath, workspaceRelative);
       }
       return {
         rewrite: (input: unknown) =>
@@ -470,8 +470,8 @@ function flattenAuthoredParallelDefinition(
 function normalizeReferenceAssetPath(value: string): string {
   const normalized = value.replace(/\\/g, "/").replace(/^\.\//, "");
   return normalized.startsWith(`${RUN_BUNDLE_FILES.ASSETS_DIR}/`)
-    ? normalized.slice(RUN_BUNDLE_FILES.ASSETS_DIR.length + 1)
-    : normalized;
+    ? normalized
+    : "";
 }
 
 function buildAssetReference(

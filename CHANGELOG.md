@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Run bundle exports no longer include their in-workspace staging or previous bundle files in the workspace patch, and imports rewrite only references to bundled assets.
+- The CLI synopsis now lists the stream-delta export option and the import continuation and changes options.
 - A closed stdout or stderr pipe during workflow execution now stops the run cleanly and releases its runner lock.
 - Git branch suggestions keep bare names when tags collide, and ambiguous worktree directory suggestions insert full paths.
 - Harness detection retries no longer freeze other dashboard actions while CLI checks run.

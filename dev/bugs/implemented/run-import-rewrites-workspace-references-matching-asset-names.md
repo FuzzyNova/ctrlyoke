@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against compiled `out/`)
 - **Area:** `src/core/orchestration/RunBundleImporter.ts` (asset placement ~405-430, `rewriteAssetReferences` ~438-451, `normalizeReferenceAssetPath` ~470-475)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

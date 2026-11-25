@@ -158,6 +158,37 @@ suite("RunBundleExporter secrets", () => {
     );
   });
 
+  test("excludes its in-workspace output from the patch, including force re-exports", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.STOPPED,
+      currentIndex: 0,
+      steps: [{ prompt: "next" }],
+    });
+    await fs.writeFile(path.join(workspace, "real-change.txt"), "change\n");
+    const bundleDir = path.join(workspace, "release-run.ctrlyokerun");
+    const exportOptions = {
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir,
+      exportedByVersion: "test",
+      secrets: { workspaceRoot: workspace, environment: {} },
+    };
+    for (const replace of [false, true]) {
+      const exported = await exportRunBundle({
+        ...exportOptions,
+        replace,
+      });
+      assert.deepStrictEqual(exported.changedFiles, ["real-change.txt"]);
+      const patch = await fs.readFile(
+        path.join(bundleDir, RUN_BUNDLE_FILES.CHANGES),
+        "utf8"
+      );
+      assert.match(patch, /real-change\.txt/);
+      assert.doesNotMatch(patch, /release-run\.ctrlyokerun|staging-/);
+    }
+  });
+
   test("keeps patch paths and non-UTF-8 bytes intact while redacting added lines only", async () => {
     await fs.writeFile(
       path.join(workspace, "code.js"),

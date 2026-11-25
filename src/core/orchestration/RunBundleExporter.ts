@@ -282,7 +282,8 @@ export async function getRunBundleExportPreview(
 
 async function collectWorkspaceChanges(
   executionRoot: string,
-  baseCommit: string
+  baseCommit: string,
+  excludedPaths: string[] = []
 ): Promise<{ patch: Buffer; files: string[] }> {
   const indexPath = path.join(
     os.tmpdir(),
@@ -291,7 +292,22 @@ async function collectWorkspaceChanges(
   const env = { ...process.env, GIT_INDEX_FILE: indexPath };
   try {
     await execGit(["read-tree", baseCommit], { cwd: executionRoot, env });
-    await execGit(["add", "-A"], { cwd: executionRoot, env });
+    const pathspecs = excludedPaths.flatMap((excludedPath) => {
+      const relativePath = path.relative(executionRoot, excludedPath);
+      if (
+        !relativePath ||
+        relativePath === ".." ||
+        relativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePath)
+      ) {
+        return [];
+      }
+      return [`:(exclude,literal)${relativePath.replace(/\\/g, "/")}`];
+    });
+    await execGit(["add", "-A", "--", ".", ...pathspecs], {
+      cwd: executionRoot,
+      env,
+    });
     const [{ stdout: patch }, { stdout: namesText }] = await Promise.all([
       execGitBuffer(
         ["diff", "--cached", "--binary", "--full-index", baseCommit],
@@ -360,7 +376,8 @@ async function writeChangesPatch(
 
   const { patch, files } = await collectWorkspaceChanges(
     executionRoot,
-    baseCommit
+    baseCommit,
+    [stagingDir, path.resolve(options.bundleDir)]
   );
   const transformedPatch = redactPatchAddedLines(
     patch,

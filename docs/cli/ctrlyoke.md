@@ -25,8 +25,8 @@ ctrlyoke history steps --workflow <key-or-name> [--run <ref|runId>] [--json] [--
 ctrlyoke history show --workflow <key-or-name> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
-ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--no-changes] [--force] [--cwd <path>] [--json]
-ctrlyoke import <bundleDir> [--name <name>] [--again] [--cwd <path>] [--json]
+ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--with-stream-deltas] [--no-changes] [--force] [--cwd <path>] [--json]
+ctrlyoke import <bundleDir> [--name <name>] [--again] [--continue] [--changes <worktree|checkout|skip>] [--cwd <path>] [--json]
 ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key-or-name> --run <ref|runId> --order <indices>
