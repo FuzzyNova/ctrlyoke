@@ -12,6 +12,8 @@ import { suite, test } from "mocha";
 interface SpawnCall {
   command: string;
   options: Record<string, unknown>;
+  /** True when the plugin ran the hook with spawnSync. */
+  sync?: boolean;
 }
 
 async function loadPlugin(
@@ -43,6 +45,10 @@ async function loadPlugin(
   const mockRequire = (name: string): unknown => {
     if (name === "child_process") {
       return {
+        spawnSync: (command: string, spawnOptions: Record<string, unknown>) => {
+          spawnCalls.push({ command, options: spawnOptions, sync: true });
+          return { status: 0, signal: null, error: undefined };
+        },
         spawn: (
           command: string,
           argsOrOptions: string[] | Record<string, unknown>,
@@ -480,6 +486,49 @@ suite("OpenCode plugin user hooks", () => {
       tool_input: { command: "pwd" },
       tool_output: { title: "pwd", output: "/tmp", metadata: {} },
     });
+  });
+
+  // OpenCode 2.4's `opencode run` exits on idle/error without awaiting plugin
+  // event handlers, so an async stop or error hook finished after the step.
+  test("runs stop and error hooks synchronously so OpenCode waits for them", async () => {
+    const { plugin, spawnCalls } = await loadPlugin([
+      { event: "stop", command: "hook-stop", timeoutSec: 5 },
+      { event: "error", command: "hook-error" },
+      { event: "userPromptSubmit", command: "hook-prompt" },
+    ]);
+    await plugin.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: "session-1", status: { type: "busy" } },
+      },
+    });
+    await plugin.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: "session-1", status: { type: "idle" } },
+      },
+    });
+    await plugin.event({
+      event: {
+        type: "session.error",
+        properties: { sessionID: "session-1", message: "failed" },
+      },
+    });
+
+    assert.deepStrictEqual(
+      spawnCalls.map(({ command, sync }) => ({ command, sync: !!sync })),
+      [
+        { command: "hook-prompt", sync: false },
+        { command: "hook-stop", sync: true },
+        { command: "hook-error", sync: true },
+      ]
+    );
+    assert.strictEqual(spawnCalls[1].options.timeout, 5000);
+    assert.strictEqual(spawnCalls[2].options.timeout, undefined);
+    assert.strictEqual(
+      JSON.parse(spawnCalls[1].options.input as string).hook_event_name,
+      "stop"
+    );
   });
 
   test("kills the hook process tree when an OpenCode hook times out", async () => {

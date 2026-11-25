@@ -25,6 +25,7 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 - Qwen treats `UserPromptSubmit` as a second start signal; its provider registers `userPromptSubmit` alongside `sessionStart`/`stop`.
 - Codex and Qwen intentionally write an unconditional invocation log entry before diagnostic flag checks so hook-registration failures can be distinguished from logging/config issues.
 - OpenCode is plugin-driven, not stdin-driven. Keep `tool.execute.before` and `tool.execute.after` as top-level returned handlers; they do not come through the generic `event` callback. OpenCode 1.19.4 delivers `permission.asked` through the generic `event` callback, though its SDK `Event` union omits it. The SDK declares a top-level `permission.ask` hook, but the installed runtime did not invoke it; permission requests therefore notify user hooks without applying their allow/deny output.
+- OpenCode 2.4's `opencode run` exits on idle/error without awaiting plugin `event` handlers, so anything a handler awaits after that point is cut loose. End-of-turn user hooks (`stop`, `error`) therefore run with `spawnSync` (`BLOCKING_USER_HOOK_EVENTS`), and `inline-config.harness.test.ts`/the capability `error` case catch a regression. Tool hooks (`tool.execute.*`) are awaited by OpenCode and stay async.
 - OpenCode completion detection intentionally tracks child sessions and treats any non-child `session.status idle` as the main stop signal because the main `session.created` event can be missed (`session.updated` is the fallback).
 </harnessSpecificGotchas>
 

@@ -54,7 +54,7 @@
 //  - Logs written to .ctrlyoke/logs/ctrlyoke-opencode-plugin-debug.log
 
 import { writeFileSync, mkdirSync, appendFileSync, readFileSync } from "fs";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import path from "path";
 
 const OPENCODE_BOOLEAN_TRUE = "true" as const;
@@ -246,6 +246,20 @@ try {
 }
 
 /**
+ * End-of-turn events whose user hooks run synchronously. OpenCode 2.4's
+ * `opencode run` exits as soon as the session goes idle or errors, without
+ * awaiting plugin event handlers, so an awaited hook was cut loose and
+ * finished after the step (and often the whole ctrlyoke run) had ended.
+ * Blocking the plugin host keeps OpenCode alive until the hook finishes, the
+ * way other harnesses wait for their native Stop hooks. Tool hooks are
+ * trigger hooks OpenCode awaits itself, so they stay asynchronous.
+ */
+const BLOCKING_USER_HOOK_EVENTS: ReadonlySet<string> = new Set([
+  "stop",
+  "error",
+]);
+
+/**
  * Hook stdin has a stable shape: hook_event_name and session_id when known,
  * plus tool_name, tool_input, and tool_output for tool hooks. Native event
  * properties are preserved for additional context.
@@ -254,17 +268,45 @@ async function _runUserHooks(
   event: string,
   payload: Record<string, unknown>
 ): Promise<void> {
+  const input = JSON.stringify(payload);
   for (const hook of _userHooks) {
-    if (hook.event === event) {
-      try {
-        await _runHook(hook.command, JSON.stringify(payload), {
-          cwd: workspaceRoot,
-          env: _getUserHookEnv(hook),
-          timeoutSec: hook.timeoutSec,
-          captureStdout: false,
-        });
-      } catch (_e) {}
+    if (hook.event !== event) continue;
+    if (BLOCKING_USER_HOOK_EVENTS.has(event)) {
+      _runHookBlocking(hook, input);
+      continue;
     }
+    try {
+      await _runHook(hook.command, input, {
+        cwd: workspaceRoot,
+        env: _getUserHookEnv(hook),
+        timeoutSec: hook.timeoutSec,
+        captureStdout: false,
+      });
+    } catch (_e) {}
+  }
+}
+
+/**
+ * Run a user hook to completion before returning (see
+ * BLOCKING_USER_HOOK_EVENTS). On timeout only the shell is killed; on
+ * Windows a grandchild it started can outlive it.
+ */
+function _runHookBlocking(hook: UserHook, input: string): void {
+  const result = spawnSync(hook.command, {
+    cwd: workspaceRoot,
+    env: _getUserHookEnv(hook),
+    shell: true,
+    input,
+    stdio: ["pipe", "inherit", "inherit"],
+    timeout: hook.timeoutSec !== undefined ? hook.timeoutSec * 1000 : undefined,
+    killSignal: "SIGKILL",
+    windowsHide: true,
+  });
+  if (result.error) {
+    _debugLog("⏱️ User hook failed or timed out", {
+      command: hook.command,
+      error: String(result.error),
+    });
   }
 }
 
