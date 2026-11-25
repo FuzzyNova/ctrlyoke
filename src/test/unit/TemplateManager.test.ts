@@ -919,6 +919,43 @@ suite("TemplateManager variable metadata", () => {
         );
       });
 
+      test("adds provenance to YAML metadata with an indented comment or marker-like block text", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const cases: Array<[string, string, string | undefined]> = [
+          [
+            "commented",
+            "_templateMeta:\n    # author note\n  name: Review\nsteps: []\n",
+            undefined,
+          ],
+          [
+            "blockText",
+            "_templateMeta:\n  name: Review\n  description: |\n    communityInstallFile: keep me\nsteps: []\n",
+            "communityInstallFile: keep me\n",
+          ],
+        ];
+        for (const [name, content, description] of cases) {
+          const installed = await tm.installTemplateContent(
+            name,
+            TEMPLATE_SCOPES.USER,
+            WORKFLOW_FILE_FORMATS.YAML,
+            content,
+            `${name}.ctrlyoke.yaml`
+          );
+          const written = jsYaml.load(
+            await fs.promises.readFile(installed.path, "utf-8")
+          ) as any;
+          assert.strictEqual(
+            written._templateMeta.communityInstallFile,
+            `${name}.ctrlyoke.yaml`,
+            name
+          );
+          assert.strictEqual(written._templateMeta.description, description);
+          assert.deepStrictEqual(written.steps, []);
+        }
+      });
+
       test("does not report a marker that names a different extension", async () => {
         const tm = makeManager();
         const templateDir = makeTempDir();

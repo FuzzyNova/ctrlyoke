@@ -4,7 +4,6 @@ import type {
   ContextMenuSubmenu,
 } from "../components/shared/ContextMenu";
 import { selectionTargetKey, useEditorStore } from "@store/editorStore";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
@@ -12,8 +11,10 @@ import {
 } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
+  EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
   STEER_ORIGIN_KINDS,
+  STEP_TYPES,
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
@@ -307,7 +308,7 @@ export function buildQueuedStepHandoffMenuItems({
 
   const editorState = useEditorStore.getState();
   const replacedDraft =
-    editorState.selectionTarget.kind === "newPrompt"
+    editorState.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
       ? editorState
       : editorState.savedNewPromptState;
   const scriptDraftWouldBeReplaced =

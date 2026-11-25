@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
+import { isDeepStrictEqual } from "util";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -792,18 +793,24 @@ export class TemplateManager {
           index > metaIndex && /^(?!\s)(?:[^\s#][^:]*):/.test(line)
       );
       const end = nextTopLevel < 0 ? lines.length : nextTopLevel;
+      // The first key line (not a comment, whose indentation is free) sets
+      // the mapping's indentation.
       const childIndex = lines.findIndex(
-        (line, index) => index > metaIndex && index < end && /^\s+\S/.test(line)
+        (line, index) =>
+          index > metaIndex && index < end && /^\s+[^\s#]/.test(line)
       );
       if (childIndex >= 0) {
         const indentation = lines[childIndex].match(/^\s+/)?.[0] ?? "  ";
         const newline = content.includes("\r\n") ? "\r\n" : "\n";
         const markerLine = `${indentation}communityInstallFile: ${JSON.stringify(marker)}${newline}`;
+        // Only a key at the mapping's own indentation; a deeper line could be
+        // block-scalar text or a nested mapping.
         const existingIndex = lines.findIndex(
           (line, index) =>
             index > metaIndex &&
             index < end &&
-            /^\s+communityInstallFile\s*:/.test(line)
+            line.startsWith(indentation) &&
+            /^communityInstallFile\s*:/.test(line.slice(indentation.length))
         );
         if (existingIndex >= 0) lines[existingIndex] = markerLine;
         else {
@@ -816,7 +823,17 @@ export class TemplateManager {
           }
           lines.splice(end, 0, markerLine);
         }
-        return lines.join("");
+        const edited = lines.join("");
+        // A line edit can't see every YAML layout; keep it only when it
+        // parses back to exactly the marked document.
+        try {
+          const reparsed = loadYamlDocument(edited, {
+            schema: WORKFLOW_YAML_SCHEMA,
+          });
+          if (isDeepStrictEqual(reparsed, parsed)) return edited;
+        } catch {
+          // Fall through to the structured fallback.
+        }
       }
     }
 
