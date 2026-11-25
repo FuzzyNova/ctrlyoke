@@ -65,6 +65,7 @@ import {
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
+  isHarnessId,
   StepOutputTextMode,
   LOGS_DIR,
   QUEUE_POSITION,
@@ -1941,6 +1942,20 @@ export class CtrlYokeMCPServer {
     workflowHarness?: PromptStep["harness"]
   ): Promise<void> {
     const capabilities = await this.readCapabilities();
+
+    for (const step of steps) {
+      if (isScriptStep(step)) continue;
+      const effectiveHarness = SettingsPropertyResolver.resolveHarnessValue(
+        (step as PromptStep).harness,
+        workflowHarness
+      );
+      if (effectiveHarness !== undefined && !isHarnessId(effectiveHarness)) {
+        throw new Error(
+          `Invalid harness '${effectiveHarness}'. Valid harnesses: ${Object.values(HARNESS_IDS).join(", ")}`
+        );
+      }
+    }
+
     if (!capabilities) return;
 
     for (const step of steps) {
@@ -1950,6 +1965,7 @@ export class CtrlYokeMCPServer {
         promptStep.harness,
         workflowHarness
       );
+      if (effectiveHarness === undefined) continue;
 
       const harnessEntry = capabilities.harnesses.find(
         (harness) => harness.id === effectiveHarness

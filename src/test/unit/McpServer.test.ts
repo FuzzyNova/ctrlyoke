@@ -2299,6 +2299,50 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("rejects unknown harness ids without capabilities and accepts known ids", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "harness-id-without-capabilities"
+    );
+    try {
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      const validHarness = HARNESS_IDS.CODEX_CLI;
+      const errorPattern = /Invalid harness 'bogus-harness'.*Valid harnesses:/;
+
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ prompt: "invalid append", harness: "bogus-harness" }],
+        }),
+        errorPattern
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { harness: "bogus-harness" },
+        }),
+        errorPattern
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "valid append", harness: validHarness }],
+      });
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(
+        (persisted.steps?.[4] as PromptStep).harness,
+        validHarness
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("rejects fields outside the MCP edit_step capability boundary", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun(

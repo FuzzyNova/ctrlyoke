@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced with a temporary test in `src/test/unit/McpServer.test.ts`)
 - **Area:** `src/mcp-server.ts` (`validateStepHarnessAndModelCapabilities` ~1938-1977; callers ~1516 append, ~1751 edit), `src/utils/McpToolDefinitions.ts` (~281-285, ~364), `src/core/IntegrationFactory.ts` (~83, ~232)
-- **Severity:** medium (a bad step is saved into a live run and fails mid-run at dispatch, unattended)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
