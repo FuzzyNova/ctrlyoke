@@ -224,7 +224,7 @@ export class OpenCodeHarnessAdapter implements IHarnessAdapter {
     npmPackage: "opencode-ai",
     versionPolicy: {
       minimum: "1.3.16",
-      testedWith: "2.3.2",
+      testedWith: "2.4.1",
       updateCommand: "opencode upgrade",
     },
     shouldStreamHeadlessOutput: true,
