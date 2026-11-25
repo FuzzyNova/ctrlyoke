@@ -3609,6 +3609,14 @@ export const EDITOR_TARGET_KINDS = {
 } as const;
 
 // ============================================================================
+// STEER ORIGIN KINDS - Where a steer message came from, echoed back on failure
+// ============================================================================
+export const STEER_ORIGIN_KINDS = {
+  /** A queued step sent through its context menu's Send as Steer. */
+  QUEUED_STEP: "queuedStep",
+} as const;
+
+// ============================================================================
 // PROMPT HISTORY KINDS - How a Recent Prompts entry left the prompt editor
 // ============================================================================
 export const PROMPT_HISTORY_KINDS = {

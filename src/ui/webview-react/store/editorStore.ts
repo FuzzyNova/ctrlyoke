@@ -228,7 +228,7 @@ function normalizePromptErrorBehavior(
  * Returns a stable string key for a selection target, used to index pendingEdits.
  * Only valid for edit-mode targets (queue / finalStep).
  */
-function selectionTargetKey(target: EditorSelectionTarget): string {
+export function selectionTargetKey(target: EditorSelectionTarget): string {
   if (target.kind === FINAL_STEP_PHASES.QUEUE) return `queue:${target.index}`;
   if (target.kind === FINAL_STEP_PHASES.FINAL_STEP)
     return FINAL_STEP_PHASES.FINAL_STEP;

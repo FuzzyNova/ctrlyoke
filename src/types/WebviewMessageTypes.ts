@@ -90,6 +90,7 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
+  ScriptStep,
   QueueState,
   WorkflowViewAddress,
   WorkflowKey,
@@ -154,6 +155,7 @@ export type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerati
 import type {
   HistoryTrashEntryKind,
   McpLocalSource,
+  STEER_ORIGIN_KINDS,
 } from "./DashboardConstants";
 import type {
   HistoryClearPreview,
@@ -2713,9 +2715,10 @@ export interface AppendFileMessage {
 
 /** Context-menu origin carried back only when a queued-step steer fails. */
 export interface QueuedStepSteerOrigin {
-  kind: "queuedStep";
+  kind: typeof STEER_ORIGIN_KINDS.QUEUED_STEP;
   stepIndex: number;
-  step: WorkflowStep;
+  /** The step as the dashboard held it, with any unsaved prompt edit applied. */
+  step: PromptStep | ScriptStep;
 }
 
 /** Webview → Extension: `sessionId` names a PTY session or headless control channel. */

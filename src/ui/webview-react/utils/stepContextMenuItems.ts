@@ -1,10 +1,9 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
-import type { WorkflowStep as CoreWorkflowStep } from "@root/types/CtrlYokeTypes";
 import type {
   ContextMenuItem,
   ContextMenuSubmenu,
 } from "../components/shared/ContextMenu";
-import { useEditorStore } from "@store/editorStore";
+import { selectionTargetKey, useEditorStore } from "@store/editorStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
@@ -13,6 +12,7 @@ import {
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
   FINAL_STEP_PHASES,
+  STEER_ORIGIN_KINDS,
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
@@ -318,7 +318,10 @@ export function buildQueuedStepHandoffMenuItems({
   };
 
   const editorState = useEditorStore.getState();
-  const queuedEdit = editorState.pendingEdits[`queue:${stepIndex}`];
+  const queuedEdit =
+    editorState.pendingEdits[
+      selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index: stepIndex })
+    ];
   const isSelectedStep =
     editorState.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
     editorState.selectionTarget.index === stepIndex;
@@ -342,11 +345,9 @@ export function buildQueuedStepHandoffMenuItems({
   const steerTo = (target: SteerTarget) => () => {
     if (steerDisabledReason !== undefined || !workflowId) return;
     sendSteerText(workflowId, target.sessionId, steerText, {
-      kind: "queuedStep",
+      kind: STEER_ORIGIN_KINDS.QUEUED_STEP,
       stepIndex,
-      step: isScriptStep(step)
-        ? (step as unknown as CoreWorkflowStep)
-        : ({ ...step, prompt: steerText } as unknown as CoreWorkflowStep),
+      step: isScriptStep(step) ? step : { ...step, prompt: steerText },
     });
     removeStep();
   };
