@@ -1111,26 +1111,12 @@
           "$ref": "#/$defs/scriptProperties/properties/env"
         },
         "compareSource": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/scriptProperties/properties/compareSource"
-            },
-            {
-              "$ref": "#/$defs/varPlaceholder"
-            }
-          ],
-          "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "$ref": "#/$defs/scriptProperties/properties/compareSource",
+          "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "timeoutSec": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/scriptProperties/properties/timeoutSec"
-            },
-            {
-              "$ref": "#/$defs/varPlaceholder"
-            }
-          ],
-          "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "$ref": "#/$defs/scriptProperties/properties/timeoutSec",
+          "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "shell": {
           "$ref": "#/$defs/scriptProperties/properties/shell"
@@ -1194,29 +1180,15 @@
           "description": "Per-step runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored."
         },
         "operator": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/scriptProperties/properties/operator"
-            },
-            {
-              "$ref": "#/$defs/varPlaceholder"
-            }
-          ],
-          "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "$ref": "#/$defs/scriptProperties/properties/operator",
+          "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "expected": {
           "$ref": "#/$defs/scriptProperties/properties/expected"
         },
         "ignoreCase": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/scriptProperties/properties/ignoreCase"
-            },
-            {
-              "$ref": "#/$defs/varPlaceholder"
-            }
-          ],
-          "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+          "$ref": "#/$defs/scriptProperties/properties/ignoreCase",
+          "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "returns": {
           "$ref": "#/$defs/scriptProperties/properties/returns"

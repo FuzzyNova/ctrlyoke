@@ -4,7 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
 import { runCli } from "./helpers/cliProcess";
+import { PromptFileParser } from "../../core/PromptFileParser";
+import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import { DOCS_URLS } from "../../types/DashboardConstants";
+import type { ScriptStep } from "../../types/CtrlYokeTypes";
 import { projectKey } from "../../utils/ProjectStatePaths";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WORKING_FILE_NAME } from "../../utils/WorkflowPaths";
@@ -249,6 +252,59 @@ suite("CLI dry-run process", () => {
     );
     assert.strictEqual(result.code, 2, result.stderr);
     assert.match(result.stderr, /timeoutSec/);
+  });
+
+  test("parser accepts and dispatch substitution resolves script comparison placeholders", async function () {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-script-step-value-vars-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "script-values.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        vars: {
+          compare: "stdout",
+          timeout: "5",
+          operator: "contains",
+          ignore: "true",
+        },
+        steps: [
+          {
+            type: "script",
+            script: "echo hi",
+            compareSource: "{{compare}}",
+            timeoutSec: "{{timeout}}",
+            operator: "{{operator}}",
+            ignoreCase: "{{ignore}}",
+          },
+        ],
+      }),
+      "utf8"
+    );
+
+    const parsed = await new PromptFileParser().parsePromptFile(workflow);
+    assert.ok(parsed?.steps?.[0]);
+    const resolved = VarSubstitutor.substituteStepView(
+      parsed.steps[0],
+      parsed.vars ?? {},
+      "dispatch"
+    ) as ScriptStep;
+
+    assert.deepStrictEqual(
+      {
+        compareSource: resolved.compareSource,
+        timeoutSec: resolved.timeoutSec,
+        operator: resolved.operator,
+        ignoreCase: resolved.ignoreCase,
+      },
+      {
+        compareSource: "stdout",
+        timeoutSec: 5,
+        operator: "contains",
+        ignoreCase: true,
+      }
+    );
   });
 
   test("warns on stderr for an unused --var without failing dry-run", async function () {
