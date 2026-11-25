@@ -208,7 +208,7 @@ suite("QwenHeadlessControlChannel", () => {
     channel.close();
   });
 
-  test("sends interrupt and marks the following result as interrupted", async () => {
+  test("marks only the first result after interrupt as interrupted", async () => {
     const writes: string[] = [];
     const channel = new QwenHeadlessControlChannel();
     await channel.start({
@@ -238,11 +238,16 @@ suite("QwenHeadlessControlChannel", () => {
     assert.strictEqual(request.type, QWEN_CONTROL.REQUEST_TYPE);
     assert.ok(request.request_id);
     assert.strictEqual(request.request.subtype, QWEN_CONTROL.INTERRUPT_SUBTYPE);
-    assert.deepStrictEqual(channel.observe({ type: QWEN_EVENT_TYPES.RESULT }), [
+    const firstResult = channel.observe({ type: QWEN_EVENT_TYPES.RESULT });
+    const secondResult = channel.observe({ type: QWEN_EVENT_TYPES.RESULT });
+    assert.deepStrictEqual(firstResult, [
       {
         kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
         interrupted: true,
       },
+    ]);
+    assert.deepStrictEqual(secondResult, [
+      { kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END },
     ]);
     channel.close();
   });

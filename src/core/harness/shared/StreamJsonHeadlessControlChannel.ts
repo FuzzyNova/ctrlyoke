@@ -96,10 +96,12 @@ export abstract class StreamJsonHeadlessControlChannel implements IHeadlessContr
     }
 
     if (record.type === this.protocol.resultType) {
+      const interrupted = this.interruptRequested;
+      this.interruptRequested = false;
       return [
         {
           kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
-          ...(this.interruptRequested ? { interrupted: true } : {}),
+          ...(interrupted ? { interrupted: true } : {}),
         },
       ];
     }

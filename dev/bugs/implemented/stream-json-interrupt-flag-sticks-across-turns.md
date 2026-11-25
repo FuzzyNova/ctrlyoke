@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, code trace plus a scratch script against the compiled channel)
 - **Area:** `src/core/harness/shared/StreamJsonHeadlessControlChannel.ts` (`observe` ~97-104, `interrupt` ~139-150)
-- **Severity:** medium (a later failing turn is recorded as a successful partial step; affects Claude and Qwen headless)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
