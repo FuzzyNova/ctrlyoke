@@ -12,8 +12,78 @@ import { readWorkflowLock } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import * as path from "path";
+import { errorWithCode } from "../helpers/errnoError";
 
 suite("WorkflowLockManager stale-run recovery", () => {
+  test("heartbeat retries a transient rename failure and removes its temp file", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-heartbeat-retry-")
+    );
+    const workflowKey = "heartbeat-retry" as WorkflowKey;
+    const ownerToken = "heartbeat-owner";
+    const lockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      workflowKey
+    );
+    const fsPromises = require("fs/promises") as typeof import("fs/promises");
+    const originalRename = fsPromises.rename;
+    let renameAttempts = 0;
+
+    try {
+      await WorkflowLockManager.acquireLock(workspaceRoot, workflowKey, {
+        schemaVersion: 2,
+        workflowKey,
+        runRef: "run-2026-01-01T00-00-00-000Z" as RunRef,
+        runner: RUNNER_IDS.VSCODE,
+        pid: process.pid,
+        ownerToken,
+        hostInstanceId: "heartbeat-host",
+        executionInstanceId: "heartbeat-execution",
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      });
+      const heartbeatBefore = (await readWorkflowLock(workspaceRoot, workflowKey))
+        ?.lastHeartbeat;
+
+      Object.defineProperty(fsPromises, "rename", {
+        configurable: true,
+        value: async (source: string, destination: string) => {
+          if (destination === lockPath && renameAttempts++ === 0) {
+            throw errorWithCode("EPERM");
+          }
+          return originalRename(source, destination);
+        },
+      });
+
+      await WorkflowLockManager.updateHeartbeat(
+        workspaceRoot,
+        workflowKey,
+        ownerToken
+      );
+
+      const heartbeatAfter = (await readWorkflowLock(workspaceRoot, workflowKey))
+        ?.lastHeartbeat;
+      assert.ok(
+        heartbeatAfter !== undefined && heartbeatAfter > (heartbeatBefore ?? 0),
+        "the retried write should publish the updated heartbeat"
+      );
+      assert.strictEqual(renameAttempts, 2);
+      assert.deepStrictEqual(
+        (await fs.readdir(path.dirname(lockPath))).filter((name) =>
+          name.endsWith(".tmp")
+        ),
+        [],
+        "successful retry must leave no temporary file in the lineage"
+      );
+    } finally {
+      Object.defineProperty(fsPromises, "rename", {
+        configurable: true,
+        value: originalRename,
+      });
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("normalization cannot overwrite or remove a successor acquired during run-file rename", async function () {
     this.timeout(15_000);
     const workspaceRoot = await fs.mkdtemp(

@@ -21,7 +21,10 @@ import {
   readWorkflowLockInspection,
 } from "./WorkflowLockInspector";
 import { withFileLock } from "./FileLockUtils";
-import { writeFileAtomic } from "./AtomicFileUtils";
+import {
+  WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
+  writeFileAtomic,
+} from "./AtomicFileUtils";
 import { runStateWriteOptions } from "./RunStateWrites";
 import {
   hasNewerSchema,
@@ -212,13 +215,19 @@ export class WorkflowLockManager {
           ...existing,
           lastHeartbeat: Date.now(),
         };
-        const tmpPath = `${lockPath}.${ownerToken}.tmp`;
-        await fs.promises.writeFile(
-          tmpPath,
+        // Keep retries shorter than the 5s heartbeat interval; a workflow-critical
+        // five-minute retry would hold the runner-lock mutex past the 30s stale limit.
+        await writeFileAtomic(
+          lockPath,
           JSON.stringify(updated, null, 2),
-          "utf8"
+          {
+            ...runStateWriteOptions(
+              lockPath,
+              "WorkflowLockManager.updateHeartbeat"
+            ),
+            budgetMs: Math.min(WORKFLOW_CRITICAL_RENAME_BUDGET_MS, 1_000),
+          }
         );
-        await fs.promises.rename(tmpPath, lockPath);
       });
     } catch (err) {
       const code = getErrnoCode(err);

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent; read-only, not reproduced, since the failure is Windows-only)
 - **Area:** `src/utils/WorkflowLockManager.ts` (`updateHeartbeat` ~194-232)
-- **Severity:** medium (Windows only: a live run can be marked STOPPED and its lock taken by another host)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
