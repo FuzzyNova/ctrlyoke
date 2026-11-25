@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Git diffs used for commit messages and prompt attachments stay free of ANSI colors, and `commit --all` handles repositories with no commits in every locale.
 - Run bundle workspace patches ignore user Git diff settings and remain applicable on import.
 - Queue run-file updates preserve unknown runtime metadata and refuse writes to runs created by a newer ctrlyoke.
 - Invalid `run` and `rerun` override flags now fail before creating persisted history.

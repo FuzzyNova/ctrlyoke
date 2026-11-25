@@ -386,6 +386,52 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
+  test("disables repo-configured color and handles unborn HEAD with includeUnstaged", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-unborn-"));
+    const originalLanguage = process.env.LANGUAGE;
+    const originalLocale = process.env.LC_ALL;
+    try {
+      const runGit = async (args: string[]): Promise<void> => {
+        await execFileAsync("git", args, { cwd, encoding: "utf8" });
+      };
+      await runGit(["init"]);
+      await runGit(["config", "user.email", "test@example.com"]);
+      await runGit(["config", "user.name", "CtrlYoke Test"]);
+      await runGit(["config", "color.ui", "always"]);
+      await fs.writeFile(path.join(cwd, "staged.txt"), "staged content\n");
+      await runGit(["add", "staged.txt"]);
+      await fs.writeFile(
+        path.join(cwd, "untracked.txt"),
+        "untracked content\n"
+      );
+
+      process.env.LANGUAGE = "de_DE.UTF-8";
+      process.env.LC_ALL = "de_DE.UTF-8";
+      const result = await new CommitMessageGenerator().getDiff(cwd, {
+        includeUnstaged: true,
+      });
+
+      assert.ok(result);
+      assert.ok(result.diff.includes("staged.txt"), result.diff);
+      assert.ok(result.diff.includes("untracked.txt"), result.diff);
+      assert.ok(!result.diff.includes("\u001b"), result.diff);
+    } finally {
+      if (originalLanguage === undefined) {
+        delete process.env.LANGUAGE;
+      } else {
+        process.env.LANGUAGE = originalLanguage;
+      }
+      if (originalLocale === undefined) {
+        delete process.env.LC_ALL;
+      } else {
+        process.env.LC_ALL = originalLocale;
+      }
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
   test("carries the persisted run address on generation errors", () => {
     const workflowKey =
       "commit-message-generation-20260824-120000" as WorkflowKey;

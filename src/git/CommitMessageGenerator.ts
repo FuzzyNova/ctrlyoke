@@ -24,6 +24,7 @@ import { buildCommitMessageSkillCommandPrefix } from "../utils/McpToolSkillGener
 import { fenceLiteral } from "../utils/FileReferenceParser";
 import {
   GIT_DIFF_NO_EXT_DIFF_OPTION,
+  GIT_DIFF_NO_COLOR_OPTION,
   parseGitNulSeparatedPaths,
   repoToplevel,
 } from "../utils/GitUtils";
@@ -60,7 +61,12 @@ import { truncateUtf8 } from "../utils/Utf8Truncate";
 const execFileAsync = promisify(execFile);
 
 function gitDiffArgs(...args: string[]): string[] {
-  return ["diff", ...args, GIT_DIFF_NO_EXT_DIFF_OPTION];
+  return [
+    "diff",
+    ...args,
+    GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
+  ];
 }
 
 function gitDiffCommand(...args: string[]): string {
@@ -485,7 +491,23 @@ export class CommitMessageGenerator {
       hasStagedChanges = true;
     }
     if (options.includeUnstaged) {
+      let hasHead = true;
       try {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["rev-parse", "--verify", "--quiet", "HEAD"],
+          { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
+        );
+        hasHead = Boolean(stdout.trim());
+      } catch (error) {
+        const gitError = error as { code?: unknown; stderr?: unknown };
+        if (gitError.code === 1) {
+          hasHead = false;
+        } else {
+          throw error;
+        }
+      }
+      if (hasHead) {
         const { stdout: headDiff } = await execFileAsync(
           "git",
           gitDiffArgs("HEAD"),
@@ -494,14 +516,7 @@ export class CommitMessageGenerator {
         if (headDiff.trim()) {
           append(headDiff);
         }
-      } catch (error) {
-        const stderr =
-          typeof error === "object" && error !== null && "stderr" in error
-            ? String(error.stderr)
-            : "";
-        if (!/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)) {
-          throw error;
-        }
+      } else {
         commands.push(gitDiffCommand());
         // An unborn repository has no HEAD comparison; combine its staged
         // additions with the regular unstaged diff instead.

@@ -406,6 +406,19 @@ suite("GitUtils.gitRefExists", function () {
     );
   });
 
+  test("disables repo-configured color in staged and working tree diffs", async () => {
+    runGit(["config", "color.ui", "always"]);
+    await writeWorkspaceFile("tracked.txt", "staged color change\n");
+    runGit(["add", "tracked.txt"]);
+
+    const stagedDiff = await getStagedDiff(workspaceRoot);
+    assert.ok(!stagedDiff.includes("\u001b"), stagedDiff);
+
+    await writeWorkspaceFile("tracked.txt", "working color change\n");
+    const workingDiff = await getWorkingTreeDiff(workspaceRoot);
+    assert.ok(!workingDiff.includes("\u001b"), workingDiff);
+  });
+
   test("lists non-ASCII tracked paths in a stash", async () => {
     await writeWorkspaceFile("café.txt", "base\n");
     runGit(["add", "café.txt"]);

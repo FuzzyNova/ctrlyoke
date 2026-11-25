@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against `out/`)
 - **Area:** `src/git/CommitMessageGenerator.ts` (`getDiff`, `includeUnstaged` branch ~487-510)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

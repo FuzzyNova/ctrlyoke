@@ -16,10 +16,11 @@ import { Log } from "./Log";
 import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
+export const GIT_DIFF_NO_COLOR_OPTION = "--no-color";
 
 /** Stable options for producing patches that must be portable across user Git config. */
 export const GIT_PATCH_FORMAT_OPTIONS = [
-  "--no-color",
+  GIT_DIFF_NO_COLOR_OPTION,
   GIT_DIFF_NO_EXT_DIFF_OPTION,
   "--no-textconv",
   "--src-prefix=a/",
@@ -1129,6 +1130,7 @@ export async function getDiffBetweenRefs(
     "--stat",
     "-p",
     GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     "--end-of-options",
     baseRef,
     targetRef,
@@ -1169,6 +1171,7 @@ export function buildWorkingTreeDiffArgs(
     "--stat",
     "-p",
     GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     ...(pathspecs?.length ? ["--", ...pathspecs] : []),
   ];
 }
@@ -1233,6 +1236,7 @@ export function buildStagedDiffArgs(
     "--stat",
     "-p",
     GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     ...(pathspecs?.length ? ["--", ...pathspecs] : []),
   ];
 }
@@ -1293,6 +1297,7 @@ export function buildStashDiffArgs(
         "--stat",
         "-p",
         GIT_DIFF_NO_EXT_DIFF_OPTION,
+        GIT_DIFF_NO_COLOR_OPTION,
         "--end-of-options",
         `${stashRef}^1`,
         stashRef,

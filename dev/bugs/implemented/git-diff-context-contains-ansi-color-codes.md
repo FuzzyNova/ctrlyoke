@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against `out/`)
 - **Area:** `src/git/CommitMessageGenerator.ts` (`gitDiffArgs` ~62-64), `src/utils/GitUtils.ts` (`getDiffBetweenRefs` ~1110, `getWorkingTreeDiff` ~1134, `getStagedDiff` ~1203, `getStashDiff` ~1258)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
