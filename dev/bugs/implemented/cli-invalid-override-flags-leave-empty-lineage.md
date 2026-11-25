@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced with `node out/cli.js` and an isolated `CTRLYOKE_HOME`)
 - **Area:** `src/cli.ts` (run path ~1524-1575, rerun path ~2249-2270), `src/cli/CliPropertyOverrides.ts`
-- **Severity:** low (history and dashboard clutter; same class as `dev/bugs/implemented/cli-run-refused-before-start-leaves-empty-lineage.md`)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -18,6 +18,99 @@ suite("CLI dry-run process", () => {
     }
   });
 
+  test("invalid run overrides create no lineage", async function () {
+    this.timeout(90000);
+    const invalidFlags = [
+      ["--force", "bogus"],
+      ["--force", "model"],
+      ["--sandbox", "--sandbox-none"],
+    ];
+    for (const [index, flags] of invalidFlags.entries()) {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-run-invalid-")
+      );
+      const stateHome = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-run-invalid-state-")
+      );
+      temporaryRoots.push(root, stateHome);
+      const workflow = path.join(root, "workflow.json");
+      await fs.writeFile(
+        workflow,
+        JSON.stringify({ steps: [{ type: "script", script: "echo hi" }] })
+      );
+      const result = await runCli(
+        ["run", workflow, ...flags, "--cwd", root],
+        root,
+        { CTRLYOKE_HOME: stateHome }
+      );
+      assert.strictEqual(result.code, 2, result.stderr);
+      const expectedMessage = [
+        '--force cannot include "bogus"',
+        "--force model requires --model",
+        "--sandbox-none cannot be combined with --sandbox or --no-sandbox",
+      ][index];
+      assert.ok(result.stderr.includes(expectedMessage), result.stderr);
+      await assert.rejects(
+        fs.access(path.join(stateHome, "projects", projectKey(root), ".runs")),
+        { code: "ENOENT" }
+      );
+    }
+  });
+
+  test("invalid rerun overrides do not seed a run", async function () {
+    this.timeout(120000);
+    const invalidFlags = [
+      ["--force", "bogus"],
+      ["--force", "model"],
+      ["--sandbox", "--sandbox-none"],
+    ];
+    for (const [index, flags] of invalidFlags.entries()) {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-rerun-invalid-")
+      );
+      const stateHome = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-rerun-invalid-state-")
+      );
+      temporaryRoots.push(root, stateHome);
+      const workflow = path.join(root, "workflow.json");
+      await fs.writeFile(
+        workflow,
+        JSON.stringify({ steps: [{ type: "script", script: "echo hi" }] })
+      );
+      const env = { CTRLYOKE_HOME: stateHome };
+      const initial = await runCli(
+        ["run", workflow, "--cwd", root, "--json"],
+        root,
+        env
+      );
+      assert.strictEqual(initial.code, 0, initial.stderr);
+      const { workflowKey } = JSON.parse(initial.stdout) as {
+        workflowKey: string;
+      };
+      const runsRoot = path.join(
+        stateHome,
+        "projects",
+        projectKey(root),
+        ".runs",
+        workflowKey
+      );
+      const before = await fs.readdir(runsRoot);
+      const result = await runCli(
+        ["rerun", "--workflow", workflowKey, ...flags, "--cwd", root],
+        root,
+        env
+      );
+      assert.strictEqual(result.code, 2, result.stderr);
+      const expectedMessage = [
+        '--force cannot include "bogus"',
+        "--force model requires --model",
+        "--sandbox-none cannot be combined with --sandbox or --no-sandbox",
+      ][index];
+      assert.ok(result.stderr.includes(expectedMessage), result.stderr);
+      assert.deepStrictEqual(await fs.readdir(runsRoot), before);
+    }
+  });
+
   test("case-colliding --var refusal creates no lineage", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(

@@ -1529,6 +1529,7 @@ async function runCommand(
       // creation once all refusals have passed.
       let preflightWorkflow:
         Awaited<ReturnType<PromptFileParser["parsePromptFile"]>> | undefined;
+      const overrides = buildCliPropertyOverrides(options, harness);
       if (!options.prompt && resolvedFile) {
         const preflightParser = new PromptFileParser(
           platform,
@@ -1551,6 +1552,10 @@ async function runCommand(
               resolvedFile
             )
           );
+          applyCliPropertyOverrides(
+            structuredClone(preflightWorkflow),
+            overrides
+          );
         }
       }
 
@@ -1566,7 +1571,6 @@ async function runCommand(
         }
       }
 
-      const overrides = buildCliPropertyOverrides(options, harness);
       const workflow = instance.promptQueue.getWorkflowFile();
       const notices = applyCliPropertyOverrides(workflow, overrides);
       for (const key of Object.keys(overrides.workflow) as Array<
@@ -2246,6 +2250,11 @@ async function executeAddressedCliOperation(
       workflowKey,
       sourceRunRef
     );
+    const overrides = buildCliPropertyOverrides(
+      options,
+      ConfigurationUtils.getIntegrationMode()
+    );
+    applyCliPropertyOverrides(structuredClone(source), overrides);
     const seeded = await WorkingFileManager.seedNewRun(
       workspaceRoot,
       workflowKey,
@@ -2268,7 +2277,8 @@ async function executeAddressedCliOperation(
           instance,
           options,
           ConfigurationUtils.getIntegrationMode(),
-          true
+          true,
+          overrides
         );
         await warnIfNeeded();
       }
@@ -2364,15 +2374,18 @@ async function applyAddressedCliPropertyOverrides(
   instance: WorkflowInstance,
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   defaultHarness: HarnessId,
-  includeHarnessAndModel: boolean
+  includeHarnessAndModel: boolean,
+  prebuiltOverrides?: ReturnType<typeof buildCliPropertyOverrides>
 ): Promise<void> {
   const workflow = instance.promptQueue.getWorkflowFile();
-  const overrides = buildCliPropertyOverrides(
-    includeHarnessAndModel
-      ? options
-      : { ...options, harness: undefined, model: undefined },
-    defaultHarness
-  );
+  const overrides =
+    prebuiltOverrides ??
+    buildCliPropertyOverrides(
+      includeHarnessAndModel
+        ? options
+        : { ...options, harness: undefined, model: undefined },
+      defaultHarness
+    );
   const originalModel = workflow.model;
   const notices = applyCliPropertyOverrides(workflow, overrides);
   const workflowProperties: Record<string, unknown> = {
