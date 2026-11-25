@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stale-lock normalization settles a recovered run before a successor can acquire its runner lock.
 - `history show` treats recorded condition and worktree-setup script results as terminal, including in existing run histories.
 - Workflow discovery, file search, the hosted file viewer and run export work in folders that are not git repositories when Git runs in a non-English locale.
 - Script step comparison fields now accept whole-value variable placeholders without failing schema validation.
