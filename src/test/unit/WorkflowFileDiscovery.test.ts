@@ -46,6 +46,33 @@ suite("WorkflowFileDiscovery", () => {
     );
   });
 
+  test("falls back to filesystem discovery under a translated Git locale", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workflow-discovery-nogit-")
+    );
+    tempDirs.push(workspaceRoot);
+    await fs.writeFile(
+      path.join(workspaceRoot, "a.ctrlyoke.yaml"),
+      "steps: []"
+    );
+    const originalLanguage = process.env.LANGUAGE;
+    const originalLocale = process.env.LC_ALL;
+    try {
+      process.env.LANGUAGE = "de";
+      process.env.LC_ALL = "de_DE.UTF-8";
+      const files = await findWorkflowFilesInWorkspace(workspaceRoot);
+      assert.deepStrictEqual(
+        files.map((file) => file.relativePath),
+        ["a.ctrlyoke.yaml"]
+      );
+    } finally {
+      if (originalLanguage === undefined) delete process.env.LANGUAGE;
+      else process.env.LANGUAGE = originalLanguage;
+      if (originalLocale === undefined) delete process.env.LC_ALL;
+      else process.env.LC_ALL = originalLocale;
+    }
+  });
+
   test("discovers prompt files inside an unmanifested assets directory", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-workflow-discovery-")

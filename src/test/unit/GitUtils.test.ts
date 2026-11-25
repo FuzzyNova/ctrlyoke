@@ -484,6 +484,27 @@ suite("GitUtils.gitRefExists", function () {
     );
   });
 
+  test("returns null for a missing blob under a translated Git locale", async () => {
+    await writeWorkspaceFile("present.txt", "content\n");
+    runGit(["add", "present.txt"]);
+    runGit(["commit", "-m", "Add present file"]);
+    const originalLanguage = process.env.LANGUAGE;
+    const originalLocale = process.env.LC_ALL;
+    try {
+      process.env.LANGUAGE = "de";
+      process.env.LC_ALL = "de_DE.UTF-8";
+      assert.strictEqual(
+        await getBlobBytes(workspaceRoot, "HEAD", "missing-path"),
+        null
+      );
+    } finally {
+      if (originalLanguage === undefined) delete process.env.LANGUAGE;
+      else process.env.LANGUAGE = originalLanguage;
+      if (originalLocale === undefined) delete process.env.LC_ALL;
+      else process.env.LC_ALL = originalLocale;
+    }
+  });
+
   test("rejects oversized blobs before reading their contents", async () => {
     await writeWorkspaceFile("large.txt", "0123456789");
     runGit(["add", "large.txt"]);

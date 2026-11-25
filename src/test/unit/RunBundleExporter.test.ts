@@ -338,32 +338,43 @@ suite("RunBundleExporter secrets", () => {
     await fs.mkdir(unbornRoot);
     await execGit(["init"], { cwd: unbornRoot });
 
-    for (const [label, executionRoot] of [
-      ["non-git", nonGitRoot],
-      ["unborn", unbornRoot],
-    ]) {
-      const bundleDir = path.join(root, `${label}.ctrlyokerun`);
-      const options = {
-        stateRoot: workspace,
-        workspaceRoot: executionRoot,
-        ...run,
-        bundleDir,
-        exportedByVersion: "test",
-        includeChanges: false,
-      };
-      const exported = await exportRunBundle(options);
-      assert.strictEqual(exported.continuable, false, label);
-      assert.strictEqual(exported.continuation, undefined, label);
-      assert.deepStrictEqual(
-        await getRunBundleExportPreview(
-          workspace,
-          executionRoot,
-          run.workflowKey,
-          run.runRef
-        ),
-        { continuable: false, changedFiles: [] },
-        label
-      );
+    const originalLanguage = process.env.LANGUAGE;
+    const originalLocale = process.env.LC_ALL;
+    process.env.LANGUAGE = "de";
+    process.env.LC_ALL = "de_DE.UTF-8";
+    try {
+      for (const [label, executionRoot] of [
+        ["non-git", nonGitRoot],
+        ["unborn", unbornRoot],
+      ]) {
+        const bundleDir = path.join(root, `${label}.ctrlyokerun`);
+        const options = {
+          stateRoot: workspace,
+          workspaceRoot: executionRoot,
+          ...run,
+          bundleDir,
+          exportedByVersion: "test",
+          includeChanges: false,
+        };
+        const exported = await exportRunBundle(options);
+        assert.strictEqual(exported.continuable, false, label);
+        assert.strictEqual(exported.continuation, undefined, label);
+        assert.deepStrictEqual(
+          await getRunBundleExportPreview(
+            workspace,
+            executionRoot,
+            run.workflowKey,
+            run.runRef
+          ),
+          { continuable: false, changedFiles: [] },
+          label
+        );
+      }
+    } finally {
+      if (originalLanguage === undefined) delete process.env.LANGUAGE;
+      else process.env.LANGUAGE = originalLanguage;
+      if (originalLocale === undefined) delete process.env.LC_ALL;
+      else process.env.LC_ALL = originalLocale;
     }
   });
 

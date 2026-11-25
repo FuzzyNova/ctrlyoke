@@ -62,6 +62,7 @@ import {
   execGit,
   execGitBuffer,
   GIT_PATCH_FORMAT_OPTIONS,
+  gitProbeEnv,
   isNotGitRepositoryError,
 } from "../../utils/GitUtils";
 import { settleInterruptedRun } from "../../utils/InterruptedRunSettlement";
@@ -220,6 +221,7 @@ async function getContinuationInfo(
       baseCommit = (
         await execGit(["rev-parse", "--verify", "--quiet", "HEAD"], {
           cwd: executionRoot,
+          env: gitProbeEnv(),
         })
       ).stdout.trim();
     } catch (error) {
