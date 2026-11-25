@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against the compiled host channel and V2 plugin with a fake OpenCode context)
 - **Area:** `src/scripts/ctrlyoke-opencode-plugin-v2/index.ts` (`startSteerPolling` ~347-380), `src/core/harness/opencode/OpenCodeHeadlessControlChannel.ts` (`handleSteerPoll` ~448-482)
-- **Severity:** high (steering on OpenCode 2.3+ only works in the first 20 s of a turn; later steers hang, then fail)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

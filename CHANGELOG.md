@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- OpenCode headless steering continues polling after an idle 204 response and stops when the session ends.
 - `secret check --json` now reports missing values and unapproved grant names in its failure envelope.
 - History prune now keeps project history for repositories on volumes that are not mounted.
 - The community template index appears before legacy-install checks; templates are downloaded in parallel only for scopes with an unmarked local copy.
