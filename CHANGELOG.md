@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Custom templates no longer inherit community install markers, and community install provenance preserves YAML comments and formatting.
 - MCP step preset lookup rejects inherited object property names, preserving the run's authored gates.
 - Stale-lock normalization settles a recovered run before a successor can acquire its runner lock.
 - `history show` treats recorded condition and worktree-setup script results as terminal, including in existing run histories.

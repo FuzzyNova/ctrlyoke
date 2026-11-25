@@ -250,6 +250,28 @@ describe("CommunityTemplatesPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("does not offer uninstall when the provenance marker names another file", () => {
+    seedIndex([REVIEW]);
+    useUiStore.setState({
+      templateCatalog: [
+        {
+          ...installedTemplate(REVIEW.id),
+          communityInstallFile: `${REVIEW.id}.ctrlyoke.json`,
+        },
+      ],
+    });
+    render(
+      <CommunityTemplatesPage activeScope="user" onSetDefaults={vi.fn()} />
+    );
+    const row = screen.getByTestId(`community-template-${REVIEW.id}`);
+    expect(
+      within(row).getByRole("button", { name: "Name taken" })
+    ).toBeDisabled();
+    expect(
+      within(row).queryByRole("button", { name: /Uninstall/ })
+    ).not.toBeInTheDocument();
+  });
+
   it("uninstalls from the active scope after confirming, keeping saved values unless asked", () => {
     seedIndex([REVIEW]);
     useUiStore.setState({

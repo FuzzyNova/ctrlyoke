@@ -769,6 +769,61 @@ export class TemplateManager {
     return JSON.stringify(template, null, 2);
   }
 
+  /** Add install provenance while preserving YAML comments and formatting. */
+  private addCommunityInstallMarker(
+    content: string,
+    parsed: Record<string, unknown>,
+    format: WorkflowFileFormat,
+    marker: string
+  ): string {
+    const metadata = parsed["_templateMeta"] as Record<string, unknown>;
+    metadata.communityInstallFile = marker;
+    if (format === WORKFLOW_FILE_FORMATS.JSON) {
+      return this.serializeTemplate(parsed, format);
+    }
+
+    const lines = content.split(/(?<=\n)/);
+    const metaIndex = lines.findIndex((line) =>
+      /^_templateMeta\s*:\s*(?:#.*)?(?:\r?\n)?$/.test(line)
+    );
+    if (metaIndex >= 0) {
+      const nextTopLevel = lines.findIndex(
+        (line, index) =>
+          index > metaIndex && /^(?!\s)(?:[^\s#][^:]*):/.test(line)
+      );
+      const end = nextTopLevel < 0 ? lines.length : nextTopLevel;
+      const childIndex = lines.findIndex(
+        (line, index) => index > metaIndex && index < end && /^\s+\S/.test(line)
+      );
+      if (childIndex >= 0) {
+        const indentation = lines[childIndex].match(/^\s+/)?.[0] ?? "  ";
+        const newline = content.includes("\r\n") ? "\r\n" : "\n";
+        const markerLine = `${indentation}communityInstallFile: ${JSON.stringify(marker)}${newline}`;
+        const existingIndex = lines.findIndex(
+          (line, index) =>
+            index > metaIndex &&
+            index < end &&
+            /^\s+communityInstallFile\s*:/.test(line)
+        );
+        if (existingIndex >= 0) lines[existingIndex] = markerLine;
+        else {
+          if (
+            end === lines.length &&
+            lines[end - 1] &&
+            !/\r?\n$/.test(lines[end - 1])
+          ) {
+            lines[end - 1] += newline;
+          }
+          lines.splice(end, 0, markerLine);
+        }
+        return lines.join("");
+      }
+    }
+
+    // Flow mappings and unusual metadata layouts need a structured fallback.
+    return this.serializeTemplate(parsed, format);
+  }
+
   /**
    * Create a custom template by cloning an existing template. Keeping the base
    * in the normal template registry means every available template — built-in
@@ -866,6 +921,7 @@ export class TemplateManager {
       ...existingMeta,
       name: templateName,
     };
+    delete copiedMeta.communityInstallFile;
     if (variablesToCopy.size > 0) copiedMeta.variables = copiedVariables;
     const template = {
       ...base,
@@ -908,12 +964,20 @@ export class TemplateManager {
       format
     );
 
+    const workflowMeta =
+      workflowContent["_templateMeta"] &&
+      typeof workflowContent["_templateMeta"] === "object" &&
+      !Array.isArray(workflowContent["_templateMeta"])
+        ? { ...(workflowContent["_templateMeta"] as Record<string, unknown>) }
+        : {};
+    delete workflowMeta.communityInstallFile;
     const template = {
+      ...workflowContent,
       _templateMeta: {
+        ...workflowMeta,
         name: templateName,
         description: "",
       },
-      ...workflowContent,
     };
 
     await fs.promises.writeFile(
@@ -929,8 +993,9 @@ export class TemplateManager {
    * Install a template someone else wrote (a community template downloaded
    * from the network) as a new custom template. The content is untrusted, so
    * it must parse, declare `_templateMeta`, and pass the workflow schema
-   * before anything is written; it is then written byte for byte, so the
-   * author's comments and layout survive.
+   * before anything is written; absent provenance changes, it is written byte
+   * for byte. YAML provenance is inserted into the metadata block to preserve
+   * comments and layout, with serialization only as a fallback.
    *
    * @param templateName Name for the installed template (its file basename)
    * @param scope Where to store the template
@@ -970,11 +1035,11 @@ export class TemplateManager {
     this.promptFileParser.getSchemaWarnings(parsed);
 
     if (communityInstallFile) {
-      const metadata = meta as Record<string, unknown>;
-      metadata.communityInstallFile = communityInstallFile;
-      content = this.serializeTemplate(
+      content = this.addCommunityInstallMarker(
+        content,
         parsed as Record<string, unknown>,
-        format
+        format,
+        communityInstallFile
       );
     }
     const fullPath = await this.prepareCustomTemplatePath(
@@ -1065,14 +1130,18 @@ export class TemplateManager {
       return false;
     const meta = metadata as Record<string, unknown>;
     if (typeof meta.communityInstallFile === "string") return false;
-    meta.communityInstallFile = expectedFile;
 
     // Recheck immediately before writing so an edit made during the fetch is preserved.
     const latest = await fs.promises.readFile(filePath);
     if (!latest.equals(current)) return false;
     await fs.promises.writeFile(
       filePath,
-      this.serializeTemplate(parsed as Record<string, unknown>, format),
+      this.addCommunityInstallMarker(
+        libraryContent,
+        parsed as Record<string, unknown>,
+        format,
+        expectedFile
+      ),
       "utf-8"
     );
     return true;
@@ -1198,7 +1267,7 @@ export class TemplateManager {
               source,
               ...(meta.author ? { author: meta.author } : {}),
               ...(meta.tags ? { tags: meta.tags } : {}),
-              ...(meta.communityInstallFile
+              ...(meta.communityInstallFile === file
                 ? { communityInstallFile: meta.communityInstallFile }
                 : {}),
             });

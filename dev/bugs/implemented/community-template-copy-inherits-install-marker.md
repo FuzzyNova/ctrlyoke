@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, confirmed by probe against `out/`)
 - **Area:** `src/core/TemplateManager.ts`, `src/ui/webview-react/components/settings/CommunityTemplatesPage.tsx`
-- **Severity:** high (deletes a user-authored template; the protection b99a0b8c8 added is bypassed)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

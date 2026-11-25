@@ -559,6 +559,36 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(parsed.steps[0].prompt, "Build {feature}");
     });
 
+    test("does not copy community install provenance into a new template", async () => {
+      const tm = makeManager();
+      const templateDir = makeTempDir();
+      tm.getTemplatesPathForScope = () => templateDir;
+      tm.getTemplateInfo = async () => ({ id: "base", variables: [] });
+      tm.getTemplateContent = async () =>
+        [
+          "_templateMeta:",
+          "  name: Installed",
+          "  communityInstallFile: Installed.ctrlyoke.yaml",
+          "steps: []",
+          "",
+        ].join("\n");
+
+      const createdPath = await tm.createCustomTemplate(
+        "Copy",
+        TEMPLATE_SCOPES.USER,
+        WORKFLOW_FILE_FORMATS.YAML,
+        "base"
+      );
+      const copied = jsYaml.load(
+        await fs.promises.readFile(createdPath, "utf-8")
+      ) as any;
+      assert.strictEqual(copied._templateMeta.communityInstallFile, undefined);
+      await assert.rejects(
+        tm.uninstallCommunityTemplate("Copy", TEMPLATE_SCOPES.USER),
+        /not recorded as a community install/
+      );
+    });
+
     test("copies user and workspace saved values into authored defaults without changing the source overlay", async () => {
       const userValues = { base: { userValue: "user-saved" } };
       const workspaceValues = { base: { workspaceValue: "workspace-saved" } };
@@ -722,7 +752,13 @@ suite("TemplateManager variable metadata", () => {
       const createdPath = await tm.saveWorkflowAsTemplate(
         "Snapshot",
         TEMPLATE_SCOPES.WORKSPACE,
-        { steps: [{ prompt: "Ship it" }] },
+        {
+          _templateMeta: {
+            communityInstallFile: "Installed.ctrlyoke.yaml",
+            description: "Snapshot metadata",
+          },
+          steps: [{ prompt: "Ship it" }],
+        },
         WORKFLOW_FILE_FORMATS.JSON
       );
 
@@ -734,6 +770,7 @@ suite("TemplateManager variable metadata", () => {
         await fs.promises.readFile(createdPath, "utf-8")
       );
       assert.strictEqual(parsed._templateMeta.name, "Snapshot");
+      assert.strictEqual(parsed._templateMeta.communityInstallFile, undefined);
       assert.strictEqual(parsed.steps[0].prompt, "Ship it");
       assert.strictEqual(parsed.$schema, undefined);
     });
@@ -830,7 +867,7 @@ suite("TemplateManager variable metadata", () => {
         const written = await fs.promises.readFile(installed.path, "utf-8");
         assert.match(
           written,
-          /^ {2}communityInstallFile: octocat-review-branch\.ctrlyoke\.yaml$/m
+          /^ {2}communityInstallFile: "octocat-review-branch\.ctrlyoke\.yaml"$/m
         );
         assert.strictEqual(
           await tm.uninstallCommunityTemplate(
@@ -838,6 +875,73 @@ suite("TemplateManager variable metadata", () => {
             TEMPLATE_SCOPES.USER
           ),
           installed.path
+        );
+      });
+
+      test("adds provenance without reformatting YAML comments or key order", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const content = [
+          "# Author comment: keep this",
+          "_templateMeta:",
+          "  name: Review",
+          "  description: Keep layout",
+          "steps:",
+          "  - prompt: Review",
+          "",
+        ].join("\n");
+
+        const installed = await tm.installTemplateContent(
+          "review",
+          TEMPLATE_SCOPES.USER,
+          WORKFLOW_FILE_FORMATS.YAML,
+          content,
+          "review.ctrlyoke.yaml"
+        );
+        const written = await fs.promises.readFile(installed.path, "utf-8");
+        assert.ok(written.startsWith("# Author comment: keep this\n"));
+        assert.ok(
+          written.indexOf("name: Review") <
+            written.indexOf("description: Keep layout")
+        );
+        assert.ok(
+          written.indexOf("description: Keep layout") <
+            written.indexOf("communityInstallFile:")
+        );
+        const [discovered] = await tm.discoverTemplatesInDir(
+          templateDir,
+          TEMPLATE_SCOPES.USER
+        );
+        assert.strictEqual(
+          discovered.communityInstallFile,
+          "review.ctrlyoke.yaml"
+        );
+      });
+
+      test("does not report a marker that names a different extension", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        await fs.promises.writeFile(
+          path.join(templateDir, "review.ctrlyoke.json"),
+          JSON.stringify({
+            _templateMeta: {
+              name: "Review",
+              communityInstallFile: "review.ctrlyoke.yaml",
+            },
+            steps: [],
+          }),
+          "utf-8"
+        );
+        const [template] = await tm.discoverTemplatesInDir(
+          templateDir,
+          TEMPLATE_SCOPES.USER
+        );
+        assert.strictEqual(template.communityInstallFile, undefined);
+        await assert.rejects(
+          tm.uninstallCommunityTemplate("review", TEMPLATE_SCOPES.USER),
+          /not recorded as a community install/
         );
       });
 
@@ -1011,7 +1115,8 @@ suite("TemplateManager variable metadata", () => {
         const templateDir = makeTempDir();
         tm.getTemplatesPathForScope = () => templateDir;
         const target = path.join(templateDir, "review.ctrlyoke.yaml");
-        const content = "_templateMeta:\n  name: Review\nsteps: []\n";
+        const content =
+          "# Keep this author comment\n_templateMeta:\n  name: Review\nsteps: []\n";
         await fs.promises.writeFile(target, content, "utf-8");
 
         assert.strictEqual(
@@ -1024,10 +1129,9 @@ suite("TemplateManager variable metadata", () => {
           ),
           true
         );
-        assert.match(
-          await fs.promises.readFile(target, "utf-8"),
-          /communityInstallFile: review\.ctrlyoke\.yaml/
-        );
+        const marked = await fs.promises.readFile(target, "utf-8");
+        assert.ok(marked.startsWith("# Keep this author comment\n"));
+        assert.match(marked, /communityInstallFile: "review\.ctrlyoke\.yaml"/);
         await tm.uninstallCommunityTemplate("review", TEMPLATE_SCOPES.USER);
         await assert.rejects(fs.promises.stat(target));
       });
