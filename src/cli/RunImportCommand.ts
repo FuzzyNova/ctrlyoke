@@ -42,8 +42,9 @@ export interface RunImportCommandDependencies {
   continueRun?: (
     workflowKey: string,
     runRef: string,
-    cwd?: string
-  ) => Promise<void>;
+    cwd: string | undefined,
+    outputOptions: { json: boolean; quiet: boolean }
+  ) => Promise<number | undefined>;
 }
 
 export function registerImportCommand(
@@ -76,6 +77,7 @@ export async function importRunCommand(
   io: RunImportCommandIo,
   dependencies: RunImportCommandDependencies = {}
 ): Promise<void> {
+  let jsonResultWritten = false;
   try {
     const workspace = await (
       dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
@@ -129,8 +131,7 @@ export async function importRunCommand(
       warnings.push(imported.placement.warning);
     for (const warning of warnings)
       if (!options.json) io.writeOut(`Warning: ${warning}`);
-    let continued = false;
-    if (
+    const shouldContinue = Boolean(
       options.continue &&
       header.manifest.continuation &&
       imported.status === RUN_IMPORT_STATUSES.IMPORTED &&
@@ -138,15 +139,27 @@ export async function importRunCommand(
       (imported.placement?.target === RUN_CHANGES_TARGETS.SKIP ||
         imported.placement?.applied !== false) &&
       dependencies.continueRun
-    ) {
-      await dependencies.continueRun(
-        imported.workflowKey,
-        imported.runRef,
-        options.cwd
-      );
-      continued = true;
-    }
+    );
 
+    const continued = shouldContinue;
+
+    // Report the imported history entry before execution starts. Whether
+    // continuation will run is already known, so JSON can remain one result
+    // line while the run executes afterward.
+    if (!options.json && imported.status === RUN_IMPORT_STATUSES.IMPORTED) {
+      io.writeOut(
+        `Imported ${descriptor.workflowName} as ${imported.workflowKey} ${imported.runRef}.`
+      );
+      io.writeOut(`  ${eventCount} events`);
+      io.writeOut(`  Source: ${importedFrom.sourceRoot}`);
+      io.writeOut(
+        `  Exported: ${importedFrom.exportedAt} by ctrlyoke ${importedFrom.exportedByVersion}`
+      );
+      io.writeOut(
+        `View it with: ctrlyoke history show --workflow ${imported.workflowKey} --run ${imported.runRef}`
+      );
+      if (shouldContinue) io.writeOut("Continuing imported run.");
+    }
     if (options.json) {
       io.writeOut(
         JSON.stringify({
@@ -171,6 +184,24 @@ export async function importRunCommand(
           preview,
         })
       );
+      jsonResultWritten = true;
+    }
+
+    if (shouldContinue && imported.status === RUN_IMPORT_STATUSES.IMPORTED) {
+      const continuationExitCode = await dependencies.continueRun!(
+        imported.workflowKey,
+        imported.runRef,
+        options.cwd,
+        { json: options.json === true, quiet: options.json === true }
+      );
+      if (continuationExitCode !== undefined) {
+        (dependencies.setExitCode ?? ((code) => (process.exitCode = code)))(
+          continuationExitCode
+        );
+      }
+    }
+
+    if (options.json) {
       return;
     }
 
@@ -181,29 +212,18 @@ export async function importRunCommand(
       io.writeOut("Pass --again to create another import.");
       return;
     }
-
-    io.writeOut(
-      `Imported ${descriptor.workflowName} as ${imported.workflowKey} ${imported.runRef}.`
-    );
-    io.writeOut(`  ${eventCount} events`);
-    io.writeOut(`  Source: ${importedFrom.sourceRoot}`);
-    io.writeOut(
-      `  Exported: ${importedFrom.exportedAt} by ctrlyoke ${importedFrom.exportedByVersion}`
-    );
-    io.writeOut(
-      `View it with: ctrlyoke history show --workflow ${imported.workflowKey} --run ${imported.runRef}`
-    );
-    if (continued) io.writeOut("Continuing imported run.");
   } catch (error) {
     if (!options.json) throw error;
     const message = getErrorMessage(error);
-    io.writeOut(
-      JSON.stringify({
-        schemaVersion: 1,
-        success: false,
-        error: { message },
-      })
-    );
+    if (!jsonResultWritten) {
+      io.writeOut(
+        JSON.stringify({
+          schemaVersion: 1,
+          success: false,
+          error: { message },
+        })
+      );
+    }
     // Invalid bundle data is user input, and follows the CLI usage error code.
     (dependencies.setExitCode ?? ((code) => (process.exitCode = code)))(
       CLI_USAGE_EXIT_CODE

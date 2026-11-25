@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, reproduced against a fresh build)
 - **Area:** `src/cli.ts`, `src/cli/RunImportCommand.ts`
-- **Severity:** high (the documented flag never works, and every attempt leaves another imported run behind)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -43,7 +43,7 @@ and `history list` shows a new `imp-…` lineage after every attempt. Running
   (`src/cli.ts` near the end of `runCommand`), so `importRunCommand`'s result
   output (`src/cli/RunImportCommand.ts:149-199`) would never print.
 - `continueCommand` is called without `json`/`quiet`, so `import --json
-  --continue` would mix the run's text output into stdout.
+--continue` would mix the run's text output into stdout.
 - `src/test/unit/RunImportCommand.test.ts:139` stubs `continueRun` with a no-op,
   so no test exercises the real wiring.
 

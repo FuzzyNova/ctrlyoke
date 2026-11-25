@@ -260,7 +260,11 @@ import {
   getStateHomeWarning,
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
-import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
+import {
+  getFrozenRunHistoryLocation,
+  initializeRunHistoryLocation,
+  isRunHistoryLocationInitialized,
+} from "./utils/RunHistoryStoragePolicy";
 import {
   analyzeCliCompatibility,
   assertCliValidateHarnessId as assertHarnessId,
@@ -385,7 +389,9 @@ program.hook("preAction", async (_thisCommand, actionCommand) => {
   }
 });
 
-registerRunCommand(program, runCommand);
+registerRunCommand(program, async (file, options) => {
+  await runCommand(file, options);
+});
 registerServerCommand(program);
 
 registerRunScopedCommands(program, {
@@ -480,28 +486,46 @@ registerExportCommand(program, (options) =>
   )
 );
 
-registerImportCommand(program, (options) =>
-  handleHistoryCommand(
+registerImportCommand(program, async (options) => {
+  let continuationExitCode: number | undefined;
+  await handleHistoryCommand(
     importRunCommand(
       options,
       {
         writeOut: (message) => console.log(message),
       },
       {
-        continueRun: async (workflowKey, runRef, cwd) =>
-          continueCommand({
-            workflow: workflowKey,
-            run: runRef,
-            cwd,
-            allowTool: [],
-            denyTool: [],
-          }),
+        continueRun: async (workflowKey, runRef, cwd, outputOptions) => {
+          continuationExitCode = await runCommand(
+            undefined,
+            {
+              workflow: workflowKey,
+              run: runRef,
+              cwd,
+              allowTool: [],
+              denyTool: [],
+              json: outputOptions.json,
+              quiet: outputOptions.quiet,
+            },
+            {
+              kind: CLI_RUN_OPERATION_KINDS.CONTINUE,
+              workflow: workflowKey,
+              run: runRef,
+            },
+            true,
+            false
+          );
+          return continuationExitCode;
+        },
       }
     ),
     options.json === true,
     "import"
-  )
-);
+  );
+  if (continuationExitCode !== undefined) {
+    process.exit(continuationExitCode);
+  }
+});
 
 registerStatusCommand(program, {
   status: (options) =>
@@ -982,9 +1006,14 @@ async function continueCommand(options: ContinueOptions): Promise<void> {
 async function runCommand(
   file: string | undefined,
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
-  operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
-): Promise<void> {
+  operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN },
+  returnExitCode = false,
+  emitJsonResult = true
+): Promise<number | undefined> {
   const reportRunUsageError = (error: unknown): void => {
+    if (returnExitCode) {
+      throw error;
+    }
     reportCliError(error, {
       json: options.json === true,
       envelope: (message) =>
@@ -1091,7 +1120,12 @@ async function runCommand(
   // execution/continuation command family; validate and commit have separate
   // lightweight bootstraps and must not create project state.
   const runHistoryLocation = configService.get("storage").runHistoryLocation;
-  initializeRunHistoryLocation(runHistoryLocation);
+  if (
+    !isRunHistoryLocationInitialized() ||
+    getFrozenRunHistoryLocation() !== runHistoryLocation
+  ) {
+    initializeRunHistoryLocation(runHistoryLocation);
+  }
   const gitToplevel = await repoToplevel(workingDir);
   const stateHomeWarning = getStateHomeWarning(
     ctrlyokeStateHome(),
@@ -1121,6 +1155,10 @@ async function runCommand(
     createCliTrustIo()
   );
   if (workspaceSettingsExitCode !== undefined) {
+    if (returnExitCode) {
+      process.exitCode = workspaceSettingsExitCode;
+      return workspaceSettingsExitCode;
+    }
     process.exit(workspaceSettingsExitCode);
   }
 
@@ -1661,7 +1699,9 @@ async function runCommand(
         outputProjection,
         finalStepRuntime: instance.promptQueue.getFinalStepRuntime(),
       });
-      process.stdout.write(JSON.stringify(result) + "\n");
+      if (emitJsonResult) {
+        process.stdout.write(JSON.stringify(result) + "\n");
+      }
     } else if (!options.quiet) {
       // In interactive mode the AI CLI TUI may leave the terminal with a hidden
       // cursor or stale attributes when killed. Reset before printing the summary.
@@ -1702,11 +1742,19 @@ async function runCommand(
       }
     }
 
+    if (returnExitCode) {
+      process.exitCode = exitCode;
+      return exitCode;
+    }
     process.exit(exitCode);
   } catch (err) {
     releaseLiveOutputState();
     reportCliError(err, {
       json: options.json,
+      ...(!emitJsonResult && options.json ? { writeOut: () => {} } : {}),
+      ...(returnExitCode
+        ? { exit: (code: number) => (process.exitCode = code) }
+        : {}),
       envelope: (message) => {
         const state = instance.getQueueState();
         return buildCliJsonResult({
@@ -1728,6 +1776,9 @@ async function runCommand(
         });
       },
     });
+    if (returnExitCode) {
+      return err instanceof CliUsageError ? err.exitCode : CLI_USAGE_EXIT_CODE;
+    }
   }
 }
 
