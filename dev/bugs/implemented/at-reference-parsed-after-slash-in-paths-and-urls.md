@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, reproduced against `out/`)
 - **Area:** `src/utils/ReferenceBoundary.ts`, `src/utils/FileReferenceParser.ts`
-- **Severity:** low (spurious "could not be attached" diagnostics and reference chips; a wrong file is attached if the tail happens to exist)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

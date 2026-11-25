@@ -15,6 +15,14 @@ import {
 } from "@utils/atomicReferences";
 
 describe("CodeMirrorEditor context reference parsing", () => {
+  it("does not chip @ text embedded in paths or URLs", () => {
+    expect(
+      findContextReferenceMatches(
+        "node_modules/@types/node/index.d.ts https://medium.com/@alice/post"
+      )
+    ).toEqual([]);
+  });
+
   it("treats a dotted path with a trailing slash only as a directory", () => {
     expect(findContextReferenceMatches("@.ctrlyoke/.runs/")).toEqual([
       {

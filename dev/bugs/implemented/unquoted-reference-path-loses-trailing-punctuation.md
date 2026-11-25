@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, reproduced against `out/`)
 - **Area:** `src/utils/ContextReferenceBuilder.ts`, `src/utils/FileReferenceParser.ts`
-- **Severity:** low (affects unusual filenames; the wrong or a missing file is attached)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

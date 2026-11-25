@@ -1,5 +1,9 @@
 import { PRIOR_CONTEXT_SUMMARY_SEGMENT } from "../types/DashboardConstants";
-import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
+import {
+  NOT_AFTER_AT_BOUNDARY,
+  NOT_AFTER_BOUNDARY,
+  NOT_BEFORE_BOUNDARY,
+} from "./ReferenceBoundary";
 
 /** Shared unquoted @ path body. A colon is valid only in the drive prefix. */
 export const UNQUOTED_AT_REFERENCE_PATH = String.raw`(?:[A-Za-z]:)?[^\s:"]+`;
@@ -114,22 +118,25 @@ export interface ReferencePatterns {
 export function createReferencePatterns(): ReferencePatterns {
   return {
     // Quoting explicitly marks a file path, including root extensionless names.
-    fullFileQuoted: new RegExp(`${NOT_AFTER_BOUNDARY}@"([^"]*[^/\\\\])"`, "gu"),
+    fullFileQuoted: new RegExp(
+      `${NOT_AFTER_AT_BOUNDARY}@"([^"]*[^/\\\\])"`,
+      "gu"
+    ),
     // @path/to/file.ts
     //
     // The path marker and final boundary mirror runtime file-path and punctuation rules.
     fullFile: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@((?=(?:[A-Za-z]:)?[^\\s:"]*[/.\\\\])${UNQUOTED_AT_REFERENCE_PATH_LAZY}[\\p{L}\\p{N}])${UNQUOTED_REFERENCE_END}`,
+      `${NOT_AFTER_AT_BOUNDARY}@((?=(?:[A-Za-z]:)?[^\\s:"]*[/.\\\\])${UNQUOTED_AT_REFERENCE_PATH_LAZY}[\\p{L}\\p{N}])${UNQUOTED_REFERENCE_END}`,
       "gu"
     ),
     // @"path with spaces/dir/"
     directoryQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@"([^"]+\\/)"(?![\\p{L}\\p{N}])`,
+      `${NOT_AFTER_AT_BOUNDARY}@"([^"]+\\/)"(?![\\p{L}\\p{N}])`,
       "gu"
     ),
     // @path/to/dir/
     directory: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@(${UNQUOTED_AT_REFERENCE_PATH}\\/)${UNQUOTED_REFERENCE_END}`,
+      `${NOT_AFTER_AT_BOUNDARY}@(${UNQUOTED_AT_REFERENCE_PATH}\\/)${UNQUOTED_REFERENCE_END}`,
       "gu"
     ),
     // #selection:<path>:10-20 — path quoted, or bare with no whitespace/`:`/`"`.

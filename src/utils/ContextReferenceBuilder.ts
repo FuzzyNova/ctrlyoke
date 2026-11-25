@@ -9,8 +9,10 @@ export function quoteReferencePath(pathValue: string): string {
   // Keep drive-letter paths quoted even though the parser understands their
   // colon prefix. This is the established insertion format for absolute paths.
   const hasPathMarker = /[/.\\]/.test(pathValue);
+  const hasParserSafeEnding = /[\p{L}\p{N}/\\]$/u.test(pathValue);
   return hasPathMarker &&
     !/[\s:]/.test(pathValue) &&
+    hasParserSafeEnding &&
     unquotedPathPattern.test(pathValue)
     ? pathValue
     : `"${pathValue}"`;

@@ -28,7 +28,7 @@ import {
   type GitChangeKind,
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
-import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
+import { NOT_AFTER_AT_BOUNDARY, NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 import {
   createGitChangeReferencePattern,
   createConditionOutputReferencePattern,
@@ -731,7 +731,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // characters. The unquoted body still permits an embedded @ so a path like
   // src/myimage@512x512.png parses as one reference, not split at the inner @.
   const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH_LAZY}${UNQUOTED_REFERENCE_END}))`,
+    `${NOT_AFTER_AT_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH_LAZY}${UNQUOTED_REFERENCE_END}))`,
     "gu"
   );
   let match;

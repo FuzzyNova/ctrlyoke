@@ -32,6 +32,9 @@ const REFERENCE_BOUNDARY_CHAR_RE = new RegExp(
  */
 export const NOT_AFTER_BOUNDARY = `(?<![${REFERENCE_BOUNDARY_CHARS}])`;
 
+/** `@` references also cannot start inside a path or URL segment. */
+export const NOT_AFTER_AT_BOUNDARY = `${NOT_AFTER_BOUNDARY}${String.raw`(?<![\\/.:])`}`;
+
 /** Lookahead asserting a reference is not followed by a filename character. */
 export const NOT_BEFORE_BOUNDARY = `(?![${REFERENCE_BOUNDARY_CHARS}])`;
 
@@ -69,7 +72,10 @@ export function findWordStartTriggerIndex(
   triggerChar: string
 ): number {
   let index = text.lastIndexOf(triggerChar);
-  while (isReferenceBoundaryBefore(text, index)) {
+  while (
+    isReferenceBoundaryBefore(text, index) ||
+    (triggerChar === "@" && index > 0 && "/\\.:".includes(text[index - 1]))
+  ) {
     index = text.lastIndexOf(triggerChar, index - 1);
   }
   return index;

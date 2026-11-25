@@ -84,6 +84,17 @@ suite("ReferencePatterns", () => {
       assert.deepStrictEqual(paths(fullFile, "mail name@example.com now"), []);
     });
 
+    test("does not decorate @ references inside paths or URLs", () => {
+      const { fullFile } = createReferencePatterns();
+      assert.deepStrictEqual(
+        paths(
+          fullFile,
+          "node_modules/@types/node/index.d.ts https://medium.com/@alice/post"
+        ),
+        []
+      );
+    });
+
     test("keeps an embedded @ inside a single reference", () => {
       const { fullFile } = createReferencePatterns();
       assert.deepStrictEqual(paths(fullFile, "@myimage@512x512.png"), [
@@ -206,6 +217,15 @@ suite("ReferencePatterns", () => {
     assert.deepStrictEqual(findContextReferenceMatches("café@src/a.ts"), []);
     assert.deepStrictEqual(findWordStartTriggerIndex("café@", "@"), -1);
     assert.deepStrictEqual(findWordStartTriggerIndex("東京/skill", "/"), -1);
+  });
+
+  test("@ completion accepts opening punctuation and rejects path separators", () => {
+    assert.strictEqual(findWordStartTriggerIndex("(@", "@"), 1);
+    assert.strictEqual(findWordStartTriggerIndex('"@', "@"), 1);
+    assert.strictEqual(findWordStartTriggerIndex(" @", "@"), 1);
+    for (const prefix of ["/", "\\", ".", ":"]) {
+      assert.strictEqual(findWordStartTriggerIndex(`${prefix}@`, "@"), -1);
+    }
   });
 
   suite("quoted variants", () => {
