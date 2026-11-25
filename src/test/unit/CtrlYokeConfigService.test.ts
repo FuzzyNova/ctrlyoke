@@ -12,6 +12,7 @@ import {
   type ConfigBackend,
 } from "../../config/CtrlYokeConfigService";
 import { FileConfigBackend } from "../../config/FileConfigBackend";
+import { WorkspaceSettingsTrustStore } from "../../config/WorkspaceSettingsTrustStore";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
@@ -824,6 +825,35 @@ suite("CtrlYokeConfigService workspace sensitive settings", () => {
       service.getWorkspaceSensitiveSettingStates().map((s) => s.decision),
       [undefined]
     );
+  });
+
+  test("reloads merged settings when another trust store changes decisions", async () => {
+    const settingsDir = path.join(tempDir, ".ctrlyoke");
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(settingsDir, "settings.json"),
+      JSON.stringify({ terminal: { shellExecutable: "./tools/evil.exe" } })
+    );
+    const trustFile = path.join(tempDir, "workspace-settings-trust.json");
+    const hostTrust = new WorkspaceSettingsTrustStore(trustFile);
+    const cliTrust = new WorkspaceSettingsTrustStore(trustFile);
+    service.setWorkspaceSettingsTrust(hostTrust);
+    service.setWorkspaceBackend(
+      new FileConfigBackend(path.join(settingsDir, "settings.json"), tempDir)
+    );
+
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+    const state = service.getWorkspaceSensitiveSettingStates()[0]!;
+    const identity = service.getWorkspaceTrustIdentity()!;
+
+    await cliTrust.setDecisions(identity, [state.request], "allow");
+    assert.strictEqual(
+      service.getAll().terminal.shellExecutable,
+      "./tools/evil.exe"
+    );
+
+    await cliTrust.setDecisions(identity, [state.request], "deny");
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
   });
 
   test("applies an allowed value and ignores a denied one", async () => {

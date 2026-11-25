@@ -14,6 +14,11 @@ import { TRUST_DECISIONS } from "../../types/DashboardConstants";
 export class FakeWorkspaceSettingsTrust implements WorkspaceSettingsTrustDecisions {
   readonly decisions = new Map<string, WorkspaceSettingTrustDecision>();
   readonly reported: { identity: string; keys: string[] }[] = [];
+  private currentRevision: object = {};
+
+  get revision(): object {
+    return this.currentRevision;
+  }
 
   constructor(private readonly allowAll = false) {}
 
@@ -42,6 +47,7 @@ export class FakeWorkspaceSettingsTrust implements WorkspaceSettingsTrustDecisio
     requests: readonly WorkspaceSensitiveSettingRequest[],
     decision: WorkspaceSettingTrustDecision
   ): Promise<void> {
+    this.currentRevision = {};
     for (const request of requests) {
       this.decisions.set(
         FakeWorkspaceSettingsTrust.key(identity, request),

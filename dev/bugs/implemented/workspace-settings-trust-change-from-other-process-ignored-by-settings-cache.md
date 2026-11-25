@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against `out/`)
 - **Area:** `src/config/CtrlYokeConfigService.ts` (`getAll` ~532-547, `getWorkspaceSettings` ~772-803), `src/config/WorkspaceSettingsTrustStore.ts` (~57-60)
-- **Severity:** medium (security-relevant: a revoked approval keeps applying)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -346,6 +346,7 @@ export class CtrlYokeConfigService {
     userSettings: PartialCtrlYokeSettings | undefined;
     workspaceSettings: PartialCtrlYokeSettings | undefined;
     cliOverlay: PartialCtrlYokeSettings | undefined;
+    trustRevision: object | undefined;
   };
 
   private invalidateMergedSettings(): void {
@@ -536,12 +537,18 @@ export class CtrlYokeConfigService {
     // detecting those edits without repeating the deep merges.
     const userSettings = this.userBackend?.getAll();
     const workspaceSettings = this.workspaceBackend?.getAll();
+    const hasSensitiveRequests =
+      this.getWorkspaceSensitiveSettingRequests().length > 0;
+    const trustRevision = hasSensitiveRequests
+      ? this.workspaceSettingsTrust.revision
+      : undefined;
     const cached = this.mergedSettingsCache;
     if (
       cached &&
       cached.userSettings === userSettings &&
       cached.workspaceSettings === workspaceSettings &&
-      cached.cliOverlay === this.cliOverlay
+      cached.cliOverlay === this.cliOverlay &&
+      cached.trustRevision === trustRevision
     ) {
       return cloneSettingsValue(cached.settings);
     }
@@ -583,6 +590,7 @@ export class CtrlYokeConfigService {
       userSettings,
       workspaceSettings,
       cliOverlay: this.cliOverlay,
+      trustRevision,
     };
     return cloneSettingsValue(result);
   }

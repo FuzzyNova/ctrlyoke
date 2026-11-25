@@ -31,6 +31,8 @@ export type UndecidedWorkspaceSettingsListener = (
 
 /** Read surface the settings layer needs; tests substitute their own. */
 export interface WorkspaceSettingsTrustDecisions {
+  /** Identity of the currently loaded decisions; access may perform the store's existing mtime check. */
+  get revision(): object | undefined;
   getDecision(
     workspaceIdentity: string,
     request: WorkspaceSensitiveSettingRequest
@@ -76,6 +78,16 @@ export class WorkspaceSettingsTrustStore implements WorkspaceSettingsTrustDecisi
    *   tests redirect).
    */
   constructor(private readonly storePathOrResolver: string | (() => string)) {}
+
+  /**
+   * Stable while the loaded decision data is unchanged. `load()` performs the
+   * existing stat check, so readers can invalidate derived caches without
+   * adding another filesystem operation.
+   */
+  get revision(): object | undefined {
+    this.load();
+    return this.cached?.data;
+  }
 
   private get storePath(): string {
     return typeof this.storePathOrResolver === "string"
