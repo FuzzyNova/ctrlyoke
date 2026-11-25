@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against compiled `out/`)
 - **Area:** `src/core/HarnessIntegration.ts` (`buildPriorContextXmlFromItems` ~272-282, `applySummaryBudget` ~304-327), `src/core/orchestration/RunOutputResolver.ts` (~1360-1416)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

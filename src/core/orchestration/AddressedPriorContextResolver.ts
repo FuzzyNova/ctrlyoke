@@ -127,7 +127,7 @@ export class AddressedPriorContextResolver {
           ),
           this.projectionOptions,
           detail
-        ))
+        )).map((item) => ({ ...item, importedRun: true }))
       );
     }
     return items;

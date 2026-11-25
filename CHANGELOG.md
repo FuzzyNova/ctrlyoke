@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Prior-context summary budgets now retain the newest final-step pass and omit older queue steps first, including when context comes from an addressed run.
 - Community template uninstall now verifies library install provenance and removes only its recorded file, protecting same-name user templates.
 - Run bundle exports no longer include their in-workspace staging or previous bundle files in the workspace patch, and imports rewrite only references to bundled assets.
 - The CLI synopsis now lists the stream-delta export option and the import continuation and changes options.

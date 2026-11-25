@@ -385,6 +385,46 @@ suite("prior-context XML", () => {
     );
   });
 
+  test("budgets final-step passes after queue steps without changing display order", () => {
+    const text = "s".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES);
+    const queueItems = Array.from({ length: 30 }, (_, index) => ({
+      index,
+      name: `queue ${index}`,
+      text,
+      detail: "summary" as const,
+    }));
+    const finalItems = Array.from({ length: 3 }, (_, index) => ({
+      index,
+      name: `pass ${index}`,
+      text,
+      detail: "summary" as const,
+      type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
+    }));
+    const xml = buildPriorContextXmlFromItems([...queueItems, ...finalItems]);
+
+    assert.match(xml, /<step index="1" name="queue 0"[^>]*omitted="all"/);
+    assert.match(xml, /<step index="3" type="finalStep" name="pass 2"[^>]*>/);
+    assert.ok(!xml.includes('name="pass 2" detail="summary" omitted="all"'));
+    assert.ok(xml.indexOf('name="pass 0"') < xml.indexOf('name="queue 1"'));
+  });
+
+  test("budgets addressed run summaries before current-run summaries", () => {
+    const text = "s".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES);
+    const xml = buildPriorContextXmlFromItems([
+      ...Array.from({ length: 27 }, (_, index) => ({
+        index,
+        name: `addressed ${index}`,
+        text,
+        detail: "summary" as const,
+        importedRun: true,
+      })),
+      { index: 0, name: "current", text, detail: "summary" },
+    ]);
+
+    assert.match(xml, /name="addressed 0"[^>]*omitted="all"/);
+    assert.ok(xml.includes('name="current" detail="summary"'));
+  });
+
   test("maps inline references to the resolver's canonical context selectors", () => {
     assert.strictEqual(
       inlinePriorContextRefToPriorContext({ kind: "previous" }),
