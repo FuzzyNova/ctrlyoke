@@ -39,6 +39,8 @@ import {
   getWorkingTreeDiff,
   getStagedDiff,
   getRecentCommits,
+  getCommitInfo,
+  getCommitByHash,
   searchCommitsByMessage,
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
@@ -569,6 +571,56 @@ suite("GitUtils.gitRefExists", function () {
       history.map((entry) => entry.subject),
       ["Third commit", "Second commit", "Initial commit"]
     );
+  });
+
+  test("keeps signed commit output clean when log.showSignature is enabled", async function () {
+    try {
+      execFileSync("ssh-keygen", ["-V"], { stdio: "ignore" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") this.skip();
+    }
+
+    const keyPath = path.join(workspaceRoot, "signing-key");
+    execFileSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", keyPath], {
+      stdio: "ignore",
+    });
+    const allowedSignersPath = path.join(workspaceRoot, "allowed-signers");
+    await fs.writeFile(
+      allowedSignersPath,
+      `ctrlyoke-tests ${await fs.readFile(`${keyPath}.pub`, "utf8")}`,
+      "utf8"
+    );
+    runGit(["config", "gpg.format", "ssh"]);
+    runGit(["config", "user.signingkey", keyPath]);
+    runGit(["config", "gpg.ssh.allowedSignersFile", allowedSignersPath]);
+    runGit(["config", "commit.gpgsign", "true"]);
+    runGit(["config", "log.showSignature", "true"]);
+
+    for (const subject of ["Signed first", "Signed second"]) {
+      await writeWorkspaceFile("tracked.txt", `${subject}\n`);
+      runGit(["add", "tracked.txt"]);
+      runGit(["-c", "user.email=ctrlyoke-tests", "commit", "-m", subject]);
+    }
+
+    const commits = await getRecentCommits(workspaceRoot, 2);
+    assert.deepStrictEqual(
+      commits.map(({ subject }) => subject),
+      ["Signed second", "Signed first"]
+    );
+    assert.ok(commits.every(({ hash }) => /^[0-9a-f]{40}$/i.test(hash)));
+
+    const commitInfo = await getCommitInfo(workspaceRoot, "HEAD");
+    assert.strictEqual(commitInfo.subject, "Signed second");
+    assert.ok(/^[0-9a-f]{40}$/i.test(commitInfo.hash));
+    assert.ok(!commitInfo.hash.includes("Good "));
+
+    const commitByHash = await getCommitByHash(workspaceRoot, commitInfo.hash);
+    assert.strictEqual(commitByHash?.hash, commitInfo.hash);
+    assert.strictEqual(commitByHash?.subject, "Signed second");
+
+    const diff = await getCommitDiff(workspaceRoot, "HEAD");
+    assert.ok(diff.includes("Signed second"));
+    assert.ok(!diff.includes('Good "git" signature'));
   });
 
   test("searches commit subjects with literal grep strings", async () => {

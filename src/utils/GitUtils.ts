@@ -17,6 +17,7 @@ import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 export const GIT_DIFF_NO_COLOR_OPTION = "--no-color";
+export const GIT_NO_SHOW_SIGNATURE_OPTION = "--no-show-signature";
 
 /** Stable options for producing patches that must be portable across user Git config. */
 export const GIT_PATCH_FORMAT_OPTIONS = [
@@ -553,6 +554,7 @@ export async function getRecentCommits(
     "-C",
     workspaceRoot,
     "log",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     // Trailing %P (parents) and %D (decorate) enable merge detection and ref pills.
     `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D`,
   ];
@@ -631,6 +633,7 @@ export async function getFileHistoryCommits(
     "-C",
     workspaceRoot,
     "log",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "--follow",
     "-z",
     "--name-status",
@@ -669,6 +672,7 @@ export function createFileHistoryCommitWalk(
     "-C",
     workspaceRoot,
     "log",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "--follow",
     "-z",
     "--name-status",
@@ -865,6 +869,7 @@ export async function getCommitInfo(
     "-C",
     workspaceRoot,
     "show",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "-s",
     `--format=%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%aI%x00%ar`,
     "--end-of-options",
@@ -919,6 +924,7 @@ export function buildCommitDiffArgs(
     "-C",
     workspaceRoot,
     "show",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "--stat",
     "-p",
     GIT_DIFF_NO_EXT_DIFF_OPTION,
@@ -1365,6 +1371,7 @@ export async function searchCommitsByMessage(
       "-C",
       workspaceRoot,
       "log",
+      GIT_NO_SHOW_SIGNATURE_OPTION,
       // A body spans lines, so each record ends with RS (%x1e), not "\n".
       `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%b%x1e`,
       `--grep=${query}`,
@@ -1433,6 +1440,7 @@ export async function getCommitByHash(
       "-C",
       workspaceRoot,
       "show",
+      GIT_NO_SHOW_SIGNATURE_OPTION,
       "-s",
       "--format=%H%x00%h%x00%s%x00%an%x00%ar",
       hash,

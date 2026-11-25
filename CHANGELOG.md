@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Script step comparison fields now accept whole-value variable placeholders without failing schema validation.
 - Merged settings now reflect workspace trust decisions changed by another process without requiring a settings-file update.
 - Git diffs used for commit messages and prompt attachments stay free of ANSI colors, and `commit --all` handles repositories with no commits in every locale.
+- Commit history, metadata, and diffs stay clean when Git is configured to show signature verification.
 - Run bundle workspace patches ignore user Git diff settings and remain applicable on import.
 - Queue run-file updates preserve unknown runtime metadata and refuse writes to runs created by a newer ctrlyoke.
 - Invalid `run` and `rerun` override flags now fail before creating persisted history.
