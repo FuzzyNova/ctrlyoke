@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (review of b99a0b8c8)
 - **Area:** `src/ui/webview-react/components/settings/CommunityTemplatesPage.tsx` (~228-243, 315, 332), `src/core/TemplateManager.ts` (`uninstallCommunityTemplate` ~1016), `src/ui/CommunityTemplateService.ts` (`handleUninstall` ~149)
-- **Severity:** medium (upgrade regression for every existing community-template user)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

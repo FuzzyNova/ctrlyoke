@@ -495,6 +495,14 @@ export class DashboardMessageRouter {
           content,
           installFile
         ),
+      markLegacyCommunityInstall: (name, scope, format, installFile, content) =>
+        this.serializer.markLegacyCommunityInstall(
+          name,
+          scope,
+          format,
+          installFile,
+          content
+        ),
       uninstallTemplate: (name, scope) =>
         this.serializer.uninstallCommunityTemplate(name, scope),
       clearSavedValues: async (templateId, ctx) => {

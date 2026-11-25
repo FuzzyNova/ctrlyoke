@@ -993,6 +993,54 @@ export class TemplateManager {
     };
   }
 
+  /** Mark an exact, pre-provenance community copy as an install in place. */
+  async markLegacyCommunityInstall(
+    templateName: string,
+    scope: TemplateScope,
+    format: WorkflowFileFormat,
+    expectedFile: string,
+    libraryContent: string
+  ): Promise<boolean> {
+    this.validateTemplateName(templateName);
+    const directory = this.getTemplatesPathForScope(scope);
+    if (!directory) return false;
+    const filePath = path.join(directory, expectedFile);
+    let current: Buffer;
+    try {
+      current = await fs.promises.readFile(filePath);
+    } catch {
+      return false;
+    }
+    if (!current.equals(Buffer.from(libraryContent, "utf-8"))) return false;
+
+    let parsed: unknown;
+    try {
+      parsed = loadYamlDocument(libraryContent, {
+        schema: WORKFLOW_YAML_SCHEMA,
+      });
+    } catch {
+      return false;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return false;
+    const metadata = (parsed as Record<string, unknown>)["_templateMeta"];
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return false;
+    const meta = metadata as Record<string, unknown>;
+    if (typeof meta.communityInstallFile === "string") return false;
+    meta.communityInstallFile = expectedFile;
+
+    // Recheck immediately before writing so an edit made during the fetch is preserved.
+    const latest = await fs.promises.readFile(filePath);
+    if (!latest.equals(current)) return false;
+    await fs.promises.writeFile(
+      filePath,
+      this.serializeTemplate(parsed as Record<string, unknown>, format),
+      "utf-8"
+    );
+    return true;
+  }
+
   /**
    * Delete one custom template file from a scope's templates directory. Only
    * the file named `<templateName>.ctrlyoke.{yaml,yml,json}` in that directory

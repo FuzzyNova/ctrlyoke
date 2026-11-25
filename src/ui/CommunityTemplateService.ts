@@ -9,6 +9,7 @@ import type {
 import {
   buildCustomTemplateId,
   getCommunityInstallFileName,
+  SETTING_SCOPES,
   type WorkflowFileFormat,
 } from "../types/DashboardConstants";
 import {
@@ -28,6 +29,13 @@ export interface CommunityTemplateInstaller {
     content: string,
     communityInstallFile: string
   ): Promise<{ path: string; templateId: string }>;
+  markLegacyCommunityInstall(
+    templateName: string,
+    scope: SettingWriteScope,
+    format: WorkflowFileFormat,
+    expectedFile: string,
+    libraryContent: string
+  ): Promise<boolean>;
   /** Delete an installed template from one scope; returns the deleted path. */
   uninstallTemplate(
     templateName: string,
@@ -73,6 +81,39 @@ export class CommunityTemplateService {
   ): Promise<void> {
     try {
       const templates = await this.getIndex(message.refresh === true);
+      // Upgrade pre-marker copies only after proving their bytes still match
+      // the current library version. A download failure leaves the catalog usable.
+      let migratedAny = false;
+      for (const entry of templates) {
+        const format = getCommunityTemplateFormat(entry.id, entry.file);
+        if (!format) continue;
+        try {
+          const content = await this.client.fetchTemplate(entry);
+          const migrated = await Promise.all([
+            this.installer.markLegacyCommunityInstall(
+              entry.id,
+              SETTING_SCOPES.USER,
+              format,
+              getCommunityInstallFileName(entry.id, entry.file),
+              content
+            ),
+            this.installer.markLegacyCommunityInstall(
+              entry.id,
+              SETTING_SCOPES.WORKSPACE,
+              format,
+              getCommunityInstallFileName(entry.id, entry.file),
+              content
+            ),
+          ]);
+          migratedAny ||= migrated.some(Boolean);
+        } catch (error) {
+          Log.warn(
+            `[CommunityTemplates] legacy install check failed for "${entry.id}":`,
+            getErrorMessage(error)
+          );
+        }
+      }
+      if (migratedAny) await this.installer.refreshTemplateCatalog(ctx);
       ctx.emit({
         type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT,
         templates,

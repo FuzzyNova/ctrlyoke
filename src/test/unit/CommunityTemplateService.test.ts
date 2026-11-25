@@ -164,6 +164,11 @@ suite("CommunityTemplateService", () => {
       format: WorkflowFileFormat;
       content: string;
     }> = [];
+    const legacyChecks: Array<{
+      name: string;
+      scope: SettingWriteScope;
+      content: string;
+    }> = [];
     const uninstalls: Array<{ name: string; scope: SettingWriteScope }> = [];
     const cleared: string[] = [];
     let refreshes = 0;
@@ -172,6 +177,16 @@ suite("CommunityTemplateService", () => {
       installTemplateContent: async (name, scope, format, content) => {
         installs.push({ name, scope, format, content });
         return { path: `/t/${name}`, templateId: `custom:${scope}:${name}` };
+      },
+      markLegacyCommunityInstall: async (
+        name,
+        scope,
+        _format,
+        _file,
+        content
+      ) => {
+        legacyChecks.push({ name, scope, content });
+        return false;
       },
       uninstallTemplate: async (name, scope) => {
         if (uninstallError) throw uninstallError;
@@ -197,6 +212,7 @@ suite("CommunityTemplateService", () => {
       ctx,
       posted,
       installs,
+      legacyChecks,
       uninstalls,
       cleared,
       requested,
@@ -228,6 +244,20 @@ suite("CommunityTemplateService", () => {
       type: MESSAGE_TYPES.COMMUNITY_TEMPLATE_INDEX_RESULT,
       templates: [REVIEW_ENTRY],
     });
+  });
+
+  test("keeps the index available when a legacy template check cannot reach the library", async () => {
+    const unavailableRoutes = {
+      [`${BASE_URL}/index.json`]: {
+        body: JSON.stringify(index([REVIEW_ENTRY])),
+      },
+    };
+    const { service, ctx, posted } = setup(unavailableRoutes);
+    await service.handleRequestIndex(ctx, {
+      type: MESSAGE_TYPES.REQUEST_COMMUNITY_TEMPLATE_INDEX,
+    });
+    assert.deepStrictEqual(posted[0].templates, [REVIEW_ENTRY]);
+    assert.strictEqual(posted[0].error, undefined);
   });
 
   test("reports an index failure and retries on the next request", async () => {

@@ -894,6 +894,22 @@ export class WorkflowLibraryHandlers {
     );
   }
 
+  markLegacyCommunityInstall(
+    templateName: string,
+    scope: TemplateScope,
+    format: WorkflowFileFormat,
+    expectedFile: string,
+    libraryContent: string
+  ): Promise<boolean> {
+    return this.templateManager.markLegacyCommunityInstall(
+      templateName,
+      scope,
+      format,
+      expectedFile,
+      libraryContent
+    );
+  }
+
   /** Delete one installed custom template; returns the deleted file's path. */
   uninstallCustomTemplate(
     templateName: string,

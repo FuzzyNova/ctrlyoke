@@ -965,6 +965,59 @@ suite("TemplateManager variable metadata", () => {
     });
 
     suite("uninstallCommunityTemplate", () => {
+      test("marks only a byte-identical legacy community template", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const target = path.join(templateDir, "review.ctrlyoke.yaml");
+        const content = "_templateMeta:\n  name: Review\nsteps: []\n";
+        await fs.promises.writeFile(target, content, "utf-8");
+
+        assert.strictEqual(
+          await tm.markLegacyCommunityInstall(
+            "review",
+            TEMPLATE_SCOPES.USER,
+            WORKFLOW_FILE_FORMATS.YAML,
+            "review.ctrlyoke.yaml",
+            content
+          ),
+          true
+        );
+        assert.match(
+          await fs.promises.readFile(target, "utf-8"),
+          /communityInstallFile: review\.ctrlyoke\.yaml/
+        );
+        await tm.uninstallCommunityTemplate("review", TEMPLATE_SCOPES.USER);
+        await assert.rejects(fs.promises.stat(target));
+      });
+
+      test("leaves a differing unmarked template untouched", async () => {
+        const tm = makeManager();
+        const templateDir = makeTempDir();
+        tm.getTemplatesPathForScope = () => templateDir;
+        const target = path.join(templateDir, "review.ctrlyoke.yaml");
+        const content = "_templateMeta:\n  name: User version\nsteps: []\n";
+        await fs.promises.writeFile(target, content, "utf-8");
+        assert.strictEqual(
+          await tm.markLegacyCommunityInstall(
+            "review",
+            TEMPLATE_SCOPES.USER,
+            WORKFLOW_FILE_FORMATS.YAML,
+            "review.ctrlyoke.yaml",
+            "_templateMeta:\n  name: Library version\nsteps: []\n"
+          ),
+          false
+        );
+        await assert.rejects(
+          tm.uninstallCommunityTemplate("review", TEMPLATE_SCOPES.USER),
+          /not recorded as a community install/
+        );
+        assert.strictEqual(
+          await fs.promises.readFile(target, "utf-8"),
+          content
+        );
+      });
+
       test("refuses an unmarked same-id template and deletes the exact marked file", async () => {
         const tm = makeManager();
         const templateDir = makeTempDir();

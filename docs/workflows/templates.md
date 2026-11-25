@@ -286,8 +286,10 @@ When a template is installed in the scope shown in the title bar, its button rea
 from User** or **Uninstall from Workspace**. It removes only that scope's copy; switch scopes to
 remove the other. ctrlyoke asks first, because uninstalling deletes the file and any changes you
 made to it. Workflows already created from the template are not affected.
-Only copies recorded as installed from the community library can be removed here. Older copies
-without install information are left in place and can be removed from the template manager.
+Copies installed by older ctrlyoke releases are recognised when their contents still match the
+current library template, then marked so they can be managed here. Edited copies and copies that
+cannot be checked because the library is unavailable are left untouched and can be removed from
+the template manager.
 
 Saved values are kept unless you tick **Also clear its saved values** in that dialog, which
 appears when the template has any. Kept values come back if you install the template again.

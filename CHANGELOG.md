@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Community templates installed before install provenance was recorded are recognised and marked when their files still match the library; edited or unavailable copies remain untouched.
+
 ### Fixed
 
 - Runner-lock heartbeats retry transient file-sharing rename failures and clean up temporary files.
