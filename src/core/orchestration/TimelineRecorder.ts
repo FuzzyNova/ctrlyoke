@@ -117,7 +117,10 @@ export class TimelineRecorder {
    * append, so it reads backwards from the end in fixed-size chunks rather than
    * loading the whole (potentially very large) events file.
    */
-  private async truncateTornEventsTail(manifestPath: string): Promise<void> {
+  private async truncateTornEventsTail(
+    manifestPath: string,
+    nextSequence: number
+  ): Promise<void> {
     const eventsPath =
       TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
     let handle: fs.promises.FileHandle;
@@ -132,29 +135,74 @@ export class TimelineRecorder {
 
     try {
       const { size } = await handle.stat();
-      const chunk = Buffer.alloc(
-        Math.min(TimelineRecorder.TAIL_SCAN_CHUNK_BYTES, Math.max(size, 1))
-      );
+      const chunk = Buffer.alloc(TimelineRecorder.TAIL_SCAN_CHUNK_BYTES);
       let end = size;
-      let isFinalByte = true;
+      let truncateAt = size;
+      let pending = Buffer.alloc(0);
+      let hasTrailingNewline = size === 0;
+      let firstRecord = true;
+
+      const shouldTruncateRecord = (
+        line: Buffer,
+        lineStart: number
+      ): boolean => {
+        if (firstRecord && !hasTrailingNewline) {
+          truncateAt = lineStart;
+          firstRecord = false;
+          return false;
+        }
+        firstRecord = false;
+        const text = line.toString("utf8").trim();
+        if (!text) return false;
+        let sequence: number | undefined;
+        try {
+          const parsed = JSON.parse(text) as { sequence?: unknown };
+          if (typeof parsed.sequence === "number") sequence = parsed.sequence;
+        } catch {
+          // A malformed trailing record cannot be committed safely.
+        }
+        if (sequence === undefined || sequence >= nextSequence) {
+          truncateAt = lineStart;
+          return false;
+        }
+        return true;
+      };
+
       while (end > 0) {
         const start = Math.max(0, end - chunk.length);
         const length = end - start;
         await handle.read(chunk, 0, length, start);
-        const lastNewline = chunk.subarray(0, length).lastIndexOf(0x0a);
-        if (isFinalByte && lastNewline === length - 1) {
-          return;
+        if (end === size && size > 0) {
+          hasTrailingNewline = chunk[length - 1] === 0x0a;
         }
-        isFinalByte = false;
-        if (lastNewline !== -1) {
-          await handle.truncate(start + lastNewline + 1);
-          return;
+        const bytes = pending.length
+          ? Buffer.concat([chunk.subarray(0, length), pending])
+          : chunk.subarray(0, length);
+        let lineEnd = bytes.length;
+        if (end === size && hasTrailingNewline) lineEnd--;
+        let stopped = false;
+        while (lineEnd > 0) {
+          const newline = bytes.lastIndexOf(0x0a, lineEnd - 1);
+          if (newline < 0) {
+            if (start === 0) {
+              stopped = shouldTruncateRecord(bytes.subarray(0, lineEnd), 0);
+            } else {
+              pending = Buffer.from(bytes.subarray(0, lineEnd));
+            }
+            break;
+          }
+          const lineStart = start + newline + 1;
+          stopped = shouldTruncateRecord(
+            bytes.subarray(newline + 1, lineEnd),
+            lineStart
+          );
+          if (stopped) break;
+          lineEnd = newline;
         }
+        if (stopped) break;
         end = start;
       }
-      if (size > 0) {
-        await handle.truncate(0);
-      }
+      if (truncateAt !== size) await handle.truncate(truncateAt);
     } finally {
       await handle.close();
     }
@@ -340,7 +388,7 @@ export class TimelineRecorder {
       withFileLock(manifestPath, async () => {
         const manifest = await this.readManifest(manifestPath);
         assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
-        await this.truncateTornEventsTail(manifestPath);
+        await this.truncateTornEventsTail(manifestPath, manifest.nextSequence);
         let nextSequence = manifest.nextSequence;
 
         const events: WorkflowTimelineEvent[] = drafts.map(
@@ -400,7 +448,7 @@ export class TimelineRecorder {
           return { committed: false };
         }
 
-        await this.truncateTornEventsTail(manifestPath);
+        await this.truncateTornEventsTail(manifestPath, manifest.nextSequence);
 
         const event: WorkflowTimelineEvent = {
           eventType: TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED,
