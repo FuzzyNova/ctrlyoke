@@ -1086,7 +1086,7 @@ describe("StepEditor — Send Steer Message", () => {
     );
   });
 
-  it("keeps a script draft when restoring a failed queued-step steer", () => {
+  it("keeps a script draft and saves failed steer text to Recent Prompts", () => {
     const queuedStep = {
       type: STEP_TYPES.PROMPT,
       name: "Queued step",
@@ -1109,10 +1109,23 @@ describe("StepEditor — Send Steer Message", () => {
       );
     });
 
-    expect(useEditorStore.getState().savedNewPromptState).toMatchObject({
-      stepType: STEP_TYPES.SCRIPT,
-      scriptCommand: "npm run deploy -- --prod",
-    });
+    expect(useEditorStore.getState().stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(useEditorStore.getState().scriptCommand).toBe(
+      "npm run deploy -- --prod"
+    );
+    expect(useEditorStore.getState().savedNewPromptState).toBeNull();
+    expect(usePromptHistoryStore.getState().entries).toContainEqual(
+      expect.objectContaining({
+        text: "queued steer text",
+        kind: PROMPT_HISTORY_KINDS.DRAFT,
+      })
+    );
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+        message: expect.stringContaining("Recent Prompts"),
+      })
+    );
   });
 
   it("keeps another step's in-progress edit when restoring a failed queued steer", () => {

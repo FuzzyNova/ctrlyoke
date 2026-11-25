@@ -455,9 +455,8 @@ interface EditorActions {
   moveStepToNewStepDraft: (
     index: number,
     step: WorkflowStep,
-    restorePendingEdit?: boolean,
-    preserveReplacedScriptDraft?: boolean
-  ) => void;
+    restorePendingEdit?: boolean
+  ) => boolean;
   /**
    * Replace the editor's prompt text with a Recent Prompts entry. Unsent text
    * in a new prompt is kept in Recent Prompts first; dirty edits to an
@@ -939,8 +938,7 @@ export const useEditorStore = create<
   moveStepToNewStepDraft: (
     index,
     step,
-    restorePendingEdit = true,
-    preserveReplacedScriptDraft = false
+    restorePendingEdit = true
   ) => {
     const before = get();
     const replacedDraft =
@@ -950,11 +948,15 @@ export const useEditorStore = create<
           readPersistedNewStepDraft(getVsCodeApi()));
     rememberReplacedPromptDraft(replacedDraft);
     const preservedScriptDraft =
-      preserveReplacedScriptDraft &&
       replacedDraft?.stepType === STEP_TYPES.SCRIPT &&
       replacedDraft.scriptCommand.trim().length > 0
         ? restoreNewStepDraft(replacedDraft)
         : null;
+    if (preservedScriptDraft) {
+      if ("prompt" in step) {
+        usePromptHistoryStore.getState().rememberDraft(step.prompt);
+      }
+    }
 
     // Loading the step through edit mode reuses its step-to-editor mapping
     // and picks up unsaved edits cached for it; the editor then leaves edit
@@ -967,14 +969,16 @@ export const useEditorStore = create<
       ];
     }
     set({
+      ...(preservedScriptDraft ?? {}),
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null,
       originalPromptData: null,
-      savedNewPromptState: preservedScriptDraft,
+      savedNewPromptState: null,
       isDirty: true,
       pendingEdits,
     });
     expandPromptEditorIfCollapsed();
+    return preservedScriptDraft !== null;
   },
 
   loadRecentPrompt: (text) => {

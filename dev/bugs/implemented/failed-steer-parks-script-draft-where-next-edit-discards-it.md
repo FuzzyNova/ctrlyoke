@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (review of dcdd02a45, store probe)
 - **Area:** `src/ui/webview-react/store/editorStore.ts`, `src/ui/webview-react/components/editor/StepEditor.tsx`
-- **Severity:** medium (silent loss of a user-typed script command; the fix in dcdd02a45 is incomplete)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

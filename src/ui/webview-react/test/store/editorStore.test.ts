@@ -336,17 +336,31 @@ describe("moveStepToNewStepDraft", () => {
     expect(store().selectionTarget.kind).toBe("newPrompt");
   });
 
-  it("keeps a replaced script draft when restoring a failed steer", () => {
+  it("keeps a replaced script draft through later edit-mode round trips", () => {
     store().setStepType(STEP_TYPES.SCRIPT);
     store().setScriptCommand("npm run deploy -- --prod");
 
-    store().moveStepToNewStepDraft(0, makePromptStep(), false, true);
+    const preservedScriptDraft = store().moveStepToNewStepDraft(
+      0,
+      makePromptStep(),
+      false
+    );
 
-    expect(store().promptText).toBe("Do something useful");
-    expect(store().savedNewPromptState).toMatchObject({
-      stepType: STEP_TYPES.SCRIPT,
-      scriptCommand: "npm run deploy -- --prod",
-    });
+    expect(preservedScriptDraft).toBe(true);
+    expect(store().stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(store().scriptCommand).toBe("npm run deploy -- --prod");
+    expect(store().savedNewPromptState).toBeNull();
+    expect(usePromptHistoryStore.getState().entries).toMatchObject([
+      { text: "Do something useful", kind: PROMPT_HISTORY_KINDS.DRAFT },
+    ]);
+
+    store().enterEditMode(1, makePromptStep({ prompt: "other" }));
+    store().enterNewPromptMode();
+
+    expect(store().stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(store().scriptCommand).toBe("npm run deploy -- --prod");
+    expect(store().promptText).toBe("");
+    expect(store().savedNewPromptState).toBeNull();
   });
 });
 

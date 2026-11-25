@@ -867,9 +867,15 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         pendingNewWorkflowToastRef.current = null;
         const { origin } = event.data as ExecutePromptErrorMessage;
         if (origin?.kind === STEER_ORIGIN_KINDS.QUEUED_STEP) {
-          useEditorStore
+          const keptScriptDraft = useEditorStore
             .getState()
-            .moveStepToNewStepDraft(origin.stepIndex, origin.step, false, true);
+            .moveStepToNewStepDraft(origin.stepIndex, origin.step, false);
+          if (keptScriptDraft) {
+            notifyUser(
+              "Your script draft is still in the editor. The steered prompt was saved in Recent Prompts.",
+              USER_FEEDBACK_SEVERITY.INFO
+            );
+          }
           return;
         }
         const restored =
