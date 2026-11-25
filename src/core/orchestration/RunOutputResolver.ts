@@ -35,6 +35,7 @@ import type { StepOutputSource } from "../../utils/StepOutputText";
 import { getStepOutputText } from "../../utils/StepOutputText";
 import {
   TIMELINE_ATTEMPT_KINDS,
+  TIMELINE_ATTEMPT_TERMINAL_STATES,
   TIMELINE_EVENT_TYPES,
   type TimelineAttemptKind,
   type TimelineAttemptStartReason,
@@ -663,8 +664,8 @@ export class RunOutputResolver {
       !state.value.terminalState
     ) {
       state.value.terminalState = state.value.output?.scriptVerdict
-        ? "completed"
-        : "cancelled";
+        ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+        : TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED;
     }
     return {
       kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
