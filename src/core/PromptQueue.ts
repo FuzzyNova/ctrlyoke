@@ -83,6 +83,7 @@ import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import { reportPromptCompleted } from "../utils/TelemetryEvents";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
+import { isNewerRunFile } from "../utils/PersistedSchemaGuard";
 import type {
   DiskStepMergeOptions,
   IWorkingFileQueueAccess,
@@ -645,7 +646,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
       // Persist forced STOPPED state to disk immediately so subsequent
       // RecentWorkflowCatalog reads see the correct state, not "running".
-      if (recoveredIdsAdded || forcedToStopped || activeParallelGroupChanged) {
+      if (
+        !isNewerRunFile(workingFile) &&
+        (recoveredIdsAdded || forcedToStopped || activeParallelGroupChanged)
+      ) {
         await this.updateWorkingFile(recoveredIdsAdded).catch((err) =>
           Log.warn(
             "[PromptQueue] Working file load: failed to persist STOPPED state to disk:",

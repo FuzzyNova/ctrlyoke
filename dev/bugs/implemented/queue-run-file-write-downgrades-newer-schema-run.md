@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against `out/`)
 - **Area:** `src/core/WorkingFileManager.ts` (`writeQueueState` / `updateWorkingFile`, ~2710-2870), `src/core/PromptQueue.ts` (`restoreFromWorkingFile`), `src/utils/PersistedSchemaGuard.ts` (`prepareRunFileForWrite`, ~209-234)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

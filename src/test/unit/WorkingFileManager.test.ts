@@ -33,6 +33,7 @@ import {
 import type { RunSummaryRecord } from "../../core/orchestration/OutputHistoryManager";
 import {
   CURRENT_SCHEMA_VERSIONS,
+  isNewerSchemaError,
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
 
@@ -285,6 +286,56 @@ suite("WorkingFileManager", () => {
       model: "gpt-5.4-mini",
       _runtime: finalStepRuntime,
     });
+  });
+
+  test("preserves unknown runtime metadata and refuses newer run files", async () => {
+    const workingFilePath = tempFile("newer-runtime");
+    const newerFile = makeMinimalWorkingFile();
+    newerFile._runtime = {
+      ...newerFile._runtime,
+      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE] + 1,
+      executionState: EXECUTION_STATES.RUNNING,
+      futureField: "keep me",
+    } as typeof newerFile._runtime;
+    const initialBytes = JSON.stringify(newerFile, null, 2);
+    await fs.writeFile(workingFilePath, initialBytes, "utf8");
+
+    const queue = new PromptQueue();
+    await queue.restoreFromWorkingFile(workingFilePath, true);
+    assert.strictEqual(await fs.readFile(workingFilePath, "utf8"), initialBytes);
+    await assert.rejects(queue.updateWorkingFile(), isNewerSchemaError);
+    assert.strictEqual(await fs.readFile(workingFilePath, "utf8"), initialBytes);
+  });
+
+  test("preserves non-queue runtime fields and clears absent queue fields", async () => {
+    const workingFilePath = tempFile("runtime-field-preservation");
+    const workingFile = makeMinimalWorkingFile();
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      worktreeNotice: "Worktree setup needs attention",
+      importedFrom: { sourceRoot: "source-run" } as NonNullable<
+        NonNullable<WorkingFile["_runtime"]>["importedFrom"]
+      >,
+      finalStep: { phase: "queue", loopCount: 1, status: STEP_STATUS.COMPLETED },
+      activeParallelGroup: { groupId: "group-1", admission: "accepting" },
+      pendingRewind: { fromStepIndex: 0, baseDefinitionRevision: 1 },
+    } as typeof workingFile._runtime;
+    await writeTempJson(workingFilePath, workingFile);
+
+    const access = makeMockAccess(workingFilePath);
+    const manager = new WorkingFileManager(access);
+    await manager.updateWorkingFile();
+    const persisted = JSON.parse(
+      await fs.readFile(workingFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(persisted._runtime?.worktreeNotice, "Worktree setup needs attention");
+    assert.deepStrictEqual(persisted._runtime?.importedFrom, {
+      sourceRoot: "source-run",
+    });
+    assert.strictEqual(persisted._runtime?.finalStep, undefined);
+    assert.strictEqual(persisted._runtime?.activeParallelGroup, undefined);
+    assert.strictEqual(persisted._runtime?.pendingRewind, undefined);
   });
 
   test("persists the structured run stop reason in workflow runtime metadata", async () => {

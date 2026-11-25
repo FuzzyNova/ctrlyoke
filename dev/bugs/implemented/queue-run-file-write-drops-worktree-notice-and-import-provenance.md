@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against `out/`)
 - **Area:** `src/core/WorkingFileManager.ts` (`updateWorkingFile` `_runtime` rebuild ~2841-2858, `updateWorktreeNotice` ~2991-3013)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
