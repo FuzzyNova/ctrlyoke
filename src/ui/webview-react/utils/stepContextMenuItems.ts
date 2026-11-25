@@ -1,4 +1,5 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
+import type { WorkflowStep as CoreWorkflowStep } from "@root/types/CtrlYokeTypes";
 import type {
   ContextMenuItem,
   ContextMenuSubmenu,
@@ -288,8 +289,8 @@ export interface QueuedStepHandoffMenuItemsInput {
  * Move to Editor and Send as Steer: take a queued step back out of the queue,
  * into the prompt editor or into a live session. Both remove the step without
  * the delete confirmation, because its text is not lost: it is in the editor,
- * or delivered and kept in Recent Prompts (a failed steer is restored into
- * the editor). Send as Steer opens a submenu when several sessions are live.
+ * or delivered and kept in Recent Prompts (a failed steer is restored as a
+ * new-step draft). Send as Steer opens a submenu when several sessions are live.
  */
 export function buildQueuedStepHandoffMenuItems({
   step,
@@ -316,7 +317,16 @@ export function buildQueuedStepHandoffMenuItems({
     },
   };
 
-  const steerText = isScriptStep(step) ? "" : step.prompt.trim();
+  const editorState = useEditorStore.getState();
+  const queuedEdit = editorState.pendingEdits[`queue:${stepIndex}`];
+  const isSelectedStep =
+    editorState.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
+    editorState.selectionTarget.index === stepIndex;
+  const savedPrompt = "prompt" in step ? step.prompt : "";
+  const queuedPrompt = isSelectedStep
+    ? editorState.promptText
+    : (queuedEdit?.promptText ?? savedPrompt);
+  const steerText = isScriptStep(step) ? "" : queuedPrompt.trim();
   // A step's own session never steers it: it has not started yet.
   const destinations = steerTargets.filter(
     (target) => target.stepIndex !== stepIndex
@@ -331,7 +341,13 @@ export function buildQueuedStepHandoffMenuItems({
           : undefined));
   const steerTo = (target: SteerTarget) => () => {
     if (steerDisabledReason !== undefined || !workflowId) return;
-    sendSteerText(workflowId, target.sessionId, steerText);
+    sendSteerText(workflowId, target.sessionId, steerText, {
+      kind: "queuedStep",
+      stepIndex,
+      step: isScriptStep(step)
+        ? (step as unknown as CoreWorkflowStep)
+        : ({ ...step, prompt: steerText } as unknown as CoreWorkflowStep),
+    });
     removeStep();
   };
 

@@ -2711,12 +2711,28 @@ export interface AppendFileMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
+/** Context-menu origin carried back only when a queued-step steer fails. */
+export interface QueuedStepSteerOrigin {
+  kind: "queuedStep";
+  stepIndex: number;
+  step: WorkflowStep;
+}
+
 /** Webview → Extension: `sessionId` names a PTY session or headless control channel. */
 export interface SendSteerMessage {
   type: typeof MESSAGE_TYPES.SEND_STEER_MESSAGE;
   workflowId: string;
   sessionId: string;
   text: string;
+  /** Present for queued-step context-menu steers so failures can restore safely. */
+  origin?: QueuedStepSteerOrigin;
+}
+
+/** Extension → Webview: a prompt or steer dispatch failed. */
+export interface ExecutePromptErrorMessage {
+  type: typeof MESSAGE_TYPES.EXECUTE_PROMPT_ERROR;
+  text: string;
+  origin?: QueuedStepSteerOrigin;
 }
 
 /** Webview → Extension: interrupt a live headless turn without stopping its step. */

@@ -863,6 +863,15 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === MESSAGE_TYPES.EXECUTE_PROMPT_ERROR) {
         pendingNewWorkflowToastRef.current = null;
+        const origin = event.data.origin as
+          | { kind: "queuedStep"; stepIndex: number; step: WorkflowStep }
+          | undefined;
+        if (origin?.kind === "queuedStep") {
+          useEditorStore
+            .getState()
+            .moveStepToNewStepDraft(origin.stepIndex, origin.step, false);
+          return;
+        }
         const restored =
           (event.data.text as string) || lastSubmittedTextRef.current;
         if (restored) {

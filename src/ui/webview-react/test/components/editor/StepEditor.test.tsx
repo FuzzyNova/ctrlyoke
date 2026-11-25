@@ -59,6 +59,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { DRAWER_PAGES } from "@/types/drawerPages";
 import { useWorkflowStore } from "@store/workflowStore";
+import type { WorkflowStep } from "@store/workflowStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import {
@@ -1049,6 +1050,87 @@ describe("StepEditor — Send Steer Message", () => {
     await waitFor(() => {
       expect(useEditorStore.getState().promptText).toBe("restore this steer");
     });
+  });
+
+  it("restores a failed queued-step steer through the new-step draft path", async () => {
+    const queuedStep = {
+      type: STEP_TYPES.PROMPT,
+      name: "Queued step",
+      prompt: "queued steer text",
+      enabled: true,
+    } as WorkflowStep;
+    useEditorStore.getState().setPromptText("unsent editor draft");
+    render(<StepEditor />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+            text: "queued steer text",
+            origin: { kind: "queuedStep", stepIndex: 2, step: queuedStep },
+          },
+        })
+      );
+    });
+
+    expect(useEditorStore.getState().promptText).toBe("queued steer text");
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: EDITOR_TARGET_KINDS.NEW_PROMPT,
+    });
+    expect(usePromptHistoryStore.getState().entries).toContainEqual(
+      expect.objectContaining({
+        text: "unsent editor draft",
+        kind: PROMPT_HISTORY_KINDS.DRAFT,
+      })
+    );
+  });
+
+  it("keeps another step's in-progress edit when restoring a failed queued steer", () => {
+    const editedStep = {
+      type: STEP_TYPES.PROMPT,
+      name: "Editing step",
+      prompt: "saved text",
+      enabled: true,
+    } as WorkflowStep;
+    const queuedStep = {
+      type: STEP_TYPES.PROMPT,
+      name: "Queued step",
+      prompt: "queued steer text",
+      enabled: true,
+    } as WorkflowStep;
+    useEditorStore.getState().enterEditMode(0, editedStep);
+    useEditorStore.getState().setPromptText("in-progress edit");
+    const shiftedStep = {
+      type: STEP_TYPES.PROMPT,
+      name: "Shifted step",
+      prompt: "shifted saved text",
+      enabled: true,
+    } as WorkflowStep;
+    useEditorStore.getState().enterEditMode(2, shiftedStep);
+    useEditorStore.getState().setPromptText("another shifted edit");
+    useEditorStore.getState().deselect();
+    render(<StepEditor />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+            text: "queued steer text",
+            origin: { kind: "queuedStep", stepIndex: 2, step: queuedStep },
+          },
+        })
+      );
+    });
+
+    expect(useEditorStore.getState().promptText).toBe("queued steer text");
+    expect(useEditorStore.getState().pendingEdits["queue:0"]?.promptText).toBe(
+      "in-progress edit"
+    );
+    expect(useEditorStore.getState().pendingEdits["queue:2"]?.promptText).toBe(
+      "another shifted edit"
+    );
   });
 });
 

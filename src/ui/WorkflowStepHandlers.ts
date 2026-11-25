@@ -116,6 +116,7 @@ export class WorkflowStepHandlers {
       ctx.emit({
         type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
         text: message.text,
+        ...(message.origin ? { origin: message.origin } : {}),
       });
       ctx.emit({
         type: MESSAGE_TYPES.USER_FEEDBACK,

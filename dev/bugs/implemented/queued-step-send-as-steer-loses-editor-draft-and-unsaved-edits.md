@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, code trace)
 - **Area:** `src/ui/webview-react/utils/stepContextMenuItems.ts` (`buildQueuedStepHandoffMenuItems` ~294-370), `src/ui/webview-react/components/editor/StepEditor.tsx` (~861-875), `src/ui/WorkflowStepHandlers.ts` (~100-125)
-- **Severity:** medium (unsent user text is lost without a confirmation)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

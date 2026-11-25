@@ -440,14 +440,22 @@ interface EditorActions {
   enterNewPromptMode: () => void;
   startReplyToStep: (reply: ReplyContextInput) => void;
   cancelReplyToStep: () => void;
-  enterEditMode: (index: number, promptData: WorkflowStep) => void;
+  enterEditMode: (
+    index: number,
+    promptData: WorkflowStep,
+    restorePendingEdit?: boolean
+  ) => void;
   /**
    * Make a queued step the new-step draft: its text, name and properties,
    * including unsaved edits made to it in the editor. The caller removes the
    * step from the queue. Unsent prompt text in the draft it replaces is kept
    * in Recent Prompts.
    */
-  moveStepToNewStepDraft: (index: number, step: WorkflowStep) => void;
+  moveStepToNewStepDraft: (
+    index: number,
+    step: WorkflowStep,
+    restorePendingEdit?: boolean
+  ) => void;
   /**
    * Replace the editor's prompt text with a Recent Prompts entry. Unsent text
    * in a new prompt is kept in Recent Prompts first; an existing step's text
@@ -766,7 +774,7 @@ export const useEditorStore = create<
     });
   },
 
-  enterEditMode: (index, promptData) => {
+  enterEditMode: (index, promptData, restorePendingEdit = true) => {
     const state = get();
     const newPendingEdits = { ...state.pendingEdits };
 
@@ -792,7 +800,9 @@ export const useEditorStore = create<
 
     // Restore a pending (unsaved) edit if one exists for this prompt, otherwise
     // load the prompt data from the workflow.
-    const pendingEdit = newPendingEdits[selectionTargetKey(newTarget)];
+    const pendingEdit = restorePendingEdit
+      ? newPendingEdits[selectionTargetKey(newTarget)]
+      : undefined;
 
     if (isScriptStep(promptData)) {
       // Script step: populate scriptCommand, set stepType to script (unless pending edit overrides)
@@ -924,7 +934,7 @@ export const useEditorStore = create<
     }
   },
 
-  moveStepToNewStepDraft: (index, step) => {
+  moveStepToNewStepDraft: (index, step, restorePendingEdit = true) => {
     const before = get();
     rememberReplacedPromptDraft(
       before.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
@@ -936,11 +946,13 @@ export const useEditorStore = create<
     // Loading the step through edit mode reuses its step-to-editor mapping
     // and picks up unsaved edits cached for it; the editor then leaves edit
     // mode without restoring the draft it replaced.
-    get().enterEditMode(index, step);
+    get().enterEditMode(index, step, restorePendingEdit);
     const pendingEdits = { ...get().pendingEdits };
-    delete pendingEdits[
-      selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index })
-    ];
+    if (restorePendingEdit) {
+      delete pendingEdits[
+        selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index })
+      ];
+    }
     set({
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null,

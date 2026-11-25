@@ -4,6 +4,7 @@ import { sendMessage } from "@messaging/sendMessage";
 import { useEditorStore } from "@store/editorStore";
 import { usePromptHistoryStore } from "@store/promptHistoryStore";
 import { clearEditorAfterDispatch } from "@utils/editorDraftDispatch";
+import type { QueuedStepSteerOrigin } from "@root/types/WebviewMessageTypes";
 
 /**
  * Send text as a steer to one live session and keep it in Recent Prompts. On
@@ -13,12 +14,14 @@ import { clearEditorAfterDispatch } from "@utils/editorDraftDispatch";
 export function sendSteerText(
   workflowId: string,
   sessionId: string,
-  text: string
+  text: string,
+  origin?: QueuedStepSteerOrigin
 ): void {
   sendMessage(MESSAGE_TYPES.SEND_STEER_MESSAGE, {
     workflowId,
     sessionId,
     text,
+    ...(origin ? { origin } : {}),
   });
   usePromptHistoryStore.getState().record(text, PROMPT_HISTORY_KINDS.STEER);
 }
