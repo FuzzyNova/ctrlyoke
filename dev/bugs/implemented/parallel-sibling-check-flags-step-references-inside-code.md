@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (Claude subagent, reproduced against compiled `out/core/PromptFileParser.js`)
 - **Area:** `src/core/ParallelGroupTopology.ts` (`getParallelSiblingReferenceErrors` ~60-95)
-- **Severity:** medium (the whole workflow file fails to parse, even though the docs say this is the way to write a token literally)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -60,6 +60,7 @@ silently at run time.
 
 ## Suggested Fix
 
+- The retry-prompt gap was deliberately left open and needs a compatibility decision (a warning instead of an error, or a schema bump).
 - Use the code-masked `parseInlinePriorContextRefs` in `getParallelSiblingReferenceErrors`.
 - Single-source "which step texts carry inline `$step` references" with
   `StepReferenceShifts` (prompt, `endCondition.retryPrompt`, `passRetryPrompt`), so the

@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import {
@@ -25,6 +28,23 @@ suite("PromptFileParser.validateWorkflowText", () => {
       ),
       { issues: [] }
     );
+  });
+
+  test("parses the reported YAML with a literal sibling reference in inline code", async () => {
+    const directory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-parser-")
+    );
+    const filePath = path.join(directory, "t.ctrlyoke.yaml");
+    try {
+      await fs.writeFile(
+        filePath,
+        'name: t\nsteps:\n  - parallel:\n      - prompt: "Explain what `$step:2` means in ctrlyoke"\n      - prompt: "Do something else"\n'
+      );
+      const parsed = await parser.parsePromptFile(filePath);
+      assert.ok(parsed);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
   });
 
   test("returns schema errors with instance paths", () => {

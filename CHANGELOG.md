@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Parallel workflows now allow sibling `$step:N` tokens written inside inline or fenced code, where the runtime leaves them literal.
 - Timeline appends interrupted by a crash before the run manifest was updated are rolled back on the next append, so event sequence numbers stay unique.
 - MCP step additions and edits reject unknown harness ids even when harness capabilities have not been detected.
 - Hosted server identity proofs are bound to the responding port, preventing relayed probes from identifying a port squatter as a sibling server.
