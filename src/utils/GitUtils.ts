@@ -921,6 +921,8 @@ export function buildCommitDiffArgs(
     "show",
     "--stat",
     "-p",
+    GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     "--end-of-options",
     hash,
     ...(pathspecs?.length ? ["--", ...pathspecs] : []),
@@ -1304,7 +1306,16 @@ export function buildStashDiffArgs(
         "--",
         ...pathspecs,
       ]
-    : ["-C", workspaceRoot, "stash", "show", "-p", stashRef];
+    : [
+        "-C",
+        workspaceRoot,
+        "stash",
+        "show",
+        "-p",
+        GIT_DIFF_NO_EXT_DIFF_OPTION,
+        GIT_DIFF_NO_COLOR_OPTION,
+        stashRef,
+      ];
 }
 
 /**

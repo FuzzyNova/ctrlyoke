@@ -34,6 +34,8 @@ import {
   createFileHistoryCommitWalk,
   setFileHistorySpawnForTests,
   getStashFiles,
+  getStashDiff,
+  getCommitDiff,
   getWorkingTreeDiff,
   getStagedDiff,
   getRecentCommits,
@@ -417,6 +419,32 @@ suite("GitUtils.gitRefExists", function () {
     await writeWorkspaceFile("tracked.txt", "working color change\n");
     const workingDiff = await getWorkingTreeDiff(workspaceRoot);
     assert.ok(!workingDiff.includes("\u001b"), workingDiff);
+  });
+
+  test("disables repo-configured color and external diff in commit and stash diffs", async () => {
+    const externalDiffPath = path.join(workspaceRoot, "external-diff.js");
+    await fs.writeFile(
+      externalDiffPath,
+      'process.stdout.write("EXTERNAL-DIFF-TOOL OUTPUT\\n");\n',
+      "utf8"
+    );
+    runGit(["config", "color.ui", "always"]);
+    runGit(["config", "diff.external", `node "${externalDiffPath}"`]);
+    await writeWorkspaceFile("tracked.txt", "committed color change\n");
+    runGit(["add", "tracked.txt"]);
+    runGit(["commit", "-m", "Color change"]);
+    await writeWorkspaceFile("tracked.txt", "stashed color change\n");
+    runGit(["stash", "push", "-m", "color stash", "--", "tracked.txt"]);
+
+    for (const diff of [
+      await getCommitDiff(workspaceRoot, "HEAD"),
+      await getStashDiff(workspaceRoot, 0),
+      await getStashDiff(workspaceRoot, 0, ["tracked.txt"]),
+    ]) {
+      assert.ok(diff.includes("@@"), diff);
+      assert.ok(!diff.includes("\u001b"), diff);
+      assert.ok(!diff.includes("EXTERNAL-DIFF-TOOL OUTPUT"), diff);
+    }
   });
 
   test("lists non-ASCII tracked paths in a stash", async () => {
