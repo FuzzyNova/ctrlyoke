@@ -5,6 +5,7 @@ import { promisify } from "util";
 import { Log } from "../../../utils/Log";
 import { resolveWindowsShell } from "../PtyProcessManager";
 import { buildCmdExeVerbatimArgs } from "./WindowsCmdEscaping";
+import { escapePowerShellSingleQuotedBody } from "../../../types/CommandDisplayFormatter";
 
 const execFileAsync = promisify(execFile);
 
@@ -482,17 +483,11 @@ async function getWindowsCommandMetadata(
   shell: string
 ): Promise<WindowsCommandMetadata | undefined> {
   try {
-    const escapedName = escapePowerShellSingleQuoted(commandName);
+    const script = buildWindowsCommandMetadataScript(commandName);
     // Prefer Application (.exe, .cmd, .bat) over ExternalScript (.ps1).
     // npm .ps1 shims check $MyInvocation.ExpectingInput and pipe $input to node
     // when stdin is an open pipe, causing a 30-second hang via execFileAsync.
     // The .cmd counterpart calls node directly and avoids this issue.
-    const script =
-      `$cmd = Get-Command -Name '${escapedName}' -CommandType Application ` +
-      `-ErrorAction SilentlyContinue | Select-Object -First 1 Name,CommandType,Source,Path,Definition; ` +
-      `if (-not $cmd) { $cmd = Get-Command -Name '${escapedName}' -CommandType ExternalScript ` +
-      `-ErrorAction SilentlyContinue | Select-Object -First 1 Name,CommandType,Source,Path,Definition }; ` +
-      `if ($cmd) { $cmd | ConvertTo-Json -Compress }`;
     const { stdout } = await execFileAsync(
       shell,
       ["-NoProfile", "-Command", script],
@@ -527,8 +522,15 @@ function getWindowsCommandPath(
   return candidate.trim();
 }
 
-function escapePowerShellSingleQuoted(value: string): string {
-  return value.replace(/'/g, "''");
+export function buildWindowsCommandMetadataScript(commandName: string): string {
+  const escapedName = escapePowerShellSingleQuotedBody(commandName);
+  return (
+    `$cmd = Get-Command -Name '${escapedName}' -CommandType Application ` +
+    `-ErrorAction SilentlyContinue | Select-Object -First 1 Name,CommandType,Source,Path,Definition; ` +
+    `if (-not $cmd) { $cmd = Get-Command -Name '${escapedName}' -CommandType ExternalScript ` +
+    `-ErrorAction SilentlyContinue | Select-Object -First 1 Name,CommandType,Source,Path,Definition }; ` +
+    `if ($cmd) { $cmd | ConvertTo-Json -Compress }`
+  );
 }
 
 function formatDisplayArg(arg: string): string {

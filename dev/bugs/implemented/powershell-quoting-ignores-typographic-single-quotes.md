@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent, probe against `out/`)
 - **Area:** `src/types/CommandDisplayFormatter.ts`, `src/core/harness/shared/CliLauncherResolver.ts`
-- **Severity:** medium (script steps under pwsh/powershell break when a path or argument contains `’`)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -28,7 +28,9 @@ Where it matters:
 ## Steps to Reproduce
 
 ```js
-const { escapePowerShellArgument } = require("./out/types/CommandDisplayFormatter");
+const {
+  escapePowerShellArgument,
+} = require("./out/types/CommandDisplayFormatter");
 escapePowerShellArgument("Don\u2019t"); // "'Don’t'" — expected "'Don’’t'"
 ```
 
