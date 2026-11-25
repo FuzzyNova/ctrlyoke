@@ -47,6 +47,7 @@ export const STATUSLINE_LAUNCHER_FILES: readonly string[] = [
   "ctrlyoke-statusline-wrapper.js",
   "ctrlyoke-statusline-format.js",
   "ctrlyoke-format-migrations.js",
+  "ctrlyoke-settings-jsonc.js",
   ...Object.values(STATUS_LINE_HARNESS_IDS).map(statuslineScriptFileName),
 ];
 
