@@ -42,8 +42,9 @@ suite("WorkflowLockManager stale-run recovery", () => {
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
       });
-      const heartbeatBefore = (await readWorkflowLock(workspaceRoot, workflowKey))
-        ?.lastHeartbeat;
+      const heartbeatBefore = (
+        await readWorkflowLock(workspaceRoot, workflowKey)
+      )?.lastHeartbeat;
 
       Object.defineProperty(fsPromises, "rename", {
         configurable: true,
@@ -61,8 +62,9 @@ suite("WorkflowLockManager stale-run recovery", () => {
         ownerToken
       );
 
-      const heartbeatAfter = (await readWorkflowLock(workspaceRoot, workflowKey))
-        ?.lastHeartbeat;
+      const heartbeatAfter = (
+        await readWorkflowLock(workspaceRoot, workflowKey)
+      )?.lastHeartbeat;
       assert.ok(
         heartbeatAfter !== undefined && heartbeatAfter > (heartbeatBefore ?? 0),
         "the retried write should publish the updated heartbeat"

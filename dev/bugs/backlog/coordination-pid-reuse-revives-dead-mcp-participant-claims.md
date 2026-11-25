@@ -7,7 +7,7 @@
 ## Symptom
 
 The coordination board is replayed with each participant's liveness as it is
-*now*. If an MCP participant crashes without leaving, another participant is
+_now_. If an MCP participant crashes without leaving, another participant is
 granted its paths. If the crashed participant's PID is later reused by an
 unrelated process, the next fold judges the crashed participant alive again.
 Its original claim wins, the newer grant is dropped without notice, and
@@ -21,6 +21,7 @@ The same thing happens when an observer's `process.kill(pid, 0)` returns
 
 Fold level (compiled `out/`, `foldCoordinationEntries` with an injected
 liveness check):
+
 1. Participant A (pid 111, via MCP) claims `src`. Mark pid 111 dead.
 2. Participant B (pid 222) claims `src`. The fold grants it: claims are `src:B`.
 3. Mark pid 111 alive again (PID reuse). Fold again: claims are `src:A`, A is
@@ -44,6 +45,7 @@ gone.
 ## Suggested Fix
 
 Needs a design choice; options:
+
 - Write a leave entry the first time a participant is observed dead (in the
   fold's caller or in `closeRunParticipants`), so it can never revive.
 - Record the process start time alongside the PID and treat a mismatch as dead.

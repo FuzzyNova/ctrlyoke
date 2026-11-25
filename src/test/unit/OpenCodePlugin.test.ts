@@ -206,7 +206,11 @@ async function startV2Plugin(
   const toolHooks = new Map<string, V2ToolHook>();
   const prompts = options.prompts ?? [];
   const ctx = {
-    session: { async prompt(input: unknown) { prompts.push(input); } },
+    session: {
+      async prompt(input: unknown) {
+        prompts.push(input);
+      },
+    },
     event: {
       subscribe(options: { signal: AbortSignal }) {
         signal = options.signal;
@@ -230,7 +234,9 @@ async function startV2Plugin(
       },
     },
     permission: {
-      async hook() { return undefined; },
+      async hook() {
+        return undefined;
+      },
     },
   };
   const dispose = await definition.setup(ctx);
@@ -263,13 +269,17 @@ suite("OpenCode plugin user hooks", () => {
       return {
         status,
         ok: status !== 204 && status !== 410,
-        async json() { return { text: "please change direction" }; },
+        async json() {
+          return { text: "please change direction" };
+        },
       } as Response;
     };
     const { v2 } = await loadPlugin([], { v2: true, fetcher, prompts });
     assert.ok(v2);
     // The session event registers the control session and starts polling.
-    await v2.publish("session.execution.started", { sessionID: "steer-session" });
+    await v2.publish("session.execution.started", {
+      sessionID: "steer-session",
+    });
     for (let i = 0; i < 30 && responses.length > 0; i++) {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }

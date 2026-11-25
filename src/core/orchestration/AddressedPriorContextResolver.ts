@@ -119,15 +119,17 @@ export class AddressedPriorContextResolver {
       const address = await this.resolveSource(source);
       await this.assertAuthorizedTerminalRun(address);
       items.push(
-        ...(await this.outputResolver.resolveAllPriorContextItems(
-          WorkflowPaths.manifestPath(
-            this.workspaceRoot,
-            address.workflowKey,
-            address.runRef
-          ),
-          this.projectionOptions,
-          detail
-        )).map((item) => ({ ...item, importedRun: true }))
+        ...(
+          await this.outputResolver.resolveAllPriorContextItems(
+            WorkflowPaths.manifestPath(
+              this.workspaceRoot,
+              address.workflowKey,
+              address.runRef
+            ),
+            this.projectionOptions,
+            detail
+          )
+        ).map((item) => ({ ...item, importedRun: true }))
       );
     }
     return items;

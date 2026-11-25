@@ -180,7 +180,10 @@ suite("StatuslineLauncher", () => {
     const compiledScripts = path.resolve(__dirname, "../../scripts");
     const missing: string[] = [];
     for (const file of STATUSLINE_LAUNCHER_FILES) {
-      const source = await fs.readFile(path.join(compiledScripts, file), "utf8");
+      const source = await fs.readFile(
+        path.join(compiledScripts, file),
+        "utf8"
+      );
       for (const match of source.matchAll(
         /require\(\s*["']\.\/([^"']+)["']\s*\)/g
       )) {

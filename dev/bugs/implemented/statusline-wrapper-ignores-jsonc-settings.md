@@ -29,7 +29,11 @@ the wrapper silently treats the file as missing:
    {
      // disable the Claude statusline
      "schemaVersion": 2,
-     "statusLine": { "byHarness": { "claude-cli": { "enabled": false, "customCommand": "echo hi" } } },
+     "statusLine": {
+       "byHarness": {
+         "claude-cli": { "enabled": false, "customCommand": "echo hi" },
+       },
+     },
    }
    ```
 2. From the compiled `out/scripts/ctrlyoke-statusline-wrapper.js`, call

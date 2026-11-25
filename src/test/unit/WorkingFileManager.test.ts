@@ -302,9 +302,15 @@ suite("WorkingFileManager", () => {
 
     const queue = new PromptQueue();
     await queue.restoreFromWorkingFile(workingFilePath, true);
-    assert.strictEqual(await fs.readFile(workingFilePath, "utf8"), initialBytes);
+    assert.strictEqual(
+      await fs.readFile(workingFilePath, "utf8"),
+      initialBytes
+    );
     await assert.rejects(queue.updateWorkingFile(), isNewerSchemaError);
-    assert.strictEqual(await fs.readFile(workingFilePath, "utf8"), initialBytes);
+    assert.strictEqual(
+      await fs.readFile(workingFilePath, "utf8"),
+      initialBytes
+    );
   });
 
   test("preserves non-queue runtime fields and clears absent queue fields", async () => {
@@ -316,7 +322,11 @@ suite("WorkingFileManager", () => {
       importedFrom: { sourceRoot: "source-run" } as NonNullable<
         NonNullable<WorkingFile["_runtime"]>["importedFrom"]
       >,
-      finalStep: { phase: "queue", loopCount: 1, status: STEP_STATUS.COMPLETED },
+      finalStep: {
+        phase: "queue",
+        loopCount: 1,
+        status: STEP_STATUS.COMPLETED,
+      },
       activeParallelGroup: { groupId: "group-1", admission: "accepting" },
       pendingRewind: { fromStepIndex: 0, baseDefinitionRevision: 1 },
     } as typeof workingFile._runtime;
@@ -329,7 +339,10 @@ suite("WorkingFileManager", () => {
       await fs.readFile(workingFilePath, "utf8")
     ) as WorkingFile;
 
-    assert.strictEqual(persisted._runtime?.worktreeNotice, "Worktree setup needs attention");
+    assert.strictEqual(
+      persisted._runtime?.worktreeNotice,
+      "Worktree setup needs attention"
+    );
     assert.deepStrictEqual(persisted._runtime?.importedFrom, {
       sourceRoot: "source-run",
     });

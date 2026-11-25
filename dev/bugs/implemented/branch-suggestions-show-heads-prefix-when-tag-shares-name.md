@@ -27,7 +27,7 @@ from the base instead of checking out the existing `release` branch.
 ## Root Cause
 
 `listLocalBranches` (`src/utils/GitUtils.ts` ~2219) formats each ref with
-`%(refname:short)`. Git's `:short` produces the shortest *unambiguous* name, so when
+`%(refname:short)`. Git's `:short` produces the shortest _unambiguous_ name, so when
 `refs/tags/<name>` (or `refs/remotes/<name>`) also exists it returns `heads/<name>`.
 Every consumer then treats the result as a branch name: `getBranchCompletions` uses
 it as `label` and `insertText`, and the worktree code looks it up under `refs/heads/`.

@@ -21,6 +21,7 @@ Two problems with the pending-step context-menu item **Send as Steer** (landed i
 ## Steps to Reproduce
 
 Failure path:
+
 1. Type an unsent draft in the prompt editor (or select step 5 and edit it
    without saving).
 2. Right-click pending step 3 → Send as Steer.
@@ -31,6 +32,7 @@ Failure path:
    Prompts.
 
 Unsaved edits:
+
 1. Select pending step 2 and change its text without saving.
 2. Right-click step 2 → Send as Steer.
 3. The old saved text is steered; the edit is discarded.

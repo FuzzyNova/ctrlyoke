@@ -44,7 +44,7 @@ suite("CliClosedPipe", () => {
       write: () => false,
     }) as unknown as NodeJS.WriteStream;
     let stops = 0;
-    stopWorkflowOnClosedPipe(stream, () => stops += 1);
+    stopWorkflowOnClosedPipe(stream, () => (stops += 1));
     stream.emit("error", errnoError("EPIPE"));
     assert.strictEqual(stream.write("ignored"), true);
     assert.strictEqual(stops, 1);

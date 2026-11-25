@@ -217,17 +217,13 @@ export class WorkflowLockManager {
         };
         // Keep retries shorter than the 5s heartbeat interval; a workflow-critical
         // five-minute retry would hold the runner-lock mutex past the 30s stale limit.
-        await writeFileAtomic(
-          lockPath,
-          JSON.stringify(updated, null, 2),
-          {
-            ...runStateWriteOptions(
-              lockPath,
-              "WorkflowLockManager.updateHeartbeat"
-            ),
-            budgetMs: Math.min(WORKFLOW_CRITICAL_RENAME_BUDGET_MS, 1_000),
-          }
-        );
+        await writeFileAtomic(lockPath, JSON.stringify(updated, null, 2), {
+          ...runStateWriteOptions(
+            lockPath,
+            "WorkflowLockManager.updateHeartbeat"
+          ),
+          budgetMs: Math.min(WORKFLOW_CRITICAL_RENAME_BUDGET_MS, 1_000),
+        });
       });
     } catch (err) {
       const code = getErrnoCode(err);

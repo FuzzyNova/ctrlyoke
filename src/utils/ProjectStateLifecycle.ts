@@ -384,10 +384,7 @@ async function classifyStatePath(
       while (parent !== path.dirname(parent)) {
         try {
           const parentStats = await fs.stat(parent);
-          if (
-            parentStats.isDirectory() &&
-            isPosixMountContainer(parent)
-          ) {
+          if (parentStats.isDirectory() && isPosixMountContainer(parent)) {
             return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
           }
           return parentStats.isDirectory()
@@ -412,8 +409,10 @@ function isPosixMountContainer(parent: string): boolean {
   if (POSIX_MOUNT_CONTAINERS.includes(normalizedParent)) {
     return true;
   }
-  return /^\/media\/[^/]+$/.test(normalizedParent) ||
-    /^\/run\/media\/[^/]+$/.test(normalizedParent);
+  return (
+    /^\/media\/[^/]+$/.test(normalizedParent) ||
+    /^\/run\/media\/[^/]+$/.test(normalizedParent)
+  );
 }
 
 async function refuseLiveOrUnknownRunner(
