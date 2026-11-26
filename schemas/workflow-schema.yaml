@@ -353,9 +353,7 @@ $defs:
       - type: boolean
         const: true
         description: Managed-worktree shorthand.
-      - type: string
-        minLength: 1
-        description: Named-worktree branch shorthand. The value must be a valid local Git branch name.
+      - $ref: '#/$defs/managedWorktreeConfig'
       - type: object
         description: >-
           Managed creates a throw-away worktree and branch per run and removes the directory when
@@ -618,13 +616,13 @@ $defs:
         $ref: '#/$defs/scriptStep/properties/type'
         title: Type
       name:
-        $ref: '#/$defs/scriptStep/properties/name'
+        $ref: '#/$defs/stepDisplayProperties/properties/name'
         title: Name
       enabled:
-        $ref: '#/$defs/scriptStep/properties/enabled'
+        $ref: '#/$defs/stepDisplayProperties/properties/enabled'
         title: Enabled
       color:
-        $ref: '#/$defs/scriptStep/properties/color'
+        $ref: '#/$defs/stepDisplayProperties/properties/color'
         title: Color
       executionMode:
         $ref: '#/$defs/scriptStep/properties/executionMode'
@@ -1157,32 +1155,6 @@ $defs:
               (backwards compatible). Not substituted: This structural field or identity value stays
               as authored.
             title: Type
-          name:
-            type: string
-            description: >-
-              Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the
-              dashboard shows a truncated preview of the prompt text. Not substituted: This
-              structural field or identity value stays as authored.
-            maxLength: 100
-            title: Name
-          enabled:
-            oneOf:
-              - type: boolean
-                description: >-
-                  Whether this step executes. When omitted, the step is enabled. Set to false to
-                  keep the step in the workflow but skip execution.
-              - $ref: '#/$defs/varPlaceholder'
-            description: >-
-              Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean
-              and validated at run start.
-            title: Enabled
-          color:
-            type: string
-            pattern: ^#[0-9a-fA-F]{6}$
-            description: >-
-              Optional authored identity colour for this step. Not substituted: This structural
-              field or identity value stays as authored.
-            title: Color
           prompt:
             type: string
             description: >-
@@ -1208,6 +1180,7 @@ $defs:
           type: object
           required:
             - script
+      - $ref: '#/$defs/stepDisplayProperties'
   scriptStep:
     type: object
     description: A workflow step that runs a shell script/command with no AI interaction.
@@ -1219,33 +1192,6 @@ $defs:
         type: string
         const: script
         title: Type
-      name:
-        description: >-
-          Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows
-          the script text. Not substituted: This structural field or identity value stays as
-          authored. Variable substitution: step text accepts {{name}} and resolves at dispatch;
-          unresolved placeholders fail before execution.
-        type: string
-        maxLength: 100
-        title: Name
-      enabled:
-        oneOf:
-          - type: boolean
-            description: >-
-              Whether this step executes. When omitted, the step is enabled. Set to false to keep
-              the step in the workflow but skip execution.
-          - $ref: '#/$defs/varPlaceholder'
-        description: >-
-          Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and
-          validated at run start.
-        title: Enabled
-      color:
-        type: string
-        pattern: ^#[0-9a-fA-F]{6}$
-        description: >-
-          Optional authored identity colour for this step. Not substituted: This structural field or
-          identity value stays as authored.
-        title: Color
       executionMode:
         oneOf:
           - type: string
@@ -1324,16 +1270,7 @@ $defs:
           placeholder is coerced and validated before dispatch.
         title: On Pass
       onFail:
-        oneOf:
-          - type: string
-            enum:
-              - continue
-              - stopWorkflow
-            default: stopWorkflow
-            description: >-
-              What to do when the script fails or returns is not matched. 'continue': log a warning
-              and advance the queue. 'stopWorkflow': halt execution (default).
-          - $ref: '#/$defs/varPlaceholder'
+        $ref: '#/$defs/stepOnFail'
         description: >-
           What to do when the script fails or returns is not matched. 'continue': log a warning and
           advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}}
@@ -1373,6 +1310,8 @@ $defs:
     required:
       - type
       - script
+    allOf:
+      - $ref: '#/$defs/stepDisplayProperties'
   endCondition:
     type: object
     description: >-
@@ -1875,6 +1814,7 @@ $defs:
       of step output.
     allOf:
       - $ref: '#/$defs/executionProperties'
+      - $ref: '#/$defs/stepLifecycleRuntime'
       - not:
           type: object
           required:
@@ -1884,41 +1824,10 @@ $defs:
           required:
             - trustedExternalRoots
       - properties:
-          startedAt:
-            type: number
-            description: Timestamp when the executor claimed this step for dispatch
-            title: Started At
-          stepId:
-            type: string
-            description: Stable internal identity for this queue step within its run
-            title: Step ID
-          completedAt:
-            type: number
-            description: >-
-              Timestamp when this prompt completed execution (set for all terminal states, not just
-              successful completion)
-            title: Completed At
-          terminalStatus:
-            type: string
-            enum:
-              - completed
-              - cancelled
-              - failed
-              - skipped
-              - noTurnStarted
-            description: >-
-              Terminal state of this prompt. Absent or 'completed' means successful completion.
-              'noTurnStarted' means the harness handled submitted input without beginning an AI
-              turn. Used to restore the correct visual status after a working file reload.
-            title: Terminal Status
           retryCount:
             type: number
             description: Number of retry attempts for this prompt
             title: Retry Count
-          elapsed:
-            type: number
-            description: Completed prompt duration in seconds
-            title: Elapsed
           contextWindowUsed:
             type: number
             description: Context window tokens in use, captured from the last completed output
@@ -1938,16 +1847,6 @@ $defs:
               - unknown
             description: Structured classification of the last harness/session failure for this prompt.
             title: Failure Kind
-          failureMessage:
-            type: string
-            description: Human-readable message describing the last harness/session failure.
-            title: Failure Message
-          terminalFailure:
-            type: boolean
-            description: >-
-              Whether a failed member remains terminal for its parallel group. False when a per-step
-              continue policy resolved the failure.
-            title: Terminal Failure
     unevaluatedProperties: false
   runtimeMetadata:
     type: object
@@ -2828,3 +2727,95 @@ $defs:
     description: >-
       A whole-value workflow variable placeholder. See
       https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
+  stepDisplayProperties:
+    type: object
+    properties:
+      name:
+        type: string
+        description: >-
+          Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the
+          dashboard shows a truncated preview of the prompt text. Not substituted: This structural
+          field or identity value stays as authored.
+        maxLength: 100
+        title: Name
+      enabled:
+        oneOf:
+          - type: boolean
+            description: >-
+              Whether this step executes. When omitted, the step is enabled. Set to false to keep
+              the step in the workflow but skip execution.
+          - $ref: '#/$defs/varPlaceholder'
+        description: >-
+          Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and
+          validated at run start.
+        title: Enabled
+      color:
+        type: string
+        pattern: ^#[0-9a-fA-F]{6}$
+        description: >-
+          Optional authored identity colour for this step. Not substituted: This structural field or
+          identity value stays as authored.
+        title: Color
+  stepOnFail:
+    oneOf:
+      - type: string
+        enum:
+          - continue
+          - stopWorkflow
+        default: stopWorkflow
+        description: >-
+          What to do when the script fails or returns is not matched. 'continue': log a warning and
+          advance the queue. 'stopWorkflow': halt execution (default).
+      - $ref: '#/$defs/varPlaceholder'
+    description: >-
+      What to do when the script fails or returns is not matched. 'continue': log a warning and
+      advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}}
+      placeholder is coerced and validated before dispatch.
+  managedWorktreeConfig:
+    type: string
+    minLength: 1
+    description: Named-worktree branch shorthand. The value must be a valid local Git branch name.
+  stepLifecycleRuntime:
+    type: object
+    properties:
+      startedAt:
+        type: number
+        description: Timestamp when the executor claimed this step for dispatch
+        title: Started At
+      stepId:
+        type: string
+        description: Stable internal identity for this queue step within its run
+        title: Step ID
+      completedAt:
+        type: number
+        description: >-
+          Timestamp when this prompt completed execution (set for all terminal states, not just
+          successful completion)
+        title: Completed At
+      terminalStatus:
+        type: string
+        enum:
+          - completed
+          - cancelled
+          - failed
+          - skipped
+          - noTurnStarted
+        description: >-
+          Terminal state of this prompt. Absent or 'completed' means successful completion.
+          'noTurnStarted' means the harness handled submitted input without beginning an AI turn.
+          Used to restore the correct visual status after a working file reload.
+        title: Terminal Status
+      elapsed:
+        type: number
+        description: Completed prompt duration in seconds
+        title: Elapsed
+      failureMessage:
+        type: string
+        description: Human-readable message describing the last harness/session failure.
+        title: Failure Message
+      terminalFailure:
+        type: boolean
+        description: >-
+          Whether a failed member remains terminal for its parallel group. False when a per-step
+          continue policy resolved the failure.
+        title: Terminal Failure

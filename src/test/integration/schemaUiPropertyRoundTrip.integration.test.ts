@@ -283,16 +283,25 @@ const rootProperties = () =>
     ])
   ).sort();
 
+const displayProperties = () =>
+  authorableProperties(definition("stepDisplayProperties"));
+
 const promptStepProperties = () =>
   Array.from(
     new Set([
       ...executionProperties(),
+      ...displayProperties(),
       ...authorableProperties(promptStepOwnBranch()),
     ])
   ).sort();
 
 const scriptStepProperties = () =>
-  authorableProperties(definition("scriptStep"));
+  Array.from(
+    new Set([
+      ...displayProperties(),
+      ...authorableProperties(definition("scriptStep")),
+    ])
+  ).sort();
 
 const promptStepSeed = () => ({ prompt: PROMPT_TEXT });
 const scriptStepSeed = () => ({ type: "script", script: SCRIPT_TEXT });

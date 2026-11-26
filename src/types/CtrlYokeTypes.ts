@@ -1224,35 +1224,32 @@ export interface ConditionEvaluationSummary {
  * Per-prompt runtime execution metadata.
  * Tracks execution state for individual prompts within a workflow.
  */
-export interface PromptRuntimeMetadata extends ExecutionProperties {
-  /** Preserves queue-index history ownership after an edited failure is rewound. */
-  rewoundFailure?: boolean;
-  /**
-   * Timestamp when the executor claimed this step for dispatch. This is not
-   * the timestamp when runtime metadata was written.
-   */
-  startedAt?: number;
-
+export interface StepLifecycleRuntime {
   /** Stable identity for this queue step within its run. */
   stepId?: string;
-
-  /** Timestamp when prompt completed (set for all terminal states, not just successful completion) */
+  /** Timestamp when the executor claimed this step for dispatch. */
+  startedAt?: number;
+  /** Timestamp when this prompt completed, for any terminal state. */
   completedAt?: number;
-
-  /**
-   * Terminal state of this prompt. Absent or 'completed' means successful completion.
-   * Used to restore the correct visual status after a working file reload.
-   */
+  /** Terminal state of this prompt. */
   terminalStatus?: PromptTerminalStatus;
+  /** Completed prompt duration in seconds. */
+  elapsed?: number;
+  /** Human-readable message describing the last harness/session failure. */
+  failureMessage?: string;
+  /** False when the failed step was resolved by its per-step continue policy. */
+  terminalFailure?: boolean;
+}
 
+export interface PromptRuntimeMetadata
+  extends ExecutionProperties, StepLifecycleRuntime {
+  /** Preserves queue-index history ownership after an edited failure is rewound. */
+  rewoundFailure?: boolean;
   /** Retry count if applicable */
   retryCount?: number;
 
   /** Session ID associated with the completed prompt output. */
   sessionId?: string;
-
-  /** Completed prompt duration in seconds. */
-  elapsed?: number;
 
   /** Context window usage captured from the last completed output. */
   contextWindowUsed?: number;
@@ -1261,14 +1258,8 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
   /** Structured runtime failure classification for this prompt attempt. */
   failureKind?: FailureKind;
 
-  /** Human-readable failure message persisted for UI/history display. */
-  failureMessage?: string;
-
   /** Source that detected the failure, when known. */
   failureSource?: import("./DashboardConstants").FailureSource;
-
-  /** False when the failed step was resolved by its per-step continue policy. */
-  terminalFailure?: boolean;
 }
 
 /**

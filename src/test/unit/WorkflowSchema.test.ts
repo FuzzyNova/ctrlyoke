@@ -130,6 +130,69 @@ suite("Workflow template schema", () => {
     );
   });
 
+  test("preserves extracted step schema definitions and their strictness", () => {
+    const validWorkflow = {
+      steps: [
+        {
+          prompt: "Prompt",
+          name: "Prompt name",
+          enabled: true,
+          color: "#123456",
+        },
+        {
+          type: "script",
+          script: "npm test",
+          name: "Script name",
+          enabled: "{{runScript}}",
+          color: "#abcdef",
+          onFail: "continue",
+          _runtime: {
+            stepId: "step-1",
+            startedAt: 1,
+            completedAt: 2,
+            terminalStatus: "completed",
+            elapsed: 1,
+            failureMessage: "",
+            terminalFailure: false,
+          },
+        },
+      ],
+      worktree: {
+        mode: "managed",
+        merge: false,
+        keep: true,
+        base: "main",
+        setup: "npm ci",
+      },
+    };
+    assert.strictEqual(
+      validate(validWorkflow),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({
+        steps: [{ type: "script", script: "x", onFail: "{{action}}" }],
+      }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    const invalids = [
+      { steps: [{ prompt: "x", unknownDisplay: true }] },
+      { steps: [{ type: "script", script: "x", unknownDisplay: true }] },
+      { steps: [{ type: "script", script: "x", onFail: "unknown" }] },
+      {
+        worktree: { mode: "managed", unknown: true },
+        steps: [{ prompt: "x" }],
+      },
+      { steps: [{ prompt: "x", _runtime: { stepId: "x", unknown: true } }] },
+    ];
+    for (const invalid of invalids) {
+      assert.strictEqual(validate(invalid), false, JSON.stringify(invalid));
+    }
+  });
+
   test("accepts schemaVersion and $schema on every closed workflow root and settings root", () => {
     const roots = [
       {

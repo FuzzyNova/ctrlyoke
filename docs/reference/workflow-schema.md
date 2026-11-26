@@ -370,6 +370,19 @@ Also includes every field from [Execution properties](#execution-properties).
 
 Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.
 
+### `prompt` {#prompt-step-prompt}
+
+- **Type:** `string`
+- **Required:** yes
+
+The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.&lt;kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.&lt;kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.
+
+### `_runtime` {#prompt-step-runtime}
+
+- **Type:** [Step runtime](/reference/run-files#step-runtime)
+
+Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.
+
 ### `name` {#prompt-step-name}
 
 - **Type:** `string`
@@ -395,19 +408,6 @@ Accepted forms:
 
 Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
-### `prompt` {#prompt-step-prompt}
-
-- **Type:** `string`
-- **Required:** yes
-
-The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.&lt;kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.&lt;kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.
-
-### `_runtime` {#prompt-step-runtime}
-
-- **Type:** [Step runtime](/reference/run-files#step-runtime)
-
-Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.
-
 ## Script step {#script-step}
 
 A workflow step that runs a shell script/command with no AI interaction.
@@ -418,31 +418,6 @@ A workflow step that runs a shell script/command with no AI interaction.
 - **Required:** yes
 
 Step type discriminator. Required, and must be "script", for script steps. Not substituted: This structural field or identity value stays as authored.
-
-### `name` {#script-step-name}
-
-- **Type:** `string`
-- **Constraints:** at most 100 characters
-
-Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
-
-### `enabled` {#script-step-enabled}
-
-- **Type:** `boolean` or `string`
-
-Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
-
-Accepted forms:
-
-- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
-
-### `color` {#script-step-color}
-
-- **Type:** `string`
-- **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
-
-Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
 ### `executionMode` {#script-step-executionmode}
 
@@ -569,6 +544,31 @@ Accepted forms:
 - **Type:** removed
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
+
+### `name` {#script-step-name}
+
+- **Type:** `string`
+- **Constraints:** at most 100 characters
+
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.
+
+### `enabled` {#script-step-enabled}
+
+- **Type:** `boolean` or `string`
+
+Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
+
+Accepted forms:
+
+- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
+
+### `color` {#script-step-color}
+
+- **Type:** `string`
+- **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
+
+Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
 ## Parallel group {#parallel-group}
 

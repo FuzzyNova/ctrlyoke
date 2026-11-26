@@ -220,6 +220,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         ],
         "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
       },
+      "prompt": {
+        "valueKind": "string",
+        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
+      },
       "name": {
         "valueKind": "string",
         "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
@@ -235,10 +239,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "color": {
         "valueKind": "string",
         "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
-      },
-      "prompt": {
-        "valueKind": "string",
-        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
       },
       "maxSteps": {
         "valueKind": "oneOf",
@@ -543,6 +543,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         ],
         "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
       },
+      "prompt": {
+        "valueKind": "string",
+        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
+      },
       "name": {
         "valueKind": "string",
         "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
@@ -558,10 +562,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "color": {
         "valueKind": "string",
         "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
-      },
-      "prompt": {
-        "valueKind": "string",
-        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
       }
     },
     "forbiddenKeys": [
@@ -579,22 +579,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "script"
         ],
         "description": "Step type discriminator. Required, and must be \"script\", for script steps. Not substituted: This structural field or identity value stays as authored."
-      },
-      "name": {
-        "valueKind": "string",
-        "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
-      },
-      "enabled": {
-        "valueKind": "oneOf",
-        "alternatives": [
-          "boolean",
-          "string"
-        ],
-        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
-      },
-      "color": {
-        "valueKind": "string",
-        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
       },
       "executionMode": {
         "valueKind": "string",
@@ -699,6 +683,22 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string"
         ],
         "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+      },
+      "name": {
+        "valueKind": "string",
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
+      },
+      "enabled": {
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
+      },
+      "color": {
+        "valueKind": "string",
+        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
       }
     },
     "forbiddenKeys": [

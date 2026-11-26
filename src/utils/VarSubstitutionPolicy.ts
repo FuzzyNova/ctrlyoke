@@ -196,7 +196,7 @@ export const VAR_SUBSTITUTION_POLICY = {
     RUN_START,
     VIEW.STEP,
     ["enabled"],
-    "/$defs/promptStep/allOf/1/properties/enabled/oneOf/0"
+    "/$defs/stepDisplayProperties/properties/enabled/oneOf/0"
   ),
   maxSteps: valueField(
     RUN_START,
@@ -274,7 +274,7 @@ export const VAR_SUBSTITUTION_POLICY = {
     DISPATCH,
     VIEW.STEP,
     ["onFail"],
-    "/$defs/scriptStep/properties/onFail/oneOf/0"
+    "/$defs/stepOnFail/oneOf/0"
   ),
   "steps[].errorBehavior.onError": valueField(
     DISPATCH,
