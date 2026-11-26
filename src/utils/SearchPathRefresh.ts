@@ -9,9 +9,8 @@
  * spawn inherits the stale PATH and fails with ENOENT, however often detection
  * is retried. Before a retry, this reads PATH the way a new terminal would —
  * the login shell on macOS/Linux, the Machine + User registry values on
- * Windows — and prepends the directories the current process lacks. Entries
- * already present keep their order, so nothing that resolved before resolves
- * differently now.
+ * Windows — and appends the directories the current process lacks, preserving
+ * the precedence of commands already resolvable from the current PATH.
  *
  * Node-only: no `vscode` import, so the CLI and MCP bundles can use it.
  */
@@ -185,7 +184,7 @@ export function findNewSearchPathEntries(
 }
 
 /**
- * Prepend PATH directories added since this process started to
+ * Append PATH directories added since this process started to
  * `process.env`, so every later spawn (version probes, harness PTYs, hooks)
  * finds a CLI installed after launch. Returns the directories it added.
  * Never throws: a shell that fails to answer leaves PATH unchanged.
@@ -218,7 +217,7 @@ export async function refreshProcessSearchPath(
   if (added.length === 0) {
     return [];
   }
-  env[pathKey] = [...added, ...(currentPath ? [currentPath] : [])].join(
+  env[pathKey] = [...(currentPath ? [currentPath] : []), ...added].join(
     delimiterFor(platform)
   );
   Log.info(

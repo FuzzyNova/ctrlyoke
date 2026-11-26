@@ -53,6 +53,7 @@ import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { analyzeWorkflowBundle } from "../../utils/WorkflowBundleAnalyzer";
 import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
+import { getTerminalFailureRetry } from "../../utils/StepStatusDerivation";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -61,6 +62,8 @@ import {
 import {
   execGit,
   execGitBuffer,
+  GIT_PATCH_FORMAT_OPTIONS,
+  gitProbeEnv,
   isNotGitRepositoryError,
 } from "../../utils/GitUtils";
 import { settleInterruptedRun } from "../../utils/InterruptedRunSettlement";
@@ -219,6 +222,7 @@ async function getContinuationInfo(
       baseCommit = (
         await execGit(["rev-parse", "--verify", "--quiet", "HEAD"], {
           cwd: executionRoot,
+          env: gitProbeEnv(),
         })
       ).stdout.trim();
     } catch (error) {
@@ -282,7 +286,8 @@ export async function getRunBundleExportPreview(
 
 async function collectWorkspaceChanges(
   executionRoot: string,
-  baseCommit: string
+  baseCommit: string,
+  excludedPaths: string[] = []
 ): Promise<{ patch: Buffer; files: string[] }> {
   const indexPath = path.join(
     os.tmpdir(),
@@ -291,10 +296,32 @@ async function collectWorkspaceChanges(
   const env = { ...process.env, GIT_INDEX_FILE: indexPath };
   try {
     await execGit(["read-tree", baseCommit], { cwd: executionRoot, env });
-    await execGit(["add", "-A"], { cwd: executionRoot, env });
+    const pathspecs = excludedPaths.flatMap((excludedPath) => {
+      const relativePath = path.relative(executionRoot, excludedPath);
+      if (
+        !relativePath ||
+        relativePath === ".." ||
+        relativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePath)
+      ) {
+        return [];
+      }
+      return [`:(exclude,literal)${relativePath.replace(/\\/g, "/")}`];
+    });
+    await execGit(["add", "-A", "--", ".", ...pathspecs], {
+      cwd: executionRoot,
+      env,
+    });
     const [{ stdout: patch }, { stdout: namesText }] = await Promise.all([
       execGitBuffer(
-        ["diff", "--cached", "--binary", "--full-index", baseCommit],
+        [
+          "diff",
+          "--cached",
+          "--binary",
+          "--full-index",
+          ...GIT_PATCH_FORMAT_OPTIONS,
+          baseCommit,
+        ],
         {
           cwd: executionRoot,
           env,
@@ -315,20 +342,14 @@ async function collectWorkspaceChanges(
 
 function getPendingStepCount(workingFile: WorkingFile): number {
   const steps = workingFile.steps ?? [];
-  const currentIndex = Math.min(
-    workingFile._runtime?.currentIndex ?? 0,
-    steps.length
-  );
+  const currentIndex = getContinuationQueueIndex(workingFile);
   return steps.length - currentIndex + (workingFile.finalStep ? 1 : 0);
 }
 
 function getNextStep(
   workingFile: WorkingFile
 ): RunBundleContinuation["nextStep"] {
-  const currentIndex = Math.min(
-    workingFile._runtime?.currentIndex ?? 0,
-    (workingFile.steps ?? []).length
-  );
+  const currentIndex = getContinuationQueueIndex(workingFile);
   const runtimeFinalStep = workingFile._runtime?.finalStep;
   if (
     currentIndex >= (workingFile.steps ?? []).length &&
@@ -346,6 +367,21 @@ function getNextStep(
   };
 }
 
+function getContinuationQueueIndex(workingFile: WorkingFile): number {
+  const steps = workingFile.steps ?? [];
+  const currentIndex = Math.min(
+    workingFile._runtime?.currentIndex ?? 0,
+    steps.length
+  );
+  const retry = getTerminalFailureRetry({
+    executionState: workingFile._runtime?.executionState,
+    currentIndex,
+    steps,
+    parallelGroups: workingFile.parallelGroups,
+  });
+  return retry?.headIndex ?? currentIndex;
+}
+
 async function writeChangesPatch(
   options: RunBundleExportOptions,
   executionRoot: string,
@@ -360,7 +396,8 @@ async function writeChangesPatch(
 
   const { patch, files } = await collectWorkspaceChanges(
     executionRoot,
-    baseCommit
+    baseCommit,
+    [stagingDir, path.resolve(options.bundleDir)]
   );
   const transformedPatch = redactPatchAddedLines(
     patch,
@@ -425,10 +462,11 @@ export async function exportRunBundle(
     worktree?.sourceCheckoutRoot,
     ...(worktree?.namedWorkspaceRoots.map((root) => root.fsPath) ?? []),
   ].filter((root): root is string => !!root);
+  const portableWorkspaceRoots = withRealPathSpellings(workspaceRoots);
   const transform = createBundleTransform(
     options,
     exactSecrets,
-    workspaceRoots
+    portableWorkspaceRoots
   );
   const continuationInfo = await getContinuationInfo(
     workingFile,
@@ -546,9 +584,11 @@ export async function exportRunBundle(
       exportedAt: (options.now?.() ?? new Date()).toISOString(),
       exportedByVersion: options.exportedByVersion,
       // Only the home rewrite: the reader should see which checkout this was.
-      sourceRoot: createPortablePathRewriter({ homeDir: options.homeDir })(
-        options.workspaceRoot
-      ),
+      sourceRoot: createPortablePathRewriter({
+        homeDirs: options.homeDir
+          ? withRealPathSpellings([options.homeDir])
+          : undefined,
+      })(options.workspaceRoot),
       lineage: transform.apply(
         {
           workflowName: descriptor.workflowName,
@@ -650,8 +690,10 @@ function createBundleTransform(
   workspaceRoots: readonly string[]
 ): BundleTransform {
   const rewrite = createPortablePathRewriter({
-    workspaceRoots,
-    homeDir: options.homeDir,
+    workspaceRoots: withRealPathSpellings(workspaceRoots),
+    homeDirs: options.homeDir
+      ? withRealPathSpellings([options.homeDir])
+      : undefined,
   });
   const byRule: Record<string, number> = {};
   const byFile: Record<string, number> = {};
@@ -711,6 +753,20 @@ function createBundleTransform(
     removedByFile: () => ({ ...byFile }),
     externalPaths: () => [...external].sort(),
   };
+}
+
+/** Include the filesystem spelling so paths recorded through symlinks match. */
+function withRealPathSpellings(roots: readonly string[]): string[] {
+  const expanded = new Set<string>();
+  for (const root of roots) {
+    expanded.add(root);
+    try {
+      expanded.add(fs.realpathSync.native(root));
+    } catch {
+      // A missing or inaccessible root can still match by its recorded spelling.
+    }
+  }
+  return [...expanded];
 }
 
 /** Redact added lines in valid UTF-8 text hunks; preserve all other patch bytes. */

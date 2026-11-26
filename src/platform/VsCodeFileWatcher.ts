@@ -5,6 +5,7 @@ import type {
   FileWatcher,
   FileWatcherFactory,
 } from "../core/HostPorts";
+import { pathsEqual } from "../utils/PathCasing";
 
 function normalizeAbsolutePath(filePath: string): string {
   return path.normalize(path.resolve(filePath));
@@ -17,7 +18,11 @@ class VsCodeFileWatcher implements FileWatcher {
 
   private readonly watcher: vscode.FileSystemWatcher;
 
-  constructor(basePath: string, glob: string) {
+  constructor(
+    basePath: string,
+    glob: string,
+    private readonly exactPath?: string
+  ) {
     const normalizedBasePath = normalizeAbsolutePath(basePath);
     this.watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(vscode.Uri.file(normalizedBasePath), glob)
@@ -55,7 +60,11 @@ class VsCodeFileWatcher implements FileWatcher {
     }
 
     const subscription = event((uri) => {
-      listener(normalizeAbsolutePath(uri.fsPath));
+      const filePath = normalizeAbsolutePath(uri.fsPath);
+      if (this.exactPath && !pathsEqual(filePath, this.exactPath)) {
+        return;
+      }
+      listener(filePath);
     });
     this.subscriptions.add(subscription);
 
@@ -71,5 +80,17 @@ class VsCodeFileWatcher implements FileWatcher {
 export class VsCodeFileWatcherFactory implements FileWatcherFactory {
   create(basePath: string, glob: string): FileWatcher {
     return new VsCodeFileWatcher(basePath, glob);
+  }
+
+  createForFile(absolutePath: string): FileWatcher {
+    const normalizedPath = normalizeAbsolutePath(absolutePath);
+    // `*` keeps the watch to the file's own directory (VS Code globs match
+    // dotfiles); events are then filtered to the exact path, so glob
+    // metacharacters in the basename are never interpreted.
+    return new VsCodeFileWatcher(
+      path.dirname(normalizedPath),
+      "*",
+      normalizedPath
+    );
   }
 }

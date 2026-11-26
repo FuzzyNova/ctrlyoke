@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
+import { isDeepStrictEqual } from "util";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -129,6 +130,7 @@ export interface TemplateInfo {
   author?: string;
   /** `_templateMeta.tags`: gallery keywords. */
   tags?: string[];
+  communityInstallFile?: string;
 }
 
 /** Parsed shape of a `_templateMeta` block in a template file */
@@ -137,6 +139,7 @@ interface ParsedTemplateMeta {
   description?: string;
   author?: string;
   tags?: string[];
+  communityInstallFile?: string;
   variables: Record<string, Partial<Omit<TemplateVariable, "name">>>;
 }
 
@@ -233,6 +236,8 @@ export class TemplateManager {
       if (typeof meta["description"] === "string")
         result.description = meta["description"];
       if (typeof meta["author"] === "string") result.author = meta["author"];
+      if (typeof meta["communityInstallFile"] === "string")
+        result.communityInstallFile = meta["communityInstallFile"];
       if (
         Array.isArray(meta["tags"]) &&
         meta["tags"].every((tag) => typeof tag === "string")
@@ -765,6 +770,77 @@ export class TemplateManager {
     return JSON.stringify(template, null, 2);
   }
 
+  /** Add install provenance while preserving YAML comments and formatting. */
+  private addCommunityInstallMarker(
+    content: string,
+    parsed: Record<string, unknown>,
+    format: WorkflowFileFormat,
+    marker: string
+  ): string {
+    const metadata = parsed["_templateMeta"] as Record<string, unknown>;
+    metadata.communityInstallFile = marker;
+    if (format === WORKFLOW_FILE_FORMATS.JSON) {
+      return this.serializeTemplate(parsed, format);
+    }
+
+    const lines = content.split(/(?<=\n)/);
+    const metaIndex = lines.findIndex((line) =>
+      /^_templateMeta\s*:\s*(?:#.*)?(?:\r?\n)?$/.test(line)
+    );
+    if (metaIndex >= 0) {
+      const nextTopLevel = lines.findIndex(
+        (line, index) =>
+          index > metaIndex && /^(?!\s)(?:[^\s#][^:]*):/.test(line)
+      );
+      const end = nextTopLevel < 0 ? lines.length : nextTopLevel;
+      // The first key line (not a comment, whose indentation is free) sets
+      // the mapping's indentation.
+      const childIndex = lines.findIndex(
+        (line, index) =>
+          index > metaIndex && index < end && /^\s+[^\s#]/.test(line)
+      );
+      if (childIndex >= 0) {
+        const indentation = lines[childIndex].match(/^\s+/)?.[0] ?? "  ";
+        const newline = content.includes("\r\n") ? "\r\n" : "\n";
+        const markerLine = `${indentation}communityInstallFile: ${JSON.stringify(marker)}${newline}`;
+        // Only a key at the mapping's own indentation; a deeper line could be
+        // block-scalar text or a nested mapping.
+        const existingIndex = lines.findIndex(
+          (line, index) =>
+            index > metaIndex &&
+            index < end &&
+            line.startsWith(indentation) &&
+            /^communityInstallFile\s*:/.test(line.slice(indentation.length))
+        );
+        if (existingIndex >= 0) lines[existingIndex] = markerLine;
+        else {
+          if (
+            end === lines.length &&
+            lines[end - 1] &&
+            !/\r?\n$/.test(lines[end - 1])
+          ) {
+            lines[end - 1] += newline;
+          }
+          lines.splice(end, 0, markerLine);
+        }
+        const edited = lines.join("");
+        // A line edit can't see every YAML layout; keep it only when it
+        // parses back to exactly the marked document.
+        try {
+          const reparsed = loadYamlDocument(edited, {
+            schema: WORKFLOW_YAML_SCHEMA,
+          });
+          if (isDeepStrictEqual(reparsed, parsed)) return edited;
+        } catch {
+          // Fall through to the structured fallback.
+        }
+      }
+    }
+
+    // Flow mappings and unusual metadata layouts need a structured fallback.
+    return this.serializeTemplate(parsed, format);
+  }
+
   /**
    * Create a custom template by cloning an existing template. Keeping the base
    * in the normal template registry means every available template — built-in
@@ -862,6 +938,7 @@ export class TemplateManager {
       ...existingMeta,
       name: templateName,
     };
+    delete copiedMeta.communityInstallFile;
     if (variablesToCopy.size > 0) copiedMeta.variables = copiedVariables;
     const template = {
       ...base,
@@ -904,12 +981,20 @@ export class TemplateManager {
       format
     );
 
+    const workflowMeta =
+      workflowContent["_templateMeta"] &&
+      typeof workflowContent["_templateMeta"] === "object" &&
+      !Array.isArray(workflowContent["_templateMeta"])
+        ? { ...(workflowContent["_templateMeta"] as Record<string, unknown>) }
+        : {};
+    delete workflowMeta.communityInstallFile;
     const template = {
+      ...workflowContent,
       _templateMeta: {
+        ...workflowMeta,
         name: templateName,
         description: "",
       },
-      ...workflowContent,
     };
 
     await fs.promises.writeFile(
@@ -925,8 +1010,9 @@ export class TemplateManager {
    * Install a template someone else wrote (a community template downloaded
    * from the network) as a new custom template. The content is untrusted, so
    * it must parse, declare `_templateMeta`, and pass the workflow schema
-   * before anything is written; it is then written byte for byte, so the
-   * author's comments and layout survive.
+   * before anything is written; absent provenance changes, it is written byte
+   * for byte. YAML provenance is inserted into the metadata block to preserve
+   * comments and layout, with serialization only as a fallback.
    *
    * @param templateName Name for the installed template (its file basename)
    * @param scope Where to store the template
@@ -938,7 +1024,8 @@ export class TemplateManager {
     templateName: string,
     scope: TemplateScope,
     format: WorkflowFileFormat,
-    content: string
+    content: string,
+    communityInstallFile?: string
   ): Promise<{ path: string; templateId: string }> {
     if (Buffer.byteLength(content, "utf-8") > MAX_INSTALLED_TEMPLATE_BYTES) {
       throw new Error(
@@ -964,6 +1051,14 @@ export class TemplateManager {
     // warnings, the same leniency the template loader applies.
     this.promptFileParser.getSchemaWarnings(parsed);
 
+    if (communityInstallFile) {
+      content = this.addCommunityInstallMarker(
+        content,
+        parsed as Record<string, unknown>,
+        format,
+        communityInstallFile
+      );
+    }
     const fullPath = await this.prepareCustomTemplatePath(
       templateName,
       scope,
@@ -978,6 +1073,95 @@ export class TemplateManager {
       path: fullPath,
       templateId: buildCustomTemplateId(scope, templateName),
     };
+  }
+
+  /** Check for a local pre-provenance copy without needing library content. */
+  async hasUnmarkedCommunityInstallCandidate(
+    templateName: string,
+    scope: TemplateScope,
+    expectedFile: string
+  ): Promise<boolean> {
+    this.validateTemplateName(templateName);
+    const directory = this.getTemplatesPathForScope(scope);
+    if (!directory) return false;
+    let content: string;
+    try {
+      content = await fs.promises.readFile(
+        path.join(directory, expectedFile),
+        "utf-8"
+      );
+    } catch {
+      return false;
+    }
+    let parsed: unknown;
+    try {
+      // This is only a download hint, not a validity check. The exact-byte
+      // migration gate below decides whether any file can actually be marked.
+      parsed = jsYaml.load(content);
+    } catch {
+      return true;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return true;
+    const metadata = (parsed as Record<string, unknown>)["_templateMeta"];
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return true;
+    return (
+      typeof (metadata as Record<string, unknown>).communityInstallFile !==
+      "string"
+    );
+  }
+
+  /** Mark an exact, pre-provenance community copy as an install in place. */
+  async markLegacyCommunityInstall(
+    templateName: string,
+    scope: TemplateScope,
+    format: WorkflowFileFormat,
+    expectedFile: string,
+    libraryContent: string
+  ): Promise<boolean> {
+    this.validateTemplateName(templateName);
+    const directory = this.getTemplatesPathForScope(scope);
+    if (!directory) return false;
+    const filePath = path.join(directory, expectedFile);
+    let current: Buffer;
+    try {
+      current = await fs.promises.readFile(filePath);
+    } catch {
+      return false;
+    }
+    if (!current.equals(Buffer.from(libraryContent, "utf-8"))) return false;
+
+    let parsed: unknown;
+    try {
+      parsed = loadYamlDocument(libraryContent, {
+        schema: WORKFLOW_YAML_SCHEMA,
+      });
+    } catch {
+      return false;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return false;
+    const metadata = (parsed as Record<string, unknown>)["_templateMeta"];
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return false;
+    const meta = metadata as Record<string, unknown>;
+    if (typeof meta.communityInstallFile === "string") return false;
+
+    // Recheck immediately before writing so an edit made during the fetch is preserved.
+    const latest = await fs.promises.readFile(filePath);
+    if (!latest.equals(current)) return false;
+    await fs.promises.writeFile(
+      filePath,
+      this.addCommunityInstallMarker(
+        libraryContent,
+        parsed as Record<string, unknown>,
+        format,
+        expectedFile
+      ),
+      "utf-8"
+    );
+    return true;
   }
 
   /**
@@ -998,6 +1182,35 @@ export class TemplateManager {
     }
     await fs.promises.unlink(templatePath);
     return templatePath;
+  }
+
+  async uninstallCommunityTemplate(
+    templateName: string,
+    scope: TemplateScope
+  ): Promise<string> {
+    this.validateTemplateName(templateName);
+    const directory = this.getTemplatesPathForScope(scope);
+    if (!directory)
+      throw new Error(`Template is not installed: ${templateName}`);
+    for (const extension of CUSTOM_TEMPLATE_EXTENSIONS) {
+      const expectedFile = `${templateName}${extension}`;
+      const templatePath = path.join(directory, expectedFile);
+      let content: string;
+      try {
+        content = await fs.promises.readFile(templatePath, "utf-8");
+      } catch {
+        continue;
+      }
+      if (
+        this.parseTemplateMeta(content).communityInstallFile === expectedFile
+      ) {
+        await fs.promises.unlink(templatePath);
+        return templatePath;
+      }
+    }
+    throw new Error(
+      `Template "${templateName}" is not recorded as a community install and was not deleted. Delete it from the template manager if you want to remove it.`
+    );
   }
 
   /**
@@ -1071,6 +1284,9 @@ export class TemplateManager {
               source,
               ...(meta.author ? { author: meta.author } : {}),
               ...(meta.tags ? { tags: meta.tags } : {}),
+              ...(meta.communityInstallFile === file
+                ? { communityInstallFile: meta.communityInstallFile }
+                : {}),
             });
             seenNames.add(name);
           } catch (error) {

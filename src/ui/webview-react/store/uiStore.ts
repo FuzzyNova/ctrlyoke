@@ -44,7 +44,10 @@ import type {
   WorkspaceWorktreeOwnership,
   WorkflowSchedule,
 } from "@root/types/CtrlYokeTypes";
-import type { CreateWorkflowVariantRequest } from "@root/types/WebviewMessageTypes";
+import type {
+  CreateWorkflowVariantRequest,
+  TemplateCatalogItem,
+} from "@root/types/WebviewMessageTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
 import type { RunImportPreview } from "@root/types/RunImportPreviewTypes";
 import type { WorkspaceEntrySort } from "@root/types/HostedWorkspaceViewerTypes";
@@ -234,15 +237,9 @@ export interface TemplateVariable {
 /**
  * Template information for new workflow modal
  */
-export interface TemplateInfo {
-  id: string;
-  name: string;
-  description: string;
+export type TemplateInfo = Omit<TemplateCatalogItem, "variables"> & {
   variables?: TemplateVariable[];
-  isBuiltIn: boolean;
-  /** Where a custom template was discovered; undefined for built-ins. */
-  source?: "user" | "workspace";
-}
+};
 
 /**
  * Data for the Save Workflow dialog

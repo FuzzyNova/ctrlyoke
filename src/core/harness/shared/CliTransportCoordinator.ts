@@ -1009,6 +1009,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                       await controlChannel.sendUserMessage(text);
                     } catch (error) {
                       releaseReservation();
+                      if (!controlTurnActive && !hasOutstandingSteers()) {
+                        closeAfterTurnEnd();
+                      }
                       source?.logTail?.discardDispatchedUserMessage(text);
                       stdoutEventPump?.discardDispatchedUserMessage(text);
                       throw error;
@@ -1108,7 +1111,26 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
               }
             : undefined,
         });
-        await controlReady;
+        if (controlReady) {
+          // spawnProcess resolves only after the child exits. Closing the
+          // channel rejects handshake requests that can no longer receive a
+          // response from stdout.
+          await closeControlChannel();
+          try {
+            await controlReady;
+          } catch (error) {
+            // A classified handshake failure (for example SESSION_REJECTED,
+            // which drives the retry-without-resume fallback) keeps its kind.
+            if (error instanceof CliTransportError) throw error;
+            const stderr = result.stderr.trim();
+            throw new CliTransportError(
+              `Headless control handshake failed after the process exited with code ${result.exitCode}: ${getErrorMessage(error)}${stderr ? `; stderr: ${stderr}` : ""}`,
+              FAILURE_KINDS.HARNESS_ERROR,
+              { cause: error },
+              FAILURE_SOURCES.HEADLESS_PARSE
+            );
+          }
+        }
       } finally {
         const tail = liveOutputRedactor?.flush();
         if (tail) {

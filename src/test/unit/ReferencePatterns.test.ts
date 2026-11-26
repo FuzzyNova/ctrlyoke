@@ -6,6 +6,7 @@ import {
   createReferencePatterns,
 } from "../../utils/ReferencePatterns";
 import { findContextReferenceMatches } from "../../utils/PromptReferenceScanner";
+import { parseAtReferences } from "../../utils/FileReferenceParser";
 import { findWordStartTriggerIndex } from "../../utils/ReferenceBoundary";
 
 /** Collect capture group 1 for every match of `pattern` in `text`. */
@@ -84,6 +85,17 @@ suite("ReferencePatterns", () => {
       assert.deepStrictEqual(paths(fullFile, "mail name@example.com now"), []);
     });
 
+    test("does not decorate @ references inside paths or URLs", () => {
+      const { fullFile } = createReferencePatterns();
+      assert.deepStrictEqual(
+        paths(
+          fullFile,
+          "node_modules/@types/node/index.d.ts https://medium.com/@alice/post"
+        ),
+        []
+      );
+    });
+
     test("keeps an embedded @ inside a single reference", () => {
       const { fullFile } = createReferencePatterns();
       assert.deepStrictEqual(paths(fullFile, "@myimage@512x512.png"), [
@@ -107,6 +119,42 @@ suite("ReferencePatterns", () => {
         ),
         ["scripts/build", ".github/CODEOWNERS", "src/bin/ctrlyoke"]
       );
+    });
+
+    test("ignores prose punctuation after bare names without a path marker", () => {
+      for (const text of [
+        "Thanks @team.",
+        "Ask @copilot... ok",
+        "see @Makefile).",
+      ]) {
+        assert.deepStrictEqual(findContextReferenceMatches(text), []);
+      }
+    });
+
+    test("scanner and runtime agree on unquoted and quoted file references", () => {
+      const inputs = [
+        "Thanks @team.",
+        "Ask @copilot... ok",
+        "see @Makefile).",
+        "@src/a.ts.",
+        "@a.b",
+        "@foo-.x",
+        "@src/dir/",
+        'Read @"Makefile" now',
+        "Use @src/file.ts, then @docs/readme.",
+      ];
+      for (const input of inputs) {
+        assert.deepStrictEqual(
+          findContextReferenceMatches(input)
+            .filter(({ type }) => type === "file" || type === "directory")
+            .map(({ type, path }) => ({ type, path })),
+          parseAtReferences(input).map(({ path, isDirectory }) => ({
+            type: isDirectory ? "directory" : "file",
+            path,
+          })),
+          input
+        );
+      }
     });
   });
 
@@ -206,6 +254,15 @@ suite("ReferencePatterns", () => {
     assert.deepStrictEqual(findContextReferenceMatches("café@src/a.ts"), []);
     assert.deepStrictEqual(findWordStartTriggerIndex("café@", "@"), -1);
     assert.deepStrictEqual(findWordStartTriggerIndex("東京/skill", "/"), -1);
+  });
+
+  test("@ completion accepts opening punctuation and rejects path separators", () => {
+    assert.strictEqual(findWordStartTriggerIndex("(@", "@"), 1);
+    assert.strictEqual(findWordStartTriggerIndex('"@', "@"), 1);
+    assert.strictEqual(findWordStartTriggerIndex(" @", "@"), 1);
+    for (const prefix of ["/", "\\", ".", ":"]) {
+      assert.strictEqual(findWordStartTriggerIndex(`${prefix}@`, "@"), -1);
+    }
   });
 
   suite("quoted variants", () => {

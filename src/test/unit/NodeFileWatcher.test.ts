@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import { watch, type FSWatcher } from "chokidar";
@@ -48,6 +49,46 @@ suite("Node file watcher exclusions", () => {
         );
       }
     );
+  });
+});
+
+suite("Node file watcher single-file scope", () => {
+  test("createForFile does not walk sibling subtrees", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-file-watch-scope-")
+    );
+    for (let index = 0; index < 5; index += 1) {
+      await fs.mkdir(path.join(root, `dir${index}`, "nested"), {
+        recursive: true,
+      });
+    }
+    const targetPath = path.join(root, "[id].tsx");
+    await fs.writeFile(targetPath, "initial");
+    let chokidarWatcher: FSWatcher | undefined;
+    const factory = new NodeFileWatcherFactory((paths, options) => {
+      chokidarWatcher = watch(paths, options);
+      return chokidarWatcher;
+    });
+    const watcher = factory.createForFile(targetPath);
+    try {
+      assert.ok(chokidarWatcher);
+      await new Promise<void>((resolve) =>
+        chokidarWatcher!.once("ready", () => resolve())
+      );
+      const watchedDirectories = Object.keys(chokidarWatcher.getWatched()).map(
+        (directory) => path.resolve(directory)
+      );
+      assert.ok(
+        watchedDirectories.every(
+          (directory) => !directory.startsWith(path.join(root, "dir"))
+        ),
+        `single-file watch walked subdirectories: ${watchedDirectories.join(", ")}`
+      );
+    } finally {
+      watcher.dispose();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
 

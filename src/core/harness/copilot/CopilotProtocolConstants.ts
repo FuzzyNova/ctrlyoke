@@ -49,10 +49,17 @@ export const COPILOT_ACP_SESSION_EVENTS = [
 
 export const COPILOT_EVENT_TYPES = {
   RESULT: "result",
+  AUTO_MODE_RESOLVED: "session.auto_mode_resolved",
   SESSION_INFO: "session.info",
+  USAGE_RECORD: "session.usage_record",
   SUBAGENT_STARTED: "subagent.started",
   SUBAGENT_COMPLETED: "subagent.completed",
   SUBAGENT_FAILED: "subagent.failed",
+} as const;
+
+/** `session.usage_record` `usage.initiator` values. */
+export const COPILOT_USAGE_INITIATORS = {
+  SUB_AGENT: "sub-agent",
 } as const;
 
 export const COPILOT_SESSION_INFO_TYPES = {

@@ -2299,6 +2299,50 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("rejects unknown harness ids without capabilities and accepts known ids", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "harness-id-without-capabilities"
+    );
+    try {
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      const validHarness = HARNESS_IDS.CODEX_CLI;
+      const errorPattern = /Invalid harness 'bogus-harness'.*Valid harnesses:/;
+
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ prompt: "invalid append", harness: "bogus-harness" }],
+        }),
+        errorPattern
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { harness: "bogus-harness" },
+        }),
+        errorPattern
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "valid append", harness: validHarness }],
+      });
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(
+        (persisted.steps?.[4] as PromptStep).harness,
+        validHarness
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("rejects fields outside the MCP edit_step capability boundary", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun(
@@ -2848,6 +2892,49 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       }),
       /clearProperties\[0\] must be one of/
     );
+  });
+
+  test("rejects inherited condition preset names without changing the run file", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-prototype-names",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = { committed: { script: "git status" } };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    for (const name of ["constructor", "__proto__"]) {
+      const beforeAppend = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ prompt: "must reject", endCondition: { use: name } }],
+        }),
+        /unknown condition preset/
+      );
+      assert.strictEqual(
+        await fs.readFile(run.runFilePath, "utf8"),
+        beforeAppend
+      );
+
+      const beforeEdit = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 0,
+          updates: { endCondition: { use: name } },
+        }),
+        /unknown condition preset/
+      );
+      assert.strictEqual(
+        await fs.readFile(run.runFilePath, "utf8"),
+        beforeEdit
+      );
+    }
   });
 
   test("caps preset retries and validates declared parameter values", async () => {
@@ -3897,6 +3984,29 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(persisted.steps?.length, 2);
     assert.strictEqual(status.metadata.maxSteps, -1);
     assert.strictEqual(status.metadata.remainingSteps, -1);
+  });
+
+  test("workflow_status resolves a templated maxSteps cap", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "templated-status-cap",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 2,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.maxSteps = "{{cap}}" as unknown as number;
+    workingFile.vars = { cap: "5" };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.strictEqual(status.metadata.maxSteps, 5);
+    assert.strictEqual(status.metadata.remainingSteps, 3);
   });
 
   test("includes a persisted guardrail stop reason in workflow_status", async () => {

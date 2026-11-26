@@ -250,6 +250,12 @@ function createHost(
         onDidDelete: () => ({ dispose: () => undefined }),
         dispose: () => undefined,
       }),
+      createForFile: () => ({
+        onDidCreate: () => ({ dispose: () => undefined }),
+        onDidChange: () => ({ dispose: () => undefined }),
+        onDidDelete: () => ({ dispose: () => undefined }),
+        dispose: () => undefined,
+      }),
     },
   });
   internal.externalRunWatchCoordinator = coordinator;

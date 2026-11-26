@@ -499,6 +499,14 @@ async function restoreSnapshotAtomic(
   workingFilePath: string,
   content: Buffer
 ): Promise<void> {
+  const current = JSON.parse(
+    await fs.readFile(workingFilePath, "utf8")
+  ) as WorkingFile;
+  assertWritableSchema(
+    PERSISTED_STORES.RUN_FILE,
+    current._runtime,
+    workingFilePath
+  );
   try {
     await writeFileAtomic(
       workingFilePath,
@@ -2802,9 +2810,7 @@ export class WorkingFileManager {
         steps: this.queueAccess.getSteps(),
         parallelGroups: this.queueAccess.getParallelGroups?.() ?? [],
       }).parallelGroups;
-      const tokenTotals =
-        this.queueAccess.getTokenTotals?.() ??
-        workingFile._runtime?.tokenTotals;
+      const tokenTotals = this.queueAccess.getTokenTotals?.();
 
       // The finalStep definition remains disk-authoritative, but its per-step
       // execution metadata is owned by PromptQueue just like queue-step runtime.
@@ -2838,7 +2844,29 @@ export class WorkingFileManager {
       const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
       const activeParallelGroup =
         this.queueAccess.getActiveParallelGroupRuntime?.();
+      const {
+        finalStep: _diskFinalStep,
+        activeParallelGroup: _diskActiveParallelGroup,
+        pendingRewind: _diskPendingRewind,
+        tokenTotals: _diskTokenTotals,
+        startTime: _diskStartTime,
+        pausedTime: _diskPausedTime,
+        totalPausedDuration: _diskTotalPausedDuration,
+        executionEndTime: _diskExecutionEndTime,
+        stopReason: _diskStopReason,
+        ...diskRuntime
+      } = workingFile._runtime ?? {};
+      void _diskFinalStep;
+      void _diskActiveParallelGroup;
+      void _diskPendingRewind;
+      void _diskTokenTotals;
+      void _diskStartTime;
+      void _diskPausedTime;
+      void _diskTotalPausedDuration;
+      void _diskExecutionEndTime;
+      void _diskStopReason;
       workingFile._runtime = {
+        ...diskRuntime,
         currentIndex: this.queueAccess.getCurrentIndex(),
         executionState: this.queueAccess.getStatus(),
         ...(tokenTotals ? { tokenTotals } : {}),
@@ -2847,12 +2875,6 @@ export class WorkingFileManager {
         ...(activeParallelGroup ? { activeParallelGroup } : {}),
         ...(this.queueAccess.getPendingRewind?.()
           ? { pendingRewind: this.queueAccess.getPendingRewind() }
-          : {}),
-        ...(workingFile._runtime?.worktree
-          ? { worktree: workingFile._runtime.worktree }
-          : {}),
-        ...(workingFile._runtime?.lastActivityAt !== undefined
-          ? { lastActivityAt: workingFile._runtime.lastActivityAt }
           : {}),
       };
 

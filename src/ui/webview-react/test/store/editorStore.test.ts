@@ -335,6 +335,33 @@ describe("moveStepToNewStepDraft", () => {
     expect(store().scriptCommand).toBe("npm test");
     expect(store().selectionTarget.kind).toBe("newPrompt");
   });
+
+  it("keeps a replaced script draft through later edit-mode round trips", () => {
+    store().setStepType(STEP_TYPES.SCRIPT);
+    store().setScriptCommand("npm run deploy -- --prod");
+
+    const preservedScriptDraft = store().moveStepToNewStepDraft(
+      0,
+      makePromptStep(),
+      false
+    );
+
+    expect(preservedScriptDraft).toBe(true);
+    expect(store().stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(store().scriptCommand).toBe("npm run deploy -- --prod");
+    expect(store().savedNewPromptState).toBeNull();
+    expect(usePromptHistoryStore.getState().entries).toMatchObject([
+      { text: "Do something useful", kind: PROMPT_HISTORY_KINDS.DRAFT },
+    ]);
+
+    store().enterEditMode(1, makePromptStep({ prompt: "other" }));
+    store().enterNewPromptMode();
+
+    expect(store().stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(store().scriptCommand).toBe("npm run deploy -- --prod");
+    expect(store().promptText).toBe("");
+    expect(store().savedNewPromptState).toBeNull();
+  });
 });
 
 describe("loadRecentPrompt", () => {
@@ -357,6 +384,19 @@ describe("loadRecentPrompt", () => {
 
     expect(store().promptText).toBe("earlier prompt");
     expect(usePromptHistoryStore.getState().entries).toEqual([]);
+  });
+
+  it("remembers dirty edits to an existing step before replacing them", () => {
+    store().enterEditMode(0, makePromptStep({ prompt: "saved text" }));
+    store().setPromptText("unsaved careful edit");
+
+    store().loadRecentPrompt("earlier prompt");
+
+    expect(store().promptText).toBe("earlier prompt");
+    expect(usePromptHistoryStore.getState().entries[0]).toMatchObject({
+      text: "unsaved careful edit",
+      kind: PROMPT_HISTORY_KINDS.DRAFT,
+    });
   });
 });
 

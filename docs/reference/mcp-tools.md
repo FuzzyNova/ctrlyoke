@@ -55,7 +55,7 @@ A headless step cannot wait for background work: the harness process, and anythi
     cannot be displaced.
 - `source`: optional label describing why the steps were added.
 
-When `harness` or `model` is set, it is checked against the installed harnesses and their models (when that information is available). The run's total step count cannot exceed its effective `maxSteps` cap. A rejected append returns an error such as `Step limit reached: this run has 30/30 steps (workflow maxSteps: 30). Do not retry; finish without appending.` The message identifies whether the cap came from the workflow's `maxSteps` or the global `queue.maxSteps` setting.
+Unknown harness ids are always rejected. When `harness` or `model` is set, it is also checked against the installed harnesses and their models when that information is available. The run's total step count cannot exceed its effective `maxSteps` cap. A rejected append returns an error such as `Step limit reached: this run has 30/30 steps (workflow maxSteps: 30). Do not retry; finish without appending.` The message identifies whether the cap came from the workflow's `maxSteps` or the global `queue.maxSteps` setting.
 
 Example:
 

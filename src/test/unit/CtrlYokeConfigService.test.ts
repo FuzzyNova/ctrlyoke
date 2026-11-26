@@ -12,6 +12,7 @@ import {
   type ConfigBackend,
 } from "../../config/CtrlYokeConfigService";
 import { FileConfigBackend } from "../../config/FileConfigBackend";
+import { WorkspaceSettingsTrustStore } from "../../config/WorkspaceSettingsTrustStore";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
@@ -826,6 +827,35 @@ suite("CtrlYokeConfigService workspace sensitive settings", () => {
     );
   });
 
+  test("reloads merged settings when another trust store changes decisions", async () => {
+    const settingsDir = path.join(tempDir, ".ctrlyoke");
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(settingsDir, "settings.json"),
+      JSON.stringify({ terminal: { shellExecutable: "./tools/evil.exe" } })
+    );
+    const trustFile = path.join(tempDir, "workspace-settings-trust.json");
+    const hostTrust = new WorkspaceSettingsTrustStore(trustFile);
+    const cliTrust = new WorkspaceSettingsTrustStore(trustFile);
+    service.setWorkspaceSettingsTrust(hostTrust);
+    service.setWorkspaceBackend(
+      new FileConfigBackend(path.join(settingsDir, "settings.json"), tempDir)
+    );
+
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+    const state = service.getWorkspaceSensitiveSettingStates()[0]!;
+    const identity = service.getWorkspaceTrustIdentity()!;
+
+    await cliTrust.setDecisions(identity, [state.request], "allow");
+    assert.strictEqual(
+      service.getAll().terminal.shellExecutable,
+      "./tools/evil.exe"
+    );
+
+    await cliTrust.setDecisions(identity, [state.request], "deny");
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+  });
+
   test("applies an allowed value and ignores a denied one", async () => {
     service.setWorkspaceBackend(
       workspaceBackend({
@@ -959,6 +989,94 @@ suite("CtrlYokeConfigService workspace sensitive settings", () => {
     assert.deepStrictEqual(
       service.getAll().defaults.hooks.map((hook) => hook.command),
       ["./mine.sh"]
+    );
+  });
+
+  test("approves a new whole-value sensitive request when the user writes a sub-path", async () => {
+    const settingsFile = path.join(tempDir, ".ctrlyoke", "settings.json");
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    service.setWorkspaceBackend(new FileConfigBackend(settingsFile, tempDir));
+
+    await service.set(
+      "defaults.toolPermissions.mode",
+      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+      "workspace"
+    );
+
+    const [state] = service.getWorkspaceSensitiveSettingStates();
+    assert.strictEqual(state?.request.settingPath, "defaults.toolPermissions");
+    assert.strictEqual(state?.decision, "allow");
+    assert.strictEqual(
+      service.getAll().defaults.toolPermissions?.mode,
+      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+    );
+  });
+
+  test("approves every later sub-path write over a value the user already approved", async () => {
+    const settingsFile = path.join(tempDir, ".ctrlyoke", "settings.json");
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    service.setWorkspaceBackend(new FileConfigBackend(settingsFile, tempDir));
+
+    await service.set(
+      "defaults.toolPermissions.mode",
+      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+      "workspace"
+    );
+    await service.set(
+      "defaults.toolPermissions.allowedTools",
+      ["Bash"],
+      "workspace"
+    );
+
+    const [state] = service.getWorkspaceSensitiveSettingStates();
+    assert.strictEqual(state?.request.settingPath, "defaults.toolPermissions");
+    assert.strictEqual(state?.decision, "allow");
+    assert.deepStrictEqual(
+      service.getAll().defaults.toolPermissions?.allowedTools,
+      ["Bash"]
+    );
+  });
+
+  test("keeps an externally committed whole-value request pending after a sub-path write", async () => {
+    service.setUserBackend(
+      makeBackend({
+        terminal: { shellExecutable: "pwsh" } as never,
+        defaults: {
+          toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
+        } as never,
+      })
+    );
+    const settingsFile = path.join(tempDir, ".ctrlyoke", "settings.json");
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    fs.writeFileSync(
+      settingsFile,
+      JSON.stringify({
+        defaults: {
+          toolPermissions: {
+            mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+            allowedTools: ["Bash"],
+          },
+        },
+      })
+    );
+    service.setWorkspaceBackend(new FileConfigBackend(settingsFile, tempDir));
+
+    const before = service.getWorkspaceSensitiveSettingStates()[0];
+    assert.strictEqual(before?.request.settingPath, "defaults.toolPermissions");
+    assert.strictEqual(before?.decision, undefined);
+
+    await service.set(
+      "defaults.toolPermissions.mode",
+      PERMISSION_MODES.CUSTOM,
+      "workspace"
+    );
+
+    const [state] = service.getWorkspaceSensitiveSettingStates();
+    assert.strictEqual(state?.request.settingPath, "defaults.toolPermissions");
+    assert.strictEqual(state?.decision, undefined);
+    assert.strictEqual(
+      service.getAll().defaults.toolPermissions?.mode,
+      PERMISSION_MODES.CUSTOM
     );
   });
 

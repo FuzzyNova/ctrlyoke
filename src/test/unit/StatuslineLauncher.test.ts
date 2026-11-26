@@ -174,6 +174,27 @@ suite("StatuslineLauncher", () => {
     }
   });
 
+  test("the copied set includes every sibling the compiled scripts require", async () => {
+    // A sibling missing from the set is never deployed, so the launcher's
+    // copy of the wrapper throws MODULE_NOT_FOUND inside the harness.
+    const compiledScripts = path.resolve(__dirname, "../../scripts");
+    const missing: string[] = [];
+    for (const file of STATUSLINE_LAUNCHER_FILES) {
+      const source = await fs.readFile(
+        path.join(compiledScripts, file),
+        "utf8"
+      );
+      for (const match of source.matchAll(
+        /require\(\s*["']\.\/([^"']+)["']\s*\)/g
+      )) {
+        if (!STATUSLINE_LAUNCHER_FILES.includes(match[1])) {
+          missing.push(`${file} -> ${match[1]}`);
+        }
+      }
+    }
+    assert.deepStrictEqual(missing, []);
+  });
+
   test("removeStatuslineLauncher leaves unrelated files in the directory", async () => {
     await deployFresh(await packageRoot("pkg", "0.2.0", "v0.2.0"));
     const unrelated = path.join(statuslineLauncherDirectory(), "keep-me.txt");

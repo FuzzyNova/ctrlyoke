@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import { parseAtReferences } from "../../utils/FileReferenceParser";
 import { looksLikeFilePath } from "../../utils/promptPathUtils";
 import {
   buildDirectoryReference,
@@ -31,6 +32,26 @@ suite("ContextReferenceBuilder", () => {
   test("keeps hashes in unquoted paths because @ references support them", () => {
     assert.strictEqual(quoteReferencePath("src/C#/a.cs"), "src/C#/a.cs");
     assert.strictEqual(buildFileReference("src/C#/a.cs"), "@src/C#/a.cs");
+  });
+
+  test("quotes trailing punctuation so built @ references round-trip", () => {
+    for (const path of [
+      "lib/foo.c++",
+      "src/x.ts~",
+      "docs/notes_",
+      "src/file(1)",
+      "src/a-",
+    ]) {
+      const reference = buildFileReference(path);
+      assert.ok(reference.startsWith('@"'), `${path} should be quoted`);
+      assert.deepStrictEqual(
+        parseAtReferences(`see ${reference} now`).map(
+          ({ path: parsed }) => parsed
+        ),
+        [path]
+      );
+    }
+    assert.strictEqual(buildFileReference("src/a.ts"), "@src/a.ts");
   });
 
   test("builds file references", () => {

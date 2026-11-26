@@ -45,23 +45,14 @@ export async function realpathOrResolved(p: string): Promise<string> {
  * one checker across all references in a prompt expansion.
  */
 export class RealpathContainmentChecker {
-  private readonly realRoots: Promise<string[]>;
+  private readonly roots: readonly string[];
+  private realRoots?: Promise<string[]>;
+  private realRootsSync?: string[];
   private readonly lexicalRoots: string[];
 
   constructor(roots: readonly string[]) {
+    this.roots = [...roots];
     this.lexicalRoots = roots.map((root) => path.resolve(root));
-    this.realRoots = Promise.all(
-      roots.map(async (root) => {
-        try {
-          return path.resolve(await fs.realpath(root));
-        } catch (error) {
-          if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
-            return path.resolve(root);
-          }
-          throw error;
-        }
-      })
-    );
   }
 
   async check(candidate: string): Promise<RealpathContainmentResult> {
@@ -70,23 +61,65 @@ export class RealpathContainmentChecker {
       resolvedPath = path.resolve(await fs.realpath(candidate));
     } catch (error) {
       if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
-        // Preserve the existing missing-file behaviour. A lexical in-root
-        // missing path cannot expose content; its caller's stat/read keeps
-        // producing the existing not-found skip. Traversal is still denied.
-        return {
-          resolvedPath: path.resolve(candidate),
-          allowed: isPathWithinAnyDirectory(
-            path.resolve(candidate),
-            this.lexicalRoots
-          ),
-        };
+        return this.missingCandidateResult(candidate);
       }
       throw error;
     }
+    this.realRoots ??= Promise.all(
+      this.roots.map(async (root) => {
+        try {
+          return path.resolve(await fs.realpath(root));
+        } catch (error) {
+          return RealpathContainmentChecker.unresolvedRoot(root, error);
+        }
+      })
+    );
     return {
       resolvedPath,
       allowed: isPathWithinAnyDirectory(resolvedPath, await this.realRoots),
     };
+  }
+
+  /** Synchronous counterpart of `check`, for VS Code's synchronous link API. */
+  checkSync(candidate: string): RealpathContainmentResult {
+    let resolvedPath: string;
+    try {
+      resolvedPath = path.resolve(realpathSync(candidate));
+    } catch (error) {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
+        return this.missingCandidateResult(candidate);
+      }
+      throw error;
+    }
+    this.realRootsSync ??= this.roots.map((root) => {
+      try {
+        return path.resolve(realpathSync(root));
+      } catch (error) {
+        return RealpathContainmentChecker.unresolvedRoot(root, error);
+      }
+    });
+    return {
+      resolvedPath,
+      allowed: isPathWithinAnyDirectory(resolvedPath, this.realRootsSync),
+    };
+  }
+
+  /**
+   * A missing candidate is compared against the lexical roots: an in-root
+   * missing path cannot expose content, and its caller's stat/read keeps
+   * producing the not-found skip. Traversal is still denied.
+   */
+  private missingCandidateResult(candidate: string): RealpathContainmentResult {
+    const resolvedPath = path.resolve(candidate);
+    return {
+      resolvedPath,
+      allowed: isPathWithinAnyDirectory(resolvedPath, this.lexicalRoots),
+    };
+  }
+
+  private static unresolvedRoot(root: string, error: unknown): string {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return path.resolve(root);
+    throw error;
   }
 }
 

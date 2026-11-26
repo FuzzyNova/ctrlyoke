@@ -6,6 +6,7 @@ import {
   SETTING_SCOPES,
   SETTING_WRITE_SCOPE_LABELS,
   buildCustomTemplateId,
+  getCommunityInstallFileName,
   getCommunityTemplateReportUrl,
   getCommunityTemplateSourceUrl,
 } from "@root/types/DashboardConstants";
@@ -84,10 +85,6 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
   );
   const [clearSavedValues, setClearSavedValues] = useState(false);
 
-  const installedIds = useMemo(
-    () => new Set(catalog.map((template) => template.id)),
-    [catalog]
-  );
   const visible = useMemo(
     () => (templates ?? []).filter((entry) => matchesQuery(entry, query)),
     [templates, query]
@@ -225,12 +222,25 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
             const localId = buildCustomTemplateId(activeScope, entry.id);
             const install =
               installs[getCommunityInstallKey(activeScope, entry.id)];
-            const installed = installedIds.has(localId);
+            const expectedFile = getCommunityInstallFileName(
+              entry.id,
+              entry.file
+            );
+            const localTemplate = catalog.find(
+              (template) => template.id === localId
+            );
+            const installed =
+              localTemplate?.communityInstallFile === expectedFile;
+            const nameTaken = Boolean(localTemplate) && !installed;
             const installedScopes = INSTALL_SCOPES.filter((scope) =>
-              installedIds.has(buildCustomTemplateId(scope, entry.id))
+              catalog.some(
+                (template) =>
+                  template.id === buildCustomTemplateId(scope, entry.id) &&
+                  template.communityInstallFile === expectedFile
+              )
             );
             const busy = install?.installing || install?.uninstalling;
-            const installedPath = `${scopeDir}/${entry.file}`;
+            const installedPath = `${scopeDir}/${expectedFile}`;
             return (
               <li
                 key={entry.id}
@@ -302,6 +312,11 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
                       {install.error}
                     </p>
                   )}
+                  {nameTaken && (
+                    <span className="text-xs text-description-fg">
+                      Name taken
+                    </span>
+                  )}
                   {installed && (
                     <button
                       type="button"
@@ -314,7 +329,7 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
                 </div>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || nameTaken}
                   onClick={() =>
                     installed
                       ? openUninstall(entry)
@@ -325,7 +340,9 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
                   aria-label={
                     installed
                       ? `Uninstall ${entry.name} from ${scopeLabel} templates`
-                      : `Install ${entry.name} to ${scopeLabel} templates`
+                      : nameTaken
+                        ? "Name taken"
+                        : `Install ${entry.name} to ${scopeLabel} templates`
                   }
                 >
                   {install?.installing
@@ -334,7 +351,9 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
                       ? "Uninstalling…"
                       : installed
                         ? `Uninstall from ${scopeLabel}`
-                        : `Install to ${scopeLabel}`}
+                        : nameTaken
+                          ? "Name taken"
+                          : `Install to ${scopeLabel}`}
                 </button>
               </li>
             );
@@ -358,7 +377,8 @@ export function CommunityTemplatesPage({ activeScope, onSetDefaults }: Props) {
           <p>
             Deletes{" "}
             <code className="font-mono text-foreground">
-              {scopeDir}/{confirming.file}
+              {scopeDir}/
+              {getCommunityInstallFileName(confirming.id, confirming.file)}
             </code>{" "}
             from your {scopeLabel} templates. Changes you made to this copy are
             lost. Workflows already created from it are not affected.

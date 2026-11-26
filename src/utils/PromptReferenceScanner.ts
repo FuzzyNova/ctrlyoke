@@ -15,6 +15,7 @@ import {
   createConditionOutputReferencePattern,
   createGitChangeReferencePattern,
   createReferencePatterns,
+  hasUnquotedAtReferencePathMarker,
 } from "./ReferencePatterns";
 import {
   findCodeRanges,
@@ -193,6 +194,12 @@ export function findContextReferenceMatches(
   ) => {
     const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
+      if (
+        pattern === patterns.fullFile &&
+        !hasUnquotedAtReferencePathMarker(match[1])
+      ) {
+        continue;
+      }
       target.push({
         from: offset + match.index,
         to: offset + match.index + match[0].length,

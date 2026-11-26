@@ -32,7 +32,8 @@ export function createWorkflowContextCompletionSource(
   client: {
     customSource: (
       context: CompletionContext,
-      escape?: import("@root/completions/WorkflowInsertEscape").InsertTextEscape
+      escape?: import("@root/completions/WorkflowInsertEscape").InsertTextEscape,
+      jsonStyleEscapes?: boolean
     ) => ReturnType<CompletionSource>;
   },
   getContext: (
@@ -46,7 +47,8 @@ export function createWorkflowContextCompletionSource(
     context: CompletionContext
   ) =>
     | import("@root/completions/WorkflowInsertEscape").InsertTextEscape
-    | undefined
+    | undefined,
+  isJsonStyleEscape?: (context: CompletionContext) => boolean
 ): CompletionSource {
   return (context) => {
     const line = context.state.doc.lineAt(context.pos);
@@ -78,12 +80,17 @@ export function createWorkflowContextCompletionSource(
     const trigger = findCustomCompletionContext(
       before,
       line.from,
-      getEscape?.(context)
+      getEscape?.(context),
+      isJsonStyleEscape?.(context)
     );
     if (trigger?.trigger === "$") {
       const workflowContext = getContext(context);
       if (!workflowContext) {
-        return client.customSource(context, getEscape?.(context));
+        return client.customSource(
+          context,
+          getEscape?.(context),
+          isJsonStyleEscape?.(context)
+        );
       }
       const items = getPriorItems(trigger.query, workflowContext);
       return items.length
@@ -106,7 +113,11 @@ export function createWorkflowContextCompletionSource(
           }
         : null;
     }
-    return client.customSource(context, getEscape?.(context));
+    return client.customSource(
+      context,
+      getEscape?.(context),
+      isJsonStyleEscape?.(context)
+    );
   };
 }
 

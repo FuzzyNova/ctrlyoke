@@ -747,17 +747,37 @@ describe("useStepContextMenu", () => {
       });
     });
 
+    it("disables Move to Editor while a non-empty script draft would be replaced", () => {
+      useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+      useEditorStore.getState().setScriptCommand("npm run deploy -- --prod");
+      openMenuOnQueuedStep();
+
+      const move = screen.getByRole("menuitem", { name: "Move to Editor" });
+      expect(move).toBeDisabled();
+      expect(move).toHaveAttribute(
+        "title",
+        "Save or clear the script draft before moving a step into the editor"
+      );
+    });
+
     it("steers the step's prompt to the only live session and removes it", () => {
       openHeadlessTarget(0);
       openMenuOnQueuedStep();
       fireEvent.click(screen.getByRole("menuitem", { name: "Send as Steer" }));
 
-      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
-        type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
-        workflowId: "workflow-1",
-        sessionId: "control-0",
-        text: "meant as a steer",
-      });
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+          workflowId: "workflow-1",
+          sessionId: "control-0",
+          text: "meant as a steer",
+          origin: {
+            kind: "queuedStep",
+            stepIndex: 1,
+            step: { ...queuedStep, prompt: "meant as a steer" },
+          },
+        })
+      );
       expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
         type: MESSAGE_TYPES.DELETE_PROMPT,
         indices: [1],
@@ -766,6 +786,26 @@ describe("useStepContextMenu", () => {
         text: "meant as a steer",
         kind: PROMPT_HISTORY_KINDS.STEER,
       });
+    });
+
+    it("steers the unsaved queued-step edit", () => {
+      useEditorStore.getState().enterEditMode(1, queuedStep);
+      useEditorStore.getState().setPromptText("edited steer text");
+      useEditorStore.getState().deselect();
+      openHeadlessTarget(0);
+      openMenuOnQueuedStep();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Send as Steer" }));
+
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+          text: "edited steer text",
+          origin: expect.objectContaining({
+            kind: "queuedStep",
+            step: expect.objectContaining({ prompt: "edited steer text" }),
+          }),
+        })
+      );
     });
 
     it("lists each live session in a submenu when there are several", () => {

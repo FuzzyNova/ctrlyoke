@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import * as path from "node:path";
 import { foldPathForCompare } from "../utils/PathCasing";
+import { canonicalStatePath } from "../utils/ProjectStatePaths";
 import { isValidSecretName, validateSecretName } from "../utils/SecretName";
 
 const USER_SECRET_PREFIX = "ctrlyoke.secret.user";
@@ -32,9 +33,17 @@ export function workspaceSecretKey(
 
 /** Hash a workspace root for use with workspace-scoped secret keys. */
 export function workspaceSecretHash(workspaceRoot: string): string {
-  const canonicalRoot = foldPathForCompare(path.resolve(workspaceRoot));
+  const canonicalRoot = foldPathForCompare(canonicalStatePath(workspaceRoot));
   return createHash("sha256")
     .update(canonicalRoot, "utf8")
+    .digest("hex")
+    .slice(0, WORKSPACE_HASH_LENGTH);
+}
+
+/** Hash used by releases that did not resolve workspace symlinks. */
+export function legacyWorkspaceSecretHash(workspaceRoot: string): string {
+  return createHash("sha256")
+    .update(foldPathForCompare(path.resolve(workspaceRoot)), "utf8")
     .digest("hex")
     .slice(0, WORKSPACE_HASH_LENGTH);
 }
@@ -45,6 +54,13 @@ export function workspaceSecretKeyForRoot(
   name: string
 ): string {
   return workspaceSecretKey(workspaceSecretHash(workspaceRoot), name);
+}
+
+export function legacyWorkspaceSecretKeyForRoot(
+  workspaceRoot: string,
+  name: string
+): string {
+  return workspaceSecretKey(legacyWorkspaceSecretHash(workspaceRoot), name);
 }
 
 /** Build the user-scoped metadata key for a managed secret. */
@@ -73,6 +89,16 @@ export function workspaceSecretMetadataKeyForRoot(
   name: string
 ): string {
   return workspaceSecretMetadataKey(workspaceSecretHash(workspaceRoot), name);
+}
+
+export function legacyWorkspaceSecretMetadataKeyForRoot(
+  workspaceRoot: string,
+  name: string
+): string {
+  return workspaceSecretMetadataKey(
+    legacyWorkspaceSecretHash(workspaceRoot),
+    name
+  );
 }
 
 /** Return whether a SecretStore key belongs to a managed secret or its metadata. */

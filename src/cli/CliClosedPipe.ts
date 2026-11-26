@@ -9,6 +9,7 @@ import { hasErrnoCode } from "../utils/ErrorUtils";
 export const CLI_CLOSED_PIPE_EXIT_CODE = 0;
 
 const guardedStreams = new WeakSet<NodeJS.EventEmitter>();
+const runGuardedStreams = new WeakSet<NodeJS.EventEmitter>();
 
 /** Whether an error is the write failure a closed pipe produces. */
 export function isClosedPipeError(error: unknown): boolean {
@@ -34,5 +35,23 @@ export function exitQuietlyOnClosedPipe(
       return;
     }
     throw error;
+  });
+}
+
+/** Treat a closed output stream as a workflow interruption. */
+export function stopWorkflowOnClosedPipe(
+  stream: NodeJS.WriteStream,
+  stop: () => void
+): void {
+  if (runGuardedStreams.has(stream)) return;
+  runGuardedStreams.add(stream);
+  stream.on("error", (error: unknown) => {
+    if (!isClosedPipeError(error)) throw error;
+    // Console writes after the first EPIPE would otherwise keep producing
+    // errors while the graceful workflow shutdown is in progress.
+    if (typeof stream.write === "function") {
+      stream.write = (() => true) as NodeJS.WriteStream["write"];
+    }
+    stop();
   });
 }

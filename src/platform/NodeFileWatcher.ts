@@ -9,6 +9,7 @@ import type {
 } from "../core/HostPorts";
 import { Log } from "../utils/Log";
 import { getErrnoCode, getErrorMessage } from "../utils/ErrorUtils";
+import { pathsEqual } from "../utils/PathCasing";
 
 /** chokidar's `watch`, injectable so tests can reach the underlying watcher. */
 export type ChokidarWatch = typeof watch;
@@ -25,16 +26,26 @@ class NodeFileWatcher implements FileWatcher {
   private readonly reportedErrorCodes = new Set<string>();
   private disposed = false;
 
-  constructor(basePath: string, glob: string, watchFn: ChokidarWatch) {
+  constructor(
+    basePath: string,
+    glob: string,
+    watchFn: ChokidarWatch,
+    exactPath?: string
+  ) {
     const normalizedBasePath = normalizeAbsolutePath(basePath);
     const segments = glob.split("/");
     const hasRecursiveGlob = glob.includes("**");
     const isLiteralBasename =
       segments.length === 1 &&
       ![...glob].some((character) => "*?[]{}".includes(character));
-    const depth = hasRecursiveGlob
-      ? undefined
-      : Math.max(0, segments.length - 1);
+    // A single-file watch targets the exact path at depth 0: watching its
+    // directory recursively would walk every sibling subtree (a workflow at
+    // the workspace root would watch the whole repository).
+    const depth = exactPath
+      ? 0
+      : hasRecursiveGlob
+        ? undefined
+        : Math.max(0, segments.length - 1);
     const excluded = (relativePath: string): boolean =>
       DEFAULT_FILE_WATCHER_EXCLUDES.some(
         (pattern) =>
@@ -42,9 +53,10 @@ class NodeFileWatcher implements FileWatcher {
           minimatch(`${relativePath}/sentinel`, pattern, { dot: true })
       );
     this.watcher = watchFn(
-      isLiteralBasename
-        ? path.join(normalizedBasePath, glob)
-        : normalizedBasePath,
+      exactPath ??
+        (isLiteralBasename
+          ? path.join(normalizedBasePath, glob)
+          : normalizedBasePath),
       {
         ignoreInitial: true,
         ...(depth === undefined ? {} : { depth }),
@@ -68,7 +80,14 @@ class NodeFileWatcher implements FileWatcher {
         .relative(normalizedBasePath, absolutePath)
         .split(path.sep)
         .join("/");
-      if (!relativePath || !minimatch(relativePath, glob)) return;
+      if (
+        !relativePath ||
+        (exactPath
+          ? !pathsEqual(absolutePath, exactPath)
+          : !minimatch(relativePath, glob, { dot: true }))
+      ) {
+        return;
+      }
 
       const listeners = (
         {
@@ -144,5 +163,15 @@ export class NodeFileWatcherFactory implements FileWatcherFactory {
 
   create(basePath: string, glob: string): FileWatcher {
     return new NodeFileWatcher(basePath, glob, this.watchFn);
+  }
+
+  createForFile(absolutePath: string): FileWatcher {
+    const normalizedPath = normalizeAbsolutePath(absolutePath);
+    return new NodeFileWatcher(
+      path.dirname(normalizedPath),
+      path.basename(normalizedPath),
+      this.watchFn,
+      normalizedPath
+    );
   }
 }

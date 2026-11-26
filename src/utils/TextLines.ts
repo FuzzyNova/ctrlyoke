@@ -131,7 +131,10 @@ export async function* streamFileLines(
 
       // Only the unfinished tail is retained between chunks, so checking it
       // bounds memory to the limit plus one read chunk.
-      assertLineLength(buffered, completedLines + 1);
+      assertLineLength(
+        endsWithCarriageReturn ? buffered.slice(0, -1) : buffered,
+        completedLines + 1
+      );
     }
 
     if (buffered.length > 0) {

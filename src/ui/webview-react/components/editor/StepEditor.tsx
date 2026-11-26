@@ -65,7 +65,9 @@ import {
   STEP_COLOR_MODES,
   USER_FEEDBACK_SEVERITY,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  STEER_ORIGIN_KINDS,
 } from "@root/types/DashboardConstants";
+import type { ExecutePromptErrorMessage } from "@root/types/WebviewMessageTypes";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isExecutionBusy, isWorkflowRunning } from "../../utils/status";
@@ -863,6 +865,19 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === MESSAGE_TYPES.EXECUTE_PROMPT_ERROR) {
         pendingNewWorkflowToastRef.current = null;
+        const { origin } = event.data as ExecutePromptErrorMessage;
+        if (origin?.kind === STEER_ORIGIN_KINDS.QUEUED_STEP) {
+          const keptScriptDraft = useEditorStore
+            .getState()
+            .moveStepToNewStepDraft(origin.stepIndex, origin.step, false);
+          if (keptScriptDraft) {
+            notifyUser(
+              "Your script draft is still in the editor. The steered prompt was saved in Recent Prompts.",
+              USER_FEEDBACK_SEVERITY.INFO
+            );
+          }
+          return;
+        }
         const restored =
           (event.data.text as string) || lastSubmittedTextRef.current;
         if (restored) {

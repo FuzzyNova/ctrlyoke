@@ -15,6 +15,7 @@ import {
   readRunBundle,
   RunBundleFormatError,
 } from "../../core/orchestration/RunBundleReader";
+import { RunBundleImporter } from "../../core/orchestration/RunBundleImporter";
 import { ReplayIntegrationFactory } from "../../dev/replay/ReplayIntegration";
 import { RunReplaySession } from "../../dev/replay/RunReplaySession";
 import {
@@ -42,6 +43,11 @@ import {
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
 import { BUNDLE_WORKSPACE_TOKEN } from "../../utils/RunBundlePaths";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  NewerSchemaError,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { MockPlatform } from "../helpers/mockHarness";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
@@ -484,6 +490,79 @@ suite("Run replay (bundle -> live engine)", function () {
       workspace
     );
     assert.strictEqual(loaded.manifest.assets, undefined);
+  });
+
+  test("refuses newer inner bundle schemas before allocating history", async () => {
+    const cases = [
+      [
+        RUN_BUNDLE_FILES.DEFINITION,
+        PERSISTED_STORES.WORKFLOW_DEFINITION,
+        {
+          schemaVersion:
+            CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION] + 1,
+          steps: [],
+        },
+      ],
+      [
+        RUN_BUNDLE_FILES.RUNTIME,
+        PERSISTED_STORES.WORKFLOW_DEFINITION,
+        {
+          schemaVersion:
+            CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION] + 1,
+          _runtime: {
+            schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
+          },
+        },
+      ],
+      [
+        RUN_BUNDLE_FILES.RUNTIME,
+        PERSISTED_STORES.RUN_FILE,
+        {
+          schemaVersion:
+            CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+          _runtime: {
+            schemaVersion:
+              CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE] + 1,
+          },
+        },
+      ],
+      [
+        RUN_BUNDLE_FILES.MANIFEST,
+        PERSISTED_STORES.TIMELINE,
+        {
+          schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.TIMELINE] + 1,
+          startedAt: 1000,
+          nextSequence: 1,
+        },
+      ],
+    ] as const;
+    for (const [file, store, record] of cases) {
+      const bundleDir = path.join(root, `newer-${store}.ctrlyokerun`);
+      await writeBundle(bundleDir);
+      await fs.writeFile(path.join(bundleDir, file), JSON.stringify(record));
+      await assert.rejects(
+        new RunBundleImporter().importRun({
+          workspaceRoot: workspace,
+          bundleDir,
+        }),
+        (error: unknown) =>
+          error instanceof NewerSchemaError && error.store === store
+      );
+      await assert.rejects(
+        fs.access(WorkflowPaths.runsRoot(workspace)),
+        "refusal happens before lineage allocation"
+      );
+    }
+  });
+
+  test("imports a bundle with current inner schemas", async () => {
+    const bundleDir = path.join(root, "current.ctrlyokerun");
+    await writeBundle(bundleDir);
+    const result = await new RunBundleImporter().importRun({
+      workspaceRoot: workspace,
+      bundleDir,
+    });
+    assert.strictEqual(result.status, "imported");
   });
 
   test("rejects a bundle asset whose recorded hash was tampered", async () => {

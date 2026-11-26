@@ -850,6 +850,9 @@ export class WorkflowLibraryHandlers {
       variables: t.variables,
       isBuiltIn: t.isBuiltIn,
       source: t.source,
+      ...(t.communityInstallFile
+        ? { communityInstallFile: t.communityInstallFile }
+        : {}),
     }));
   }
 
@@ -877,18 +880,49 @@ export class WorkflowLibraryHandlers {
     }
   }
 
+  /** Check whether a scope contains a legacy copy that could be marked. */
+  hasUnmarkedCommunityInstallCandidate(
+    templateName: string,
+    scope: TemplateScope,
+    expectedFile: string
+  ): Promise<boolean> {
+    return this.templateManager.hasUnmarkedCommunityInstallCandidate(
+      templateName,
+      scope,
+      expectedFile
+    );
+  }
+
   /** Install downloaded template content as a custom template. */
   installTemplateContent(
     templateName: string,
     scope: TemplateScope,
     format: WorkflowFileFormat,
-    content: string
+    content: string,
+    communityInstallFile?: string
   ): Promise<{ path: string; templateId: string }> {
     return this.templateManager.installTemplateContent(
       templateName,
       scope,
       format,
-      content
+      content,
+      communityInstallFile
+    );
+  }
+
+  markLegacyCommunityInstall(
+    templateName: string,
+    scope: TemplateScope,
+    format: WorkflowFileFormat,
+    expectedFile: string,
+    libraryContent: string
+  ): Promise<boolean> {
+    return this.templateManager.markLegacyCommunityInstall(
+      templateName,
+      scope,
+      format,
+      expectedFile,
+      libraryContent
     );
   }
 
@@ -898,6 +932,13 @@ export class WorkflowLibraryHandlers {
     scope: TemplateScope
   ): Promise<string> {
     return this.templateManager.uninstallCustomTemplate(templateName, scope);
+  }
+
+  uninstallCommunityTemplate(
+    name: string,
+    scope: TemplateScope
+  ): Promise<string> {
+    return this.templateManager.uninstallCommunityTemplate(name, scope);
   }
 
   /**

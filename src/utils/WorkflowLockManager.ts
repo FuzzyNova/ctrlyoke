@@ -21,7 +21,10 @@ import {
   readWorkflowLockInspection,
 } from "./WorkflowLockInspector";
 import { withFileLock } from "./FileLockUtils";
-import { writeFileAtomic } from "./AtomicFileUtils";
+import {
+  WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
+  writeFileAtomic,
+} from "./AtomicFileUtils";
 import { runStateWriteOptions } from "./RunStateWrites";
 import {
   hasNewerSchema,
@@ -41,7 +44,8 @@ function sleep(ms: number): Promise<void> {
 /** Reclaim only the stale owner inspected by the caller, under the lock mutex. */
 async function reclaimIfStale(
   lockPath: string,
-  expectedToken: string | undefined
+  expectedToken: string | undefined,
+  beforeUnlink?: () => Promise<void>
 ): Promise<boolean> {
   return withFileLock(lockPath, async () => {
     const current = await readWorkflowLockAtPath(lockPath);
@@ -54,6 +58,7 @@ async function reclaimIfStale(
       return false;
     }
 
+    await beforeUnlink?.();
     await fs.promises.unlink(lockPath).catch((error) => {
       if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
     });
@@ -212,13 +217,15 @@ export class WorkflowLockManager {
           ...existing,
           lastHeartbeat: Date.now(),
         };
-        const tmpPath = `${lockPath}.${ownerToken}.tmp`;
-        await fs.promises.writeFile(
-          tmpPath,
-          JSON.stringify(updated, null, 2),
-          "utf8"
-        );
-        await fs.promises.rename(tmpPath, lockPath);
+        // Keep retries shorter than the 5s heartbeat interval; a workflow-critical
+        // five-minute retry would hold the runner-lock mutex past the 30s stale limit.
+        await writeFileAtomic(lockPath, JSON.stringify(updated, null, 2), {
+          ...runStateWriteOptions(
+            lockPath,
+            "WorkflowLockManager.updateHeartbeat"
+          ),
+          budgetMs: Math.min(WORKFLOW_CRITICAL_RENAME_BUDGET_MS, 1_000),
+        });
       });
     } catch (err) {
       const code = getErrnoCode(err);
@@ -311,38 +318,42 @@ export class WorkflowLockManager {
       }
 
       try {
+        let recovered = false;
         const reclaimed = await reclaimIfStale(
           WorkflowLockManager.getLockPath(workspaceRoot, workflowKey),
-          lock.ownerToken
-        );
-        if (reclaimed) {
-          let runningFile: WorkingFile;
-          try {
-            runningFile = JSON.parse(
-              await fs.promises.readFile(runFilePath, "utf8")
-            );
-          } catch {
-            continue;
-          }
-          const executionState = runningFile._runtime?.executionState;
-          if (
-            isNewerRunFile(runningFile) ||
-            !executionState ||
-            !ACTIVE_EXECUTION_STATES.has(executionState as ExecutionState) ||
-            executionState === EXECUTION_STATES.PAUSED
-          )
-            continue;
-
-          runningFile._runtime!.executionState = EXECUTION_STATES.STOPPED;
-          settleInterruptedRun(runningFile);
-          await writeFileAtomic(
-            runFilePath,
-            JSON.stringify(runningFile, null, 2),
-            runStateWriteOptions(
-              runFilePath,
-              "WorkflowLockManager.normalizeStaleLocks"
+          lock.ownerToken,
+          async () => {
+            let runningFile: WorkingFile;
+            try {
+              runningFile = JSON.parse(
+                await fs.promises.readFile(runFilePath, "utf8")
+              );
+            } catch {
+              return;
+            }
+            const executionState = runningFile._runtime?.executionState;
+            if (
+              isNewerRunFile(runningFile) ||
+              !executionState ||
+              !ACTIVE_EXECUTION_STATES.has(executionState as ExecutionState) ||
+              executionState === EXECUTION_STATES.PAUSED
             )
-          );
+              return;
+
+            runningFile._runtime!.executionState = EXECUTION_STATES.STOPPED;
+            settleInterruptedRun(runningFile);
+            await writeFileAtomic(
+              runFilePath,
+              JSON.stringify(runningFile, null, 2),
+              runStateWriteOptions(
+                runFilePath,
+                "WorkflowLockManager.normalizeStaleLocks"
+              )
+            );
+            recovered = true;
+          }
+        );
+        if (reclaimed && recovered) {
           recoveredRunFiles.push(runFilePath);
           Log.info(
             `[WorkflowLockManager] normalizeStaleLocks: recovered ${workflowKey} from ${lock.runRef}`

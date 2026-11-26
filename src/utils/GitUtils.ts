@@ -16,6 +16,17 @@ import { Log } from "./Log";
 import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
+export const GIT_DIFF_NO_COLOR_OPTION = "--no-color";
+export const GIT_NO_SHOW_SIGNATURE_OPTION = "--no-show-signature";
+
+/** Stable options for producing patches that must be portable across user Git config. */
+export const GIT_PATCH_FORMAT_OPTIONS = [
+  GIT_DIFF_NO_COLOR_OPTION,
+  GIT_DIFF_NO_EXT_DIFF_OPTION,
+  "--no-textconv",
+  "--src-prefix=a/",
+  "--dst-prefix=b/",
+] as const;
 
 /** Return a Git pathspec that addresses exactly the supplied path. */
 export function literalGitPathspec(filePath: string): string {
@@ -28,6 +39,10 @@ const GIT_MAX_BUFFER = 50 * 1024 * 1024;
 /** Whole-repository `ls-files` listings: large monorepos can exceed 100 MB. */
 const GIT_WHOLE_REPO_LISTING_MAX_BUFFER = 500 * 1024 * 1024;
 const GIT_SUBMODULE_MODE = "160000";
+/** Keep diagnostics parseable for Git probes whose failures have fallback behavior. */
+export function gitProbeEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, LC_ALL: "C" };
+}
 const execFilePromisified = promisify(execFile);
 
 interface GitTimeoutOverrides {
@@ -543,6 +558,7 @@ export async function getRecentCommits(
     "-C",
     workspaceRoot,
     "log",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     // Trailing %P (parents) and %D (decorate) enable merge detection and ref pills.
     `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D`,
   ];
@@ -621,6 +637,7 @@ export async function getFileHistoryCommits(
     "-C",
     workspaceRoot,
     "log",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "--follow",
     "-z",
     "--name-status",
@@ -659,6 +676,7 @@ export function createFileHistoryCommitWalk(
     "-C",
     workspaceRoot,
     "log",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "--follow",
     "-z",
     "--name-status",
@@ -855,6 +873,7 @@ export async function getCommitInfo(
     "-C",
     workspaceRoot,
     "show",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "-s",
     `--format=%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%aI%x00%ar`,
     "--end-of-options",
@@ -909,8 +928,11 @@ export function buildCommitDiffArgs(
     "-C",
     workspaceRoot,
     "show",
+    GIT_NO_SHOW_SIGNATURE_OPTION,
     "--stat",
     "-p",
+    GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     "--end-of-options",
     hash,
     ...(pathspecs?.length ? ["--", ...pathspecs] : []),
@@ -934,7 +956,7 @@ export async function getBlobBytes(
     sizeResult = await execFileAsync(
       "git",
       ["-C", repoRoot, "cat-file", "-s", objectSpec],
-      { encoding: "buffer" }
+      { encoding: "buffer", env: gitProbeEnv() }
     );
   } catch (error) {
     const stderr =
@@ -943,7 +965,8 @@ export async function getBlobBytes(
         : "";
     const missingPath =
       stderr.includes("does not exist in") ||
-      stderr.includes("exists on disk, but not in");
+      stderr.includes("exists on disk, but not in") ||
+      stderr.includes("does not exist (neither on disk nor in the index)");
     const missingRootCommitParent =
       ref.endsWith("^") && stderr.includes("invalid object name");
     if (missingPath || missingRootCommitParent) return null;
@@ -1007,8 +1030,13 @@ export async function getChangedFilesWithBinaryStatus(
   gitArgs: readonly string[]
 ): Promise<GitChangedFile[]> {
   const outputOptions = ["--raw", "--numstat", "-z", "--find-renames"];
-  const boundaryIndex = gitArgs.indexOf("--end-of-options");
-  const stashRevisionIndex = gitArgs.findIndex((arg) =>
+  const safeGitArgs =
+    (gitArgs[0] === "show" || gitArgs[0] === "log") &&
+    !gitArgs.includes(GIT_NO_SHOW_SIGNATURE_OPTION)
+      ? [gitArgs[0], GIT_NO_SHOW_SIGNATURE_OPTION, ...gitArgs.slice(1)]
+      : [...gitArgs];
+  const boundaryIndex = safeGitArgs.indexOf("--end-of-options");
+  const stashRevisionIndex = safeGitArgs.findIndex((arg) =>
     arg.startsWith("stash@{")
   );
   const insertionIndex =
@@ -1016,15 +1044,15 @@ export async function getChangedFilesWithBinaryStatus(
       ? boundaryIndex
       : stashRevisionIndex >= 0
         ? stashRevisionIndex
-        : gitArgs.length;
+        : safeGitArgs.length;
   const args =
     insertionIndex >= 0
       ? [
-          ...gitArgs.slice(0, insertionIndex),
+          ...safeGitArgs.slice(0, insertionIndex),
           ...outputOptions,
-          ...gitArgs.slice(insertionIndex),
+          ...safeGitArgs.slice(insertionIndex),
         ]
-      : [...gitArgs, ...outputOptions];
+      : [...safeGitArgs, ...outputOptions];
   const { stdout } = await execGit(["-C", repoRoot, ...args]);
   const tokens = stdout.split("\0");
   const statusByPath = new Map<string, { status: string; oldPath?: string }>();
@@ -1120,6 +1148,7 @@ export async function getDiffBetweenRefs(
     "--stat",
     "-p",
     GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     "--end-of-options",
     baseRef,
     targetRef,
@@ -1160,6 +1189,7 @@ export function buildWorkingTreeDiffArgs(
     "--stat",
     "-p",
     GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     ...(pathspecs?.length ? ["--", ...pathspecs] : []),
   ];
 }
@@ -1224,6 +1254,7 @@ export function buildStagedDiffArgs(
     "--stat",
     "-p",
     GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
     ...(pathspecs?.length ? ["--", ...pathspecs] : []),
   ];
 }
@@ -1284,13 +1315,23 @@ export function buildStashDiffArgs(
         "--stat",
         "-p",
         GIT_DIFF_NO_EXT_DIFF_OPTION,
+        GIT_DIFF_NO_COLOR_OPTION,
         "--end-of-options",
         `${stashRef}^1`,
         stashRef,
         "--",
         ...pathspecs,
       ]
-    : ["-C", workspaceRoot, "stash", "show", "-p", stashRef];
+    : [
+        "-C",
+        workspaceRoot,
+        "stash",
+        "show",
+        "-p",
+        GIT_DIFF_NO_EXT_DIFF_OPTION,
+        GIT_DIFF_NO_COLOR_OPTION,
+        stashRef,
+      ];
 }
 
 /**
@@ -1340,6 +1381,7 @@ export async function searchCommitsByMessage(
       "-C",
       workspaceRoot,
       "log",
+      GIT_NO_SHOW_SIGNATURE_OPTION,
       // A body spans lines, so each record ends with RS (%x1e), not "\n".
       `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%b%x1e`,
       `--grep=${query}`,
@@ -1408,6 +1450,7 @@ export async function getCommitByHash(
       "-C",
       workspaceRoot,
       "show",
+      GIT_NO_SHOW_SIGNATURE_OPTION,
       "-s",
       "--format=%H%x00%h%x00%s%x00%an%x00%ar",
       hash,
@@ -1511,6 +1554,7 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
       cwd: repoRoot,
       timeout: getGitWholeRepoTimeoutMs(),
       maxBuffer: GIT_WHOLE_REPO_LISTING_MAX_BUFFER,
+      env: gitProbeEnv(),
     }
   );
   return parseGitNulSeparatedPaths(stdout);
@@ -1629,7 +1673,11 @@ export async function getGitTrackedAndUntrackedFiles(
       "--exclude-standard",
       "-z",
     ],
-    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
+    {
+      timeout: getGitWholeRepoTimeoutMs(),
+      maxBuffer: GIT_MAX_BUFFER,
+      env: gitProbeEnv(),
+    }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1640,7 +1688,11 @@ export async function getGitUntrackedFiles(
 ): Promise<string[]> {
   const { stdout } = await execGit(
     ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "-z"],
-    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
+    {
+      timeout: getGitWholeRepoTimeoutMs(),
+      maxBuffer: GIT_MAX_BUFFER,
+      env: gitProbeEnv(),
+    }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1667,7 +1719,11 @@ export async function getGitIgnoredEntries(
       "--directory",
       "-z",
     ],
-    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
+    {
+      timeout: getGitWholeRepoTimeoutMs(),
+      maxBuffer: GIT_MAX_BUFFER,
+      env: gitProbeEnv(),
+    }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -2226,7 +2282,7 @@ export async function listLocalBranches(
       "for-each-ref",
       "--sort=-committerdate",
       `--format=${[
-        "%(refname:short)",
+        "%(refname:lstrip=2)",
         "%(upstream:short)",
         "%(upstream:track,nobracket)",
         "%(committerdate:unix)",

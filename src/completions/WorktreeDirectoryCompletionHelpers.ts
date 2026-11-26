@@ -5,6 +5,7 @@ import {
   type WorktreeDirectoryCandidate,
 } from "../core/orchestration/WorktreeManager";
 import { RepositoryListCache } from "./RepositoryListCache";
+import { foldPathForCompare } from "../utils/PathCasing";
 
 const directoryCache = new RepositoryListCache<WorktreeDirectoryCandidate>(
   (repoRoot) => new WorktreeManager().listWorktreeDirectories(repoRoot)
@@ -38,6 +39,11 @@ export async function getWorktreeDirectoryCompletions(
 
   const candidates = await directoryCache.get(repoRoot);
   const prefix = filterText.toLocaleLowerCase();
+  const nameCounts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const key = foldPathForCompare(candidate.name);
+    nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
+  }
   return candidates
     .filter((candidate) =>
       candidate.name.toLocaleLowerCase().startsWith(prefix)
@@ -45,7 +51,10 @@ export async function getWorktreeDirectoryCompletions(
     .map((candidate) => ({
       label: candidate.name,
       kind: COMPLETION_ITEM_KINDS.REFERENCE,
-      insertText: candidate.name,
+      insertText:
+        nameCounts.get(foldPathForCompare(candidate.name)) === 1
+          ? candidate.name
+          : candidate.worktreePath,
       detail: describeDirectoryBranch(candidate),
       documentation: candidate.worktreePath,
     }));

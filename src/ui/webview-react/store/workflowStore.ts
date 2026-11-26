@@ -2030,6 +2030,7 @@ export const useWorkflowStore = create<
             finalStepLoopCount: 0,
             finalStepPhase: null,
             liveFinalStepContextWindow: {},
+            liveContextWindow: {},
             activeStepIndices: [],
             workspaceSnapshots: {},
             finalStepWorkspaceSnapshots: {},

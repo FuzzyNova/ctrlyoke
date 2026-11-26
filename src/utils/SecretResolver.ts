@@ -13,6 +13,7 @@ import {
 } from "../platform/SecretStore";
 import {
   userSecretKey,
+  legacyWorkspaceSecretKeyForRoot,
   workspaceSecretKeyForRoot,
 } from "../platform/SecretKey";
 import { isValidSecretName } from "./SecretName";
@@ -216,9 +217,24 @@ export async function resolveSecretValues(
 
     if (context.secretStore) {
       try {
-        const workspaceValue = await context.secretStore.get(
-          workspaceSecretKeyForRoot(context.workspaceRoot, name)
+        const workspaceKey = workspaceSecretKeyForRoot(
+          context.workspaceRoot,
+          name
         );
+        let workspaceValue = await context.secretStore.get(workspaceKey);
+        if (workspaceValue === undefined) {
+          const legacyKey = legacyWorkspaceSecretKeyForRoot(
+            context.workspaceRoot,
+            name
+          );
+          if (legacyKey !== workspaceKey) {
+            workspaceValue = await context.secretStore.get(legacyKey);
+            if (workspaceValue !== undefined) {
+              await context.secretStore.store(workspaceKey, workspaceValue);
+              await context.secretStore.delete(legacyKey);
+            }
+          }
+        }
         if (workspaceValue !== undefined) {
           resolved[name] = { value: workspaceValue, source: "workspace" };
           continue;

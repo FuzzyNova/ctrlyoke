@@ -532,7 +532,7 @@ export interface SpawnPtyOptions {
   /** Called for every chunk of PTY output */
   onData: (session: PtySession, chunk: string) => void;
   /** Called when the PTY process exits */
-  onExit: (session: PtySession, exitCode: number) => void;
+  onExit: (session: PtySession, exitCode: number, signal?: number) => void;
 }
 
 /**
@@ -940,21 +940,26 @@ export class PtyProcessManager {
       deliver(streamingRedactor ? streamingRedactor.push(chunk) : chunk);
     });
 
-    ptyInstance.onExit(({ exitCode }: { exitCode: number }) => {
-      flushStream();
-      session.status = resolveEndedTerminalStatus(exitCode, session.endReason);
-      this.retireSession(sessionId);
-      logMemoryUsage("PTY session exited", {
-        sessionId,
-        kind: options.kind,
-        activeSessions: this.sessions.size,
-      });
-      options.onExit(session, exitCode ?? 1);
-      Log.debug(
-        `[PtyProcessManager] PTY session ${sessionId} (${options.kind}) exited with code ${exitCode} ` +
-          `status=${session.status} endReason=${session.endReason ?? "none"}`
-      );
-    });
+    ptyInstance.onExit(
+      ({ exitCode, signal }: { exitCode: number; signal?: number }) => {
+        flushStream();
+        session.status = resolveEndedTerminalStatus(
+          exitCode,
+          session.endReason
+        );
+        this.retireSession(sessionId);
+        logMemoryUsage("PTY session exited", {
+          sessionId,
+          kind: options.kind,
+          activeSessions: this.sessions.size,
+        });
+        options.onExit(session, exitCode ?? 1, signal);
+        Log.debug(
+          `[PtyProcessManager] PTY session ${sessionId} (${options.kind}) exited with code ${exitCode} ` +
+            `status=${session.status} endReason=${session.endReason ?? "none"}`
+        );
+      }
+    );
 
     const sizeSource = hasClientViewport
       ? `controller ${controllerClientId?.slice(0, 12)} viewport`

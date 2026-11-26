@@ -35,7 +35,7 @@ import {
   EXECUTION_STATES,
   WORKTREE_MERGE_OUTCOMES,
 } from "../../types/DashboardConstants";
-import type { WorkingFile } from "../../types/CtrlYokeTypes";
+import type { HarnessId, WorkingFile } from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
@@ -1645,6 +1645,43 @@ suite("DashboardMessageRouter — end-condition script creation", () => {
 });
 
 suite("DashboardMessageRouter — harness detection retry", () => {
+  test("routes queued messages while detection retry is pending", async () => {
+    const retryPending = deferred<HarnessId[]>();
+    const panelMessages: unknown[] = [];
+    const browserMessages: unknown[] = [];
+    const router = buildRouter(
+      {
+        retryHarnessDetection: () => retryPending.promise,
+        getWorkspaceStatsService: () => ({
+          getSnapshot: async () => ({ workflowCount: 1 }),
+        }),
+        refreshWorkspaceStats: async () => undefined,
+      },
+      (message) => panelMessages.push(message)
+    );
+
+    const retryRoute = router.route(
+      {
+        type: MESSAGE_TYPES.RETRY_HARNESS_DETECTION,
+        requestId: "retry-pending",
+      },
+      {
+        clientTag: "browser:retry-pending",
+        postMessage: (message: unknown) => browserMessages.push(message),
+      }
+    );
+    await router.route({ type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS });
+
+    assert.deepStrictEqual(panelMessages, [
+      {
+        type: MESSAGE_TYPES.WORKSPACE_STATS_UPDATED,
+        snapshot: { workflowCount: 1 },
+      },
+    ]);
+    retryPending.resolve([HARNESS_IDS.CLAUDE_CLI]);
+    await retryRoute;
+  });
+
   test("retries detection and replies only to the initiating client", async () => {
     const panelMessages: unknown[] = [];
     const browserMessages: unknown[] = [];

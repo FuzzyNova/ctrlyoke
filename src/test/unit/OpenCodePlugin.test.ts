@@ -25,6 +25,8 @@ async function loadPlugin(
     runId?: string;
     enabledEvents?: string;
     awaitingInputRule?: string;
+    fetcher?: typeof fetch;
+    prompts?: unknown[];
     /** Load the OpenCode 2 directory entry instead of the V1 factory. */
     v2?: boolean;
   } = {}
@@ -105,6 +107,12 @@ async function loadPlugin(
       ...(pluginOptions.awaitingInputRule
         ? { CTRLYOKE_NOTIFY_AWAITING_INPUT: pluginOptions.awaitingInputRule }
         : {}),
+      ...(pluginOptions.v2 && pluginOptions.fetcher
+        ? {
+            CTRLYOKE_OPENCODE_CONTROL_URL: "http://127.0.0.1:1",
+            CTRLYOKE_OPENCODE_CONTROL_TOKEN: "test-token",
+          }
+        : {}),
     },
     pid: 123,
     platform: pluginOptions.platform ?? process.platform,
@@ -119,7 +127,9 @@ async function loadPlugin(
     Set,
     Map,
     Array,
+    URL,
     AbortController,
+    fetch: pluginOptions.fetcher ?? fetch,
     process: processStub,
     setTimeout,
     clearTimeout,
@@ -146,7 +156,8 @@ async function loadPlugin(
       module: v2Module,
     });
     const v2 = await startV2Plugin(
-      v2Module.exports.default as V2PluginDefinition
+      v2Module.exports.default as V2PluginDefinition,
+      { fetcher: pluginOptions.fetcher, prompts: pluginOptions.prompts }
     );
     return { plugin: {}, spawnCalls, v2 };
   }
@@ -186,13 +197,20 @@ interface V2PluginHarness {
 }
 
 async function startV2Plugin(
-  definition: V2PluginDefinition
+  definition: V2PluginDefinition,
+  options: { fetcher?: typeof fetch; prompts?: unknown[] } = {}
 ): Promise<V2PluginHarness> {
   const queue: Array<{ type: string; data: Record<string, unknown> }> = [];
   let wake: (() => void) | undefined;
   let signal: AbortSignal | undefined;
   const toolHooks = new Map<string, V2ToolHook>();
+  const prompts = options.prompts ?? [];
   const ctx = {
+    session: {
+      async prompt(input: unknown) {
+        prompts.push(input);
+      },
+    },
     event: {
       subscribe(options: { signal: AbortSignal }) {
         signal = options.signal;
@@ -213,6 +231,11 @@ async function startV2Plugin(
     tool: {
       async hook(name: string, callback: V2ToolHook) {
         toolHooks.set(name, callback);
+      },
+    },
+    permission: {
+      async hook() {
+        return undefined;
       },
     },
   };
@@ -237,6 +260,37 @@ async function startV2Plugin(
 }
 
 suite("OpenCode plugin user hooks", () => {
+  test("keeps polling after 204, delivers steer, and stops on 410", async () => {
+    const responses = [200, 204, 200, 410];
+    const prompts: unknown[] = [];
+    const fetcher = async () => {
+      const status = responses.shift();
+      assert.notStrictEqual(status, undefined);
+      return {
+        status,
+        ok: status !== 204 && status !== 410,
+        async json() {
+          return { text: "please change direction" };
+        },
+      } as Response;
+    };
+    const { v2 } = await loadPlugin([], { v2: true, fetcher, prompts });
+    assert.ok(v2);
+    // The session event registers the control session and starts polling.
+    await v2.publish("session.execution.started", {
+      sessionID: "steer-session",
+    });
+    for (let i = 0; i < 30 && responses.length > 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.strictEqual(prompts.length, 1);
+    const prompt = prompts[0] as Record<string, unknown>;
+    assert.strictEqual(prompt.sessionID, "steer-session");
+    assert.strictEqual(prompt.text, "please change direction");
+    assert.strictEqual(prompt.delivery, "steer");
+    assert.strictEqual(responses.length, 0);
+    v2.dispose();
+  });
   test("writes child parts and task spawn links to the per-run sidecar", async () => {
     const notifyDir = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "opencode-sidecar-")

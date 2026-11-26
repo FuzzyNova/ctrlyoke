@@ -90,6 +90,7 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
+  ScriptStep,
   QueueState,
   WorkflowViewAddress,
   WorkflowKey,
@@ -154,6 +155,7 @@ export type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerati
 import type {
   HistoryTrashEntryKind,
   McpLocalSource,
+  STEER_ORIGIN_KINDS,
 } from "./DashboardConstants";
 import type {
   HistoryClearPreview,
@@ -1219,18 +1221,25 @@ export interface WorkflowPropertiesUpdateMessage {
   workflowProperties: Record<string, any>;
 }
 
+/** One template as listed to the webview by every template-catalog message. */
+export interface TemplateCatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  variables?: Record<string, any>;
+  isBuiltIn: boolean;
+  /** Where a custom template was discovered; undefined for built-ins. */
+  source?: "user" | "workspace";
+  /** Community catalog filename identifying an installed community template. */
+  communityInstallFile?: string;
+}
+
 /**
  * Open new workflow modal message (extension -> webview)
  */
 export interface OpenNewWorkflowModalMessage {
   type: typeof MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL;
-  templates: Array<{
-    id: string;
-    name: string;
-    description: string;
-    variables?: Record<string, any>;
-    isBuiltIn: boolean;
-  }>;
+  templates: TemplateCatalogItem[];
   defaultTemplateId?: string;
   defaultTemplateSource: TemplateVariableDefaultSource;
   /** Open the inline custom-template form when the modal is first shown. */
@@ -2711,12 +2720,29 @@ export interface AppendFileMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
+/** Context-menu origin carried back only when a queued-step steer fails. */
+export interface QueuedStepSteerOrigin {
+  kind: typeof STEER_ORIGIN_KINDS.QUEUED_STEP;
+  stepIndex: number;
+  /** The step as the dashboard held it, with any unsaved prompt edit applied. */
+  step: PromptStep | ScriptStep;
+}
+
 /** Webview → Extension: `sessionId` names a PTY session or headless control channel. */
 export interface SendSteerMessage {
   type: typeof MESSAGE_TYPES.SEND_STEER_MESSAGE;
   workflowId: string;
   sessionId: string;
   text: string;
+  /** Present for queued-step context-menu steers so failures can restore safely. */
+  origin?: QueuedStepSteerOrigin;
+}
+
+/** Extension → Webview: a prompt or steer dispatch failed. */
+export interface ExecutePromptErrorMessage {
+  type: typeof MESSAGE_TYPES.EXECUTE_PROMPT_ERROR;
+  text: string;
+  origin?: QueuedStepSteerOrigin;
 }
 
 /** Webview → Extension: interrupt a live headless turn without stopping its step. */

@@ -32,6 +32,15 @@ const REFERENCE_BOUNDARY_CHAR_RE = new RegExp(
  */
 export const NOT_AFTER_BOUNDARY = `(?<![${REFERENCE_BOUNDARY_CHARS}])`;
 
+/** Path and URL separators that cannot precede an `@` or `/` reference trigger. */
+const PATH_SEPARATOR_CHARS = "/\\.:";
+
+/** Lookbehind asserting a trigger does not sit inside a path or URL segment. */
+export const NOT_AFTER_PATH_SEPARATOR = `(?<![${PATH_SEPARATOR_CHARS.replace(/[\\\]^-]/g, "\\$&")}])`;
+
+/** `@` references also cannot start inside a path or URL segment. */
+export const NOT_AFTER_AT_BOUNDARY = `${NOT_AFTER_BOUNDARY}${NOT_AFTER_PATH_SEPARATOR}`;
+
 /** Lookahead asserting a reference is not followed by a filename character. */
 export const NOT_BEFORE_BOUNDARY = `(?![${REFERENCE_BOUNDARY_CHARS}])`;
 
@@ -53,6 +62,20 @@ export function isReferenceBoundaryBefore(
 }
 
 /**
+ * Whether an `@` at `index` would not start a reference: it follows a
+ * filename character or a path/URL separator (`/`, `\`, `.`, `:`).
+ */
+export function isAtReferenceBlockedBefore(
+  text: string,
+  index: number
+): boolean {
+  return (
+    isReferenceBoundaryBefore(text, index) ||
+    (index > 0 && PATH_SEPARATOR_CHARS.includes(text[index - 1]))
+  );
+}
+
+/**
  * Find the rightmost occurrence of `triggerChar` in `text` that starts a word.
  *
  * It can start right after whitespace, punctuation like `(`/`"`, or the start
@@ -69,7 +92,11 @@ export function findWordStartTriggerIndex(
   triggerChar: string
 ): number {
   let index = text.lastIndexOf(triggerChar);
-  while (isReferenceBoundaryBefore(text, index)) {
+  while (
+    triggerChar === "@"
+      ? isAtReferenceBlockedBefore(text, index)
+      : isReferenceBoundaryBefore(text, index)
+  ) {
     index = text.lastIndexOf(triggerChar, index - 1);
   }
   return index;

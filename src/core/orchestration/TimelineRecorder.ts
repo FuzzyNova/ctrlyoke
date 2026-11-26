@@ -113,11 +113,19 @@ export class TimelineRecorder {
   }
 
   /**
-   * Remove a crash-torn final JSONL record before the next append. Runs on every
-   * append, so it reads backwards from the end in fixed-size chunks rather than
-   * loading the whole (potentially very large) events file.
+   * Roll back everything after the last committed JSONL record before the next
+   * append. The manifest write is the commit point, so this removes a crash-torn
+   * final line (no trailing newline) and any complete lines whose `sequence` the
+   * manifest never counted (`>= nextSequence`): a crash between the append and the
+   * manifest write leaves those behind, and keeping them would make the next append
+   * reuse their sequence numbers. Runs on every append, so it reads backwards from
+   * the end in fixed-size chunks and stops at the first committed record rather
+   * than loading the whole (potentially very large) events file.
    */
-  private async truncateTornEventsTail(manifestPath: string): Promise<void> {
+  private async truncateTornEventsTail(
+    manifestPath: string,
+    nextSequence: number
+  ): Promise<void> {
     const eventsPath =
       TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
     let handle: fs.promises.FileHandle;
@@ -132,31 +140,82 @@ export class TimelineRecorder {
 
     try {
       const { size } = await handle.stat();
-      const chunk = Buffer.alloc(
-        Math.min(TimelineRecorder.TAIL_SCAN_CHUNK_BYTES, Math.max(size, 1))
-      );
-      let end = size;
-      let isFinalByte = true;
-      while (end > 0) {
-        const start = Math.max(0, end - chunk.length);
-        const length = end - start;
-        await handle.read(chunk, 0, length, start);
-        const lastNewline = chunk.subarray(0, length).lastIndexOf(0x0a);
-        if (isFinalByte && lastNewline === length - 1) {
-          return;
+      let truncateAt = size;
+      let isTail = true;
+      for await (const { start, bytes } of TimelineRecorder.readLinesBackward(
+        handle,
+        size
+      )) {
+        if (isTail) {
+          // The bytes after the final newline: empty for a healthy file,
+          // otherwise a record whose write was cut off.
+          isTail = false;
+          if (bytes.length > 0) truncateAt = start;
+          continue;
         }
-        isFinalByte = false;
-        if (lastNewline !== -1) {
-          await handle.truncate(start + lastNewline + 1);
-          return;
-        }
-        end = start;
+        const text = bytes.toString("utf8").trim();
+        if (!text) continue;
+        if (TimelineRecorder.isCommittedRecord(text, nextSequence)) break;
+        truncateAt = start;
       }
-      if (size > 0) {
-        await handle.truncate(0);
-      }
+      if (truncateAt < size) await handle.truncate(truncateAt);
     } finally {
       await handle.close();
+    }
+  }
+
+  private static isCommittedRecord(
+    text: string,
+    nextSequence: number
+  ): boolean {
+    try {
+      const parsed = JSON.parse(text) as { sequence?: unknown };
+      return (
+        typeof parsed.sequence === "number" && parsed.sequence < nextSequence
+      );
+    } catch {
+      // A malformed record at the tail cannot have been committed.
+      return false;
+    }
+  }
+
+  /**
+   * Yield the file's newline-separated segments from last to first, each with its
+   * starting byte offset. The first segment yielded is whatever follows the final
+   * newline (empty when the file ends with one). A segment spanning several chunks
+   * is collected as parts and joined once, so a long line costs linear time.
+   */
+  private static async *readLinesBackward(
+    handle: fs.promises.FileHandle,
+    size: number
+  ): AsyncGenerator<{ start: number; bytes: Buffer }, void, undefined> {
+    const chunk = Buffer.alloc(TimelineRecorder.TAIL_SCAN_CHUNK_BYTES);
+    let parts: Buffer[] = [];
+    let end = size;
+    while (end > 0) {
+      const start = Math.max(0, end - chunk.length);
+      const length = end - start;
+      await handle.read(chunk, 0, length, start);
+      let segmentEnd = length;
+      let newline = chunk.subarray(0, segmentEnd).lastIndexOf(0x0a);
+      while (newline >= 0) {
+        parts.push(Buffer.from(chunk.subarray(newline + 1, segmentEnd)));
+        yield {
+          start: start + newline + 1,
+          bytes: Buffer.concat(parts.reverse()),
+        };
+        parts = [];
+        segmentEnd = newline;
+        newline =
+          segmentEnd > 0 ? chunk.subarray(0, segmentEnd).lastIndexOf(0x0a) : -1;
+      }
+      if (segmentEnd > 0) {
+        parts.push(Buffer.from(chunk.subarray(0, segmentEnd)));
+      }
+      end = start;
+    }
+    if (parts.length > 0) {
+      yield { start: 0, bytes: Buffer.concat(parts.reverse()) };
     }
   }
 
@@ -340,7 +399,7 @@ export class TimelineRecorder {
       withFileLock(manifestPath, async () => {
         const manifest = await this.readManifest(manifestPath);
         assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
-        await this.truncateTornEventsTail(manifestPath);
+        await this.truncateTornEventsTail(manifestPath, manifest.nextSequence);
         let nextSequence = manifest.nextSequence;
 
         const events: WorkflowTimelineEvent[] = drafts.map(
@@ -400,7 +459,7 @@ export class TimelineRecorder {
           return { committed: false };
         }
 
-        await this.truncateTornEventsTail(manifestPath);
+        await this.truncateTornEventsTail(manifestPath, manifest.nextSequence);
 
         const event: WorkflowTimelineEvent = {
           eventType: TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED,

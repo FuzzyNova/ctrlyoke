@@ -229,6 +229,12 @@ $defs:
           Short keywords for filtering the community template gallery, such as `review` or
           `testing`.
         title: Tags
+      communityInstallFile:
+        type: string
+        description: >-
+          Internal filename recorded when ctrlyoke installs this template from the community
+          library.
+        title: Community Install File
       variables:
         type: object
         description: Metadata for placeholders used by this template, keyed by variable name.
@@ -1265,24 +1271,18 @@ $defs:
         $ref: '#/$defs/scriptProperties/properties/env'
         title: Env
       compareSource:
-        oneOf:
-          - $ref: '#/$defs/scriptProperties/properties/compareSource'
-          - $ref: '#/$defs/varPlaceholder'
+        $ref: '#/$defs/scriptProperties/properties/compareSource'
         description: >-
           Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the
           trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit
           requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced
-          and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated
-          before dispatch.
+          and validated before dispatch.
         title: Compare Source
       timeoutSec:
-        oneOf:
-          - $ref: '#/$defs/scriptProperties/properties/timeoutSec'
-          - $ref: '#/$defs/varPlaceholder'
+        $ref: '#/$defs/scriptProperties/properties/timeoutSec'
         description: >-
           Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A
-          whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value
-          {{name}} placeholder is coerced and validated before dispatch.
+          whole-value {{name}} placeholder is coerced and validated before dispatch.
         title: Timeout Sec
       shell:
         $ref: '#/$defs/scriptProperties/properties/shell'
@@ -1346,9 +1346,7 @@ $defs:
           substituted: This structural field or identity value stays as authored.
         title: Runtime
       operator:
-        oneOf:
-          - $ref: '#/$defs/scriptProperties/properties/operator'
-          - $ref: '#/$defs/varPlaceholder'
+        $ref: '#/$defs/scriptProperties/properties/operator'
         description: >-
           How the compare source is compared against `expected`. Default: 'eq' (whole-value literal
           match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains'
@@ -1358,20 +1356,16 @@ $defs:
           `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`.
           'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`;
           `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}}
-          placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder
-          is coerced and validated before dispatch.
+          placeholder is coerced and validated before dispatch.
         title: Operator
       expected:
         $ref: '#/$defs/scriptProperties/properties/expected'
         title: Expected
       ignoreCase:
-        oneOf:
-          - $ref: '#/$defs/scriptProperties/properties/ignoreCase'
-          - $ref: '#/$defs/varPlaceholder'
+        $ref: '#/$defs/scriptProperties/properties/ignoreCase'
         description: >-
           Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default:
-          false. A whole-value {{name}} placeholder is coerced and validated before dispatch. A
-          whole-value {{name}} placeholder is coerced and validated before dispatch.
+          false. A whole-value {{name}} placeholder is coerced and validated before dispatch.
         title: Ignore Case
       returns:
         $ref: '#/$defs/scriptProperties/properties/returns'

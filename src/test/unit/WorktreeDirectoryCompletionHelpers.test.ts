@@ -70,6 +70,27 @@ suite("WorktreeDirectoryCompletionHelpers", function () {
     );
   });
 
+  test("uses full paths for duplicate directory names and bare names for unique ones", async () => {
+    const firstPath = path.join(parent, "first", "feature");
+    const secondPath = path.join(parent, "second", "feature");
+    const uniquePath = path.join(parent, "unique");
+    await fs.mkdir(path.dirname(firstPath));
+    await fs.mkdir(path.dirname(secondPath));
+    runGit(["worktree", "add", "-b", "feature-one", firstPath]);
+    runGit(["worktree", "add", "-b", "feature-two", secondPath]);
+    runGit(["worktree", "add", "-b", "unique-branch", uniquePath]);
+
+    const items = await getWorktreeDirectoryCompletions(repository, "");
+    assert.deepStrictEqual(
+      items.map(({ label, insertText }) => ({ label, insertText })),
+      [
+        { label: "feature", insertText: firstPath },
+        { label: "feature", insertText: secondPath },
+        { label: "unique", insertText: "unique" },
+      ]
+    );
+  });
+
   test("returns nothing without a repository root", async () => {
     assert.deepStrictEqual(
       await getWorktreeDirectoryCompletions(undefined, ""),

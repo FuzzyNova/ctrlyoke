@@ -24,6 +24,7 @@ import { buildCommitMessageSkillCommandPrefix } from "../utils/McpToolSkillGener
 import { fenceLiteral } from "../utils/FileReferenceParser";
 import {
   GIT_DIFF_NO_EXT_DIFF_OPTION,
+  GIT_DIFF_NO_COLOR_OPTION,
   parseGitNulSeparatedPaths,
   repoToplevel,
 } from "../utils/GitUtils";
@@ -60,7 +61,12 @@ import { truncateUtf8 } from "../utils/Utf8Truncate";
 const execFileAsync = promisify(execFile);
 
 function gitDiffArgs(...args: string[]): string[] {
-  return ["diff", ...args, GIT_DIFF_NO_EXT_DIFF_OPTION];
+  return [
+    "diff",
+    ...args,
+    GIT_DIFF_NO_EXT_DIFF_OPTION,
+    GIT_DIFF_NO_COLOR_OPTION,
+  ];
 }
 
 function gitDiffCommand(...args: string[]): string {
@@ -475,17 +481,31 @@ export class CommitMessageGenerator {
         truncated = true;
       }
     };
-    const commands = [
-      stagedCommand,
-      gitDiffCommand(...(options.includeUnstaged ? ["HEAD"] : [])),
-    ];
+    const commands = [stagedCommand];
     let includesUntrackedFiles = false;
     let hasStagedChanges = false;
     if (stagedDiff.trim()) {
       hasStagedChanges = true;
     }
     if (options.includeUnstaged) {
+      let hasHead = true;
       try {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["rev-parse", "--verify", "--quiet", "HEAD"],
+          { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
+        );
+        hasHead = Boolean(stdout.trim());
+      } catch (error) {
+        const gitError = error as { code?: unknown; stderr?: unknown };
+        if (gitError.code === 1) {
+          hasHead = false;
+        } else {
+          throw error;
+        }
+      }
+      if (hasHead) {
+        commands.push(gitDiffCommand("HEAD"));
         const { stdout: headDiff } = await execFileAsync(
           "git",
           gitDiffArgs("HEAD"),
@@ -494,14 +514,7 @@ export class CommitMessageGenerator {
         if (headDiff.trim()) {
           append(headDiff);
         }
-      } catch (error) {
-        const stderr =
-          typeof error === "object" && error !== null && "stderr" in error
-            ? String(error.stderr)
-            : "";
-        if (!/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)) {
-          throw error;
-        }
+      } else {
         commands.push(gitDiffCommand());
         // An unborn repository has no HEAD comparison; combine its staged
         // additions with the regular unstaged diff instead.
@@ -522,6 +535,7 @@ export class CommitMessageGenerator {
         }
       }
     } else {
+      commands.push(gitDiffCommand());
       const { stdout: trackedDiff } = await execFileAsync(
         "git",
         gitDiffArgs(),
@@ -557,11 +571,27 @@ export class CommitMessageGenerator {
       try {
         const absolutePath = path.join(repositoryRoot, filePath);
         const stat = await fs.lstat(absolutePath);
+        const header = `diff --git a/${filePath} b/${filePath}\n`;
+        if (stat.isSymbolicLink()) {
+          const target = await fs.readlink(absolutePath);
+          const content =
+            `${header}new file mode 120000\n` +
+            `--- /dev/null\n` +
+            `+++ b/${filePath}\n` +
+            `@@ -0,0 +1 @@\n` +
+            `+${target}\n` +
+            `\\ No newline at end of file\n`;
+          append(content);
+          continue;
+        }
+        if (stat.isDirectory()) {
+          append(`${header}new file mode 160000\n`);
+          continue;
+        }
         if (!stat.isFile()) {
           continue;
         }
 
-        const header = `diff --git a/${filePath} b/${filePath}\n`;
         const binaryHeader = `${header}new file mode 100644\nBinary file b/${filePath} added\n`;
         const sample = await readFilePrefix(
           absolutePath,

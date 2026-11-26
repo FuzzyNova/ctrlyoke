@@ -71,6 +71,53 @@ suite("Workflow template schema", () => {
     }
   });
 
+  test("no oneOf has overlapping branches that accept varPlaceholder", () => {
+    const seen = new Set<object>();
+    const canReachVarPlaceholder = (node: unknown): boolean => {
+      if (!node || typeof node !== "object") return false;
+      if (seen.has(node)) return false;
+      seen.add(node);
+      const schemaNode = node as Record<string, unknown>;
+      if (schemaNode.$ref === "#/$defs/varPlaceholder") return true;
+      if (typeof schemaNode.$ref === "string") {
+        const target = schemaNode.$ref
+          .slice(2)
+          .split("/")
+          .reduce<unknown>(
+            (current, key) =>
+              (current as Record<string, unknown> | undefined)?.[key],
+            schema
+          );
+        if (canReachVarPlaceholder(target)) return true;
+      }
+      return ["oneOf", "anyOf"].some((composition) =>
+        ((schemaNode[composition] as unknown[] | undefined) ?? []).some(
+          canReachVarPlaceholder
+        )
+      );
+    };
+    const findOverlaps = (node: unknown, pointer: string): string[] => {
+      if (!node || typeof node !== "object") return [];
+      const schemaNode = node as Record<string, unknown>;
+      const overlaps: string[] = [];
+      if (Array.isArray(schemaNode.oneOf)) {
+        const acceptingBranches = schemaNode.oneOf.filter((branch) => {
+          seen.clear();
+          return canReachVarPlaceholder(branch);
+        });
+        if (acceptingBranches.length > 1) overlaps.push(pointer);
+      }
+      for (const [key, child] of Object.entries(schemaNode)) {
+        if (child && typeof child === "object") {
+          overlaps.push(...findOverlaps(child, `${pointer}/${key}`));
+        }
+      }
+      return overlaps;
+    };
+
+    assert.deepStrictEqual(findOverlaps(schema, "#"), []);
+  });
+
   test("requires the prompt field on prompt steps", () => {
     assert.strictEqual(
       validate({ steps: [{ prompt: "Test prompt" }] }),

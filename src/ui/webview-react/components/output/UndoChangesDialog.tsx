@@ -168,10 +168,15 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   // A dialog opened mid-run holds the change list as it stood then — missing
   // whatever the finishing step's snapshot adds — so it stays read-only for
   // its whole lifetime, even after the run stops.
-  const [openedWhileBlocked] = useState(() => undoBlockedReason !== undefined);
+  const openedWhileBlocked = useRef(false);
+  if (undoBlockedReason !== undefined) {
+    openedWhileBlocked.current = true;
+  }
   const blockedReason =
     undoBlockedReason ??
-    (openedWhileBlocked ? IN_FLIGHT_RUN_REOPEN_TO_UNDO_MESSAGE : undefined);
+    (openedWhileBlocked.current
+      ? IN_FLIGHT_RUN_REOPEN_TO_UNDO_MESSAGE
+      : undefined);
   const isWorkflowMode = (workflowEntries?.length ?? 0) > 0;
   const model = useMemo(() => {
     const undoModel = buildPromptUndoDialogModel({
@@ -204,7 +209,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }, [input, isWorkflowMode, redoInstructions, workflowEntries]);
 
   const initialChecked = useMemo(() => {
-    if (intent === UNDO_DIALOG_INTENTS.VIEW || openedWhileBlocked) {
+    if (intent === UNDO_DIALOG_INTENTS.VIEW || openedWhileBlocked.current) {
       return new Set<string>();
     }
     return new Set(
@@ -212,9 +217,14 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         .filter((row) => row.instruction !== null)
         .map((row) => row.key)
     );
-  }, [intent, isWorkflowMode, mode, model, openedWhileBlocked]);
+  }, [intent, isWorkflowMode, mode, model]);
 
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(initialChecked);
+  useEffect(() => {
+    if (openedWhileBlocked.current) {
+      setCheckedPaths(new Set());
+    }
+  }, [undoBlockedReason]);
   const [activeDirection, setActiveDirection] =
     useState<UndoRedoDirection>(mode);
   const [isSubmitting, setIsSubmitting] = useState(false);

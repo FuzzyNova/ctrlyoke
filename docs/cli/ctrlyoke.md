@@ -25,8 +25,8 @@ ctrlyoke history steps --workflow <key-or-name> [--run <ref|runId>] [--json] [--
 ctrlyoke history show --workflow <key-or-name> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
-ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--no-changes] [--force] [--cwd <path>] [--json]
-ctrlyoke import <bundleDir> [--name <name>] [--again] [--cwd <path>] [--json]
+ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--with-stream-deltas] [--no-changes] [--force] [--cwd <path>] [--json]
+ctrlyoke import <bundleDir> [--name <name>] [--again] [--continue] [--changes <worktree|checkout|skip>] [--cwd <path>] [--json]
 ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key-or-name> --run <ref|runId> --order <indices>
@@ -130,7 +130,7 @@ Use `--run` with `--workflow` to inspect a specific run.
 | `2`  | Usage, parse, or unexpected error; also, with no terminal to ask in, unapproved external roots, secret grants or workspace settings that run programs, or run state written by a newer ctrlyoke |
 | `3`  | A harness failed because its CLI could not be found (not installed, not on `PATH`)                                                                                                              |
 | `4`  | A step failed with a timeout that is not a configured execution guardrail                                                                                                                       |
-| `5`  | Interrupted with Ctrl+C or `SIGTERM`; the run is stopped and its runner lock released                                                                                                           |
+| `5`  | Interrupted with Ctrl+C, `SIGTERM` or a closed output pipe; the run is stopped and its runner lock released                                                                                     |
 | `6`  | The run stopped after reaching a configured execution guardrail                                                                                                                                 |
 
 ## `ctrlyoke run`
@@ -408,15 +408,16 @@ Validation reports workflow findings that hold whatever harness runs the file.
 Unknown fields are ignored by the current ctrlyoke version and reported as
 warnings; the message suggests the nearest valid key and notes that the field
 may come from a newer ctrlyoke. Other warnings describe settings that will not
-take effect. Findings print under the result and appear in `--json` as a
+take effect, or a queue that `run` will refuse to start. Findings print under the result and appear in `--json` as a
 `warnings` array of `{ code, message, propertyPointer }`, where
 `propertyPointer` is an RFC 6901 pointer to the authored value. Identify a
 finding by its `code`, not by its message.
 
-| Code                           | Meaning                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `unknown-property`             | A field is not recognized at this location and will be ignored by this ctrlyoke version.                                        |
-| `script-comparison-incomplete` | A script comparison names a `compareSource` or `operator` but no `expected`, so it is ignored and the check uses exit code `0`. |
+| Code                           | Meaning                                                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unknown-property`             | A field is not recognized at this location and will be ignored by this ctrlyoke version.                                                                    |
+| `script-comparison-incomplete` | A script comparison names a `compareSource` or `operator` but no `expected`, so it is ignored and the check uses exit code `0`.                             |
+| `step-limit-exceeded`          | The authored steps already exceed the effective `maxSteps` (the workflow's or the settings limit), so `run` stops before the first step with exit code `6`. |
 
 Warnings do not change the exit code by default. Bare `--strict` fails on
 `unknown-property` warnings; `--strict <policy>` also applies that rule while
@@ -477,9 +478,12 @@ needs the status line, and it removes it when it is uninstalled itself.
 
 Your settings and run history are kept. The command exits `2` if a harness
 settings file can't be updated (for example, it isn't valid JSON); fix that
-file and run it again. From VS Code's integrated terminal, `ctrlyoke` is the copy
-bundled with the extension, and this command refuses to run there; uninstall the
-extension instead. `--json` prints one JSON object with a `schemaVersion` field.
+file and run it again. In JSON mode, this failure also includes
+`success: false` and `error.message` alongside the uninstall details. From
+VS Code's integrated terminal, `ctrlyoke` is the copy bundled with the
+extension, and this command refuses to run there; uninstall the extension
+instead. In JSON mode that refusal uses the standard error envelope.
+`--json` prints one JSON object with a `schemaVersion` field.
 See [Uninstall](/guide/installation#uninstall).
 
 ## `ctrlyoke trust-workflow-external-roots`
@@ -550,6 +554,11 @@ prints names, scope, set state, and source (`managed`, `environment`, or
 defaults to `user`. `secret rm <NAME>` asks for confirmation unless you pass
 `--yes`.
 
+Removing a name that is not stored in the selected scope succeeds with
+`removed: false` in JSON, or a message naming that scope in text mode. If the
+name is stored in the other scope, the text message tells you which `--scope`
+to pass.
+
 Managed secrets use the host OS credential store. On this machine, the
 dashboard, CLI, and hosted server share those secrets. The extension falls back
 to VS Code profile storage when the OS credential store is unavailable; the CLI
@@ -577,7 +586,9 @@ one.
 The `secret` commands and `trust-secret-grants` support `--json`, which emits
 one versioned result line. Success results include the command data; `secret
 check` reports the checked file and missing secret names. Failures use the
-standard JSON error envelope and preserve the command's exit code.
+standard JSON error envelope and preserve the command's exit code. When grants
+are unapproved, the failure also includes `unapprovedGrants` with those secret
+names; `missingNames` lists any accompanying missing values.
 
 ## `ctrlyoke license`
 
@@ -620,7 +631,8 @@ history:
 ctrlyoke history prune --yes
 ```
 
-Inaccessible repository paths are reported as unknown and are never deleted.
+Inaccessible repository paths, including repositories on volumes that are not
+mounted, are reported as unknown and are never deleted.
 Projects with a live or indeterminate `runner.json` are also refused. The
 command scans the user project registry under `<ctrlyokeStateHome>/projects/`
 and does not need a workspace to be open.
@@ -970,6 +982,9 @@ workflow key, run reference, event count, source provenance, the `changes`
 target and apply result, `continued`, warnings, and the same workspace-specific
 preview under `preview`. Invalid bundle data emits the standard error envelope
 and exits with code `2`.
+
+When `--continue` fails after the import result is written, ctrlyoke keeps that
+single JSON line on stdout and writes the redacted continuation error to stderr.
 
 ## `ctrlyoke step`
 

@@ -105,7 +105,10 @@ import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { buildFileReference } from "@root/utils/ContextReferenceBuilder";
 import { createWorkflowVariableExtension } from "@utils/codemirrorWorkflowVariables";
 import type { VarSubstitutionPolicyField } from "@root/utils/VarSubstitutionPolicy";
-import { isReferenceBoundaryBefore } from "@root/utils/ReferenceBoundary";
+import {
+  isAtReferenceBlockedBefore,
+  isReferenceBoundaryBefore,
+} from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 import {
   buildReferenceChipMenuItems,
@@ -287,8 +290,13 @@ export function buildPromptReferenceInsertion(
   // char's word-boundary lookbehind (see REFERENCE_BOUNDARY_CHAR_RE) would
   // reject it as mid-word and the reference would silently fail to parse —
   // insert a leading space to keep it a real trigger.
+  // An `@` reference also cannot start right after a path/URL separator.
   if (!shouldSurroundWithNewlines && selection.from > 0) {
-    if (isReferenceBoundaryBefore(docText, selection.from)) {
+    if (
+      text.startsWith("@")
+        ? isAtReferenceBlockedBefore(docText, selection.from)
+        : isReferenceBoundaryBefore(docText, selection.from)
+    ) {
       text = ` ${text}`;
     }
   }

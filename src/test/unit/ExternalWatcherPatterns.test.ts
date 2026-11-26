@@ -112,6 +112,9 @@ class RecordingFileWatcherFactory implements FileWatcherFactory {
     this.watchers.push(watcher);
     return watcher;
   }
+  createForFile(absolutePath: string): RecordingFileWatcher {
+    return this.create(path.dirname(absolutePath), path.basename(absolutePath));
+  }
 }
 
 suite("external watcher patterns", () => {

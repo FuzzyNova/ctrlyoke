@@ -344,6 +344,12 @@ export class QwenLogParser extends BaseLogParser {
   /** Spawn call id -> the follower's agent id for that child. */
   private readonly subagentIdsBySpawn = new Map<string, string>();
   private subagentUsageEnabled = true;
+  private headlessResultUsage: QwenProviderEvent["usage"] | undefined;
+
+  /** Set process-wide usage observed on Qwen headless stdout. */
+  setHeadlessResultUsage(usage?: QwenProviderEvent["usage"]): void {
+    this.headlessResultUsage = usage;
+  }
 
   getSubagentFollower(): SubagentSourceFollower {
     return this.subagentFollower;
@@ -408,7 +414,7 @@ export class QwenLogParser extends BaseLogParser {
     let totalOutputTokens = 0;
     let totalCachedTokens = 0;
     let sawUsageMetadata = false;
-    let resultUsage: QwenProviderEvent["usage"];
+    let resultUsage: QwenProviderEvent["usage"] = this.headlessResultUsage;
     let lastAssistantUsage: QwenProviderEvent["usageMetadata"] | undefined;
     let model: string | undefined;
     // Maps callId → full file path so tool_result events can get the path from the
@@ -539,7 +545,9 @@ export class QwenLogParser extends BaseLogParser {
     const resultOutput =
       resultUsage?.output_tokens ?? resultUsage?.candidatesTokenCount;
     const resultCached =
-      resultUsage?.cached_tokens ?? resultUsage?.cachedContentTokenCount;
+      resultUsage?.cache_read_input_tokens ??
+      resultUsage?.cached_tokens ??
+      resultUsage?.cachedContentTokenCount;
     const resultTotal =
       resultUsage?.total_tokens ?? resultUsage?.totalTokenCount;
     const tokenUsage: TokenUsage | undefined =

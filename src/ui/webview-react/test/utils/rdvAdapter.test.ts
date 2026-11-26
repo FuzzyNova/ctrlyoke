@@ -6,6 +6,7 @@ import {
   locateActiveDiffMatch,
   mergeNonTextDiffEntries,
   parseUnifiedDiffToFiles,
+  toRdvFromContent,
   type RenderedDiffRun,
 } from "@utils/rdvAdapter";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
@@ -116,6 +117,18 @@ describe("getRenderedDiffStats", () => {
       { count: 1, addedLines: 0, removedLines: 0 },
       { count: 1, addedLines: 0, removedLines: 1 },
     ]);
+  });
+});
+
+describe("toRdvFromContent", () => {
+  it("treats missing snippet final newlines as insignificant", () => {
+    const result = toRdvFromContent("foo", "foo\nbar");
+    const changes = result.hunks.flatMap((hunk) => hunk.changes);
+
+    expect(changes).toHaveLength(2);
+    expect(changes.map((change) => change.type)).toEqual(["normal", "insert"]);
+    expect(changes.map((change) => change.content)).toEqual(["foo", "bar"]);
+    expect(JSON.stringify(result)).not.toContain("No newline at end of file");
   });
 });
 

@@ -51,7 +51,7 @@ const DEFAULT_TIMERS: ShutdownTimers = {
 
 export function installTwoStageShutdown(
   options: TwoStageShutdownOptions
-): void {
+): () => void {
   let shuttingDown = false;
   let exitRequested = false;
   let confirmationTimer: ReturnType<typeof setTimeout> | undefined;
@@ -89,6 +89,8 @@ export function installTwoStageShutdown(
   };
 
   const beginShutdown = (): void => {
+    if (shuttingDown || exitRequested) return;
+    removeListeners();
     shuttingDown = true;
     options.onShutdownStarted?.();
     if (confirmationTimer !== undefined) {
@@ -150,6 +152,7 @@ export function installTwoStageShutdown(
   }
 
   armListeners();
+  return beginShutdown;
 }
 
 export { DEFAULT_TIMERS as defaultShutdownTimers };

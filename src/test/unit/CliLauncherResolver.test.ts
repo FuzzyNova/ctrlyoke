@@ -7,12 +7,21 @@ import {
   parseNpmCmdShimExecutableRelativePath,
   parseNpmCmdShimScriptRelativePath,
   parsePowerShellBatchProxyTarget,
+  buildWindowsCommandMetadataScript,
   redactMcpConfigArgs,
   resolveCliCommand,
   setWindowsCommandMetadataResolverForTests,
 } from "../../core/harness/shared/CliLauncherResolver";
 
 suite("CliLauncherResolver", () => {
+  test("escapes every PowerShell quote in the Windows lookup script", () => {
+    for (const quote of ["'", "\u2018", "\u2019", "\u201A", "\u201B"]) {
+      const script = buildWindowsCommandMetadataScript(`tool${quote}name`);
+      assert.ok(script.includes(`'tool${quote}${quote}name'`));
+      assert.strictEqual(script.includes(`tool${quote}name`), false);
+    }
+  });
+
   test("redacts inline MCP configuration before display or persistence", () => {
     const secretConfig = JSON.stringify({
       mcpServers: { server: { env: { TOKEN: "secret-value" } } },

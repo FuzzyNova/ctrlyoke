@@ -143,6 +143,32 @@ suite("PersistedSchemaGuard", () => {
         NewerSchemaError
       );
     });
+
+    test("prepareRunFileForWrite refuses a newer top-level definition", () => {
+      assert.throws(
+        () =>
+          prepareRunFileForWrite(
+            {
+              schemaVersion: newerThan(PERSISTED_STORES.WORKFLOW_DEFINITION),
+            } as { schemaVersion: number; _runtime?: object },
+            "run.json"
+          ),
+        (error: unknown) =>
+          error instanceof NewerSchemaError &&
+          error.store === PERSISTED_STORES.WORKFLOW_DEFINITION
+      );
+      const current = prepareRunFileForWrite(
+        {
+          schemaVersion:
+            CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+        } as { schemaVersion: number; _runtime?: object },
+        "run.json"
+      );
+      assert.strictEqual(
+        current.schemaVersion,
+        CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION]
+      );
+    });
   });
 
   suite("usage statistics", () => {

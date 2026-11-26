@@ -1,4 +1,3 @@
-import * as path from "path";
 import type { Disposable, FileWatcherFactory } from "../HostPorts";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { CoordinationScopeSnapshot } from "../../types/CtrlYokeTypes";
@@ -73,10 +72,7 @@ export class ExecutionRootCoordinationWatchSession implements Disposable {
 
   async start(): Promise<void> {
     const scope = await resolveCoordinationBoardScope(this.executionRoot);
-    const watcher = this.fileWatcherFactory.create(
-      path.dirname(scope.boardPath),
-      path.basename(scope.boardPath)
-    );
+    const watcher = this.fileWatcherFactory.createForFile(scope.boardPath);
     this.disposables.push(
       watcher,
       watcher.onDidChange(() => this.notifyBoardChanged()),

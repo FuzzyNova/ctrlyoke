@@ -470,24 +470,24 @@ Environment map consumed by the script process. Secret references are allowed on
 
 ### `compareSource` {#script-step-comparesource}
 
-- **Type:** `"stdout" | "stderr" | "exitCode"` or `string` or `string`
+- **Type:** `"stdout" | "stderr" | "exitCode"` or `string`
 
-Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
 
 Accepted forms:
 
-- `"stdout" | "stderr" | "exitCode"` or `string` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+- `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
 - `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `timeoutSec` {#script-step-timeoutsec}
 
-- **Type:** `number` or `string` or `string`
+- **Type:** `number` or `string`
 
-Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
 
 Accepted forms:
 
-- `number` or `string` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+- `number` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 - `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `shell` {#script-step-shell}
@@ -538,13 +538,13 @@ Per-step runtime execution metadata (optional, added automatically during execut
 
 ### `operator` {#script-step-operator}
 
-- **Type:** `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` or `string` or `string`
+- **Type:** `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` or `string`
 
-How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
 
 Accepted forms:
 
-- `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` or `string` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+- `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.
 - `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `expected` {#script-step-expected}
@@ -555,13 +555,13 @@ Value the compare source is compared against. Omit it to pass when the script ex
 
 ### `ignoreCase` {#script-step-ignorecase}
 
-- **Type:** `boolean` or `string` or `string`
+- **Type:** `boolean` or `string`
 
-Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
 
 Accepted forms:
 
-- `boolean` or `string` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value <code v-pre>{{name}}</code> placeholder is coerced and validated before dispatch.
+- `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
 - `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
 
 ### `returns` {#script-step-returns}
@@ -1346,6 +1346,12 @@ Who wrote the template, such as a GitHub handle. Shown in the community template
 - **Type:** `string[]`
 
 Short keywords for filtering the community template gallery, such as `review` or `testing`.
+
+### `communityInstallFile` {#template-metadata-communityinstallfile}
+
+- **Type:** `string`
+
+Internal filename recorded when ctrlyoke installs this template from the community library.
 
 ### `variables` {#template-metadata-variables}
 

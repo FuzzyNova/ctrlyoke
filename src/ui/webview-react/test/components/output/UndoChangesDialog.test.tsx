@@ -786,6 +786,13 @@ describe("UndoChangesDialog", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
     expect(sendMessageMock).not.toHaveBeenCalled();
+
+    rerender(dialog(undefined));
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      IN_FLIGHT_RUN_REOPEN_TO_UNDO_MESSAGE
+    );
+    expect(sendMessageMock).not.toHaveBeenCalled();
   });
 
   it("sends fetched snapshot restore content in an undo request", () => {

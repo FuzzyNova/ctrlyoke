@@ -21,6 +21,7 @@ import {
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
   RUNNER_IDS,
+  PROMPT_FILE_RESOLUTION_STATUSES,
   WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
@@ -168,6 +169,7 @@ import {
   CLI_CLOSED_PIPE_EXIT_CODE,
   exitQuietlyOnClosedPipe,
   isClosedPipeError,
+  stopWorkflowOnClosedPipe,
 } from "./cli/CliClosedPipe";
 import { registerStepCommands } from "./cli/StepCommandDefinitions";
 import { registerSecretCommands } from "./cli/SecretCommandDefinitions";
@@ -230,6 +232,7 @@ import {
   VarSubstitutionValidationError,
   VarSubstitutor,
 } from "./utils/VarSubstitutor";
+import { findVariablePlaceholders } from "./utils/VariablePlaceholders";
 import { confirmYesNo } from "./cli/CliConfirm";
 import {
   trustExternalRootsCommand as reviewExternalRootsCommand,
@@ -252,6 +255,7 @@ import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
 import { SettingsPropertyResolver } from "./utils/SettingsPropertyResolver";
+import { PromptFileResolver } from "./core/PromptFileResolver";
 import type { WorkflowExecutionPreview } from "./types/ExecutionPreviewTypes";
 import { repoToplevel } from "./utils/GitUtils";
 import {
@@ -259,7 +263,11 @@ import {
   getStateHomeWarning,
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
-import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
+import {
+  getFrozenRunHistoryLocation,
+  initializeRunHistoryLocation,
+  isRunHistoryLocationInitialized,
+} from "./utils/RunHistoryStoragePolicy";
 import {
   analyzeCliCompatibility,
   assertCliValidateHarnessId as assertHarnessId,
@@ -384,7 +392,9 @@ program.hook("preAction", async (_thisCommand, actionCommand) => {
   }
 });
 
-registerRunCommand(program, runCommand);
+registerRunCommand(program, async (file, options) => {
+  await runCommand(file, options);
+});
 registerServerCommand(program);
 
 registerRunScopedCommands(program, {
@@ -479,28 +489,47 @@ registerExportCommand(program, (options) =>
   )
 );
 
-registerImportCommand(program, (options) =>
-  handleHistoryCommand(
+registerImportCommand(program, async (options) => {
+  let continuationExitCode: number | undefined;
+  await handleHistoryCommand(
     importRunCommand(
       options,
       {
         writeOut: (message) => console.log(message),
+        writeErr: (message) => console.error(message),
       },
       {
-        continueRun: async (workflowKey, runRef, cwd) =>
-          continueCommand({
-            workflow: workflowKey,
-            run: runRef,
-            cwd,
-            allowTool: [],
-            denyTool: [],
-          }),
+        continueRun: async (workflowKey, runRef, cwd, outputOptions) => {
+          continuationExitCode = await runCommand(
+            undefined,
+            {
+              workflow: workflowKey,
+              run: runRef,
+              cwd,
+              allowTool: [],
+              denyTool: [],
+              json: outputOptions.json,
+              quiet: outputOptions.quiet,
+            },
+            {
+              kind: CLI_RUN_OPERATION_KINDS.CONTINUE,
+              workflow: workflowKey,
+              run: runRef,
+            },
+            true,
+            false
+          );
+          return continuationExitCode;
+        },
       }
     ),
     options.json === true,
     "import"
-  )
-);
+  );
+  if (continuationExitCode !== undefined) {
+    process.exit(continuationExitCode);
+  }
+});
 
 registerStatusCommand(program, {
   status: (options) =>
@@ -981,9 +1010,14 @@ async function continueCommand(options: ContinueOptions): Promise<void> {
 async function runCommand(
   file: string | undefined,
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
-  operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
-): Promise<void> {
+  operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN },
+  returnExitCode = false,
+  emitJsonResult = true
+): Promise<number | undefined> {
   const reportRunUsageError = (error: unknown): void => {
+    if (returnExitCode) {
+      throw error;
+    }
     reportCliError(error, {
       json: options.json === true,
       envelope: (message) =>
@@ -1090,7 +1124,12 @@ async function runCommand(
   // execution/continuation command family; validate and commit have separate
   // lightweight bootstraps and must not create project state.
   const runHistoryLocation = configService.get("storage").runHistoryLocation;
-  initializeRunHistoryLocation(runHistoryLocation);
+  if (
+    !isRunHistoryLocationInitialized() ||
+    getFrozenRunHistoryLocation() !== runHistoryLocation
+  ) {
+    initializeRunHistoryLocation(runHistoryLocation);
+  }
   const gitToplevel = await repoToplevel(workingDir);
   const stateHomeWarning = getStateHomeWarning(
     ctrlyokeStateHome(),
@@ -1110,7 +1149,11 @@ async function runCommand(
   // dev/implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md. User-scope roots
   // need no such gate (the user already approved them by editing their own
   // settings).
-  await exitUnlessTrustDecided(workspaceExternalRootsTrustRequest(workingDir));
+  await exitUnlessTrustDecided(
+    workspaceExternalRootsTrustRequest(workingDir),
+    options.json === true,
+    workingDir
+  );
 
   // Workspace settings that choose a program to run (shell, hooks, MCP
   // servers, harness flags, default scripts) need a decision before the
@@ -1120,6 +1163,20 @@ async function runCommand(
     createCliTrustIo()
   );
   if (workspaceSettingsExitCode !== undefined) {
+    if (options.json) {
+      process.stdout.write(
+        JSON.stringify(
+          buildCliJsonResult({
+            workspaceRoot: workingDir,
+            error: `Run \`ctrlyoke ${TRUST_WORKSPACE_SETTINGS_COMMAND}\` to review them.`,
+          })
+        ) + "\n"
+      );
+    }
+    if (returnExitCode) {
+      process.exitCode = workspaceSettingsExitCode;
+      return workspaceSettingsExitCode;
+    }
     process.exit(workspaceSettingsExitCode);
   }
 
@@ -1480,9 +1537,13 @@ async function runCommand(
   // shutdown() requests a stop and waits for the execution to settle, which
   // guarantees the runner lock has been released before exit.
   let interrupted = false;
-  installTwoStageShutdown({
+  const triggerGracefulShutdown = installTwoStageShutdown({
     signals: process,
-    signalNames: [PROCESS_SIGNALS.INTERRUPT, PROCESS_SIGNALS.TERMINATE],
+    signalNames: [
+      PROCESS_SIGNALS.INTERRUPT,
+      PROCESS_SIGNALS.TERMINATE,
+      PROCESS_SIGNALS.HANGUP,
+    ],
     exit: process.exit,
     timers: defaultShutdownTimers,
     isInteractive: false,
@@ -1517,6 +1578,8 @@ async function runCommand(
       interrupted = true;
     },
   });
+  stopWorkflowOnClosedPipe(process.stdout, triggerGracefulShutdown);
+  stopWorkflowOnClosedPipe(process.stderr, triggerGracefulShutdown);
 
   try {
     if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN) {
@@ -1526,6 +1589,7 @@ async function runCommand(
       // creation once all refusals have passed.
       let preflightWorkflow:
         Awaited<ReturnType<PromptFileParser["parsePromptFile"]>> | undefined;
+      const overrides = buildCliPropertyOverrides(options, harness);
       if (!options.prompt && resolvedFile) {
         const preflightParser = new PromptFileParser(
           platform,
@@ -1538,7 +1602,9 @@ async function runCommand(
               preflightWorkflow,
               workingDir,
               resolvedFile
-            )
+            ),
+            options.json === true,
+            workingDir
           );
           mergeCliVarsIntoWorkflow(preflightWorkflow, config.vars);
           await exitUnlessTrustDecided(
@@ -1546,7 +1612,13 @@ async function runCommand(
               preflightWorkflow,
               workingDir,
               resolvedFile
-            )
+            ),
+            options.json === true,
+            workingDir
+          );
+          applyCliPropertyOverrides(
+            structuredClone(preflightWorkflow),
+            overrides
           );
         }
       }
@@ -1563,7 +1635,6 @@ async function runCommand(
         }
       }
 
-      const overrides = buildCliPropertyOverrides(options, harness);
       const workflow = instance.promptQueue.getWorkflowFile();
       const notices = applyCliPropertyOverrides(workflow, overrides);
       for (const key of Object.keys(overrides.workflow) as Array<
@@ -1589,7 +1660,12 @@ async function runCommand(
       if (Object.keys(config.vars).length > 0) {
         const workflowFile = instance.promptQueue.getWorkflowFile();
         mergeCliVarsIntoWorkflow(workflowFile, config.vars);
-        warnUnusedCliVariables(workflowFile, config.vars);
+        await warnUnusedCliVariables(
+          workflowFile,
+          config.vars,
+          resolvedFile,
+          platform
+        );
         instance.promptQueue.updateWorkflowProperty("vars", workflowFile.vars);
         await instance.promptQueue.updateWorkingFile(true);
       }
@@ -1654,7 +1730,9 @@ async function runCommand(
         outputProjection,
         finalStepRuntime: instance.promptQueue.getFinalStepRuntime(),
       });
-      process.stdout.write(JSON.stringify(result) + "\n");
+      if (emitJsonResult) {
+        process.stdout.write(JSON.stringify(result) + "\n");
+      }
     } else if (!options.quiet) {
       // In interactive mode the AI CLI TUI may leave the terminal with a hidden
       // cursor or stale attributes when killed. Reset before printing the summary.
@@ -1695,11 +1773,18 @@ async function runCommand(
       }
     }
 
+    if (returnExitCode) {
+      process.exitCode = exitCode;
+      return exitCode;
+    }
     process.exit(exitCode);
   } catch (err) {
     releaseLiveOutputState();
     reportCliError(err, {
-      json: options.json,
+      json: options.json && emitJsonResult,
+      ...(returnExitCode
+        ? { exit: (code: number) => (process.exitCode = code) }
+        : {}),
       envelope: (message) => {
         const state = instance.getQueueState();
         return buildCliJsonResult({
@@ -1721,6 +1806,9 @@ async function runCommand(
         });
       },
     });
+    if (returnExitCode) {
+      return err instanceof CliUsageError ? err.exitCode : CLI_USAGE_EXIT_CODE;
+    }
   }
 }
 
@@ -1819,14 +1907,61 @@ function handleSecretCommand(
     });
 }
 
-function warnUnusedCliVariables(
+async function warnUnusedCliVariables(
   workflow: PromptFile,
-  vars: Record<string, string>
-): void {
+  vars: Record<string, string>,
+  sourceDefinitionPath: string | undefined,
+  platform: NodePlatformAdapter
+): Promise<void> {
   if (Object.keys(vars).length === 0) return;
-  const authored = JSON.stringify(workflow);
+  const texts: string[] = [];
+  const collectTexts = (value: unknown): void => {
+    if (typeof value === "string") texts.push(value);
+    else if (Array.isArray(value)) value.forEach(collectTexts);
+    else if (value && typeof value === "object") {
+      Object.values(value).forEach(collectTexts);
+    }
+  };
+  collectTexts(workflow);
+  if (sourceDefinitionPath) {
+    const resolver = new PromptFileResolver({
+      workspaceRoot: platform.getWorkspaceRoot(),
+      namedRoots: platform.getNamedWorkspaceRoots(),
+      trustedRoots: platform.getWorkspaceRoots(),
+      approvedExternalRoots: platform.getApprovedExternalFileRoots(
+        platform.getWorkspaceRoot()
+      ),
+    });
+    const resolvePromptReferences = async (value: unknown): Promise<void> => {
+      if (typeof value === "string") {
+        if (!resolver.looksLikePromptFilePath(value)) return;
+        const resolved = await resolver.resolve(value, sourceDefinitionPath);
+        if (resolved.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+          texts.push(resolved.content);
+        }
+      } else if (Array.isArray(value)) {
+        await Promise.all(value.map(resolvePromptReferences));
+      } else if (value && typeof value === "object") {
+        await Promise.all(Object.values(value).map(resolvePromptReferences));
+      }
+    };
+    await resolvePromptReferences(workflow);
+  }
+  // Workflow loading resolves referenced prompt files into their text before
+  // this check. Include the same effective settings defaults used by execution.
+  collectTexts(SettingsPropertyResolver.createContext().defaults);
+  collectTexts({
+    endCondition: ConfigurationUtils.getDefaultEndCondition(),
+    preCondition: ConfigurationUtils.getDefaultPreCondition(),
+    worktree: ConfigurationUtils.getDefaultWorktree(),
+  });
+  const referenced = new Set(
+    texts.flatMap((text) =>
+      findVariablePlaceholders(text).map(({ name }) => name)
+    )
+  );
   for (const name of Object.keys(vars)) {
-    if (!authored.includes(`{{${name}}}`)) {
+    if (!referenced.has(name)) {
       console.error(
         `Warning: --var ${name}=... is unused; no workflow field references {{${name}}}.`
       );
@@ -1855,9 +1990,23 @@ function mergeCliVarsIntoWorkflow(
  * Run one of the `run` family's trust gates: ask in a terminal, or exit 2
  * when there is none (see {@link ensureCliTrustDecided}).
  */
-async function exitUnlessTrustDecided(request: CliTrustRequest): Promise<void> {
+async function exitUnlessTrustDecided(
+  request: CliTrustRequest,
+  json = false,
+  workspaceRoot = process.cwd()
+): Promise<void> {
   const exitCode = await ensureCliTrustDecided(request, createCliTrustIo());
   if (exitCode !== undefined) {
+    if (json) {
+      process.stdout.write(
+        JSON.stringify(
+          buildCliJsonResult({
+            workspaceRoot,
+            error: `Run \`${request.reviewCommand}\` to review them.`,
+          })
+        ) + "\n"
+      );
+    }
     process.exit(exitCode);
   }
 }
@@ -1998,19 +2147,23 @@ async function dryRunCommand(
 
     if (resolvedFile) {
       await exitUnlessTrustDecided(
-        workflowExternalRootsTrustRequest(workflow, workingDir, resolvedFile)
+        workflowExternalRootsTrustRequest(workflow, workingDir, resolvedFile),
+        options.json === true,
+        workingDir
       );
     }
 
     mergeCliVarsIntoWorkflow(workflow, config.vars);
-    warnUnusedCliVariables(workflow, config.vars);
+    await warnUnusedCliVariables(workflow, config.vars, resolvedFile, platform);
     const runStartView = VarSubstitutor.substituteWorkflowView(
       workflow,
       workflow.vars ?? {},
       "run-start"
     );
     await exitUnlessTrustDecided(
-      secretGrantsTrustRequest(workflow, workingDir, resolvedFile)
+      secretGrantsTrustRequest(workflow, workingDir, resolvedFile),
+      options.json === true,
+      workingDir
     );
 
     const previewWorkflow = runStartView;
@@ -2243,6 +2396,11 @@ async function executeAddressedCliOperation(
       workflowKey,
       sourceRunRef
     );
+    const overrides = buildCliPropertyOverrides(
+      options,
+      ConfigurationUtils.getIntegrationMode()
+    );
+    applyCliPropertyOverrides(structuredClone(source), overrides);
     const seeded = await WorkingFileManager.seedNewRun(
       workspaceRoot,
       workflowKey,
@@ -2265,7 +2423,8 @@ async function executeAddressedCliOperation(
           instance,
           options,
           ConfigurationUtils.getIntegrationMode(),
-          true
+          true,
+          overrides
         );
         await warnIfNeeded();
       }
@@ -2361,15 +2520,18 @@ async function applyAddressedCliPropertyOverrides(
   instance: WorkflowInstance,
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   defaultHarness: HarnessId,
-  includeHarnessAndModel: boolean
+  includeHarnessAndModel: boolean,
+  prebuiltOverrides?: ReturnType<typeof buildCliPropertyOverrides>
 ): Promise<void> {
   const workflow = instance.promptQueue.getWorkflowFile();
-  const overrides = buildCliPropertyOverrides(
-    includeHarnessAndModel
-      ? options
-      : { ...options, harness: undefined, model: undefined },
-    defaultHarness
-  );
+  const overrides =
+    prebuiltOverrides ??
+    buildCliPropertyOverrides(
+      includeHarnessAndModel
+        ? options
+        : { ...options, harness: undefined, model: undefined },
+      defaultHarness
+    );
   const originalModel = workflow.model;
   const notices = applyCliPropertyOverrides(workflow, overrides);
   const workflowProperties: Record<string, unknown> = {

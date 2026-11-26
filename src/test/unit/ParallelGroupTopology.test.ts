@@ -16,6 +16,7 @@ import {
   unwrapParallelGroup,
   validateParallelGroupTopology,
   deleteParallelGroupSteps,
+  getParallelSiblingReferenceErrors,
   PARALLEL_GROUP_INSERT_POSITIONS,
   flattenParallelItems,
   promoteStepToParallelGroup,
@@ -77,6 +78,42 @@ function names(value: ParallelGroupTopology): string[] {
 }
 
 suite("ParallelGroupTopology", () => {
+  suite("parallel sibling references", () => {
+    const groups = [{ id: "g", startIndex: 0, endIndex: 1, failFast: true }];
+
+    test("ignores step references inside inline code", () => {
+      assert.deepStrictEqual(
+        getParallelSiblingReferenceErrors(
+          [step("Explain `$step:2`"), step("other")],
+          groups
+        ),
+        []
+      );
+    });
+
+    test("ignores step references inside fenced code", () => {
+      assert.deepStrictEqual(
+        getParallelSiblingReferenceErrors(
+          [step("Example:\n```\n$step:2\n```"), step("other")],
+          groups
+        ),
+        []
+      );
+    });
+
+    test("rejects an unmasked sibling reference in the prompt", () => {
+      assert.deepStrictEqual(
+        getParallelSiblingReferenceErrors(
+          [step("Use $step:2"), step("other")],
+          groups
+        ),
+        [
+          "Step 1: Inline priorContext reference 2 cannot target a sibling in parallel group (steps 1, 2)",
+        ]
+      );
+    });
+  });
+
   test("clamps effective group width to one when fan-out is explicitly disabled", () => {
     assert.strictEqual(getEffectiveParallelGroupWidth(12, false), 1);
   });

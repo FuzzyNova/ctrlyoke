@@ -281,6 +281,20 @@ suite("FileReferenceParser", () => {
       assert.deepStrictEqual(parseAtReferences("東京@src/a.ts"), []);
     });
 
+    test("does not parse @ inside paths or URLs", () => {
+      assert.deepStrictEqual(
+        parseAtReferences("check node_modules/@types/node/index.d.ts please"),
+        []
+      );
+      assert.deepStrictEqual(
+        parseAtReferences("read https://medium.com/@alice/post first"),
+        []
+      );
+      assert.deepStrictEqual(parseAtReferences("path\\@scope/file.ts"), []);
+      assert.deepStrictEqual(parseAtReferences("x.@src/file.ts"), []);
+      assert.deepStrictEqual(parseAtReferences("x:@src/file.ts"), []);
+    });
+
     test("keeps extensionless files and directories distinct after punctuation stripping", () => {
       assert.deepStrictEqual(
         parseAtReferences("@scripts/build, @src/.").map(

@@ -1,5 +1,4 @@
 import * as fs from "fs";
-import * as path from "path";
 import type { Disposable, FileWatcherFactory } from "../HostPorts";
 import {
   WorkflowSummary,
@@ -152,10 +151,7 @@ export class ExternalRunWatchSession implements Disposable {
 
   private setupWorkingFileWatcher(): void {
     const targetPath = this.workingFilePath;
-    const watcher = this.fileWatcherFactory.create(
-      path.dirname(targetPath),
-      path.basename(targetPath)
-    );
+    const watcher = this.fileWatcherFactory.createForFile(targetPath);
 
     this.disposables.push(
       watcher.onDidChange(() => {
@@ -279,10 +275,7 @@ export class ExternalRunWatchSession implements Disposable {
       this.workflowKey
     );
 
-    const watcher = this.fileWatcherFactory.create(
-      path.dirname(targetPath),
-      path.basename(targetPath)
-    );
+    const watcher = this.fileWatcherFactory.createForFile(targetPath);
 
     const validateLock = (): void => {
       void this.validateCurrentLock();
@@ -337,10 +330,7 @@ export class ExternalRunWatchSession implements Disposable {
       `[ExternalRunWatchSession] watching run: ${this.workflowKey}/${this.runRef}`
     );
     const targetPath = this.manifestPath;
-    const watcher = this.fileWatcherFactory.create(
-      path.dirname(targetPath),
-      path.basename(targetPath)
-    );
+    const watcher = this.fileWatcherFactory.createForFile(targetPath);
 
     this.disposables.push(
       watcher.onDidChange(() => {

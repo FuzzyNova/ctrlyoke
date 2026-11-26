@@ -295,7 +295,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stderr",
           "exitCode"
         ],
-        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "timeoutSec": {
         "valueKind": "oneOf",
@@ -303,7 +303,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "number",
           "string"
         ],
-        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "shell": {
         "valueKind": "string",
@@ -342,7 +342,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "isEmpty",
           "isNotEmpty"
         ],
-        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "expected": {
         "valueKind": "oneOf",
@@ -358,7 +358,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "boolean",
           "string"
         ],
-        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "steps": {
         "valueKind": "array",
@@ -619,7 +619,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "stderr",
           "exitCode"
         ],
-        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "timeoutSec": {
         "valueKind": "oneOf",
@@ -627,7 +627,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "number",
           "string"
         ],
-        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "shell": {
         "valueKind": "string",
@@ -682,7 +682,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "isEmpty",
           "isNotEmpty"
         ],
-        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "expected": {
         "valueKind": "oneOf",
@@ -698,7 +698,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "boolean",
           "string"
         ],
-        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+        "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       }
     },
     "forbiddenKeys": [
@@ -1082,6 +1082,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "tags": {
         "valueKind": "array",
         "description": "Short keywords for filtering the community template gallery, such as `review` or `testing`."
+      },
+      "communityInstallFile": {
+        "valueKind": "string",
+        "description": "Internal filename recorded when ctrlyoke installs this template from the community library."
       },
       "variables": {
         "valueKind": "object",

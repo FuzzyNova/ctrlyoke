@@ -61,11 +61,19 @@ export function escapeCmdArgument(
   return arg;
 }
 
+/** Escape every character PowerShell recognizes as a single-quote delimiter. */
+export function escapePowerShellSingleQuotedBody(value: string): string {
+  return value.replace(
+    /[\u0027\u2018\u2019\u201A\u201B]/g,
+    (quote) => `${quote}${quote}`
+  );
+}
+
 /** PowerShell single-quoted strings are fully literal — no expansion, no
- * escape sequences — except a doubled `'` for an embedded quote. */
+ * escape sequences — except doubled single-quote characters. */
 export function escapePowerShellArgument(value: string): string {
   if (value.length === 0) return "''";
-  return `'${value.replace(/'/g, "''")}'`;
+  return `'${escapePowerShellSingleQuotedBody(value)}'`;
 }
 
 /** POSIX single-quoted strings are fully literal; an embedded `'` closes the

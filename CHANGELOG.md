@@ -11,6 +11,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Claude Code's 5-hour and weekly quota now updates after headless steps too. Headless Claude Code never runs its status line, which was ctrlyoke's only source for the quota, so a run of headless Claude steps left **Stats & Usage** and the harness picker showing the value from your last interactive step. ctrlyoke now reads the quota that Claude Code includes in its headless output. This works with the Claude status line turned off.
 - After an interactive Claude Code step ends, ctrlyoke keeps reading its quota for as long as the step's terminal stays open. Messages you type into that terminal yourself now update **Stats & Usage** and the harness picker; before, anything Claude reported after the step ended was ignored.
+- Run bundle path rewriting now preserves JSON escape sequences immediately following workspace and home paths.
+- Pending rewind operations now leave run files and snapshots untouched when the lineage descriptor or run file was written by a newer ctrlyoke.
+- Final-step pass condition summaries are retained in run files and `ctrlyoke run --json` results.
+- `import --continue --json` reports continuation errors on stderr while keeping its single stdout result line.
+- Workflow `maxSteps` placeholders now enforce the run-wide limit on appended steps and report numeric limits in MCP status.
+- Run bundle imports refuse newer workflow definition, run file, and timeline schemas before creating history.
+- Prompt-file resolution follows symbolic links only when their targets remain inside trusted workspace, state, or approved external roots.
+- An `@` directly after `/`, `\`, `.` or `:` (as in a URL or `docs/@types`) no longer starts a file reference, and inserted references to paths ending in punctuation are quoted so the punctuation stays part of the path; the prompt editor adds a space when it inserts a reference right after one of those characters.
+- `secret rm` now reports `removed: false` when the name is absent from the selected scope and points to the other scope when it holds that name.
+- `uninstall --json` now includes the standard error envelope for bundled-CLI refusals and adds `success: false` and `error.message` when harness settings cannot be updated.
+- Community templates installed before install provenance was recorded are recognised and marked when their files still match the library; edited or unavailable copies remain untouched.
+
+### Fixed
+
+- Run bundle imports now accept empty change patches and retry errored runs from the failed step, with matching export and preview positions.
+- Headless Codex and Copilot control handshakes now fail promptly when the child exits, and failed queued Copilot steers release the ACP session.
+- Interactive script processes killed by an external signal now follow `errorBehavior`, while user Stop records the attempt as cancelled.
+- Fresh execution starts now clear stale live context-window readings.
+- Run bundle exports now rewrite workspace and home paths when runs and exports use different symlink spellings.
+- JSON run-family results now include an error envelope when a trust or workspace-settings approval is pending.
+- Streamed line-length checks no longer count a held-back carriage return at a chunk boundary.
+- Unranked file and prompt-file completions now sort paths by numeric depth.
+- Prompt-token completions now open after JSON-style character escapes in JSON strings and YAML double-quoted scalars.
+- Raw snippet diffs now treat missing trailing newlines consistently, preserving unchanged final lines.
+- CLI unused-variable warnings now account for referenced prompt files, and runtime unresolved-variable warnings follow each field's fence substitution policy.
+- Node file watchers now report dotfile events, and single-file watches treat glob metacharacters literally.
+- Workspace writes to a field inside a whole-value sensitive setting now approve the newly written value without approving requests that were already pending.
+- Hosted diffs now handle signed commit metadata and staged-deleted binary files.
+- Changes dialogs stay read-only and clear their selection after a run starts while they are open.
+- Detached headless CLI and script process groups are killed when ctrlyoke exits, and `ctrlyoke run` shuts down gracefully on SIGHUP.
+- Timed out shell scripts now escalate SIGTERM to SIGKILL for surviving POSIX descendants.
+- Interactive script PTYs now receive workflow variables as `CTRLYOKE_VAR_*` and run without inherited VS Code environment variables.
+- Prompt links in workflow files now scan decoded prompt values, so escaped, quoted, and comment-contained references match runtime prompt text.
+- Prompt editors now ignore prose punctuation when deciding whether an `@` mention has a file path marker, matching runtime reference parsing.
+- Commit-message diffs now include untracked symbolic links without reading through them.
+- Workspace secrets now resolve through symlinked workspace paths, and existing path-based secret keys migrate on read.
+- Headless Qwen usage now includes the process-wide stdout result total and correctly prices cached input tokens.
+- `import --continue` now reports the imported run, continues it in the same process, and preserves a single JSON result with the continuation exit code.
+- PowerShell command quoting now escapes ASCII and typographic single-quote characters in script invocations, previews, and Windows CLI lookup.
+- The prompt editor preserves dirty step edits in Recent Prompts and protects non-empty script drafts when replacing editor content.
+- Custom templates no longer inherit community install markers, and community install provenance preserves YAML comments and formatting.
+- MCP step preset lookup rejects inherited object property names, preserving the run's authored gates.
+- Stale-lock normalization settles a recovered run before a successor can acquire its runner lock.
+- `history show` treats recorded condition and worktree-setup script results as terminal, including in existing run histories.
+- Workflow discovery, file search, the hosted file viewer and run export work in folders that are not git repositories when Git runs in a non-English locale.
+- Script step comparison fields now accept whole-value variable placeholders without failing schema validation.
+- Merged settings now reflect workspace trust decisions changed by another process without requiring a settings-file update.
+- Git diffs used for commit messages and prompt attachments stay free of ANSI colors, and `commit --all` handles repositories with no commits in every locale.
+- Commit history, metadata, and diffs stay clean when Git is configured to show signature verification.
+- Run bundle workspace patches ignore user Git diff settings and remain applicable on import.
+- Queue run-file updates preserve unknown runtime metadata and refuse writes to runs created by a newer ctrlyoke.
+- Invalid `run` and `rerun` override flags now fail before creating persisted history.
+- Pending-step **Send as Steer** uses unsaved edits and restores the step after a failed delivery without losing the editor draft.
+- Claude and Qwen stream-json headless control channels now apply an interrupt only to the next result record.
+- OpenCode headless steering continues polling after an idle 204 response and stops when the session ends.
+- `secret check --json` now reports missing values and unapproved grant names in its failure envelope.
+- History prune now keeps project history for repositories on volumes that are not mounted.
+- The community template index appears before legacy-install checks; templates are downloaded in parallel only for scopes with an unmarked local copy.
+- Parallel workflows now allow sibling `$step:N` tokens written inside inline or fenced code, where the runtime leaves them literal.
+- Timeline appends interrupted by a crash before the run manifest was updated are rolled back on the next append, so event sequence numbers stay unique.
+- MCP step additions and edits reject unknown harness ids even when harness capabilities have not been detected.
+- Hosted server identity proofs are bound to the responding port, preventing relayed probes from identifying a port squatter as a sibling server.
+- The public standalone shim sends a same-origin resource policy so unrelated sites cannot embed its workspace-specific script.
+- Runner-lock heartbeats retry transient file-sharing rename failures and clean up temporary files.
+- Copilot `--model auto` attempts now record the model Copilot selected and avoid pricing an unresolved alias as another provider's model.
+- Prior-context summary budgets now retain the newest final-step pass and omit older queue steps first, including when context comes from an addressed run.
+- Community template uninstall now verifies library install provenance and removes only its recorded file, protecting same-name user templates.
+- Run bundle exports no longer include their in-workspace staging or previous bundle files in the workspace patch, and imports rewrite only references to bundled assets.
+- The CLI synopsis now lists the stream-delta export option and the import continuation and changes options.
+- A closed stdout or stderr pipe during workflow execution now stops the run cleanly and releases its runner lock.
+- Git branch suggestions keep bare names when tags collide, and ambiguous worktree directory suggestions insert full paths.
+- Harness detection retries no longer freeze other dashboard actions while CLI checks run.
 
 ## [0.10.0] - 2026-11-24
 
@@ -107,6 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In headless Qwen Code steps, Qwen's agent tool no longer lists the available subagent types, because the step now runs in Qwen's SDK mode (needed to answer approval requests). Built-in, user and project agents still run when the prompt names them; without a name the model often starts a background `fork` instead. See [Subagents in headless steps](https://ctrlyoke.dev/docs/harnesses/qwen-cli#headless-subagents).
 
 ### Fixed
+
+- The statusline wrapper now reads settings with the same JSONC rules as the extension, including comments, trailing commas and a leading BOM. Invalid project settings stop cwd ancestor lookup, and settings from a newer schema still disable the statusline.
 
 - An interactive step that finished just as VS Code briefly stalled no longer loses its reply. ctrlyoke could stop reading the harness's session log before the last record arrived, so the step showed no token count or context-window gauge, and its reply appeared later as a follow-up.
 - A step's context-window gauge now reflects the latest follow-up turn, such as a resumed background task, after the dashboard reloads, not only while it is open. A step whose reply arrived only as a follow-up now shows its context window too.

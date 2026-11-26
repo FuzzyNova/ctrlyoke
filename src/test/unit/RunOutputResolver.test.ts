@@ -1675,6 +1675,106 @@ suite("RunOutputResolver", () => {
     assert.strictEqual(settled[0].attempt.terminalState, undefined);
   });
 
+  test("treats recorded phase script execution as terminal", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const identity = {
+      target,
+      runIndex: 0,
+      definitionRevision: 1,
+      phase: "endCondition" as const,
+    };
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        ...identity,
+        attemptIndex: 0,
+        payload: {
+          kind: "condition",
+          startReason: "initial",
+          prompt: "true",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        ...identity,
+        attemptIndex: 0,
+        responseKind: "condition",
+        payload: {
+          cliOutput: {
+            structured: { events: [], metadata: {} },
+            elapsed: 1,
+            isStreaming: false,
+            source: "endCondition",
+            scriptVerdict: {
+              compareSource: "stdout",
+              operator: "contains",
+              expected: "pass",
+              actual: "pass",
+              outcome: "passed",
+              action: "continue",
+              durationMs: 1,
+            },
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+        timestampMs: 3,
+        ...identity,
+        attemptIndex: 0,
+        payload: { command: "true", stdout: "", stderr: "", exitCode: 0 },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 4,
+        ...identity,
+        attemptIndex: 1,
+        payload: {
+          kind: "condition",
+          startReason: "initial",
+          prompt: "true",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 5,
+        ...identity,
+        attemptIndex: 1,
+        responseKind: "condition",
+        payload: {
+          cliOutput: {
+            structured: { events: [], metadata: {} },
+            elapsed: 1,
+            isStreaming: false,
+            source: "endCondition",
+          },
+        },
+      },
+    ]);
+
+    const settled = [];
+    for await (const event of new RunOutputResolver(recorder).streamAttempts(
+      manifestPath
+    )) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        settled.push(event);
+      }
+    }
+
+    assert.deepStrictEqual(
+      settled.map(({ unterminated, attempt }) => [
+        unterminated,
+        attempt.terminalState,
+      ]),
+      [
+        [false, "completed"],
+        [true, undefined],
+      ]
+    );
+  });
+
   test("preserves recorded response kinds and uses source only for legacy events", async () => {
     const kinds = ["ai", "script", "condition", undefined] as const;
     const targets = kinds.map(

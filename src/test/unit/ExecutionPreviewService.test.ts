@@ -12,6 +12,8 @@ import {
 import type { PromptSections } from "../../core/HarnessIntegration";
 import {
   COMMAND_DISPLAY_SHELLS,
+  escapePowerShellArgument,
+  escapePowerShellSingleQuotedBody,
   renderCommandForDisplay,
 } from "../../types/CommandDisplayFormatter";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
@@ -1083,6 +1085,24 @@ suite("ExecutionPreviewService", () => {
     );
     assert.ok(posix.includes("'a path/file.ts'"));
     assert.ok(posix.includes(`'it'"'"'s ready'`));
+  });
+
+  test("escapes every PowerShell single-quote character", () => {
+    for (const quote of ["'", "\u2018", "\u2019", "\u201A", "\u201B"]) {
+      assert.strictEqual(
+        escapePowerShellSingleQuotedBody(`a${quote}b`),
+        `a${quote}${quote}b`
+      );
+      assert.strictEqual(
+        escapePowerShellArgument(`a${quote}b`),
+        `'a${quote}${quote}b'`
+      );
+      assert.ok(
+        renderCommandForDisplay("tool", [`a${quote}b`], "powershell").includes(
+          `'a${quote}${quote}b'`
+        )
+      );
+    }
   });
 
   test("previews script steps with the resolved shell and display dialect", async () => {

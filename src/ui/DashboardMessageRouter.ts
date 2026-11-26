@@ -225,6 +225,8 @@ const SLOW_ROUTE_WAIT_MS = 1000;
  * still replies only to a client that is connected when it finishes.
  */
 const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  // Harness probes can spawn shells and several CLI processes.
+  MESSAGE_TYPES.RETRY_HARNESS_DETECTION,
   // Forwarded client log lines. Queued, they were timestamped when the queue
   // reached them (seconds late behind a slow handler) and a chatty client
   // delayed every other client's commands.
@@ -485,10 +487,30 @@ export class DashboardMessageRouter {
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
     this.communityTemplates = new CommunityTemplateService({
-      installTemplateContent: (name, scope, format, content) =>
-        this.serializer.installTemplateContent(name, scope, format, content),
+      hasUnmarkedCommunityInstallCandidate: (name, scope, expectedFile) =>
+        this.serializer.hasUnmarkedCommunityInstallCandidate(
+          name,
+          scope,
+          expectedFile
+        ),
+      installTemplateContent: (name, scope, format, content, installFile) =>
+        this.serializer.installTemplateContent(
+          name,
+          scope,
+          format,
+          content,
+          installFile
+        ),
+      markLegacyCommunityInstall: (name, scope, format, installFile, content) =>
+        this.serializer.markLegacyCommunityInstall(
+          name,
+          scope,
+          format,
+          installFile,
+          content
+        ),
       uninstallTemplate: (name, scope) =>
-        this.serializer.uninstallCustomTemplate(name, scope),
+        this.serializer.uninstallCommunityTemplate(name, scope),
       clearSavedValues: async (templateId, ctx) => {
         await this.serializer.clearTemplateVariableDefaults(
           templateId,

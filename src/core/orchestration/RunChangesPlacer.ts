@@ -138,6 +138,11 @@ export class RunChangesPlacer {
     try {
       const patch = await fs.readFile(options.patchPath, "utf8");
       await validatePatchPaths(targetRoot, patch);
+      // An empty patch means the run changed no files: there is nothing to
+      // apply or compare, and the clean base tree is already the target.
+      const isEmptyPatch = !patch.trim();
+      if (isEmptyPatch && options.target === RUN_CHANGES_TARGETS.SKIP)
+        return { target: options.target, applied: false };
       if (options.target === RUN_CHANGES_TARGETS.SKIP) {
         try {
           await execGit([
@@ -159,15 +164,17 @@ export class RunChangesPlacer {
           };
         }
       }
-      await execGit([
-        "-C",
-        targetRoot,
-        "apply",
-        "--index",
-        "--3way",
-        "--",
-        options.patchPath,
-      ]);
+      if (!isEmptyPatch) {
+        await execGit([
+          "-C",
+          targetRoot,
+          "apply",
+          "--index",
+          "--3way",
+          "--",
+          options.patchPath,
+        ]);
+      }
       let rolledBack = false;
       const rollback = async (): Promise<void> => {
         if (rolledBack) return;

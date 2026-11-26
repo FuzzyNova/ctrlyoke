@@ -33,7 +33,12 @@ const SEPARATOR = String.raw`[\\/]+`;
 const PATH_DELIMITERS = String.raw`\x00-\x1f\s"'\x60<>|*?:()\[\]{},;`;
 const PATH_NAME_CHAR = `[^\\\\/${PATH_DELIMITERS}]`;
 /** Everything after the root that still belongs to the same path. */
-const PATH_TAIL = `((?:${SEPARATOR}${PATH_NAME_CHAR}*)*)`;
+function pathTail(separator: string): string {
+  // A separator belongs to a path only when a name character follows it.
+  // Preserve one trailing forward slash for directory paths.
+  return `((?:${separator}${PATH_NAME_CHAR}+)*\/?)`;
+}
+const PATH_TAIL = pathTail(SEPARATOR);
 /** The root must end where a path segment ends, so `/x/app` never matches `/x/app2`. */
 const ROOT_END = `(?!${PATH_NAME_CHAR})`;
 
@@ -56,14 +61,14 @@ function rootPattern(root: string): RegExp | undefined {
     // `C:\x`, `c:/x`, `file:///c%3A/x` and MSYS `/c/x`.
     const prefix = `${notAfter("[A-Za-z0-9]")}(?:${letter}(?::|%3A)|${notAfter(String.raw`[\w.~-]`)}/${letter})`;
     return new RegExp(
-      `${prefix}${SEPARATOR}${rest}${ROOT_END}${PATH_TAIL}`,
+      `${prefix}${SEPARATOR}${rest}${ROOT_END}${pathTail(SEPARATOR)}`,
       "gi"
     );
   }
   if (!root.startsWith("/") || segments.length === 0) return undefined;
   const body = segments.map(escapeRegExp).join(SEPARATOR);
   return new RegExp(
-    `${notAfter(String.raw`[\w.~-]`)}/${body}${ROOT_END}${PATH_TAIL}`,
+    `${notAfter(String.raw`[\w.~-]`)}/${body}${ROOT_END}${pathTail("/")}`,
     "g"
   );
 }
@@ -88,6 +93,8 @@ export interface PortablePathRoots {
   workspaceRoots?: readonly string[];
   /** Rewritten to `~`; the workspace wins where both apply. */
   homeDir?: string;
+  /** Additional spellings of the same home directory. */
+  homeDirs?: readonly string[];
 }
 
 /** Returns the export-side text transform for one source workspace. */
@@ -102,8 +109,13 @@ export function createPortablePathRewriter(
     .sort((left, right) => right.length - left.length);
   const rewrites = [
     ...workspaceRoots.map((root) => tokenRewrite(root, BUNDLE_WORKSPACE_TOKEN)),
-    roots.homeDir ? tokenRewrite(roots.homeDir, BUNDLE_HOME_TOKEN) : undefined,
-    roots.homeDir ? userNameRewrite(roots.homeDir) : undefined,
+    ...[...(roots.homeDirs ?? []), ...(roots.homeDir ? [roots.homeDir] : [])]
+      .filter((root, index, all) => all.indexOf(root) === index)
+      .sort((left, right) => right.length - left.length)
+      .flatMap((root) => [
+        tokenRewrite(root, BUNDLE_HOME_TOKEN),
+        userNameRewrite(root),
+      ]),
   ].filter((rewrite): rewrite is (text: string) => string => !!rewrite);
   return (text) =>
     rewrites.reduce((current, rewrite) => rewrite(current), text);

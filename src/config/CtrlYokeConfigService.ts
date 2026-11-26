@@ -346,6 +346,7 @@ export class CtrlYokeConfigService {
     userSettings: PartialCtrlYokeSettings | undefined;
     workspaceSettings: PartialCtrlYokeSettings | undefined;
     cliOverlay: PartialCtrlYokeSettings | undefined;
+    trustRevision: object | undefined;
   };
 
   private invalidateMergedSettings(): void {
@@ -536,12 +537,18 @@ export class CtrlYokeConfigService {
     // detecting those edits without repeating the deep merges.
     const userSettings = this.userBackend?.getAll();
     const workspaceSettings = this.workspaceBackend?.getAll();
+    const hasSensitiveRequests =
+      this.getWorkspaceSensitiveSettingRequests().length > 0;
+    const trustRevision = hasSensitiveRequests
+      ? this.workspaceSettingsTrust.revision
+      : undefined;
     const cached = this.mergedSettingsCache;
     if (
       cached &&
       cached.userSettings === userSettings &&
       cached.workspaceSettings === workspaceSettings &&
-      cached.cliOverlay === this.cliOverlay
+      cached.cliOverlay === this.cliOverlay &&
+      cached.trustRevision === trustRevision
     ) {
       return cloneSettingsValue(cached.settings);
     }
@@ -583,6 +590,7 @@ export class CtrlYokeConfigService {
       userSettings,
       workspaceSettings,
       cliOverlay: this.cliOverlay,
+      trustRevision,
     };
     return cloneSettingsValue(result);
   }
@@ -654,7 +662,9 @@ export class CtrlYokeConfigService {
    * itself is their own choice, so record it as allowed. Only values that
    * were not already requested are approved: an unapproved value committed
    * to the file by someone else stays pending even if this write touched the
-   * same setting.
+   * same setting. A write inside a whole-value setting (the dashboard edits
+   * `defaults.toolPermissions.mode`, not the whole object) approves the new
+   * whole value only when the value it replaced was already allowed or absent.
    */
   private async approveNewWorkspaceSensitiveValues(
     before: readonly WorkspaceSensitiveSettingRequest[],
@@ -666,10 +676,25 @@ export class CtrlYokeConfigService {
       before.map((request) => workspaceSensitiveSettingRequestKey(request))
     );
     const added = this.getWorkspaceSensitiveSettingRequests().filter(
-      (request) =>
-        !previousKeys.has(workspaceSensitiveSettingRequestKey(request)) &&
-        (request.settingPath === writtenPath ||
-          request.settingPath.startsWith(`${writtenPath}.`))
+      (request) => {
+        const writeIsInsideWholeValue = writtenPath.startsWith(
+          `${request.settingPath}.`
+        );
+        return (
+          !previousKeys.has(workspaceSensitiveSettingRequestKey(request)) &&
+          (request.settingPath === writtenPath ||
+            request.settingPath.startsWith(`${writtenPath}.`) ||
+            (writeIsInsideWholeValue &&
+              !before.some(
+                (previous) =>
+                  previous.settingPath === request.settingPath &&
+                  this.workspaceSettingsTrust.getDecision(
+                    identity,
+                    previous
+                  ) !== TRUST_DECISIONS.ALLOW
+              )))
+        );
+      }
     );
     await this.workspaceSettingsTrust.setDecisions(
       identity,

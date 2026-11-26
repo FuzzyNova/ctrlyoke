@@ -5,6 +5,7 @@ import {
   CLI_CLOSED_PIPE_EXIT_CODE,
   exitQuietlyOnClosedPipe,
   isClosedPipeError,
+  stopWorkflowOnClosedPipe,
 } from "../../cli/CliClosedPipe";
 
 function errnoError(code: string): NodeJS.ErrnoException {
@@ -36,5 +37,16 @@ suite("CliClosedPipe", () => {
     assert.strictEqual(isClosedPipeError(errnoError("ENOENT")), false);
     assert.strictEqual(isClosedPipeError(undefined), false);
     assert.strictEqual(isClosedPipeError("EPIPE"), false);
+  });
+
+  test("silences a failed stream and requests workflow shutdown", () => {
+    const stream = Object.assign(new EventEmitter(), {
+      write: () => false,
+    }) as unknown as NodeJS.WriteStream;
+    let stops = 0;
+    stopWorkflowOnClosedPipe(stream, () => (stops += 1));
+    stream.emit("error", errnoError("EPIPE"));
+    assert.strictEqual(stream.write("ignored"), true);
+    assert.strictEqual(stops, 1);
   });
 });

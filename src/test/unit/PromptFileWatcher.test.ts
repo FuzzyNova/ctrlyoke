@@ -38,6 +38,7 @@ suite("PromptFileWatcher", () => {
     const fileWatcher = new TestFileWatcher();
     const factory: FileWatcherFactory = {
       create: () => fileWatcher,
+      createForFile: () => fileWatcher,
     };
     const queue = {
       getState: () => ({

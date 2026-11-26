@@ -442,6 +442,22 @@ async function main() {
     logLevel: "silent",
   });
 
+  // Keep the statusline wrapper's JSONC settings reader as a sibling bundle,
+  // using the same implementation as the extension config backend.
+  const settingsJsoncCtx = await esbuild.context({
+    entryPoints: ["src/config/JsoncObjectFile.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    mainFields: ["module", "main"],
+    target: "es2020",
+    outfile: "out/scripts/ctrlyoke-settings-jsonc.js",
+    logLevel: "silent",
+  });
+
   // Build MCP server (separate executable for CLI tools)
   const mcpCtx = await esbuild.context({
     entryPoints: ["src/mcp-server.ts"],
@@ -579,6 +595,7 @@ async function main() {
     await ctx.watch();
     await statuslineFormatCtx.watch();
     await formatMigrationsCtx.watch();
+    await settingsJsoncCtx.watch();
     await mcpCtx.watch();
     await vscodeUninstallCtx.watch();
     await historySearchRebuildWorkerCtx.watch();
@@ -591,6 +608,7 @@ async function main() {
     await ctx.rebuild();
     await statuslineFormatCtx.rebuild();
     await formatMigrationsCtx.rebuild();
+    await settingsJsoncCtx.rebuild();
     await mcpCtx.rebuild();
     await vscodeUninstallCtx.rebuild();
     await historySearchRebuildWorkerCtx.rebuild();
@@ -602,6 +620,7 @@ async function main() {
     await ctx.dispose();
     await statuslineFormatCtx.dispose();
     await formatMigrationsCtx.dispose();
+    await settingsJsoncCtx.dispose();
     await mcpCtx.dispose();
     await vscodeUninstallCtx.dispose();
     await historySearchRebuildWorkerCtx.dispose();

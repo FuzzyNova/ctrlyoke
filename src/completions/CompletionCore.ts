@@ -11,6 +11,7 @@ import {
   normalizeReferencePath,
 } from "../utils/ContextReferenceBuilder";
 import { fuzzyMatches, rankByFuzzyQuery } from "./FuzzyRanking";
+import { getPathDepthSortKey } from "./PathDepthSort";
 import { getPriorContextCompletionItems } from "./PriorContextCompletions";
 import {
   COMPLETION_ITEM_KINDS,
@@ -263,7 +264,6 @@ export class CompletionCore {
       rank: number
     ): PlainCompletionItem {
       const directory = entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY;
-      const depth = entry.relativePath.split("/").length;
       return {
         label: path.posix.basename(entry.relativePath) + (directory ? "/" : ""),
         kind: directory
@@ -281,7 +281,7 @@ export class CompletionCore {
           : `**Full file attachment** (CLI-native)\n\nInsert: \`${buildFileReference(entry.relativePath)}\`\n\nThe CLI will automatically attach this file's content.\n\n_For line ranges, use \`${buildSelectionReference(entry.relativePath, 10, 20)}\`_`,
         sortText: queryForRank
           ? `0_${String(rank).padStart(6, "0")}`
-          : `0_${depth}_${entry.relativePath}`,
+          : `0_${getPathDepthSortKey(entry.relativePath)}_${entry.relativePath}`,
         filterText: `${path.posix.basename(entry.relativePath)} ${entry.relativePath}`,
         ...(queryForRank ? { rank } : {}),
       };
@@ -329,7 +329,7 @@ export class CompletionCore {
         documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
         sortText: shouldRank
           ? String(rank).padStart(6, "0")
-          : `${entry.relativePath.split("/").length}_${entry.relativePath}`,
+          : `${getPathDepthSortKey(entry.relativePath)}_${entry.relativePath}`,
         filterText: `${name} ${entry.relativePath}`,
         ...(shouldRank ? { rank } : {}),
       };

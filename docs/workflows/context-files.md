@@ -15,8 +15,10 @@ ctrlyoke prompt files support structured references that help you attach the rig
 - paths with spaces are quoted; quoted paths may also name a root-level file without an
   extension, such as `@"Makefile"`
 - an unquoted path must contain `/`, `\`, or `.`, so `@workspace` is not treated as a
-  reference. An `@` in the middle of a word is not a trigger, which keeps email addresses such
-  as `name@example.com` from becoming references.
+  reference. An `@` in the middle of a word, path, or URL is not a trigger: email addresses
+  such as `name@example.com`, scoped package paths such as `node_modules/@types/node`, and
+  URLs such as `https://medium.com/@alice/post` stay plain text. `@` can start a reference
+  after whitespace or opening punctuation such as `(` or `"`.
 
 ### Image attachments
 

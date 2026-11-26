@@ -13,6 +13,7 @@ import { getWorkflowLocation } from "./WorkflowDocumentLocation";
 import {
   getWorkflowInsertEscape,
   type InsertTextEscape,
+  usesJsonStyleEscapes,
 } from "./WorkflowInsertEscape";
 import { getCtrlYokeSlashCompletions } from "./SlashTokenCompletionHelpers";
 import { findPromptTriggerContext } from "./PromptTriggerContext";
@@ -58,7 +59,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // A cheap check first, so ordinary typing never parses the document. Any
     // escape makes it the most permissive form of the check below, so it never
     // rejects a context the located check would accept.
-    if (!findPromptTriggerContext(textBeforeCursor, (text) => text)) {
+    if (!findPromptTriggerContext(textBeforeCursor, (text) => text, true)) {
       return undefined;
     }
 
@@ -67,7 +68,11 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return undefined;
     }
     const { escape } = promptText;
-    const triggerContext = findPromptTriggerContext(textBeforeCursor, escape);
+    const triggerContext = findPromptTriggerContext(
+      textBeforeCursor,
+      escape,
+      promptText.jsonStyleEscapes
+    );
     if (!triggerContext) {
       return undefined;
     }
@@ -277,7 +282,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   private locatePromptText(
     document: vscode.TextDocument,
     position: vscode.Position
-  ): { escape: InsertTextEscape | undefined } | undefined {
+  ): { escape: InsertTextEscape | undefined; jsonStyleEscapes: boolean } | undefined {
     const kind = getCtrlYokeFileKind(document.fileName);
     if (kind) {
       const location = getWorkflowLocation(
@@ -286,12 +291,15 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
         kind
       );
       return location.role === WORKFLOW_LOCATION_ROLES.PROMPT_TEXT
-        ? { escape: getWorkflowInsertEscape(location) }
+        ? {
+            escape: getWorkflowInsertEscape(location),
+            jsonStyleEscapes: usesJsonStyleEscapes(location),
+          }
         : undefined;
     }
     return document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT
-      ? { escape: undefined }
+      ? { escape: undefined, jsonStyleEscapes: false }
       : undefined;
   }
 

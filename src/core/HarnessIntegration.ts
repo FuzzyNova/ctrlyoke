@@ -41,6 +41,7 @@ import {
   PriorContextItemType,
   PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
   PRIOR_CONTEXT_DETAILS,
+  PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_LIMITS,
   PRIOR_CONTEXT_TRUNCATION,
   USER_STEER_ATTRIBUTIONS,
@@ -79,6 +80,8 @@ export type PriorContextItem = {
   earlierAttempts?: { count: number; filesChanged: PriorContextFileChange[] };
   /** Discriminant set when the item originates from a finalStep/finalStep loop (not a queue prompt). */
   type?: PriorContextItemType;
+  /** Budget chronology only: addressed items precede items from the current run. */
+  importedRun?: boolean;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
   /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
@@ -312,9 +315,20 @@ function applySummaryBudget(
   steps: { item: PriorContextItem; xml: string }[]
 ): string[] {
   const rendered = steps.map(({ xml }) => xml);
-  const summaryPositions = steps.flatMap(({ item }, position) =>
-    item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? [position] : []
-  );
+  const summaryPositions = steps
+    .flatMap(({ item }, position) =>
+      item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? [position] : []
+    )
+    .sort((left, right) => {
+      const a = steps[left].item;
+      const b = steps[right].item;
+      return (
+        Number(a.importedRun !== true) - Number(b.importedRun !== true) ||
+        Number(a.type === PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP) -
+          Number(b.type === PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP) ||
+        a.index - b.index
+      );
+    });
   let total = summaryPositions.reduce(
     (sum, position) => sum + utf8Bytes(rendered[position]),
     0

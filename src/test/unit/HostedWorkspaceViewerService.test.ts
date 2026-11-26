@@ -3108,6 +3108,26 @@ suite("HostedWorkspaceViewerService", function () {
       ).getDiff("staged.png");
       assert.strictEqual(tooLarge.payloadKind, DIFF_PAYLOAD_KINDS.TOO_LARGE);
     });
+
+    test("returns staged-deleted non-text binary entries", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(path.join(root, "deleted.bin"), Buffer.from([0, 1, 2]));
+      runGit(root, "add", "deleted.bin");
+      runGit(root, "commit", "-m", "Add binary");
+      runGit(root, "rm", "deleted.bin");
+
+      const staged = await new HostedWorkspaceViewerService(root).getGitRefDiff(
+        "~staged"
+      );
+      const entry = staged.nonTextEntries?.find(
+        (candidate) => candidate.path === "deleted.bin"
+      );
+      assert.ok(entry);
+      assert.strictEqual(entry?.changeType, "deleted");
+      assert.strictEqual(entry?.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
+    });
   });
 
   // ── getGitRefDiffPage ────────────────────────────────────────────────────

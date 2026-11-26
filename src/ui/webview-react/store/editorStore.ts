@@ -228,7 +228,7 @@ function normalizePromptErrorBehavior(
  * Returns a stable string key for a selection target, used to index pendingEdits.
  * Only valid for edit-mode targets (queue / finalStep).
  */
-function selectionTargetKey(target: EditorSelectionTarget): string {
+export function selectionTargetKey(target: EditorSelectionTarget): string {
   if (target.kind === FINAL_STEP_PHASES.QUEUE) return `queue:${target.index}`;
   if (target.kind === FINAL_STEP_PHASES.FINAL_STEP)
     return FINAL_STEP_PHASES.FINAL_STEP;
@@ -397,7 +397,8 @@ function readPersistedNewStepDraft(
 
 /**
  * Keep unsent prompt text the editor is about to replace in Recent Prompts.
- * A script draft has no prompt text and is left alone.
+ * Script drafts are preserved by their caller because prompt history stores
+ * prompt text only.
  */
 function rememberReplacedPromptDraft(
   draft: Pick<NewStepDraftFields, "promptText" | "stepType"> | null
@@ -440,18 +441,26 @@ interface EditorActions {
   enterNewPromptMode: () => void;
   startReplyToStep: (reply: ReplyContextInput) => void;
   cancelReplyToStep: () => void;
-  enterEditMode: (index: number, promptData: WorkflowStep) => void;
+  enterEditMode: (
+    index: number,
+    promptData: WorkflowStep,
+    restorePendingEdit?: boolean
+  ) => void;
   /**
    * Make a queued step the new-step draft: its text, name and properties,
    * including unsaved edits made to it in the editor. The caller removes the
    * step from the queue. Unsent prompt text in the draft it replaces is kept
    * in Recent Prompts.
    */
-  moveStepToNewStepDraft: (index: number, step: WorkflowStep) => void;
+  moveStepToNewStepDraft: (
+    index: number,
+    step: WorkflowStep,
+    restorePendingEdit?: boolean
+  ) => boolean;
   /**
    * Replace the editor's prompt text with a Recent Prompts entry. Unsent text
-   * in a new prompt is kept in Recent Prompts first; an existing step's text
-   * is still in the step, so it is simply edited.
+   * in a new prompt is kept in Recent Prompts first; dirty edits to an
+   * existing step are also kept.
    */
   loadRecentPrompt: (text: string) => void;
   cancelEdit: () => void;
@@ -766,7 +775,7 @@ export const useEditorStore = create<
     });
   },
 
-  enterEditMode: (index, promptData) => {
+  enterEditMode: (index, promptData, restorePendingEdit = true) => {
     const state = get();
     const newPendingEdits = { ...state.pendingEdits };
 
@@ -792,7 +801,9 @@ export const useEditorStore = create<
 
     // Restore a pending (unsaved) edit if one exists for this prompt, otherwise
     // load the prompt data from the workflow.
-    const pendingEdit = newPendingEdits[selectionTargetKey(newTarget)];
+    const pendingEdit = restorePendingEdit
+      ? newPendingEdits[selectionTargetKey(newTarget)]
+      : undefined;
 
     if (isScriptStep(promptData)) {
       // Script step: populate scriptCommand, set stepType to script (unless pending edit overrides)
@@ -924,24 +935,37 @@ export const useEditorStore = create<
     }
   },
 
-  moveStepToNewStepDraft: (index, step) => {
+  moveStepToNewStepDraft: (index, step, restorePendingEdit = true) => {
     const before = get();
-    rememberReplacedPromptDraft(
+    const replacedDraft =
       before.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
         ? before
         : (before.savedNewPromptState ??
-            readPersistedNewStepDraft(getVsCodeApi()))
-    );
+          readPersistedNewStepDraft(getVsCodeApi()));
+    rememberReplacedPromptDraft(replacedDraft);
+    const preservedScriptDraft =
+      replacedDraft?.stepType === STEP_TYPES.SCRIPT &&
+      replacedDraft.scriptCommand.trim().length > 0
+        ? restoreNewStepDraft(replacedDraft)
+        : null;
+    if (preservedScriptDraft) {
+      if ("prompt" in step) {
+        usePromptHistoryStore.getState().rememberDraft(step.prompt);
+      }
+    }
 
     // Loading the step through edit mode reuses its step-to-editor mapping
     // and picks up unsaved edits cached for it; the editor then leaves edit
     // mode without restoring the draft it replaced.
-    get().enterEditMode(index, step);
+    get().enterEditMode(index, step, restorePendingEdit);
     const pendingEdits = { ...get().pendingEdits };
-    delete pendingEdits[
-      selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index })
-    ];
+    if (restorePendingEdit) {
+      delete pendingEdits[
+        selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index })
+      ];
+    }
     set({
+      ...(preservedScriptDraft ?? {}),
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null,
       originalPromptData: null,
@@ -950,12 +974,20 @@ export const useEditorStore = create<
       pendingEdits,
     });
     expandPromptEditorIfCollapsed();
+    return preservedScriptDraft !== null;
   },
 
   loadRecentPrompt: (text) => {
     const state = get();
     if (state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) {
       rememberReplacedPromptDraft(state);
+    } else if (
+      state.originalPromptData &&
+      "prompt" in state.originalPromptData &&
+      state.promptText !== state.originalPromptData.prompt &&
+      state.promptText.trim().length > 0
+    ) {
+      usePromptHistoryStore.getState().rememberDraft(state.promptText);
     }
     set({ promptText: text, isDirty: true });
   },

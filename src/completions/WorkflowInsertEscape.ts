@@ -7,6 +7,16 @@ import {
 /** Rewrites completion text so it stays literal inside the string it lands in. */
 export type InsertTextEscape = (text: string) => string;
 
+/** Whether raw text in this workflow value can contain JSON-style escapes. */
+export function usesJsonStyleEscapes(
+  location: Pick<WorkflowLocation, "jsonString" | "scalarStyle">
+): boolean {
+  return (
+    location.jsonString ||
+    location.scalarStyle === YAML_SCALAR_STYLES.DOUBLE_QUOTED
+  );
+}
+
 const escapeSingleQuoted: InsertTextEscape = (text) => text.replace(/'/g, "''");
 
 /**
@@ -18,10 +28,7 @@ const escapeSingleQuoted: InsertTextEscape = (text) => text.replace(/'/g, "''");
 export function getWorkflowInsertEscape(
   location: Pick<WorkflowLocation, "jsonString" | "scalarStyle">
 ): InsertTextEscape | undefined {
-  if (
-    location.jsonString ||
-    location.scalarStyle === YAML_SCALAR_STYLES.DOUBLE_QUOTED
-  ) {
+  if (usesJsonStyleEscapes(location)) {
     return escapeJsonStringFragment;
   }
   if (location.scalarStyle === YAML_SCALAR_STYLES.SINGLE_QUOTED) {

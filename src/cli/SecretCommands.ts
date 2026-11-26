@@ -11,6 +11,7 @@ import {
 } from "../platform/NodePlatformAdapter";
 import {
   MissingSecretsError,
+  UnapprovedSecretGrantsError,
   getWorkflowSecretGrants,
   preflightWorkflowSecrets,
 } from "../utils/SecretResolver";
@@ -20,6 +21,7 @@ import {
 } from "../config/SecretGrantsTrustStore";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import {
+  legacyWorkspaceSecretKeyForRoot,
   userSecretKey,
   workspaceSecretKeyForRoot,
 } from "../platform/SecretKey";
@@ -183,9 +185,38 @@ export async function removeSecretCommand(
     return;
   }
 
-  await dependencies.secretStore.delete(
-    secretKeyForScope(scope, workspaceRoot, name)
-  );
+  const key = secretKeyForScope(scope, workspaceRoot, name);
+  const legacyKey =
+    scope === SETTING_SCOPES.WORKSPACE
+      ? legacyWorkspaceSecretKeyForRoot(workspaceRoot, name)
+      : key;
+  const value =
+    (await dependencies.secretStore.get(key)) ??
+    (legacyKey === key
+      ? undefined
+      : await dependencies.secretStore.get(legacyKey));
+  if (value === undefined) {
+    const otherScope =
+      scope === SETTING_SCOPES.USER
+        ? SETTING_SCOPES.WORKSPACE
+        : SETTING_SCOPES.USER;
+    const otherValue = await dependencies.secretStore.get(
+      secretKeyForScope(otherScope, workspaceRoot, name)
+    );
+    const hint =
+      otherValue === undefined
+        ? ""
+        : ` A secret with this name is stored at ${otherScope} scope; pass --scope ${otherScope} to remove it.`;
+    writeSecretSuccess(
+      options.json,
+      io,
+      { name, scope, removed: false },
+      `No secret ${name} is stored at ${scope} scope.${hint}`
+    );
+    return;
+  }
+  await dependencies.secretStore.delete(key);
+  if (legacyKey !== key) await dependencies.secretStore.delete(legacyKey);
   writeSecretSuccess(
     options.json,
     io,
@@ -276,7 +307,15 @@ export async function checkSecretsCommand(
       error instanceof MissingSecretsError ? 1 : 2,
       error instanceof MissingSecretsError
         ? { filesChecked: [filePath], missingNames: error.secretNames }
-        : { filesChecked: [filePath], missingNames: [] }
+        : error instanceof UnapprovedSecretGrantsError
+          ? {
+              filesChecked: [filePath],
+              missingNames: [
+                ...new Set(error.missingSecrets.map(({ name }) => name)),
+              ],
+              unapprovedGrants: error.secretNames,
+            }
+          : { filesChecked: [filePath], missingNames: [] }
     );
     return error instanceof MissingSecretsError ? 1 : 2;
   }

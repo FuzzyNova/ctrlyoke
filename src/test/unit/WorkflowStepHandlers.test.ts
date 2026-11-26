@@ -7,6 +7,7 @@ import type { DashboardClientContext } from "../../ui/DashboardClientContext";
 import type { DashboardSettingsSync } from "../../ui/DashboardSettingsSync";
 import {
   MESSAGE_TYPES,
+  STEP_TYPES,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
@@ -110,6 +111,15 @@ suite("WorkflowStepHandlers — steer messages", () => {
         workflowId: "workflow-1",
         sessionId: "session-1",
         text: "restore this draft",
+        origin: {
+          kind: "queuedStep",
+          stepIndex: 2,
+          step: {
+            type: STEP_TYPES.PROMPT,
+            name: "Queued",
+            prompt: "restore this draft",
+          },
+        },
       }
     );
 
@@ -117,6 +127,15 @@ suite("WorkflowStepHandlers — steer messages", () => {
       {
         type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
         text: "restore this draft",
+        origin: {
+          kind: "queuedStep",
+          stepIndex: 2,
+          step: {
+            type: STEP_TYPES.PROMPT,
+            name: "Queued",
+            prompt: "restore this draft",
+          },
+        },
       },
       {
         type: MESSAGE_TYPES.USER_FEEDBACK,

@@ -371,9 +371,10 @@ export function findSlashCompletionContext(
 export function findCustomCompletionContext(
   textBefore: string,
   lineFrom = 0,
-  escape?: InsertTextEscape
+  escape?: InsertTextEscape,
+  jsonStyleEscapes = false
 ): { trigger: CompletionTrigger; query: string; from: number } | null {
-  const context = findPromptTriggerContext(textBefore, escape);
+  const context = findPromptTriggerContext(textBefore, escape, jsonStyleEscapes);
   return context
     ? {
         trigger: context.trigger,

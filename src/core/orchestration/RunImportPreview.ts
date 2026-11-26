@@ -20,6 +20,7 @@ import {
   HARNESS_IDS,
   PRIOR_CONTEXT_KEYWORDS,
   SESSION_AVAILABILITY,
+  STEP_STATUS,
   STEP_TYPES,
 } from "../../types/DashboardConstants";
 import { isSessionResumeFailure } from "../harness/shared/SessionResumeWarning";
@@ -91,7 +92,10 @@ export class RunImportPreviewService {
         index < steps.length;
         index++
       ) {
-        if (steps[index]?._runtime?.completedAt === undefined)
+        if (
+          steps[index]?._runtime?.completedAt === undefined ||
+          steps[index]?._runtime?.terminalStatus === STEP_STATUS.FAILED
+        )
           pendingIndexes.add(index);
       }
     }

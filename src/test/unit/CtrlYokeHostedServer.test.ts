@@ -671,6 +671,12 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
       const rootPage = await sendGetRequest(port, `/?token=${token}`);
       assert.strictEqual(response.body, rootPage.body);
       assert.ok(response.body.includes("/standalone-shim.js"));
+      const shim = await sendGetRequest(port, "/standalone-shim.js");
+      assert.strictEqual(shim.statusCode, 200);
+      assert.strictEqual(
+        shim.headers["cross-origin-resource-policy"],
+        "same-origin"
+      );
       assert.ok(response.body.includes(`/manifest.webmanifest?token=${token}`));
       assert.ok(!response.body.includes("{{cspSource}}"));
       assert.ok(!response.body.includes("{{codiconsUri}}"));

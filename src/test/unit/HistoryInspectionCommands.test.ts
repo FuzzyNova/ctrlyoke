@@ -2454,6 +2454,53 @@ suite("CLI history inspection command handlers", () => {
       "Attempt did not terminate before the recorded history ended",
     ]);
   });
+
+  test("summarizes a completed end-condition script without an interruption warning", async () => {
+    const key = "release" as WorkflowKey;
+    const statuses: string[] = [];
+    const originalStatus = CliTerminalFormatter.renderStatusMessage;
+    CliTerminalFormatter.renderStatusMessage = ((message) => {
+      statuses.push(message);
+    }) as typeof originalStatus;
+    const attempt = settledAttempt(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      {
+        phase: "endCondition",
+        kind: "condition",
+        terminalState: "completed",
+        output: {
+          elapsed: 1,
+          isStreaming: false,
+          source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+          scriptVerdict: {
+            compareSource: "stdout",
+            operator: "contains",
+            expected: "pass",
+            actual: "pass",
+            outcome: "passed",
+            action: "continue",
+            durationMs: 1,
+          },
+        },
+      }
+    );
+    try {
+      const io = new TestIo();
+      await showHistoryCommand(
+        { workflow: key, run: "3", json: true, summary: true },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([attempt])
+        )
+      );
+      assert.strictEqual(JSON.parse(io.output[0]).state, "completed");
+      assert.deepStrictEqual(statuses, []);
+    } finally {
+      CliTerminalFormatter.renderStatusMessage = originalStatus;
+    }
+  });
   test("reports each unrendered index of a --step list on its own line", async () => {
     const key = "release" as WorkflowKey;
     const statuses: string[] = [];

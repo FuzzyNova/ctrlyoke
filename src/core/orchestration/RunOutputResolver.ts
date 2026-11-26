@@ -35,6 +35,7 @@ import type { StepOutputSource } from "../../utils/StepOutputText";
 import { getStepOutputText } from "../../utils/StepOutputText";
 import {
   TIMELINE_ATTEMPT_KINDS,
+  TIMELINE_ATTEMPT_TERMINAL_STATES,
   TIMELINE_EVENT_TYPES,
   type TimelineAttemptKind,
   type TimelineAttemptStartReason,
@@ -595,6 +596,11 @@ export class RunOutputResolver {
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
           state.value.scriptOutput = event.scriptOutput;
+          // Phase scripts have no ATTEMPT_TERMINATED timeline record. Their
+          // execution record is written only after the process has finished.
+          if (event.attempt.phase !== undefined) {
+            state.terminated = true;
+          }
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
           state.value.terminalState = event.terminalState;
@@ -652,6 +658,15 @@ export class RunOutputResolver {
     key: string
   ): RunOutputResolverAttemptEvent {
     const appendsOutput = state.continuation && !state.value.output;
+    if (
+      state.value.phase !== undefined &&
+      state.value.scriptOutput &&
+      !state.value.terminalState
+    ) {
+      state.value.terminalState = state.value.output?.scriptVerdict
+        ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+        : TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED;
+    }
     return {
       kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
       attempt: this.finishAttemptState(state, key, appendsOutput),

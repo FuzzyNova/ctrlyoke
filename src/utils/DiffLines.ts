@@ -52,6 +52,21 @@ export function hasPatchOrderingRegression(hunks: UnifiedDiffHunk[]): boolean {
   return false;
 }
 
+/** Normalize snippet content before diffing, where trailing newlines have no EOF meaning. */
+export function normalizeDiffInputs(
+  oldContent: string,
+  newContent: string
+): [string, string] {
+  const normalize = (content: string): string => {
+    const normalized = content.replace(/\r\n/g, "\n");
+    return normalized.length > 0 && !normalized.endsWith("\n")
+      ? `${normalized}\n`
+      : normalized;
+  };
+
+  return [normalize(oldContent), normalize(newContent)];
+}
+
 /** Deduplicate exact repeated hunks while preserving their original order. */
 export function normalizeStructuredPatch(
   hunks: UnifiedDiffHunk[] | undefined
@@ -126,15 +141,13 @@ export function getStructuredPatchDiffLines(
   return diffLines;
 }
 
-/** Generate diff lines from raw content, normalizing Windows line endings. */
+/** Generate diff lines from raw content, normalizing snippet line endings. */
 export function generateDiffLines(
   oldContent: string,
   newContent: string
 ): DiffLine[] {
-  const diffResult = Diff.diffLines(
-    oldContent.replace(/\r\n/g, "\n"),
-    newContent.replace(/\r\n/g, "\n")
-  );
+  const [old, next] = normalizeDiffInputs(oldContent, newContent);
+  const diffResult = Diff.diffLines(old, next);
   const lines: DiffLine[] = [];
 
   let oldLineNum = 1;

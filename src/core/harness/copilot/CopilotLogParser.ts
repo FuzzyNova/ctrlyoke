@@ -32,8 +32,10 @@ import {
   COPILOT_SESSION_INFO_TYPES,
   COPILOT_USER_MESSAGE_DELIVERIES,
   COPILOT_TOOL_NAMES,
+  COPILOT_USAGE_INITIATORS,
   type CopilotMcpToolIdentity,
 } from "./CopilotProtocolConstants";
+import { COPILOT_AUTO_MODEL } from "../../../utils/ModelConstants";
 import {
   SESSION_AVAILABILITY,
   type SessionProbeResult,
@@ -42,6 +44,22 @@ import {
 // ============================================================================
 // Copilot Log Event Type Definitions
 // ============================================================================
+
+/**
+ * The model to report for a session. Only Copilot's `auto` alias is replaced
+ * by the model it resolved to (`session.auto_mode_resolved`, else the latest
+ * own usage record); an explicitly requested model is reported as requested.
+ */
+export function resolveCopilotReportedModel(
+  requestedModel: string | undefined,
+  resolvedAutoModel: string | undefined,
+  latestUsageModel: string | undefined
+): string | undefined {
+  if (requestedModel && requestedModel !== COPILOT_AUTO_MODEL) {
+    return requestedModel;
+  }
+  return resolvedAutoModel || latestUsageModel || requestedModel || undefined;
+}
 
 // ============================================================================
 // CopilotLogParser Implementation
@@ -725,6 +743,8 @@ export class CopilotLogParser extends BaseLogParser {
     const outputEvents: CliEvent[] = [];
     let sessionId: string | undefined;
     let model: string | undefined;
+    let resolvedAutoModel: string | undefined;
+    let latestUsageModel: string | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
     let cachedInputTokens = 0;
@@ -752,6 +772,26 @@ export class CopilotLogParser extends BaseLogParser {
       if (event.type === "session.start" && event.data) {
         sessionId = event.data.sessionId;
         model = event.data.selectedModel;
+      }
+
+      if (
+        event.type === COPILOT_EVENT_TYPES.AUTO_MODE_RESOLVED &&
+        typeof event.data?.chosenModel === "string"
+      ) {
+        resolvedAutoModel = event.data.chosenModel;
+      }
+
+      // The parent's events.jsonl also carries its sub-agents' usage records,
+      // which can run on another model; only the session's own calls count.
+      if (
+        event.type === COPILOT_EVENT_TYPES.USAGE_RECORD &&
+        typeof event.data?.usage?.model === "string" &&
+        event.data.usage.initiator !== COPILOT_USAGE_INITIATORS.SUB_AGENT &&
+        (typeof event.data.usage.accounting?.sourceSessionId !== "string" ||
+          sessionId === undefined ||
+          event.data.usage.accounting.sourceSessionId === sessionId)
+      ) {
+        latestUsageModel = event.data.usage.model;
       }
 
       // Headless stdout carries the session identity in its final result event
@@ -1060,7 +1100,11 @@ export class CopilotLogParser extends BaseLogParser {
       events: outputEvents,
       metadata: {
         sessionId,
-        model: (model ?? this.resolvedModel) || undefined,
+        model: resolveCopilotReportedModel(
+          model ?? this.resolvedModel,
+          resolvedAutoModel,
+          latestUsageModel
+        ),
         harness: HARNESS_IDS.COPILOT_CLI,
         error: reportedError,
         errorType: reportedErrorType,

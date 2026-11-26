@@ -8,7 +8,7 @@ import type {
 import { isScriptStep } from "../types/CtrlYokeTypes";
 import { assertStartedStepPositionsPreserved } from "./StepIdentity";
 import { hasStarted } from "../utils/StepStatusDerivation";
-import { scanInlinePriorContextRefs } from "../utils/FileReferenceParser";
+import { parseInlinePriorContextRefs } from "../utils/FileReferenceParser";
 import {
   PARALLEL_GROUP_INSERT_RELOCATION_KINDS,
   type ParallelGroupInsertRelocationKind,
@@ -80,7 +80,7 @@ export function getParallelSiblingReferenceErrors(
         }
       }
 
-      for (const match of scanInlinePriorContextRefs(step.prompt)) {
+      for (const match of parseInlinePriorContextRefs(step.prompt)) {
         if (match.ref.kind !== PRIOR_CONTEXT_REFERENCE_KINDS.STEP) continue;
         for (const reference of match.ref.indices) {
           if (

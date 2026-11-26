@@ -359,7 +359,8 @@ function startSteerPolling(
           headers: controlHeaders(bridge.token),
           signal,
         });
-        if (response.status === 204 || response.status === 410) return;
+        if (response.status === 204) continue;
+        if (response.status === 410) return;
         if (!response.ok) {
           throw new Error(
             `OpenCode steer bridge returned HTTP ${response.status}`

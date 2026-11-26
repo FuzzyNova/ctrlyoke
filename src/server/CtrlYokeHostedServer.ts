@@ -231,10 +231,11 @@ function escapeHtmlAttribute(value: string): string {
 function createServerIdentityProof(
   token: string,
   nonce: string,
-  workspaceRoot: string
+  workspaceRoot: string,
+  port: number
 ): string {
   return createHmac("sha256", token)
-    .update(`${nonce}\n${resolvedPathKey(workspaceRoot)}`)
+    .update(`${nonce}\n${resolvedPathKey(workspaceRoot)}\n${port}`)
     .digest("hex");
 }
 
@@ -1312,7 +1313,12 @@ export class CtrlYokeHostedServer
         return;
       }
       res.json({
-        proof: createServerIdentityProof(this.token, nonce, this.workspaceRoot),
+        proof: createServerIdentityProof(
+          this.token,
+          nonce,
+          this.workspaceRoot,
+          this.port
+        ),
       });
     });
     // Serve static assets (CSS/JS/fonts) without token — they are not sensitive and
@@ -1322,6 +1328,7 @@ export class CtrlYokeHostedServer
       res.locals.skipSecretRedaction = true;
       res
         .type("application/javascript")
+        .set("Cross-Origin-Resource-Policy", "same-origin")
         .send(buildHostedStandaloneShimScript(this.workspaceKey));
     });
     // Cert download — no token required so iOS users can fetch and install it
@@ -3261,11 +3268,7 @@ export class CtrlYokeHostedServer
 
     let subscription = this.fileWatchers.get(normalizedPath);
     if (!subscription) {
-      const directory = path.dirname(normalizedPath);
-      const watcher = this.fileWatcherFactory.create(
-        directory,
-        path.basename(normalizedPath)
-      );
+      const watcher = this.fileWatcherFactory.createForFile(normalizedPath);
       subscription = { watcher, clients: new Map() };
       this.fileWatchers.set(normalizedPath, subscription);
       const subscribedClients = subscription.clients;
@@ -3581,7 +3584,8 @@ export class CtrlYokeHostedServer
                   createServerIdentityProof(
                     this.token,
                     nonce,
-                    this.workspaceRoot
+                    this.workspaceRoot,
+                    port
                   )
                 )
               );

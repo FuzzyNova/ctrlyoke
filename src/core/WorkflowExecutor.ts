@@ -172,7 +172,10 @@ import {
   createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
-import type { ScriptProcessRunner } from "./orchestration/ScriptProcessRunner";
+import {
+  buildScriptProcessEnv,
+  type ScriptProcessRunner,
+} from "./orchestration/ScriptProcessRunner";
 import {
   getSignedStepIndex as getSignedWorkflowStepIndex,
   toOutputExecutionTarget as toWorkflowOutputExecutionTarget,
@@ -420,6 +423,8 @@ export interface WorkflowExecutionContext {
     cwd: string;
     /** Environment overrides for the script process. */
     env?: Record<string, string>;
+    /** Workflow variables exposed as CTRLYOKE_VAR_<NAME>. */
+    vars?: Record<string, string>;
     /** Called for each output chunk — used to stream text to the CliOutput panel. */
     onOutput: (chunk: string) => void;
     /** Maximum runtime in milliseconds before the PTY is killed. */
@@ -429,7 +434,13 @@ export interface WorkflowExecutionContext {
     onSessionCreated?: (sessionId: string) => void;
     onSessionEnded?: () => void;
   }) => Promise<
-    number | { exitCode: number; errored?: boolean; error?: string }
+    | number
+    | {
+        exitCode: number;
+        errored?: boolean;
+        error?: string;
+        cancelled?: boolean;
+      }
   >;
   targetRunIndices?: Map<string, number>;
   /**
@@ -553,6 +564,18 @@ function getAttemptStartReason(
   return attemptIndex > 0
     ? TIMELINE_ATTEMPT_START_REASONS.RETRY
     : TIMELINE_ATTEMPT_START_REASONS.INITIAL;
+}
+
+/**
+ * A field checked for unresolved `{{var}}` placeholders. `fencedCodeProtected`
+ * must match that field's entry in `VarSubstitutionPolicy` (prompt bodies and
+ * retry prompts): substitution leaves fenced placeholders literal there, so
+ * the check must skip them too.
+ */
+interface VariableCheckField {
+  field: string;
+  value: string | undefined;
+  fencedCodeProtected?: boolean;
 }
 
 /**
@@ -976,7 +999,7 @@ export class WorkflowExecutor {
             break;
           }
 
-          await this.setFinalStepRuntime(context, {
+          await this.settleFinalStepRuntime(context, {
             phase: FINAL_STEP_PHASES.QUEUE,
             loopCount: loopIndex + 1,
             status: STEP_STATUS.COMPLETED,
@@ -996,7 +1019,7 @@ export class WorkflowExecutor {
           continue;
         }
 
-        await this.setFinalStepRuntime(context, {
+        await this.settleFinalStepRuntime(context, {
           phase: FINAL_STEP_PHASES.FINAL_STEP,
           loopCount: loopIndex,
           status: STEP_STATUS.COMPLETED,
@@ -2058,7 +2081,7 @@ export class WorkflowExecutor {
         PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
       );
     } else {
-      await this.setFinalStepRuntime(context!, {
+      await this.settleFinalStepRuntime(context!, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.NO_TURN_STARTED,
@@ -2213,7 +2236,7 @@ export class WorkflowExecutor {
           message: failureReason,
         });
       } else {
-        await this.setFinalStepRuntime(context, {
+        await this.settleFinalStepRuntime(context, {
           phase: FINAL_STEP_PHASES.FINAL_STEP,
           loopCount: target.loopIndex,
           status: STEP_STATUS.FAILED,
@@ -2598,7 +2621,11 @@ export class WorkflowExecutor {
       this.reportUnresolvedVariables(
         this.getResolvedPropertyVariableFields(resolvedProperties, {
           includePreCondition: false,
-        }).concat({ field: "prompt text", value: effectivePromptText }),
+        }).concat({
+          field: "prompt text",
+          value: effectivePromptText,
+          fencedCodeProtected: true,
+        }),
         vars ?? {},
         resolvedProperties.harness,
         context,
@@ -3015,7 +3042,7 @@ export class WorkflowExecutor {
     }
 
     // finalStep — skip = loop exits cleanly (the condition we were fixing is resolved)
-    await this.setFinalStepRuntime(context, {
+    await this.settleFinalStepRuntime(context, {
       phase: FINAL_STEP_PHASES.FINAL_STEP,
       loopCount: target.loopIndex,
       status: STEP_STATUS.SKIPPED,
@@ -3206,6 +3233,7 @@ export class WorkflowExecutor {
       let ptyErrored = false;
       let ptyError: string | undefined;
       let ptyTimedOut = false;
+      let ptyCancelled = false;
 
       const evaluation = async (onOutput: (chunk: string) => void) => {
         if (isInteractive && context.spawnScriptPty) {
@@ -3227,11 +3255,16 @@ export class WorkflowExecutor {
             script: effectiveStep.script,
             shell: effectiveStep.shell,
             cwd: context.executionWorkspace.executionRoot,
-            env: await this.resolveScriptEnvironment(
-              effectiveStep.env,
-              secretNames,
-              context
+            env: buildScriptProcessEnv(
+              process.env,
+              scriptVars,
+              await this.resolveScriptEnvironment(
+                effectiveStep.env,
+                secretNames,
+                context
+              )
             ),
+            vars: scriptVars,
             onOutput: (chunk) => {
               outputChunks.push(chunk);
               onOutput(chunk);
@@ -3249,6 +3282,7 @@ export class WorkflowExecutor {
             ptyExitCode = ptyResult.exitCode;
             ptyErrored = ptyResult.errored === true;
             ptyError = ptyResult.error;
+            ptyCancelled = ptyResult.cancelled === true;
           }
         }
 
@@ -3265,6 +3299,25 @@ export class WorkflowExecutor {
         }
 
         const exitCode = ptyExitCode ?? 1;
+        if (ptyCancelled) {
+          const cancelledResult =
+            await this.endConditionEvaluator.evaluateResult(
+              {
+                result: outputChunks.join(""),
+                stdout: outputChunks.join(""),
+                stderr: "",
+                success: false,
+                exitCode,
+              },
+              resolvedProperties
+            );
+          return {
+            ...cancelledResult,
+            cancelled: true,
+            errored: cancelledResult.errored ?? false,
+            duration: Date.now() - timestampMs,
+          };
+        }
         const comparison = await this.endConditionEvaluator.evaluateResult(
           {
             result: outputChunks.join(""),
@@ -4478,7 +4531,7 @@ export class WorkflowExecutor {
       }
       await this.promptQueue.failStep(target.stepIndex, reason, failureKind);
     } else {
-      await this.setFinalStepRuntime(context, {
+      await this.settleFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
@@ -5220,6 +5273,7 @@ export class WorkflowExecutor {
         this.getResolvedPropertyVariableFields(resolvedProperties).concat({
           field: "retry prompt text",
           value: effectiveRetryPrompt.prompt,
+          fencedCodeProtected: true,
         }),
         retryVars,
         resolvedProperties.harness,
@@ -5461,8 +5515,8 @@ export class WorkflowExecutor {
   private getResolvedPropertyVariableFields(
     properties: ResolvedProperties,
     options: { includePreCondition?: boolean } = {}
-  ): Array<{ field: string; value: string | undefined }> {
-    const fields: Array<{ field: string; value: string | undefined }> = [
+  ): VariableCheckField[] {
+    const fields: VariableCheckField[] = [
       { field: "model", value: properties.model },
       { field: "additionalArgs", value: properties.additionalArgs },
     ];
@@ -5497,17 +5551,19 @@ export class WorkflowExecutor {
       {
         field: "endCondition.retryPrompt",
         value: properties.endCondition?.retryPrompt,
+        fencedCodeProtected: true,
       },
       {
         field: "endCondition.passRetryPrompt",
         value: properties.endCondition?.passRetryPrompt,
+        fencedCodeProtected: true,
       }
     );
     return fields;
   }
 
   private reportUnresolvedVariables(
-    fields: ReadonlyArray<{ field: string; value: string | undefined }>,
+    fields: ReadonlyArray<VariableCheckField>,
     vars: Record<string, string>,
     harnessId: HarnessId,
     context: WorkflowExecutionContext,
@@ -5515,12 +5571,14 @@ export class WorkflowExecutor {
     step: WorkflowStep,
     phase?: string
   ): void {
-    const findings = fields.flatMap(({ field, value }) =>
+    const findings = fields.flatMap(({ field, value, fencedCodeProtected }) =>
       value === undefined
         ? []
-        : VarSubstitutor.findUnresolvedVariables(value, vars).map(
-            (placeholder) => ({ field, placeholder })
-          )
+        : VarSubstitutor.findUnresolvedVariables(
+            value,
+            vars,
+            fencedCodeProtected === true
+          ).map((placeholder) => ({ field, placeholder }))
     );
     if (findings.length === 0) {
       return;
@@ -6153,7 +6211,7 @@ export class WorkflowExecutor {
         return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
       }
 
-      await this.setFinalStepRuntime(context, {
+      await this.settleFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
@@ -6210,7 +6268,7 @@ export class WorkflowExecutor {
         failureSource
       );
     } else {
-      await this.setFinalStepRuntime(context, {
+      await this.settleFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
@@ -6339,5 +6397,15 @@ export class WorkflowExecutor {
       runtime.loopCount,
       runtime.phase
     );
+  }
+
+  private async settleFinalStepRuntime(
+    context: WorkflowExecutionContext,
+    patch: FinalStepRuntimeState
+  ): Promise<void> {
+    await this.setFinalStepRuntime(context, {
+      ...(this.promptQueue.getFinalStepRuntime() ?? {}),
+      ...patch,
+    });
   }
 }

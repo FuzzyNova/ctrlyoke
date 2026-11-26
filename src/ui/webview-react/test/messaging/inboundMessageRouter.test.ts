@@ -3959,6 +3959,36 @@ describe("STEP_STATUS_CHANGED", () => {
 // ---------------------------------------------------------------------------
 
 describe("CONTEXT_WINDOW_UPDATE", () => {
+  it("clears stopped live context when execution starts fresh", () => {
+    renderHook(() => useInboundMessageRouter());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
+      });
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+      useWorkflowStore.getState().setCurrentStep(0);
+      dispatch(MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE, {
+        stepIndex: 0,
+        used: 150000,
+        size: 200000,
+      });
+      dispatch(MESSAGE_TYPES.EXECUTION_STATE_CHANGED, {
+        state: EXECUTION_STATES.STOPPED,
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        fileName: "wf.yaml",
+        totalSteps: 2,
+      });
+    });
+
+    expect(useWorkflowStore.getState().liveContextWindow[0]).toBeUndefined();
+  });
+
   it("stores live context for the currently running step", () => {
     renderHook(() => useInboundMessageRouter());
 

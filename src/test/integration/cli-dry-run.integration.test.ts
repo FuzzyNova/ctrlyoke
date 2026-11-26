@@ -4,7 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
 import { runCli } from "./helpers/cliProcess";
+import { PromptFileParser } from "../../core/PromptFileParser";
+import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import { DOCS_URLS } from "../../types/DashboardConstants";
+import type { ScriptStep } from "../../types/CtrlYokeTypes";
 import { projectKey } from "../../utils/ProjectStatePaths";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WORKING_FILE_NAME } from "../../utils/WorkflowPaths";
@@ -15,6 +18,99 @@ suite("CLI dry-run process", () => {
   teardown(async () => {
     for (const root of temporaryRoots.splice(0)) {
       await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("invalid run overrides create no lineage", async function () {
+    this.timeout(90000);
+    const invalidFlags = [
+      ["--force", "bogus"],
+      ["--force", "model"],
+      ["--sandbox", "--sandbox-none"],
+    ];
+    for (const [index, flags] of invalidFlags.entries()) {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-run-invalid-")
+      );
+      const stateHome = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-run-invalid-state-")
+      );
+      temporaryRoots.push(root, stateHome);
+      const workflow = path.join(root, "workflow.json");
+      await fs.writeFile(
+        workflow,
+        JSON.stringify({ steps: [{ type: "script", script: "echo hi" }] })
+      );
+      const result = await runCli(
+        ["run", workflow, ...flags, "--cwd", root],
+        root,
+        { CTRLYOKE_HOME: stateHome }
+      );
+      assert.strictEqual(result.code, 2, result.stderr);
+      const expectedMessage = [
+        '--force cannot include "bogus"',
+        "--force model requires --model",
+        "--sandbox-none cannot be combined with --sandbox or --no-sandbox",
+      ][index];
+      assert.ok(result.stderr.includes(expectedMessage), result.stderr);
+      await assert.rejects(
+        fs.access(path.join(stateHome, "projects", projectKey(root), ".runs")),
+        { code: "ENOENT" }
+      );
+    }
+  });
+
+  test("invalid rerun overrides do not seed a run", async function () {
+    this.timeout(120000);
+    const invalidFlags = [
+      ["--force", "bogus"],
+      ["--force", "model"],
+      ["--sandbox", "--sandbox-none"],
+    ];
+    for (const [index, flags] of invalidFlags.entries()) {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-rerun-invalid-")
+      );
+      const stateHome = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-rerun-invalid-state-")
+      );
+      temporaryRoots.push(root, stateHome);
+      const workflow = path.join(root, "workflow.json");
+      await fs.writeFile(
+        workflow,
+        JSON.stringify({ steps: [{ type: "script", script: "echo hi" }] })
+      );
+      const env = { CTRLYOKE_HOME: stateHome };
+      const initial = await runCli(
+        ["run", workflow, "--cwd", root, "--json"],
+        root,
+        env
+      );
+      assert.strictEqual(initial.code, 0, initial.stderr);
+      const { workflowKey } = JSON.parse(initial.stdout) as {
+        workflowKey: string;
+      };
+      const runsRoot = path.join(
+        stateHome,
+        "projects",
+        projectKey(root),
+        ".runs",
+        workflowKey
+      );
+      const before = await fs.readdir(runsRoot);
+      const result = await runCli(
+        ["rerun", "--workflow", workflowKey, ...flags, "--cwd", root],
+        root,
+        env
+      );
+      assert.strictEqual(result.code, 2, result.stderr);
+      const expectedMessage = [
+        '--force cannot include "bogus"',
+        "--force model requires --model",
+        "--sandbox-none cannot be combined with --sandbox or --no-sandbox",
+      ][index];
+      assert.ok(result.stderr.includes(expectedMessage), result.stderr);
+      assert.deepStrictEqual(await fs.readdir(runsRoot), before);
     }
   });
 
@@ -158,6 +254,59 @@ suite("CLI dry-run process", () => {
     assert.match(result.stderr, /timeoutSec/);
   });
 
+  test("parser accepts and dispatch substitution resolves script comparison placeholders", async function () {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-script-step-value-vars-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "script-values.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        vars: {
+          compare: "stdout",
+          timeout: "5",
+          operator: "contains",
+          ignore: "true",
+        },
+        steps: [
+          {
+            type: "script",
+            script: "echo hi",
+            compareSource: "{{compare}}",
+            timeoutSec: "{{timeout}}",
+            operator: "{{operator}}",
+            ignoreCase: "{{ignore}}",
+          },
+        ],
+      }),
+      "utf8"
+    );
+
+    const parsed = await new PromptFileParser().parsePromptFile(workflow);
+    assert.ok(parsed?.steps?.[0]);
+    const resolved = VarSubstitutor.substituteStepView(
+      parsed.steps[0],
+      parsed.vars ?? {},
+      "dispatch"
+    ) as ScriptStep;
+
+    assert.deepStrictEqual(
+      {
+        compareSource: resolved.compareSource,
+        timeoutSec: resolved.timeoutSec,
+        operator: resolved.operator,
+        ignoreCase: resolved.ignoreCase,
+      },
+      {
+        compareSource: "stdout",
+        timeoutSec: 5,
+        operator: "contains",
+        ignoreCase: true,
+      }
+    );
+  });
+
   test("warns on stderr for an unused --var without failing dry-run", async function () {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-dry-run-var-unused-")
@@ -175,6 +324,27 @@ suite("CLI dry-run process", () => {
     );
     assert.strictEqual(result.code, 0, result.stderr);
     assert.match(result.stderr, /spare.*unused/);
+  });
+
+  test("does not warn for a --var used only in a referenced prompt file", async function () {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-var-")
+    );
+    temporaryRoots.push(root);
+    const prompt = path.join(root, "review.prompt.md");
+    const workflow = path.join(root, "review.ctrlyoke.json");
+    await fs.writeFile(prompt, "Review {{target}} carefully.", "utf8");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({ steps: [{ prompt: "./review.prompt.md" }] }),
+      "utf8"
+    );
+    const result = await runCli(
+      ["run", workflow, "--dry-run", "--var", "target=lib", "--cwd", root],
+      root
+    );
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /target.*unused/);
   });
 
   test("reports authored step limit violations in dry-run output and JSON", async function () {
@@ -361,6 +531,12 @@ suite("CLI dry-run process", () => {
       ),
       result.stderr
     );
+    const report = JSON.parse(result.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(report.success, false);
+    assert.match(report.error.message, /trust-secret-grants/u);
   });
 
   test("fails closed on pending workflow roots, then allows a trusted workflow to run", async function () {
@@ -397,6 +573,12 @@ suite("CLI dry-run process", () => {
       ),
       blocked.stderr
     );
+    const blockedReport = JSON.parse(blocked.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(blockedReport.success, false);
+    assert.match(blockedReport.error.message, /trust-workflow-external-roots/u);
 
     const trusted = await runCli(
       ["trust-workflow-external-roots", workflow, "--cwd", root, "--yes"],
@@ -410,6 +592,64 @@ suite("CLI dry-run process", () => {
       root
     );
     assert.strictEqual(allowed.code, 0, allowed.stderr);
+  });
+
+  test("reports pending workspace roots and settings in JSON run results", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-trust-json-")
+    );
+    const externalRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-trust-outside-")
+    );
+    temporaryRoots.push(root, externalRoot);
+    const workflow = path.join(root, "workflow.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({ steps: [{ prompt: "This must not execute" }] }),
+      "utf8"
+    );
+    await fs.mkdir(path.join(root, ".ctrlyoke"), { recursive: true });
+    const settingsPath = path.join(root, ".ctrlyoke", "settings.json");
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ permissions: { trustedExternalRoots: [externalRoot] } }),
+      "utf8"
+    );
+
+    const workspaceRoots = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(workspaceRoots.code, 2, workspaceRoots.stderr);
+    const rootsReport = JSON.parse(workspaceRoots.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(rootsReport.success, false);
+    assert.match(rootsReport.error.message, /trust-external-roots/u);
+
+    const trustRoots = await runCli(
+      ["trust-external-roots", "--cwd", root, "--yes"],
+      root
+    );
+    assert.strictEqual(trustRoots.code, 0, trustRoots.stderr);
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ defaults: { hooks: [{ command: "echo pending" }] } }),
+      "utf8"
+    );
+    const workspaceSettings = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(workspaceSettings.code, 2, workspaceSettings.stderr);
+    const settingsReport = JSON.parse(workspaceSettings.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(settingsReport.success, false);
+    assert.match(settingsReport.error.message, /trust-workspace-settings/u);
   });
 
   test("does not gate workflows with null or omitted trustedExternalRoots", async function () {

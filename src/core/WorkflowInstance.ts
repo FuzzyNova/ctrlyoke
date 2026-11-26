@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as os from "os";
 import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
@@ -125,6 +126,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { exceedsLimit } from "../utils/LimitUtils";
 import {
   getEffectiveMaxStepsSource,
+  resolveWorkflowMaxSteps,
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
 import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
@@ -168,6 +170,7 @@ import {
 } from "./orchestration/ScriptExecutionReporter";
 import {
   ScriptProcessRunner,
+  buildScriptProcessEnv,
   resolveScriptInvocation,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
@@ -2993,7 +2996,9 @@ export class WorkflowInstance
       }
 
       const newSize = currentSize + parsed.steps.length;
-      const workflowMaxSteps = this.promptQueue.getWorkflowFile().maxSteps;
+      const workflowMaxSteps = resolveWorkflowMaxSteps(
+        this.promptQueue.getWorkflowFile()
+      );
       const maxSteps = resolveEffectiveMaxSteps(
         workflowMaxSteps,
         ConfigurationUtils.getGlobalMaxSteps()
@@ -3887,7 +3892,9 @@ export class WorkflowInstance
   }
 
   private getStepLimitError(additionalSteps: number): string | undefined {
-    const workflowMaxSteps = this.promptQueue.getWorkflowFile().maxSteps;
+    const workflowMaxSteps = resolveWorkflowMaxSteps(
+      this.promptQueue.getWorkflowFile()
+    );
     const maxSteps = resolveEffectiveMaxSteps(
       workflowMaxSteps,
       ConfigurationUtils.getGlobalMaxSteps()
@@ -4067,7 +4074,15 @@ export class WorkflowInstance
     options: Parameters<
       NonNullable<WorkflowExecutionContext["spawnScriptPty"]>
     >[0]
-  ): Promise<number | { exitCode: number; errored?: boolean; error?: string }> {
+  ): Promise<
+    | number
+    | {
+        exitCode: number;
+        errored?: boolean;
+        error?: string;
+        cancelled?: boolean;
+      }
+  > {
     return new Promise((resolve) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager) {
@@ -4126,7 +4141,7 @@ export class WorkflowInstance
           command: shell,
           args: toPtySpawnArgs(shellArgs, windowsVerbatimArguments),
           cwd: options.cwd,
-          env: { ...process.env, ...(options.env ?? {}) },
+          env: buildScriptProcessEnv(process.env, options.vars, options.env),
           streamingSecretRedaction: true,
           onData: (session, chunk) => {
             ptyPostMessage({
@@ -4137,11 +4152,25 @@ export class WorkflowInstance
             });
             options.onOutput(chunk);
           },
-          onExit: (session, exitCode) => {
+          onExit: (session, exitCode, signal) => {
             if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
             options.onSessionEnded?.();
             ptyPostMessage(buildTerminalEndedMessage(session, exitCode));
-            resolve(exitCode);
+            if (session.endReason === TERMINAL_END_REASONS.STOPPED) {
+              resolve({ exitCode, cancelled: true });
+            } else if (signal && !session.endReason) {
+              const signalName =
+                Object.entries(os.constants.signals).find(
+                  ([, number]) => number === signal
+                )?.[0] ?? String(signal);
+              resolve({
+                exitCode: 128 + signal,
+                errored: true,
+                error: `Process terminated by ${signalName}`,
+              });
+            } else {
+              resolve(exitCode);
+            }
           },
         });
         if (options.timeout > 0) {

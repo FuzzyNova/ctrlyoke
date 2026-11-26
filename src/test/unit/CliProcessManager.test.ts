@@ -1,7 +1,11 @@
 import * as assert from "assert";
+import * as fs from "fs";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { CliProcessManager } from "../../utils/CliProcessManager";
+import {
+  CliProcessManager,
+  killLiveProcessGroupsOnExit,
+} from "../../utils/CliProcessManager";
 import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
@@ -144,6 +148,38 @@ suite("CliProcessManager working directory", () => {
 });
 
 suite("CliProcessManager teardown", () => {
+  test("exit hook kills live group leaders and forgets closed ones", async function () {
+    if (process.platform === "win32") this.skip();
+
+    const killedPids: number[] = [];
+    const manager = new CliProcessManager(
+      process.cwd(),
+      undefined,
+      undefined,
+      (pid, signal) => {
+        assert.strictEqual(signal, PROCESS_SIGNALS.KILL);
+        killedPids.push(pid);
+      }
+    );
+    const closed = await manager.spawn(process.execPath, [
+      "-e",
+      "process.exit(0)",
+    ]);
+    assert.strictEqual(closed.exitCode, 0);
+
+    const livePromise = manager.spawn(process.execPath, [
+      "-e",
+      "setInterval(() => {}, 1000)",
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    killLiveProcessGroupsOnExit();
+
+    assert.strictEqual(killedPids.length, 1);
+    assert.ok(killedPids[0] < 0, "exit hook should signal a process group");
+    await manager.cancel();
+    await livePromise;
+  });
+
   test("disposeAsync waits for SIGTERM to escalate and the child to close", async () => {
     const signals: NodeJS.Signals[] = [];
     const manager = new CliProcessManager(
@@ -203,6 +239,28 @@ suite("CliProcessManager teardown", () => {
     assert.deepStrictEqual(signals, [PROCESS_SIGNALS.TERMINATE]);
     assert.strictEqual(result.terminatedByManager, true);
     assert.strictEqual(result.terminationSignal, PROCESS_SIGNALS.TERMINATE);
+  });
+
+  test("disposeProcess terminates an interactive child with the default kill path", async () => {
+    // spawnInteractive children are not detached, so they share this process
+    // group; a `-pid` group kill would fail with ESRCH and leave them running.
+    const manager = new CliProcessManager(process.cwd());
+    const exit = manager.spawnInteractive(
+      process.execPath,
+      ["-e", "setTimeout(() => {}, 10000)"],
+      process.cwd()
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const started = Date.now();
+    manager.disposeProcess();
+    const result = await exit;
+
+    assert.strictEqual(result.terminatedByManager, true);
+    assert.ok(
+      Date.now() - started < 2000,
+      "SIGTERM should end the child before SIGKILL escalation"
+    );
   });
 
   test("escalates a timed-out child after another child becomes current", async () => {
@@ -311,5 +369,33 @@ suite("CliProcessManager teardown", () => {
       termPids.every((pid) => killPids.includes(pid)),
       "closing the first child should not cancel the second child's SIGKILL"
     );
+  });
+
+  test("escalates a shell descendant after the shell exits on SIGTERM", async function () {
+    if (process.platform === "win32") this.skip();
+
+    const markerPath = path.join(makeTempDir("cy-cli-descendant-"), "survived");
+    const manager = new CliProcessManager(process.cwd());
+    const script = [
+      "process.on('SIGTERM', () => {});",
+      `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(markerPath)}, 'alive'), 4500);`,
+      "setInterval(() => {}, 1000);",
+    ].join(" ");
+
+    try {
+      await assert.rejects(
+        manager.spawn(
+          "bash",
+          ["-c", `node -e ${JSON.stringify(script)}; wait`],
+          { timeout: 500 }
+        ),
+        /Process timeout/
+      );
+      await new Promise((resolve) => setTimeout(resolve, 4800));
+      assert.ok(!fs.existsSync(markerPath), "descendant should be SIGKILLed");
+    } finally {
+      fs.rmSync(path.dirname(markerPath), { recursive: true, force: true });
+      await manager.cancel();
+    }
   });
 });

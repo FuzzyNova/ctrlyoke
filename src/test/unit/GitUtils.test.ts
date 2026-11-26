@@ -34,9 +34,13 @@ import {
   createFileHistoryCommitWalk,
   setFileHistorySpawnForTests,
   getStashFiles,
+  getStashDiff,
+  getCommitDiff,
   getWorkingTreeDiff,
   getStagedDiff,
   getRecentCommits,
+  getCommitInfo,
+  getCommitByHash,
   searchCommitsByMessage,
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
@@ -406,6 +410,45 @@ suite("GitUtils.gitRefExists", function () {
     );
   });
 
+  test("disables repo-configured color in staged and working tree diffs", async () => {
+    runGit(["config", "color.ui", "always"]);
+    await writeWorkspaceFile("tracked.txt", "staged color change\n");
+    runGit(["add", "tracked.txt"]);
+
+    const stagedDiff = await getStagedDiff(workspaceRoot);
+    assert.ok(!stagedDiff.includes("\u001b"), stagedDiff);
+
+    await writeWorkspaceFile("tracked.txt", "working color change\n");
+    const workingDiff = await getWorkingTreeDiff(workspaceRoot);
+    assert.ok(!workingDiff.includes("\u001b"), workingDiff);
+  });
+
+  test("disables repo-configured color and external diff in commit and stash diffs", async () => {
+    const externalDiffPath = path.join(workspaceRoot, "external-diff.js");
+    await fs.writeFile(
+      externalDiffPath,
+      'process.stdout.write("EXTERNAL-DIFF-TOOL OUTPUT\\n");\n',
+      "utf8"
+    );
+    runGit(["config", "color.ui", "always"]);
+    runGit(["config", "diff.external", `node "${externalDiffPath}"`]);
+    await writeWorkspaceFile("tracked.txt", "committed color change\n");
+    runGit(["add", "tracked.txt"]);
+    runGit(["commit", "-m", "Color change"]);
+    await writeWorkspaceFile("tracked.txt", "stashed color change\n");
+    runGit(["stash", "push", "-m", "color stash", "--", "tracked.txt"]);
+
+    for (const diff of [
+      await getCommitDiff(workspaceRoot, "HEAD"),
+      await getStashDiff(workspaceRoot, 0),
+      await getStashDiff(workspaceRoot, 0, ["tracked.txt"]),
+    ]) {
+      assert.ok(diff.includes("@@"), diff);
+      assert.ok(!diff.includes("\u001b"), diff);
+      assert.ok(!diff.includes("EXTERNAL-DIFF-TOOL OUTPUT"), diff);
+    }
+  });
+
   test("lists non-ASCII tracked paths in a stash", async () => {
     await writeWorkspaceFile("café.txt", "base\n");
     runGit(["add", "café.txt"]);
@@ -439,6 +482,42 @@ suite("GitUtils.gitRefExists", function () {
       await getBlobBytes(workspaceRoot, "HEAD", "missing.png"),
       null
     );
+  });
+
+  test("returns null for an index blob after the path is removed", async () => {
+    await fs.writeFile(
+      path.join(workspaceRoot, "deleted.bin"),
+      Buffer.from([0, 1])
+    );
+    runGit(["add", "deleted.bin"]);
+    runGit(["commit", "-m", "Add binary"]);
+    runGit(["rm", "deleted.bin"]);
+
+    assert.strictEqual(
+      await getBlobBytes(workspaceRoot, ":", "deleted.bin"),
+      null
+    );
+  });
+
+  test("returns null for a missing blob under a translated Git locale", async () => {
+    await writeWorkspaceFile("present.txt", "content\n");
+    runGit(["add", "present.txt"]);
+    runGit(["commit", "-m", "Add present file"]);
+    const originalLanguage = process.env.LANGUAGE;
+    const originalLocale = process.env.LC_ALL;
+    try {
+      process.env.LANGUAGE = "de";
+      process.env.LC_ALL = "de_DE.UTF-8";
+      assert.strictEqual(
+        await getBlobBytes(workspaceRoot, "HEAD", "missing-path"),
+        null
+      );
+    } finally {
+      if (originalLanguage === undefined) delete process.env.LANGUAGE;
+      else process.env.LANGUAGE = originalLanguage;
+      if (originalLocale === undefined) delete process.env.LC_ALL;
+      else process.env.LC_ALL = originalLocale;
+    }
   });
 
   test("rejects oversized blobs before reading their contents", async () => {
@@ -527,6 +606,79 @@ suite("GitUtils.gitRefExists", function () {
     assert.deepStrictEqual(
       history.map((entry) => entry.subject),
       ["Third commit", "Second commit", "Initial commit"]
+    );
+  });
+
+  test("keeps signed commit output clean when log.showSignature is enabled", async function () {
+    try {
+      execFileSync("ssh-keygen", ["-V"], { stdio: "ignore" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") this.skip();
+    }
+
+    const keyPath = path.join(workspaceRoot, "signing-key");
+    execFileSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", keyPath], {
+      stdio: "ignore",
+    });
+    const allowedSignersPath = path.join(workspaceRoot, "allowed-signers");
+    await fs.writeFile(
+      allowedSignersPath,
+      `ctrlyoke-tests ${await fs.readFile(`${keyPath}.pub`, "utf8")}`,
+      "utf8"
+    );
+    runGit(["config", "gpg.format", "ssh"]);
+    runGit(["config", "user.signingkey", keyPath]);
+    runGit(["config", "gpg.ssh.allowedSignersFile", allowedSignersPath]);
+    runGit(["config", "commit.gpgsign", "true"]);
+    runGit(["config", "log.showSignature", "true"]);
+
+    for (const subject of ["Signed first", "Signed second"]) {
+      await writeWorkspaceFile("tracked.txt", `${subject}\n`);
+      runGit(["add", "tracked.txt"]);
+      runGit(["-c", "user.email=ctrlyoke-tests", "commit", "-m", subject]);
+    }
+
+    const commits = await getRecentCommits(workspaceRoot, 2);
+    assert.deepStrictEqual(
+      commits.map(({ subject }) => subject),
+      ["Signed second", "Signed first"]
+    );
+    assert.ok(commits.every(({ hash }) => /^[0-9a-f]{40}$/i.test(hash)));
+
+    const commitInfo = await getCommitInfo(workspaceRoot, "HEAD");
+    assert.strictEqual(commitInfo.subject, "Signed second");
+    assert.ok(/^[0-9a-f]{40}$/i.test(commitInfo.hash));
+    assert.ok(!commitInfo.hash.includes("Good "));
+
+    const commitByHash = await getCommitByHash(workspaceRoot, commitInfo.hash);
+    assert.strictEqual(commitByHash?.hash, commitInfo.hash);
+    assert.strictEqual(commitByHash?.subject, "Signed second");
+
+    const diff = await getCommitDiff(workspaceRoot, "HEAD");
+    assert.ok(diff.includes("Signed second"));
+    assert.ok(!diff.includes('Good "git" signature'));
+
+    runGit(["rm", "tracked.txt"]);
+    runGit([
+      "-c",
+      "user.email=ctrlyoke-tests",
+      "commit",
+      "-m",
+      "Signed deletion",
+    ]);
+    const deletedFiles = await getChangedFilesWithBinaryStatus(workspaceRoot, [
+      "show",
+      "--format=",
+      "--no-ext-diff",
+      "--end-of-options",
+      "HEAD",
+    ]);
+    assert.deepStrictEqual(
+      deletedFiles.map(({ path: filePath, status }) => ({
+        path: filePath,
+        status,
+      })),
+      [{ path: "tracked.txt", status: "D" }]
     );
   });
 
@@ -705,6 +857,18 @@ suite("GitUtils worktree plumbing", function () {
 
     assert.ok(branches.includes("feature"));
     assert.ok(branch !== null && branches.includes(branch));
+  });
+
+  test("lists the bare local branch name when a tag shares its name", async () => {
+    runGit(["branch", "release"]);
+    runGit(["tag", "release"]);
+
+    const branches = (await listLocalBranches(workspaceRoot)).map(
+      (summary) => summary.name
+    );
+
+    assert.ok(branches.includes("release"));
+    assert.ok(!branches.includes("heads/release"));
   });
 
   test("reports each local branch's upstream tracking state", async () => {

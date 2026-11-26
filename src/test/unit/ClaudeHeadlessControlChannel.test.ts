@@ -160,7 +160,7 @@ suite("ClaudeHeadlessControlChannel", () => {
     channel.close();
   });
 
-  test("sends interrupt and marks the following result as interrupted", async () => {
+  test("marks only the first result after interrupt as interrupted", async () => {
     const writes: string[] = [];
     const channel = new ClaudeHeadlessControlChannel();
     await channel.start({
@@ -183,15 +183,17 @@ suite("ClaudeHeadlessControlChannel", () => {
       CLAUDE_CONTROL.INTERRUPT_SUBTYPE
     );
     assert.ok(request.request_id);
-    assert.deepStrictEqual(
-      channel.observe({ type: CLAUDE_EVENT_TYPES.RESULT }),
-      [
-        {
-          kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
-          interrupted: true,
-        },
-      ]
-    );
+    const firstResult = channel.observe({ type: CLAUDE_EVENT_TYPES.RESULT });
+    const secondResult = channel.observe({ type: CLAUDE_EVENT_TYPES.RESULT });
+    assert.deepStrictEqual(firstResult, [
+      {
+        kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END,
+        interrupted: true,
+      },
+    ]);
+    assert.deepStrictEqual(secondResult, [
+      { kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END },
+    ]);
     channel.close();
   });
 });

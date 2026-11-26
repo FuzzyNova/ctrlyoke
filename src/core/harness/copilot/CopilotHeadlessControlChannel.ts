@@ -163,7 +163,9 @@ export class CopilotHeadlessControlChannel implements IHeadlessControlChannel {
 
     const priorRequest = this.activePrompt;
     if (priorRequest) {
-      await priorRequest.result;
+      // A queued steer is independent of whether the previous turn succeeded.
+      // Its own prompt should determine the steer's result.
+      await priorRequest.result.catch(() => undefined);
     }
 
     const prompt = [

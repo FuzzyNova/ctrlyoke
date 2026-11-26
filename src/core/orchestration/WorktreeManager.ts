@@ -2961,7 +2961,8 @@ export class WorktreeManager {
   ): Promise<void> {
     const unresolved = VarSubstitutor.findUnresolvedVariables(
       setup,
-      vars ?? {}
+      vars ?? {},
+      false
     );
     if (unresolved.length > 0) {
       reportUnresolvedVariables?.(unresolved);

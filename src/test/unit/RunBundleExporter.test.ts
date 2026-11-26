@@ -80,6 +80,60 @@ suite("RunBundleExporter secrets", () => {
     assert.deepStrictEqual(values, ["only-this-one"]);
   });
 
+  test("rewrites workspace paths recorded through either symlink spelling", async () => {
+    const alias = path.join(root, "repo-alias");
+    await fs.symlink(workspace, alias, "dir");
+    for (const [index, [recordedRoot, exportRoot]] of [
+      [workspace, alias],
+      [alias, workspace],
+    ].entries()) {
+      const { workflowKey, runRef } = await createRun({
+        state: EXECUTION_STATES.STOPPED,
+        currentIndex: 0,
+        steps: [{ prompt: `see ${recordedRoot}/source.yaml` }],
+      });
+      await new TimelineRecorder().appendEvents(
+        WorkflowPaths.manifestPath(workspace, workflowKey, runRef),
+        [
+          {
+            eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+            timestampMs: 101,
+            target: { kind: "queue", queueIndex: 0 },
+            runIndex: 0,
+            attemptIndex: 0,
+            payload: {
+              cliOutput: {
+                workingDirectory: `${recordedRoot}/nested`,
+                output: "ok",
+              },
+            },
+          } as never,
+        ]
+      );
+      const exported = await exportRunBundle({
+        stateRoot: workspace,
+        workspaceRoot: exportRoot,
+        workflowKey,
+        runRef,
+        bundleDir: path.join(root, `symlink-export-${index}`),
+        exportedByVersion: "test",
+        includeSnapshots: true,
+        homeDir: root,
+      });
+      const files = await Promise.all(
+        (await fs.readdir(exported.bundleDir))
+          .filter((file) => file !== RUN_BUNDLE_FILES.ASSETS_DIR)
+          .map((file) =>
+            fs.readFile(path.join(exported.bundleDir, file), "utf8")
+          )
+      );
+      const bundleText = files.join("\n");
+      assert.ok(!bundleText.includes(workspace), "real spelling is removed");
+      assert.ok(!bundleText.includes(alias), "symlink spelling is removed");
+      assert.deepStrictEqual(exported.manifest.externalPaths, []);
+    }
+  });
+
   test("exports continuation state and an untracked patch without touching the real index", async () => {
     const { workflowKey, runRef } = await createRun({
       state: EXECUTION_STATES.STOPPED,
@@ -156,6 +210,105 @@ suite("RunBundleExporter secrets", () => {
       readRunBundle(exported.bundleDir, workspace),
       /failed its SHA-256 check/
     );
+  });
+
+  test("exports a failed terminal step as the next continuation step", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.ERROR,
+      currentIndex: 1,
+      steps: [
+        {
+          prompt: "failed",
+          _runtime: {
+            startedAt: 110,
+            completedAt: 120,
+            terminalStatus: "failed",
+            terminalFailure: true,
+          },
+        },
+        { prompt: "second" },
+        { prompt: "third" },
+      ],
+    });
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "failed-continuation.ctrlyokerun"),
+      exportedByVersion: "test",
+    });
+
+    assert.deepStrictEqual(exported.continuation?.nextStep, {
+      kind: "queue",
+      stepIndex: 0,
+    });
+    assert.strictEqual(exported.continuation?.pendingStepCount, 3);
+  });
+
+  test("exports a patch unaffected by repository diff settings", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.STOPPED,
+      currentIndex: 0,
+      steps: [{ prompt: "next" }],
+    });
+    const baseCommit = (
+      await execGit(["rev-parse", "HEAD"], { cwd: workspace })
+    ).stdout.trim();
+    await fs.writeFile(path.join(workspace, "base.txt"), "changed\n");
+    await execGit(["config", "color.ui", "always"], { cwd: workspace });
+    await execGit(["config", "diff.noprefix", "true"], { cwd: workspace });
+    await execGit(["config", "diff.external", "false"], { cwd: workspace });
+
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "configured-diff.ctrlyokerun"),
+      exportedByVersion: "test",
+      secrets: { workspaceRoot: workspace, environment: {} },
+    });
+    const checkout = path.join(root, "base-checkout");
+    await fs.mkdir(checkout);
+    await execGit(["clone", "--quiet", workspace, checkout], { cwd: root });
+    await execGit(["checkout", "--quiet", baseCommit], { cwd: checkout });
+    await fs.writeFile(
+      path.join(root, "changes.patch"),
+      await fs.readFile(path.join(exported.bundleDir, RUN_BUNDLE_FILES.CHANGES))
+    );
+    await execGit(["apply", "--check", path.join(root, "changes.patch")], {
+      cwd: checkout,
+    });
+  });
+
+  test("excludes its in-workspace output from the patch, including force re-exports", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.STOPPED,
+      currentIndex: 0,
+      steps: [{ prompt: "next" }],
+    });
+    await fs.writeFile(path.join(workspace, "real-change.txt"), "change\n");
+    const bundleDir = path.join(workspace, "release-run.ctrlyokerun");
+    const exportOptions = {
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir,
+      exportedByVersion: "test",
+      secrets: { workspaceRoot: workspace, environment: {} },
+    };
+    for (const replace of [false, true]) {
+      const exported = await exportRunBundle({
+        ...exportOptions,
+        replace,
+      });
+      assert.deepStrictEqual(exported.changedFiles, ["real-change.txt"]);
+      const patch = await fs.readFile(
+        path.join(bundleDir, RUN_BUNDLE_FILES.CHANGES),
+        "utf8"
+      );
+      assert.match(patch, /real-change\.txt/);
+      assert.doesNotMatch(patch, /release-run\.ctrlyokerun|staging-/);
+    }
   });
 
   test("keeps patch paths and non-UTF-8 bytes intact while redacting added lines only", async () => {
@@ -272,32 +425,43 @@ suite("RunBundleExporter secrets", () => {
     await fs.mkdir(unbornRoot);
     await execGit(["init"], { cwd: unbornRoot });
 
-    for (const [label, executionRoot] of [
-      ["non-git", nonGitRoot],
-      ["unborn", unbornRoot],
-    ]) {
-      const bundleDir = path.join(root, `${label}.ctrlyokerun`);
-      const options = {
-        stateRoot: workspace,
-        workspaceRoot: executionRoot,
-        ...run,
-        bundleDir,
-        exportedByVersion: "test",
-        includeChanges: false,
-      };
-      const exported = await exportRunBundle(options);
-      assert.strictEqual(exported.continuable, false, label);
-      assert.strictEqual(exported.continuation, undefined, label);
-      assert.deepStrictEqual(
-        await getRunBundleExportPreview(
-          workspace,
-          executionRoot,
-          run.workflowKey,
-          run.runRef
-        ),
-        { continuable: false, changedFiles: [] },
-        label
-      );
+    const originalLanguage = process.env.LANGUAGE;
+    const originalLocale = process.env.LC_ALL;
+    process.env.LANGUAGE = "de";
+    process.env.LC_ALL = "de_DE.UTF-8";
+    try {
+      for (const [label, executionRoot] of [
+        ["non-git", nonGitRoot],
+        ["unborn", unbornRoot],
+      ]) {
+        const bundleDir = path.join(root, `${label}.ctrlyokerun`);
+        const options = {
+          stateRoot: workspace,
+          workspaceRoot: executionRoot,
+          ...run,
+          bundleDir,
+          exportedByVersion: "test",
+          includeChanges: false,
+        };
+        const exported = await exportRunBundle(options);
+        assert.strictEqual(exported.continuable, false, label);
+        assert.strictEqual(exported.continuation, undefined, label);
+        assert.deepStrictEqual(
+          await getRunBundleExportPreview(
+            workspace,
+            executionRoot,
+            run.workflowKey,
+            run.runRef
+          ),
+          { continuable: false, changedFiles: [] },
+          label
+        );
+      }
+    } finally {
+      if (originalLanguage === undefined) delete process.env.LANGUAGE;
+      else process.env.LANGUAGE = originalLanguage;
+      if (originalLocale === undefined) delete process.env.LC_ALL;
+      else process.env.LC_ALL = originalLocale;
     }
   });
 

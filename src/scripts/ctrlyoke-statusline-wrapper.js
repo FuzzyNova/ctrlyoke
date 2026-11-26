@@ -23,6 +23,7 @@ const {
   CURRENT_SCHEMA_VERSIONS,
   PERSISTED_STORES,
 } = require("./ctrlyoke-format-migrations.js");
+const { readJsoncObjectFile } = require("./ctrlyoke-settings-jsonc.js");
 
 const DEFAULT_FORWARD_TIMEOUT_MS = 1500;
 
@@ -80,8 +81,11 @@ const CONTEXT_COLORS = Object.freeze({
 let snapshotSequence = 0;
 
 function readSettingsFile(settingsPath) {
+  const readResult = readJsoncObjectFile(settingsPath);
+  if (readResult.kind === "missing") return { found: false, settings: {} };
+  if (readResult.kind !== "object") return { found: true, settings: {} };
   try {
-    const raw = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    const raw = readResult.value;
     let parsed;
     try {
       const migration = migrateToCurrent(PERSISTED_STORES.SETTINGS, raw);

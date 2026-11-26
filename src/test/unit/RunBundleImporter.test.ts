@@ -16,6 +16,8 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { execGit } from "../../utils/GitUtils";
 import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
 import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
+import { RunImportPreviewService } from "../../core/orchestration/RunImportPreview";
+import { PromptQueue } from "../../core/PromptQueue";
 import {
   RunMaterializer,
   type RunMaterializationInput,
@@ -611,8 +613,93 @@ suite("RunBundleImporter", () => {
     );
   });
 
+  test("continues an imported errored run from its failed step", async () => {
+    await makeContinuableBundle();
+    const runtimePath = path.join(bundle, "run.ctrlyoke.json");
+    const runtime = JSON.parse(await fs.readFile(runtimePath, "utf8")) as {
+      steps: Array<{ _runtime?: Record<string, unknown> }>;
+      _runtime: Record<string, unknown>;
+    };
+    runtime._runtime.executionState = EXECUTION_STATES.ERROR;
+    runtime._runtime.currentIndex = 1;
+    runtime.steps[0]._runtime = {
+      startedAt: 110,
+      completedAt: 120,
+      terminalStatus: "failed",
+      terminalFailure: true,
+    };
+    await fs.writeFile(runtimePath, JSON.stringify(runtime));
+
+    const bundleManifestPath = path.join(bundle, "run.json");
+    const bundleManifest = JSON.parse(
+      await fs.readFile(bundleManifestPath, "utf8")
+    ) as {
+      continuation: {
+        executionState: string;
+        nextStep: { kind: string; stepIndex?: number };
+        pendingStepCount: number;
+      };
+    };
+    bundleManifest.continuation.executionState = EXECUTION_STATES.ERROR;
+    bundleManifest.continuation.nextStep = { kind: "queue", stepIndex: 0 };
+    bundleManifest.continuation.pendingStepCount = 4;
+    await fs.writeFile(bundleManifestPath, JSON.stringify(bundleManifest));
+
+    const preview = await new RunImportPreviewService().preview(
+      bundle,
+      workspace,
+      {
+        git: async (_root, args) =>
+          args[0] === "cat-file" ? "" : args[0] === "rev-parse" ? "base" : "",
+      }
+    );
+    assert.strictEqual(preview.pendingSteps[0]?.stepIndex, 0);
+
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+      changes: "skip",
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      result.workflowKey,
+      result.runRef
+    );
+    const queue = new PromptQueue();
+    await queue.restoreFromWorkingFile(runFilePath);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+    assert.strictEqual(
+      await queue.rewindTerminalFailureForContinuation(),
+      true
+    );
+    assert.strictEqual(queue.getState().currentIndex, 0);
+    assert.strictEqual(
+      queue.getState().steps[0]?._runtime?.rewoundFailure,
+      true
+    );
+  });
+
   test("rewrites exported attachment references in continuation prompts", async () => {
+    await fs.writeFile(path.join(workspace, "note.md"), "workspace note\n");
     await makeContinuableBundle(undefined, true);
+    const definition = JSON.parse(
+      await fs.readFile(path.join(bundle, "workflow.ctrlyoke.json"), "utf8")
+    ) as { steps: Array<{ prompt: string }> };
+    definition.steps[2].prompt += "; compare with @note.md";
+    await fs.writeFile(
+      path.join(bundle, "workflow.ctrlyoke.json"),
+      JSON.stringify(definition)
+    );
+    const runtime = JSON.parse(
+      await fs.readFile(path.join(bundle, "run.ctrlyoke.json"), "utf8")
+    ) as { steps: Array<{ prompt: string }> };
+    runtime.steps[2].prompt += "; compare with @note.md";
+    await fs.writeFile(
+      path.join(bundle, "run.ctrlyoke.json"),
+      JSON.stringify(runtime)
+    );
     await fs.rm(path.join(workspace, ".ctrlyoke", "attachments", "note.md"));
     const result = await importer.importRun({
       workspaceRoot: workspace,
@@ -631,6 +718,8 @@ suite("RunBundleImporter", () => {
     };
     const prompt = runFile.steps[2].prompt;
     assert.match(prompt, /assets\/app\.css/);
+    assert.match(prompt, /@note\.md/);
+    assert.doesNotMatch(prompt, /attachments\/note\.md; compare/);
     const reference = parseAtReferences(prompt).find((item) =>
       item.path.includes("note.md")
     );

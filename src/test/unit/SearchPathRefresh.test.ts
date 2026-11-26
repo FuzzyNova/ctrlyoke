@@ -51,7 +51,7 @@ suite("SearchPathRefresh", () => {
     );
   });
 
-  test("prepends a directory created after launch so a newly installed CLI resolves", async () => {
+  test("appends a directory created after launch so a newly installed CLI resolves", async () => {
     const env: NodeJS.ProcessEnv = { PATH: "/usr/bin:/bin" };
 
     const added = await refreshProcessSearchPath(
@@ -61,7 +61,19 @@ suite("SearchPathRefresh", () => {
     );
 
     assert.deepStrictEqual(added, ["/home/me/.local/bin"]);
-    assert.strictEqual(env.PATH, "/home/me/.local/bin:/usr/bin:/bin");
+    assert.strictEqual(env.PATH, "/usr/bin:/bin:/home/me/.local/bin");
+  });
+
+  test("keeps existing PATH entries ahead of new entries", async () => {
+    const env: NodeJS.ProcessEnv = { PATH: "/usr/bin:/bin" };
+
+    await refreshProcessSearchPath(
+      async () => "/home/me/.local/bin:/usr/bin:/bin",
+      env,
+      "linux"
+    );
+
+    assert.strictEqual(env.PATH, "/usr/bin:/bin:/home/me/.local/bin");
   });
 
   test("keeps the existing PATH spelling and order on Windows", async () => {
@@ -73,7 +85,7 @@ suite("SearchPathRefresh", () => {
       "win32"
     );
 
-    assert.deepStrictEqual(env, { Path: "C:\\new;C:\\b;C:\\a" });
+    assert.deepStrictEqual(env, { Path: "C:\\b;C:\\a;C:\\new" });
   });
 
   test("never re-adds directories the dev host hid with --no-harnesses", async () => {

@@ -53,11 +53,12 @@ The import preview checks whether the commit is available. If it is missing,
 the run can still be imported for viewing, but it cannot continue until the
 base is available.
 
-A run stopped mid-step moves the same way it continues locally. The step that
-was running stays cancelled and continuing starts at the next step. Any edits
-the cancelled step made before it stopped are in the exported changes. To run
-that step again, rerun it after importing. This also applies to a run whose
-VS Code window or CLI process exited while a step was running.
+A run stopped mid-step moves the same way it continues locally. The interrupted
+step stays cancelled and continuing starts at the next step. A run that ended
+in error retries its failed step when continued, matching local continuation.
+Any edits made before stopping or failing are in the exported changes. This
+also applies to a run whose VS Code window or CLI process exited while a step
+was running.
 
 For a continuable bundle, choose where its patch should go:
 
@@ -67,6 +68,10 @@ For a continuable bundle, choose where its patch should go:
   clean and at the exported base commit.
 - **Skip** leaves the patch unapplied and compares the current tree with it.
   Use this when you have applied or synced the changes yourself.
+
+An empty changes patch is valid when the run made no file changes. Checkout and
+worktree imports continue with the unchanged tree, and **Skip** does not warn
+that changes are missing.
 
 Choose **Import** to add the run to history without starting it, or **Import
 and Continue** to import and resume its pending work. A history-only bundle,

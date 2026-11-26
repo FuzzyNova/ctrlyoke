@@ -33,6 +33,7 @@ import {
 import type { RunSummaryRecord } from "../../core/orchestration/OutputHistoryManager";
 import {
   CURRENT_SCHEMA_VERSIONS,
+  isNewerSchemaError,
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
 
@@ -285,6 +286,69 @@ suite("WorkingFileManager", () => {
       model: "gpt-5.4-mini",
       _runtime: finalStepRuntime,
     });
+  });
+
+  test("preserves unknown runtime metadata and refuses newer run files", async () => {
+    const workingFilePath = tempFile("newer-runtime");
+    const newerFile = makeMinimalWorkingFile();
+    newerFile._runtime = {
+      ...newerFile._runtime,
+      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE] + 1,
+      executionState: EXECUTION_STATES.RUNNING,
+      futureField: "keep me",
+    } as typeof newerFile._runtime;
+    const initialBytes = JSON.stringify(newerFile, null, 2);
+    await fs.writeFile(workingFilePath, initialBytes, "utf8");
+
+    const queue = new PromptQueue();
+    await queue.restoreFromWorkingFile(workingFilePath, true);
+    assert.strictEqual(
+      await fs.readFile(workingFilePath, "utf8"),
+      initialBytes
+    );
+    await assert.rejects(queue.updateWorkingFile(), isNewerSchemaError);
+    assert.strictEqual(
+      await fs.readFile(workingFilePath, "utf8"),
+      initialBytes
+    );
+  });
+
+  test("preserves non-queue runtime fields and clears absent queue fields", async () => {
+    const workingFilePath = tempFile("runtime-field-preservation");
+    const workingFile = makeMinimalWorkingFile();
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      worktreeNotice: "Worktree setup needs attention",
+      importedFrom: { sourceRoot: "source-run" } as NonNullable<
+        NonNullable<WorkingFile["_runtime"]>["importedFrom"]
+      >,
+      finalStep: {
+        phase: "queue",
+        loopCount: 1,
+        status: STEP_STATUS.COMPLETED,
+      },
+      activeParallelGroup: { groupId: "group-1", admission: "accepting" },
+      pendingRewind: { fromStepIndex: 0, baseDefinitionRevision: 1 },
+    } as typeof workingFile._runtime;
+    await writeTempJson(workingFilePath, workingFile);
+
+    const access = makeMockAccess(workingFilePath);
+    const manager = new WorkingFileManager(access);
+    await manager.updateWorkingFile();
+    const persisted = JSON.parse(
+      await fs.readFile(workingFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(
+      persisted._runtime?.worktreeNotice,
+      "Worktree setup needs attention"
+    );
+    assert.deepStrictEqual(persisted._runtime?.importedFrom, {
+      sourceRoot: "source-run",
+    });
+    assert.strictEqual(persisted._runtime?.finalStep, undefined);
+    assert.strictEqual(persisted._runtime?.activeParallelGroup, undefined);
+    assert.strictEqual(persisted._runtime?.pendingRewind, undefined);
   });
 
   test("persists the structured run stop reason in workflow runtime metadata", async () => {
@@ -1425,6 +1489,136 @@ suite("WorkingFileManager", () => {
           ),
         /definition revision conflict/i
       );
+    });
+
+    test("newer lineage descriptors block begin, commit, and discard before run writes", async () => {
+      const descriptorPath = (workflowKey: WorkflowKey) =>
+        WorkflowPaths.descriptorPath(tmpWorkspace, workflowKey);
+      const snapshotPath = (workflowKey: WorkflowKey, runRef: RunRef) =>
+        WorkflowPaths.pendingRewindBaseFilePath(
+          tmpWorkspace,
+          workflowKey,
+          runRef
+        );
+      const markDescriptorNewer = async (workflowKey: WorkflowKey) => {
+        const descriptor = JSON.parse(
+          await fs.readFile(descriptorPath(workflowKey), "utf8")
+        );
+        descriptor.schemaVersion = 99;
+        await fs.writeFile(
+          descriptorPath(workflowKey),
+          JSON.stringify(descriptor)
+        );
+      };
+
+      const begin = await makeCompletedRun();
+      const beginBefore = await fs.readFile(begin.runFilePath);
+      await markDescriptorNewer(begin.workflowKey);
+      await assert.rejects(
+        WorkingFileManager.beginPendingRewind(
+          tmpWorkspace,
+          begin.workflowKey,
+          begin.runRef,
+          1,
+          1,
+          2
+        ),
+        isNewerSchemaError
+      );
+      assert.deepStrictEqual(await fs.readFile(begin.runFilePath), beginBefore);
+      await assert.rejects(
+        fs.access(snapshotPath(begin.workflowKey, begin.runRef))
+      );
+      await fs.rm(tmpWorkspace, { recursive: true, force: true });
+      tmpWorkspace = "";
+
+      for (const operation of ["commit", "discard"] as const) {
+        const run = await makeCompletedRun();
+        await WorkingFileManager.beginPendingRewind(
+          tmpWorkspace,
+          run.workflowKey,
+          run.runRef,
+          1,
+          1,
+          2
+        );
+        const runBefore = await fs.readFile(run.runFilePath);
+        const snapshotBefore = await fs.readFile(
+          snapshotPath(run.workflowKey, run.runRef)
+        );
+        await markDescriptorNewer(run.workflowKey);
+        await assert.rejects(
+          operation === "commit"
+            ? WorkingFileManager.commitPendingRewind(
+                tmpWorkspace,
+                run.workflowKey,
+                run.runRef,
+                2,
+                3
+              )
+            : WorkingFileManager.discardPendingRewind(
+                tmpWorkspace,
+                run.workflowKey,
+                run.runRef,
+                2,
+                3,
+                true
+              ),
+          isNewerSchemaError
+        );
+        assert.deepStrictEqual(await fs.readFile(run.runFilePath), runBefore);
+        assert.deepStrictEqual(
+          await fs.readFile(snapshotPath(run.workflowKey, run.runRef)),
+          snapshotBefore
+        );
+        // The next fixture needs an independent temporary workspace because its
+        // lineage descriptor is intentionally left at schema version 99.
+        if (operation === "commit") {
+          await fs.rm(tmpWorkspace, { recursive: true, force: true });
+          tmpWorkspace = "";
+        }
+      }
+    });
+
+    test("discard refuses a newer run schema without changing the run or snapshot", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+      const snapshotPath = WorkflowPaths.pendingRewindBaseFilePath(
+        tmpWorkspace,
+        workflowKey,
+        runRef
+      );
+      const snapshotBefore = await fs.readFile(snapshotPath);
+      const current = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      Object.assign(current._runtime!, {
+        schemaVersion: 99,
+        futureField: "keep-me",
+      });
+      await fs.writeFile(runFilePath, JSON.stringify(current, null, 2));
+      const runBefore = await fs.readFile(runFilePath);
+
+      await assert.rejects(
+        WorkingFileManager.discardPendingRewind(
+          tmpWorkspace,
+          workflowKey,
+          runRef,
+          2,
+          rewind.descriptorRevision,
+          true
+        ),
+        isNewerSchemaError
+      );
+      assert.deepStrictEqual(await fs.readFile(runFilePath), runBefore);
+      assert.deepStrictEqual(await fs.readFile(snapshotPath), snapshotBefore);
     });
 
     test("restores the durable pending rewind state after a process restart", async () => {

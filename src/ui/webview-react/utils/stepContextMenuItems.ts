@@ -3,7 +3,7 @@ import type {
   ContextMenuItem,
   ContextMenuSubmenu,
 } from "../components/shared/ContextMenu";
-import { useEditorStore } from "@store/editorStore";
+import { selectionTargetKey, useEditorStore } from "@store/editorStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
@@ -11,7 +11,10 @@ import {
 } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
+  EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
+  STEER_ORIGIN_KINDS,
+  STEP_TYPES,
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
@@ -288,8 +291,8 @@ export interface QueuedStepHandoffMenuItemsInput {
  * Move to Editor and Send as Steer: take a queued step back out of the queue,
  * into the prompt editor or into a live session. Both remove the step without
  * the delete confirmation, because its text is not lost: it is in the editor,
- * or delivered and kept in Recent Prompts (a failed steer is restored into
- * the editor). Send as Steer opens a submenu when several sessions are live.
+ * or delivered and kept in Recent Prompts (a failed steer is restored as a
+ * new-step draft). Send as Steer opens a submenu when several sessions are live.
  */
 export function buildQueuedStepHandoffMenuItems({
   step,
@@ -303,20 +306,44 @@ export function buildQueuedStepHandoffMenuItems({
   const removeStep = () =>
     sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { indices: [stepIndex] });
 
+  const editorState = useEditorStore.getState();
+  const replacedDraft =
+    editorState.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
+      ? editorState
+      : editorState.savedNewPromptState;
+  const scriptDraftWouldBeReplaced =
+    replacedDraft?.stepType === STEP_TYPES.SCRIPT &&
+    replacedDraft.scriptCommand.trim().length > 0;
+  const moveDisabledReason =
+    removeDisabledReason ??
+    (scriptDraftWouldBeReplaced
+      ? "Save or clear the script draft before moving a step into the editor"
+      : undefined);
   const moveToEditor: ContextMenuItem = {
     label: "Move to Editor",
     icon: "codicon-edit",
-    disabled: removeDisabledReason !== undefined,
+    disabled: moveDisabledReason !== undefined,
     title: "Load this step into the prompt editor and remove it from the queue",
-    disabledTitle: removeDisabledReason,
+    disabledTitle: moveDisabledReason,
     onClick: () => {
-      if (removeDisabledReason !== undefined) return;
+      if (moveDisabledReason !== undefined) return;
       useEditorStore.getState().moveStepToNewStepDraft(stepIndex, step);
       removeStep();
     },
   };
 
-  const steerText = isScriptStep(step) ? "" : step.prompt.trim();
+  const queuedEdit =
+    editorState.pendingEdits[
+      selectionTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index: stepIndex })
+    ];
+  const isSelectedStep =
+    editorState.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
+    editorState.selectionTarget.index === stepIndex;
+  const savedPrompt = "prompt" in step ? step.prompt : "";
+  const queuedPrompt = isSelectedStep
+    ? editorState.promptText
+    : (queuedEdit?.promptText ?? savedPrompt);
+  const steerText = isScriptStep(step) ? "" : queuedPrompt.trim();
   // A step's own session never steers it: it has not started yet.
   const destinations = steerTargets.filter(
     (target) => target.stepIndex !== stepIndex
@@ -331,7 +358,11 @@ export function buildQueuedStepHandoffMenuItems({
           : undefined));
   const steerTo = (target: SteerTarget) => () => {
     if (steerDisabledReason !== undefined || !workflowId) return;
-    sendSteerText(workflowId, target.sessionId, steerText);
+    sendSteerText(workflowId, target.sessionId, steerText, {
+      kind: STEER_ORIGIN_KINDS.QUEUED_STEP,
+      stepIndex,
+      step: isScriptStep(step) ? step : { ...step, prompt: steerText },
+    });
     removeStep();
   };
 

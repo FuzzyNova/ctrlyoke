@@ -59,6 +59,7 @@ function installedTemplate(
     description: "",
     isBuiltIn: false,
     source: scope,
+    communityInstallFile: `${id}.ctrlyoke.yaml`,
     variables: [{ name: "testCommand", type: "text", default: "npm test" }],
   } satisfies TemplateInfo;
 }
@@ -224,6 +225,51 @@ describe("CommunityTemplatesPage", () => {
         "Installed in User templates"
       )
     ).toBeInTheDocument();
+  });
+
+  it("shows a same-id authored template as name taken without install controls", () => {
+    seedIndex([REVIEW]);
+    useUiStore.setState({
+      templateCatalog: [
+        { ...installedTemplate(REVIEW.id), communityInstallFile: undefined },
+      ],
+    });
+    render(
+      <CommunityTemplatesPage activeScope="user" onSetDefaults={vi.fn()} />
+    );
+    const row = screen.getByTestId(`community-template-${REVIEW.id}`);
+    expect(
+      within(row).getByRole("button", { name: "Name taken" })
+    ).toBeDisabled();
+    expect(
+      within(row).queryByRole("button", { name: /Uninstall/ })
+    ).not.toBeInTheDocument();
+    expect(within(row).queryByText("Set defaults")).not.toBeInTheDocument();
+    expect(
+      within(row).queryByLabelText(/Installed in/)
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not offer uninstall when the provenance marker names another file", () => {
+    seedIndex([REVIEW]);
+    useUiStore.setState({
+      templateCatalog: [
+        {
+          ...installedTemplate(REVIEW.id),
+          communityInstallFile: `${REVIEW.id}.ctrlyoke.json`,
+        },
+      ],
+    });
+    render(
+      <CommunityTemplatesPage activeScope="user" onSetDefaults={vi.fn()} />
+    );
+    const row = screen.getByTestId(`community-template-${REVIEW.id}`);
+    expect(
+      within(row).getByRole("button", { name: "Name taken" })
+    ).toBeDisabled();
+    expect(
+      within(row).queryByRole("button", { name: /Uninstall/ })
+    ).not.toBeInTheDocument();
   });
 
   it("uninstalls from the active scope after confirming, keeping saved values unless asked", () => {
