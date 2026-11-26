@@ -19,6 +19,7 @@ import {
   PREVIEW_PROPERTY_SOURCES,
   PREVIEW_SCOPES,
   PREVIEW_STEP_TYPES,
+  STEP_TYPES,
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
@@ -51,7 +52,13 @@ import type {
   ExecutionPreviewScope,
   ManagedMcpServer,
 } from "../types/WebviewMessageTypes";
-import { isScriptStep, type DynamicQueueConfig } from "../types/CtrlYokeTypes";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+  type DynamicQueueConfig,
+} from "../types/CtrlYokeTypes";
 import type {
   ExecutionPropertyDefaults,
   ResolvedExecutionTarget,
@@ -337,15 +344,15 @@ export class ExecutionPreviewService {
         configuredWidth: this.options.dynamicQueueConfig?.maxParallelSteps ?? 6,
         runStartView: runStart,
         normalizeProperties: async (properties, step, effectivePromptText) =>
-          isScriptStep(step)
-            ? properties
-            : (
+          isPromptStep(step)
+            ? (
                 await McpServerNormalizer.applyWithDiagnostics(
                   properties,
                   managedMcpServers,
                   effectivePromptText
                 )
-              ).properties,
+              ).properties
+            : properties,
         checkHarnessReady: (harnessId) =>
           this.options.capabilities.harnesses[harnessId]?.available
             ? undefined
@@ -431,7 +438,7 @@ export class ExecutionPreviewService {
       (target) => !blockers.has(target.stepIndex)
     );
     for (const target of targets) {
-      if (isScriptStep(target.step)) {
+      if (!isPromptStep(target.step)) {
         continue;
       }
       const resolution =
@@ -453,7 +460,7 @@ export class ExecutionPreviewService {
     }
 
     const compatibilityTargets: CompatibilityExecutionTarget[] = targets
-      .filter((target) => !isScriptStep(target.step))
+      .filter((target) => isPromptStep(target.step))
       .map((target) => ({
         consumer: target.isFinalStep
           ? { kind: FINAL_STEP_PHASES.FINAL_STEP }
@@ -648,7 +655,7 @@ export class ExecutionPreviewService {
     workflow: PromptFile
   ): ResolvedExecutionTarget {
     return resolveExecutionProperties(
-      isScriptStep(step) ? this.scriptAsPrompt(step) : step,
+      isPromptStep(step) ? step : this.scriptAsPrompt(step),
       workflow,
       {
         defaults: this.options.defaults,
@@ -674,7 +681,7 @@ export class ExecutionPreviewService {
     authoredStep: WorkflowStep | undefined
   ): Promise<StepExecutionPreview> {
     const step = this.substituteDispatchStep(target, variables);
-    const promptStep = isScriptStep(step) ? this.scriptAsPrompt(step) : step;
+    const promptStep = isPromptStep(step) ? step : this.scriptAsPrompt(step);
     const targetResolution =
       resolvedTarget ?? this.resolveTarget(step, workflow);
     const substitutedProperties = VarSubstitutor.applyToResolvedProperties(
@@ -726,16 +733,16 @@ export class ExecutionPreviewService {
       properties.harness,
       worktreeExecutionWorkspace
     );
-    const resolvedSessionId = isScriptStep(step)
-      ? undefined
-      : preflightMember !== undefined
+    const resolvedSessionId = isPromptStep(step)
+      ? preflightMember !== undefined
         ? preflightMember.resolvedSessionId
         : this.resolveSessionId(
             target.stepIndex,
             allSteps,
             properties,
             this.parallelGroupStartBoundary(workflow, target.stepIndex)
-          );
+          )
+      : undefined;
     const conditionPreview = this.buildConditions(
       properties.preCondition,
       properties.endCondition,
@@ -777,6 +784,10 @@ export class ExecutionPreviewService {
         diagnostics,
         ...substitutionFields,
       };
+    }
+
+    if (!isPromptStep(step)) {
+      throw new Error("Unsupported workflow step type in execution preview");
     }
 
     if (!step.prompt.trim()) {
@@ -969,15 +980,22 @@ export class ExecutionPreviewService {
     variables: Record<string, string>,
     sourceDefinitionPath?: string
   ): Promise<WorkflowStep> {
-    if (isScriptStep(step)) {
-      return Promise.resolve(VarSubstitutor.applyToScriptStep(step, variables));
+    const stepType = getStepType(step);
+    switch (stepType) {
+      case STEP_TYPES.SCRIPT:
+        return Promise.resolve(
+          VarSubstitutor.applyToScriptStep(step as ScriptStep, variables)
+        );
+      case STEP_TYPES.PROMPT:
+        return resolvePromptTextWithVariables(
+          (step as PromptStep).prompt,
+          variables,
+          this.promptFileResolver,
+          sourceDefinitionPath
+        ).then((prompt) => ({ ...step, prompt }));
+      default:
+        return assertNever(stepType);
     }
-    return resolvePromptTextWithVariables(
-      step.prompt,
-      variables,
-      this.promptFileResolver,
-      sourceDefinitionPath
-    ).then((prompt) => ({ ...step, prompt }));
   }
 
   private scriptAsPrompt(step: ScriptStep): PromptStep {

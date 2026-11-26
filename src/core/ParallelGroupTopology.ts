@@ -5,7 +5,7 @@ import type {
   PromptFile,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import { isScriptStep } from "../types/CtrlYokeTypes";
+import { isPromptStep } from "../types/CtrlYokeTypes";
 import { assertStartedStepPositionsPreserved } from "./StepIdentity";
 import { hasStarted } from "../utils/StepStatusDerivation";
 import { parseInlinePriorContextRefs } from "../utils/FileReferenceParser";
@@ -59,7 +59,7 @@ export function getParallelSiblingReferenceErrors(
       stepIndex++
     ) {
       const step = steps[stepIndex];
-      if (isScriptStep(step)) {
+      if (!isPromptStep(step)) {
         continue;
       }
 

@@ -19,7 +19,7 @@ import { createPriorContextResolver } from "./orchestration/AddressedPriorContex
 import {
   buildEphemeralWorkflowStep,
   buildPromptStepProperties,
-  buildScriptStepFromProperties,
+  buildWorkflowStepFromProperties,
   sanitizeClipboardWorkflowStep,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
@@ -52,7 +52,6 @@ import {
   PANEL_CLIENT_ID,
   SCHEDULER_CLIENT_ID,
   RUNNER_IDS,
-  STEP_TYPES,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_EDIT_KINDS,
   WORKTREE_BRANCH_STATES,
@@ -231,28 +230,16 @@ function buildPromptStepChange(
   promptName?: string,
   clearProperties?: string[]
 ): { replace: WorkflowStep; clearProperties?: string[] } {
-  const props = properties as Record<string, unknown>;
   if (text === undefined) {
     return {
       replace: buildPromptStepProperties(properties) as WorkflowStep,
       clearProperties,
     };
   }
-  return props?.type === STEP_TYPES.SCRIPT
-    ? {
-        replace: buildScriptStepFromProperties(text, props, promptName),
-        clearProperties,
-      }
-    : {
-        replace: {
-          prompt: text,
-          ...(promptName !== undefined && {
-            name: promptName || undefined,
-          }),
-          ...buildPromptStepProperties(properties),
-        },
-        clearProperties,
-      };
+  return {
+    replace: buildWorkflowStepFromProperties(text, properties, promptName),
+    clearProperties,
+  };
 }
 
 /**

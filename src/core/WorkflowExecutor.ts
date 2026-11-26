@@ -10,6 +10,9 @@ import {
   ScriptStep,
   WorkflowStep,
   isScriptStep,
+  isPromptStep,
+  getStepType,
+  assertNever,
   DynamicQueueConfig,
   FinalStepRuntimeState,
   EXECUTION_STATES,
@@ -1117,16 +1120,16 @@ export class WorkflowExecutor {
         memberStep,
         effectivePromptText
       ) =>
-        isScriptStep(memberStep)
-          ? properties
-          : (
+        isPromptStep(memberStep)
+          ? (
               await McpServerNormalizer.applyFromRegistryWithDiagnostics(
                 properties,
                 context.workspaceFolderPath ??
                   context.executionWorkspace.executionRoot,
                 effectivePromptText ?? ""
               )
-            ).properties,
+            ).properties
+          : properties,
       checkHarnessReady: context.ensureHarnessReady,
       ensureIsolatedIntegration: (member) =>
         context.getIntegrationForPrompt(
@@ -2093,11 +2096,7 @@ export class WorkflowExecutor {
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? this.promptQueue.getState().steps[target.stepIndex]
         : undefined;
-    if (
-      target.kind === FINAL_STEP_PHASES.QUEUE &&
-      step &&
-      !isScriptStep(step)
-    ) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE && step && isPromptStep(step)) {
       const resolved = SettingsPropertyResolver.resolve(
         step,
         this.promptQueue.getWorkflowFile(),
@@ -2379,8 +2378,19 @@ export class WorkflowExecutor {
     }
 
     // Route script steps directly — no AI harness interaction needed
-    if (isScriptStep(authoredStep)) {
-      return this.executeScriptStep(authoredStep, viewIndex, context, target);
+    const authoredStepType = getStepType(authoredStep);
+    switch (authoredStepType) {
+      case STEP_TYPES.SCRIPT:
+        return this.executeScriptStep(
+          authoredStep as ScriptStep,
+          viewIndex,
+          context,
+          target
+        );
+      case STEP_TYPES.PROMPT:
+        break;
+      default:
+        return assertNever(authoredStepType);
     }
 
     let prompt: PromptStep = authoredStep as PromptStep;
@@ -3014,12 +3024,17 @@ export class WorkflowExecutor {
     reason: string = "Skipped by pre-condition",
     logPrefix: string = "[Pre-condition]"
   ): Promise<boolean> {
-    const stepLabel =
-      !isScriptStep(step) && (step as PromptStep).name
-        ? (step as PromptStep).name!
-        : step.type === STEP_TYPES.SCRIPT
-          ? (step as ScriptStep).script.split(/\s+/)[0]
-          : "prompt";
+    const stepLabel = (() => {
+      const stepType = getStepType(step);
+      switch (stepType) {
+        case STEP_TYPES.PROMPT:
+          return (step as PromptStep).name || "prompt";
+        case STEP_TYPES.SCRIPT:
+          return (step as ScriptStep).script.split(/\s+/)[0];
+        default:
+          return assertNever(stepType);
+      }
+    })();
 
     Log.info(`${logPrefix} Step skipped — ${stepLabel}`);
     await this.trackStatusMessage(

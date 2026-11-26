@@ -1,5 +1,5 @@
 import {
-  isScriptStep,
+  isPromptStep,
   type PromptFile,
   type WorkflowStep,
 } from "../types/CtrlYokeTypes";
@@ -44,7 +44,7 @@ export function findShiftedStepReferences(
 
   const affected: string[] = [];
   newSteps.forEach((step, index) => {
-    if (isScriptStep(step) || hasStarted(step)) return;
+    if (!isPromptStep(step) || hasStarted(step)) return;
     if (!oldKeys.has(stepKey(step)) || moved.has(stepKey(step))) return;
     if (stepPositionalReferences(step).some(shifted)) {
       affected.push(describeStep(step, index));
@@ -53,7 +53,7 @@ export function findShiftedStepReferences(
   const { finalStep, workflowDefaults } = options;
   if (
     finalStep &&
-    !isScriptStep(finalStep) &&
+    isPromptStep(finalStep) &&
     stepPositionalReferences(finalStep).some(shifted)
   ) {
     affected.push("Final step");
@@ -107,7 +107,7 @@ export function describeStepRemoval(removedIndices: readonly number[]): string {
 }
 
 function stepPositionalReferences(step: WorkflowStep): number[] {
-  if (isScriptStep(step)) return [];
+  if (!isPromptStep(step)) return [];
   const texts = [
     step.prompt,
     step.endCondition?.retryPrompt,

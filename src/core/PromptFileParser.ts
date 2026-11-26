@@ -13,6 +13,9 @@ import {
   StepDisplayProperties,
   EXECUTION_PROPERTY_KEYS,
   isScriptStep,
+  isPromptStep,
+  getStepType,
+  assertNever,
   hasExecutableSteps,
   type ScriptProperties,
   type WorkflowValidationResult,
@@ -685,9 +688,7 @@ export class PromptFileParser {
         const rootAlternatives = defs.singleStepRoot?.oneOf;
         schemas = [
           Array.isArray(rootAlternatives)
-            ? rootAlternatives[
-                isObject(target) && target.type === STEP_TYPES.SCRIPT ? 1 : 0
-              ]
+            ? rootAlternatives[isObject(target) ? stepSchemaIndex(target) : 0]
             : defs.singleStepRoot,
         ];
       } else {
@@ -706,11 +707,7 @@ export class PromptFileParser {
       // include fields valid for the authored step kind.
       schemas =
         suggestionCandidatesOnly && isObject(target)
-          ? [
-              target.type === STEP_TYPES.SCRIPT
-                ? defs.scriptStep
-                : defs.promptStep,
-            ]
+          ? [stepSchemaIndex(target) === 1 ? defs.scriptStep : defs.promptStep]
           : [defs.workflowStep];
     }
 
@@ -1031,15 +1028,20 @@ export class PromptFileParser {
     parsed: any,
     promptFilePath: string
   ): Promise<PromptFile> {
-    if (
-      parsed.type === STEP_TYPES.SCRIPT &&
-      typeof parsed.script === "string"
-    ) {
-      const promptFile: PromptFile = {
-        steps: [this.buildScriptStep(parsed)],
-      };
-      this.copyWorkflowLevelProperties(parsed, promptFile);
-      return promptFile;
+    const rootStepType = getStepType(parsed);
+    switch (rootStepType) {
+      case STEP_TYPES.SCRIPT: {
+        if (typeof parsed.script !== "string") break;
+        const promptFile: PromptFile = {
+          steps: [this.buildScriptStep(parsed)],
+        };
+        this.copyWorkflowLevelProperties(parsed, promptFile);
+        return promptFile;
+      }
+      case STEP_TYPES.PROMPT:
+        break;
+      default:
+        assertNever(rootStepType);
     }
 
     // Handle single prompt format
@@ -1075,16 +1077,9 @@ export class PromptFileParser {
             );
           }
           const resolvedMembers: WorkflowStep[] = await Promise.all(
-            (item.parallel as any[]).map(async (member) => {
-              if (member.type === STEP_TYPES.SCRIPT) {
-                return this.buildScriptStep(member);
-              }
-              const promptValue = await this.validatePromptReference(
-                member.prompt,
-                promptFilePath
-              );
-              return this.buildPromptStep(promptValue, member);
-            })
+            (item.parallel as any[]).map((member) =>
+              this.buildNormalizedStep(member, promptFilePath)
+            )
           );
           resolvedItems.push({
             parallel: resolvedMembers,
@@ -1095,16 +1090,9 @@ export class PromptFileParser {
           continue;
         }
 
-        if (item.type === STEP_TYPES.SCRIPT) {
-          resolvedItems.push(this.buildScriptStep(item));
-          resolvedStepCount += 1;
-          continue;
-        }
-        const promptValue = await this.validatePromptReference(
-          item.prompt,
-          promptFilePath
+        resolvedItems.push(
+          await this.buildNormalizedStep(item, promptFilePath)
         );
-        resolvedItems.push(this.buildPromptStep(promptValue, item));
         resolvedStepCount += 1;
       }
 
@@ -1148,18 +1136,10 @@ export class PromptFileParser {
 
       const rawFinalStep = parsed.finalStep;
       if (rawFinalStep) {
-        if (rawFinalStep.type === STEP_TYPES.SCRIPT) {
-          promptFile.finalStep = this.buildScriptStep(rawFinalStep);
-        } else if (typeof rawFinalStep.prompt === "string") {
-          const promptValue = await this.validatePromptReference(
-            rawFinalStep.prompt,
-            promptFilePath
-          );
-          promptFile.finalStep = this.buildPromptStep(
-            promptValue,
-            rawFinalStep
-          );
-        }
+        promptFile.finalStep = await this.buildNormalizedStep(
+          rawFinalStep,
+          promptFilePath
+        );
       }
 
       // Copy workflow-level properties (if present)
@@ -1247,13 +1227,42 @@ export class PromptFileParser {
     if (!isObject(source)) {
       return false;
     }
-    if (source.type === STEP_TYPES.SCRIPT) {
-      return true;
+    if (
+      source.type !== undefined &&
+      source.type !== STEP_TYPES.PROMPT &&
+      source.type !== STEP_TYPES.SCRIPT
+    ) {
+      return false;
     }
-    return (
-      (source.type === undefined || source.type === STEP_TYPES.PROMPT) &&
-      typeof source.prompt === "string"
-    );
+    const sourceType = getStepType(source);
+    switch (sourceType) {
+      case STEP_TYPES.SCRIPT:
+        return true;
+      case STEP_TYPES.PROMPT:
+        return typeof source.prompt === "string";
+      default:
+        return assertNever(sourceType);
+    }
+  }
+
+  private async buildNormalizedStep(
+    source: Record<string, any>,
+    promptFilePath: string
+  ): Promise<WorkflowStep> {
+    const sourceType = getStepType(source);
+    switch (sourceType) {
+      case STEP_TYPES.SCRIPT:
+        return this.buildScriptStep(source);
+      case STEP_TYPES.PROMPT: {
+        const promptValue = await this.validatePromptReference(
+          source.prompt,
+          promptFilePath
+        );
+        return this.buildPromptStep(promptValue, source);
+      }
+      default:
+        return assertNever(sourceType);
+    }
   }
 
   private getParallelReferenceErrors(
@@ -1393,6 +1402,7 @@ export class PromptFileParser {
     if (isScriptStep(step)) {
       return [{ config: step, pointer: stepPointer }];
     }
+    if (!isPromptStep(step)) return [];
 
     const sites: { config: ScriptProperties; pointer: string }[] = [];
     if (step.endCondition) {
@@ -1491,6 +1501,8 @@ export class PromptFileParser {
         return;
       }
 
+      if (!isPromptStep(item)) return;
+
       if (!item.prompt || item.prompt.trim().length === 0) {
         errors.push(`Prompt ${index + 1}: Empty prompt text`);
       }
@@ -1549,5 +1561,18 @@ export class PromptFileParser {
       ).message,
       propertyPointer: workflowMaxSteps === undefined ? "/steps" : "/maxSteps",
     };
+  }
+}
+
+/** Index of a step kind in the schema's prompt/script single-step union. */
+function stepSchemaIndex(step: Record<string, unknown>): number {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.PROMPT:
+      return 0;
+    case STEP_TYPES.SCRIPT:
+      return 1;
+    default:
+      return assertNever(stepType);
   }
 }

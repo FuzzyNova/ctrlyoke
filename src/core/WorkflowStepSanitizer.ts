@@ -19,7 +19,8 @@ import {
 } from "../utils/PersistedSchemaGuard";
 import {
   EXECUTION_PROPERTY_KEYS,
-  isScriptStep,
+  assertNever,
+  getStepType,
   isPriorContextRunSource,
   type ErrorBehavior,
   type EndCondition,
@@ -55,15 +56,23 @@ export function assertBulkWorkflowStepUpdateAllowed(
   ) {
     throw new Error("Step properties must be an object");
   }
+  const stepType = getStepType(step);
   const allowedKeys = new Set<string>(
-    isScriptStep(step)
-      ? BULK_EDITABLE_SCRIPT_STEP_KEYS
-      : BULK_EDITABLE_PROMPT_STEP_KEYS
+    (() => {
+      switch (stepType) {
+        case STEP_TYPES.SCRIPT:
+          return BULK_EDITABLE_SCRIPT_STEP_KEYS;
+        case STEP_TYPES.PROMPT:
+          return BULK_EDITABLE_PROMPT_STEP_KEYS;
+        default:
+          return assertNever(stepType);
+      }
+    })()
   );
   for (const key of [...Object.keys(properties), ...(clearProperties ?? [])]) {
     if (!allowedKeys.has(key)) {
       throw new Error(
-        `Cannot bulk update ${key} on ${isScriptStep(step) ? "script" : "prompt"} step ${index + 1}`
+        `Cannot bulk update ${key} on ${stepType} step ${index + 1}`
       );
     }
   }
@@ -661,7 +670,12 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
     ...(typeof step.color === "string" && { color: step.color }),
   };
 
-  if (step.type === STEP_TYPES.SCRIPT) {
+  const stepType = getStepType(step);
+  if (stepType !== STEP_TYPES.SCRIPT && stepType !== STEP_TYPES.PROMPT) {
+    assertNever(stepType);
+  }
+
+  if (stepType === STEP_TYPES.SCRIPT) {
     if (typeof step.script !== "string") {
       throw new Error("Clipboard script step is missing a script string");
     }
@@ -773,18 +787,18 @@ export function mergeWorkflowStepUpdate(
   incomingStep: Partial<WorkflowStep>,
   clearProperties?: string[]
 ): WorkflowStep {
-  const incomingIsScript =
+  const incomingType =
     incomingStep.type !== undefined
-      ? incomingStep.type === STEP_TYPES.SCRIPT
+      ? incomingStep.type
       : Object.prototype.hasOwnProperty.call(incomingStep, "script")
-        ? true
+        ? STEP_TYPES.SCRIPT
         : Object.prototype.hasOwnProperty.call(incomingStep, "prompt")
-          ? false
+          ? STEP_TYPES.PROMPT
           : undefined;
 
   if (
-    incomingIsScript !== undefined &&
-    isScriptStep(existingStep) !== incomingIsScript
+    incomingType !== undefined &&
+    getStepType(existingStep) !== incomingType
   ) {
     return incomingStep as WorkflowStep;
   }
@@ -798,15 +812,21 @@ export function mergeWorkflowStepUpdate(
 
 /** Normalize a dashboard final-step payload before applying the shared merge rule. */
 export function buildFinalStepUpdate(finalStep: WorkflowStep): WorkflowStep {
-  const normalized = (
-    isScriptStep(finalStep)
-      ? stripViewOnlyWorkflowStepFields(finalStep)
-      : {
-          prompt: finalStep.prompt,
+  const finalStepType = getStepType(finalStep);
+  const normalized = (() => {
+    switch (finalStepType) {
+      case STEP_TYPES.SCRIPT:
+        return stripViewOnlyWorkflowStepFields(finalStep);
+      case STEP_TYPES.PROMPT:
+        return {
+          prompt: (finalStep as PromptStep).prompt,
           ...(finalStep.name ? { name: finalStep.name } : {}),
           ...buildPromptStepProperties(finalStep),
-        }
-  ) as WorkflowStep;
+        };
+      default:
+        return assertNever(finalStepType);
+    }
+  })() as WorkflowStep;
 
   // Final-step runtime metadata belongs to the disk head, not to an editor
   // payload. Same-kind merges preserve it from the existing step; type changes
@@ -889,14 +909,32 @@ export function buildEphemeralWorkflowStep(
   properties: unknown,
   promptName?: string
 ): WorkflowStep {
-  const props = properties as Record<string, unknown>;
-  return props?.type === STEP_TYPES.SCRIPT
-    ? buildScriptStepFromProperties(text, props, promptName)
-    : {
+  return buildWorkflowStepFromProperties(text, properties, promptName);
+}
+
+/** Build an authored step from editor properties with exhaustive kind handling. */
+export function buildWorkflowStepFromProperties(
+  text: string,
+  properties: unknown,
+  promptName?: string
+): WorkflowStep {
+  const props =
+    properties && typeof properties === "object"
+      ? (properties as Record<string, unknown>)
+      : {};
+  const stepType = getStepType(props);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return buildScriptStepFromProperties(text, props, promptName);
+    case STEP_TYPES.PROMPT:
+      return {
         prompt: text,
         ...(promptName?.trim() ? { name: promptName.trim() } : {}),
         ...buildPromptStepProperties(properties),
       };
+    default:
+      return assertNever(stepType);
+  }
 }
 
 export function buildPromptStepProperties(

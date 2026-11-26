@@ -16,7 +16,7 @@ import type {
   PromptStep,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import { isScriptStep } from "../types/CtrlYokeTypes";
+import { isPromptStep, isScriptStep } from "../types/CtrlYokeTypes";
 import type {
   ExecutionPropertyDefaults,
   ResolvedExecutionTarget,
@@ -231,14 +231,14 @@ export async function preflightParallelGroupMember(
     };
   }
   const prompt = promptProjection(step);
-  const effectivePromptText = isScriptStep(step)
-    ? undefined
-    : await resolvePromptTextWithVariables(
+  const effectivePromptText = isPromptStep(step)
+    ? await resolvePromptTextWithVariables(
         step.prompt,
         variables,
         options.promptFileResolver ?? PASSTHROUGH_PROMPT_FILE_RESOLVER,
         options.sourceDefinitionPath
-      );
+      )
+    : undefined;
   if (options.normalizeProperties) {
     resolvedProperties = await options.normalizeProperties(
       resolvedProperties,
@@ -271,9 +271,8 @@ export async function preflightParallelGroupMember(
     });
   }
 
-  const candidateSessionId = isScriptStep(step)
-    ? undefined
-    : SessionResolver.resolveWithProperties(
+  const candidateSessionId = isPromptStep(step)
+    ? SessionResolver.resolveWithProperties(
         prompt,
         options.stepIndex,
         workflow.steps ?? [],
@@ -281,12 +280,13 @@ export async function preflightParallelGroupMember(
         options.finalStepSessionId,
         group.startIndex,
         false
-      );
+      )
+    : undefined;
 
   const reservedMembers = options.reservedMembers ?? [];
   const sessionOwners = reservedMembers.filter(
     (reserved) =>
-      !isScriptStep(reserved.step) &&
+      isPromptStep(reserved.step) &&
       candidateSessionId !== undefined &&
       reserved.resolvedSessionId === candidateSessionId &&
       reserved.resolvedProperties.harness === resolvedProperties.harness
@@ -356,7 +356,7 @@ export async function preflightParallelGroupMember(
     });
   }
 
-  if (!isScriptStep(step) && options.checkHarnessReady) {
+  if (isPromptStep(step) && options.checkHarnessReady) {
     const reason = await options.checkHarnessReady(resolvedProperties.harness);
     if (reason) {
       issues.push({
@@ -368,7 +368,7 @@ export async function preflightParallelGroupMember(
   }
 
   let memberWithIntegration = member;
-  if (!isScriptStep(step) && options.ensureIsolatedIntegration) {
+  if (isPromptStep(step) && options.ensureIsolatedIntegration) {
     try {
       const integration = await options.ensureIsolatedIntegration(member);
       memberWithIntegration = {

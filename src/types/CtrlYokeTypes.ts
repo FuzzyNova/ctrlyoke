@@ -1123,6 +1123,32 @@ export function isScriptStep<T extends object>(
   return "type" in step && step.type === STEP_TYPES.SCRIPT;
 }
 
+/** Return the authored step kind, treating an omitted discriminator as prompt. */
+export function getStepType<T extends object>(step: T): WorkflowStepType {
+  return (("type" in step ? step.type : undefined) ??
+    STEP_TYPES.PROMPT) as WorkflowStepType;
+}
+
+/** Type guard for prompt steps, including legacy steps without a discriminator. */
+export function isPromptStep<T extends object>(
+  step: T
+): step is
+  | Extract<T, { type?: typeof STEP_TYPES.PROMPT }>
+  | Extract<T, { type?: undefined }> {
+  return (
+    !("type" in step) ||
+    step.type === undefined ||
+    step.type === STEP_TYPES.PROMPT
+  );
+}
+
+/** Fail at runtime when an exhaustive discriminated union gains an unhandled case. */
+export function assertNever(value: never, context?: string): never {
+  throw new Error(
+    `Unexpected value${context ? ` in ${context}` : ""}: ${String(value)}`
+  );
+}
+
 /**
  * True when a workflow has something to execute. A `finalStep` counts as a
  * step: a final-step-only workflow (empty `steps`, orchestrating `finalStep`)

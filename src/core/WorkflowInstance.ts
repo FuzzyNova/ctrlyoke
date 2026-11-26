@@ -20,8 +20,7 @@ import {
   buildDefinitionSnapshot,
   buildEphemeralWorkflowStep,
   buildFinalStepUpdate,
-  buildPromptStepProperties,
-  buildScriptStepFromProperties,
+  buildWorkflowStepFromProperties,
   mergeWorkflowStepUpdate,
   sanitizeClipboardWorkflowStep,
   stripViewOnlyWorkflowStepFields,
@@ -43,7 +42,7 @@ import {
   PromptFile,
   PromptStep,
   WorkflowStep,
-  isScriptStep,
+  isPromptStep,
   QueueState,
   HarnessId,
   EXECUTION_STATES,
@@ -95,7 +94,6 @@ import {
   FAILURE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
   STEP_STATUS,
-  STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   WORKFLOW_RUNTIME_COMMANDS,
   WORKFLOW_TELEMETRY_OUTCOMES,
@@ -1586,7 +1584,7 @@ export class WorkflowInstance
     return {
       fileName: path.basename(this.currentPromptFile.filePath),
       steps: this.currentPromptFile.promptFile.steps.map((p) => ({
-        prompt: isScriptStep(p) ? p.script : p.prompt,
+        prompt: isPromptStep(p) ? p.prompt : p.script,
       })),
     };
   }
@@ -3320,7 +3318,7 @@ export class WorkflowInstance
     }
 
     Log.debug(
-      `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${isScriptStep(sanitizedStep) ? sanitizedStep.script.substring(0, 50) : sanitizedStep.prompt.substring(0, 50)}...`
+      `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${isPromptStep(sanitizedStep) ? sanitizedStep.prompt.substring(0, 50) : sanitizedStep.script.substring(0, 50)}...`
     );
     return warning;
   }
@@ -3333,14 +3331,11 @@ export class WorkflowInstance
     clearProperties?: string[]
   ): Promise<void> {
     const props = properties as Record<string, unknown>;
-    const incomingStep: WorkflowStep =
-      props?.type === STEP_TYPES.SCRIPT
-        ? buildScriptStepFromProperties(text, props, promptName)
-        : {
-            prompt: text,
-            ...(promptName !== undefined && { name: promptName || undefined }),
-            ...buildPromptStepProperties(properties),
-          };
+    const incomingStep: WorkflowStep = buildWorkflowStepFromProperties(
+      text,
+      props,
+      promptName
+    );
     const existingStep = this.promptQueue.getState().steps[index];
     await this.promptQueue.replaceStep(
       index,
@@ -3979,7 +3974,7 @@ export class WorkflowInstance
     return {
       workflowName,
       step,
-      stepHarness: isScriptStep(step) ? undefined : step.harness,
+      stepHarness: isPromptStep(step) ? step.harness : undefined,
     };
   }
 
@@ -5787,7 +5782,7 @@ export class WorkflowInstance
         const hasEndCondition =
           workflowFile.endCondition != null ||
           state.steps.some(
-            (step) => !isScriptStep(step) && step.endCondition != null
+            (step) => isPromptStep(step) && step.endCondition != null
           );
         reportWorkflowStarted({
           harness: SettingsPropertyResolver.resolveHarnessValue(
@@ -5907,15 +5902,15 @@ export class WorkflowInstance
     switch (transition.command) {
       case WORKFLOW_ATTEMPT_COMMANDS.BEGIN:
         if (step) {
-          const command = isScriptStep(step) ? step.script : step.prompt;
-          const harness = isScriptStep(step)
-            ? undefined
-            : (step._runtime?.harness ??
+          const command = isPromptStep(step) ? step.prompt : step.script;
+          const harness = isPromptStep(step)
+            ? (step._runtime?.harness ??
               SettingsPropertyResolver.resolve(
                 step,
                 this.promptQueue.getWorkflowFile(),
                 { hostCanProvidePty: this.hostCanProvidePty }
-              ).harness);
+              ).harness)
+            : undefined;
           Log.info(
             `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1}/${state.steps.length} started ` +
               `(attempt ${transition.current.attemptIndex + 1}, command="${command}"` +
