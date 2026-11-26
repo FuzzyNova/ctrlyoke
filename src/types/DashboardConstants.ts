@@ -3889,6 +3889,15 @@ export const PROMPT_TERMINAL_STATUS = {
 export type PromptTerminalStatus =
   (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS];
 
+/** Identifies who initiated cancellation of a child workflow run. */
+export const SUB_WORKFLOW_CANCELLATION_SOURCES = {
+  PARENT: "parent",
+  CHILD: "child",
+} as const;
+
+export type SubWorkflowCancellationSource =
+  (typeof SUB_WORKFLOW_CANCELLATION_SOURCES)[keyof typeof SUB_WORKFLOW_CANCELLATION_SOURCES];
+
 const PROMPT_TERMINAL_STATUSES: ReadonlySet<string> = new Set(
   Object.values(PROMPT_TERMINAL_STATUS)
 );
