@@ -123,7 +123,7 @@ export class CliProcessManager {
   constructor(
     private workspaceRoot: string,
     private logger?: (msg: string) => void,
-    private readonly killProcessTree: KillProcessTree = kill
+    private readonly killProcessTree?: KillProcessTree
   ) {}
 
   getLastSpawnedCommand(): string | undefined {
@@ -172,6 +172,8 @@ export class CliProcessManager {
         // use spawnInteractive() below and retain their terminal behavior.
         windowsHide: true,
         windowsVerbatimArguments: options.windowsVerbatimArguments,
+        // Descendants remain signalable as a group after a wrapping shell exits.
+        detached: process.platform !== "win32",
       });
 
       this.currentProcess = child;
@@ -322,7 +324,7 @@ export class CliProcessManager {
 
     this.requestedKills.set(child, PROCESS_SIGNALS.KILL);
     this.logger?.("📤 Sending SIGKILL to process tree (immediate termination)");
-    this.killProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
+    this.signalProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
       if (err) {
         this.logger?.(`⚠️ SIGKILL failed: ${err.message}`);
       }
@@ -455,7 +457,7 @@ export class CliProcessManager {
     this.logger?.(
       "📤 Sending SIGTERM to process tree (graceful shutdown requested)"
     );
-    this.killProcessTree(child.pid, PROCESS_SIGNALS.TERMINATE, (err) => {
+    this.signalProcessTree(child.pid, PROCESS_SIGNALS.TERMINATE, (err) => {
       if (err) {
         this.logger?.(`⚠️ SIGTERM failed: ${err.message}`);
       }
@@ -464,12 +466,12 @@ export class CliProcessManager {
     // Escalate to forceful kill after delay if process hasn't exited
     const killTimeout = setTimeout(() => {
       this.killTimeouts.delete(child);
-      if (child.exitCode === null && child.signalCode === null && child.pid) {
+      if (child.pid) {
         this.requestedKills.set(child, PROCESS_SIGNALS.KILL);
         this.logger?.(
           "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL"
         );
-        this.killProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
+        this.signalProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
           if (err) {
             this.logger?.(`❌ SIGKILL failed: ${err.message}`);
           }
@@ -477,6 +479,29 @@ export class CliProcessManager {
       }
     }, KILL_ESCALATION_DELAY_MS);
     this.killTimeouts.set(child, killTimeout);
+  }
+
+  private signalProcessTree(
+    pid: number,
+    signal: NodeJS.Signals,
+    callback: (error?: Error | null) => void
+  ): void {
+    if (this.killProcessTree) {
+      this.killProcessTree(pid, signal, callback);
+      return;
+    }
+
+    if (process.platform !== "win32") {
+      try {
+        process.kill(-pid, signal);
+        callback();
+      } catch (error) {
+        callback(error as Error);
+      }
+      return;
+    }
+
+    kill(pid, signal, callback);
   }
 
   /**

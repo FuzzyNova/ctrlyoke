@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli, via subagent; reproduced on macOS)
 - **Area:** `src/utils/CliProcessManager.ts` (`killGracefully`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

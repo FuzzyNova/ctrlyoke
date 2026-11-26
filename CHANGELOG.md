@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Timed out shell scripts now escalate SIGTERM to SIGKILL for surviving POSIX descendants.
 - Interactive script PTYs now receive workflow variables as `CTRLYOKE_VAR_*` and run without inherited VS Code environment variables.
 - Prompt links in workflow files now scan decoded prompt values, so escaped, quoted, and comment-contained references match runtime prompt text.
 

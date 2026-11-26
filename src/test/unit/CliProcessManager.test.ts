@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as fs from "fs";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { CliProcessManager } from "../../utils/CliProcessManager";
@@ -311,5 +312,39 @@ suite("CliProcessManager teardown", () => {
       termPids.every((pid) => killPids.includes(pid)),
       "closing the first child should not cancel the second child's SIGKILL"
     );
+  });
+
+  test("escalates a shell descendant after the shell exits on SIGTERM", async function () {
+    if (process.platform === "win32") this.skip();
+
+    const markerPath = path.join(
+      makeTempDir("cy-cli-descendant-"),
+      "survived"
+    );
+    const manager = new CliProcessManager(process.cwd());
+    const script = [
+      "process.on('SIGTERM', () => {});",
+      `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(markerPath)}, 'alive'), 4500);`,
+      "setInterval(() => {}, 1000);",
+    ].join(" ");
+
+    try {
+      await assert.rejects(
+        manager.spawn(
+          "bash",
+          ["-c", `node -e ${JSON.stringify(script)}; wait`],
+          { timeout: 500 }
+        ),
+        /Process timeout/
+      );
+      await new Promise((resolve) => setTimeout(resolve, 4800));
+      assert.ok(
+        !fs.existsSync(markerPath),
+        "descendant should be SIGKILLed"
+      );
+    } finally {
+      fs.rmSync(path.dirname(markerPath), { recursive: true, force: true });
+      await manager.cancel();
+    }
   });
 });
