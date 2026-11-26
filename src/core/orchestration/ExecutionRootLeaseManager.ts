@@ -37,6 +37,7 @@ export interface ExecutionLease {
   runRef: string;
   startedAt: number;
   lastHeartbeat: number;
+  delegationChain?: string[];
 }
 
 export interface ExecutionLeaseRequest {
@@ -48,6 +49,7 @@ export interface ExecutionLeaseRequest {
   runner: ExecutionLease["runner"];
   instanceId: string;
   pid?: number;
+  delegationChain?: string[];
 }
 
 export interface ExecutionLeaseHandle extends ExecutionLease {
@@ -155,12 +157,13 @@ async function resolveLeaseScope(
 }
 
 function isCompatible(
-  requestedMode: ExecutionLeaseMode,
-  existingMode: ExecutionLeaseMode
+  request: ExecutionLeaseRequest,
+  existing: ExecutionLease
 ): boolean {
   return (
-    requestedMode === EXECUTION_LEASE_MODES.SHARED_NATIVE &&
-    existingMode === EXECUTION_LEASE_MODES.SHARED_NATIVE
+    (request.mode === EXECUTION_LEASE_MODES.SHARED_NATIVE &&
+      existing.mode === EXECUTION_LEASE_MODES.SHARED_NATIVE) ||
+    (request.delegationChain?.includes(existing.ownerToken) ?? false)
   );
 }
 
@@ -238,6 +241,9 @@ export class ExecutionRootLeaseManager {
       runRef: request.runRef,
       startedAt: now,
       lastHeartbeat: now,
+      ...(request.delegationChain
+        ? { delegationChain: [...request.delegationChain] }
+        : {}),
     };
 
     await fs.mkdir(scope.leasesRoot, { recursive: true });
@@ -259,7 +265,7 @@ export class ExecutionRootLeaseManager {
       });
       const liveLeases = await readLiveLeases(scope);
       const conflict = liveLeases.find(
-        (existing) => !isCompatible(request.mode, existing.mode)
+        (existing) => !isCompatible(request, existing)
       );
       if (conflict) {
         throw new ExecutionLeaseConflictError(

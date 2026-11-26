@@ -256,6 +256,8 @@ export interface WorkflowExecutionContext {
   subWorkflowHost?: SubWorkflowHost;
   /** Resolved active workflow chain, root first. */
   ancestorPaths?: readonly string[];
+  delegationChain?: readonly string[];
+  getExecutionLeaseOwnerToken?(): string | undefined;
   statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
@@ -3191,6 +3193,18 @@ export class WorkflowExecutor {
               ? { loopIndex: target.loopIndex }
               : {}),
           },
+          parentExecution: {
+            executionRoot: context.executionWorkspace.executionRoot,
+            executionCheckoutRoot:
+              context.executionWorkspace.executionCheckoutRoot ??
+              context.executionWorkspace.executionRoot,
+          },
+          delegationChain: [
+            ...(context.delegationChain ?? []),
+            ...(context.getExecutionLeaseOwnerToken?.()
+              ? [context.getExecutionLeaseOwnerToken()!]
+              : []),
+          ],
           ancestorPaths: [...ancestors, resolvedPath],
         });
       } catch (error) {

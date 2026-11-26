@@ -99,6 +99,40 @@ suite("ExecutionRootLeaseManager", function () {
     }
   });
 
+  test("allows only leases named by a delegated request chain", async () => {
+    const root = await tempDirectory("delegation");
+    try {
+      const rootLease = await ExecutionRootLeaseManager.acquire(
+        request(root, "shared-native", "ancestor")
+      );
+      const secondAncestor = await ExecutionRootLeaseManager.acquire(
+        request(root, "shared-native", "second-ancestor")
+      );
+      const delegatedRequest = {
+        ...request(root, "exclusive-worktree", "child"),
+        delegationChain: [rootLease.ownerToken, secondAncestor.ownerToken],
+      };
+      const child = await ExecutionRootLeaseManager.acquire(delegatedRequest);
+      assert.deepStrictEqual(
+        child.delegationChain,
+        delegatedRequest.delegationChain
+      );
+      await child.release();
+
+      await assert.rejects(
+        ExecutionRootLeaseManager.acquire({
+          ...request(root, "exclusive-worktree", "unrelated"),
+          delegationChain: ["not-an-owner-token"],
+        }),
+        ExecutionLeaseConflictError
+      );
+      await rootLease.release();
+      await secondAncestor.release();
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("arbitrates through the shared file lock and frees it after every operation", async () => {
     const root = await tempDirectory("arbitration");
     try {

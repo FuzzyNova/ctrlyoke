@@ -65,7 +65,11 @@ export function createCliWorkflowInstance(
 
 export function createCliSubWorkflowInstance(
   dependencies: CliWorkflowInstanceDependencies,
-  options: { concurrent: boolean; ancestorPaths: readonly string[] },
+  options: {
+    concurrent: boolean;
+    ancestorPaths: readonly string[];
+    delegationChain: readonly string[];
+  },
   subWorkflowHost: SubWorkflowHost
 ): WorkflowInstance {
   return createCliWorkflowInstance(
@@ -75,6 +79,10 @@ export function createCliSubWorkflowInstance(
         ? false
         : dependencies.hostCanProvidePty,
     },
-    { subWorkflowHost, ancestorPaths: options.ancestorPaths }
+    {
+      subWorkflowHost,
+      ancestorPaths: options.ancestorPaths,
+      delegationChain: options.delegationChain,
+    }
   );
 }

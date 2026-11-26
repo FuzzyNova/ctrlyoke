@@ -19,13 +19,11 @@ export interface SubWorkflowHost {
 export interface SubWorkflowLaunchRequest {
   source: { kind: "file"; resolvedPath: string };
   parent: SubWorkflowParentLink;
-  /** Reserved for the follow-up load-options plumbing; ignored by this launcher round. */
-  parentExecution?: {
+  parentExecution: {
     executionRoot: string;
     executionCheckoutRoot: string;
   };
-  /** Reserved for delegated lease support; ignored by this launcher round. */
-  delegationChain?: readonly string[];
+  delegationChain: readonly string[];
   /** Reserved for child-run reattachment; ignored by this launcher round. */
   resumeChildRun?: { workflowKey: WorkflowKey; runRef: RunRef };
   /** Reserved for cycle detection; ignored by this launcher round. */
@@ -85,7 +83,11 @@ export interface SubWorkflowInstance {
   loadPromptFile(
     filePath: string,
     parsedPromptFile?: ParsedPromptFile | null,
-    options?: { parentRun?: SubWorkflowParentLink }
+    options?: {
+      parentRun?: SubWorkflowParentLink;
+      parentExecution?: SubWorkflowLaunchRequest["parentExecution"];
+      delegationChain?: readonly string[];
+    }
   ): Promise<boolean>;
   executeLoadedPromptFile(): Promise<void>;
   pause(): Promise<void>;
@@ -96,4 +98,5 @@ export interface SubWorkflowInstance {
 export type SubWorkflowInstanceFactory = (options: {
   concurrent: boolean;
   ancestorPaths: readonly string[];
+  delegationChain: readonly string[];
 }) => SubWorkflowInstance;

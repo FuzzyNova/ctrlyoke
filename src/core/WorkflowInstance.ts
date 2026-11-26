@@ -286,6 +286,7 @@ interface ActiveTargetResources {
 export interface WorkflowInstanceExecutionOptions {
   subWorkflowHost?: SubWorkflowHost;
   ancestorPaths?: readonly string[];
+  delegationChain?: readonly string[];
 }
 
 export class WorkflowInstance
@@ -350,6 +351,11 @@ export class WorkflowInstance
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private loadedParentRun?: SubWorkflowParentLink;
+  private inheritedParentExecution?: {
+    executionRoot: string;
+    executionCheckoutRoot: string;
+  };
+  private loadedDelegationChain: readonly string[] = [];
   /** Race-condition guard: prevents duplicate workflow starts */
   startPending: boolean = false;
   /**
@@ -1676,9 +1682,18 @@ export class WorkflowInstance
   async loadPromptFile(
     filePath: string,
     parsedPromptFile?: ParsedPromptFile | null,
-    options?: { parentRun?: SubWorkflowParentLink }
+    options?: {
+      parentRun?: SubWorkflowParentLink;
+      parentExecution?: {
+        executionRoot: string;
+        executionCheckoutRoot: string;
+      };
+      delegationChain?: readonly string[];
+    }
   ): Promise<boolean> {
     this.loadedParentRun = options?.parentRun;
+    this.inheritedParentExecution = options?.parentExecution;
+    this.loadedDelegationChain = options?.delegationChain ?? [];
     // Clear queue to reset cached workflow name — ensures fresh name from filename
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
@@ -1703,6 +1718,24 @@ export class WorkflowInstance
     if (!promptFile) {
       this.propagateWorkflowNameToIntegrations();
       return false;
+    }
+
+    if (
+      options?.parentExecution &&
+      !Object.prototype.hasOwnProperty.call(promptFile, "worktree")
+    ) {
+      const executionRoot = options.parentExecution.executionRoot;
+      const checkoutRoot = options.parentExecution.executionCheckoutRoot;
+      const workspace = this.executionWorkspace;
+      this.executionWorkspace = {
+        ...workspace,
+        executionRoot,
+        sourceCheckoutRoot: checkoutRoot,
+        executionCheckoutRoot: checkoutRoot,
+        workspaceRoots: workspace.workspaceRoots.map((root) =>
+          root === workspace.stateRoot ? executionRoot : root
+        ),
+      };
     }
 
     this.currentPromptFile = { filePath, promptFile };
@@ -1972,6 +2005,8 @@ export class WorkflowInstance
           this.getMissingAssetDedupeKey(missingDirectories),
         getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
         getParentRun: () => this.loadedParentRun,
+        getInheritedParentExecution: () =>
+          Boolean(this.inheritedParentExecution),
         getResolvedHistoryFilePath: () => this.resolveHistoryFilePath(),
         getActiveHistoryFilePath: () => this.activeHistoryFilePath,
         setActiveHistoryFilePath: (filePath) => {
@@ -2219,6 +2254,8 @@ export class WorkflowInstance
           instance.sourceDefinitionPath ?? instance.currentPromptFile?.filePath;
         return rootPath ? [path.resolve(rootPath)] : [];
       },
+      delegationChain: this.executionOptions.delegationChain,
+      getExecutionLeaseOwnerToken: () => this.executionLease?.ownerToken,
       statusReporter: this.statusMessageReporter,
       reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
         this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
@@ -2380,6 +2417,7 @@ export class WorkflowInstance
             executionRoot: this.executionWorkspace.executionRoot,
             workflowKey,
             runRef,
+            delegationChain: [...this.loadedDelegationChain],
           });
         }
       },
@@ -5079,6 +5117,9 @@ export class WorkflowInstance
   ): Promise<void> {
     const config = this.worktreeResolution.config;
     if (!config) {
+      if (this.inheritedParentExecution && this.loadedParentRun) {
+        return;
+      }
       await this.abandonActiveWorktree();
       await this.configureExecutionWorkspace(this.defaultExecutionWorkspace);
       return;

@@ -170,11 +170,13 @@ export class WorkflowInstanceRegistry
 
   constructor(private readonly host: WorkflowInstanceRegistryHost) {
     this.viewerRegistry.set(this.host.panelClientId, null);
-    this.subWorkflowLauncher = new SubWorkflowLauncher(({ ancestorPaths }) =>
-      this.createExternalWorkflowInstance({
-        subWorkflowHost: this.subWorkflowLauncher,
-        ancestorPaths,
-      })
+    this.subWorkflowLauncher = new SubWorkflowLauncher(
+      ({ ancestorPaths, delegationChain }) =>
+        this.createExternalWorkflowInstance({
+          subWorkflowHost: this.subWorkflowLauncher,
+          ancestorPaths,
+          delegationChain,
+        })
     );
   }
 

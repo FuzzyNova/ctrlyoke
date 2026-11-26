@@ -166,6 +166,7 @@ export interface WorkflowStartupExecutionPort {
   readonly getDefinitionRevisionContext: () => DefinitionRevisionContext;
   readonly getParentRun?: () =>
     import("../../types/SubWorkflowTypes").SubWorkflowParentLink | undefined;
+  readonly getInheritedParentExecution?: () => boolean;
   readonly getResolvedHistoryFilePath: () => string;
   readonly getActiveHistoryFilePath: () => string;
   readonly setActiveHistoryFilePath: (filePath: string) => void;
@@ -675,6 +676,21 @@ export class WorkflowStartupPipeline {
     workflow = this.port.queue.getWorkflowFile(),
     defaultWorktree = ConfigurationUtils.getDefaultWorktree()
   ): Promise<void> {
+    if (
+      this.port.execution.getInheritedParentExecution?.() &&
+      !Object.prototype.hasOwnProperty.call(workflow, "worktree")
+    ) {
+      const resolution = await resolveWorktreeForStart(
+        false,
+        false,
+        this.port.platform.getNamedWorkspaceRoots(),
+        undefined,
+        isContinuation
+      );
+      this.port.worktree.setResolution(resolution);
+      this.worktreeNotice = resolution.notice;
+      return;
+    }
     const resolution = await resolveWorktreeForStart(
       workflow.worktree,
       defaultWorktree,

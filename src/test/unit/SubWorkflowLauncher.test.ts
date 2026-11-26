@@ -117,10 +117,15 @@ class FakeChild implements SubWorkflowInstance {
 
 class FakeFactory {
   readonly child = new FakeChild();
-  options?: { concurrent: boolean; ancestorPaths: readonly string[] };
+  options?: {
+    concurrent: boolean;
+    ancestorPaths: readonly string[];
+    delegationChain: readonly string[];
+  };
   create = (options: {
     concurrent: boolean;
     ancestorPaths: readonly string[];
+    delegationChain: readonly string[];
   }): SubWorkflowInstance => {
     this.options = options;
     return this.child;
@@ -136,6 +141,8 @@ function request(): SubWorkflowLaunchRequest {
       runRef: "run-parent" as RunRef,
       stepId: "step-1",
     },
+    parentExecution: { executionRoot: "/tmp", executionCheckoutRoot: "/tmp" },
+    delegationChain: [],
   };
 }
 

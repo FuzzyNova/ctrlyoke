@@ -20,6 +20,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     const instance = this.createInstance({
       concurrent: request.concurrent ?? false,
       ancestorPaths: request.ancestorPaths ?? [],
+      delegationChain: request.delegationChain,
     });
     let parentStopped = false;
 
@@ -28,7 +29,11 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       loaded = await instance.loadPromptFile(
         request.source.resolvedPath,
         undefined,
-        { parentRun: request.parent }
+        {
+          parentRun: request.parent,
+          parentExecution: request.parentExecution,
+          delegationChain: request.delegationChain,
+        }
       );
       if (!loaded) {
         return this.createFailedToLoadHandle(

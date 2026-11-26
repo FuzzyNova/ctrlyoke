@@ -42,7 +42,11 @@ suite("createCliWorkflowInstance", () => {
     });
     const childInstance = createCliSubWorkflowInstance(
       dependencies,
-      { concurrent: true, ancestorPaths: ["/root", "/child"] },
+      {
+        concurrent: true,
+        ancestorPaths: ["/root", "/child"],
+        delegationChain: ["lease-root"],
+      },
       host
     );
     assert.strictEqual(
