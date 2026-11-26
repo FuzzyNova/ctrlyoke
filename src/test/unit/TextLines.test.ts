@@ -179,6 +179,51 @@ suite("TextLines", () => {
     assert.deepStrictEqual(lines, [line, line, line]);
   });
 
+  test("allows a max-length line ending in CR at the read-chunk boundary", async () => {
+    const line = "c".repeat(READ_CHUNK_BYTES - 1);
+    await fs.writeFile(filePath, `${line}\r`, "utf8");
+    const lines: string[] = [];
+
+    for await (const streamed of streamFileLines(filePath, {
+      maxLineLength: line.length,
+    })) {
+      lines.push(streamed);
+    }
+
+    assert.deepStrictEqual(lines, [line]);
+  });
+
+  test("allows a max-length CRLF line when the read chunk splits the pair", async () => {
+    const line = "d".repeat(READ_CHUNK_BYTES - 1);
+    await fs.writeFile(filePath, `${line}\r\n`, "utf8");
+    const lines: string[] = [];
+
+    for await (const streamed of streamFileLines(filePath, {
+      maxLineLength: line.length,
+    })) {
+      lines.push(streamed);
+    }
+
+    assert.deepStrictEqual(lines, [line]);
+  });
+
+  test("still rejects a CR-terminated line one character over the limit", async () => {
+    const limit = READ_CHUNK_BYTES - 1;
+    await fs.writeFile(filePath, `${"e".repeat(limit + 1)}\r`, "utf8");
+
+    await assert.rejects(
+      async () => {
+        for await (const _line of streamFileLines(filePath, {
+          maxLineLength: limit,
+        })) {
+          // Consume the stream to observe the length error.
+        }
+      },
+      (error: unknown) =>
+        error instanceof LineTooLongError && error.maxLineLength === limit
+    );
+  });
+
   test("propagates ENOENT so callers can treat a missing file as empty", async () => {
     await assert.rejects(
       async () => {
