@@ -226,7 +226,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "name": {
         "valueKind": "string",
-        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "enabled": {
         "valueKind": "oneOf",
@@ -549,7 +549,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "name": {
         "valueKind": "string",
-        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "enabled": {
         "valueKind": "oneOf",
@@ -686,7 +686,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "name": {
         "valueKind": "string",
-        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "enabled": {
         "valueKind": "oneOf",

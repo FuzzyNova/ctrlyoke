@@ -353,48 +353,10 @@ $defs:
       - type: boolean
         const: true
         description: Managed-worktree shorthand.
+      - type: string
+        minLength: 1
+        description: Named-worktree branch shorthand. The value must be a valid local Git branch name.
       - $ref: '#/$defs/managedWorktreeConfig'
-      - type: object
-        description: >-
-          Managed creates a throw-away worktree and branch per run and removes the directory when
-          the workflow completes, leaving the branch for review; pick it for isolated runs you will
-          not follow up on.
-        properties:
-          mode:
-            type: string
-            const: managed
-            title: Mode
-          merge:
-            type: boolean
-            description: >-
-              Merge the managed branch into the captured source checkout after the run. Not
-              substituted: This structural field or identity value stays as authored.
-            title: Merge
-          keep:
-            type: boolean
-            description: >-
-              Keeps the managed worktree directory after the run instead of removing it. Without it,
-              appending a follow-up prompt recreates the directory from the branch; ignored files
-              such as node_modules are gone and the setup command runs again, so a long setup pays
-              that cost on every append. Removing the directory also ends filesystem undo for that
-              run. Not substituted: This structural field or identity value stays as authored.
-            title: Keep
-          base:
-            type: string
-            minLength: 1
-            description: Optional Git ref resolved to a commit when the worktree is created.
-            title: Base
-          setup:
-            type: string
-            description: >-
-              Optional setup command run after a new managed worktree is created. Setup is outside
-              the step-scoped errorBehavior policy: it runs before any step is in flight, so a
-              non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded
-              outcome is skipped.
-            title: Setup
-        required:
-          - mode
-        additionalProperties: false
       - type: object
         description: >-
           Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or
@@ -2734,8 +2696,9 @@ $defs:
         type: string
         description: >-
           Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the
-          dashboard shows a truncated preview of the prompt text. Not substituted: This structural
-          field or identity value stays as authored.
+          dashboard shows a preview of the step's prompt or script text. Variable substitution: step
+          text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before
+          execution.
         maxLength: 100
         title: Name
       enabled:
@@ -2772,9 +2735,46 @@ $defs:
       advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}}
       placeholder is coerced and validated before dispatch.
   managedWorktreeConfig:
-    type: string
-    minLength: 1
-    description: Named-worktree branch shorthand. The value must be a valid local Git branch name.
+    type: object
+    description: >-
+      Managed creates a throw-away worktree and branch per run and removes the directory when the
+      workflow completes, leaving the branch for review; pick it for isolated runs you will not
+      follow up on.
+    properties:
+      mode:
+        type: string
+        const: managed
+        title: Mode
+      merge:
+        type: boolean
+        description: >-
+          Merge the managed branch into the captured source checkout after the run. Not substituted:
+          This structural field or identity value stays as authored.
+        title: Merge
+      keep:
+        type: boolean
+        description: >-
+          Keeps the managed worktree directory after the run instead of removing it. Without it,
+          appending a follow-up prompt recreates the directory from the branch; ignored files such
+          as node_modules are gone and the setup command runs again, so a long setup pays that cost
+          on every append. Removing the directory also ends filesystem undo for that run. Not
+          substituted: This structural field or identity value stays as authored.
+        title: Keep
+      base:
+        type: string
+        minLength: 1
+        description: Optional Git ref resolved to a commit when the worktree is created.
+        title: Base
+      setup:
+        type: string
+        description: >-
+          Optional setup command run after a new managed worktree is created. Setup is outside the
+          step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded
+          setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.
+        title: Setup
+    required:
+      - mode
+    additionalProperties: false
   stepLifecycleRuntime:
     type: object
     properties:

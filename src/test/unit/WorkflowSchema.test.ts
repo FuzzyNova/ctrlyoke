@@ -191,6 +191,23 @@ suite("Workflow template schema", () => {
     for (const invalid of invalids) {
       assert.strictEqual(validate(invalid), false, JSON.stringify(invalid));
     }
+
+    // worktreePresets (D14) reuse this def, so it must be the managed object
+    // arm of worktreeConfig, not the named-branch string shorthand.
+    const managed = schema.$defs.managedWorktreeConfig;
+    assert.strictEqual(managed.type, "object");
+    assert.strictEqual(managed.properties.mode.const, "managed");
+    assert.ok(
+      schema.$defs.worktreeConfig.oneOf.some(
+        (variant: { $ref?: string }) =>
+          variant.$ref === "#/$defs/managedWorktreeConfig"
+      )
+    );
+    assert.strictEqual(
+      validate({ worktree: "feature/x", steps: [{ prompt: "x" }] }),
+      true,
+      JSON.stringify(validate.errors)
+    );
   });
 
   test("accepts schemaVersion and $schema on every closed workflow root and settings root", () => {

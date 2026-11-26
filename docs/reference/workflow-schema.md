@@ -388,7 +388,7 @@ Per-prompt runtime execution metadata (optional, added automatically during exec
 - **Type:** `string`
 - **Constraints:** at most 100 characters
 
-Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `enabled` {#prompt-step-enabled}
 
@@ -550,7 +550,7 @@ Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto 
 - **Type:** `string`
 - **Constraints:** at most 100 characters
 
-Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `enabled` {#script-step-enabled}
 
