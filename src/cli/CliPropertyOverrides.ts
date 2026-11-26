@@ -1,6 +1,12 @@
 import type { PromptFile, ExecutionProperties } from "../types/CtrlYokeTypes";
-import { EXECUTION_MODES, type HarnessId } from "../types/DashboardConstants";
 import {
+  EXECUTION_MODES,
+  STEP_TYPES,
+  type HarnessId,
+} from "../types/DashboardConstants";
+import {
+  assertNever,
+  getStepType,
   isPromptStep,
   isScriptStep,
   type WorkflowStep,
@@ -267,13 +273,23 @@ function applyForcedFlagToStep(
       return;
     case ForceableFlag.SCRIPT_TIMEOUT:
       if (overrides.scriptTimeout !== undefined) {
-        if (isScriptStep(step)) {
-          step.timeoutSec = overrides.scriptTimeout;
-        } else if (isPromptStep(step)) {
-          if (step.preCondition)
-            step.preCondition.timeoutSec = overrides.scriptTimeout;
-          if (step.endCondition)
-            step.endCondition.timeoutSec = overrides.scriptTimeout;
+        const stepType = getStepType(step);
+        switch (stepType) {
+          case STEP_TYPES.SCRIPT:
+            if (isScriptStep(step)) {
+              step.timeoutSec = overrides.scriptTimeout;
+            }
+            break;
+          case STEP_TYPES.PROMPT:
+            if (isPromptStep(step)) {
+              if (step.preCondition)
+                step.preCondition.timeoutSec = overrides.scriptTimeout;
+              if (step.endCondition)
+                step.endCondition.timeoutSec = overrides.scriptTimeout;
+            }
+            break;
+          default:
+            assertNever(stepType);
         }
       }
       return;

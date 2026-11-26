@@ -52,9 +52,8 @@ function stepContentPreview(step: WorkflowStep, preview: string) {
   const stepType = getStepType(step);
   switch (stepType) {
     case STEP_TYPES.SCRIPT:
-      return isScriptStep(step)
-        ? { type: STEP_TYPES.SCRIPT, script: preview }
-        : {};
+      if (!isScriptStep(step)) return {};
+      return { type: STEP_TYPES.SCRIPT, script: preview };
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? { prompt: preview } : {};
     default:
@@ -66,11 +65,39 @@ function stepOutputContent(step: WorkflowStep) {
   const stepType = getStepType(step);
   switch (stepType) {
     case STEP_TYPES.SCRIPT:
-      return isScriptStep(step)
-        ? { type: STEP_TYPES.SCRIPT, script: step.script }
-        : {};
+      if (!isScriptStep(step)) return {};
+      return { type: STEP_TYPES.SCRIPT, script: step.script };
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? { prompt: step.prompt } : {};
+    default:
+      return assertNever(stepType);
+  }
+}
+
+function getWorkflowStatusStepText(step: WorkflowStep): string {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      if (!isScriptStep(step)) return "";
+      return step.script;
+    case STEP_TYPES.PROMPT:
+      if (!isPromptStep(step)) return "";
+      return step.prompt;
+    default:
+      return assertNever(stepType);
+  }
+}
+
+function getWorkflowStatusTruncation(
+  stepType: ReturnType<typeof getStepType>,
+  isTruncated: boolean
+): { scriptTruncated?: true; promptTruncated?: true } {
+  if (!isTruncated) return {};
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return { scriptTruncated: true };
+    case STEP_TYPES.PROMPT:
+      return { promptTruncated: true };
     default:
       return assertNever(stepType);
   }
@@ -1364,15 +1391,11 @@ export class CtrlYokeMCPServer {
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
     const steps = allSteps.map((p, index) => {
-      const scriptStep = isScriptStep(p);
+      const stepType = getStepType(p);
       const effective = isPromptStep(p)
         ? resolveEffectiveStepSettings(p, queueData)
         : undefined;
-      const prompt = isScriptStep(p)
-        ? p.script
-        : isPromptStep(p)
-          ? p.prompt
-          : "";
+      const prompt = getWorkflowStatusStepText(p);
       const preview = promptFirstLinePreview(
         prompt,
         STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
@@ -1381,13 +1404,7 @@ export class CtrlYokeMCPServer {
         index,
         ...stepContentPreview(p, preview),
         ...(p.name?.trim() ? { name: p.name.trim() } : {}),
-        ...(preview !== prompt
-          ? isScriptStep(p)
-            ? { scriptTruncated: true }
-            : isPromptStep(p)
-              ? { promptTruncated: true }
-              : {}
-          : {}),
+        ...getWorkflowStatusTruncation(stepType, preview !== prompt),
         status: stepStatuses[index],
         ...((stepStatuses[index] === STEP_STATUS.COMPLETED ||
           stepStatuses[index] === STEP_STATUS.FAILED ||
@@ -1402,7 +1419,7 @@ export class CtrlYokeMCPServer {
         harness: effective?.harness,
         executionMode: effective?.executionMode,
         model: effective?.model,
-        sessionId: scriptStep ? null : (p.sessionId ?? null),
+        sessionId: isPromptStep(p) ? (p.sessionId ?? null) : null,
         resumeSession: effective?.resumeSession ?? false,
       };
     });

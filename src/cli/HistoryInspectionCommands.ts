@@ -1929,7 +1929,8 @@ function historyAttemptPrompt(attempt: ResolvedRunAttemptValue): string {
   const stepType = getStepType(step);
   switch (stepType) {
     case STEP_TYPES.SCRIPT:
-      return isScriptStep(step) ? step.script : "";
+      if (!isScriptStep(step)) return "";
+      return step.script;
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? step.prompt : "";
     default:
