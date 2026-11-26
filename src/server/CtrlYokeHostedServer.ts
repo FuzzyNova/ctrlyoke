@@ -3268,11 +3268,7 @@ export class CtrlYokeHostedServer
 
     let subscription = this.fileWatchers.get(normalizedPath);
     if (!subscription) {
-      const directory = path.dirname(normalizedPath);
-      const watcher = this.fileWatcherFactory.create(
-        directory,
-        path.basename(normalizedPath)
-      );
+      const watcher = this.fileWatcherFactory.createForFile(normalizedPath);
       subscription = { watcher, clients: new Map() };
       this.fileWatchers.set(normalizedPath, subscription);
       const subscribedClients = subscription.clients;

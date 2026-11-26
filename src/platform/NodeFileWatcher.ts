@@ -25,7 +25,12 @@ class NodeFileWatcher implements FileWatcher {
   private readonly reportedErrorCodes = new Set<string>();
   private disposed = false;
 
-  constructor(basePath: string, glob: string, watchFn: ChokidarWatch) {
+  constructor(
+    basePath: string,
+    glob: string,
+    watchFn: ChokidarWatch,
+    exactPath?: string
+  ) {
     const normalizedBasePath = normalizeAbsolutePath(basePath);
     const segments = glob.split("/");
     const hasRecursiveGlob = glob.includes("**");
@@ -68,7 +73,14 @@ class NodeFileWatcher implements FileWatcher {
         .relative(normalizedBasePath, absolutePath)
         .split(path.sep)
         .join("/");
-      if (!relativePath || !minimatch(relativePath, glob)) return;
+      if (
+        !relativePath ||
+        (exactPath
+          ? !pathEqual(absolutePath, exactPath)
+          : !minimatch(relativePath, glob, { dot: true }))
+      ) {
+        return;
+      }
 
       const listeners = (
         {
@@ -139,10 +151,26 @@ class NodeFileWatcher implements FileWatcher {
   }
 }
 
+function pathEqual(left: string, right: string): boolean {
+  return process.platform === "win32"
+    ? left.toLowerCase() === right.toLowerCase()
+    : left === right;
+}
+
 export class NodeFileWatcherFactory implements FileWatcherFactory {
   constructor(private readonly watchFn: ChokidarWatch = watch) {}
 
   create(basePath: string, glob: string): FileWatcher {
     return new NodeFileWatcher(basePath, glob, this.watchFn);
+  }
+
+  createForFile(absolutePath: string): FileWatcher {
+    const normalizedPath = normalizeAbsolutePath(absolutePath);
+    return new NodeFileWatcher(
+      path.dirname(normalizedPath),
+      "**/*",
+      this.watchFn,
+      normalizedPath
+    );
   }
 }

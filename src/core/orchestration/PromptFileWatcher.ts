@@ -1,5 +1,4 @@
 import * as fs from "fs/promises";
-import * as path from "path";
 import { PromptQueue } from "../PromptQueue";
 import { ACTIVE_EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
@@ -101,10 +100,7 @@ export class PromptFileWatcher {
     }
 
     // Create watcher for this specific file (working file)
-    this.watcher = this.fileWatcherFactory.create(
-      path.dirname(filePath),
-      path.basename(filePath)
-    );
+    this.watcher = this.fileWatcherFactory.createForFile(filePath);
 
     this.watcher.onDidChange(async (changedPath) => {
       if (this.onFileChangedCallback) {

@@ -40,6 +40,10 @@ export class NoopFileWatcherFactory implements FileWatcherFactory {
     return watcher;
   }
 
+  createForFile(): FileWatcher {
+    return this.create();
+  }
+
   fireChange(filePath: string): void {
     for (const watcher of this.watchers) watcher.fireChange(filePath);
   }

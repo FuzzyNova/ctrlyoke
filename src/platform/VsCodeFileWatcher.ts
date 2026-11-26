@@ -17,7 +17,11 @@ class VsCodeFileWatcher implements FileWatcher {
 
   private readonly watcher: vscode.FileSystemWatcher;
 
-  constructor(basePath: string, glob: string) {
+  constructor(
+    basePath: string,
+    glob: string,
+    private readonly exactPath?: string
+  ) {
     const normalizedBasePath = normalizeAbsolutePath(basePath);
     this.watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(vscode.Uri.file(normalizedBasePath), glob)
@@ -55,7 +59,16 @@ class VsCodeFileWatcher implements FileWatcher {
     }
 
     const subscription = event((uri) => {
-      listener(normalizeAbsolutePath(uri.fsPath));
+      const filePath = normalizeAbsolutePath(uri.fsPath);
+      if (
+        this.exactPath &&
+        (process.platform === "win32"
+          ? filePath.toLowerCase() !== this.exactPath.toLowerCase()
+          : filePath !== this.exactPath)
+      ) {
+        return;
+      }
+      listener(filePath);
     });
     this.subscriptions.add(subscription);
 
@@ -71,5 +84,14 @@ class VsCodeFileWatcher implements FileWatcher {
 export class VsCodeFileWatcherFactory implements FileWatcherFactory {
   create(basePath: string, glob: string): FileWatcher {
     return new VsCodeFileWatcher(basePath, glob);
+  }
+
+  createForFile(absolutePath: string): FileWatcher {
+    const normalizedPath = normalizeAbsolutePath(absolutePath);
+    return new VsCodeFileWatcher(
+      path.dirname(normalizedPath),
+      "**/*",
+      normalizedPath
+    );
   }
 }

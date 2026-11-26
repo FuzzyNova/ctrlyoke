@@ -187,4 +187,5 @@ export interface FileWatcher {
 /** Creates host-neutral file watchers rooted at an absolute base path. */
 export interface FileWatcherFactory {
   create(basePath: string, glob: string): FileWatcher;
+  createForFile(absolutePath: string): FileWatcher;
 }

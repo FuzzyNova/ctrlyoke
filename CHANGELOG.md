@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Node file watchers now report dotfile events, and single-file watches treat glob metacharacters literally.
+
 ### Changed
 
 - Pending rewind operations now leave run files and snapshots untouched when the lineage descriptor or run file was written by a newer ctrlyoke.
