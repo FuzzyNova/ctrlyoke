@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Unranked file and prompt-file completions now sort paths by numeric depth.
 - Prompt-token completions now open after JSON-style character escapes in JSON strings and YAML double-quoted scalars.
 - Raw snippet diffs now treat missing trailing newlines consistently, preserving unchanged final lines.
 - CLI unused-variable warnings now account for referenced prompt files, and runtime unresolved-variable warnings follow each field's fence substitution policy.

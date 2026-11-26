@@ -5,6 +5,7 @@ import {
 } from "./WorkspacePathStore";
 import { normalizeReferencePath } from "../utils/ContextReferenceBuilder";
 import { type WorkspaceFileTreeEntryKind } from "../types/DashboardConstants";
+import { comparePathDepths } from "./PathDepthSort";
 
 const FILE_LIMIT = 500;
 const PROMPT_LIMIT = 200;
@@ -109,9 +110,7 @@ export class WorkspacePathQuery {
     const shouldRank = Boolean(child || (filter && !hasPath));
     if (!shouldRank) {
       selected.sort((a, b) =>
-        `${a.relativePath.split("/").length}_${a.relativePath}`.localeCompare(
-          `${b.relativePath.split("/").length}_${b.relativePath}`
-        )
+        comparePathDepths(a.relativePath, b.relativePath)
       );
       return selected.slice(0, options.limit ?? PROMPT_LIMIT).map(asResult);
     }

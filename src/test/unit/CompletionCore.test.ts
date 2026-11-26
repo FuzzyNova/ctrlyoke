@@ -256,6 +256,22 @@ suite("CompletionCore", () => {
     );
   });
 
+  test("sorts unranked @ and prompt-file sortText by padded path depth", async () => {
+    const shallow = "docs/guide.prompt.md";
+    const deep = "a/b/c/d/e/f/g/h/i/deep.prompt.md";
+    const core = createCore({ files: [deep, shallow] });
+    const fileItems = await core.getFileCompletions("");
+    const promptItems = await core.getPromptFileCompletions("");
+    const fileShallow = fileItems.find((item) => item.label === "guide.prompt.md");
+    const fileDeep = fileItems.find((item) => item.label === "deep.prompt.md");
+    const promptShallow = promptItems.find((item) => item.label === "guide.prompt.md");
+    const promptDeep = promptItems.find((item) => item.label === "deep.prompt.md");
+    assert.ok(fileShallow?.sortText && fileDeep?.sortText);
+    assert.ok(promptShallow?.sortText && promptDeep?.sortText);
+    assert.ok(fileShallow.sortText < fileDeep.sortText);
+    assert.ok(promptShallow.sortText < promptDeep.sortText);
+  });
+
   test("preserves folder prefixes for file completions in a multi-root workspace", async () => {
     const items = await createCore({
       files: ["root2/src/index.ts"],

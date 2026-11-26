@@ -147,6 +147,16 @@ suite("WorkspacePathQuery", () => {
     );
   });
 
+  test("sorts unranked prompt files by numeric path depth", async () => {
+    const shallow = "docs/guide.prompt.md";
+    const deep = "a/b/c/d/e/f/g/h/i/deep.prompt.md";
+    const { query } = create([deep, shallow]);
+    assert.deepStrictEqual(
+      (await query.queryPromptFiles("")).map((item) => item.relativePath),
+      [shallow, deep]
+    );
+  });
+
   test("suggests paths in the same-directory and prefix tiers", async () => {
     const { query } = create([
       "src/ui/editor/CodeMirrorEditor.tsx",
