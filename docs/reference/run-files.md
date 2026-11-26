@@ -516,7 +516,7 @@ Lineage key of the child run.
 
 - **Type:** `string`
 
-Run reference of the child run; used to open it and to reattach on resume.
+Run reference of the child run, used to locate its output and history.
 
 ### `resolvedWorkflowPath` {#step-runtime-resolvedworkflowpath}
 

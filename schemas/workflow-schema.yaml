@@ -1349,10 +1349,11 @@ $defs:
   subWorkflowStep:
     type: object
     description: >-
-      Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage,
-      run history, and dashboard entry. The child keeps its own harness, vars, and finalStep. If the
-      child file has no worktree key, it runs in the parent's execution root; otherwise its worktree
-      setting is honoured. The parent step waits until the child run ends.
+      Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage
+      and run history. The child keeps its own harness, vars, and finalStep. If the child file has
+      no worktree key, it runs in the parent's execution root; otherwise its worktree setting is
+      honoured. The parent step waits until the child run ends. A stopped child always stops the
+      parent; onFail controls failed children.
     allOf:
       - $ref: '#/$defs/stepDisplayProperties'
     properties:
@@ -1396,7 +1397,7 @@ $defs:
             title: Child Workflow Key
           childRunRef:
             type: string
-            description: Run reference of the child run; used to open it and to reattach on resume.
+            description: Run reference of the child run, used to locate its output and history.
             title: Child Run Ref
           resolvedWorkflowPath:
             type: string

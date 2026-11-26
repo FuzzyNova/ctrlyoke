@@ -573,7 +573,7 @@ Optional authored identity colour for this step. Not substituted: This structura
 
 ## Sub-workflow step {#sub-workflow-step}
 
-Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage, run history, and dashboard entry. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends.
+Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage and run history. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends. A stopped child always stops the parent; onFail controls failed children.
 
 ### `type` {#sub-workflow-step-type}
 

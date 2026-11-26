@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sub-workflow steps** run another workflow file to completion as a child run, with its own harness, variables, final step, and run history. The parent waits for the child and can use its nested output in later steps. A run bundle containing a sub-workflow step cannot be imported by an earlier ctrlyoke version.
 - **Large Spec Loop** built-in template for specs too large for Spec-Driven Loop. It has only a final step, and every pass is a fresh headless session that reviews the last round of queued steps, records progress in a `## Progress` section of the spec, and queues only as much next work as one pass can review, so no single review faces the whole spec. Because the plan lives in the spec, a stopped run can be started again and picks up where it left off.
 
 ### Changed
