@@ -162,6 +162,25 @@ suite("HarnessUsageService", () => {
     );
   });
 
+  test("keeps a newer pushed quota when an older reading arrives later", async () => {
+    const emitted: number[] = [];
+    const service = new HarnessUsageService(workspaceRoot, [], undefined, () =>
+      emitted.push(emitted.length)
+    );
+    const live = await new LiveProvider().refreshUsage();
+    const newerFetchedAt = (live.fetchedAt ?? 0) + 60_000;
+
+    service.ingestProviderUsage({ ...live, fetchedAt: newerFetchedAt });
+    const emittedAfterNewer = emitted.length;
+    service.ingestProviderUsage(live);
+
+    assert.strictEqual(
+      service.getHarnessUsage(HARNESS_IDS.CLAUDE_CLI).quota.fetchedAt,
+      newerFetchedAt
+    );
+    assert.strictEqual(emitted.length, emittedAfterNewer);
+  });
+
   test("persists and reloads provider-neutral window fields", async () => {
     const filePath = providerSnapshotsPath();
     const service = new HarnessUsageService(
@@ -287,6 +306,16 @@ suite("HarnessUsageService", () => {
   test("preserves a newer foreign provider snapshot during merge-on-write", async () => {
     const filePath = providerSnapshotsPath();
     const newerFetchedAt = 2_000_000_000_000;
+    const service = new HarnessUsageService(
+      workspaceRoot,
+      [new LiveProvider()],
+      undefined,
+      undefined,
+      () => 1_000
+    );
+    await service.initialize();
+
+    // Another ctrlyoke host writes a newer snapshot this host never loaded.
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(
       filePath,
@@ -305,14 +334,6 @@ suite("HarnessUsageService", () => {
       "utf8"
     );
 
-    const service = new HarnessUsageService(
-      workspaceRoot,
-      [new LiveProvider()],
-      undefined,
-      undefined,
-      () => 1_000
-    );
-    await service.initialize();
     service.ingestProviderUsage(await new LiveProvider().refreshUsage());
 
     const persisted = await waitForPersistedSnapshot(filePath);

@@ -55,6 +55,7 @@ import {
 } from "./ClaudeProtocolConstants";
 import { ClaudeHeadlessControlChannel } from "./ClaudeHeadlessControlChannel";
 import type { HeadlessControlChannelOptions } from "../shared/IHeadlessControlChannel";
+import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import type {
   CliExecutionSidecar,
   CliExecutionSidecarDeps,
@@ -133,6 +134,15 @@ function mergeClaudeSettings(
  * ```
  */
 export class ClaudeHarnessAdapter implements IHarnessAdapter {
+  /**
+   * @param onProviderUsageUpdate Receives quota from headless runs'
+   *   `rate_limit_event`; interactive runs report it through the statusline
+   *   sidecar instead (`startExecutionSidecar`).
+   */
+  constructor(onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void) {
+    this.logParser = new ClaudeLogParser(onProviderUsageUpdate);
+  }
+
   probeResumableSession(sessionId: string): SessionProbeResult {
     return this.logParser.probeSessionId(sessionId);
   }
@@ -207,7 +217,7 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
       headlessControl: { steering: CLAUDE_HEADLESS_STEERING_CAPABILITY },
     };
   }
-  readonly logParser = new ClaudeLogParser();
+  readonly logParser: ClaudeLogParser;
   readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
 
   /**
@@ -488,6 +498,8 @@ export class ClaudeHarnessAdapter implements IHarnessAdapter {
     if (!snapshotPath) {
       return undefined;
     }
+    // A sidecar kept alive with a reused terminal watches this same file.
+    this.statusLineSidecar?.stop();
     this.statusLineSidecar = new ClaudeStatuslineSidecar({
       snapshotPath,
       onProviderUsageUpdate: deps.onProviderUsageUpdate,

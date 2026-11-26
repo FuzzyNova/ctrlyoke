@@ -54,7 +54,7 @@ that were killed before they could clean up.
 ## Every harness with a status line: global settings {#status-line}
 
 Claude Code, Copilot, Qwen Code and Antigravity can show a status line in their own terminal UI,
-and Claude Code and Antigravity report their quota only through it. To read it, ctrlyoke points
+and Antigravity, and Claude Code in interactive steps, report their quota only through it. To read it, ctrlyoke points
 that harness's global status line setting at a small script it keeps in `~/.ctrlyoke/bin/`:
 
 | Harness     | File                                      | Key             |

@@ -216,6 +216,12 @@ export class CliIntegration extends HarnessIntegration {
   private suppressPtyExitSessionId?: string;
 
   /**
+   * A provider sidecar kept running after its interactive step because the PTY
+   * is still open (see `CliExecutionSidecar.outlivesInteractiveStep`).
+   */
+  private interactivePtySidecar?: CliExecutionSidecar;
+
+  /**
    * Live-process artifacts (see IHarnessAdapter.getLiveProcessFilePaths) whose cleanup
    * was deferred until the PTY exits, mapped to the workspace root they belong to.
    */
@@ -897,6 +903,9 @@ export class CliIntegration extends HarnessIntegration {
       return;
     }
 
+    // Only past the handoff check: a retired PTY's late exit must not stop the
+    // sidecar now kept for the terminal that replaced it.
+    this.stopInteractivePtySidecar();
     this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
 
     // Notify WorkflowInstance that the PTY session is gone so it can clean up
@@ -1284,7 +1293,7 @@ export class CliIntegration extends HarnessIntegration {
         reuseResult =
           await this.executionRunner.executeInRunningTerminal(session);
       } finally {
-        executionSidecar?.stop();
+        this.finishProviderExecutionSidecar(executionSidecar, true);
       }
       if (reuseResult.sent) {
         return reuseResult.success;
@@ -1394,7 +1403,7 @@ export class CliIntegration extends HarnessIntegration {
             );
           })();
     } finally {
-      executionSidecar?.stop();
+      this.finishProviderExecutionSidecar(executionSidecar, isInteractive);
     }
 
     if (!session.effectiveSessionId && session.resolvedSessionId) {
@@ -1480,6 +1489,9 @@ export class CliIntegration extends HarnessIntegration {
     session: CliExecutionSession,
     workspaceRoot: string | undefined
   ): CliExecutionSidecar | undefined {
+    // A sidecar kept from the previous interactive step is replaced: a reused
+    // terminal gets a fresh one for the same PTY, a new spawn one for its own.
+    this.stopInteractivePtySidecar();
     if (!workspaceRoot) {
       return undefined;
     }
@@ -1491,6 +1503,33 @@ export class CliIntegration extends HarnessIntegration {
         this.emitContextWindowUpdate(used, size),
       onProviderUsageUpdate: this.onProviderUsageUpdate,
     });
+  }
+
+  /**
+   * End a step's sidecar, or keep it running with the interactive PTY when it
+   * opts in and that PTY is still open; see `outlivesInteractiveStep`.
+   */
+  private finishProviderExecutionSidecar(
+    sidecar: CliExecutionSidecar | undefined,
+    isInteractive: boolean
+  ): void {
+    if (!sidecar) {
+      return;
+    }
+    if (
+      isInteractive &&
+      sidecar.outlivesInteractiveStep === true &&
+      this.transportCoordinator.hasLivePtySession()
+    ) {
+      this.interactivePtySidecar = sidecar;
+      return;
+    }
+    sidecar.stop();
+  }
+
+  private stopInteractivePtySidecar(): void {
+    this.interactivePtySidecar?.stop();
+    this.interactivePtySidecar = undefined;
   }
 
   /**
@@ -1538,6 +1577,7 @@ export class CliIntegration extends HarnessIntegration {
     /** Drop the retired terminal's tab; see `TerminatePtySessionOptions`. */
     removeTerminalTab?: boolean;
   }): Promise<string | undefined> {
+    this.stopInteractivePtySidecar();
     const terminatedPtyId =
       await this.transportCoordinator.terminateCurrentPtySession(
         options.reason,
@@ -2182,6 +2222,7 @@ export class CliIntegration extends HarnessIntegration {
     void this.cleanupDeferredLiveProcessFiles();
     this.sessionActivityWatcher?.stop();
     this.sessionActivityWatcher = undefined;
+    this.stopInteractivePtySidecar();
     this.transportCoordinator.dispose(
       ConfigurationUtils.shouldCloseTerminalWhenPromptCompletes()
     );

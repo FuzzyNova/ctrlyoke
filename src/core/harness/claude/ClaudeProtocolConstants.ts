@@ -8,6 +8,8 @@ export const CLAUDE_EVENT_TYPES = {
   RESULT: STREAM_JSON_CONTROL.RESULT_TYPE,
   PROGRESS: "progress",
   ATTACHMENT: "attachment",
+  /** Headless stream-json only: the account's quota windows (never in session logs). */
+  RATE_LIMIT_EVENT: "rate_limit_event",
 } as const;
 
 /** Stream-json control protocol values used by Claude's headless channel. */

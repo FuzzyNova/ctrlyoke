@@ -30,6 +30,68 @@ export interface ClaudeStatuslineSnapshot {
   rate_limits?: unknown;
 }
 
+type ClaudeRateLimitWindowDefinition =
+  (typeof CLAUDE_RATE_LIMIT_WINDOWS)[number];
+
+/** One normalized percent window, or `undefined` for an out-of-range value. */
+function buildClaudeRateLimitWindow(
+  definition: ClaudeRateLimitWindowDefinition,
+  usedPercentage: number | undefined,
+  rawResetAt: unknown
+): HarnessUsageWindow | undefined {
+  if (
+    usedPercentage === undefined ||
+    usedPercentage < 0 ||
+    usedPercentage > 100
+  ) {
+    return undefined;
+  }
+  const resetAt = normalizeUsageTimestamp(rawResetAt);
+  return {
+    id: definition.id,
+    kind: usageWindowKind(definition.windowMinutes),
+    label: formatUsageWindowLabel(definition.windowMinutes),
+    used: usedPercentage,
+    limit: 100,
+    remaining: 100 - usedPercentage,
+    percentUsed: usedPercentage,
+    ...(resetAt !== undefined ? { resetAt } : {}),
+    windowMinutes: definition.windowMinutes,
+    unit: HARNESS_USAGE_UNITS.PERCENT,
+    confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
+  };
+}
+
+/**
+ * Map each known window present in `source` through `readWindow`, which
+ * returns the window's used percentage and raw reset time.
+ */
+function collectClaudeRateLimitWindows(
+  source: Record<string, unknown>,
+  readWindow: (raw: Record<string, unknown>) => {
+    usedPercentage: number | undefined;
+    resetAt: unknown;
+  }
+): HarnessUsageWindow[] {
+  const windows: HarnessUsageWindow[] = [];
+  for (const definition of CLAUDE_RATE_LIMIT_WINDOWS) {
+    const rawWindow = source[definition.key];
+    if (!isRecord(rawWindow)) {
+      continue;
+    }
+    const { usedPercentage, resetAt } = readWindow(rawWindow);
+    const window = buildClaudeRateLimitWindow(
+      definition,
+      usedPercentage,
+      resetAt
+    );
+    if (window) {
+      windows.push(window);
+    }
+  }
+  return windows;
+}
+
 /** Parse only the normalized quota numbers from Claude's version-sensitive payload. */
 export function parseClaudeRateLimitWindows(
   payload: unknown
@@ -37,45 +99,51 @@ export function parseClaudeRateLimitWindows(
   if (!isRecord(payload) || !isRecord(payload.rate_limits)) {
     return [];
   }
-
-  const windows: HarnessUsageWindow[] = [];
-  for (const definition of CLAUDE_RATE_LIMIT_WINDOWS) {
-    const rawWindow = payload.rate_limits[definition.key];
-    if (!isRecord(rawWindow)) {
-      continue;
-    }
-    const usedPercentage = asFiniteNumber(rawWindow.used_percentage);
-    if (
-      usedPercentage === undefined ||
-      usedPercentage < 0 ||
-      usedPercentage > 100
-    ) {
-      continue;
-    }
-    const resetAt = normalizeUsageTimestamp(rawWindow.resets_at);
-    windows.push({
-      id: definition.id,
-      kind: usageWindowKind(definition.windowMinutes),
-      label: formatUsageWindowLabel(definition.windowMinutes),
-      used: usedPercentage,
-      limit: 100,
-      remaining: 100 - usedPercentage,
-      percentUsed: usedPercentage,
-      ...(resetAt !== undefined ? { resetAt } : {}),
-      windowMinutes: definition.windowMinutes,
-      unit: HARNESS_USAGE_UNITS.PERCENT,
-      confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
-    });
-  }
-  return windows;
+  return collectClaudeRateLimitWindows(payload.rate_limits, (raw) => ({
+    usedPercentage: asFiniteNumber(raw.used_percentage),
+    resetAt: raw.resets_at,
+  }));
 }
 
-/** Convert one accepted statusline payload into the durable normalized quota contract. */
-export function parseClaudeQuotaSnapshot(
-  payload: unknown,
-  fetchedAt: unknown = Date.now()
+/**
+ * Parse the windows of a headless stream-json `rate_limit_event`.
+ *
+ * Headless Claude never runs the statusline, so this event is its only quota
+ * signal. Its shape is undocumented (observed on Claude Code 2.1.332):
+ * `rate_limit_info.unifiedWindows.<five_hour|seven_day>` carries
+ * `utilization` as a 0-1 fraction and `resetsAt` in epoch seconds. Anything
+ * else yields no windows, so a format change shows stale quota rather than a
+ * wrong number.
+ */
+export function parseClaudeRateLimitEventWindows(
+  event: unknown
+): HarnessUsageWindow[] {
+  if (
+    !isRecord(event) ||
+    !isRecord(event.rate_limit_info) ||
+    !isRecord(event.rate_limit_info.unifiedWindows)
+  ) {
+    return [];
+  }
+  return collectClaudeRateLimitWindows(
+    event.rate_limit_info.unifiedWindows,
+    (raw) => {
+      const utilization = asFiniteNumber(raw.utilization);
+      return {
+        usedPercentage:
+          utilization === undefined || utilization < 0 || utilization > 1
+            ? undefined
+            : Math.round(utilization * 1000) / 10,
+        resetAt: raw.resetsAt,
+      };
+    }
+  );
+}
+
+function buildClaudeQuotaSnapshot(
+  windows: HarnessUsageWindow[],
+  fetchedAt: unknown
 ): HarnessQuotaSnapshot | undefined {
-  const windows = parseClaudeRateLimitWindows(payload);
   const normalizedFetchedAt = normalizeUsageTimestamp(fetchedAt);
   if (windows.length === 0 || normalizedFetchedAt === undefined) {
     return undefined;
@@ -87,6 +155,28 @@ export function parseClaudeQuotaSnapshot(
     staleAfterMs: HARNESS_USAGE_FRESHNESS_MS.PROVIDER_LIVE,
     windows,
   };
+}
+
+/** Convert one headless `rate_limit_event` into the normalized quota contract. */
+export function parseClaudeRateLimitEventQuota(
+  event: unknown,
+  fetchedAt: number
+): HarnessQuotaSnapshot | undefined {
+  return buildClaudeQuotaSnapshot(
+    parseClaudeRateLimitEventWindows(event),
+    fetchedAt
+  );
+}
+
+/** Convert one accepted statusline payload into the durable normalized quota contract. */
+export function parseClaudeQuotaSnapshot(
+  payload: unknown,
+  fetchedAt: unknown = Date.now()
+): HarnessQuotaSnapshot | undefined {
+  return buildClaudeQuotaSnapshot(
+    parseClaudeRateLimitWindows(payload),
+    fetchedAt
+  );
 }
 
 export class ClaudeQuotaCollector

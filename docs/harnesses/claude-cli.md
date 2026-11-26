@@ -167,15 +167,22 @@ syntax and [the default lists](/workflows/permissions#the-default-lists).
 
 ## Usage and rate limits
 
-Claude Code reports its 5-hour and 7-day quota windows only to its status line, so ctrlyoke
-installs a status line command in `~/.claude/settings.json` to read them. If you already have a
-status line, ctrlyoke keeps running yours underneath; see
-[Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line).
+Claude Code reports its 5-hour and 7-day quota windows in two places, depending on how a step
+runs:
 
-Because of that, the quota updates only while a Claude session that ctrlyoke started is running,
-and only while the Claude status line is turned on in [**Settings → Status Line**](/guide/usage-and-stats#status-line). Claude Code has
-no way to ask for the quota on demand, so **ctrlyoke: Refresh Harness Usage** can't update it.
-Between runs, ctrlyoke keeps showing the last value along with the time it was read.
+- **Headless steps**: Claude Code includes the quota in its output once per step, and ctrlyoke
+  reads it from there. This doesn't need the status line.
+- **Interactive steps**: Claude Code reports the quota only to its status line, so ctrlyoke
+  installs a status line command in `~/.claude/settings.json` to read it. If you already have a
+  status line, ctrlyoke keeps running yours underneath; see
+  [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line). The quota then updates
+  while the step runs and, after it ends, for as long as ctrlyoke keeps that Claude terminal
+  open, so messages you type into it yourself update it too. This needs the Claude status line
+  turned on in [**Settings → Status Line**](/guide/usage-and-stats#status-line).
+
+Either way, the quota updates only from Claude sessions that ctrlyoke started. Claude Code has no
+way to ask for the quota on demand, so **ctrlyoke: Refresh Harness Usage** can't update it. Between
+runs, ctrlyoke keeps showing the last value along with the time it was read.
 
 Quota percentages appear next to the harness in the harness picker, with the reset time in its
 tooltip, and on the [**Stats & Usage**](/guide/usage-and-stats) settings tab. If a queued step's harness is above
@@ -192,7 +199,8 @@ stays in place between runs, in every project. If you already had a status line 
 keeps running it underneath.
 
 To undo it, turn Claude Code off in [**Settings → Status Line**](/guide/usage-and-stats#status-line).
-ctrlyoke then puts your original command back, and stops tracking Claude's quota. See
+ctrlyoke then puts your original command back, and stops tracking Claude's quota in interactive
+steps. Headless steps still report it. See
 [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line).
 
 ## Sign-in problems {#sign-in}

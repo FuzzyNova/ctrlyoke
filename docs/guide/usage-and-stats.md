@@ -264,10 +264,12 @@ last model call rather than the whole attempt.
 ## Status line {#status-line}
 
 Claude Code, Copilot, Qwen Code and Antigravity can show a status line at the
-bottom of their terminal UI. Claude Code and Antigravity report their quota
-_only_ there, so ctrlyoke installs its own status line command for each of
-these four harnesses. It is how quota tracking works for them, and you also get
-a live summary of the model, context and quota inside the harness.
+bottom of their terminal UI. Antigravity reports its quota _only_ there, and
+Claude Code does too in interactive steps, so ctrlyoke installs its own status
+line command for each of these four harnesses. It is how quota tracking works
+for them, and you also get a live summary of the model, context and quota
+inside the harness. Headless Claude Code steps report their quota in their own
+output instead.
 
 ::: warning This changes your global harness settings
 The status line lives in the harness's machine-wide settings file, for example
@@ -318,7 +320,8 @@ Each harness has its own section:
 
 - **Enable … statusline tracking** turns ctrlyoke's status line on or off for
   that harness. Turning it off asks whether to restore your previous status
-  line command, and stops quota tracking for Claude Code and Antigravity.
+  line command, and stops quota tracking for Antigravity and for interactive
+  Claude Code steps.
 - **Custom statusline command** is your own status line command, which
   ctrlyoke runs underneath. If you already had one, ctrlyoke fills this in when
   it installs its own.
@@ -329,14 +332,14 @@ Each harness has its own section:
 
 ## What each harness reports {#what-each-harness-reports}
 
-| Harness     | Quota                                                        | Refresh on demand            |
-| ----------- | ------------------------------------------------------------ | ---------------------------- |
-| Copilot     | Monthly premium requests or AI credits; chat and completions | Yes                          |
-| Claude Code | 5-hour and weekly windows, through the status line           | No; updates during a session |
-| Codex       | Its rate-limit windows, usually a short one and a weekly one | Yes, on Codex 0.146 or newer |
-| Antigravity | A quota per model tier, through the status line              | No; updates during a session |
-| OpenCode    | None; token counts only                                      | —                            |
-| Qwen Code   | None; token counts only                                      | —                            |
+| Harness     | Quota                                                              | Refresh on demand            |
+| ----------- | ------------------------------------------------------------------ | ---------------------------- |
+| Copilot     | Monthly premium requests or AI credits; chat and completions       | Yes                          |
+| Claude Code | 5-hour and weekly windows, from headless output or the status line | No; updates during a session |
+| Codex       | Its rate-limit windows, usually a short one and a weekly one       | Yes, on Codex 0.146 or newer |
+| Antigravity | A quota per model tier, through the status line                    | No; updates during a session |
+| OpenCode    | None; token counts only                                            | —                            |
+| Qwen Code   | None; token counts only                                            | —                            |
 
 Each harness page has the details under **Usage and rate limits**, for example
 [Claude Code](/harnesses/claude-cli#usage-and-rate-limits).

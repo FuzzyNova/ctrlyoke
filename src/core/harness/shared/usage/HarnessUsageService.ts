@@ -240,6 +240,17 @@ export class HarnessUsageService {
     if (!this.options.isEnabled()) return;
     if (!VALID_HARNESS_IDS.has(quota.harnessId)) return;
     const normalized = normalizeQuota(quota);
+    // A harness can have several push sources (Claude: headless stream output
+    // and the statusline sidecar, which re-reads a reused terminal's last
+    // snapshot when it starts). Never let an older reading replace a newer one.
+    const cachedFetchedAt = this.quotaCache.get(quota.harnessId)?.fetchedAt;
+    if (
+      normalized.fetchedAt !== undefined &&
+      cachedFetchedAt !== undefined &&
+      normalized.fetchedAt < cachedFetchedAt
+    ) {
+      return;
+    }
     this.quotaCache.set(quota.harnessId, normalized);
     this.publish();
     void this.persistProviderSnapshots();

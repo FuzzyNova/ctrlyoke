@@ -35,6 +35,8 @@ import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
+import { parseClaudeRateLimitEventQuota } from "../shared/usage/collectors/ClaudeQuotaCollector";
+import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import type {
   SubagentChildSource,
   SubagentRecordUsage,
@@ -250,6 +252,20 @@ export function normalizeClaudeWorkspacePath(workspacePath: string): string {
 }
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
+  /**
+   * @param onProviderUsageUpdate Receives the account quota carried by a
+   *   headless `rate_limit_event`. Headless Claude never runs the statusline,
+   *   so without this its quota would only refresh from interactive steps.
+   */
+  constructor(
+    private readonly onProviderUsageUpdate?: (
+      quota: HarnessQuotaSnapshot
+    ) => void,
+    private readonly now: () => number = Date.now
+  ) {
+    super();
+  }
+
   probeSessionId(sessionId: string): SessionProbeResult {
     const projectsDir = path.join(getClaudeConfigDir(), "projects");
     try {
@@ -1585,6 +1601,17 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - `progress` bash_progress → TEXT (same as extractContentFromEvent)
    */
   override extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    // Headless stdout reaches this once per record as it streams, so quota is
+    // pushed when Claude reports it rather than when the step ends. It maps to
+    // no dashboard event.
+    if (event.type === CLAUDE_EVENT_TYPES.RATE_LIMIT_EVENT) {
+      const quota = parseClaudeRateLimitEventQuota(event, this.now());
+      if (quota) {
+        this.onProviderUsageUpdate?.(quota);
+      }
+      return [];
+    }
+
     const events: CliEvent[] = [];
     const e = event as ClaudeProviderEvent;
     const timestamp = e.timestamp

@@ -126,7 +126,7 @@ export class IntegrationFactory {
     registerWithContext: boolean = true,
     executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
-    const provider = new ClaudeHarnessAdapter();
+    const provider = new ClaudeHarnessAdapter(this.onProviderUsageUpdate);
     return new CliIntegration(
       provider,
       this.platform,

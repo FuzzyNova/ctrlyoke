@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Claude Code's 5-hour and weekly quota now updates after headless steps too. Headless Claude Code never runs its status line, which was ctrlyoke's only source for the quota, so a run of headless Claude steps left **Stats & Usage** and the harness picker showing the value from your last interactive step. ctrlyoke now reads the quota that Claude Code includes in its headless output. This works with the Claude status line turned off.
+- After an interactive Claude Code step ends, ctrlyoke keeps reading its quota for as long as the step's terminal stays open. Messages you type into that terminal yourself now update **Stats & Usage** and the harness picker; before, anything Claude reported after the step ended was ignored.
+
 ## [0.10.0] - 2026-11-24
 
 ### Changed

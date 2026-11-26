@@ -1148,6 +1148,100 @@ suite("CliIntegration", () => {
     }
   });
 
+  suite("sidecars that outlive an interactive step", () => {
+    function createKeptSidecarIntegration(
+      executionMode: (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES],
+      lifecycle: string[]
+    ): CliIntegration {
+      let started = 0;
+      const integration = createTestIntegration({
+        startExecutionSidecar: () => {
+          const id = ++started;
+          lifecycle.push(`start:${id}`);
+          return {
+            outlivesInteractiveStep: true,
+            stop: () => lifecycle.push(`stop:${id}`),
+          };
+        },
+      });
+      (integration as any).sessionResolverAdapter.resolve = () => ({
+        resolvedProperties: { executionMode, model: "test-model" },
+        resolvedSessionId: undefined,
+      });
+      (integration as any).transportCoordinator.hasLivePtySession = () => true;
+      (integration as any).executionRunner[
+        executionMode === EXECUTION_MODES.INTERACTIVE
+          ? "executeInteractive"
+          : "executeHeadless"
+      ] = async () => {
+        lifecycle.push("execute");
+        return true;
+      };
+      return integration;
+    }
+
+    test("keeps running while the PTY is open, until the next step replaces it", async () => {
+      const lifecycle: string[] = [];
+      const integration = createKeptSidecarIntegration(
+        EXECUTION_MODES.INTERACTIVE,
+        lifecycle
+      );
+      (integration as any).retireInteractivePtyForRestartFallback = async () =>
+        undefined;
+      (integration as any).retireConflictingSiblingPty = async () => undefined;
+
+      await integration.sendPrompt({ prompt: "first" });
+      assert.deepStrictEqual(lifecycle, ["start:1", "execute"]);
+
+      await integration.sendPrompt({ prompt: "second" });
+      assert.deepStrictEqual(lifecycle, [
+        "start:1",
+        "execute",
+        "stop:1",
+        "start:2",
+        "execute",
+      ]);
+
+      integration.dispose();
+      assert.strictEqual(lifecycle.at(-1), "stop:2");
+    });
+
+    test("stops when its PTY exits, but not on a retired PTY's late exit", async () => {
+      const lifecycle: string[] = [];
+      const integration = createKeptSidecarIntegration(
+        EXECUTION_MODES.INTERACTIVE,
+        lifecycle
+      );
+      await integration.sendPrompt({ prompt: "first" });
+
+      (integration as any).suppressPtyExitSessionId = "pty-retired";
+      (integration as any).handlePtyExit(
+        { id: "pty-retired", reconnectBuffer: "" },
+        0
+      );
+      assert.deepStrictEqual(lifecycle, ["start:1", "execute"]);
+
+      (integration as any).handlePtyExit(
+        { id: "pty-current", reconnectBuffer: "" },
+        0
+      );
+      assert.deepStrictEqual(lifecycle, ["start:1", "execute", "stop:1"]);
+      integration.dispose();
+      assert.deepStrictEqual(lifecycle, ["start:1", "execute", "stop:1"]);
+    });
+
+    test("still stops at the end of a headless step", async () => {
+      const lifecycle: string[] = [];
+      const integration = createKeptSidecarIntegration(
+        EXECUTION_MODES.HEADLESS,
+        lifecycle
+      );
+      await integration.sendPrompt({ prompt: "headless" });
+      assert.deepStrictEqual(lifecycle, ["start:1", "execute", "stop:1"]);
+      integration.dispose();
+    });
+  });
+
   test("notifies only after a provider statusline install mutation writes", async () => {
     const feedback: string[] = [];
     let pending: {

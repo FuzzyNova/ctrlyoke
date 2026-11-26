@@ -42,6 +42,15 @@ export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
 /** Disposable sidecar that runs for the lifetime of one CLI execution. */
 export interface CliExecutionSidecar {
   stop(): void;
+  /**
+   * Keep running after an interactive step ends, for as long as its PTY stays
+   * open, so output the user's own follow-up turns produce in that terminal
+   * is still read. `CliIntegration` stops it when the PTY exits or is
+   * retired, or the integration is disposed. Only a sidecar whose callbacks
+   * are not tied to the step may opt in: provider quota is account-wide, but
+   * streaming events and context-window updates belong to a running step.
+   */
+  readonly outlivesInteractiveStep?: boolean;
 }
 
 /** Host callbacks and execution metadata supplied to a provider sidecar. */
@@ -346,8 +355,9 @@ export interface IHarnessAdapter {
    * Start a provider-specific sidecar for one execution.
    *
    * The sidecar is started for both interactive and headless executions at
-   * their shared integration boundary and is always stopped when that
-   * execution branch completes.
+   * their shared integration boundary and is stopped when that execution
+   * branch completes, unless it sets `outlivesInteractiveStep` and the
+   * interactive PTY is still open.
    */
   startExecutionSidecar?(
     deps: CliExecutionSidecarDeps

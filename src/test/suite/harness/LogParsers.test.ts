@@ -8,6 +8,7 @@ import {
   normalizeClaudeWorkspacePath,
 } from "../../../core/harness/claude/ClaudeLogParser";
 import { ClaudeHarnessAdapter } from "../../../core/harness/claude/ClaudeHarnessAdapter";
+import { CLAUDE_EVENT_TYPES } from "../../../core/harness/claude/ClaudeProtocolConstants";
 import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser";
 import { CopilotHarnessAdapter } from "../../../core/harness/copilot/CopilotHarnessAdapter";
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
@@ -1253,6 +1254,51 @@ suite("ClaudeLogParser", () => {
         stdoutOutput.metadata.usage?.contextWindowUsedTokens,
         155
       );
+    });
+
+    test("pushes headless rate_limit_event quota as Claude stdout streams", () => {
+      const pushed: Array<{
+        harnessId: string;
+        fetchedAt?: number;
+        windows: Array<[string, number | undefined, number | undefined]>;
+      }> = [];
+      const provider = new ClaudeHarnessAdapter((quota) =>
+        pushed.push({
+          harnessId: quota.harnessId,
+          fetchedAt: quota.fetchedAt,
+          windows: quota.windows.map((window) => [
+            window.id,
+            window.percentUsed,
+            window.resetAt,
+          ]),
+        })
+      );
+      const stdout = fs.readFileSync(
+        path.resolve(
+          __dirname,
+          "../../../../src/test/fixtures/claude/headless-golden.stdout.jsonl"
+        ),
+        "utf8"
+      );
+
+      const rateLimitEvents: CliEvent[] = [];
+      const before = Date.now();
+      for (const event of provider.parseHeadlessStdout(stdout)) {
+        const structured =
+          provider.logParser.extractStructuredEventsFromEvent(event);
+        if (event.type === CLAUDE_EVENT_TYPES.RATE_LIMIT_EVENT) {
+          rateLimitEvents.push(...structured);
+        }
+      }
+
+      assert.deepStrictEqual(rateLimitEvents, []);
+      assert.strictEqual(pushed.length, 1);
+      assert.strictEqual(pushed[0].harnessId, HARNESS_IDS.CLAUDE_CLI);
+      assert.ok((pushed[0].fetchedAt ?? 0) >= before);
+      assert.deepStrictEqual(pushed[0].windows, [
+        ["five-hour", 59, 1785081600 * 1000],
+        ["seven-day", 19, 1785427200 * 1000],
+      ]);
     });
 
     test("feeds stdout aliases into Claude background-work tracking", () => {

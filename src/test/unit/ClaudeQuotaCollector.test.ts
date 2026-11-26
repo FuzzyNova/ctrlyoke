@@ -8,6 +8,8 @@ import { ClaudeHarnessAdapter } from "../../core/harness/claude/ClaudeHarnessAda
 import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   parseClaudeQuotaSnapshot,
+  parseClaudeRateLimitEventQuota,
+  parseClaudeRateLimitEventWindows,
   parseClaudeRateLimitWindows,
 } from "../../core/harness/shared/usage/collectors/ClaudeQuotaCollector";
 import { HarnessSettingsJsonStore } from "../../core/harness/shared/HarnessSettingsJsonStore";
@@ -88,6 +90,70 @@ suite("ClaudeQuotaCollector", () => {
       []
     );
     assert.strictEqual(parseClaudeQuotaSnapshot({}), undefined);
+  });
+
+  test("converts a headless rate_limit_event's fractional utilization to percent windows", () => {
+    const quota = parseClaudeRateLimitEventQuota(
+      {
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: "allowed",
+          rateLimitType: "five_hour",
+          unifiedWindows: {
+            five_hour: {
+              utilization: 0.59,
+              resetsAt: 1795672200,
+              status: "allowed",
+            },
+            seven_day: { utilization: 0.19, status: "allowed" },
+          },
+        },
+      },
+      1_795_600_000_000
+    );
+
+    assert.strictEqual(quota?.fetchedAt, 1_795_600_000_000);
+    assert.deepStrictEqual(
+      quota?.windows.map((window) => [
+        window.id,
+        window.percentUsed,
+        window.remaining,
+        window.resetAt,
+        window.label,
+      ]),
+      [
+        ["five-hour", 59, 41, 1795672200 * 1000, "5h"],
+        ["seven-day", 19, 81, undefined, "week"],
+      ]
+    );
+  });
+
+  test("ignores rate_limit_event payloads without usable unified windows", () => {
+    assert.deepStrictEqual(parseClaudeRateLimitEventWindows({}), []);
+    assert.deepStrictEqual(
+      parseClaudeRateLimitEventWindows({
+        rate_limit_info: { status: "allowed", resetsAt: 1795672200 },
+      }),
+      []
+    );
+    // A percent-scaled (out-of-range) or missing utilization, and windows
+    // ctrlyoke does not know.
+    assert.deepStrictEqual(
+      parseClaudeRateLimitEventWindows({
+        rate_limit_info: {
+          unifiedWindows: {
+            five_hour: { utilization: 59 },
+            seven_day: { status: "allowed" },
+            renamed_window: { utilization: 0.5 },
+          },
+        },
+      }),
+      []
+    );
+    assert.strictEqual(
+      parseClaudeRateLimitEventQuota({ rate_limit_info: {} }, Date.now()),
+      undefined
+    );
   });
 
   test("pushes only normalized windows from the sidecar", async () => {

@@ -13,6 +13,11 @@ export interface ClaudeStatuslineSidecarDeps {
 
 /** Claude-specific payload parsing around the shared statusline transport watcher. */
 export class ClaudeStatuslineSidecar implements CliExecutionSidecar {
+  /**
+   * Claude re-runs its statusline for turns the user types into a ctrlyoke
+   * terminal between steps, and it only pushes account-wide quota.
+   */
+  readonly outlivesInteractiveStep = true;
   private readonly watcher: StatuslineSnapshotWatcher<ClaudeStatuslineSnapshot>;
 
   constructor(deps: ClaudeStatuslineSidecarDeps) {
