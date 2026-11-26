@@ -286,7 +286,10 @@ These were the open or wrong points in the previous draft. Each is settled here 
 **Decision:** add an optional `subWorkflowHost?: SubWorkflowHost` port to
 `WorkflowExecutionContext` (`src/core/WorkflowExecutor.ts:217`). There is one shared
 implementation, `SubWorkflowLauncher` in `src/core/orchestration/`, constructed with a
-`createInstance: (options: { concurrent: boolean }) => WorkflowInstance` factory:
+`SubWorkflowInstanceFactory` (`src/types/SubWorkflowTypes.ts`, with the port types). The factory
+returns the narrow `SubWorkflowInstance` surface the launcher uses, which `WorkflowInstance`
+implements; its options carry `concurrent` and grow as the child needs more (the ancestor chain,
+the parent link, the inherited execution root):
 
 - **VS Code and the hosted server:** `() => orchestrator.createExternalWorkflowInstance()`
   (`WorkflowInstanceRegistry.ts:210`, forwarded by `WorkflowOrchestrator.ts:976`). This is the
@@ -1119,6 +1122,8 @@ export interface StepLifecycleRuntime {
   terminalStatus?: PromptTerminalStatus;
   elapsed?: number;
   failureMessage?: string;
+  failureKind?: FailureKind; // moved here in round 2: PromptQueue writes it on every kind
+  rewoundFailure?: boolean; // likewise; schema $defs/stepLifecycleRuntime matches
   terminalFailure?: boolean;
 }
 
@@ -1943,39 +1948,62 @@ summaries instead.
     shared `name` description now matches `VAR_SUBSTITUTION_POLICY` (`steps[].name` is
     substituted at dispatch; the old prompt copy wrongly said "Not substituted").
 
+- **Round 2 (reviewed 2026-11-26): sequential core, part 1.** The step kind exists in types,
+  schema and parser, and the executor runs it through a `SubWorkflowHost`, but no host passes one
+  yet, so a workflow step fails with "Sub-workflow steps are not supported in this host". `npm test`
+  green (8442 extension, 4917 UI).
+  - `51ea7af0b`: `isExecutionStep`, `getExecutionRuntime` (step 1a stopped after the helpers; the
+    sweep itself landed in 1c).
+  - `8dac5b624`: tests narrow step kinds (`src/test/helpers/stepAssertions.ts`).
+  - `b0ad3c606`: `STEP_TYPES.WORKFLOW`, `SubWorkflowStep`, `SubWorkflowRuntimeMetadata`,
+    `isSubWorkflowStep`, `getWorkflowStepText`, `SUB_WORKFLOW_STEP_COPY_FIELDS`,
+    `PROMPT_PROPERTIES.WORKFLOW_REF`, and the case arms. `failureKind`/`rewoundFailure` moved
+    into `StepLifecycleRuntime`.
+  - `e9fc0f29c`: schema `subWorkflowStep`, `subWorkflowRuntimeMetadata`, `rootWorkflowStep`;
+    parser `buildSubWorkflowStep` (steps, finalStep, root), D5 parse-time check, R15 index;
+    parallel members still rejected with a message saying so.
+  - `8993bd372`: port types in `src/types/SubWorkflowTypes.ts` (plus `SubWorkflowInstance`,
+    `SubWorkflowInstanceFactory`), `SUB_WORKFLOW_CANCELLATION_SOURCES`, `SubWorkflowLauncher`.
+  - `0c73d6c33`: context `subWorkflowHost`/`ancestorPaths` (root seeded with the instance's own
+    definition path), `executeSubWorkflowStep`, `settleNonHarnessStep`,
+    `ActiveTargetResources.subWorkflow` registration.
+  - `0044312f5` (review fixes): `settleNonHarnessStep` had changed script behaviour (an errored
+    script under `onError: continue` no longer failed its queue step), now restored; a cancelled
+    child had called `confirmStopped()` itself, it now only requests the stop and lets the outcome
+    coordinator confirm and commit it; a launch that throws before the child exists now reads
+    "Sub-workflow could not start: …"; the schema's `stepLifecycleRuntime` now carries
+    `failureKind`/`rewoundFailure` to match the type (a workflow step's `_runtime` with either
+    failed validation); workflow steps bulk-edit `enabled`/`color` like scripts; literal
+    `"missing"`/`"continue"` comparisons replaced with constants.
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 2 (queued 2026-11-26): sequential core, part 1.**
-  1. ~~`STEP_TYPES.WORKFLOW` and every case arm in one step~~ failed (too large; see Decisions).
-     Re-queued as three steps, each leaving a compiling commit:
-     1a. non-test `src/`: stop relying on prompt/script field overlap in `WorkflowStep` (shared
-     helpers; possibly move queue-lifecycle fields such as `rewoundFailure`/`failureKind`
-     into `StepLifecycleRuntime`), finding sites by widening the union temporarily;
-     1b. the same for `src/test/**`;
-     1c. `STEP_TYPES.WORKFLOW`, `SubWorkflowStep` types and constants, and the ~40 remaining
-     `case` arms (executor arm a placeholder failure).
-  2. Schema `subWorkflowStep` (string `workflow` only), `subWorkflowRuntimeMetadata`, the
-     `workflowStep` arm, `rootWorkflowStep` (R9); parser `buildSubWorkflowStep` for steps,
-     finalStep and root, D5 parse-time existence check, R15 lookup; parallel members still
-     rejected by the parser.
-  3. `SubWorkflowHost` port types and `SubWorkflowLauncher` (D1, R2) with a `createInstance`
-     factory, tested against fake instances.
-  4. `subWorkflowHost`/`ancestorPaths` on `WorkflowExecutionContext` through
-     `WorkflowStartupPipeline`; `executeSubWorkflowStep` with D9 mapping, D10 cycle check, runtime
-     linkage persisted at launch, `settleNonHarnessStep` factored out of `executeScriptStep`;
-     fake-host executor tests.
-- **Round 3: sequential core, part 2.** D2/D3 stop and pause forwarding (`ActiveTargetResources.subWorkflow`,
-  detector-fallback rule); host factories (VS Code via `createExternalWorkflowInstance`, CLI
-  instance-construction helper, MCP if it executes); D4a + D4d rule 1 (R1); D7 `parentRun` on the
-  manifest; D12a workflow arm (`subWorkflowSettled`, R3, nested rendering, workflow summary
-  budget); docs guide page and CHANGELOG (first round where the step is usable end to end).
+- **Round 3 (queued 2026-11-26): sequential core, part 2.** The first round where the step works
+  end to end.
+  1. Host factories: one `SubWorkflowLauncher` per host, passed to every instance (VS Code and
+     the hosted server through `WorkflowInstanceRegistry`/`createExternalWorkflowInstance`; the
+     CLI through an extracted instance-construction helper). Children get the same host and
+     their `ancestorPaths` through factory options; `WorkflowInstance implements
+SubWorkflowInstance`. Real-instance end-to-end test.
+  2. D2/D3 stop and pause forwarding through `ActiveTargetResources.subWorkflow`, and the
+     detector-fallback rule.
+  3. D7 `parentRun` on the child manifest through a load-option seam.
+  4. D4a inheritance + D4d rule 1 (R1): `parentExecution`/`delegationChain` on the request, the
+     delegated lease and `isCompatible(request, existing)`.
+  5. D12a event: `subWorkflowSettled` + `SubWorkflowOutput` (R3), recorded by the executor, and
+     handled by `OutputHistoryTimelineAdapter`, `RunOutputResolver`, `HistoryRunDocumentBuilder`
+     and `RunBundleReader`.
+  6. D12a/D12b prior context: `PriorContextItem.subWorkflow`, nested child rendering,
+     `<childRunUnavailable/>`, the workflow summary arm inside the shared budget.
+  7. Docs guide page and CHANGELOG (including the R3 bundle limitation).
 - **Round 4: D12c** (`run` on `read_output`/`workflow_status`), **D6 reattach**, minimal dashboard
-  row + "Open run" link, CLI progress + `subWorkflowRuns` JSON.
+  row + "Open run" link, CLI progress + `subWorkflowRuns` JSON, D4c dirty check for sequential
+  worktree children.
 - **Rounds 5–6: isolated lanes (landing step 3).** D13 inline definitions (widens
   `SubWorkflowStep.workflow` to `string | InlineSubWorkflowDefinition`, adds the schema's inline
-  arm, R10 exclusions), parallel member acceptance + preflight branch, D4c dirty check,
+  arm, R10 exclusions), parallel member acceptance + preflight branch, D4c once-per-group check,
   `MERGE_INTO_SHARED_ROOT`, user-cancelled-lane join rule, D4d sibling merge wait (R4), R5 CLI
   headless children, D14 `worktreePresets` + `append_step`/`edit_step`/`workflow_status`,
   orchestrator agent and `spec-driven-loop` template.
@@ -2010,4 +2038,13 @@ Coarse roadmap; re-planned every pass.
   branches, a binary shape that the round-1 guard does not catch. The work is now split so the
   overlap is removed first (with the union widened only temporarily to list the sites), and
   the kind lands last. The `USER_INPUT_STEP_PLAN.md` kind will benefit from the same split.
+- **The D4c dirty check moves to round 4** (it was implicitly round 3). It only matters for a
+  child with its own `worktree`, and D4b (branching from the parent) is round 7, so until then a
+  worktree child branches from the main checkout as a top-level run does today.
+- **`settleNonHarnessStep` keeps one script quirk on purpose.** An errored script under
+  `errorBehavior.onError: continue` fails its queue step and still returns "continue", as before
+  round 2. Only `continueResolvesFailure` (sub-workflow `onFail: continue`) skips `failStep`.
+- **A cancelled child requests the parent's stop; it never confirms it.** The executor moves the
+  parent to CANCELLING and the outcome coordinator confirms STOPPED, the same path a user stop
+  takes. D2's "parent stopped" direction (round 3) must keep this single confirmation point.
 - No open questions need Nathan yet.
