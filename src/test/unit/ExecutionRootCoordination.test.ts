@@ -818,6 +818,53 @@ suite("ExecutionRootCoordination", function () {
     }
   });
 
+  test("a reused PID cannot revive a dead MCP participant's claim over a newer grant", async () => {
+    const root = await tempDirectory();
+    try {
+      // The registry stamps every MCP participant with this process's pid, so
+      // the crashed participant is written straight to the board with its own.
+      const crashed = participant("crashed", { pid: 111 });
+      const store = new ExecutionRootCoordinationStore(root);
+      // A current `at`: a bare store treats an old join as departed.
+      const at = new Date().toISOString();
+      await store.append({ ...join(crashed, 0), at });
+      await store.append({ ...claim(crashed, ["src"], 0), at });
+
+      let crashedPidAlive = false;
+      const registry = new CoordinationParticipantRegistry(root, {
+        processLivenessCheck: (pid) => pid !== 111 || crashedPidAlive,
+      });
+      const newer = await registry.registerParticipant({
+        kind: "external",
+        label: "newer",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      assert.deepStrictEqual((await newer.claim(["src"])).granted, ["src"]);
+
+      // The write that granted the claim compacted the dead participant's
+      // join and claim away, so nothing is left for a reused pid to revive.
+      assert.ok(
+        (await store.readAll()).every(
+          (entry) => entry.from.participantId !== crashed.participantId
+        )
+      );
+      crashedPidAlive = true;
+      const folded = await registry.fold();
+      assert.deepStrictEqual(
+        folded.claims.map((held) => [held.path, held.owner.participantId]),
+        [["src", newer.participantId]]
+      );
+      assert.ok(
+        folded.participants.every(
+          (live) => live.participantId !== crashed.participantId
+        )
+      );
+      assert.deepStrictEqual(await newer.release(["src"]), ["src"]);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("closes an unattested CLI participant for a settled sequential run", async () => {
     const root = await tempDirectory();
     try {
