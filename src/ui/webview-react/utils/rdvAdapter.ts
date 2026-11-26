@@ -12,6 +12,7 @@ import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
 import {
   getStructuredPatchDiffLines,
   isDisplayableDiffLine,
+  normalizeDiffInputs,
   normalizeStructuredPatch,
 } from "@root/utils/DiffLines";
 import { languageFromPath } from "@root/utils/WorkspaceFileLanguage";
@@ -395,8 +396,7 @@ export function toRdvFromContent(
   oldContent: string,
   newContent: string
 ): { hunks: HunkData[]; diffType: DiffType } {
-  const old = oldContent.replace(/\r\n/g, "\n");
-  const next = newContent.replace(/\r\n/g, "\n");
+  const [old, next] = normalizeDiffInputs(oldContent, newContent);
   const rawPatch = DiffLib.createPatch("file", old, next);
   // parseDiff requires git-diff-style header; createPatch emits Index:/=== headers instead
   const patchLines = rawPatch.split("\n");

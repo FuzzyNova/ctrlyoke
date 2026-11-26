@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/DiffLines.ts`, `src/ui/webview-react/utils/rdvAdapter.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
