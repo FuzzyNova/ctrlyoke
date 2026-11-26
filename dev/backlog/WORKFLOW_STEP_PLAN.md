@@ -1948,9 +1948,14 @@ summaries instead.
 Coarse roadmap; re-planned every pass.
 
 - **Round 2 (queued 2026-11-26): sequential core, part 1.**
-  1. `STEP_TYPES.WORKFLOW`, `SubWorkflowStep` types and constants, and a `case` arm in every
-     step-kind switch repo-wide (minimal behaviour; executor arm a placeholder failure), plus a
-     hand sweep of early-return/negative/cast sites.
+  1. ~~`STEP_TYPES.WORKFLOW` and every case arm in one step~~ failed (too large; see Decisions).
+     Re-queued as three steps, each leaving a compiling commit:
+     1a. non-test `src/`: stop relying on prompt/script field overlap in `WorkflowStep` (shared
+     helpers; possibly move queue-lifecycle fields such as `rewoundFailure`/`failureKind`
+     into `StepLifecycleRuntime`), finding sites by widening the union temporarily;
+     1b. the same for `src/test/**`;
+     1c. `STEP_TYPES.WORKFLOW`, `SubWorkflowStep` types and constants, and the ~40 remaining
+     `case` arms (executor arm a placeholder failure).
   2. Schema `subWorkflowStep` (string `workflow` only), `subWorkflowRuntimeMetadata`, the
      `workflowStep` arm, `rootWorkflowStep` (R9); parser `buildSubWorkflowStep` for steps,
      finalStep and root, D5 parse-time existence check, R15 lookup; parallel members still
@@ -1997,4 +2002,12 @@ Coarse roadmap; re-planned every pass.
 - **D6 is deferred to round 4.** Until then a re-executed sub-workflow step whose `_runtime`
   already names a child launches fresh and overwrites the linkage (the D6 "missing directory"
   branch).
+- **Adding a union member is mostly not a switch-arm change (round 2 lesson).** The first
+  attempt at round 2 step 1 hit 177 extension and 20 webview type errors and gave up uncommitted.
+  Only about 40 were missing `case` arms. The rest were reads that compile only because
+  `PromptStep` and `ScriptStep` share fields (`_runtime.sessionId`, `executionMode`,
+  `endCondition`, …; scripts reuse `PromptRuntimeMetadata`), plus `isPromptStep(s) ? … : s.script`
+  branches, a binary shape that the round-1 guard does not catch. The work is now split so the
+  overlap is removed first (with the union widened only temporarily to list the sites), and
+  the kind lands last. The `USER_INPUT_STEP_PLAN.md` kind will benefit from the same split.
 - No open questions need Nathan yet.
