@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/orchestration/RunBundleExporter.ts`, `src/utils/RunBundlePaths.ts`, `src/cli/CliWorkspaceBootstrap.ts`
-- **Severity:** medium (privacy: the bundle names the user's checkout and home)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

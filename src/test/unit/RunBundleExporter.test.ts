@@ -80,6 +80,60 @@ suite("RunBundleExporter secrets", () => {
     assert.deepStrictEqual(values, ["only-this-one"]);
   });
 
+  test("rewrites workspace paths recorded through either symlink spelling", async () => {
+    const alias = path.join(root, "repo-alias");
+    await fs.symlink(workspace, alias, "dir");
+    for (const [index, [recordedRoot, exportRoot]] of [
+      [workspace, alias],
+      [alias, workspace],
+    ].entries()) {
+      const { workflowKey, runRef } = await createRun({
+        state: EXECUTION_STATES.STOPPED,
+        currentIndex: 0,
+        steps: [{ prompt: `see ${recordedRoot}/source.yaml` }],
+      });
+      await new TimelineRecorder().appendEvents(
+        WorkflowPaths.manifestPath(workspace, workflowKey, runRef),
+        [
+          {
+            eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+            timestampMs: 101,
+            target: { kind: "queue", queueIndex: 0 },
+            runIndex: 0,
+            attemptIndex: 0,
+            payload: {
+              cliOutput: {
+                workingDirectory: `${recordedRoot}/nested`,
+                output: "ok",
+              },
+            },
+          } as never,
+        ]
+      );
+      const exported = await exportRunBundle({
+        stateRoot: workspace,
+        workspaceRoot: exportRoot,
+        workflowKey,
+        runRef,
+        bundleDir: path.join(root, `symlink-export-${index}`),
+        exportedByVersion: "test",
+        includeSnapshots: true,
+        homeDir: root,
+      });
+      const files = await Promise.all(
+        (await fs.readdir(exported.bundleDir))
+          .filter((file) => file !== RUN_BUNDLE_FILES.ASSETS_DIR)
+          .map((file) =>
+            fs.readFile(path.join(exported.bundleDir, file), "utf8")
+          )
+      );
+      const bundleText = files.join("\n");
+      assert.ok(!bundleText.includes(workspace), "real spelling is removed");
+      assert.ok(!bundleText.includes(alias), "symlink spelling is removed");
+      assert.deepStrictEqual(exported.manifest.externalPaths, []);
+    }
+  });
+
   test("exports continuation state and an untracked patch without touching the real index", async () => {
     const { workflowKey, runRef } = await createRun({
       state: EXECUTION_STATES.STOPPED,

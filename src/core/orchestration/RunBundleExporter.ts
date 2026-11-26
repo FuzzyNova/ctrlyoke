@@ -452,10 +452,11 @@ export async function exportRunBundle(
     worktree?.sourceCheckoutRoot,
     ...(worktree?.namedWorkspaceRoots.map((root) => root.fsPath) ?? []),
   ].filter((root): root is string => !!root);
+  const portableWorkspaceRoots = withRealPathSpellings(workspaceRoots);
   const transform = createBundleTransform(
     options,
     exactSecrets,
-    workspaceRoots
+    portableWorkspaceRoots
   );
   const continuationInfo = await getContinuationInfo(
     workingFile,
@@ -573,9 +574,11 @@ export async function exportRunBundle(
       exportedAt: (options.now?.() ?? new Date()).toISOString(),
       exportedByVersion: options.exportedByVersion,
       // Only the home rewrite: the reader should see which checkout this was.
-      sourceRoot: createPortablePathRewriter({ homeDir: options.homeDir })(
-        options.workspaceRoot
-      ),
+      sourceRoot: createPortablePathRewriter({
+        homeDirs: options.homeDir
+          ? withRealPathSpellings([options.homeDir])
+          : undefined,
+      })(options.workspaceRoot),
       lineage: transform.apply(
         {
           workflowName: descriptor.workflowName,
@@ -677,8 +680,10 @@ function createBundleTransform(
   workspaceRoots: readonly string[]
 ): BundleTransform {
   const rewrite = createPortablePathRewriter({
-    workspaceRoots,
-    homeDir: options.homeDir,
+    workspaceRoots: withRealPathSpellings(workspaceRoots),
+    homeDirs: options.homeDir
+      ? withRealPathSpellings([options.homeDir])
+      : undefined,
   });
   const byRule: Record<string, number> = {};
   const byFile: Record<string, number> = {};
@@ -738,6 +743,20 @@ function createBundleTransform(
     removedByFile: () => ({ ...byFile }),
     externalPaths: () => [...external].sort(),
   };
+}
+
+/** Include the filesystem spelling so paths recorded through symlinks match. */
+function withRealPathSpellings(roots: readonly string[]): string[] {
+  const expanded = new Set<string>();
+  for (const root of roots) {
+    expanded.add(root);
+    try {
+      expanded.add(fs.realpathSync.native(root));
+    } catch {
+      // A missing or inaccessible root can still match by its recorded spelling.
+    }
+  }
+  return [...expanded];
 }
 
 /** Redact added lines in valid UTF-8 text hunks; preserve all other patch bytes. */

@@ -93,6 +93,8 @@ export interface PortablePathRoots {
   workspaceRoots?: readonly string[];
   /** Rewritten to `~`; the workspace wins where both apply. */
   homeDir?: string;
+  /** Additional spellings of the same home directory. */
+  homeDirs?: readonly string[];
 }
 
 /** Returns the export-side text transform for one source workspace. */
@@ -107,8 +109,13 @@ export function createPortablePathRewriter(
     .sort((left, right) => right.length - left.length);
   const rewrites = [
     ...workspaceRoots.map((root) => tokenRewrite(root, BUNDLE_WORKSPACE_TOKEN)),
-    roots.homeDir ? tokenRewrite(roots.homeDir, BUNDLE_HOME_TOKEN) : undefined,
-    roots.homeDir ? userNameRewrite(roots.homeDir) : undefined,
+    ...[...(roots.homeDirs ?? []), ...(roots.homeDir ? [roots.homeDir] : [])]
+      .filter((root, index, all) => all.indexOf(root) === index)
+      .sort((left, right) => right.length - left.length)
+      .flatMap((root) => [
+        tokenRewrite(root, BUNDLE_HOME_TOKEN),
+        userNameRewrite(root),
+      ]),
   ].filter((rewrite): rewrite is (text: string) => string => !!rewrite);
   return (text) =>
     rewrites.reduce((current, rewrite) => rewrite(current), text);
