@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli), reviewing 88edf57db
 - **Area:** `src/utils/CliProcessManager.ts` (`spawn`), `src/cli.ts` (`installTwoStageShutdown` call), `src/cli/SignalShutdown.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

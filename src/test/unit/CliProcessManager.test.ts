@@ -2,7 +2,10 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { CliProcessManager } from "../../utils/CliProcessManager";
+import {
+  CliProcessManager,
+  killLiveProcessGroupsOnExit,
+} from "../../utils/CliProcessManager";
 import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
@@ -145,6 +148,35 @@ suite("CliProcessManager working directory", () => {
 });
 
 suite("CliProcessManager teardown", () => {
+  test("exit hook kills live group leaders and forgets closed ones", async function () {
+    if (process.platform === "win32") this.skip();
+
+    const killedPids: number[] = [];
+    const manager = new CliProcessManager(
+      process.cwd(),
+      undefined,
+      undefined,
+      (pid, signal) => {
+        assert.strictEqual(signal, PROCESS_SIGNALS.KILL);
+        killedPids.push(pid);
+      }
+    );
+    const closed = await manager.spawn(process.execPath, ["-e", "process.exit(0)"]);
+    assert.strictEqual(closed.exitCode, 0);
+
+    const livePromise = manager.spawn(process.execPath, [
+      "-e",
+      "setInterval(() => {}, 1000)",
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    killLiveProcessGroupsOnExit();
+
+    assert.strictEqual(killedPids.length, 1);
+    assert.ok(killedPids[0] < 0, "exit hook should signal a process group");
+    await manager.cancel();
+    await livePromise;
+  });
+
   test("disposeAsync waits for SIGTERM to escalate and the child to close", async () => {
     const signals: NodeJS.Signals[] = [];
     const manager = new CliProcessManager(

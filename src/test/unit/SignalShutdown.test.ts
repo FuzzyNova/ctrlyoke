@@ -8,6 +8,43 @@ import {
 import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
 
 suite("Two-stage signal shutdown", () => {
+  test("starts graceful shutdown on SIGHUP", async () => {
+    const listeners = new Map<ShutdownSignal, () => void>();
+    const messages: string[] = [];
+    let disposed = false;
+    installTwoStageShutdown({
+      signals: {
+        once: (signal, listener) => listeners.set(signal, listener),
+        off: (signal) => listeners.delete(signal),
+      },
+      signalNames: [PROCESS_SIGNALS.HANGUP],
+      exit: () => undefined,
+      timers: {
+        setTimeout: () => 1 as unknown as ReturnType<typeof setTimeout>,
+        clearTimeout: () => undefined,
+      },
+      isInteractive: false,
+      countRunningWorkflows: () => 1,
+      dispose: async () => { disposed = true; },
+      deadlineMs: 5000,
+      confirmationMessage: () => "confirm",
+      shutdownMessage: () => "shutdown",
+      forceMessage: "force",
+      timeoutMessage: () => "timeout",
+      onMessage: (message) => messages.push(message),
+      exitCodeForSignal: () => 129,
+      successExitCode: 0,
+      timeoutExitCode: 1,
+    });
+
+    listeners.get(PROCESS_SIGNALS.HANGUP)?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.strictEqual(disposed, true);
+    assert.deepStrictEqual(messages, ["shutdown"]);
+  });
+
   test("can leave successful exit to the run completion path", async () => {
     const listeners = new Map<ShutdownSignal, () => void>();
     const exits: number[] = [];

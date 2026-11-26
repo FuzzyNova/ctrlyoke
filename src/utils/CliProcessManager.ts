@@ -99,6 +99,25 @@ type KillProcessTree = (
   callback?: (error?: Error) => void
 ) => void;
 
+type KillProcessGroup = (pid: number, signal: NodeJS.Signals) => void;
+
+const liveProcessGroups = new Map<number, KillProcessGroup>();
+
+/** Synchronously stop detached children before this process exits. */
+export function killLiveProcessGroupsOnExit(): void {
+  for (const [pid, killProcessGroup] of liveProcessGroups) {
+    try {
+      killProcessGroup(-pid, PROCESS_SIGNALS.KILL);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+        // Exit hooks must continue cleaning up the remaining groups.
+      }
+    }
+  }
+}
+
+process.once("exit", killLiveProcessGroupsOnExit);
+
 /**
  * Manages CLI process spawning.
  *
@@ -129,7 +148,10 @@ export class CliProcessManager {
   constructor(
     private workspaceRoot: string,
     private logger?: (msg: string) => void,
-    private readonly killProcessTree?: KillProcessTree
+    private readonly killProcessTree?: KillProcessTree,
+    private readonly killProcessGroup: KillProcessGroup = (pid, signal) => {
+      process.kill(pid, signal);
+    }
   ) {}
 
   getLastSpawnedCommand(): string | undefined {
@@ -185,6 +207,9 @@ export class CliProcessManager {
 
       if (leadsProcessGroup) {
         this.processGroupLeaders.add(child);
+        if (child.pid !== undefined) {
+          liveProcessGroups.set(child.pid, this.killProcessGroup);
+        }
       }
       this.currentProcess = child;
 
@@ -242,6 +267,9 @@ export class CliProcessManager {
       // signal — otherwise a stale `currentProcess` survives the exit and the
       // SIGKILL escalation timer fires against an already-gone PID.
       const cleanupProcessState = () => {
+        if (leadsProcessGroup && child.pid !== undefined) {
+          liveProcessGroups.delete(child.pid);
+        }
         if (this.currentProcess === child) {
           this.currentProcess = undefined;
         }

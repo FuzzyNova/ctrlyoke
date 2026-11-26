@@ -1522,7 +1522,11 @@ async function runCommand(
   let interrupted = false;
   const triggerGracefulShutdown = installTwoStageShutdown({
     signals: process,
-    signalNames: [PROCESS_SIGNALS.INTERRUPT, PROCESS_SIGNALS.TERMINATE],
+    signalNames: [
+      PROCESS_SIGNALS.INTERRUPT,
+      PROCESS_SIGNALS.TERMINATE,
+      PROCESS_SIGNALS.HANGUP,
+    ],
     exit: process.exit,
     timers: defaultShutdownTimers,
     isInteractive: false,
