@@ -3867,7 +3867,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
             },
           ],
           preCondition: {
-            script: `node -e "process.stdout.write('0')" # {{unknownPreScript}}`,
+            script: `node -e "process.stdout.write('0')" # {{unknownPreScript}}\n# \`\`\`\n# {{unknownFencedScript}}\n# \`\`\``,
             env: { PRE_VALUE: "{{unknownPreEnv}}" },
             expected: "0",
           },
@@ -3926,6 +3926,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       assert.ok(diagnosticText.includes(field), `missing field ${field}`);
     }
     assert.ok(diagnosticText.includes('step 1 ("Document variables")'));
+    assert.ok(diagnosticText.includes("{{unknownFencedScript}}"));
     assert.strictEqual(
       variableAdvisories.some((diagnostic) =>
         isContextResolutionDiagnostic(diagnostic.code)

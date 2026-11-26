@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CLI unused-variable warnings now account for referenced prompt files, and runtime unresolved-variable warnings follow each field's fence substitution policy.
 - Node file watchers now report dotfile events, and single-file watches treat glob metacharacters literally.
 
 ### Changed

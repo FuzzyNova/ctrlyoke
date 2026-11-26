@@ -194,6 +194,18 @@ suite("VarSubstitutor Tests", () => {
       );
     });
 
+    test("uses the substitution fence policy for unresolved placeholders", () => {
+      const fenced = "```\n{{missing}}\n```";
+      assert.deepStrictEqual(
+        VarSubstitutor.findUnresolvedVariables(fenced, {}, false),
+        ["{{missing}}"]
+      );
+      assert.deepStrictEqual(
+        VarSubstitutor.findUnresolvedVariables(fenced, {}, true),
+        []
+      );
+    });
+
     test("leaves fenced placeholders untouched", () => {
       const text = "```\n{{resolved}} {{missing}}\n```";
       assert.strictEqual(

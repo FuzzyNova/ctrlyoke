@@ -1180,6 +1180,37 @@ suite("WorktreeManager", function () {
     await info.lease.release();
   });
 
+  test("reports unresolved setup variables inside fenced text", async () => {
+    const { parent, repository } = await makeRepository(
+      "setup-fenced-unresolved-variable"
+    );
+    const runner = new RecordingWorktreeSetupRunner({
+      success: true,
+      result: "",
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    });
+    const unresolved: string[][] = [];
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+    const info = await resolve(
+      instance,
+      repository,
+      "feature/setup-fenced-unresolved",
+      {
+        setup: "cat <<'MD'\n```\n{{unknown}}\n```\nMD",
+        reportUnresolvedVariables: (placeholders) =>
+          unresolved.push([...placeholders]),
+      }
+    );
+    assert.deepStrictEqual(unresolved, [["{{unknown}}"]]);
+    assert.match(runner.calls[0]!.command, /\{\{unknown\}\}/);
+    await info.lease.release();
+  });
+
   test("persists failed setup durably, leaves the directory, and throws", async () => {
     const { parent, repository } = await makeRepository("setup-failed");
     const updates: string[] = [];

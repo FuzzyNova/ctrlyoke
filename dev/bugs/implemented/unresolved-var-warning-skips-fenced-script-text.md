@@ -2,7 +2,8 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/VarSubstitutor.ts` (`findUnresolvedVariables`), `src/core/WorkflowExecutor.ts` (`reportUnresolvedVariables`), `src/core/orchestration/WorktreeManager.ts` (`runSetup`)
-- **Severity:** low
+
+**Resolution:** fixed in this commit
 
 ## Symptom
 

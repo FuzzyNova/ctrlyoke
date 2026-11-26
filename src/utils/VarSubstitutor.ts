@@ -249,10 +249,14 @@ export class VarSubstitutor {
    */
   static findUnresolvedVariables(
     text: string,
-    vars: Record<string, string>
+    vars: Record<string, string>,
+    fencedCodeProtected = true
   ): string[] {
     const found = new Set<string>();
-    for (const { from, to, name, inFence } of findVariablePlaceholders(text)) {
+    for (const { from, to, name, inFence } of findVariablePlaceholders(
+      text,
+      fencedCodeProtected
+    )) {
       if (inFence || isVariableDefined(vars, name)) continue;
       found.add(text.slice(from, to));
     }

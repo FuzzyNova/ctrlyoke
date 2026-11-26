@@ -326,6 +326,27 @@ suite("CLI dry-run process", () => {
     assert.match(result.stderr, /spare.*unused/);
   });
 
+  test("does not warn for a --var used only in a referenced prompt file", async function () {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-var-")
+    );
+    temporaryRoots.push(root);
+    const prompt = path.join(root, "review.prompt.md");
+    const workflow = path.join(root, "review.ctrlyoke.json");
+    await fs.writeFile(prompt, "Review {{target}} carefully.", "utf8");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({ steps: [{ prompt: "./review.prompt.md" }] }),
+      "utf8"
+    );
+    const result = await runCli(
+      ["run", workflow, "--dry-run", "--var", "target=lib", "--cwd", root],
+      root
+    );
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /target.*unused/);
+  });
+
   test("reports authored step limit violations in dry-run output and JSON", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(

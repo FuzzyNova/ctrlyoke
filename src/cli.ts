@@ -21,6 +21,7 @@ import {
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
   RUNNER_IDS,
+  PROMPT_FILE_RESOLUTION_STATUSES,
   WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
@@ -231,6 +232,7 @@ import {
   VarSubstitutionValidationError,
   VarSubstitutor,
 } from "./utils/VarSubstitutor";
+import { findVariablePlaceholders } from "./utils/VariablePlaceholders";
 import { confirmYesNo } from "./cli/CliConfirm";
 import {
   trustExternalRootsCommand as reviewExternalRootsCommand,
@@ -253,6 +255,7 @@ import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
 import { SettingsPropertyResolver } from "./utils/SettingsPropertyResolver";
+import { PromptFileResolver } from "./core/PromptFileResolver";
 import type { WorkflowExecutionPreview } from "./types/ExecutionPreviewTypes";
 import { repoToplevel } from "./utils/GitUtils";
 import {
@@ -1639,7 +1642,12 @@ async function runCommand(
       if (Object.keys(config.vars).length > 0) {
         const workflowFile = instance.promptQueue.getWorkflowFile();
         mergeCliVarsIntoWorkflow(workflowFile, config.vars);
-        warnUnusedCliVariables(workflowFile, config.vars);
+        await warnUnusedCliVariables(
+          workflowFile,
+          config.vars,
+          resolvedFile,
+          platform
+        );
         instance.promptQueue.updateWorkflowProperty("vars", workflowFile.vars);
         await instance.promptQueue.updateWorkingFile(true);
       }
@@ -1881,14 +1889,61 @@ function handleSecretCommand(
     });
 }
 
-function warnUnusedCliVariables(
+async function warnUnusedCliVariables(
   workflow: PromptFile,
-  vars: Record<string, string>
-): void {
+  vars: Record<string, string>,
+  sourceDefinitionPath: string | undefined,
+  platform: NodePlatformAdapter
+): Promise<void> {
   if (Object.keys(vars).length === 0) return;
-  const authored = JSON.stringify(workflow);
+  const texts: string[] = [];
+  const collectTexts = (value: unknown): void => {
+    if (typeof value === "string") texts.push(value);
+    else if (Array.isArray(value)) value.forEach(collectTexts);
+    else if (value && typeof value === "object") {
+      Object.values(value).forEach(collectTexts);
+    }
+  };
+  collectTexts(workflow);
+  if (sourceDefinitionPath) {
+    const resolver = new PromptFileResolver({
+      workspaceRoot: platform.getWorkspaceRoot(),
+      namedRoots: platform.getNamedWorkspaceRoots(),
+      trustedRoots: platform.getWorkspaceRoots(),
+      approvedExternalRoots: platform.getApprovedExternalFileRoots(
+        platform.getWorkspaceRoot()
+      ),
+    });
+    const resolvePromptReferences = async (value: unknown): Promise<void> => {
+      if (typeof value === "string") {
+        if (!resolver.looksLikePromptFilePath(value)) return;
+        const resolved = await resolver.resolve(value, sourceDefinitionPath);
+        if (resolved.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+          texts.push(resolved.content);
+        }
+      } else if (Array.isArray(value)) {
+        await Promise.all(value.map(resolvePromptReferences));
+      } else if (value && typeof value === "object") {
+        await Promise.all(Object.values(value).map(resolvePromptReferences));
+      }
+    };
+    await resolvePromptReferences(workflow);
+  }
+  // Workflow loading resolves referenced prompt files into their text before
+  // this check. Include the same effective settings defaults used by execution.
+  collectTexts(SettingsPropertyResolver.createContext().defaults);
+  collectTexts({
+    endCondition: ConfigurationUtils.getDefaultEndCondition(),
+    preCondition: ConfigurationUtils.getDefaultPreCondition(),
+    worktree: ConfigurationUtils.getDefaultWorktree(),
+  });
+  const referenced = new Set(
+    texts.flatMap((text) =>
+      findVariablePlaceholders(text).map(({ name }) => name)
+    )
+  );
   for (const name of Object.keys(vars)) {
-    if (!authored.includes(`{{${name}}}`)) {
+    if (!referenced.has(name)) {
       console.error(
         `Warning: --var ${name}=... is unused; no workflow field references {{${name}}}.`
       );
@@ -2065,7 +2120,7 @@ async function dryRunCommand(
     }
 
     mergeCliVarsIntoWorkflow(workflow, config.vars);
-    warnUnusedCliVariables(workflow, config.vars);
+    await warnUnusedCliVariables(workflow, config.vars, resolvedFile, platform);
     const runStartView = VarSubstitutor.substituteWorkflowView(
       workflow,
       workflow.vars ?? {},

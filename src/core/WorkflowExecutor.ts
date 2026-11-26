@@ -5528,9 +5528,11 @@ export class WorkflowExecutor {
     const findings = fields.flatMap(({ field, value }) =>
       value === undefined
         ? []
-        : VarSubstitutor.findUnresolvedVariables(value, vars).map(
-            (placeholder) => ({ field, placeholder })
-          )
+        : VarSubstitutor.findUnresolvedVariables(
+            value,
+            vars,
+            /prompt text/i.test(field)
+          ).map((placeholder) => ({ field, placeholder }))
     );
     if (findings.length === 0) {
       return;
