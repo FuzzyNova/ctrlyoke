@@ -175,6 +175,11 @@ export class WorkflowLineageRepository {
     workflowKey: WorkflowKey
   ): Promise<void> {
     const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+    assertWritableSchema(
+      PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+      descriptor,
+      WorkflowPaths.descriptorPath(workspaceRoot, workflowKey)
+    );
     if (descriptor.workflowKey !== workflowKey || descriptor.latestRunRef) {
       throw new Error(
         `Refusing to remove published lineage "${workflowKey}" during rollback`
@@ -279,6 +284,11 @@ export class WorkflowLineageRepository {
 
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      assertWritableSchema(
+        PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+        descriptor,
+        descriptorPath
+      );
       if (expectedDescriptorRevision !== undefined) {
         assertDescriptorRevision(
           expectedDescriptorRevision,
@@ -393,6 +403,11 @@ export class WorkflowLineageRepository {
     );
     await withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      assertWritableSchema(
+        PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+        descriptor,
+        descriptorPath
+      );
       if (descriptor.revision !== allocation.reservationDescriptorRevision) {
         throw new Error(
           `Descriptor revision conflict while publishing run: expected ${allocation.reservationDescriptorRevision}, found ${descriptor.revision}`
@@ -618,6 +633,11 @@ export class WorkflowLineageRepository {
     );
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      assertWritableSchema(
+        PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+        descriptor,
+        descriptorPath
+      );
       const updated: WorkflowLineageDescriptor = {
         ...mutate(descriptor),
         lastModifiedAt: Date.now(),
@@ -640,6 +660,11 @@ export class WorkflowLineageRepository {
     );
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      assertWritableSchema(
+        PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+        descriptor,
+        descriptorPath
+      );
       const updated: WorkflowLineageDescriptor = {
         ...mutate(descriptor),
         lastModifiedAt: Date.now(),
@@ -670,6 +695,11 @@ export class WorkflowLineageRepository {
     );
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      assertWritableSchema(
+        PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+        descriptor,
+        descriptorPath
+      );
       assertDescriptorRevision(expectedRevision, descriptor.revision);
       const result = await mutate(descriptor);
       const updated = {

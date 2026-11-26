@@ -499,6 +499,14 @@ async function restoreSnapshotAtomic(
   workingFilePath: string,
   content: Buffer
 ): Promise<void> {
+  const current = JSON.parse(
+    await fs.readFile(workingFilePath, "utf8")
+  ) as WorkingFile;
+  assertWritableSchema(
+    PERSISTED_STORES.RUN_FILE,
+    current._runtime,
+    workingFilePath
+  );
   try {
     await writeFileAtomic(
       workingFilePath,

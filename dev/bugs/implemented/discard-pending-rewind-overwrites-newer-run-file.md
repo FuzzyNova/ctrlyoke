@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (subagent code review, reproduced)
 - **Area:** `src/core/WorkingFileManager.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
