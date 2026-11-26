@@ -662,7 +662,9 @@ export class CtrlYokeConfigService {
    * itself is their own choice, so record it as allowed. Only values that
    * were not already requested are approved: an unapproved value committed
    * to the file by someone else stays pending even if this write touched the
-   * same setting.
+   * same setting. A write inside a whole-value setting (the dashboard edits
+   * `defaults.toolPermissions.mode`, not the whole object) approves the new
+   * whole value only when the value it replaced was already allowed or absent.
    */
   private async approveNewWorkspaceSensitiveValues(
     before: readonly WorkspaceSensitiveSettingRequest[],
@@ -685,7 +687,11 @@ export class CtrlYokeConfigService {
             (writeIsInsideWholeValue &&
               !before.some(
                 (previous) =>
-                  previous.settingPath === request.settingPath
+                  previous.settingPath === request.settingPath &&
+                  this.workspaceSettingsTrust.getDecision(
+                    identity,
+                    previous
+                  ) !== TRUST_DECISIONS.ALLOW
               )))
         );
       }

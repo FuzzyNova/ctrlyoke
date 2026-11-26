@@ -1012,6 +1012,31 @@ suite("CtrlYokeConfigService workspace sensitive settings", () => {
     );
   });
 
+  test("approves every later sub-path write over a value the user already approved", async () => {
+    const settingsFile = path.join(tempDir, ".ctrlyoke", "settings.json");
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    service.setWorkspaceBackend(new FileConfigBackend(settingsFile, tempDir));
+
+    await service.set(
+      "defaults.toolPermissions.mode",
+      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+      "workspace"
+    );
+    await service.set(
+      "defaults.toolPermissions.allowedTools",
+      ["Bash"],
+      "workspace"
+    );
+
+    const [state] = service.getWorkspaceSensitiveSettingStates();
+    assert.strictEqual(state?.request.settingPath, "defaults.toolPermissions");
+    assert.strictEqual(state?.decision, "allow");
+    assert.deepStrictEqual(
+      service.getAll().defaults.toolPermissions?.allowedTools,
+      ["Bash"]
+    );
+  });
+
   test("keeps an externally committed whole-value request pending after a sub-path write", async () => {
     service.setUserBackend(
       makeBackend({
