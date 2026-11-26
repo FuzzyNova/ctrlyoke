@@ -1,9 +1,10 @@
 # Workflow Step Plan
 
-## Status (2026-11-02)
+## Status (2026-11-26)
 
-**Partial: the prerequisites and the step-kind-agnostic prior-context work shipped; the
-sub-workflow step itself has not started.**
+**Ready to implement. The prerequisites and the step-kind-agnostic prior-context work shipped;
+the sub-workflow step itself has not started. Every open question is settled (see
+[Revision 5](#revision-5-decisions)).**
 
 Shipped:
 
@@ -18,27 +19,37 @@ Shipped:
   `PRIOR_CONTEXT_SUMMARY_SEGMENT`), `priorContextDetail: full | summary` is in the schema and
   `CtrlYokeTypes.ts`, `summarizePriorContextItem` (`HarnessIntegration.ts`) applies
   `PRIOR_CONTEXT_LIMITS` (`DashboardConstants.ts`; `SUMMARY_BUDGET_BYTES: 409600` already
-  caps all the summary steps in one prompt, earliest omitted whole first), and the editor, completions,
-  diagnostics, renumbering (`src/core/StepReferenceShifts.ts`) and docs support it.
+  caps all the summary steps in one prompt), and the editor, completions,
+  diagnostics, renumbering (`src/core/StepReferenceShifts.ts`) and docs support it. Since
+  `5dbca60d7` the budget omits by chronology, not position: imported-run items first, then queue
+  steps before `finalStep` passes, then ascending index; the last summary is never omitted, and an
+  omitted step renders `<step … omitted="all" omittedBytes="N"/>`
+  (`PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL`).
+- **The single-source `isScriptStep` guard** (`eba32a7db`): every script check now goes through
+  `isScriptStep` in `CtrlYokeTypes.ts`, which makes Phase 0 a mechanical pass.
+- **Run-start and dispatch value substitution** (`9466bb930`, `1f7f44ea6`, `69f06af66`): a
+  table-driven whitelist (`VAR_SUBSTITUTION_POLICY`, `src/utils/VarSubstitutionPolicy.ts`). It
+  affects D11 and D13; see [Revision 5](#revision-5-decisions).
+- **MCP condition-preset discovery** (`b318c17f5`, `425793e02`): `workflow_status` reports
+  `metadata.conditionPresets`, `append_step` warns about ungated sequential steps, and presets
+  resolve by own property only (`getDeclaredConditionPreset`, `src/utils/McpConditionPresetResolver.ts`).
+  D14's `worktreePresets` copies all three.
 
 Not shipped (everything else in this plan): `STEP_TYPES.WORKFLOW`, `subWorkflowStep`, Phase 0's
 `getStepType`/`isPromptStep`, `SubWorkflowHost`/`SubWorkflowLauncher`, the D4 worktree and lease
-rules, D6/D7 reattach and `parentRun`, the workflow arm of D12a (`subWorkflowOutput`), D12c's
+rules, D6/D7 reattach and `parentRun`, the workflow arm of D12a (`SubWorkflowOutput` + the `subWorkflowSettled` event), D12c's
 `run` argument on MCP `read_output`/`workflow_status` (`McpReadOutputArguments` in
 `src/utils/McpToolDefinitions.ts` still has only `indices`/`cursor`/`limit`/`tail`; an earlier
 status note claiming it shipped was wrong), parallel members, entry points, dashboard, CLI, and
 Revision 4's inline definitions (D13), agent lanes and `worktreePresets` (D14), and sibling merge
 wait (D4d).
 
-Line numbers cited below were verified on 2026-10-10 and have drifted since (for example
-`STEP_TYPES` is now at `DashboardConstants.ts:3792`, `executeScriptStep` at
-`WorkflowExecutor.ts:2641`, `appendFromFile` at `WorkflowInstance.ts:2607`,
-`appendFromFileForClient` at `WorkflowOrchestrator.ts:2093`); treat them as pointers and
-re-locate by symbol. Every symbol named below was re-checked on 2026-10-26 and still exists
-unless noted.
+Line numbers were re-verified on 2026-11-26 wherever this revision touched a passage, and are
+otherwise pointers; re-locate by symbol. Every symbol and path named below was re-checked on
+2026-11-26 and still exists unless noted.
 
-Last reviewed against code: 2026-11-02 (Revision 4: the isolated-lanes case, plus corrections to
-D1, D2, D5, the ad-hoc fan-out path, the preflight code table, and the MCP section).
+Last reviewed against code: 2026-11-26 (Revision 5: open questions answered, corrections from
+851 commits of drift, and the decisions summarized under [Revision 5](#revision-5-decisions)).
 
 ## Overview
 
@@ -57,11 +68,14 @@ There is no navigation stack, breadcrumb bar, or auto-navigation. The child is a
 registered instance, so it appears in `WorkflowSwitcher.tsx`'s dropdown like any other running
 workflow. The parent step row gets a link to the child run.
 
-ctrlyoke is released (0.2.0). Everything here is additive: a new `workflowStep` arm and new
-`_runtime`/manifest fields need `npm run schema:update` but no `schema:bump`, a new optional
-`parentRun` manifest field is read-compatible, and the MCP `run` argument and `appendMode`
-message field are optional additions. Record the user-visible additions under **Changed** /
-**Added** in `CHANGELOG.md`.
+ctrlyoke is released (latest tag `v0.10.0`). Everything here is additive: a new `workflowStep`
+arm and new `_runtime`/manifest fields need `npm run schema:update` but no `schema:bump`. A new
+optional `parentRun` manifest field is read-compatible: `WorkflowRunManifest` reads go through
+`migrateToCurrent` with no key whitelist, the same way `activeExecutionMs` was added. A new
+`subWorkflowSettled` timeline event needs no timeline bump (R3). The new lease fields are
+optional, and lease files carry no `schemaVersion`. The MCP `run` argument and the `appendMode`
+message field are optional additions. Record the user-visible additions under `## [Unreleased]`
+in `CHANGELOG.md`.
 
 > **Revision 2026-10-09.** Reviewed against the current codebase. Changes from the previous draft:
 > schema refs moved to `$defs`; file paths and method names corrected; child launch redesigned
@@ -109,6 +123,32 @@ message field are optional additions. Record the user-visible additions under **
 > The landing order now ships lanes for a parent on the main checkout as their own slice, right
 > after the sequential core, instead of behind the full nested-worktree rules. The revision also
 > records why a step-level `worktree` was rejected.
+>
+> **Revision 5 (2026-11-26).** Re-verified against the code after 851 commits. Every "verify
+> during implementation" and "settle later" item now has an answer, listed below, and the
+> passages they came from are updated in place.
+
+## Revision 5 decisions
+
+Each item names the question, what the code says today, and the decision.
+
+| #   | Question                                                                                         | What the code says (2026-11-26)                                                                                                                                                                                                                                                                                                  | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Ship D4a + D4d rule 1 with the sequential core, or fail worktree parents until step 3?           | A worktree parent holds an `exclusive-worktree` lease, and `isCompatible` (`ExecutionRootLeaseManager.ts:157`) allows only shared-native + shared-native, so an inheriting child conflicts.                                                                                                                                      | **Ship them with step 2.** The plan's own headline example ([YAML Authoring UX](#yaml-authoring-ux): a managed parent with an inheriting test child) and queue-after-running on a managed run both need it. Without it, step 2 errors on the most common worktree case. About 1 day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| R2  | How does the launcher tell "failed to start" from "failed"?                                      | `executeLoadedPromptFile` never throws on startup problems. A failed preflight calls `failRuntime()`, and other startup errors go to `finalizeFailure` (`WorkflowStartupPipeline.ts:384-394`, `:707-709`, `:774`), so the state ends **ERROR**, not IDLE as earlier revisions said.                                              | `done` maps ERROR to a failed result either way. The launcher sets `SubWorkflowResult.failedToStart: true` when no child step ever reached RUNNING, which only changes the message ("Sub-workflow could not start: …"). Both go through `onFail` (D9).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| R3  | Name of the D12a timeline event, and is it a timeline schema bump?                               | There is no `scriptOutput` event: scripts record `scriptExecutionRecorded` (`TIMELINE_EVENT_TYPES`, `WorkflowTimelineTypes.ts:43-68`). Local readers' switches ignore unknown types. `RunBundleReader.ts:398-405` rejects a bundle containing an unknown type ("is not a recognized timeline event").                            | **`subWorkflowSettled`** (`TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED`), carrying a `SubWorkflowOutput` payload. **No bump.** An older ctrlyoke importing a bundle with the event fails closed with a clear error, which is the correct behaviour. A bump would make _every_ run a newer ctrlyoke writes read-only to older versions, sub-workflow or not. Record the bundle limitation in the CHANGELOG entry.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| R4  | Timeout for the D4d sibling merge-lease wait?                                                    | `acquire` never waits: it throws `ExecutionLeaseConflictError` at once (`:264-273`), and its `retry` makes one more attempt. `mergeManagedWorktree` turns _any_ acquire error into `blocked` (`WorktreeManager.ts:1043-1047`). `execution.scriptTimeoutSec` defaults to 3600 s and means "how long a script may run".            | **Don't reuse `scriptTimeoutSec`.** Add `WORKTREE_MERGE_LEASE_WAIT_MS = 120_000` to `DashboardConstants.ts`. The wait loop lives in `mergeManagedWorktree`, not the lease manager, so every other caller keeps fail-fast. It calls `error.retry()` with backoff (250 ms, doubling, capped at 2 s) only while the sole conflict is a `purpose: "merge"` lease with the same immediate delegator. A sibling holds that lease only for the guard plus `git merge`, which takes seconds.                                                                                                                                                                                                                                                                                                                                                                        |
+| R5  | Is `supportsConcurrentInteractiveSessions` per instance or host-wide?                            | Neither. It is a static per-host boolean: VS Code passes `true`, and the CLI always passes `false` (`src/cli/CliExecutionMode.ts:28`). `INTERACTIVE_MULTIPLEX` (`ParallelGroupPreflight.ts:337-356`) applies it only between members of **one group**, and never counts live sessions in other instances.                        | A sub-workflow member counts as non-interactive in the parent's group (as planned). New: in the **CLI**, concurrent children would be separate instances in one process, each believing it owns the single TTY. `SubWorkflowLaunchRequest` gains `concurrent: boolean` (true for parallel members), and the CLI factory builds concurrent children with `hostCanProvidePty: false`, so their steps run headless. Sequential CLI children keep the CLI's TTY resolution. VS Code needs no change.                                                                                                                                                                                                                                                                                                                                                            |
+| R6  | Does `ctrlyoke history show` find child runs when invoked from inside a managed worktree?        | No. `bootstrapCliWorkspace` (`CliWorkspaceBootstrap.ts:55`) takes the cwd, and `projectKey` (`ProjectStatePaths.ts:90`) hashes its realpath, so a worktree cwd is a **different, empty project**. That matches the documented VS Code rule that opening a worktree directly gets its own history, so it is by design, not a bug. | The in-agent path is MCP `read_output { run }` (D12c), and the truncation markers name that call. The authoring guide's CLI example always passes `-d <main checkout>`. No CLI change.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| R7  | Does `ctrlyoke step add` (`SCRIPT_GENERATED_STEPS_PLAN.md`) accept `type: workflow`?             | That plan validates against `workflowStep` and appends through `RunContinuationService.appendStepsToRun`, "exactly as MCP does".                                                                                                                                                                                                 | **Yes, the full `subWorkflowStep`** (file and inline), with no extra work once Phase 0 converts `assertStepHasRequiredContent`. It is author-side (a script the author wrote), so D14's MCP restriction doesn't apply.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| R8  | Does the root `allOf` / `if not _templateMeta` block reject the new kind?                        | No. It only adds `harness`/`_runtime.harness` constraints (`workflow-schema.json:13-103`). Rejection today comes from `workflowStep.allOf[0].oneOf` (`:925-932`) plus `unevaluatedProperties: false` (`:953`).                                                                                                                   | Add the arm to `workflowStep.allOf[0].oneOf` only. The harness block stays untouched, because a workflow step has no harness.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| R9  | Which workflow-only keys does `rootWorkflowStep` accept?                                         | `rootScriptStep` (`:553-642`) has its own `unevaluatedProperties: false` and lists `worktree`, `vars`, `trustedExternalRoots` and `maxSteps`, but not `conditions`.                                                                                                                                                              | Mirror `rootScriptStep` exactly. A root workflow file has no AI step of its own, so no agent is attached to it that could use `conditions` or `worktreePresets` (agents attach to the child).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| R10 | How do `{{var}}` placeholders interact with the new step now that run-start substitution exists? | Substitution is a whitelist (`VAR_SUBSTITUTION_POLICY`, `VarSubstitutionPolicy.ts:163`), and `VarSubstitutionPolicy.test.ts` requires every schema location that accepts a placeholder to have an entry or an exclusion. `conditions` is excluded as an author-only contract (`VAR_SUBSTITUTION_EXCLUDED_FIELDS`, `:457`).       | (a) A `workflow` **path** is not substituted (D11): no policy entry, and no `varPlaceholder` arm in the schema. (b) The **inline** object (`steps[].workflow`, `finalStep.workflow`, parallel members) joins `VAR_SUBSTITUTION_EXCLUDED_FIELDS`, with the reason "substituted by the child run after materialization". D13 copies the parent's _effective_ vars (after host `--var` overrides) into the child root, so the child's own run-start and dispatch substitution resolves the same values a parent step would get. (c) `worktreePresets` is excluded like `conditions`. A preset's `base`/`setup` are substituted by the child at run start, once it is copied into the child's root `worktree`. (d) `onFail` reuses `scriptStep.onFail`'s schema, including its `varPlaceholder` arm, so the existing `steps[].onFail` dispatch entry covers it. |
+| R11 | Does `PREVIEW_STEP_TYPES` get `WORKFLOW`?                                                        | `PREVIEW_STEP_TYPES` (`DashboardConstants.ts:2065`) is `{ PROMPT, SCRIPT }`.                                                                                                                                                                                                                                                     | **Yes**, because the preview renders a "Runs _<file>_" entry ([Execution preview](#execution-preview)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| R12 | Should the new Large Spec Loop template (`47007a675`) get lanes too?                             | `large-spec-loop.ctrlyoke.yaml` is a finalStep-only loop that appends rounds of sequential steps; it never authors parallel steps.                                                                                                                                                                                               | **Not in v1.** Only `spec-driven-loop` declares `worktreePresets.lane`. Adding lanes to the large loop is a follow-up once lanes are proven in the smaller template.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| R13 | Where does `spec-driven-loop`'s `laneSetup` variable live?                                       | The template has no root `vars:`. Its variables are `_templateMeta.variables` entries (`:5`), used as `{placeholder}`. An empty `setup` is already "no setup" (`WorktreeManager.ts`, `options.setup?.trim()`).                                                                                                                   | `laneSetup` is a `_templateMeta.variables` text entry, default `npm ci`, substituted at template instantiation. Left blank, it renders `setup: ""`, which needs no special case.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| R14 | Agents queuing lanes on a **paused** worktree parent.                                            | Open bug [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/backlog/mcp-queue-mutations-refused-on-paused-worktree-run.md): MCP appends are refused on a paused run that keeps its runner lock, which worktree runs do.                                                                                              | Not a blocker for step 3, because the parent is on the main checkout. Fix it before step 4 (worktree parents), or as part of it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| R15 | Does `getValidKeysAtPointer` need a change for the root arm?                                     | Partly. Unknown-key warnings use `defs.singleStepRoot` (`PromptFileParser.ts:694`) and pick up the new arm. Suggestion candidates hard-code `type === script ? oneOf[1] : oneOf[0]` (`:684-692`).                                                                                                                                | Replace that ternary with a lookup keyed by step type, so `type: workflow` gets `oneOf[2]`. This corrects the earlier "no change" claim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
 
@@ -235,33 +275,36 @@ These were the open or wrong points in the previous draft. Each is settled here 
 
 - `WorkflowExecutor` has no orchestrator reference.
 - The CLI (`src/cli.ts`) builds exactly one `WorkflowInstance` and has no orchestrator at all.
-- `WorkflowInstanceRegistry.createWorkflow(filePath)` (`WorkflowInstanceRegistry.ts:225`)
-  returns the _existing_ instance when one for the same file is RUNNING/PAUSING/PAUSED. It also
-  disposes the panel's idle viewed instance and steals panel focus. All three behaviours are
-  wrong for a child.
+- `WorkflowInstanceRegistry.createWorkflow(filePath)` (`WorkflowInstanceRegistry.ts:217`)
+  returns the _existing_ instance when one for the same file is RUNNING/PAUSING/PAUSED
+  (`isExecutionOwnerState`). It also disposes the panel's retired or idle viewed instance and
+  steals panel focus. All three behaviours are wrong for a child.
 
 **Decision:** add an optional `subWorkflowHost?: SubWorkflowHost` port to
-`WorkflowExecutionContext` (`src/core/WorkflowExecutor.ts:187`). There is one shared
+`WorkflowExecutionContext` (`src/core/WorkflowExecutor.ts:217`). There is one shared
 implementation, `SubWorkflowLauncher` in `src/core/orchestration/`, constructed with a
-`createInstance: () => WorkflowInstance` factory:
+`createInstance: (options: { concurrent: boolean }) => WorkflowInstance` factory:
 
 - **VS Code and the hosted server:** `() => orchestrator.createExternalWorkflowInstance()`
-  (`WorkflowInstanceRegistry.ts:218`). This is the same path `CommitMessageGenerator` uses
-  (wired in `extension.ts:1614`). The
-  instance is registered and announced to the dashboard, so it gets a dropdown row without
-  changes to the dropdown.
-- **CLI:** a factory that builds `new WorkflowInstance(...)` with the CLI's existing
-  dependencies.
+  (`WorkflowInstanceRegistry.ts:210`, forwarded by `WorkflowOrchestrator.ts:976`). This is the
+  same path `CommitMessageGenerator` uses: `extension.ts:1718` hands it to `ScmCommitCommand` as
+  `createWorkflowInstance`. The instance is registered and announced to the dashboard, so it gets
+  a dropdown row without changes to the dropdown.
+- **CLI:** `runCommand` (`src/cli.ts:1010`) builds its one instance at `:1292`, with no
+  orchestrator and no dashboard sink. Extract that construction into a helper, so the launcher's
+  factory builds sibling instances with the same dependencies. Concurrent children get
+  `hostCanProvidePty: false` (R5).
 
 The launcher follows `CommitMessageGenerator`'s pattern: create the instance, load the
 definition, `await instance.executeLoadedPromptFile(...)`, then read `promptQueue.getState()` for
 the outcome. (The commit generator itself loads a prompt string through `loadPromptStringAsRun`
 and gets its instance from `ScmCommitCommand`'s `createWorkflowInstance` factory. The launcher
 loads a file through `loadPromptFile`, or an inline definition through `loadFromMemory`; see D13.)
-`executeLoadedPromptFile` can return without throwing on preflight problems, with the state still
-IDLE, so the launcher must classify the outcome from queue state, not from "it returned". The
-launcher captures the result before the registry retires and disposes the finished child
-(`WorkflowInstanceRegistry.ts:691-701`).
+`executeLoadedPromptFile` (`WorkflowInstance.ts:2507`) never throws on startup problems: a failed
+preflight calls `failRuntime()` and other startup errors go to `finalizeFailure`, so the state ends
+ERROR (R2). The launcher must therefore classify the outcome from queue state, not from "it
+returned". The launcher captures the result before the registry retires and disposes the
+finished child (`retireWorkflow`, `WorkflowInstanceRegistry.ts:311`).
 
 ```typescript
 interface SubWorkflowHost {
@@ -282,6 +325,8 @@ interface SubWorkflowLaunchRequest {
   /** Set when resuming a parent whose step already started a child (D6). */
   resumeChildRun?: { workflowKey: WorkflowKey; runRef: RunRef };
   ancestorPaths: readonly string[];
+  /** True for a parallel member; the CLI factory then builds a headless-only child (R5). */
+  concurrent: boolean;
 }
 
 interface SubWorkflowParentLink {
@@ -305,8 +350,10 @@ interface SubWorkflowResult {
   status: PromptTerminalStatus; // COMPLETED | FAILED | CANCELLED
   /** For CANCELLED: whether the parent requested it via handle.stop(), or the child was stopped directly. */
   cancelledBy?: "parent" | "child";
+  /** FAILED before any child step reached RUNNING (preflight, load or validation); only changes the message (R2). */
+  failedToStart?: boolean;
   failureMessage?: string;
-  /** Projected from the child's `_runtime.worktree`; feeds D4e and the D12 `subWorkflowOutput` metadata. */
+  /** Projected from the child's `_runtime.worktree`; feeds D4e and the D12 `SubWorkflowOutput` metadata. */
   worktree?: Pick<
     WorkingFileWorktreeRuntime,
     | "mode"
@@ -322,18 +369,18 @@ interface SubWorkflowResult {
 ```
 
 The context is assembled in one place, `WorkflowStartupPipeline.buildWorkflowExecutionContext`
-(`src/core/orchestration/WorkflowStartupPipeline.ts:429`), from ports `WorkflowInstance`
-supplies (`createWorkflowStartupContextPort`, `WorkflowInstance.ts:1986`). The host is passed
+(`src/core/orchestration/WorkflowStartupPipeline.ts:500`), from ports `WorkflowInstance`
+supplies (`createWorkflowStartupContextPort`, `WorkflowInstance.ts:2174`). The host is passed
 to `WorkflowInstance` and threaded through that port, so it is the one place the port gets
 plumbed in. A missing host is a configuration error: the step fails with
 "Sub-workflow steps are not supported in this host".
 
 ### D2. Stop: forward through the step's cancel resource, and propagate up through the outcome
 
-`WorkflowInstance.stop()` cancels each entry in `activeTargetResources`: it cancels process
-runners, kills PTY sessions, and collects integrations. When **no entry has an `integration`**
-(not only when no entry exists), it falls back to the detector integration and waits up to 10 s
-for it. A step blocked on a child has no integration, PTY, or process runner. So the sub-workflow
+`WorkflowInstance.stop()` (`WorkflowInstance.ts:2786`) cancels each entry in
+`activeTargetResources`: it cancels process runners, kills PTY sessions, and collects
+integrations. When **no entry has an `integration`** (not only when no entry exists), it falls
+back to `getDetectorIntegration()` and waits up to 10 s for it (`:2878`, `:2918`). A step blocked on a child has no integration, PTY, or process runner. So the sub-workflow
 step registers a `subWorkflow` handle on its entry, `stop()` calls `handle.stop()` for it, and
 the detector fallback runs only when no entry carries an integration **or** a `subWorkflow`
 handle. Otherwise stopping a parent blocked on a child would always wait out the 10 s timeout.
@@ -348,7 +395,7 @@ handle. Otherwise stopping a parent blocked on a child would always wait out the
 
 The previous draft mirrored the child's `executionState` onto the parent. That means writing
 into another instance's `WorkflowStateMachine` from outside. Resume would also break, because
-`WorkflowInstance.resume()` (`:2326`) restarts execution through `startWorkflowExecution` while
+`WorkflowInstance.resume()` (`:2606`) restarts execution through `startWorkflowExecution` while
 the old executor is still awaiting the child, leaving two executors on one run.
 
 ctrlyoke's pause already means "pause at the next step boundary": a long AI step keeps running
@@ -358,8 +405,8 @@ while the instance sits in PAUSING. A sub-workflow step is just a long step, so:
   active child through the handle. The child pauses at _its_ next step boundary and shows PAUSED
   in its own row. The parent stays PAUSING, which is accurate: it will pause when its current
   step, the child run, finishes.
-- **Cancel the pause on the parent** (resume while PAUSING; `cancelPauseAtRun` already exists) →
-  forwarded as `cancelPause()`/resume to the child.
+- **Cancel the pause on the parent** (resume while PAUSING; `WorkflowInstance.cancelPause()`,
+  `:2595`, already exists) → forwarded as `cancelPause()`/resume to the child.
 - **Pause or resume the child directly** → nothing is propagated to the parent. The parent stays
   RUNNING, and its step row shows the child's live state ("Sub-workflow paused"), so the dashboard
   stays accurate without touching the parent's state machine.
@@ -390,8 +437,11 @@ it is a worktree), so the inheriting child needs a **delegated lease** (D4d).
 
 **D4b. Source checkout = the parent's execution checkout.** `SubWorkflowLaunchRequest` carries
 the parent's execution checkout root. The child's `WorktreeManager` call uses it as
-`sourceCheckoutRoot`, instead of `this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()`
-(`WorkflowInstance.ts:4364-4365`; `WorktreeManager` then normalizes it with `repoToplevel`).
+`sourceCheckoutRoot`, instead of `getStateRoot()` (`WorkflowInstance.ts:1502`, which returns
+`this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()`; used as `sourceCheckoutRoot` at
+`:5019`). `WorktreeManager` then normalizes it with `repoToplevel` (`requireRepositoryRoot`,
+`WorktreeManager.ts:3668`). Keep `getStateRoot()` itself unchanged for the child, because history
+stays under the initiating checkout's state root.
 That gives:
 
 - `base` defaults to the parent's current `HEAD`;
@@ -400,8 +450,13 @@ That gives:
 
 Nested fan-out recurses: a grandchild branches from and merges into its parent's worktree,
 which later merges into the root. Resolve the **worktrees root directory** from the
-repository's main checkout, not from the source checkout. Otherwise children of a worktree
-parent end up in a nested `<parent-wt>.worktrees/` folder.
+repository's main checkout, not from the source checkout. Today `resolveWorktreeRootFor`
+(`WorktreeManager.ts:625`) passes the source checkout to `resolveWorktreeRoot`
+(`src/utils/WorktreeUtils.ts:354`), whose fallback is `<dirname(source)>/<basename(source)>.worktrees`.
+Children of a worktree parent would therefore land in a nested `<parent-wt>.worktrees/` folder.
+Resolve the main checkout as the parent directory of `git rev-parse --git-common-dir` (already
+used by `ExecutionRootScope`), and pass that to `resolveWorktreeRoot`. An explicit `worktrees.root`
+setting still wins. A top-level run resolves the same as today, so this needs only step 4.
 
 **D4c. Uncommitted parent work before a worktree child starts.** A new worktree branches from
 a commit, so uncommitted changes in the parent's checkout would silently be missing from the
@@ -419,16 +474,17 @@ base, check the parent's execution checkout:
 
 **D4d. Leases.** `ExecutionLeaseRequest` and the persisted `ExecutionLease` gain
 `delegationChain?: string[]`: the owner tokens of every blocked ancestor, root first.
-`isCompatible` (`ExecutionRootLeaseManager.ts:163`, which today compares only the two
-`ExecutionLeaseMode`s and so must receive the request and existing lease) additionally allows:
+`isCompatible` (`ExecutionRootLeaseManager.ts:157-165`) today compares only the two modes
+(`shared-native`, `exclusive-worktree`) and returns true only for two shared-native leases. It must
+instead receive the request and the existing lease, and it additionally allows:
 
 1. An existing lease whose `ownerToken` is in the request's chain. The ancestor is blocked
    waiting on this child.
 2. Two delegated leases with the same immediate delegator. These are siblings inheriting one
    root, the same sharing parallel prompt members already have.
 
-A **merge lease** from a child (`mergeManagedWorktree`, `WorktreeManager.ts:877`; the
-source-lease acquire is at `:902-912`) carries
+A **merge lease** from a child (`mergeManagedWorktree`, `WorktreeManager.ts:1004`; the
+source-lease acquire is at `:1034-1042`) carries
 the chain too, so the blocked parent's own lease (shared-native on main, or exclusive on a
 worktree) no longer turns `merge: true` into `blocked`. Rule 2 deliberately does **not** apply
 to merge leases. A merge into a checkout where an inheriting sibling is still editing stays
@@ -438,13 +494,15 @@ blocked, and D8's preflight rejects that combination up front.
 `leaseManager.acquire({ mode: "exclusive-worktree", … })` attempt on the source checkout and
 turns any conflict into `mergeOutcome: "blocked"`. Two isolated lanes that settle seconds apart,
 both with `merge: true`, would leave the later one `blocked` even though nothing is wrong. A merge
-lease request that carries a delegation chain therefore **waits**, with a bounded timeout (the
-`execution.scriptTimeoutSec` default is a reasonable reuse), when the only conflicting live lease
-is another merge lease with the same immediate delegator. Merge leases are ordinary
-`exclusive-worktree` leases today, so `ExecutionLease` also gains an optional
-`purpose: "merge"` to tell them apart from an editing lease. The waiter retries through
-`ExecutionLeaseConflictError.retry`, which already exists. Each waiter re-runs the merge guard
-after acquiring (the code already does this as `postLeaseGuardFailure`). A sibling's merge commit
+lease request that carries a delegation chain therefore **waits**, bounded by a new
+`WORKTREE_MERGE_LEASE_WAIT_MS` (120 s; R4), when the only conflicting live lease is another merge
+lease with the same immediate delegator. Merge leases are ordinary `exclusive-worktree` leases
+today, so `ExecutionLease` also gains an optional `purpose: "merge"` to tell them apart from an
+editing lease. `acquire` itself never waits, so the loop lives in `mergeManagedWorktree`. It
+catches `ExecutionLeaseConflictError`, checks the conflict against the rule above, and calls its
+existing `retry()` with backoff. Any other acquire error still ends `blocked` at once, as today.
+Each waiter re-runs the merge guard after acquiring (the code already does this as
+`postLeaseGuardFailure`, `:1051-1056`). A sibling's merge commit
 leaves the target clean and on the right branch, so the later lane merges on top of it. Only a
 real git conflict ends `conflict`. A merge lease with no chain (an ordinary top-level managed run)
 keeps today's fail-fast behaviour. Both new lease fields (`delegationChain`, `purpose`) are
@@ -487,7 +545,8 @@ checkout (D4b) as the resolver's `sourceCheckoutRoot`. Then a child file that so
 on the parent's worktree branch still resolves, instead of missing in the main checkout.
 
 - **Parse time:** check that the file exists the way `validatePromptReference` does
-  (`PromptFileParser.ts:902-918`), keeping the authored value as written.
+  (`PromptFileParser.ts:963`, which delegates to `PromptFileResolver`), keeping the authored value
+  as written.
 - **Run time:** resolve to an absolute path again before launch, because the file may have moved.
 - **Child loading:** the child file is loaded with the full parse/validate pipeline
   (`loadPromptFile`), so a schema error in the child fails the parent step with the validation
@@ -502,7 +561,7 @@ the step was in flight) and those fields are already set:
 - **The recorded child run is COMPLETED:** the parent step completes without relaunching. This
   covers a crash between the child finishing and the parent recording it.
 - **The recorded child run is STOPPED, ERROR, or interrupted:** continue that run through the
-  existing continuation path (`executeContinuationAtRun`, `WorkflowInstance.ts:2212`) instead of
+  existing continuation path (`executeContinuationAtRun`, `WorkflowInstance.ts:2435`) instead of
   creating a new lineage.
 - **The child run directory is missing** (trashed): launch fresh and overwrite the linkage.
 
@@ -512,14 +571,19 @@ step `_runtime` and therefore always launches fresh child runs.
 ### D7. Parent link is persisted on the child run
 
 The child's run `manifest.json` records `parentRun: { workflowKey, runRef, stepId, loopIndex? }`.
-This lets:
+It is a new optional field on `WorkflowRunManifest` (`src/types/WorkflowTimelineTypes.ts:103`),
+written by `TimelineRecorder.initializeRunAt` (`src/core/orchestration/TimelineRecorder.ts:53`).
+The launcher passes it through load options, so it is in the very first manifest write. A run
+bundle exported from a child keeps `parentRun`. When the parent isn't in the importing project,
+the "Started by" link renders as unavailable instead of failing. This lets:
 
 - the child's dropdown row and run view show "Started by _<parent name>_", with a link back;
 - history/search reach the parent from a child run;
 - D6 confirm that a recorded child run really belongs to this parent step before reattaching.
 
 This is new and separate from the existing variant/re-run provenance (`sourceWorkflowKey`/
-`sourceRunRef`, `CtrlYokeTypes.ts:535-570`), which means "derived from", not "spawned by".
+`sourceRunRef` on `PromptFile`, `CtrlYokeTypes.ts:657-659`), which means "derived from", not
+"spawned by".
 
 ### D8. Where the step is allowed
 
@@ -540,7 +604,10 @@ This is new and separate from the existing variant/re-run provenance (`sourceWor
   runs. `steps: [ { type: workflow, … } ]` already covers this, but blocking the shorter form
   gains nothing and leaves an odd gap next to root prompts and scripts. As with a root script,
   workflow-only keys at the root (`worktree`, for example) belong to the **parent**; the child's
-  worktree still comes from the child file (D4), and nothing else is inherited (D11). `.prompt.md` cannot express this form.
+  worktree still comes from the child file (D4), and nothing else is inherited (D11). The arm
+  accepts exactly `rootScriptStep`'s workflow-only keys (`worktree`, `vars`,
+  `trustedExternalRoots`, `maxSteps`), not `conditions` or `worktreePresets` (R9).
+  `.prompt.md` cannot express this form.
 
 ### D9. Outcome mapping and `onFail`
 
@@ -552,9 +619,10 @@ This is new and separate from the existing variant/re-run provenance (`sourceWor
 | STOPPED (by anyone)                                                   | CANCELLED                                         | stops, regardless of `onFail`. Inside a parallel group, siblings finish first; see [Parallel](#parallel-sub-workflow-steps) |
 | COMPLETED, but `merge: true` ended `conflict`/`blocked`               | COMPLETED + warning (D4e)                         | advances                                                                                                                    |
 
-`onFail` uses the existing `ScriptStepAction` type and `CONDITION_ACTIONS` values, mirroring
-`scriptStep.onFail` (`workflow-schema.json:960-965`). For `continue`, scripts today record a
-plain COMPLETED with no warning state (`WorkflowExecutor.ts:2811-2815`). The sub-workflow step
+`onFail` uses the existing `ScriptStepAction` type and `CONDITION_ACTIONS` values, and reuses
+`scriptStep.onFail`'s schema (`workflow-schema.json:1164-1177`, including its `varPlaceholder`
+arm; R10). For `continue`, scripts today record a plain COMPLETED with no warning state, only a
+`Log.warn` (`WorkflowExecutor.ts:3421-3424`). The sub-workflow step
 does the same, and also sets `failureMessage`. The row renders a warning badge when a COMPLETED
 sub-workflow step has a `failureMessage`. No new terminal status is introduced.
 
@@ -573,7 +641,8 @@ chain contains only _active_ parents.
 
 A **file-referenced** child uses its own `vars` plus host-level `--var` overrides, and its own
 `harness`, falling back to settings defaults (not the parent's harness). `{{var}}` substitution
-is not applied to the `workflow` path in v1. Only the execution root is inherited (D4), because
+is not applied to the `workflow` path in v1. The path gets no `VAR_SUBSTITUTION_POLICY` entry,
+and the schema gives it no `varPlaceholder` arm (R10). Only the execution root is inherited (D4), because
 it is about _where_ the code lives, not _how_ the workflow is configured. A file is a reusable
 unit that must behave the same whichever workflow references it.
 
@@ -585,12 +654,12 @@ D13 says how that is materialized.
 ### D12. Step references mean the same thing for every step kind; `:summary` bounds any of them
 
 > Prompt and script steps already behave this way (see Status). What remains is the **workflow
-> arm**: the `subWorkflowOutput` metadata, nested child-run rendering, and its summary budget.
+> arm**: the `SubWorkflowOutput` metadata (`subWorkflowSettled` event), nested child-run rendering, and its summary budget.
 
 A merge step has to know what each lane produced. Today it has no way to find out:
 
-- a step that sends nothing to a harness produces no `$step:N` item, because empty text is
-  skipped (`RunOutputResolver.ts:1011-1016`);
+- a step that sends nothing to a harness produces no `$step:N` item, because empty items are
+  skipped (`RunOutputResolver.ts:1270` for scripts, `:1312` for prompts);
 - `{{worktree.*}}` variables and `CTRLYOKE_WORKTREE_*` environment variables don't exist;
 - a managed branch name contains the child's `runRef`, so it can't be written into the parent
   ahead of time;
@@ -618,15 +687,19 @@ Rejected.
   over a three-lane wave yields three workflow entries.
 - **The child's steps come from the existing cross-run reader.** The run-address form of
   `priorContext` (`{ workflow, run }`) already imports a whole run through
-  `RunOutputResolver.resolveAllPriorContextItems` (`:1057`). The workflow arm calls it with the
-  child's manifest, located from `_runtime.childWorkflowKey`/`childRunRef`.
+  `RunOutputResolver.resolveAllPriorContextItems` (`:1435`). The workflow arm calls it with the
+  child's manifest, located from `_runtime.childWorkflowKey`/`childRunRef`. Child items are not
+  marked `importedRun`, so the summary budget orders them as the workflow step's own content
+  (D12b).
 - **The metadata is the workflow step's own recorded output.** When the child settles, the step
-  writes a structured `subWorkflowOutput` event to the parent's timeline, the counterpart of
-  `scriptOutput`. It holds the resolved path, `childWorkflowKey`, `childRunRef`, and outcome.
+  writes a `subWorkflowSettled` event (`TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED`) to the parent's
+  timeline. It is the counterpart of `scriptExecutionRecorded` (R3), and its payload is a
+  `SubWorkflowOutput`: the resolved path, `childWorkflowKey`, `childRunRef`, and outcome.
   When the child had a worktree, it also holds mode, branch, base, tip, files changed, and the
   merge result (D4e), taken from the child's `_runtime.worktree` (`WorkingFileWorktreeRuntime`,
-  `CtrlYokeTypes.ts:580-612`). A workflow step therefore always has output and is never skipped
-  by `$previous`.
+  `CtrlYokeTypes.ts:714-748`). A workflow step therefore always has output and is never skipped
+  by `$previous`. Add the event to `OutputHistoryTimelineAdapter`, `RunOutputResolver`,
+  `HistoryRunDocumentBuilder` and `RunBundleReader`, which all switch on event type.
 - **Missing child history** (run directory deleted): the metadata renders with a
   `<childRunUnavailable/>` marker instead of child steps. This is not an error.
 - **The script verdict** is already rendered for every script step (shipped 2026-10-13). Still to
@@ -665,11 +738,16 @@ still adds is the **workflow** row of the summary table:
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workflow  | Metadata in full; each child step's summary by the existing rules, within the summary budget (`PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES`, 400 KB, applied by `applySummaryBudget`); the earliest steps are omitted whole first |
 
-- **Workflow budget.** Render the metadata and every child step's summary. While the total is
-  over the budget, replace the earliest remaining child step with one status line
-  (`<step index="3" name="implement" status="completed" outputBytes="41213" elided="true"/>`).
-  The last child step is never elided. Nested workflow steps count toward the enclosing budget,
-  so recursion stays bounded.
+- **Workflow budget.** Render the metadata and every child step's summary. Feed the child steps
+  into the existing `applySummaryBudget` (`HarnessIntegration.ts:314`) as one ordered run of
+  positions _inside_ the workflow step, so they share the prompt's one `SUMMARY_BUDGET_BYTES`
+  with the parent's own summary steps. There is no second budget. Ordering follows the shipped
+  chronology (`5dbca60d7`): an earlier parent step's children are omitted before a later step's,
+  and within one child run the earliest steps go first. An omitted child step uses the shipped
+  marker (`<step index="3" name="implement" omitted="all" omittedBytes="41213"/>`), not a new one.
+  The last summary in the prompt is never omitted. The workflow step's metadata block is never
+  omitted, because without it a merge step loses the lane's branch. Nested workflow steps
+  flatten into the same ordering, so recursion stays bounded.
 - **One renderer per step kind**, dispatched through Phase 0's exhaustive `getStepType` switch
   inside `summarizePriorContextItem`, so a future step kind must define its summary to compile.
 
@@ -695,15 +773,16 @@ find the child run.
   ```
 
   Managed worktree runs keep the initiating checkout's `stateRoot`, so child runs live in the
-  same history as the parent.
-  Verify during implementation that the CLI resolves that same state root when invoked from
-  inside a managed worktree; if it does not, the guide passes `--cwd <source checkout>`. It
-  requires a shell tool and the CLI on `PATH`.
+  same history as the parent. **Settled (R6):** the CLI does _not_ resolve that state root from
+  inside a worktree. It keys the project on the cwd's realpath, so the guide always passes
+  `-d <main checkout>`. It requires a shell tool and the CLI on `PATH`.
 
 - **MCP `read_output` needs one addition (not yet done).** It is scoped to the agent's own attached run
   (`mcp-server.ts`: `resolveRun` → that run's manifest), and `indices` select that
-  run's steps. On a workflow step it would return only the metadata. Add an optional
-  `run: { workflowKey, runRef }` argument that redirects the read, with `indices` and the
+  run's steps. `resolveRun` (`mcp-server.ts:2328`) takes the address from the session
+  (`requireRunAddress`), never from the arguments. On a workflow step it would return only the
+  metadata. Add an optional `run: { workflowKey, runRef }` argument to `McpReadOutputArguments`
+  (`McpToolDefinitions.ts:160`) that redirects the read, with `indices` and the
   existing `cursor`/`limit`/`tail` paging applying to that run unchanged. Only **descendants** of
   the attached run are accepted: walk the target's `parentRun` chain (D7) up to the attached run,
   and reject anything else with a message naming the allowed scope. This keeps `read_output`'s
@@ -736,10 +815,21 @@ Rules for the inline form:
 - **Inheritance (D11):** at launch the child definition is **materialized**. That means the
   parent's workflow-level execution properties (`harness`, `model`, `executionMode`, `agent`,
   `skills`, `mcpServers`, `hooks`, `secrets`, `additionalArgs`, `toolPermissions`, `errorBehavior`,
-  and the workflow-level `endCondition`/`preCondition`), plus `vars`, overlaid with the inline
-  step's own keys. The result is written as the child's root, so the child's run file is
-  self-contained and never re-reads the parent. A lane therefore runs with the same harness,
-  model and permissions an ordinary step in that position would.
+  and the workflow-level `endCondition`/`preCondition`), plus the parent's _effective_ `vars`
+  (after host `--var` overrides), overlaid with the inline step's own keys. The result is
+  written as the child's root, so the child's run file is self-contained and never re-reads the
+  parent. A lane therefore runs with the same harness, model and permissions an ordinary step in
+  that position would.
+- **Variable substitution (R10).** The parent never substitutes inside an inline definition: it
+  joins `VAR_SUBSTITUTION_EXCLUDED_FIELDS`. The child's own run-start and dispatch passes substitute
+  it with the copied vars, so `{{var}}` in an inline prompt resolves exactly as it would in a
+  parent step. Materialize from the authored step, not the parent's run-start-resolved copy, so
+  nothing is substituted twice.
+- **Condition presets.** Authored YAML shares a condition through a YAML anchor (the
+  `&committed` pattern in `spec-driven-loop`), which already resolves at parse time. `{ use }` is
+  MCP-only and is resolved in `materializeAppendStep` before wrapping (D14). The child therefore
+  needs no `conditions`, and an agent attached to a lane can't use the parent's presets. That is
+  acceptable in v1, because lane agents implement and don't queue.
 - **Sessions and prior context don't cross the boundary.** The inline step is the first step of
   a new run. A numeric `sessionId`, `sessionId: finalStep`, a numeric or relative `priorContext`
   selector, and `$previous`/`$step:`/`$all`/`$finalStep` references in an inline prompt would
@@ -748,12 +838,15 @@ Rules for the inline form:
   when the child is materialized. The run-address form, `priorContext: { workflow, run }`, still
   works. Passing the parent's output into a lane is listed under Not In Scope.
 - **Loading:** the launcher loads the materialized definition through
-  `PromptFileLoader.loadFromMemory`, the path `loadFromTemplate` uses. It creates the lineage and
+  `PromptFileLoader.loadFromMemory` (`PromptFileLoader.ts:130`), the path
+  `WorkflowInstance.loadFromTemplate` (`:1702`) uses. It creates the lineage and
   copies root-level properties (including `worktree`) into the child's working file, with no
-  `originalFile`, so D6 reattach needs no source file. `loadPromptStringAsRun` is unsuitable,
-  because it keeps workflow overrides in memory only. `loadFromMemory` currently swallows errors
-  into user feedback and returns `undefined`. The launcher needs a variant that throws, so a bad
-  definition is a start failure → `onFail` with the real message.
+  `originalFile`, so D6 reattach needs no source file. `loadPromptStringAsRun`
+  (`WorkflowInstance.ts:1751`) is unsuitable, because it builds a bare `{ prompt }` file and keeps
+  workflow overrides in memory only. `loadFromMemory` currently catches errors, notifies the user
+  and returns `undefined`. Split it into a throwing core (`loadFromMemoryOrThrow`) and the
+  existing notifying wrapper, so a bad definition is a start failure → `onFail` with the real
+  message, with no stray notification.
 - **Naming:** the child lineage is named from the step's `name`, else
   `<parent name> · step <N>`.
 - **Parse-time validation** runs with the parent file, through the same schema arms. There is no
@@ -762,9 +855,10 @@ Rules for the inline form:
 
 ### D14. Agent-queued lanes: `worktreePresets` and `append_step`
 
-MCP `append_step` accepts only flat prompt steps (`MCP_APPEND_QUEUE_ITEM_FLAT_SCHEMA`, with
-`additionalProperties: false`). Its handler rejects script steps outright, and
-`materializeAppendStep` only expands author-defined condition presets. That is deliberate. The
+MCP `append_step` accepts only flat prompt steps (`MCP_APPEND_QUEUE_ITEM_FLAT_SCHEMA`,
+`McpToolDefinitions.ts:324`, with `additionalProperties: false`). It requires `prompt` and has no
+`type`/`script` properties, so script steps never validate. `materializeAppendStep`
+(`mcp-server.ts:472`) only expands author-defined condition presets. That is deliberate. The
 author defines every script, and an agent may only pick a named preset. A worktree carries a
 script too: `setup`. A sub-workflow file reference would let an agent run any scripts, hooks or
 `additionalArgs` it had written into a file. So MCP never accepts `type: workflow` with a path or
@@ -776,6 +870,10 @@ an arbitrary inline object. Instead:
   creates a fresh branch, so lanes in one group can never collide on a named branch. Agents can
   name a preset but never supply or override its fields. `setup`, like condition scripts, runs
   only as the author wrote it.
+- **Lookup** follows the condition-preset resolver. Put a `McpWorktreePresetResolver.ts` beside
+  `src/utils/McpConditionPresetResolver.ts`, sharing its own-property lookup
+  (`getDeclaredConditionPreset`'s `Object.hasOwn`, from `425793e02`) and its list formatter through
+  one generic helper, so `use: "toString"` can't resolve to a prototype member here either.
 - **`append_step` items** gain an optional `worktree: { use: "<preset>" }`, both flat and as
   `parallel` members. `materializeAppendStep` builds the prompt step as it does today, then wraps
   it into `{ type: workflow, name, workflow: { …promptStepFields, worktree: <preset copy> } }`.
@@ -792,8 +890,14 @@ an arbitrary inline object. Instead:
   model, which is the same answer as for an unwrapped step, because D13 inherits the same
   defaults.
 - **`workflow_status`** lists lane steps as `type: workflow` with their child
-  `workflowKey`/`runRef`, live child status, and the D12a worktree metadata. Its `metadata` gains
-  `worktreePresets: [{ name, merge }]`, so the orchestrator knows lanes are available.
+  `workflowKey`/`runRef`, live child status, and the D12a worktree metadata. Its `metadata`
+  (`mcp-server.ts:1385-1405`) already reports `conditionPresets` (`summarizeMcpConditionPresets`,
+  `b318c17f5`). It gains a sibling, `worktreePresets: [{ name, merge, setup }]`, where `setup` is
+  the first-line preview, as for condition scripts. An empty list means lanes are unavailable.
+- **Ungated lanes warn.** `formatUngatedAppendedStepsWarning` already warns when an appended
+  sequential step has no end condition while presets exist. Extend it to lanes: warn when a lane
+  carries no `endCondition` while a condition preset exists. The guidance says lanes **should**
+  carry `committed`.
   `read_output` on a lane's index returns the D12a output. D12c's `run` argument reaches into
   the child run.
 - **`edit_step`** on a pending lane edits the wrapped prompt fields, and accepts
@@ -812,32 +916,45 @@ The orchestrator guidance (`workflow-orchestrator.agent.md`, `<parallelSteps>`) 
   stay, scoped to members queued without a preset.
 - **Template:** `spec-driven-loop` declares
   `worktreePresets: { lane: { mode: managed, merge: true, setup: "{laneSetup}" } }` with a new
-  `laneSetup` text variable (default `npm ci`, described as "Installs dependencies in each
-  parallel lane's fresh worktree; leave blank if none are needed"). Its `committed` comment
-  changes from "not for parallel members" to "not for shared-tree parallel members".
+  `laneSetup` text entry in `_templateMeta.variables` (the template has no root `vars`; R13).
+  It defaults to `npm ci` and is described as "Installs dependencies in each parallel lane's
+  fresh worktree; leave blank if none are needed". Blank renders `setup: ""`, which
+  `WorktreeManager` already treats as no setup. The comment above `conditions:`
+  (`spec-driven-loop.ctrlyoke.yaml:109-113`), which says the gate isn't workflow-level because
+  parallel steps share one tree, changes to say that applies only to shared-tree parallel members.
+  `large-spec-loop` is unchanged in v1 (R12).
 
 ---
 
 ## Phase 0 — Prerequisite: make step-kind branching exhaustive
 
-About 57 non-test files (counted 2026-11-02) branch on `isScriptStep(...)` / `STEP_TYPES.SCRIPT` with an implicit
-"otherwise it's a prompt". The heaviest are `PromptQueue.ts` (14), `editorStore.ts` (13),
-`FinalStepFooter.tsx`, `WorkflowStepSanitizer.ts` (10 each), `PromptFileParser.ts` (9),
-`ExecutionPreviewService.ts` (9), `mcp-server.ts` (9), and `WorkflowInstance.ts`,
-`WorkflowExecutor.ts` (8 each). Guards that branch on `step.type === STEP_TYPES.SCRIPT` without
-naming `isScriptStep` count too, for example `RunContinuationService.assertStepHasRequiredContent`. Adding a third kind to the `WorkflowStep` union would compile cleanly and
-silently treat sub-workflow steps as prompts in every one of those places.
+About 62 non-test files (counted 2026-11-26, about 204 sites) branch on `isScriptStep(...)` /
+`STEP_TYPES.SCRIPT` with an implicit "otherwise it's a prompt". The heaviest are
+`PromptQueue.ts` (13), `editorStore.ts` (12), `mcp-server.ts` and `PromptFileParser.ts` (10 each),
+`WorkflowStepSanitizer.ts` and `ExecutionPreviewService.ts` (9 each), `FinalStepFooter.tsx` (8),
+and `stepContextMenuItems.ts`, `StepChipRail.tsx`, `WorkflowInstance.ts`, `WorkflowExecutor.ts`
+and `CliPropertyOverrides.ts` (7 each). Since `eba32a7db`, nearly every check names
+`isScriptStep`. The remaining direct `step.type === STEP_TYPES.SCRIPT` guards count too, for
+example `RunContinuationService.assertStepHasRequiredContent` (`:1498`). Adding a third kind to
+the `WorkflowStep` union would compile cleanly and silently treat sub-workflow steps as prompts in
+every one of those places.
 
 Before adding the new step kind:
 
 1. Add `getStepType(step): WorkflowStepType` and an `isPromptStep` guard to `CtrlYokeTypes.ts`,
-   next to `isScriptStep` (`:895`).
+   next to `isScriptStep` (`:1120`, generic over `Extract<T, { type: SCRIPT }>`; keep that shape
+   for `isPromptStep`). Neither exists yet. `USER_INPUT_STEP_PLAN.md:6` already names this as its
+   dependency.
 2. Convert each binary `isScriptStep ? … : …` branch that reads kind-specific fields into an
    exhaustive `switch (getStepType(step))` with an `assertNever` default, or into `isPromptStep`
    where only prompt fields matter.
 3. This lands on its own, with no behaviour change, and makes adding the new kind a
    compiler-guided change. `USER_INPUT_STEP_PLAN.md` adds a fourth step kind and benefits from
    the same refactor; whichever plan lands second only adds `case` arms.
+4. Add a `scripts/` check, or a unit test like `VarSubstitutionPolicy.test.ts`, that fails on a
+   new bare `isScriptStep(x) ? … : …` ternary over a `WorkflowStep` outside an allow-list. Without
+   it, the next feature quietly reintroduces the binary pattern. Use the allow-list for sites
+   that really are script-vs-everything, for example "does this step run a shell command".
 
 ---
 
@@ -845,11 +962,13 @@ Before adding the new step kind:
 
 Definitions live under **`$defs`** (draft 2020-12). Step definitions do not set
 `additionalProperties`; strictness comes from the `workflowStep` wrapper's
-`unevaluatedProperties: false` (`:783`), and the new definition follows that pattern.
+`unevaluatedProperties: false` (`:953`), and the new definition follows that pattern. The wrapper
+(`:921-954`) is `allOf[ oneOf[promptStep, scriptStep], not worktree, not trustedExternalRoots,
+not maxSteps ]`; the new arm goes in that inner `oneOf` (R8).
 
 ### Extract a shared step-lifecycle runtime definition
 
-`promptRuntimeMetadata` (`:1199-1277`) mixes execution-property echoes with lifecycle fields the
+`promptRuntimeMetadata` (`:1594-1677`) mixes execution-property echoes with lifecycle fields the
 queue relies on (`stepId` for `claimStepById`, `startedAt`, `completedAt`, `terminalStatus`,
 `elapsed`, `failureMessage`, `terminalFailure`). Extract the lifecycle fields into
 `stepLifecycleRuntime`, and have `promptRuntimeMetadata` `allOf` it. Script steps keep reusing
@@ -858,7 +977,8 @@ queue relies on (`stepId` for `claimStepById`, `startedAt`, `completedAt`, `term
 ### `subWorkflowStep`
 
 The display properties (`name`, `enabled`, `color`) are declared inline in `promptStep`
-(`:852-865`) and again in `scriptStep`. Extract them into a `stepDisplayProperties` def that all
+(`:1022-1043`) and again in `scriptStep` (`:1072-1093`); `rootScriptStep` `$ref`s the
+`scriptStep` copies. Extract them into a `stepDisplayProperties` def that all
 three step definitions `allOf`. This removes the duplication and keeps the new step from adding
 a third copy.
 
@@ -877,9 +997,8 @@ a third copy.
       ]
     },
     "onFail": {
-      "type": "string",
-      "enum": ["continue", "stopWorkflow"],
-      "default": "stopWorkflow",
+      "$comment": "Same shape as scriptStep.onFail (enum or varPlaceholder); extract it as a shared stepOnFail def rather than copying (R10).",
+      "$ref": "#/$defs/stepOnFail",
       "description": "What to do when the child run fails or cannot start. 'stopWorkflow' fails this step and stops the parent; 'continue' records the failure on the step and advances. A stopped child always stops the parent."
     },
     "_runtime": { "$ref": "#/$defs/subWorkflowRuntimeMetadata" }
@@ -918,21 +1037,26 @@ a third copy.
   whose file or inline definition has no `worktree` key (D4). Add one sentence pointing to lanes:
   "To give a member its own working tree, make it a `type: workflow` step with an inline
   `worktree`."
-- `singleStepRoot` gains a third arm, `rootWorkflowStep`: `allOf` `subWorkflowStep` +
-  `workflowOnlyProperties`, mirroring the `rootScriptStep` arm (D8).
+- `singleStepRoot` (`:496-552`) gains a third arm, `rootWorkflowStep`, mirroring
+  `rootScriptStep` (`:553-642`). `rootScriptStep` has its own `unevaluatedProperties: false` and
+  lists `worktree`, `vars`, `trustedExternalRoots` and `maxSteps` explicitly, so the new arm lists
+  the same four keys and accepts neither `conditions` nor `worktreePresets` (D8, R9).
 - **`inlineSubWorkflowDefinition`** (D13): `oneOf` the `promptStep` and `scriptStep` arms, each
   `allOf`'d with `{ properties: { worktree: { $ref: "#/$defs/worktreeConfig" } } }` and
   `unevaluatedProperties: false`. A `type: workflow` value, `steps`, `finalStep`, `parallel`, and
   every other workflow-only key are rejected. The D13 rule against cross-boundary session and
   prior-context references can't be expressed in JSON Schema, so it is a parser validation.
-- **`worktreePresets`** (D14) joins `workflowOnlyProperties`. It is an object whose keys follow the
-  `conditions` key pattern and whose values `$ref` the managed object arm of `worktreeConfig`.
-  Split that arm out as `managedWorktreeConfig` so the preset and `worktreeConfig` share it. It is
-  valid at the root of any workflow and is ignored by everything except MCP materialization
-  (D14).
+- **`worktreePresets`** (D14) joins `workflowOnlyProperties` (`:443-495`). It is an object whose
+  keys follow the `conditions` key pattern (`^[A-Za-z][A-Za-z0-9_-]*$`, `:470-472`) and whose
+  values `$ref` the managed object arm of `worktreeConfig` (`:370-398`). Split that arm out as
+  `managedWorktreeConfig` so the preset and `worktreeConfig` share it. It is valid at the root of
+  a `steps` workflow and is ignored by everything except MCP materialization (D14).
+- **Var-substitution policy (R10):** add `worktreePresets` and every inline `workflow` location
+  to `VAR_SUBSTITUTION_EXCLUDED_FIELDS`. `VarSubstitutionPolicy.test.ts` fails until they are
+  listed, because `promptStep`/`scriptStep` fields accept placeholders inside the inline arm.
 - (`priorContextDetail` already exists in `executionProperties`; no change.)
-- The loose `steps[]`/`finalStep` re-description in the root `allOf/if not _templateMeta` block
-  (`:13-82`) must not reject the new kind. Verify it doesn't, and widen it if it does.
+- The root `allOf`/`if not _templateMeta` block (`:13-103`) only constrains `harness` and
+  `_runtime.harness`, so it doesn't reject the new kind and needs no change (R8).
 - After editing, run `npm run schema:update`. This regenerates the YAML schema,
   `SchemaDescriptions.ts`, `WorkflowSchemaOutline.ts`, and the reference docs. The change is
   additive, so no `schema:bump` is needed.
@@ -942,21 +1066,27 @@ a third copy.
 ## Type System (`src/types/`)
 
 ```typescript
-// DashboardConstants.ts — STEP_TYPES (:3440)
+// DashboardConstants.ts — STEP_TYPES (:4526)
 export const STEP_TYPES = {
   PROMPT: "prompt",
   SCRIPT: "script",
   WORKFLOW: "workflow",
 } as const;
-// PREVIEW_STEP_TYPES (:1718) is a separate dry-run copy; add WORKFLOW there too if the preview
-// renders sub-workflow steps (see Execution Preview below).
+// PREVIEW_STEP_TYPES (:2065) is a separate dry-run copy; it gains WORKFLOW too (R11).
 
-// PROMPT_PROPERTIES (:3688) gains:
+// PROMPT_PROPERTIES (:4791) gains:
 WORKFLOW_REF: "workflow",
 // ON_FAIL already exists; reuse it.
 
-// New: SUB_WORKFLOW_STEP_COPY_FIELDS, the parser's copy whitelist, alongside
-// SCRIPT_STEP_COPY_FIELDS.
+// New: SUB_WORKFLOW_STEP_COPY_FIELDS (NAME, ENABLED, COLOR, WORKFLOW_REF, ON_FAIL), the parser's
+// copy whitelist, alongside SCRIPT_STEP_COPY_FIELDS (:4913).
+
+// New (R4): WORKTREE_MERGE_LEASE_WAIT_MS = 120_000.
+// New (D8/D4c): PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES (:1583) gains WORKTREE_COLLISION,
+// MERGE_INTO_SHARED_ROOT.
+
+// WorkflowTimelineTypes.ts — TIMELINE_EVENT_TYPES (:43) gains (R3):
+SUB_WORKFLOW_SETTLED: "subWorkflowSettled",
 
 // D12 constants (PRIOR_CONTEXT_DETAILS, PRIOR_CONTEXT_SUMMARY_SEGMENT,
 // PRIOR_CONTEXT_LIMITS incl. SUMMARY_BUDGET_BYTES, PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL)
@@ -988,7 +1118,7 @@ export interface SubWorkflowRuntimeMetadata extends StepLifecycleRuntime {
   resolvedWorkflowPath?: string;
 }
 
-export type WorkflowStep = PromptStep | ScriptStep | SubWorkflowStep; // (:881)
+export type WorkflowStep = PromptStep | ScriptStep | SubWorkflowStep; // (:1106)
 
 export function isSubWorkflowStep(step: WorkflowStep): step is SubWorkflowStep {
   return step.type === STEP_TYPES.WORKFLOW;
@@ -999,10 +1129,11 @@ export type InlineSubWorkflowDefinition = (PromptStep | ScriptStep) & {
   worktree?: WorktreeConfig;
 };
 
-// D14: author-owned presets; only the managed object form. WorktreeObjectConfig already exists.
+// D14: author-owned presets; only the managed object form. WorktreeObjectConfig
+// (= Extract<WorktreeConfig, { mode: string }>, CtrlYokeTypes.ts:270) already exists.
 export type ManagedWorktreeConfig = Extract<
   WorktreeObjectConfig,
-  { mode: "managed" }
+  { mode: typeof WORKTREE_MODES.MANAGED }
 >;
 export type WorktreePresets = Record<string, ManagedWorktreeConfig>;
 ```
@@ -1011,9 +1142,12 @@ export type WorktreePresets = Record<string, ManagedWorktreeConfig>;
 `childWorkflowKey`/`childRunRef`, which is all D6 needs. `PromptFile` (the workflow root type)
 gains `worktreePresets?: WorktreePresets`.
 
-`PromptRuntimeMetadata` (`:968`) extends `StepLifecycleRuntime`, matching the schema extraction.
-`SubWorkflowOutput` (the D12a metadata: resolved path, child keys, outcome, and the
-`SubWorkflowResult.worktree` projection) sits next to `ScriptRuntimeOutput`.
+`PromptRuntimeMetadata` (`:1201`, today `extends ExecutionProperties`) also extends
+`StepLifecycleRuntime`, matching the schema extraction. `SubWorkflowOutput` (the D12a metadata:
+resolved path, child keys, outcome, and the `SubWorkflowResult.worktree` projection) sits next to
+`ScriptRuntimeOutput` (`:1145`). It is the payload of the `subWorkflowSettled` timeline event (R3).
+`WorkflowRunManifest` (`WorkflowTimelineTypes.ts:103`) gains `parentRun?: SubWorkflowParentLink`
+(D7).
 `WorkflowExecutionContext` gains `subWorkflowHost?` (D1) and `ancestorPaths?: readonly string[]`
 (D10).
 
@@ -1021,17 +1155,18 @@ gains `worktreePresets?: WorktreePresets`.
 
 ## Parser (`src/core/PromptFileParser.ts`)
 
-- `normalizePromptFile` (`:969`): the `steps[]` loop (`:1037`) and the `finalStep` branch
-  (`:1081-1095`) gain a `STEP_TYPES.WORKFLOW` arm that calls a new `buildSubWorkflowStep`, which
-  copies `SUB_WORKFLOW_STEP_COPY_FIELDS`. The `finalStep` branch currently drops anything that is
-  neither script nor prompt, so it needs the arm explicitly.
-- The parallel-member path (`:1009-1035`): `isPromptOrScriptSource` (`:1178-1189`) becomes
+- `normalizePromptFile` (`:1030`): the `steps[]` loop (script → `buildScriptStep` at `:1098`,
+  else `validatePromptReference` + `buildPromptStep` at `:1103-1107`) and the `finalStep` branch
+  (`:1149-1163`) gain a `STEP_TYPES.WORKFLOW` arm that calls a new `buildSubWorkflowStep`, which
+  copies `SUB_WORKFLOW_STEP_COPY_FIELDS`. The `finalStep` branch has no `else` and drops anything
+  that is neither script nor prompt, so it needs the arm explicitly.
+- The parallel-member path (`:1236`): `isPromptOrScriptSource` (`:1246-1257`) becomes
   `isParallelMemberSource` and accepts `type: workflow`. Members go through
   `buildSubWorkflowStep`. Other step kinds (e.g. `USER_INPUT_STEP_PLAN.md`'s `userInput`) are
   still rejected (`promptFileParser.test.ts:604-617`), following `dev/implemented/PARALLEL_STEPS_PLAN.md:53-56`'s
   explicit-opt-in rule.
-- `validateWorkflowSteps` (`:1441`): a sub-workflow branch before the `!item.prompt` check
-  (`:1507`). For a string `workflow`, it requires a non-empty value and runs the file-existence
+- `validateWorkflowSteps` (`:1436`): a sub-workflow branch next to the script early return
+  (`:1486-1491`), before the `!item.prompt` check (`:1494`). For a string `workflow`, it requires a non-empty value and runs the file-existence
   check from D5. For an inline object (D13), it validates the inner step with the existing
   prompt/script rules. It then rejects numeric/`finalStep` `sessionId` values, numeric or relative
   `priorContext` selectors, and `$previous`/`$step:`/`$all`/`$finalStep` references in the inner
@@ -1041,10 +1176,13 @@ gains `worktreePresets?: WorktreePresets`.
 - Step-reference renumbering (`StepReferenceShifts.ts`) and the completions that offer step
   numbers skip the inside of an inline definition, because its references could only ever address
   the child run.
-- The root `type: "script"` single-step branch (`:973`) gets a sibling for root
-  `type: "workflow"`, which builds a one-step queue through `buildSubWorkflowStep` (D8).
-  `getValidKeysAtPointer` (`:666-674`) already routes a root without `steps` to
-  `singleStepRoot`, so unknown-key warnings pick up the new arm with no change.
+- The root `type: "script"` single-step branch (`:1034-1043`) gets a sibling for root
+  `type: "workflow"`, which builds a one-step queue through `buildSubWorkflowStep` (D8). It must
+  come before the single-prompt branch (`:1046`).
+- `getValidKeysAtPointer` (`:669`): unknown-key warnings use `defs.singleStepRoot` (`:694`) and
+  pick up the new arm with no change. The `suggestionCandidatesOnly` path hard-codes
+  `type === script ? oneOf[1] : oneOf[0]` (`:684-692`). Replace it with a step-type → arm lookup,
+  so a root `type: workflow` suggests the workflow keys (R15).
 
 ---
 
@@ -1052,12 +1190,14 @@ gains `worktreePresets?: WorktreePresets`.
 
 ### Dispatch
 
-`executeTargetContract` (`WorkflowExecutor.ts:1913`) currently routes disabled steps to
-`handleSkippedStep`, script steps to `executeScriptStep(step, stepIndex, context, target)`
-(`:1947-1950`), and everything else into the inline AI attempt loop (`:1958`). After Phase 0 this is
-a `switch (getStepType(step))` with a new `executeSubWorkflowStep(step, stepIndex, context, target)`
-arm. Final-step script dispatch passes `stepIndex = -1` (`:1948-1949`), and the new arm follows the
-same convention.
+`executeTargetContract` (`WorkflowExecutor.ts:2339`) currently routes disabled steps to
+`handleSkippedStep` (`:2372`), script steps to
+`executeScriptStep(authoredStep, viewIndex, context, target)` (`:2383`), and everything else into
+the inline AI attempt loop. After Phase 0 this is a `switch (getStepType(step))` with a new
+`executeSubWorkflowStep(authoredStep, viewIndex, context, target)` arm. `authoredStep` is the
+run-start-resolved step. For an inline `workflow` it is still the authored object, because R10
+excludes it from substitution. `viewIndex` is -1 for the final step (`:2350`), and the new arm
+follows the same convention.
 
 Parallel members reach the same `executeTargetContract` through `ParallelGroupRun.runMember` →
 `executeWithSnapshot` → `executeTarget`, so the dispatch arm serves both paths. What the
@@ -1065,8 +1205,8 @@ group itself needs is in [Parallel Sub-workflow Steps](#parallel-sub-workflow-st
 
 ### `executeSubWorkflowStep`
 
-1. `context.dashboardProvider.updateStepStatus(..., RUNNING)`, the same call script steps make
-   (`:2571-2575`).
+1. `context.dashboardProvider.updateStepStatus(..., RUNNING)`, guarded by `stepIndex >= 0`, the
+   same call script steps make (`:3177`).
 2. For a string `workflow`, resolve the reference (D5). If it is missing or unresolvable, it is
    a start failure → `onFail`. For an inline object, materialize it with the parent's resolved
    workflow-level defaults (D13). The parent's working file is already loaded in the context, so
@@ -1081,17 +1221,23 @@ group itself needs is in [Parallel Sub-workflow Steps](#parallel-sub-workflow-st
 6. As soon as the handle exists, persist `childWorkflowKey`, `childRunRef`, and
    `resolvedWorkflowPath` to the step's `_runtime`. This lights up the dashboard link and makes
    D6 work if the host dies mid-step.
-7. Store the handle on the target's `ActiveTargetResources` entry (`WorkflowInstance.ts:243-249`)
-   in a new `subWorkflow?: SubWorkflowHandle` field. The entry is keyed per target
-   (`queue:<i>` / `final:<n>`), so a parallel group holds one entry per child. Extend
-   `cancelTarget` (`:959-976`), `releaseTargetResources` (`:874`) and `stop()` (`:2464-2476`) to
-   call `handle.stop()`, which is what D2 needs. Extend `pause()`/`cancelPause()` to forward to
-   every live `subWorkflow` handle (D3).
-8. `await handle.done`, then map the result using D9. Record the D12a `subWorkflowOutput`
-   metadata as the step's output event. Record the outcome through the same `promptQueue` calls
-   `executeScriptStep` uses (`failStep`, `cancelStep`, and normal completion), so
-   `commitSequentialOutcome` (`:1725`), the final-step loop (`:621-840`) and `ParallelGroupRun`
-   need no sub-workflow knowledge beyond what the parallel section lists.
+7. Store the handle on the target's `ActiveTargetResources` entry (`WorkflowInstance.ts:272`,
+   today `target`, `attemptIndex?`, `integration?`, `processRunner?`, `ptySessionId?`) in a new
+   `subWorkflow?: SubWorkflowHandle` field. The entry is keyed per target (`queue:<i>` /
+   `final:<n>`), so a parallel group holds one entry per child. Extend `cancelTarget` (`:1082`),
+   `releaseTargetResources` (`:997`) and `stop()` (`:2786`) to call `handle.stop()`, which is what
+   D2 needs. Extend `pause()` (`:2584`) and `cancelPause()` (`:2595`) to forward to every live
+   `subWorkflow` handle (D3). The handle reaches the instance through the existing
+   `registerActiveTarget` context callback, so the executor still holds no instance reference.
+8. `await handle.done`, then map the result using D9. Record the D12a `SubWorkflowOutput` as a
+   `subWorkflowSettled` timeline event. Record the outcome exactly as `executeScriptStep` does:
+   `promptQueue.cancelStep` on abort (`:3383`), `promptQueue.failStep` on a stopping failure
+   (`:3482`), and on success no queue call at all, because the coordinator commits the target
+   outcome. Use the same `runtime.completeAttempt`/`failAttempt`, `recordAttemptTerminal` and
+   `persistRuntimeMetadata`. Then `commitSequentialOutcome` (`:1986`), the final-step loop and
+   `ParallelGroupRun` need no sub-workflow knowledge beyond what the parallel section lists. Factor
+   the shared tail out of `executeScriptStep` (a `settleNonHarnessStep` helper) instead of copying
+   it.
 9. Always clear the `subWorkflow` field in `finally`.
 
 ### `SubWorkflowLauncher.launch` (`src/core/orchestration/SubWorkflowLauncher.ts`)
@@ -1103,8 +1249,11 @@ group itself needs is in [Parallel Sub-workflow Steps](#parallel-sub-workflow-st
    inherited execution root (D4) through `loadPromptFile`/execution options. Do not use
    post-hoc setters.
 3. Start `instance.executeLoadedPromptFile()` without awaiting it. Wrap it into `done`, which
-   reads `promptQueue.getState().status` after settlement and maps COMPLETED / STOPPED /
-   ERROR-or-unstarted to `SubWorkflowResult`.
+   reads `promptQueue.getState().status` after settlement and maps COMPLETED / STOPPED / ERROR to
+   `SubWorkflowResult`. Startup failures also end ERROR (R2). `failedToStart` is set when no child
+   step reached RUNNING. A load that throws before `executeLoadedPromptFile` (missing file,
+   validation error, a bad inline definition) settles `done` FAILED with `failedToStart: true`
+   directly, without awaiting execution.
 4. Return the handle once `workflowKey`/`runRef` are known (after load).
 
 ### Final-step interaction
@@ -1123,13 +1272,17 @@ Parsing, merging (per-index detail, full wins), the per-kind summarizer, and ren
 
 - **Resolving.** `resolvePriorContextItems` (`src/core/orchestration/RunOutputResolver.ts`)
   gains a third item arm after Phase 0's switch. A workflow step's value carries the
-  `subWorkflowOutput` event; its children come from `resolveAllPriorContextItems` (also used by
+  `subWorkflowSettled` event; its children come from `resolveAllPriorContextItems` (also used by
   `AddressedPriorContextResolver.ts` for cross-run `priorContext`) on the child manifest,
   recursively for nested workflow steps.
 - **Rendering.** `buildPriorContextXmlFromItems` (`HarnessIntegration.ts`) stays the single
   renderer for live injection and the editor preview (`PriorContextPreviewBuilder.ts`).
-  `summarizePriorContextItem` gains the workflow arm; its children go through the existing
-  `applySummaryBudget` (`SUMMARY_BUDGET_BYTES`).
+  `summarizePriorContextItem` (`:110`) gains the workflow arm; its children go through the
+  existing `applySummaryBudget` (`:314`, `SUMMARY_BUDGET_BYTES`) in the shared chronological order
+  (D12b). `PriorContextItem` (`HarnessIntegration.ts:70`, which already has `scriptVerdict` and
+  `importedRun`) gains `subWorkflow?: { output: SubWorkflowOutput; children?: PriorContextItem[] }`.
+  `children` is absent when the child run is unavailable. The preview builder lives at
+  `src/utils/PriorContextPreviewBuilder.ts`.
 
 ---
 
@@ -1182,39 +1335,40 @@ gets reused:
   _where_ it runs.
 
 A lane-only parent on the main checkout needs a strict subset of this section: P1–P3, P5 (only
-D4d rule 1 for the merge lease), P6, P9, and P11–P14. P4 isn't needed because the parent's
+D4d rule 1 for the merge lease), P6, P9, and P11–P15. P4 isn't needed because the parent's
 checkout already is the workspace checkout. P10 isn't needed because lanes don't inherit the
 root. That subset is landing step 3 below.
 
 ### What currently prevents this, and the fix for each
 
-| #   | Blocker today                                                                                                                                                                                                | Fix in this plan                                                                                                                              |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1  | The parser only accepts prompt and script members (`isPromptOrScriptSource`, `PromptFileParser.ts:1168-1189`); the plan previously excluded the kind on purpose                                              | Accept `type: workflow` members (Parser section). The schema already references `workflowStep`.                                               |
-| P2  | `ActiveTargetResources` has no slot for a child, so fail-fast's `cancelRunning` → `cancelTarget` (`ParallelGroupRun.ts:661-668`, `WorkflowInstance.ts:959-976`) and `stop()` could not reach a running child | `subWorkflow` handle field per target (Execution step 7)                                                                                      |
-| P3  | Group preflight assumes a harness member: `checkHarnessReady`, `ensureIsolatedIntegration`, session-collision checks (`ParallelGroupPreflight.ts:240-329`)                                                   | Sub-workflow members skip those checks, as script members already skip harness and session checks. They get their own checks instead (below). |
-| P4  | Every child resolves its worktree base from, and merges into, the VS Code workspace checkout, not the parent's checkout                                                                                      | D4b source-checkout override                                                                                                                  |
-| P5  | `merge: true` into a checkout where the parent holds a lease is refused as `blocked` (`WorktreeManager.ts:880-888`); the parent always holds one                                                             | D4d delegated merge lease                                                                                                                     |
-| P6  | Wave N+1 branches from `HEAD`, so uncommitted fixes from the merge step are silently missing                                                                                                                 | D4c dirty-parent check before fan-out                                                                                                         |
-| P7  | Concurrent managed starts with a slow `setup` fail with a lock timeout, or take over the 30 s-stale mutation lock                                                                                            | Fixed; managed `setup` runs outside the mutation lock                                                                                         |
-| P8  | A child whose agent commits its own work never lands or merges                                                                                                                                               | Fixed; managed settlement accepts forward commits on the recorded branch                                                                      |
-| P9  | The merge step has no way to learn each lane's branch                                                                                                                                                        | D12: the step's output carries the branch metadata; `$step:summary:a-b` reads every lane at a bounded size                                    |
-| P10 | Several children inheriting one exclusive worktree root would conflict on their leases                                                                                                                       | D4d sibling-delegation rule                                                                                                                   |
-| P11 | Two lanes with `merge: true` that settle together race for the source checkout's merge lease; the loser ends `blocked` because `mergeManagedWorktree` tries `acquire` once                                   | D4d: sibling merge leases wait (bounded) and re-run the merge guard                                                                           |
-| P12 | A one-prompt lane needs its own workflow file, and an agent that writes one dirties the parent's tree, so the D4c check and the `committed` gate both fail                                                   | D13 inline single-step definitions                                                                                                            |
-| P13 | MCP `append_step` accepts only flat prompt steps and can't name a worktree; agents can't supply `setup` scripts                                                                                              | D14 `worktreePresets` + `worktree: { use }` on `append_step` items                                                                            |
-| P14 | `RunContinuationService.assertStepHasRequiredContent` (used for active-group joins and run edits) rejects anything without a `prompt` that isn't a script                                                    | Phase 0 converts it to the exhaustive switch                                                                                                  |
+| #   | Blocker today                                                                                                                                                                                         | Fix in this plan                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | The parser only accepts prompt and script members (`isPromptOrScriptSource`, `PromptFileParser.ts:1246-1257`); the plan previously excluded the kind on purpose                                       | Accept `type: workflow` members (Parser section). The schema already references `workflowStep`.                                               |
+| P2  | `ActiveTargetResources` has no slot for a child, so fail-fast's `cancelRunning` → `cancelTarget` (`ParallelGroupRun.ts:664`, `WorkflowInstance.ts:1082`) and `stop()` could not reach a running child | `subWorkflow` handle field per target (Execution step 7)                                                                                      |
+| P3  | Group preflight assumes a harness member: `checkHarnessReady` (`ParallelGroupPreflight.ts:359`), `ensureIsolatedIntegration` (`:371`), session-collision checks (`:332`)                              | Sub-workflow members skip those checks, as script members already skip harness and session checks. They get their own checks instead (below). |
+| P4  | Every child resolves its worktree base from, and merges into, the VS Code workspace checkout (`getStateRoot()`), not the parent's checkout                                                            | D4b source-checkout override                                                                                                                  |
+| P5  | `merge: true` into a checkout where the parent holds a lease is refused as `blocked` (`WorktreeManager.ts:1043-1047`); the parent always holds one                                                    | D4d delegated merge lease                                                                                                                     |
+| P6  | Wave N+1 branches from `HEAD`, so uncommitted fixes from the merge step are silently missing                                                                                                          | D4c dirty-parent check before fan-out                                                                                                         |
+| P7  | Concurrent managed starts with a slow `setup` fail with a lock timeout, or take over the 30 s-stale mutation lock                                                                                     | Fixed; managed `setup` runs outside the mutation lock                                                                                         |
+| P8  | A child whose agent commits its own work never lands or merges                                                                                                                                        | Fixed; managed settlement accepts forward commits on the recorded branch                                                                      |
+| P9  | The merge step has no way to learn each lane's branch                                                                                                                                                 | D12: the step's output carries the branch metadata; `$step:summary:a-b` reads every lane at a bounded size                                    |
+| P10 | Several children inheriting one exclusive worktree root would conflict on their leases                                                                                                                | D4d sibling-delegation rule                                                                                                                   |
+| P11 | Two lanes with `merge: true` that settle together race for the source checkout's merge lease; the loser ends `blocked` because `mergeManagedWorktree` tries `acquire` once                            | D4d: sibling merge leases wait (bounded) and re-run the merge guard                                                                           |
+| P12 | A one-prompt lane needs its own workflow file, and an agent that writes one dirties the parent's tree, so the D4c check and the `committed` gate both fail                                            | D13 inline single-step definitions                                                                                                            |
+| P13 | MCP `append_step` accepts only flat prompt steps and can't name a worktree; agents can't supply `setup` scripts                                                                                       | D14 `worktreePresets` + `worktree: { use }` on `append_step` items                                                                            |
+| P14 | `RunContinuationService.assertStepHasRequiredContent` (`:1498`, used for active-group joins and run edits) rejects anything without a `prompt` that isn't a script                                    | Phase 0 converts it to the exhaustive switch                                                                                                  |
+| P15 | In the CLI, concurrent children would each try to own the single TTY (`supportsConcurrentInteractiveSessions` is always false there and only checked within one group)                                | R5: the CLI factory builds concurrent children with `hostCanProvidePty: false`                                                                |
 
 ### Group preflight for sub-workflow members
 
-`preflightParallelGroupMember` (`ParallelGroupPreflight.ts:154-340`) gains a sub-workflow branch.
+`preflightParallelGroupMember` (`ParallelGroupPreflight.ts:178`) gains a sub-workflow branch.
 It resolves and **parses each child file once**; the launcher reuses that parse. An inline
 member (D13) needs no resolution, and its materialized definition is built here once and reused
 the same way. It classifies the child's execution plan from its `worktree` key using the D4
 table, then checks:
 
 - **Unresolvable path, child validation error, or cycle (D10)** → a per-member issue. The member
-  settles FAILED and its `onFail` applies, as preflight failures do today (`:526-536`).
+  settles FAILED and its `onFail` applies, as preflight failures do today.
 - **Two members targeting the same named worktree branch** → `WORKTREE_COLLISION` (a new
   `PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES` entry, beside `SESSION_COLLISION`). Only one could
   ever hold its exclusive lease.
@@ -1227,11 +1381,13 @@ table, then checks:
 - **Parent checkout dirty and any member creates a worktree** → the D4c rule, applied **once for
   the group** before any worker starts. Every lane then branches from one commit.
 
-The existing `INTERACTIVE_MULTIPLEX` check is about one instance multiplexing interactive
-terminals. Children are separate instances whose own steps go through their own preflight. A
-sub-workflow member therefore counts as non-interactive here. Verify during implementation that
-`supportsConcurrentInteractiveSessions` is per instance; if it turns out to be host-wide, the
-child's own preflight surfaces it as a start failure.
+The existing `INTERACTIVE_MULTIPLEX` check (`:337-356`) is about one instance multiplexing
+interactive terminals. It fires only between interactive members of **one group**, using a static
+per-host flag: VS Code passes `true`, and the CLI always passes `false`. It never counts sessions
+in other instances. Children are separate instances whose own steps go through their own
+preflight, so a sub-workflow member counts as non-interactive here. **Settled (R5):** that is
+safe in VS Code, which multiplexes terminals. In the CLI, concurrent children are built
+headless-only (`hostCanProvidePty: false`), so they never compete for the TTY.
 
 ### Group behaviour
 
@@ -1240,14 +1396,18 @@ child's own preflight surfaces it as a start failure.
   product. That is documented, not capped, in v1.
 - **Fail fast:** with `failFast: true` (the schema default), a failing lane cancels its siblings
   through `cancelRunning` → `cancelTarget` → `handle.stop()`. The abort-caused CANCELLED rewrite
-  (`ParallelGroupRun.ts:563-569`) already classifies those siblings correctly. The authoring
+  (`ParallelGroupRun.ts:566-572`) fires only when the signal aborted, fail-fast triggered, and the
+  member reports FAILED. A stopped child resolves CANCELLED rather than FAILED, so it is already
+  CANCELLED and needs no rewrite. Add a test that a fail-fast-stopped lane is classified as a
+  sibling cancellation, not a user stop (`cancelledBy: "parent"`). The authoring
   guide recommends `failFast: false` for long fan-outs.
 - **Stopping one lane directly** (from the child's own dropdown row): only that member settles
   CANCELLED. Its siblings keep running, because stopping one lane should not discard others'
   work. At the join, any user-cancelled member makes the group return `stopped`, so
-  `finishParallelGroupRun` (`WorkflowExecutor.ts:1265`) stops the parent **instead of
+  `finishParallelGroupRun` (`WorkflowExecutor.ts:1456`) stops the parent **instead of
   advancing to the merge step with a missing lane**. Resuming the parent recovers the settled
-  members (`getRecoveredGroupOutcome`) and reattaches the stopped lane's child run (D6). The
+  members (`getRecoveredGroupOutcome`, `WorkflowExecutor.ts:1163`) and reattaches the stopped
+  lane's child run (D6). The
   handle tells the two cancellations apart: `SubWorkflowResult.cancelledBy` is `"parent"` when
   the cancel came through `handle.stop()`, and `"child"` otherwise.
 - **Stopping the parent:** `subscribeToStop` → `cancelRunning` stops every child (D2).
@@ -1263,7 +1423,7 @@ child's own preflight surfaces it as a start failure.
 ### Ad-hoc fan-out: "Run alongside the current step"
 
 The manual version of this pattern is starting workflows side by side while one is already
-running. `appendStepsToActiveParallelGroup` (`RunContinuationService.ts:487-706`) already
+running. `appendStepsToActiveParallelGroup` (static, `RunContinuationService.ts:593`) already
 supports `QUEUE_POSITION.PARALLEL_WITH_CURRENT`: it joins the active group or promotes the
 running step into a new `failFast: false` group. It takes any `WorkflowStep`, but its
 `assertIncomingStepsHaveRequiredContent` → `assertStepHasRequiredContent` guard knows only two
@@ -1273,10 +1433,11 @@ would be rejected until Phase 0 converts that guard (it belongs on the Phase 0 l
 Entry points). It sends `appendMode: "subWorkflow"` with `position: "parallelWithCurrent"`. It is
 subject to that path's existing rules: the run must be RUNNING, width must be > 1, and the run
 must not be in the final-step phase. The in-memory `instance.appendFromFile` path does **not**
-honour `PARALLEL_WITH_CURRENT`: `PromptQueue.appendSteps` → `resolveQueueInsertIndex` turns it
-into a plain insert index after the current group or step, and never joins or promotes. So this
-entry must route through `RunContinuationService.appendStepsToActiveParallelGroup`, as the MCP
-`append_step` handler does.
+honour `PARALLEL_WITH_CURRENT`: `PromptQueue.appendSteps` (`:2132`) → `resolveQueueInsertIndex`
+(a free function in `DashboardConstants.ts:3575`) turns it into a plain insert index after the
+current group or step, and never joins or promotes. So this entry must route through
+`RunContinuationService.appendStepsToActiveParallelGroup`, as the MCP `append_step` handler does
+(`mcp-server.ts:1529`).
 
 ---
 
@@ -1285,13 +1446,13 @@ entry must route through `RunContinuationService.appendStepsToActiveParallelGrou
 The previous draft said this needed only a different payload on `appendFromFileForClient`. That
 is half true:
 
-- **Without a run address**, `appendFromFileForClient` (`WorkflowOrchestrator.ts:1895`) calls
-  `instance.appendFromFile` (`WorkflowInstance.ts:2551`). That appends to the live instance's
+- **Without a run address**, `appendFromFileForClient` (`WorkflowOrchestrator.ts:2165`) calls
+  `instance.appendFromFile` (`WorkflowInstance.ts:2951`). That appends to the live instance's
   queue in memory, even while it is RUNNING, but it spreads `parsed.steps` and drops the file's
   workflow-level settings.
-- **With a run address**, it calls `appendAndContinueAtRun`, which **refuses an actively
-  executing run** (`RunLifecycleService.validateExplicitContinuationTarget`, `:877-986`). It also
-  drops `position` and `parallelGroups`.
+- **With a run address**, it calls `appendAndContinueAtRun` (`:2197`), which **refuses an
+  actively executing run** unless it is PAUSED (`RunLifecycleService.validateExplicitContinuationTarget`,
+  `:888`). It also drops `position` and `parallelGroups`.
 
 **Design:** add one shared builder, used by every entry point:
 
@@ -1317,16 +1478,19 @@ still parsed once up front to fail fast on schema errors; its steps are not used
 | Surface                                                                               | Change                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `WorkflowSwitcher.tsx` dropdown row context menu (`hooks/useWorkflowContextMenu.tsx`) | New item **"Queue workflow to run next…"** on running/paused/finished run rows, and **"Run workflow alongside current step…"** on running rows (see Parallel, ad-hoc fan-out). |
-| `WorkflowControls.tsx` queue split-button (`:101`)                                    | New option **"Queue as sub-workflow…"** next to the existing inline "Queue Workflow".                                                                                          |
-| Workspace viewer file menus (`hooks/useWorkflowFileMenuItems.ts:52`)                  | Same option for a workflow file.                                                                                                                                               |
-| VS Code explorer                                                                      | New `ctrlyoke.queueAsSubWorkflowFromContext` command next to `ctrlyoke.queueFromContext` (`extension.ts:1022`).                                                                |
+| `WorkflowControls.tsx` queue `SplitButton` (`:110`)                                   | New option **"Queue as sub-workflow…"** next to the existing inline "Queue Workflow".                                                                                          |
+| Workspace viewer file menus (`hooks/useWorkflowFileMenuItems.ts`)                     | Same option for a workflow file.                                                                                                                                               |
+| VS Code explorer                                                                      | New `ctrlyoke.queueAsSubWorkflowFromContext` command next to `ctrlyoke.queueFromContext` (`extension.ts:1110`).                                                                |
 
-All of them send the existing `APPEND_FILE` message (`WebviewMessageTypes.ts:2286`) with a new
-optional `appendMode` field. There is no new message type. The handler is
-`DashboardMessageRouter.ts:875`, not `CtrlYokeWebviewProvider.ts`, which only forwards messages. The
-hosted server shares that router through `DashboardApplication`, so hosted parity comes free.
-Picking the file follows the existing split: VS Code uses a native picker via
-`selectWorkspacePath`; hosted mode uses `WorkflowFilePickerModal`.
+All of them send the existing `APPEND_FILE` message (`AppendFileMessage`,
+`WebviewMessageTypes.ts:2717`) with a new optional `appendMode` field (`APPEND_MODES` constant;
+default `inline`). There is no new message type. The handler is `DashboardMessageRouter.ts:1357`,
+not `CtrlYokeWebviewProvider.ts`, which only forwards messages. It currently always passes
+`QUEUE_POSITION.END`; the "alongside" entry needs it to forward a `position` too, so add that
+optional field to the message in the same change. The hosted server shares that router through
+`DashboardApplication`, so hosted parity comes free. Picking the file follows the existing split:
+VS Code uses a native picker via `selectWorkspacePath` (`src/platform/VsCodeDashboardHostActions.ts:74`);
+hosted mode uses `WorkflowFilePickerModal` (`components/workflow/WorkflowFilePickerModal.tsx`).
 
 Existing inline append behaviour (splicing steps into the current run and session) is unchanged.
 
@@ -1336,13 +1500,15 @@ Existing inline append behaviour (splicing steps into the current run and sessio
 
 ### Parent step row
 
-There is no `PromptItem.tsx`. Rows are `WorkflowStepRow` (`prompts/WorkflowStepRow.tsx`), which
-renders `WorkflowStepItem` (`steps/WorkflowStepItem.tsx`), and script steps are a branch inside it
-(`WorkflowStepItem.tsx:310-343`). After Phase 0 that branch becomes a switch, and the sub-workflow arm
-renders:
+Rows are `WorkflowStepRow` (`components/steps/WorkflowStepRow.tsx`), which renders
+`WorkflowStepItem` (`components/steps/WorkflowStepItem.tsx`), and script steps are a branch inside
+it (`WorkflowStepItem.tsx:302-307`). After Phase 0 that branch becomes a switch, and the sub-workflow
+arm renders:
 
-- a workflow icon, a **"Workflow"** badge, and the referenced file's name as the subtitle;
-  `getStepText` (`:97`) returns `step.workflow`; there is no harness/model badge or token count;
+- a workflow icon, a **"Workflow"** badge, and the referenced file's name as the subtitle.
+  `getStepText` (`WorkflowStepRow.tsx:98`) returns the path for a file reference, and the inner
+  step's text for an inline definition. There is no harness/model badge or token count. An inline
+  lane shows its inherited harness/model as the inner step would, plus a worktree badge;
 - a live status badge for the child, looked up by `_runtime.childWorkflowKey` from the
   workflows the store already tracks (running / paused / completed / failed);
 - the warning badge from D9 when the step completed with a `failureMessage`;
@@ -1351,7 +1517,7 @@ renders:
   (`utils/runNavigation.ts:111`). One run-address link covers both a live child and a finished
   one, so no separate "View live output" and "View run" states are needed.
 
-The step's output area (`layout/OutputSection.tsx`) renders the D12a metadata: outcome, branch,
+The step's output area (`components/layout/OutputSection.tsx`) renders the D12a metadata: outcome, branch,
 and merge result. It does not mirror the child's step output; that lives in the child's own view
 behind "Open run →". (Prompts in the parent that reference the step still receive the child's
 output, per D12.) Inside a `ParallelGroupPanel`, members
@@ -1372,19 +1538,26 @@ The dropdown needs no other change.
 
 ### Editor
 
-- **Step-type toggle** (`layout/EditorSection.tsx:286-320`, `editorStore.setStepType`): a third
-  **Workflow** option.
+- **Step-type toggle** (`components/layout/EditorSection.tsx:304`/`:322`, `editorStore.setStepType`
+  at `:1289`): a third **Workflow** option. `setStepType` today only flips a script flag (and
+  closes the properties drawer for script). Change it to store a `WorkflowStepType`, so there is
+  one source for the mode instead of a second boolean. `EditorSection` has its own `isScriptMode`
+  (`:215`), which derives from it.
 - **`components/editor/StepEditor.tsx`:** an `isSubWorkflowMode` path alongside `isScriptMode`
-  (`:308`). It shows a workflow-file field with a browse button (same picker split as above), an
+  (`:335`). It shows a workflow-file field with a browse button (same picker split as above), an
   `onFail` select (reuse the script step's select component), and the shared name/color/enabled
   fields. All prompt-only and script-only sections are hidden. A **File / Inline** switch picks
   D13's inline form. Inline shows the existing prompt or script editor for the wrapped step, plus
   a worktree control. The control reuses the workflow-level worktree editor, so there is no
   second copy. The workflow-properties editor gains a `worktreePresets` list next to
   `conditions`.
-- **Building properties:** add a `buildSubWorkflowProperties` next to `buildScriptProperties`
-  (`:842`). Fold the duplicated inline script-properties logic (`:1111-1164`) into
-  `buildScriptProperties` in the same change, so the new mode doesn't copy the duplication.
+- **Building properties:** `buildScriptProperties` (`StepEditor.tsx:931`) is now a thin
+  `useCallback` over `getScriptStepPropertyUpdate` (`utils/scriptStepProperties.ts:34`), which
+  `utils/executionPreview.ts` shares. The duplication earlier revisions flagged is gone. Add
+  `getSubWorkflowStepPropertyUpdate` in a sibling `utils/subWorkflowStepProperties.ts`, used the
+  same way by the editor and the preview. `editorStore` still repeats script-field resets in four
+  places (`:590-597`, `:698-731`, `:1036-1138`, `:1843-1877`). Fold them into one
+  `resetStepKindFields(kind)` helper before adding the workflow kind's resets.
 
 ### Execution preview
 
@@ -1399,7 +1572,8 @@ An inline child previews as its wrapped step, resolved with D13's materializatio
 
 - **CLI (`src/cli.ts`):**
   - The CLI constructs its `WorkflowInstance` with a `SubWorkflowLauncher` whose factory builds
-    sibling instances with the same dependencies.
+    sibling instances with the same dependencies, through the helper extracted from `runCommand`
+    (D1). Concurrent children are headless-only (R5).
   - Child step progress goes through the same console reporter, prefixed with the child
     workflow's name.
   - `CliJsonResultBuilder.ts` adds `subWorkflowRuns: [{ stepId, workflowKey, runRef, status }]`
@@ -1417,12 +1591,13 @@ An inline child previews as its wrapped step, resolved with D13's materializatio
   `worktreePresets`. Its 9 script branches are covered by Phase 0. `read_output` and
   `workflow_status` gain the optional descendant-only `run` argument (D12c); the tool
   descriptions in `McpToolDefinitions.ts` mention it.
-- **`ctrlyoke history show`:** no change; it already reads any run, including child runs
-  (D12c). The authoring guide shows the command next to `$step:summary:…`.
-- **`SCRIPT_GENERATED_STEPS_PLAN.md`:** `ctrlyoke step add` is author-side (a script the author
-  wrote), so it may accept the full `subWorkflowStep` shape. Whether it does depends on whether
-  that plan validates against `workflowStep` or publishes its own item schema, as MCP does.
-  Settle that in that plan.
+- **`ctrlyoke history show`** (`src/cli/HistoryInspectionCommands.ts:566`): no change; it already
+  reads any run, including child runs (D12c). The authoring guide shows the command, with
+  `-d <main checkout>` (R6), next to `$step:summary:…`.
+- **`SCRIPT_GENERATED_STEPS_PLAN.md`:** **settled (R7).** `ctrlyoke step add` validates against
+  `workflowStep` and appends through `RunContinuationService.appendStepsToRun`, so it accepts the
+  full `subWorkflowStep`, file and inline, once Phase 0 lands. It is author-side, so D14's MCP
+  restriction doesn't apply.
 
 ---
 
@@ -1430,12 +1605,18 @@ An inline child previews as its wrapped step, resolved with D13's materializatio
 
 - `WorkflowLocationTypes.ts`:
   - add `WORKFLOW_OBJECT_KINDS.SUB_WORKFLOW_STEP`;
-  - detect it in object-kind detection (`:150-174`) by `type: workflow`;
-  - map its text-holding key (`workflow`) to a new file-path role (`:52-91`).
-- `WorkflowFileCompletionCore.ts`: key filtering (`:161-203`) gains a `subWorkflowOnly` set from
-  `WORKFLOW_SCHEMA_OUTLINE[SUB_WORKFLOW_STEP]`, which `schema:update` generates. Prompt and
-  script keys are suppressed. Exclude sub-workflow steps from session candidates (`:470-472`);
-  they stay prior-context candidates, because D12 gives them output.
+  - detect it in object-kind detection (`:155-172`) by `type: workflow`, ahead of the "anything
+    else is a prompt step" fallback. An object under a sub-workflow step's `workflow` key is the
+    inline definition: classify it as a prompt or script step by the existing rules, so inline
+    editing gets prompt/script completions plus `worktree`;
+  - map its text-holding key (`workflow`) to a new file-path role.
+- `WorkflowFileCompletionCore.ts`: slot kinds (`:150-167`) gain the workflow kind for group,
+  parallel-member and `finalStep` slots. Root key filtering (`rootKeyIsRelevant`, `:171`) gains a
+  `subWorkflowOnly` set from `WORKFLOW_SCHEMA_OUTLINE[SUB_WORKFLOW_STEP]`
+  (`src/types/generated/WorkflowSchemaOutline.ts`), which `schema:update` generates. Prompt and
+  script keys are suppressed. Exclude sub-workflow steps from session candidates (`:465-472`,
+  which today filter `!isScriptStep`; Phase 0 turns that into `isPromptStep`). They stay
+  prior-context candidates, because D12 gives them output.
 - `WorkflowPropertySnippets.ts`: update the `type` snippet detail (`:31`) to
   `"prompt" | "script" | "workflow"`, and add a sub-workflow step snippet.
 - Path completion for the `workflow` value: reuse the existing prompt-file-path completion,
@@ -1502,7 +1683,10 @@ finalStep:
 | Host without `subWorkflowHost`                                    | Step fails with "not supported in this host"                                                                                                  |
 | Root file is only a workflow step                                 | Valid one-step queue; append more workflows while it runs (D8)                                                                                |
 | `$previous` after a workflow step                                 | Metadata plus every child step's full output, recursively (D12a)                                                                              |
-| `$step:summary:N` over a very long child                          | 400 KB summary budget; earliest child steps omitted whole (`omitted="all"`), the last always kept                                             |
+| `$step:summary:N` over a very long child                          | One shared 400 KB summary budget; earliest child steps omitted whole (`omitted="all"`), metadata and the last summary always kept (D12b)      |
+| CLI parallel group of lanes whose steps are interactive           | Children built headless-only; no TTY contention (R5)                                                                                          |
+| Bundle with `subWorkflowSettled` imported by an older ctrlyoke    | Import refused with "is not a recognized timeline event"; no timeline schema bump (R3)                                                        |
+| Agent appends a lane to a paused worktree parent                  | Refused today by an open bug (R14); fixed before step 4                                                                                       |
 | Child run history deleted before a later reference                | Metadata with `<childRunUnavailable/>`; not an error                                                                                          |
 | Inline child references `$previous` or a numeric `sessionId`      | Validation error naming the run boundary (D13)                                                                                                |
 | Inline child holds `steps`, `parallel`, or `type: workflow`       | Schema error; use a file (D13)                                                                                                                |
@@ -1518,7 +1702,13 @@ finalStep:
 
 | File                                                                                                                                     | Change                                                                                                                                                                                                                                             |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~50 files with `isScriptStep`/`STEP_TYPES.SCRIPT` branches                                                                               | **Phase 0:** exhaustive `getStepType` switch / `isPromptStep`                                                                                                                                                                                      |
+| ~62 files with `isScriptStep`/`STEP_TYPES.SCRIPT` branches                                                                               | **Phase 0:** exhaustive `getStepType` switch / `isPromptStep`, plus the binary-ternary guard check                                                                                                                                                 |
+| `src/types/WorkflowTimelineTypes.ts`, `src/core/orchestration/TimelineRecorder.ts`                                                       | `SUB_WORKFLOW_SETTLED` event (R3); `WorkflowRunManifest.parentRun` written by `initializeRunAt` (D7)                                                                                                                                               |
+| `OutputHistoryTimelineAdapter.ts`, `HistoryRunDocumentBuilder.ts`, `RunBundleReader.ts`                                                  | Handle the new event type                                                                                                                                                                                                                          |
+| `src/utils/VarSubstitutionPolicy.ts`                                                                                                     | Exclude inline `workflow` objects and `worktreePresets` (R10)                                                                                                                                                                                      |
+| `src/utils/McpWorktreePresetResolver.ts` (new), `src/utils/McpConditionPresetResolver.ts`                                                | Preset lookup/summary sharing one own-property helper (D14)                                                                                                                                                                                        |
+| `src/cli/CliExecutionMode.ts`, `src/cli.ts`                                                                                              | Instance-construction helper reused by the CLI launcher factory; headless-only concurrent children (R5)                                                                                                                                            |
+| `src/ui/webview-react/utils/subWorkflowStepProperties.ts` (new)                                                                          | Property update shared by `StepEditor` and the preview                                                                                                                                                                                             |
 | `schemas/workflow-schema.json` (+ `npm run schema:update` outputs)                                                                       | `stepLifecycleRuntime` + `stepDisplayProperties` extraction, `subWorkflowStep`, `subWorkflowRuntimeMetadata`, `workflowStep` arm, `parallelGroupItem` description                                                                                  |
 | `src/types/DashboardConstants.ts`                                                                                                        | `STEP_TYPES.WORKFLOW`, `PROMPT_PROPERTIES.WORKFLOW_REF`, `SUB_WORKFLOW_STEP_COPY_FIELDS`, `WORKFLOW_OBJECT_KINDS.SUB_WORKFLOW_STEP`, `APPEND_MODES`                                                                                                |
 | `src/types/CtrlYokeTypes.ts`                                                                                                             | `SubWorkflowStep`, `StepLifecycleRuntime`, `SubWorkflowRuntimeMetadata`, union, `isSubWorkflowStep`, `getStepType`, `isPromptStep`, manifest `parentRun`                                                                                           |
@@ -1538,13 +1728,12 @@ finalStep:
 | `src/core/orchestration/ExecutionRootLeaseManager.ts`, `WorktreeManager.ts`                                                              | Lease `purpose: "merge"`; sibling merge leases wait (D4d)                                                                                                                                                                                          |
 | `src/templates/agents/workflow-orchestrator.agent.md`, `src/templates/workflows/spec-driven-loop.ctrlyoke.yaml`                          | Lane guidance; `worktreePresets.lane` + `laneSetup` variable (D14)                                                                                                                                                                                 |
 | `src/templates/skills/ctrlyoke-syntax/SKILL.md`, `src/templates/agents/ctrlyoke-tech-support.agent.md`                                   | Workflow-step `$previous` documentation                                                                                                                                                                                                            |
-| Run manifest writer (where `manifest.json` is built)                                                                                     | `parentRun` (D7)                                                                                                                                                                                                                                   |
 | `src/core/WorkflowOrchestrator.ts`, `WorkflowInstanceRegistry.ts`                                                                        | Launcher factory via `createExternalWorkflowInstance`; `appendFromFileForClient` `appendMode` routing                                                                                                                                              |
 | `src/ui/DashboardMessageRouter.ts`                                                                                                       | `APPEND_FILE` handler passes `appendMode`                                                                                                                                                                                                          |
 | `src/extension.ts`, `package.json`                                                                                                       | `ctrlyoke.queueAsSubWorkflowFromContext` command and menu entry                                                                                                                                                                                    |
 | `src/cli.ts`, `src/cli/CliJsonResultBuilder.ts`                                                                                          | CLI launcher factory, child progress output, `subWorkflowRuns` in JSON                                                                                                                                                                             |
-| `src/ui/webview-react/components/steps/WorkflowStepItem.tsx`, `WorkflowStepRow.tsx`                                                      | Sub-workflow row variant, live child badge, "Open run" link                                                                                                                                                                                        |
-| `src/ui/webview-react/components/layout/EditorSection.tsx`, `components/editor/StepEditor.tsx`, `store/editorStore.ts`                   | Workflow step type, editor mode, `buildSubWorkflowProperties`                                                                                                                                                                                      |
+| `src/ui/webview-react/components/steps/WorkflowStepItem.tsx`, `components/steps/WorkflowStepRow.tsx`                                     | Sub-workflow row variant, live child badge, "Open run" link, `getStepText`                                                                                                                                                                         |
+| `src/ui/webview-react/components/layout/EditorSection.tsx`, `components/editor/StepEditor.tsx`, `store/editorStore.ts`                   | Workflow step type (`setStepType` stores a `WorkflowStepType`), editor mode, `resetStepKindFields`                                                                                                                                                 |
 | `src/ui/webview-react/hooks/useWorkflowContextMenu.tsx`, `components/workflow/WorkflowControls.tsx`, `hooks/useWorkflowFileMenuItems.ts` | "Queue workflow to run next…" / "Queue as sub-workflow…"                                                                                                                                                                                           |
 | `src/ui/webview-react/components/workflow/WorkflowSwitcher.tsx`                                                                          | "Started by" label on child rows                                                                                                                                                                                                                   |
 | `src/core/ExecutionPreviewService.ts`, `ui/webview-react/utils/executionPreview.ts`                                                      | Single-entry preview                                                                                                                                                                                                                               |
@@ -1560,7 +1749,7 @@ finalStep:
 - **Prior context (D12, workflow arm):**
   - `$previous` after a workflow step yields the metadata plus every child step, recursively
     for a three-level chain; `$previous:2` counts parent-level steps;
-  - workflow budget: earliest steps elided first, last kept, nested budget shared;
+  - workflow budget: earliest child steps omitted first in chronological order, metadata and the last summary kept, one budget shared with parent steps and nested children;
   - deleted child history renders `<childRunUnavailable/>`;
   - the editor preview matches live injection for a workflow step at both detail levels.
 - **`read_output` / `workflow_status` (D12c):** a child and a grandchild run are readable through
@@ -1607,7 +1796,19 @@ finalStep:
   `workflow_status` lists lanes and presets; a `merge: true` lane can't join a running step.
 - **Sibling merge wait (D4d, real git):** two `merge: true` lanes settling together both merge,
   the second on top of the first; a real conflict still ends `conflict`; a chainless merge lease
-  still fails fast.
+  still fails fast; a waiter gives up with `blocked` after `WORKTREE_MERGE_LEASE_WAIT_MS` (use a
+  fake clock); a non-conflict acquire error still ends `blocked` at once.
+- **Var substitution (R10):** `VarSubstitutionPolicy.test.ts` passes with the new exclusions;
+  `{{var}}` in an inline prompt resolves in the child to the parent's effective value (including a
+  `--var` override), once; a `{{var}}` in a `workflow` path stays literal.
+- **Timeline (R3):** `subWorkflowSettled` round-trips through `OutputHistoryTimelineAdapter`,
+  history documents and run-bundle export/import.
+- **Launcher (R2):** a child that fails preflight and a child whose file fails to load both
+  settle `failedToStart: true`; a child that fails mid-run does not.
+- **CLI concurrency (R5):** a parallel group of two lanes in the CLI builds both children with
+  `hostCanProvidePty: false`; a sequential child keeps the TTY.
+- **Phase 0 guard:** the binary-ternary check fails on a new `isScriptStep(x) ? … : …` outside
+  the allow-list.
 - **CLI:** a nested run end to end with the JSON `subWorkflowRuns`.
 - **UI (Vitest):** row variant, live badge lookup, the "Open run" link address, the editor mode
   toggle, and the context-menu item.
@@ -1642,28 +1843,30 @@ finalStep:
 
 ## Rough Effort Estimate
 
-| Work                                                                                                           | Days  |
-| -------------------------------------------------------------------------------------------------------------- | ----- |
-| Phase 0: exhaustive step-kind branching across ~57 files                                                       | 1.5–2 |
-| Schema (lifecycle extraction, new defs, wiring) + types + parser                                               | 1     |
-| `SubWorkflowLauncher` + executor arm + outcome mapping + cycle check                                           | 2     |
-| Stop/pause forwarding (D2/D3)                                                                                  | 1     |
-| Worktree rules D4a–e: source-checkout override, dirty check, lease chains, delegated merge                     | 2–2.5 |
-| D12 workflow arm: `subWorkflowOutput`, nested child-run rendering, workflow summary budget                     | 1     |
-| D12c: descendant-only `run` argument on `read_output`/`workflow_status`                                        | 0.5   |
-| Parallel: member acceptance, preflight branch and codes, user-cancelled lane at join, ad-hoc "alongside" entry | 2     |
-| Resume reattach (D6) + manifest parent link (D7)                                                               | 1     |
-| Queue-after-running: `appendMode` plumbing + entry points                                                      | 1     |
-| Dashboard row, "Started by" label, editor mode, preview                                                        | 1.5–2 |
-| CLI integration + completions                                                                                  | 1     |
-| D13 inline definitions: schema arm, boundary validation, materialization, throwing `loadFromMemory`            | 1     |
-| D14 agent lanes: `worktreePresets`, `append_step`/`edit_step`/`workflow_status`, orchestrator agent + template | 1.5   |
-| D4d sibling merge wait (`purpose: "merge"`, bounded retry)                                                     | 0.5   |
-| Tests (including real-git worktree fan-out tests)                                                              | 3–4   |
+| Work                                                                                                            | Days  |
+| --------------------------------------------------------------------------------------------------------------- | ----- |
+| Phase 0: exhaustive step-kind branching across ~62 files, plus the guard check                                  | 1.5–2 |
+| Schema (lifecycle extraction, new defs, wiring) + types + parser                                                | 1     |
+| `SubWorkflowLauncher` + executor arm + outcome mapping + cycle check                                            | 2     |
+| Stop/pause forwarding (D2/D3)                                                                                   | 1     |
+| Worktree rules D4a–e: source-checkout override, dirty check, lease chains, delegated merge                      | 2–2.5 |
+| D12 workflow arm: `subWorkflowSettled` event, nested child-run rendering, workflow summary budget               | 1     |
+| D12c: descendant-only `run` argument on `read_output`/`workflow_status`                                         | 0.5   |
+| Parallel: member acceptance, preflight branch and codes, user-cancelled lane at join, ad-hoc "alongside" entry  | 2     |
+| Resume reattach (D6) + manifest parent link (D7)                                                                | 1     |
+| Queue-after-running: `appendMode` plumbing + entry points                                                       | 1     |
+| Dashboard row, "Started by" label, editor mode, preview                                                         | 1.5–2 |
+| CLI integration + completions                                                                                   | 1     |
+| D13 inline definitions: schema arm, boundary validation, materialization, throwing `loadFromMemory`             | 1     |
+| D14 agent lanes: `worktreePresets`, `append_step`/`edit_step`/`workflow_status`, orchestrator agent + template  | 1.5   |
+| D4d sibling merge wait (`purpose: "merge"`, bounded retry)                                                      | 0.5   |
+| Revision 5 additions: timeline event wiring (R3), var-substitution exclusions (R10), CLI headless children (R5) | 0.5–1 |
+| Tests (including real-git worktree fan-out tests)                                                               | 3–4   |
 
-**Remaining total: about 23–25 days** (the prerequisite bugs and the step-kind-agnostic D12
-work are done). The sequential-only slice (landing steps 1–2 below plus queue-next from step 6)
-is roughly 8–10 days of that. The isolated-lanes slice (step 3) adds about 6–7 days on top.
+**Remaining total: about 24–26 days** (the prerequisite bugs and the step-kind-agnostic D12
+work are done). The sequential-only slice (landing steps 1–2 below, now including D4a + D4d
+rule 1, plus queue-next from step 6) is roughly 9–11 days of that. The isolated-lanes slice
+(step 3) adds about 6–7 days on top.
 
 **Suggested landing order** (each step after Phase 0 ships on its own):
 
@@ -1674,9 +1877,11 @@ is roughly 8–10 days of that. The isolated-lanes slice (step 3) adds about 6�
    feature for parents on the main checkout: `isCompatible` (`ExecutionRootLeaseManager.ts`)
    already lets two `SHARED_NATIVE` leases coexist, so a child with no `worktree` key runs
    alongside the blocked parent, and a managed-worktree child branches from the main checkout as
-   today. A parent that is itself in a worktree holds an `exclusive-worktree` lease, so an inheriting
-   child conflicts until D4a + D4d rule 1 (ancestor delegation only, about 1 day) land; ship
-   that minimal pair with step 2, or fail that case with a clear start error until step 3.
+   today. A parent that is itself in a worktree holds an `exclusive-worktree` lease, so an
+   inheriting child would conflict. **Decided (R1): D4a + D4d rule 1 (ancestor delegation only,
+   about 1 day) ship in this step**, so the headline "implement in a managed worktree, then run a
+   test sub-workflow in it" case works from the first release. A worktree child of a worktree
+   parent (which needs D4b) still gets a clear start error until step 4.
 3. **Isolated lanes, for a parent on the main checkout.** The
    [motivating case](#motivating-case-isolated-parallel-lanes), shipped before the full worktree
    rules because it needs only a subset of them (see
@@ -1694,8 +1899,10 @@ is roughly 8–10 days of that. The isolated-lanes slice (step 3) adds about 6�
    A parent that is itself in a worktree gets a clear start error for worktree children until
    step 4.
 
-4. **Remaining worktree rules (D4a–b, D4d rule 2).** Inheritance, the source-checkout override
-   for worktree parents, nested fan-out, and sibling delegation.
+4. **Remaining worktree rules (D4b, D4d rule 2).** The source-checkout override and the
+   main-checkout worktrees root for worktree parents, nested fan-out, and sibling delegation.
+   Fix [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/backlog/mcp-queue-mutations-refused-on-paused-worktree-run.md)
+   first or as part of it (R14).
 5. **Authored waves end to end:** inheriting members, `WORKTREE_COLLISION`, and named-worktree
    members. This is the staging-plan pattern.
 6. **Entry points:** queue next, run alongside.
