@@ -147,7 +147,7 @@ Each item names the question, what the code says today, and the decision.
 | R11 | Does `PREVIEW_STEP_TYPES` get `WORKFLOW`?                                                        | `PREVIEW_STEP_TYPES` (`DashboardConstants.ts:2065`) is `{ PROMPT, SCRIPT }`.                                                                                                                                                                                                                                                     | **Yes**, because the preview renders a "Runs _<file>_" entry ([Execution preview](#execution-preview)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | R12 | Should the new Large Spec Loop template (`47007a675`) get lanes too?                             | `large-spec-loop.ctrlyoke.yaml` is a finalStep-only loop that appends rounds of sequential steps; it never authors parallel steps.                                                                                                                                                                                               | **Not in v1.** Only `spec-driven-loop` declares `worktreePresets.lane`. Adding lanes to the large loop is a follow-up once lanes are proven in the smaller template.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | R13 | Where does `spec-driven-loop`'s `laneSetup` variable live?                                       | The template has no root `vars:`. Its variables are `_templateMeta.variables` entries (`:5`), used as `{placeholder}`. An empty `setup` is already "no setup" (`WorktreeManager.ts`, `options.setup?.trim()`).                                                                                                                   | `laneSetup` is a `_templateMeta.variables` text entry, default `npm ci`, substituted at template instantiation. Left blank, it renders `setup: ""`, which needs no special case.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| R14 | Agents queuing lanes on a **paused** worktree parent.                                            | Open bug [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/backlog/mcp-queue-mutations-refused-on-paused-worktree-run.md): MCP appends are refused on a paused run that keeps its runner lock, which worktree runs do.                                                                                              | Not a blocker for step 3, because the parent is on the main checkout. Fix it before step 4 (worktree parents), or as part of it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| R14 | Agents queuing lanes on a **paused** worktree parent.                                            | Bug [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/implemented/mcp-queue-mutations-refused-on-paused-worktree-run.md): MCP appends were refused on a paused run that keeps its runner lock, which worktree runs do.                                                                                             | **Resolved:** fixed in `ffc623b4f` (2026-11-26), so it no longer gates step 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | R15 | Does `getValidKeysAtPointer` need a change for the root arm?                                     | Partly. Unknown-key warnings use `defs.singleStepRoot` (`PromptFileParser.ts:694`) and pick up the new arm. Suggestion candidates hard-code `type === script ? oneOf[1] : oneOf[0]` (`:684-692`).                                                                                                                                | Replace that ternary with a lookup keyed by step type, so `type: workflow` gets `oneOf[2]`. This corrects the earlier "no change" claim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
@@ -1686,7 +1686,7 @@ finalStep:
 | `$step:summary:N` over a very long child                          | One shared 400 KB summary budget; earliest child steps omitted whole (`omitted="all"`), metadata and the last summary always kept (D12b)      |
 | CLI parallel group of lanes whose steps are interactive           | Children built headless-only; no TTY contention (R5)                                                                                          |
 | Bundle with `subWorkflowSettled` imported by an older ctrlyoke    | Import refused with "is not a recognized timeline event"; no timeline schema bump (R3)                                                        |
-| Agent appends a lane to a paused worktree parent                  | Refused today by an open bug (R14); fixed before step 4                                                                                       |
+| Agent appends a lane to a paused worktree parent                  | Accepted: the R14 bug was fixed in `ffc623b4f`                                                                                                |
 | Child run history deleted before a later reference                | Metadata with `<childRunUnavailable/>`; not an error                                                                                          |
 | Inline child references `$previous` or a numeric `sessionId`      | Validation error naming the run boundary (D13)                                                                                                |
 | Inline child holds `steps`, `parallel`, or `type: workflow`       | Schema error; use a file (D13)                                                                                                                |
@@ -1901,9 +1901,66 @@ rule 1, plus queue-next from step 6) is roughly 9–11 days of that. The isolate
 
 4. **Remaining worktree rules (D4b, D4d rule 2).** The source-checkout override and the
    main-checkout worktrees root for worktree parents, nested fan-out, and sibling delegation.
-   Fix [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/backlog/mcp-queue-mutations-refused-on-paused-worktree-run.md)
-   first or as part of it (R14).
+   (R14's bug, [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/implemented/mcp-queue-mutations-refused-on-paused-worktree-run.md),
+   is already fixed in `ffc623b4f`.)
 5. **Authored waves end to end:** inheriting members, `WORKTREE_COLLISION`, and named-worktree
    members. This is the staging-plan pattern.
 6. **Entry points:** queue next, run alongside.
 7. **Editor and completions polish**, including the inline-definition editor mode.
+
+---
+
+## Progress
+
+Maintained by the orchestrating final step of the workflow that implements this plan. Only that
+step edits this section; implementation steps report contradictions and deferrals in their
+summaries instead.
+
+### Done
+
+- Nothing from this plan's own landing order yet (first pass, 2026-11-26). The prerequisites
+  listed under [Status](#status-2026-11-26) shipped before this workflow started, and R14's bug
+  was fixed in `ffc623b4f`.
+
+### Next
+
+Coarse roadmap; re-planned every pass.
+
+- **Round 1 (queued 2026-11-26): Phase 0 plus the schema extraction.** No behaviour change.
+  1. `getStepType`/`isPromptStep`/`assertNever` in `CtrlYokeTypes.ts`; convert `src/core/*.ts` and
+     `src/types/`.
+  2. Convert `src/core/orchestration/`, `src/cli*`, `src/mcp-server.ts`, `src/utils/`,
+     `src/completions/`, `src/git/`.
+  3. Convert `src/ui/webview-react/`.
+  4. The binary-ternary guard test with its allow-list, plus any sites it still finds.
+  5. Schema-only extraction: `stepDisplayProperties`, `stepLifecycleRuntime`, `stepOnFail`,
+     `managedWorktreeConfig`; `PromptRuntimeMetadata extends StepLifecycleRuntime`.
+- **Round 2: sequential core, part 1.** `STEP_TYPES.WORKFLOW` + `subWorkflowStep` schema arm
+  (steps, finalStep, root `rootWorkflowStep`; parallel members still rejected by the parser),
+  types, parser (`buildSubWorkflowStep`, R15 lookup), compiler-guided `case` arms with
+  "not yet executable" behaviour where needed; `SubWorkflowHost` port + `SubWorkflowLauncher`
+  (D1, R2) + executor arm + D9 outcome mapping + D10 cycle detection, against a fake host.
+- **Round 3: sequential core, part 2.** D2/D3 stop and pause forwarding; host factories
+  (VS Code via `createExternalWorkflowInstance`, CLI, MCP); D4a + D4d rule 1 (R1); D7 `parentRun`;
+  D12a workflow arm (`subWorkflowSettled`, R3; nested rendering; workflow summary budget); docs
+  guide page and CHANGELOG.
+- **Round 4: D12c** (`run` on `read_output`/`workflow_status`), **D6 reattach**, minimal dashboard
+  row + "Open run" link, CLI progress + `subWorkflowRuns` JSON.
+- **Rounds 5–6: isolated lanes (landing step 3).** D13 inline definitions (R10 exclusions),
+  parallel member acceptance + preflight branch, D4c dirty check, `MERGE_INTO_SHARED_ROOT`,
+  user-cancelled-lane join rule, D4d sibling merge wait (R4), R5 CLI headless children, D14
+  `worktreePresets` + `append_step`/`edit_step`/`workflow_status`, orchestrator agent and
+  `spec-driven-loop` template.
+- **Round 7: landing steps 4–5.** D4b, D4d rule 2, nested fan-out, inheriting members,
+  `WORKTREE_COLLISION`, named-worktree members.
+- **Round 8: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
+  "Started by" label, editor mode + preview + completions polish.
+
+### Decisions
+
+- **Phase 0 is split by directory into sequential steps**, not run in parallel: the steps share
+  `CtrlYokeTypes.ts` helpers, and the guard test (step 4) can only pass once every area is done.
+- **The schema `$defs` extraction lands in round 1**, ahead of the new step kind, because it is
+  a behaviour-neutral refactor that the round-2 schema arm builds on, and reviewing it apart from
+  the new arm keeps the round-2 schema diff small.
+- No open questions need Nathan yet.
