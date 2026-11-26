@@ -17,6 +17,7 @@ import {
   sandboxOverriddenDiagnostic,
 } from "../../../types/CompatibilityTypes";
 import { getCliFlagValues, hasCliFlag } from "../../../utils/CliArgParser";
+import { CODEX_EXEC_ARGUMENTS } from "./CodexProtocolConstants";
 import {
   harnessSettingSandbox,
   nativeSandboxCapabilities,
@@ -53,6 +54,12 @@ const CODEX_BYPASS_FLAGS = [
 ] as const;
 const CODEX_SANDBOX_FLAGS = ["-s", "--sandbox"] as const;
 const CODEX_CONFIG_FLAGS = ["-c", "--config"] as const;
+/**
+ * `--add-dir` adds a writable root to the workspace-write sandbox, the same
+ * widening as `-c sandbox_workspace_write.writable_roots`, and makes
+ * interactive read-only Codex exit at launch ("Error adding directories").
+ */
+const CODEX_ADD_DIR_FLAGS = [CODEX_EXEC_ARGUMENTS.ADD_DIR] as const;
 /** `-c` keys that set containment: `sandbox_mode`, `sandbox_workspace_write.*`, `sandbox_permissions`. */
 const CODEX_SANDBOX_CONFIG_KEY =
   /^sandbox_(mode|workspace_write|permissions)(\.|$)/;
@@ -62,7 +69,9 @@ const CODEX_SANDBOX_CONFIG_KEY =
  * emits for `sandbox: true`, as Codex 0.166.0 behaves:
  * - the bypass flag wins over `-s` and runs with `danger-full-access`;
  * - a second `-s` is rejected outright ("cannot be used multiple times");
- * - `-c sandbox_workspace_write.*` adds writable roots or opens the network.
+ * - `-c sandbox_workspace_write.*` adds writable roots or opens the network;
+ * - `--add-dir` adds a writable root (approved external roots are the
+ *   supported way to do that).
  * `-c sandbox_mode=…` loses to `-s`, but is refused too as a contradiction.
  */
 function findSandboxOverride(additionalArgs: string): string | undefined {
@@ -75,7 +84,14 @@ function findSandboxOverride(additionalArgs: string): string | undefined {
   const config = getCliFlagValues(additionalArgs, CODEX_CONFIG_FLAGS).find(
     (value) => CODEX_SANDBOX_CONFIG_KEY.test(value.split("=")[0].trim())
   );
-  return config ? `-c ${config}` : undefined;
+  if (config) return `-c ${config}`;
+  if (hasCliFlag(additionalArgs, CODEX_ADD_DIR_FLAGS)) {
+    const dir = getCliFlagValues(additionalArgs, CODEX_ADD_DIR_FLAGS)[0];
+    return dir === undefined
+      ? CODEX_EXEC_ARGUMENTS.ADD_DIR
+      : `${CODEX_EXEC_ARGUMENTS.ADD_DIR} ${dir}`;
+  }
+  return undefined;
 }
 
 export class CodexSandboxMapper implements ISandboxMapper {
@@ -97,7 +113,7 @@ export class CodexSandboxMapper implements ISandboxMapper {
         ? [
             sandboxOverriddenDiagnostic(
               HARNESS_IDS.CODEX_CLI,
-              `sandbox: true cannot be applied on Codex because additionalArgs passes ${override}, which would replace or widen the sandbox ctrlyoke sets. Remove it from additionalArgs or turn Sandbox off.`
+              `sandbox: true cannot be applied on Codex because additionalArgs passes ${override}, which would replace or widen the sandbox ctrlyoke sets. Remove it from additionalArgs or turn Sandbox off. To give a contained step another writable directory, approve it as an external root (permissions.trustedExternalRoots).`
             ),
           ]
         : [],

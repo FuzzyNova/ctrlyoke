@@ -203,6 +203,8 @@ suite("sandbox mappers", () => {
       ],
       ["-csandbox_workspace_write.network_access=true", "network_access"],
       [`-c 'sandbox_permissions=["disk-full-read-access"]'`, "sandbox_perm"],
+      ["--add-dir /tmp/outside", "--add-dir /tmp/outside"],
+      ["--model m --add-dir=/tmp/outside", "--add-dir /tmp/outside"],
     ] as const) {
       const result = await mapper.prepare(true, { ...context, additionalArgs });
       const diagnostic = result.diagnostics[0];
@@ -233,6 +235,17 @@ suite("sandbox mappers", () => {
       });
       assert.deepStrictEqual(other.diagnostics, []);
     }
+    // --add-dir is refused under read-only too (it crashes interactive
+    // Codex there), and the diagnostic names the supported alternative.
+    const readOnly = await mapper.prepare(true, {
+      ...context,
+      sandboxMode: SANDBOX_MODES.READ_ONLY,
+      additionalArgs: "--add-dir /tmp/outside",
+    });
+    assert.ok(
+      readOnly.diagnostics[0]?.message.includes("trustedExternalRoots"),
+      readOnly.diagnostics[0]?.message
+    );
   });
 
   test("Copilot and Qwen emit their off switches for Off", async () => {

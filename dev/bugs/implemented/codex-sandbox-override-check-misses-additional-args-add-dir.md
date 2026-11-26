@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/harness/codex/CodexSandboxMapper.ts` (`findSandboxOverride`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -49,7 +49,14 @@ Update the refused-forms list in `docs/harnesses/codex-cli.md:114`, extend
 `src/test/unit/SandboxMappers.test.ts`, and add a **Changed** entry to
 `CHANGELOG.md`, because a workflow that runs today would be refused at launch.
 
-**Needs a decision:** the fix is a behavior change, since a currently accepted
-`additionalArgs` value starts failing at launch. The alternative is to document
-`--add-dir` as an intentional escape hatch, and still drop or refuse it under
-`read-only`, where it only ever crashes interactive Codex.
+## Decision
+
+**Refuse it** (2026-11-26). With `sandbox: true`, an `additionalArgs` `--add-dir`
+(including `--add-dir=…`) is a sandbox override and is refused at launch, the same
+way `sandbox_workspace_write.writable_roots` is, in both `workspace-write` and
+`read-only` modes. The diagnostic names approved external roots as the supported
+way to add a writable directory. This is a user-visible behavior change, so it
+needs the `CHANGELOG.md` **Changed** entry and the `docs/harnesses/codex-cli.md`
+update listed above in the same commit. Rejected alternative: documenting
+`--add-dir` as an escape hatch, because it would let the dashboard report the
+sandbox as On while the step writes outside the workspace.

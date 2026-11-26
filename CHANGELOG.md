@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `@` directly after `/`, `\`, `.` or `:` (as in a URL or `docs/@types`) no longer starts a file reference, and inserted references to paths ending in punctuation are quoted so the punctuation stays part of the path; the prompt editor adds a space when it inserts a reference right after one of those characters.
 - `secret rm` now reports `removed: false` when the name is absent from the selected scope and points to the other scope when it holds that name.
 - `uninstall --json` now includes the standard error envelope for bundled-CLI refusals and adds `success: false` and `error.message` when harness settings cannot be updated.
+- A Codex step with `sandbox: true` now fails at launch when `additionalArgs` passes `--add-dir`. The flag added a writable directory outside the workspace while the dashboard still showed the sandbox as On, the same widening ctrlyoke already refused for `-c sandbox_workspace_write.writable_roots`; under `sandboxMode: read-only` it made interactive Codex exit at launch. Approve the directory as an external root (`permissions.trustedExternalRoots`) instead.
 - Community templates installed before install provenance was recorded are recognised and marked when their files still match the library; edited or unavailable copies remain untouched.
 
 ### Fixed
