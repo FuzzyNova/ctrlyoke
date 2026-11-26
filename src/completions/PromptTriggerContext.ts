@@ -61,6 +61,28 @@ const WORD_START_TRIGGERS = [
   COMPLETION_TRIGGERS.BANG,
 ] as const;
 
+/** JSON-style escapes that decode to a control character (a word boundary). */
+const CONTROL_ESCAPES = new Set(["b", "f", "n", "r", "t"]);
+
+/**
+ * Decode the JSON-style escapes in a JSON string or YAML double-quoted scalar
+ * without changing offsets: each escape becomes padding followed by the
+ * character it decodes to, so the boundary scan sees what the runtime parser
+ * sees (`\n@` starts a word; `\\@`, `\/@` and `A@` do not). Scanning left
+ * to right consumes `\\` as a pair, so `\\n` stays a backslash and an `n`.
+ */
+function decodeEscapesInPlace(text: string): string {
+  return text.replace(/\\(?:["\\/bfnrt]|u[\da-fA-F]{4})/gu, (match: string) => {
+    const code = match[1];
+    const decoded = CONTROL_ESCAPES.has(code)
+      ? " "
+      : code === "u"
+        ? String.fromCharCode(Number.parseInt(match.slice(2), 16))
+        : code;
+    return " ".repeat(match.length - 1) + decoded;
+  });
+}
+
 /**
  * Find the prompt-token completion context at the end of `textBefore` (the
  * line up to the cursor). The rightmost trigger wins, and `/` uses the same
@@ -73,17 +95,8 @@ export function findPromptTriggerContext(
   escape?: InsertTextEscape,
   jsonStyleEscapes = false
 ): PromptTriggerContext | null {
-  // In JSON strings and YAML double-quoted scalars, a decoded control escape
-  // ends a word. Mask it without changing offsets before the boundary scan.
-  // An escaped backslash (\\n) is literal text and must remain untouched.
   const boundaryText = jsonStyleEscapes
-    ? textBefore.replace(/\\(?:["\\/bfnrt]|u[\da-fA-F]{4})/gu, (match, offset: number) => {
-        let precedingBackslashes = 0;
-        for (let i = offset - 1; i >= 0 && textBefore[i] === "\\"; i--) {
-          precedingBackslashes++;
-        }
-        return precedingBackslashes % 2 === 0 ? " ".repeat(match.length) : match;
-      })
+    ? decodeEscapesInPlace(textBefore)
     : textBefore;
   let trigger: PromptTokenTrigger | undefined;
   let index = findPartialSlashTokenStart(boundaryText);

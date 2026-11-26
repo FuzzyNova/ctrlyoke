@@ -78,14 +78,54 @@ suite("findPromptTriggerContext", () => {
       });
     }
     assert.strictEqual(
-      findPromptTriggerContext('"prompt": "Fix this.\\\\n@src', undefined, true),
+      findPromptTriggerContext(
+        '"prompt": "Fix this.\\\\n@src',
+        undefined,
+        true
+      ),
+      null
+    );
+    // Non-control escapes decode to the character the runtime parser sees:
+    // `\@`, `/@` and `A@` do not start a reference, `"@` and `\n@` do.
+    for (const blocked of [
+      '"prompt": "a \\\\@src',
+      '"prompt": "a \\/@src',
+      '"prompt": "a \\u0041@src',
+      '"prompt": "a \\u0041#sym',
+    ]) {
+      assert.strictEqual(
+        findPromptTriggerContext(blocked, undefined, true),
+        null,
+        blocked
+      );
+    }
+    assert.strictEqual(
+      findPromptTriggerContext('"prompt": "a \\"@src', undefined, true)
+        ?.trigger,
+      "@"
+    );
+    assert.strictEqual(
+      findPromptTriggerContext('"prompt": "a \\\\\\n@src', undefined, true)
+        ?.trigger,
+      "@"
+    );
+    assert.strictEqual(
+      findPromptTriggerContext('"prompt": "a\\u0020@src', undefined, true)
+        ?.trigger,
+      "@"
+    );
+    assert.strictEqual(
+      findPromptTriggerContext(
+        "- prompt: 'Fix this.\\n@src'",
+        undefined,
+        false
+      ),
       null
     );
     assert.strictEqual(
-      findPromptTriggerContext("- prompt: 'Fix this.\\n@src'", undefined, false),
+      findPromptTriggerContext("- prompt: |\n  Fix this.\\n@src"),
       null
     );
-    assert.strictEqual(findPromptTriggerContext("- prompt: |\n  Fix this.\\n@src"), null);
     // Without the explicit string-style flag, raw markdown is unchanged.
     assert.strictEqual(findPromptTriggerContext("Fix this.\\n@src"), null);
   });
