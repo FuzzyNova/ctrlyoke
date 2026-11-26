@@ -161,6 +161,32 @@ suite("CopilotHeadlessControlChannel", () => {
     channel.close();
   });
 
+  test("sends a queued steer after the prior prompt fails", async () => {
+    const writes: string[] = [];
+    const channel = createChannel();
+    await startFreshSession(channel, writes);
+
+    await channel.sendUserMessage("first");
+    const firstPrompt = await waitForWrite(writes, 2);
+    const queuedSteer = channel.sendUserMessage("steer");
+    channel.observeStdoutChunk(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: firstPrompt.id,
+        error: { message: "rate limited" },
+      })}\n`
+    );
+
+    await queuedSteer;
+    const steerPrompt = await waitForWrite(writes, 3);
+    assert.strictEqual(steerPrompt.method, "session/prompt");
+    assert.deepStrictEqual(
+      (steerPrompt.params as { prompt: unknown[] }).prompt,
+      [{ type: "text", text: "steer" }]
+    );
+    channel.close();
+  });
+
   test("maps approvals to one-shot ACP options only", async () => {
     const writes: string[] = [];
     const channel = createChannel();

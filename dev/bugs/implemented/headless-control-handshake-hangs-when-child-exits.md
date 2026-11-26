@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/harness/shared/CliTransportCoordinator.ts` (`executeHeadless`), `src/core/harness/codex/CodexAppServerHeadlessControlChannel.ts`, `src/core/harness/copilot/CopilotHeadlessControlChannel.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

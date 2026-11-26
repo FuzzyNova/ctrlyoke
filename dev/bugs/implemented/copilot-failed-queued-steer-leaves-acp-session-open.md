@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/harness/shared/CliTransportCoordinator.ts` (`activeHeadlessControlSend`, `closeAfterTurnEnd`), `src/core/harness/copilot/CopilotHeadlessControlChannel.ts` (`sendQueuedUserMessage`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

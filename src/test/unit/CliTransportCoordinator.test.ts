@@ -16,6 +16,8 @@ import {
   CLAUDE_EVENT_TYPES,
 } from "../../core/harness/claude/ClaudeProtocolConstants";
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
+import { CopilotHeadlessControlChannel } from "../../core/harness/copilot/CopilotHeadlessControlChannel";
+import { CodexAppServerHeadlessControlChannel } from "../../core/harness/codex/CodexAppServerHeadlessControlChannel";
 import { OpenCodeHarnessAdapter } from "../../core/harness/opencode/OpenCodeHarnessAdapter";
 import { QwenHeadlessControlChannel } from "../../core/harness/qwen/QwenHeadlessControlChannel";
 import { QwenHarnessAdapter } from "../../core/harness/qwen/QwenHarnessAdapter";
@@ -354,6 +356,74 @@ async function createCoordinatorWithLivePty(
 }
 
 suite("CliTransportCoordinator", () => {
+  test("fails Codex and Copilot handshakes when the child exits", async () => {
+    for (const [name, channel] of [
+      ["Codex", new CodexAppServerHeadlessControlChannel()],
+      [
+        "Copilot",
+        new CopilotHeadlessControlChannel(
+          {
+            approvalPolicy: "deny",
+            approvalTimeoutMs: 1_000,
+            useApprovalControl: false,
+          },
+          []
+        ),
+      ],
+    ] as const) {
+      const provider = {
+        ...createHeadlessProvider(),
+        createHeadlessControlChannel: () => channel,
+      } as unknown as IHarnessAdapter;
+      const coordinator = new CliTransportCoordinator({
+        provider,
+        processManager: {
+          spawn: async (
+            _command: string,
+            _args: string[],
+            options: {
+              onStdinReady?: (writer: any) => void;
+            }
+          ) => {
+            options.onStdinReady?.({
+              write: (
+                _text: string,
+                _encoding: string,
+                callback?: (error?: Error | null) => void
+              ) => {
+                callback?.();
+                return true;
+              },
+              end: (callback?: () => void) => callback?.(),
+            });
+            return {
+              stdout: "",
+              stderr: `${name} startup failure`,
+              exitCode: 1,
+            };
+          },
+          isActive: () => false,
+        } as any,
+        resolveCliCommand: resolveCommand,
+        runtimeState: {
+          getWorkspaceRoot: () => process.cwd(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: createHeadlessHostCallbacks(),
+      });
+
+      await assert.rejects(
+        coordinator.executeHeadless([], "prompt", [], async () => true),
+        (error: unknown) => {
+          assert.ok(error instanceof CliTransportError, `${name}: ${error}`);
+          assert.match(error.message, /exited with code 1/);
+          assert.match(error.message, new RegExp(`${name} startup failure`));
+          return true;
+        }
+      );
+    }
+  });
+
   test("does not warn for an approval-capable ask channel with a dashboard", async () => {
     const channel: IHeadlessControlChannel = {
       spawnShape: {},
@@ -1145,6 +1215,127 @@ suite("CliTransportCoordinator", () => {
     assert.strictEqual(endCalled, false);
 
     emitStdout?.(`${JSON.stringify({ type: QWEN_EVENT_TYPES.RESULT })}\n`);
+    assert.strictEqual(await execution, true);
+    assert.strictEqual(endCalled, true);
+  });
+
+  test("closes stdin when a queued steer fails after TURN_END", async () => {
+    let emitStdout: ((chunk: string) => void) | undefined;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    let rejectSteer!: (error: Error) => void;
+    let endCalled = false;
+    let resolveTarget!: (target: HeadlessControlTargetMessage) => void;
+    const target = new Promise<HeadlessControlTargetMessage>(
+      (resolve) => (resolveTarget = resolve)
+    );
+    const spawnResult = new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolve) => (finishSpawn = resolve));
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      async start() {},
+      async sendUserMessage(text) {
+        if (text === "steer")
+          return new Promise<void>(
+            (_resolve, reject) => (rejectSteer = reject)
+          );
+      },
+      observe(record) {
+        if (
+          typeof record === "object" &&
+          record !== null &&
+          "type" in record &&
+          record.type === QWEN_EVENT_TYPES.RESULT
+        ) {
+          return [{ kind: HEADLESS_CONTROL_OBSERVATION_KINDS.TURN_END }];
+        }
+        return [];
+      },
+      async answerApproval() {},
+      close() {},
+    };
+    const provider = {
+      ...createHeadlessProvider(),
+      config: {
+        ...createHeadlessProvider().config,
+        harnessId: HARNESS_IDS.QWEN_CLI,
+      },
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: {
+            onStdinReady?: (writer: any) => void;
+            onStdout?: (chunk: string) => void;
+          }
+        ) => {
+          emitStdout = options.onStdout;
+          options.onStdinReady?.({
+            write: (
+              _chunk: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => {
+              endCalled = true;
+              callback?.();
+              finishSpawn({ stdout: "", stderr: "", exitCode: 0 });
+            },
+          });
+          return spawnResult;
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        ...createHeadlessHostCallbacks(),
+        onHeadlessControlTarget: (message) => {
+          if (message.isOpen) resolveTarget(message);
+        },
+      },
+    });
+    const execution = coordinator.executeHeadless(
+      [],
+      "initial",
+      [],
+      async () => true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        workflowId: "workflow-queued-failure",
+        stepIndex: 0,
+        harnessId: HARNESS_IDS.QWEN_CLI,
+      }
+    );
+    const opened = await target;
+    const steering = coordinator.sendHeadlessUserMessage(
+      opened.controlSessionId,
+      "steer"
+    );
+    emitStdout?.(`${JSON.stringify({ type: QWEN_EVENT_TYPES.RESULT })}\n`);
+    rejectSteer(new Error("queued steer failed"));
+    await assert.rejects(steering, /queued steer failed/);
     assert.strictEqual(await execution, true);
     assert.strictEqual(endCalled, true);
   });
