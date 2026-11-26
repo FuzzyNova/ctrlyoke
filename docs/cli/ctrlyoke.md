@@ -408,15 +408,16 @@ Validation reports workflow findings that hold whatever harness runs the file.
 Unknown fields are ignored by the current ctrlyoke version and reported as
 warnings; the message suggests the nearest valid key and notes that the field
 may come from a newer ctrlyoke. Other warnings describe settings that will not
-take effect. Findings print under the result and appear in `--json` as a
+take effect, or a queue that `run` will refuse to start. Findings print under the result and appear in `--json` as a
 `warnings` array of `{ code, message, propertyPointer }`, where
 `propertyPointer` is an RFC 6901 pointer to the authored value. Identify a
 finding by its `code`, not by its message.
 
-| Code                           | Meaning                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `unknown-property`             | A field is not recognized at this location and will be ignored by this ctrlyoke version.                                        |
-| `script-comparison-incomplete` | A script comparison names a `compareSource` or `operator` but no `expected`, so it is ignored and the check uses exit code `0`. |
+| Code                           | Meaning                                                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unknown-property`             | A field is not recognized at this location and will be ignored by this ctrlyoke version.                                                                    |
+| `script-comparison-incomplete` | A script comparison names a `compareSource` or `operator` but no `expected`, so it is ignored and the check uses exit code `0`.                             |
+| `step-limit-exceeded`          | The authored steps already exceed the effective `maxSteps` (the workflow's or the settings limit), so `run` stops before the first step with exit code `6`. |
 
 Warnings do not change the exit code by default. Bare `--strict` fails on
 `unknown-property` warnings; `--strict <policy>` also applies that rule while
