@@ -4,6 +4,8 @@ import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import type { SubWorkflowParentLink } from "../../types/SubWorkflowTypes";
+import type { WorkflowKey, RunRef } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -108,6 +110,33 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.eventCount, 5);
     assert.strictEqual(manifest.nextSequence, 6);
     assert.strictEqual(manifest.lastUpdatedAt, 131);
+  });
+
+  test("writes parentRun only when supplied and preserves it in later writes", async () => {
+    const parentRun: SubWorkflowParentLink = {
+      workflowKey: "parent-workflow" as WorkflowKey,
+      runRef: "parent-run" as RunRef,
+      stepId: "step-1",
+      loopIndex: 0,
+    };
+    const parentPath = await recorder.initializeRunAt(
+      path.join(tempDir, "child"),
+      "child-workflow",
+      2,
+      200,
+      EXECUTION_STATES.RUNNING,
+      1,
+      undefined,
+      parentRun
+    );
+    await recorder.appendEvents(parentPath, [
+      createStatusEventDraft(210, "updated"),
+    ]);
+    assert.deepStrictEqual(
+      (await recorder.readManifest(parentPath)).parentRun,
+      parentRun
+    );
+    assert.ok(!("parentRun" in (await recorder.readManifest(manifestPath))));
   });
 
   test("reads legacy cli output events that contain callerType", async () => {

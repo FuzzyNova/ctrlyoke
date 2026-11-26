@@ -1,5 +1,6 @@
 import type {
   PromptFile,
+  ParsedPromptFile,
   RunRef,
   WorkingFileWorktreeRuntime,
   WorkflowKey,
@@ -81,7 +82,11 @@ export interface SubWorkflowInstance {
       _runtime?: { worktree?: WorkingFileWorktreeRuntime };
     };
   };
-  loadPromptFile(filePath: string): Promise<boolean>;
+  loadPromptFile(
+    filePath: string,
+    parsedPromptFile?: ParsedPromptFile | null,
+    options?: { parentRun?: SubWorkflowParentLink }
+  ): Promise<boolean>;
   executeLoadedPromptFile(): Promise<void>;
   pause(): Promise<void>;
   cancelPause(): Promise<void>;

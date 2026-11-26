@@ -27,6 +27,7 @@ import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { runStateWriteOptions } from "../../utils/RunStateWrites";
 import { Log } from "../../utils/Log";
 import { hasErrnoCode, getErrnoCode } from "../../utils/ErrorUtils";
+import type { SubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -57,7 +58,8 @@ export class TimelineRecorder {
     startedAt: number,
     executionState: ExecutionState,
     definitionRevision: number = 1,
-    initialDefinition?: WorkflowDefinitionSnapshot
+    initialDefinition?: WorkflowDefinitionSnapshot,
+    parentRun?: SubWorkflowParentLink
   ): Promise<string> {
     const manifestPath =
       TimelineRecorder.getManifestPathForRunDirectory(runDirectoryPath);
@@ -93,6 +95,7 @@ export class TimelineRecorder {
       executionState,
       definitionRevision,
       ...(initialDefinition ? { initialDefinition } : {}),
+      ...(parentRun ? { parentRun } : {}),
       stepCount: 0,
       eventCount: 0,
       nextSequence: 1,

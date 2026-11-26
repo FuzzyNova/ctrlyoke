@@ -28,6 +28,7 @@ import {
   type WorkflowLineageCreationOptions,
 } from "../types/CtrlYokeTypes";
 import type { SubWorkflowRuntimeMetadata } from "../types/CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "../types/SubWorkflowTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -2583,7 +2584,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   public async promoteToNewRun(
     workspaceFolderPath: string,
-    startedAt: number
+    startedAt: number,
+    parentRun?: SubWorkflowParentLink
   ): Promise<{
     workingFilePath: string;
     runRef: RunRef;
@@ -2608,7 +2610,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const result = await this.workingFileManager.promoteToNewRun(
       workspaceFolderPath,
       workflowKey,
-      startedAt
+      startedAt,
+      parentRun
     );
 
     this.state.workingFilePath = result.workingFilePath;

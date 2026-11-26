@@ -72,6 +72,40 @@ suite("RunBundleExporter secrets", () => {
     assert.ok(values.includes("step-secret"));
   });
 
+  test("exports parentRun in the bundled run manifest", async () => {
+    const { workflowKey, runRef } = await createRun({
+      state: EXECUTION_STATES.STOPPED,
+      currentIndex: 0,
+      steps: [{ prompt: "child run" }],
+    });
+    const manifestPath = WorkflowPaths.manifestPath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const recorder = new TimelineRecorder();
+    const parentRun = {
+      workflowKey: "parent-workflow" as never,
+      runRef: "parent-run" as never,
+      stepId: "parent-step",
+      loopIndex: 1,
+    };
+    await recorder.updateManifest(manifestPath, (manifest) => ({
+      ...manifest,
+      parentRun,
+    }));
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      workflowKey,
+      runRef,
+      bundleDir: path.join(root, "parent-run.ctrlyokerun"),
+      exportedByVersion: "test",
+    });
+    const bundle = await readRunBundle(exported.bundleDir, workspace);
+    assert.deepStrictEqual(bundle.runManifest.parentRun, parentRun);
+  });
+
   test("skips a granted secret with no value on this machine", async () => {
     const values = await resolveRunBundleSecrets(definition, {
       workspaceRoot: process.cwd(),

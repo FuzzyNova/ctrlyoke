@@ -26,6 +26,7 @@ import { OutputHistoryManager } from "./OutputHistoryManager";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkingFileManager } from "../WorkingFileManager";
 import { getErrorMessage } from "../../utils/ErrorUtils";
+import type { SubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 
 export interface RunMaterializationInput {
   workspaceRoot: string;
@@ -39,6 +40,7 @@ export interface RunMaterializationInput {
   runtimeState?: Partial<WorkingFileRuntime>;
   startedAt?: number;
   activeExecutionMs?: number;
+  parentRun?: SubWorkflowParentLink;
   provenance: NonNullable<WorkflowLineageDescriptor["importedFrom"]>;
   beforeEvents?: (identity: {
     workflowKey: WorkflowKey;
@@ -144,7 +146,8 @@ export class RunMaterializer {
         allocation.runId,
         startedAt,
         [],
-        initialDefinition
+        initialDefinition,
+        input.parentRun
       );
       const manifestPath = initialized.filePath;
       if (!manifestPath)

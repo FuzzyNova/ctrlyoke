@@ -50,6 +50,7 @@ import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { TimelineRecorder } from "./TimelineRecorder";
+import type { SubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 import { RunOutputResolver } from "./RunOutputResolver";
 import { RunMetadataScanner } from "./RunMetadataScanner";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
@@ -389,7 +390,8 @@ export class OutputHistoryManager {
     runId: number,
     startedAt: number,
     retentionProtectedRunRefs: readonly RunRef[] = [],
-    initialDefinition?: WorkflowDefinitionSnapshot
+    initialDefinition?: WorkflowDefinitionSnapshot,
+    parentRun?: SubWorkflowParentLink
   ): Promise<{ filePath: string; runCount: number }> {
     Log.debug(
       `[OutputHistoryManager] initializeRunAt: ${workflowKey}/${runRef} (runId=${runId})`
@@ -402,7 +404,8 @@ export class OutputHistoryManager {
         startedAt,
         EXECUTION_STATES.RUNNING,
         1,
-        initialDefinition
+        initialDefinition,
+        parentRun
       );
 
       // Prune old runs if needed (disk-only operation)

@@ -19,6 +19,7 @@ import type {
   WorktreeRunProjection,
   WorkflowStopReason,
 } from "./CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "./SubWorkflowTypes";
 import type {
   OutputExecutionTarget,
   WorkspaceSnapshot,
@@ -109,6 +110,8 @@ export interface WorkflowRunManifest {
   completedAt?: number;
   /** Pause-aware active execution time; absent on runs created before this field. */
   activeExecutionMs?: number;
+  /** The sub-workflow step that launched this run, when it has a parent. */
+  parentRun?: SubWorkflowParentLink;
   executionState: ExecutionState;
   /** Structured reason when a run ended because an execution guardrail fired. */
   stopReason?: WorkflowStopReason;

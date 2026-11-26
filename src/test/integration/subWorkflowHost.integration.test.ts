@@ -12,6 +12,7 @@ import {
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { STEP_STATUS } from "../../types/DashboardConstants";
 import { isSubWorkflowStep } from "../../types/CtrlYokeTypes";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 
 suite("Sub-workflow host end to end", () => {
   test("runs child scripts, links child runs, and fails through a child failure or cycle", async () => {
@@ -92,6 +93,21 @@ suite("Sub-workflow host end to end", () => {
       const childRuntime = childStep._runtime;
       assert.ok(childRuntime?.childWorkflowKey);
       assert.ok(childRuntime?.childRunRef);
+      const childManifest = await new TimelineRecorder().readManifest(
+        instances[0].outputHistoryManager.getHistoryFilePath(
+          childRuntime!.childWorkflowKey!,
+          childRuntime!.childRunRef!
+        )
+      );
+      assert.strictEqual(
+        childManifest.parentRun?.workflowKey,
+        parent.promptQueue.getState().workflowKey
+      );
+      assert.strictEqual(
+        childManifest.parentRun?.runRef,
+        parent.getExecutionRunRef()
+      );
+      assert.ok(childManifest.parentRun?.stepId);
 
       await writeWorkflow(child, [
         { type: "script", script: 'node -e "process.exit(1)"' },

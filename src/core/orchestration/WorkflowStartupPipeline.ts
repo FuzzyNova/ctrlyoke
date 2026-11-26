@@ -164,6 +164,8 @@ export interface WorkflowStartupExecutionPort {
     missingDirectories: readonly string[]
   ) => string;
   readonly getDefinitionRevisionContext: () => DefinitionRevisionContext;
+  readonly getParentRun?: () =>
+    import("../../types/SubWorkflowTypes").SubWorkflowParentLink | undefined;
   readonly getResolvedHistoryFilePath: () => string;
   readonly getActiveHistoryFilePath: () => string;
   readonly setActiveHistoryFilePath: (filePath: string) => void;
@@ -1348,7 +1350,8 @@ export class WorkflowStartupPipeline {
     const startedAt = Date.now();
     const promoted = await this.port.queue.promoteToNewRun(
       runWorkspaceRoot,
-      startedAt
+      startedAt,
+      this.port.execution.getParentRun?.()
     );
     if (!promoted) return workingFilePath;
 
@@ -1364,7 +1367,8 @@ export class WorkflowStartupPipeline {
       promoted.runId,
       startedAt,
       [],
-      this.port.execution.getDefinitionRevisionContext().definition
+      this.port.execution.getDefinitionRevisionContext().definition,
+      this.port.execution.getParentRun?.()
     );
     if (!historyInit.filePath) {
       throw new Error(

@@ -66,6 +66,7 @@ import type {
   SubWorkflowHandle,
   SubWorkflowHost,
   SubWorkflowInstance,
+  SubWorkflowParentLink,
 } from "../types/SubWorkflowTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
@@ -348,6 +349,7 @@ export class WorkflowInstance
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
+  private loadedParentRun?: SubWorkflowParentLink;
   /** Race-condition guard: prevents duplicate workflow starts */
   startPending: boolean = false;
   /**
@@ -1673,8 +1675,10 @@ export class WorkflowInstance
    */
   async loadPromptFile(
     filePath: string,
-    parsedPromptFile?: ParsedPromptFile | null
+    parsedPromptFile?: ParsedPromptFile | null,
+    options?: { parentRun?: SubWorkflowParentLink }
   ): Promise<boolean> {
+    this.loadedParentRun = options?.parentRun;
     // Clear queue to reset cached workflow name — ensures fresh name from filename
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
@@ -1967,6 +1971,7 @@ export class WorkflowInstance
         getMissingAssetDedupeKey: (missingDirectories) =>
           this.getMissingAssetDedupeKey(missingDirectories),
         getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+        getParentRun: () => this.loadedParentRun,
         getResolvedHistoryFilePath: () => this.resolveHistoryFilePath(),
         getActiveHistoryFilePath: () => this.activeHistoryFilePath,
         setActiveHistoryFilePath: (filePath) => {
@@ -2425,6 +2430,8 @@ export class WorkflowInstance
     harnessOverride?: HarnessId,
     onPrepared?: () => Promise<void>
   ): Promise<void> {
+    // A seeded re-run is a new top-level execution, even when its source was a child.
+    this.loadedParentRun = undefined;
     await this.closeRetainedTerminalsForFreshRun();
     await this.loadWorkingFile(seeded.workingFilePath);
     await onPrepared?.();

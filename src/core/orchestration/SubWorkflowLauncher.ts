@@ -25,9 +25,11 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
 
     let loaded: boolean;
     try {
-      // Parent lineage and inherited execution-root data belong in load options
-      // once WorkflowInstance exposes that seam; do not apply them afterward.
-      loaded = await instance.loadPromptFile(request.source.resolvedPath);
+      loaded = await instance.loadPromptFile(
+        request.source.resolvedPath,
+        undefined,
+        { parentRun: request.parent }
+      );
       if (!loaded) {
         return this.createFailedToLoadHandle(
           instance,
