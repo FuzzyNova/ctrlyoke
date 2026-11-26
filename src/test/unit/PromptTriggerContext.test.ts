@@ -61,6 +61,35 @@ suite("findPromptTriggerContext", () => {
     assert.strictEqual(triggerOf("Done!"), undefined);
   });
 
+  test("treats JSON-style character escapes as boundaries only when enabled", () => {
+    for (const [text, trigger, query] of [
+      ['  "prompt": "Fix this.\\n@src', "@", "src"],
+      ['  "prompt": "Fix this.\\t#sym:', "#", "sym:"],
+      ['  "prompt": "x \\n/skill:', "/", "skill:"],
+      ['  - prompt: "Fix this.\\n@src', "@", "src"],
+      ['  - prompt: "Fix this.\\t~diff', "~", "diff"],
+      ['  - prompt: "Fix this.\\r$preCondition:', "$", "preCondition:"],
+      ['  - prompt: "Fix this.\\f!API', "!", "API"],
+    ] as const) {
+      assert.deepStrictEqual(findPromptTriggerContext(text, undefined, true), {
+        trigger,
+        query,
+        index: text.lastIndexOf(trigger),
+      });
+    }
+    assert.strictEqual(
+      findPromptTriggerContext('"prompt": "Fix this.\\\\n@src', undefined, true),
+      null
+    );
+    assert.strictEqual(
+      findPromptTriggerContext("- prompt: 'Fix this.\\n@src'", undefined, false),
+      null
+    );
+    assert.strictEqual(findPromptTriggerContext("- prompt: |\n  Fix this.\\n@src"), null);
+    // Without the explicit string-style flag, raw markdown is unchanged.
+    assert.strictEqual(findPromptTriggerContext("Fix this.\\n@src"), null);
+  });
+
   test("uses the rightmost trigger at a word start", () => {
     assert.strictEqual(triggerOf("@src/a.ts #sym"), "#");
     assert.strictEqual(triggerOf("#sym:A @src"), "@");

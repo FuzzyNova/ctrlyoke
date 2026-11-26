@@ -125,7 +125,8 @@ export class PromptCompletionClient {
    */
   readonly customSource = (
     context: CompletionContext,
-    escapeInsertText?: InsertTextEscape
+    escapeInsertText?: InsertTextEscape,
+    jsonStyleEscapes = false
   ): CompletionResult | Promise<CompletionResult | null> | null => {
     // Use the rightmost trigger character, mirroring PromptCompletionProvider.
     // A greedy `@"[^"]*` match once swallowed a real `@path` typed after a
@@ -136,7 +137,8 @@ export class PromptCompletionClient {
     const completionContext = findCustomCompletionContext(
       textBefore,
       lineObj.from,
-      escapeInsertText
+      escapeInsertText,
+      jsonStyleEscapes
     );
     if (!completionContext) {
       this.cache = null;

@@ -70,13 +70,26 @@ const WORD_START_TRIGGERS = [
  */
 export function findPromptTriggerContext(
   textBefore: string,
-  escape?: InsertTextEscape
+  escape?: InsertTextEscape,
+  jsonStyleEscapes = false
 ): PromptTriggerContext | null {
+  // In JSON strings and YAML double-quoted scalars, a decoded control escape
+  // ends a word. Mask it without changing offsets before the boundary scan.
+  // An escaped backslash (\\n) is literal text and must remain untouched.
+  const boundaryText = jsonStyleEscapes
+    ? textBefore.replace(/\\(?:["\\/bfnrt]|u[\da-fA-F]{4})/gu, (match, offset: number) => {
+        let precedingBackslashes = 0;
+        for (let i = offset - 1; i >= 0 && textBefore[i] === "\\"; i--) {
+          precedingBackslashes++;
+        }
+        return precedingBackslashes % 2 === 0 ? " ".repeat(match.length) : match;
+      })
+    : textBefore;
   let trigger: PromptTokenTrigger | undefined;
-  let index = findPartialSlashTokenStart(textBefore);
+  let index = findPartialSlashTokenStart(boundaryText);
   if (index !== -1) trigger = COMPLETION_TRIGGERS.SLASH;
   for (const candidate of WORD_START_TRIGGERS) {
-    const candidateIndex = findWordStartTriggerIndex(textBefore, candidate);
+    const candidateIndex = findWordStartTriggerIndex(boundaryText, candidate);
     if (candidateIndex > index) {
       index = candidateIndex;
       trigger = candidate;

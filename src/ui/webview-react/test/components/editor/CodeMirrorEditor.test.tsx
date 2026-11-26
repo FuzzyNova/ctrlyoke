@@ -731,6 +731,19 @@ describe("CodeMirrorEditor external reference completions", () => {
     ).toEqual({ trigger: "@", query: '"my dir/', from: 15 });
   });
 
+  it("uses shared trigger rules for escaped JSON and double-quoted YAML values", () => {
+    expect(findCustomCompletionContext('"prompt": "Fix.\\n@src', 0, undefined, true)).toEqual({
+      trigger: "@",
+      query: "src",
+      from: 17,
+    });
+    expect(findCustomCompletionContext('- prompt: "Fix.\\t#sym:', 0, undefined, true)?.trigger).toBe("#");
+    expect(findCustomCompletionContext('"prompt": "Fix.\\n/skill:', 0, undefined, true)?.trigger).toBe("/");
+    expect(findCustomCompletionContext('"prompt": "Fix.\\\\n@src', 0, undefined, true)).toBeNull();
+    expect(findCustomCompletionContext("- prompt: 'Fix.\\n@src'", 0, undefined, false)).toBeNull();
+    expect(findCustomCompletionContext("- prompt: |\n  Fix.\\n@src")).toBeNull();
+  });
+
   it("finds slash-token completion contexts and allows namespace punctuation", () => {
     expect(findSlashCompletionContext("/", 4)).toEqual({ from: 4, query: "" });
     expect(findSlashCompletionContext(" /", 0)).toEqual({ from: 1, query: "" });

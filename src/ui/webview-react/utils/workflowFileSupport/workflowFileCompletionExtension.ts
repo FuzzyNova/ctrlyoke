@@ -16,7 +16,10 @@ import {
 import { COMPLETION_KIND_ICONS } from "@root/types/SymbolKindConstants";
 import type { WorkflowValueDataSource } from "@root/completions/WorkflowFileCompletionCore";
 import type { WorkflowLocation } from "@root/completions/WorkflowLocationTypes";
-import { getWorkflowInsertEscape } from "@root/completions/WorkflowInsertEscape";
+import {
+  getWorkflowInsertEscape,
+  usesJsonStyleEscapes,
+} from "@root/completions/WorkflowInsertEscape";
 import { DEFAULT_COMPLETION_ICON } from "@utils/atomicReferences";
 import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
 import type { PromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
@@ -167,7 +170,8 @@ function createPromptTokenSource(
       const trigger = findCustomCompletionContext(
         line.text.slice(0, context.pos - line.from),
         line.from,
-        getWorkflowInsertEscape(located.location)
+        getWorkflowInsertEscape(located.location),
+        usesJsonStyleEscapes(located.location)
       );
       if (trigger && trigger.from < valueStart) return null;
     }
@@ -183,7 +187,8 @@ function createPromptTokenSource(
             options.getSettingsPreCondition?.()
           ),
       getContextualPriorCompletions,
-      () => getWorkflowInsertEscape(located.location)
+      () => getWorkflowInsertEscape(located.location),
+      () => usesJsonStyleEscapes(located.location)
     );
     return workflowSource(context);
   };
