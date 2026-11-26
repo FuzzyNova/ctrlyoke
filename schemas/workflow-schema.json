@@ -521,8 +521,60 @@
               "$ref": "#/properties/_templateMeta"
             }
           }
+        },
+        {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/rootWorkflowStep" },
+            { "$ref": "#/$defs/workflowOnlyProperties" }
+          ],
+          "properties": {
+            "$schema": { "$ref": "#/$defs/rootScriptStep/properties/$schema" },
+            "schemaVersion": {
+              "$ref": "#/$defs/rootScriptStep/properties/schemaVersion"
+            },
+            "_templateMeta": { "$ref": "#/properties/_templateMeta" }
+          }
         }
       ]
+    },
+    "rootWorkflowStep": {
+      "type": "object",
+      "description": "A top-level sub-workflow step with workflow-only properties.",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "description": "Schema URL used by JSON-aware editors for validation and completion."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1. Not substituted: This structural field or identity value stays as authored."
+        },
+        "type": { "$ref": "#/$defs/subWorkflowStep/properties/type" },
+        "name": { "$ref": "#/$defs/stepDisplayProperties/properties/name" },
+        "enabled": {
+          "$ref": "#/$defs/stepDisplayProperties/properties/enabled"
+        },
+        "color": { "$ref": "#/$defs/stepDisplayProperties/properties/color" },
+        "workflow": { "$ref": "#/$defs/subWorkflowStep/properties/workflow" },
+        "onFail": { "$ref": "#/$defs/subWorkflowStep/properties/onFail" },
+        "_runtime": { "$ref": "#/$defs/subWorkflowStep/properties/_runtime" },
+        "worktree": {
+          "$ref": "#/$defs/workflowOnlyProperties/properties/worktree"
+        },
+        "vars": { "$ref": "#/$defs/workflowOnlyProperties/properties/vars" },
+        "trustedExternalRoots": {
+          "$ref": "#/$defs/workflowOnlyProperties/properties/trustedExternalRoots"
+        },
+        "maxSteps": {
+          "$ref": "#/$defs/workflowOnlyProperties/properties/maxSteps"
+        },
+        "_templateMeta": { "$ref": "#/properties/_templateMeta" }
+      },
+      "required": ["type", "workflow"],
+      "unevaluatedProperties": false
     },
     "rootScriptStep": {
       "type": "object",
@@ -902,6 +954,9 @@
             },
             {
               "$ref": "#/$defs/scriptStep"
+            },
+            {
+              "$ref": "#/$defs/subWorkflowStep"
             }
           ]
         },
@@ -928,7 +983,7 @@
     },
     "parallelGroupItem": {
       "type": "object",
-      "description": "An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.",
+      "description": "An authored group of prompt or script steps. Workflow steps are currently rejected as group members. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.",
       "properties": {
         "parallel": {
           "description": "The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.",
@@ -1123,6 +1178,56 @@
           "$ref": "#/$defs/stepDisplayProperties"
         }
       ]
+    },
+    "subWorkflowStep": {
+      "type": "object",
+      "description": "Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage, run history, and dashboard entry. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends.",
+      "allOf": [{ "$ref": "#/$defs/stepDisplayProperties" }],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workflow",
+          "description": "Marks this step as a sub-workflow step."
+        },
+        "workflow": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The workflow file to run. The path is resolved like a prompt file reference and is not variable-substituted in v1."
+        },
+        "onFail": {
+          "$ref": "#/$defs/stepOnFail",
+          "description": "What to do when the child run fails or cannot start. 'stopWorkflow' fails this step and stops the parent; 'continue' records the failure on the step and advances. A stopped child always stops the parent."
+        },
+        "_runtime": {
+          "$ref": "#/$defs/subWorkflowRuntimeMetadata",
+          "description": "Per-step runtime linkage to the child run (added automatically during execution). Not substituted: This structural field or identity value stays as authored."
+        }
+      },
+      "required": ["type", "workflow"]
+    },
+    "subWorkflowRuntimeMetadata": {
+      "type": "object",
+      "description": "Runtime linkage to the child run this step started (added automatically during execution).",
+      "allOf": [
+        { "$ref": "#/$defs/stepLifecycleRuntime" },
+        {
+          "properties": {
+            "childWorkflowKey": {
+              "type": "string",
+              "description": "Lineage key of the child run."
+            },
+            "childRunRef": {
+              "type": "string",
+              "description": "Run reference of the child run; used to open it and to reattach on resume."
+            },
+            "resolvedWorkflowPath": {
+              "type": "string",
+              "description": "Absolute path the workflow reference resolved to when the child launched."
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
     },
     "endCondition": {
       "type": "object",

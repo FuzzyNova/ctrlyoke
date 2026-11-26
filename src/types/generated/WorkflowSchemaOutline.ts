@@ -216,7 +216,8 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "string",
         "enum": [
           "prompt",
-          "script"
+          "script",
+          "workflow"
         ],
         "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
       },
@@ -359,6 +360,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string"
         ],
         "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+      },
+      "workflow": {
+        "valueKind": "string",
+        "description": "The workflow file to run. The path is resolved like a prompt file reference and is not variable-substituted in v1."
       },
       "steps": {
         "valueKind": "array",

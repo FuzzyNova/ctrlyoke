@@ -50,6 +50,8 @@ import {
   USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
   SCRIPT_STEP_COPY_FIELDS,
+  SUB_WORKFLOW_STEP_COPY_FIELDS,
+  PROMPT_FILE_RESOLUTION_STATUSES,
 } from "../types/DashboardConstants";
 import {
   CTRLYOKE_FILE_KINDS,
@@ -707,7 +709,11 @@ export class PromptFileParser {
       // include fields valid for the authored step kind.
       schemas =
         suggestionCandidatesOnly && isObject(target)
-          ? [stepSchemaIndex(target) === 1 ? defs.scriptStep : defs.promptStep]
+          ? [
+              [defs.promptStep, defs.scriptStep, defs.subWorkflowStep][
+                stepSchemaIndex(target)
+              ],
+            ]
           : [defs.workflowStep];
     }
 
@@ -961,8 +967,15 @@ export class PromptFileParser {
     promptValue: string,
     promptFilePath: string
   ): Promise<string> {
+    const resolver = this.createPromptFileResolver();
+
+    await resolver.validatePromptReference(promptValue, promptFilePath);
+    return promptValue;
+  }
+
+  private createPromptFileResolver(): PromptFileResolver {
     const trustedRoots = this.platform?.getWorkspaceRoots();
-    const resolver = new PromptFileResolver({
+    return new PromptFileResolver({
       workspaceRoot: this.platform?.getWorkspaceRoot(),
       namedRoots: this.platform?.getNamedWorkspaceRoots() ?? [],
       trustedRoots: trustedRoots?.length ? trustedRoots : undefined,
@@ -970,9 +983,6 @@ export class PromptFileParser {
         this.platform?.getWorkspaceRoot()
       ),
     });
-
-    await resolver.validatePromptReference(promptValue, promptFilePath);
-    return promptValue;
   }
 
   /**
@@ -1040,8 +1050,12 @@ export class PromptFileParser {
       }
       case STEP_TYPES.PROMPT:
         break;
-      case STEP_TYPES.WORKFLOW:
-        throw new Error("Sub-workflow steps are not supported by this parser");
+      case STEP_TYPES.WORKFLOW: {
+        const step = await this.buildSubWorkflowStep(parsed, promptFilePath);
+        const promptFile: PromptFile = { steps: [step] };
+        this.copyWorkflowLevelProperties(parsed, promptFile);
+        return promptFile;
+      }
       default:
         assertNever(rootStepType);
     }
@@ -1217,7 +1231,7 @@ export class PromptFileParser {
         }
         if (!this.isPromptOrScriptSource(member)) {
           throw new WorkflowStructureValidationError(
-            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt or script step`,
+            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt or script step; workflow steps are not supported in parallel groups`,
             `/steps/${stepIndex}/parallel/${memberIndex}`
           );
         }
@@ -1259,7 +1273,7 @@ export class PromptFileParser {
       case STEP_TYPES.SCRIPT:
         return this.buildScriptStep(source);
       case STEP_TYPES.WORKFLOW:
-        throw new Error("Sub-workflow steps are not supported by this parser");
+        return this.buildSubWorkflowStep(source, promptFilePath);
       case STEP_TYPES.PROMPT: {
         const promptValue = await this.validatePromptReference(
           source.prompt,
@@ -1270,6 +1284,35 @@ export class PromptFileParser {
       default:
         return assertNever(sourceType);
     }
+  }
+
+  private async buildSubWorkflowStep(
+    source: Record<string, unknown>,
+    promptFilePath: string
+  ): Promise<WorkflowStep> {
+    if (typeof source.workflow !== "string" || source.workflow.trim() === "") {
+      throw new Error("Sub-workflow step requires a non-empty workflow path");
+    }
+    const resolution = await this.createPromptFileResolver().resolvePath(
+      source.workflow,
+      promptFilePath
+    );
+    if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+      throw new Error(
+        `Sub-workflow file reference "${source.workflow}" ${resolution.status === "missing" ? "could not be found" : `could not be read: ${getErrorMessage(resolution.error)}`}`
+      );
+    }
+    const step = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: source.workflow,
+    } as Extract<WorkflowStep, { type: typeof STEP_TYPES.WORKFLOW }>;
+    for (const key of SUB_WORKFLOW_STEP_COPY_FIELDS) {
+      const value = source[key];
+      if (value !== undefined) Object.assign(step, { [key]: value });
+    }
+    if (source._runtime !== undefined)
+      step._runtime = source._runtime as typeof step._runtime;
+    return step;
   }
 
   private getParallelReferenceErrors(
@@ -1580,7 +1623,7 @@ function stepSchemaIndex(step: Record<string, unknown>): number {
     case STEP_TYPES.SCRIPT:
       return 1;
     case STEP_TYPES.WORKFLOW:
-      return 0;
+      return 2;
     default:
       return assertNever(stepType);
   }

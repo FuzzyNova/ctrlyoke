@@ -79,10 +79,11 @@ test("enums, defaults and value kinds come through $ref and oneOf", () => {
 });
 
 test("a key defined in several oneOf branches merges every branch's enum", () => {
-  // The root is a prompt step in one branch and a script step in another.
+  // The root can be a prompt, script, or sub-workflow step.
   assert.deepEqual(outline.workflowRoot.properties.type.enum, [
     "prompt",
     "script",
+    "workflow",
   ]);
   assert.deepEqual(outline.worktree.properties.mode.enum, ["managed", "named"]);
 });

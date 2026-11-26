@@ -500,6 +500,24 @@ Context window size in tokens, captured from the last completed output
 
 Structured classification of the last harness/session failure for this prompt.
 
+### `childWorkflowKey` {#step-runtime-childworkflowkey}
+
+- **Type:** `string`
+
+Lineage key of the child run.
+
+### `childRunRef` {#step-runtime-childrunref}
+
+- **Type:** `string`
+
+Run reference of the child run; used to open it and to reattach on resume.
+
+### `resolvedWorkflowPath` {#step-runtime-resolvedworkflowpath}
+
+- **Type:** `string`
+
+Absolute path the workflow reference resolved to when the child launched.
+
 ## Parallel group topology {#parallel-group-topology}
 
 Normalized working-file topology for one authored parallel group.

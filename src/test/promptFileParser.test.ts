@@ -207,6 +207,14 @@ suite("PromptFileParser Tests", () => {
       assert.ok(!promptWrongKind.message.includes("Did you mean 'shell'?"));
       assert.ok(promptTypo?.message.includes("Did you mean 'harness'?"));
       assert.ok(scriptTypo?.message.includes("Did you mean 'shell'?"));
+      const workflowTypo = parser
+        .getSchemaWarnings({
+          type: "workflow",
+          workflow: "child.ctrlyoke.yaml",
+          onFial: "continue",
+        })
+        .find((warning) => warning.propertyPointer === "/onFial");
+      assert.ok(workflowTypo?.message.includes("Did you mean 'onFail'?"));
     });
 
     test("warns for an other-kind key on a single-step root", () => {
@@ -223,6 +231,91 @@ suite("PromptFileParser Tests", () => {
   });
 
   suite("parsePromptFile - JSON Format", () => {
+    test("normalizes workflow steps, finalStep, and a single-step root", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-subworkflow-parser-")
+      );
+      try {
+        await fs.writeFile(
+          path.join(tempDir, "child.ctrlyoke.yaml"),
+          "steps:\n  - prompt: child\n",
+          "utf8"
+        );
+        for (const [name, source, expectedType] of [
+          [
+            "steps",
+            {
+              steps: [
+                {
+                  type: "workflow",
+                  workflow: "child.ctrlyoke.yaml",
+                  name: "child",
+                },
+              ],
+            },
+            "steps",
+          ],
+          [
+            "final",
+            {
+              steps: [{ prompt: "parent" }],
+              finalStep: { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+            },
+            "finalStep",
+          ],
+          [
+            "root",
+            {
+              type: "workflow",
+              workflow: "child.ctrlyoke.yaml",
+              worktree: true,
+            },
+            "steps",
+          ],
+        ] as const) {
+          const filePath = path.join(tempDir, `${name}.ctrlyoke.json`);
+          await fs.writeFile(filePath, JSON.stringify(source), "utf8");
+          const result = await parser.parsePromptFile(filePath);
+          assert.ok(
+            result,
+            parser.lastParseError?.message ?? `Failed to parse ${name}`
+          );
+          const workflowStep =
+            expectedType === "finalStep" ? result.finalStep : result.steps?.[0];
+          assert.strictEqual(workflowStep?.type, "workflow");
+          assert.strictEqual(workflowStep?.workflow, "child.ctrlyoke.yaml");
+          if (name === "steps") assert.strictEqual(workflowStep?.name, "child");
+          if (name === "root")
+            assert.deepStrictEqual(result.worktree, { mode: "managed" });
+        }
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("reports a missing sub-workflow file", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-subworkflow-missing-")
+      );
+      try {
+        const filePath = path.join(tempDir, "parent.ctrlyoke.json");
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({
+            steps: [{ type: "workflow", workflow: "missing.ctrlyoke.yaml" }],
+          }),
+          "utf8"
+        );
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+        assert.match(
+          parser.lastParseError?.message ?? "",
+          /workflow|file|resolve/i
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("preserves a script step shell override", async () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-script-shell-")
@@ -802,6 +895,20 @@ suite("PromptFileParser Tests", () => {
           ],
         },
         message: /parallel member 2 must be a prompt or script step/i,
+      },
+      {
+        name: "workflow member remains unsupported",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one" },
+                { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+              ],
+            },
+          ],
+        },
+        message: /workflow steps are not supported in parallel groups/i,
       },
     ];
 

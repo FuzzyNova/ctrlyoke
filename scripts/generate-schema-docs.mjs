@@ -144,6 +144,16 @@ const WORKFLOW_PAGES = [
         ],
       },
       {
+        id: "sub-workflow-step",
+        title: "Sub-workflow step",
+        summary: "A step that runs a referenced workflow file as a child run.",
+        refs: ["#/$defs/subWorkflowStep", "#/$defs/rootWorkflowStep"],
+        properties: [
+          { pointer: "#/$defs/subWorkflowStep/properties" },
+          { pointer: "#/$defs/stepDisplayProperties/properties" },
+        ],
+      },
+      {
         id: "parallel-group",
         title: "Parallel group",
         refs: ["#/$defs/parallelGroupItem"],
@@ -283,10 +293,15 @@ const WORKFLOW_PAGES = [
       {
         id: "step-runtime",
         title: "Step runtime",
-        refs: ["#/$defs/promptRuntimeMetadata", "#/$defs/stepLifecycleRuntime"],
+        refs: [
+          "#/$defs/promptRuntimeMetadata",
+          "#/$defs/stepLifecycleRuntime",
+          "#/$defs/subWorkflowRuntimeMetadata",
+        ],
         properties: [
           { pointer: "#/$defs/stepLifecycleRuntime/properties" },
           { pointer: "#/$defs/promptRuntimeMetadata/allOf/4/properties" },
+          { pointer: "#/$defs/subWorkflowRuntimeMetadata/allOf/1/properties" },
         ],
       },
       {

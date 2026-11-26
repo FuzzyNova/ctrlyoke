@@ -44,6 +44,47 @@ suite("Workflow template schema", () => {
     );
   });
 
+  test("accepts workflow steps in steps, finalStep, and the single-step root", () => {
+    for (const document of [
+      { steps: [{ type: "workflow", workflow: "child.ctrlyoke.yaml" }] },
+      {
+        steps: [{ prompt: "parent" }],
+        finalStep: { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+      },
+      {
+        type: "workflow",
+        workflow: "child.ctrlyoke.yaml",
+        worktree: true,
+      },
+    ]) {
+      assert.strictEqual(
+        validate(document),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("rejects invalid workflow step fields and runtime metadata", () => {
+    for (const document of [
+      { steps: [{ type: "workflow", workflow: "child", worktree: true }] },
+      { steps: [{ type: "workflow", workflow: "child", unexpected: true }] },
+      { steps: [{ type: "workflow", workflow: "" }] },
+      { steps: [{ type: "workflow", workflow: { prompt: "child" } }] },
+      {
+        steps: [
+          {
+            type: "workflow",
+            workflow: "child",
+            _runtime: { unexpected: true },
+          },
+        ],
+      },
+    ]) {
+      assert.strictEqual(validate(document), false, JSON.stringify(document));
+    }
+  });
+
   test("stamps every bundled workflow template with schemaVersion 1", () => {
     const workflowsDirectory = path.resolve(
       __dirname,

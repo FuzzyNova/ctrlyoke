@@ -45,6 +45,7 @@ say what it does.
 | [Execution properties](#execution-properties) | Shared execution configuration properties used across workflow-level defaults, prompt-level overrides, and runtime metadata |
 | [Prompt step](#prompt-step) | A step that sends a prompt to a harness. |
 | [Script step](#script-step) | A workflow step that runs a shell script/command with no AI interaction. |
+| [Sub-workflow step](#sub-workflow-step) | A step that runs a referenced workflow file as a child run. |
 | [Parallel group](#parallel-group) | An authored group of prompt or script steps. |
 | [Pre-condition](#pre-condition) | Script gate that runs before the prompt. |
 | [End condition](#end-condition) | Validation that runs after the prompt completes. |
@@ -74,14 +75,14 @@ Optional workflow display name shown in the dashboard heading, recent workflows 
 
 ### `steps` {#workflow-file-steps}
 
-- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step) or [Parallel group](#parallel-group))
+- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step) or [Sub-workflow step](#sub-workflow-step) or [Parallel group](#parallel-group))
 - **Required:** yes
 
 The ordered step queue. Each item is a prompt step, a script step, or a parallel group.
 
 ### `finalStep` {#workflow-file-finalstep}
 
-- **Type:** [Prompt step](#prompt-step) or [Script step](#script-step)
+- **Type:** [Prompt step](#prompt-step) or [Script step](#script-step) or [Sub-workflow step](#sub-workflow-step)
 
 A step that always runs after all queued prompts complete. Can be an AI prompt or a script step. If mcpServers includes "ctrlyoke" and the finalStep appends prompts, those prompts run before finalStep executes again. Working files store resolved harness/model/session metadata on finalStep.\_runtime; workflow phase/status remains in the root \_runtime.finalStep block.
 
@@ -570,9 +571,70 @@ Accepted forms:
 
 Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
+## Sub-workflow step {#sub-workflow-step}
+
+Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage, run history, and dashboard entry. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends.
+
+### `type` {#sub-workflow-step-type}
+
+- **Type:** `"workflow"`
+- **Required:** yes
+
+Marks this step as a sub-workflow step.
+
+### `workflow` {#sub-workflow-step-workflow}
+
+- **Type:** `string`
+- **Required:** yes
+- **Constraints:** at least 1 character(s)
+
+The workflow file to run. The path is resolved like a prompt file reference and is not variable-substituted in v1.
+
+### `onFail` {#sub-workflow-step-onfail}
+
+- **Type:** `"continue" | "stopWorkflow"` or `string`
+
+What to do when the child run fails or cannot start. 'stopWorkflow' fails this step and stops the parent; 'continue' records the failure on the step and advances. A stopped child always stops the parent.
+
+Accepted forms:
+
+- `"continue" | "stopWorkflow"` — What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default).
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
+
+### `_runtime` {#sub-workflow-step-runtime}
+
+- **Type:** [Step runtime](/reference/run-files#step-runtime)
+
+Per-step runtime linkage to the child run (added automatically during execution). Not substituted: This structural field or identity value stays as authored.
+
+### `name` {#sub-workflow-step-name}
+
+- **Type:** `string`
+- **Constraints:** at most 100 characters
+
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
+
+### `enabled` {#sub-workflow-step-enabled}
+
+- **Type:** `boolean` or `string`
+
+Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
+
+Accepted forms:
+
+- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
+
+### `color` {#sub-workflow-step-color}
+
+- **Type:** `string`
+- **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
+
+Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
+
 ## Parallel group {#parallel-group}
 
-An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.
+An authored group of prompt or script steps. Workflow steps are currently rejected as group members. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.
 
 ```yaml
 steps:
@@ -589,7 +651,7 @@ member can do through the `ctrlyoke` MCP server.
 
 ### `parallel` {#parallel-group-parallel}
 
-- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step))
+- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step) or [Sub-workflow step](#sub-workflow-step))
 - **Required:** yes
 - **Constraints:** at least 2 item(s)
 
