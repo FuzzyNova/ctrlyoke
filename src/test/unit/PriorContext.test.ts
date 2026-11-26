@@ -54,6 +54,132 @@ suite("prior-context XML", () => {
     );
   });
 
+  test("renders workflow metadata and recursively nested child output", () => {
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 1,
+        name: "lane & merge",
+        detail: "full",
+        workflowPath: "waves/a&b.yaml",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "child&key" as never,
+            childRunRef: 'run"1' as never,
+            outcome: { status: "completed" as never },
+            worktree: {
+              mode: "managed" as never,
+              branchName: "feature&one",
+              baseCommit: "abc",
+              finalBranchTip: "def",
+              changedFileCount: 2,
+              mergeOutcome: "conflict" as never,
+              conflictFiles: ["src/a.ts"],
+            },
+          },
+          children: [
+            {
+              index: 0,
+              name: "child step",
+              prompt: "implement",
+              text: "done",
+              detail: "full",
+              subWorkflow: {
+                output: {
+                  childWorkflowKey: "grandchild" as never,
+                  childRunRef: "run-2" as never,
+                  outcome: { status: "completed" as never },
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    assert.ok(
+      xml.includes('name="lane &amp; merge" workflow="waves/a&amp;b.yaml"'),
+      xml
+    );
+    assert.ok(
+      xml.includes(
+        'workflowKey="child&amp;key" runRef="run&quot;1" outcome="completed"'
+      ),
+      xml
+    );
+    assert.ok(xml.includes('<merge result="conflict">src/a.ts</merge>'), xml);
+    assert.ok(xml.includes('workflowKey="grandchild"'), xml);
+  });
+
+  test("marks an unavailable workflow child run", () => {
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        detail: "full",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "gone" as never,
+            childRunRef: "run-gone" as never,
+            outcome: { status: "completed" as never },
+          },
+        },
+      },
+    ]);
+    assert.ok(xml.includes("<childRunUnavailable/>"), xml);
+  });
+
+  test("budgets child summaries with parent summaries while keeping workflow metadata", () => {
+    const childText = "c".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES);
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        name: "parent",
+        prompt: "parent prompt",
+        text: childText,
+        detail: "summary",
+      },
+      {
+        index: 1,
+        name: "lane",
+        detail: "summary",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "child" as never,
+            childRunRef: "run-child" as never,
+            outcome: { status: "completed" as never },
+          },
+          children: Array.from({ length: 30 }, (_, index) => ({
+            index,
+            name: `child ${index}`,
+            prompt: `prompt ${index}`,
+            text: childText,
+            detail: "summary" as const,
+          })),
+        },
+      },
+    ]);
+
+    assert.match(xml, /<step index="2" type="workflow" name="lane"/);
+    assert.ok(xml.includes('workflowKey="child"'), xml);
+    assert.match(
+      xml,
+      /<step index="1" name="parent" detail="summary" omitted="all"/
+    );
+    assert.match(
+      xml,
+      /<step index="1" name="child 0" detail="summary" omitted="all"/
+    );
+    assert.ok(xml.includes("prompt 29"), "the last child summary is retained");
+    assert.ok(!xml.includes('name="lane" detail="summary" omitted="all"'));
+    const summaryXml = xml.slice(
+      xml.indexOf('<step index="2" type="workflow"')
+    );
+    const omittedChildCount = [...summaryXml.matchAll(/omitted="all"/g)].length;
+    assert.ok(
+      omittedChildCount > 0,
+      `omitted child count: ${omittedChildCount}`
+    );
+  });
+
   const verdict = (overrides: Partial<ScriptVerdict>): ScriptVerdict => ({
     compareSource: COMPARE_SOURCES.EXIT_CODE,
     operator: SCRIPT_OPERATORS.EQ,

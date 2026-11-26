@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as fs from "fs";
 import type {
   ScriptRuntimeOutput,
   SubWorkflowOutput,
@@ -69,6 +70,7 @@ import {
 } from "../../utils/OutputContextWindow";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
   type PriorContextDetail,
   type PriorContextFileChange,
@@ -1277,6 +1279,19 @@ export class RunOutputResolver {
         );
         const step = value?.definition?.step ?? allPrompts[index];
         if (!step || !value) return [];
+        if (isSubWorkflowStep(step) && value.subWorkflowOutput) {
+          return [
+            {
+              index,
+              name: step.name,
+              detail:
+                merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
+              subWorkflow: { output: value.subWorkflowOutput },
+              workflowPath:
+                typeof step.workflow === "string" ? step.workflow : undefined,
+            },
+          ];
+        }
         if (isScriptStep(step)) {
           const scriptOutput = value.scriptOutput;
           const text = scriptOutput
@@ -1431,8 +1446,10 @@ export class RunOutputResolver {
           return [
             {
               ...common,
-              subWorkflowOutput: value.subWorkflowOutput,
-            } as PriorContextItem,
+              subWorkflow: { output: value.subWorkflowOutput },
+              workflowPath:
+                typeof step.workflow === "string" ? step.workflow : undefined,
+            },
           ];
         const projected = latestValues.get(targetKey);
         const transcript = projected?.transcript;
@@ -1465,7 +1482,37 @@ export class RunOutputResolver {
       : merged.includePreviousFinalStep
         ? finalItems.slice(-1)
         : [];
-    return deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]);
+    return this.resolveSubWorkflowChildren(
+      deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]),
+      options
+    );
+  }
+
+  private async resolveSubWorkflowChildren(
+    items: PriorContextItem[],
+    options: RunOutputProjectionOptions
+  ): Promise<PriorContextItem[]> {
+    for (const item of items) {
+      if (!item.subWorkflow) continue;
+      const { childWorkflowKey, childRunRef } = item.subWorkflow.output;
+      const childManifestPath = WorkflowPaths.manifestPath(
+        options.workspaceRoot,
+        childWorkflowKey,
+        childRunRef
+      );
+      try {
+        await fs.promises.access(childManifestPath);
+        item.subWorkflow.children = await this.resolveAllPriorContextItems(
+          childManifestPath,
+          options,
+          item.detail
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
+    }
+    return items;
   }
 
   /** Read a whole terminal source run through the timeline reader. */

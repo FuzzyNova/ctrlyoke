@@ -85,8 +85,13 @@ export type PriorContextItem = {
   importedRun?: boolean;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
-  /** Workflow child metadata; nested rendering is handled by a later layer. */
+  /** Legacy workflow metadata projection, retained for reader compatibility. */
   subWorkflowOutput?: SubWorkflowOutput;
+  /** Child run output, when its history directory is still available. */
+  subWorkflow?: { output: SubWorkflowOutput; children?: PriorContextItem[] };
+  workflowPath?: string;
+  /** Internal marker used only while applying the shared summary budget. */
+  budgetOmittedXml?: string;
   /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
   scriptVerdict?: ScriptVerdict;
   summaryPrompt?: PriorContextText;
@@ -113,6 +118,12 @@ export interface PriorContextFileChange {
 function summarizePriorContextItem(item: PriorContextItem): PriorContextItem {
   if (item.detail !== PRIOR_CONTEXT_DETAILS.SUMMARY) return item;
   const summary: PriorContextItem = { ...item };
+  if (item.subWorkflow?.children) {
+    summary.subWorkflow = {
+      ...item.subWorkflow,
+      children: item.subWorkflow.children.map(summarizePriorContextItem),
+    };
+  }
   delete summary.earlierAttempts;
   if (item.prompt !== undefined) {
     summary.summaryPrompt = boundPriorContextText(
@@ -292,9 +303,11 @@ export function buildPriorContextXmlFromItems(
 function priorContextStepAttributes(item: PriorContextItem): string {
   const typeAttr = item.type
     ? ` type="${escapeXmlAttribute(item.type)}"`
-    : item.scriptOutput
-      ? ` type="${STEP_TYPES.SCRIPT}"`
-      : "";
+    : item.subWorkflow
+      ? ` type="${STEP_TYPES.WORKFLOW}"`
+      : item.scriptOutput
+        ? ` type="${STEP_TYPES.SCRIPT}"`
+        : "";
   const nameAttr = item.name ? ` name="${escapeXmlAttribute(item.name)}"` : "";
   const detailAttr =
     item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
@@ -318,35 +331,63 @@ function applySummaryBudget(
   steps: { item: PriorContextItem; xml: string }[]
 ): string[] {
   const rendered = steps.map(({ xml }) => xml);
-  const summaryPositions = steps
-    .flatMap(({ item }, position) =>
-      item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? [position] : []
-    )
+  const positions: {
+    item: PriorContextItem;
+    owner: PriorContextItem;
+    replace(xml: string): void;
+    xml: string;
+  }[] = [];
+  const collect = (
+    item: PriorContextItem,
+    owner: PriorContextItem,
+    topPosition: number
+  ) => {
+    if (item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY && !item.subWorkflow) {
+      positions.push({
+        item,
+        owner,
+        xml: renderPriorContextStep(item),
+        replace: (xml) => {
+          item.budgetOmittedXml = xml;
+          if (steps[topPosition].item === item) rendered[topPosition] = xml;
+        },
+      });
+    }
+    for (const child of item.subWorkflow?.children ?? [])
+      collect(child, owner, topPosition);
+  };
+  steps.forEach(({ item }, position) => collect(item, item, position));
+  const summaryPositions = positions
+    .map((_, index) => index)
     .sort((left, right) => {
-      const a = steps[left].item;
-      const b = steps[right].item;
+      const a = positions[left].owner;
+      const b = positions[right].owner;
       return (
         Number(a.importedRun !== true) - Number(b.importedRun !== true) ||
         Number(a.type === PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP) -
           Number(b.type === PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP) ||
-        a.index - b.index
+        a.index - b.index ||
+        left - right
       );
     });
   let total = summaryPositions.reduce(
-    (sum, position) => sum + utf8Bytes(rendered[position]),
+    (sum, position) => sum + utf8Bytes(positions[position].xml),
     0
   );
   for (const position of summaryPositions.slice(0, -1)) {
     if (total <= PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES) break;
-    const bytes = utf8Bytes(rendered[position]);
-    const stub = `<step ${priorContextStepAttributes(steps[position].item)} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
-    rendered[position] = stub;
+    const bytes = utf8Bytes(positions[position].xml);
+    const stub = `<step ${priorContextStepAttributes(positions[position].item)} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
+    positions[position].replace(stub);
     total -= bytes - utf8Bytes(stub);
   }
-  return rendered;
+  return steps.map(({ item }, position) =>
+    item.subWorkflow ? renderPriorContextStep(item) : rendered[position]
+  );
 }
 
 function renderPriorContextStep(item: PriorContextItem): string {
+  if (item.budgetOmittedXml) return item.budgetOmittedXml;
   const attributes = priorContextStepAttributes(item);
   // A script finalStep has a verdict but no scriptOutput, so this is
   // rendered in both arms below.
@@ -356,6 +397,30 @@ function renderPriorContextStep(item: PriorContextItem): string {
   const earlierAttempts = item.earlierAttempts
     ? `<earlierAttempts count="${item.earlierAttempts.count}">\n${renderFilesChanged(item.earlierAttempts.filesChanged)}\n</earlierAttempts>\n`
     : "";
+  if (item.subWorkflow) {
+    const output = item.subWorkflow.output;
+    const attrs = [
+      ["workflow", output.resolvedWorkflowPath ?? item.workflowPath],
+      ["workflowKey", output.childWorkflowKey],
+      ["runRef", output.childRunRef],
+      ["outcome", output.outcome.status],
+    ]
+      .filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string"
+      )
+      .map(([name, value]) => ` ${name}="${escapeXmlAttribute(value)}"`)
+      .join("");
+    const worktree = output.worktree
+      ? `<worktree mode="${escapeXmlAttribute(output.worktree.mode)}" branch="${escapeXmlAttribute(output.worktree.branchName ?? "")}" base="${escapeXmlAttribute(output.worktree.baseCommit ?? "")}" tip="${escapeXmlAttribute(output.worktree.finalBranchTip ?? "")}" filesChanged="${output.worktree.changedFileCount ?? 0}"/>\n`
+      : "";
+    const merge = output.worktree?.mergeOutcome
+      ? `<merge result="${escapeXmlAttribute(output.worktree.mergeOutcome)}">${(output.worktree.conflictFiles ?? []).map(escapeXmlAttribute).join("\n")}</merge>\n`
+      : "";
+    const children =
+      item.subWorkflow.children?.map(renderPriorContextStep).join("\n") ??
+      "<childRunUnavailable/>";
+    return `<step ${attributes}${attrs}>\n${worktree}${merge}${children}\n</step>`;
+  }
   if (item.scriptOutput) {
     const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
     const stdoutSection = item.scriptOutput.stdout.trim()
