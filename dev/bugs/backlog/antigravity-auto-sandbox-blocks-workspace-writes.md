@@ -32,3 +32,11 @@ the workspace (`autoModeMinimumVersion`/fallback in the mapper), or find an agy 
 the sandbox's write roots. `versionPolicy.testedWith` for Antigravity is 1.5.14 despite this failing
 case; the issue is public in `docs/troubleshooting/known-issues.md`. agy is closed source, so no
 public tracker is known; report it through agy's `/feedback` or Google's channel if one exists.
+
+## Decision
+
+**Keep watching; no gating yet** (2026-11-26). Leave the mapper unchanged and keep the
+`docs/troubleshooting/known-issues.md` entry. Re-check on each new agy release. Mark the live case
+`antigravity-cli: auto runs an unlisted benign command chained to an allowed one` as an expected
+failure on Windows so the release `test:harness` run stops failing on it, and lift that mark (and
+close this bug) once an agy release writes the workspace again.
