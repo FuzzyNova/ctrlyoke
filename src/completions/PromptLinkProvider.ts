@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
+import { getWorkflowTextSpans } from "./WorkflowPromptRanges";
+import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import {
   getDocumentPromptCodeRanges,
   isRangeInPromptCode,
@@ -30,7 +32,6 @@ import { PromptFileResolver } from "../core/PromptFileResolver";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../utils/ProjectStatePaths";
-import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import {
@@ -93,125 +94,145 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   ): Promise<vscode.DocumentLink[] | undefined> {
     const links: vscode.DocumentLink[] = [];
     const text = document.getText();
+    const kind = getCtrlYokeFileKind(document.fileName);
+    const spans = kind
+      ? getWorkflowTextSpans(text, kind).filter((span) => span.exact)
+      : [
+          // Non-ctrlyoke markdown and prompt documents are prompt text end to end.
+          ...(document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
+          document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT
+            ? [{ text, toSourceOffset: (offset: number) => offset }]
+            : []),
+        ];
     const workspaceRoot = this.getWorkspaceRoot();
 
-    links.push(...this.findSecretLinks(document, text));
+    for (const span of spans) {
+      const spanDocument = {
+        ...document,
+        positionAt: (offset: number) =>
+          document.positionAt(span.toSourceOffset(offset)),
+      };
+      const promptText = span.text;
+      links.push(...this.findSecretLinks(spanDocument, promptText));
 
-    if (!workspaceRoot) {
-      return links.length > 0 ? links : undefined;
-    }
+      if (!workspaceRoot) continue;
 
-    const namedRoots = getVsCodeNamedWorkspaceRoots();
-    const trustedRoots = [
-      ...getVsCodeTrustedWorkspaceRoots(),
-      ...runtimeTrustedRootRegistry.getRoots(),
-    ];
-    const sourceDefinitionDir = getTrustedSourceDefinitionDir(
-      document.fileName,
-      trustedRoots
-    );
-    const workspaceIdentity =
-      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-    const approvedExternalRoots =
-      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-        workspaceIdentity
+      const namedRoots = getVsCodeNamedWorkspaceRoots();
+      const trustedRoots = [
+        ...getVsCodeTrustedWorkspaceRoots(),
+        ...runtimeTrustedRootRegistry.getRoots(),
+      ];
+      const sourceDefinitionDir = getTrustedSourceDefinitionDir(
+        document.fileName,
+        trustedRoots
       );
-    const ownStateRoots = [
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-    ];
-    const referenceMatches = findContextReferenceMatches(text);
+      const workspaceIdentity =
+        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+      const approvedExternalRoots =
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          workspaceIdentity
+        );
+      const ownStateRoots = [
+        projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+      ];
+      const referenceMatches = findContextReferenceMatches(promptText);
 
-    // A standalone prompt-file path has no @/# marker, so it needs its own
-    // link entry. Keep this separate from context-reference matching because
-    // prompt parsing resolves these paths relative to the prompt document
-    // before falling back to the workspace and .ctrlyoke roots.
-    links.push(
-      ...this.findPromptFileLinks(
-        document,
-        text,
-        workspaceRoot,
-        namedRoots,
-        trustedRoots,
-        approvedExternalRoots,
-        ownStateRoots
-      )
-    );
+      // A standalone prompt-file path has no @/# marker, so it needs its own
+      // link entry. Keep this separate from context-reference matching because
+      // prompt parsing resolves these paths relative to the prompt document
+      // before falling back to the workspace and .ctrlyoke roots.
+      links.push(
+        ...this.findPromptFileLinks(
+          spanDocument,
+          promptText,
+          workspaceRoot,
+          namedRoots,
+          trustedRoots,
+          approvedExternalRoots,
+          ownStateRoots
+        )
+      );
 
-    // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
-    links.push(
-      ...this.findFileLinks(
-        document,
-        text,
-        referenceMatches.filter(
-          (match) => match.type === ATOMIC_REFERENCE_KINDS.FILE
-        ),
-        workspaceRoot,
-        namedRoots,
-        trustedRoots,
-        approvedExternalRoots,
-        ownStateRoots,
-        sourceDefinitionDir
-      )
-    );
+      // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
+      links.push(
+        ...this.findFileLinks(
+          spanDocument,
+          promptText,
+          referenceMatches.filter(
+            (match) => match.type === ATOMIC_REFERENCE_KINDS.FILE
+          ),
+          workspaceRoot,
+          namedRoots,
+          trustedRoots,
+          approvedExternalRoots,
+          ownStateRoots,
+          sourceDefinitionDir
+        )
+      );
 
-    // 2. Detect directory references (@dir/ and @"path with spaces/dir/").
-    // The directory pattern also matches the folder prefix of a file
-    // reference (`@src/dir/` in `@src/dir/a.ts`), which would nest a second
-    // link inside the file's.
-    links.push(
-      ...this.findDirectoryLinks(
-        document,
-        text,
-        referenceMatches.filter(
-          (match) => match.type === ATOMIC_REFERENCE_KINDS.DIRECTORY
-        ),
-        workspaceRoot,
-        namedRoots,
-        trustedRoots,
-        approvedExternalRoots,
-        ownStateRoots,
-        sourceDefinitionDir
-      )
-    );
+      // 2. Detect directory references (@dir/ and @"path with spaces/dir/").
+      // The directory pattern also matches the folder prefix of a file
+      // reference (`@src/dir/` in `@src/dir/a.ts`), which would nest a second
+      // link inside the file's.
+      links.push(
+        ...this.findDirectoryLinks(
+          spanDocument,
+          promptText,
+          referenceMatches.filter(
+            (match) => match.type === ATOMIC_REFERENCE_KINDS.DIRECTORY
+          ),
+          workspaceRoot,
+          namedRoots,
+          trustedRoots,
+          approvedExternalRoots,
+          ownStateRoots,
+          sourceDefinitionDir
+        )
+      );
 
-    // 3. Detect line range references (#selection:path:10-20 and #selection:"path with spaces/file":10-20)
-    links.push(
-      ...this.findLineRangeLinks(
-        document,
-        referenceMatches.filter(
-          (match) => match.type === ATOMIC_REFERENCE_KINDS.LINE_RANGE
-        ),
-        workspaceRoot,
-        namedRoots,
-        trustedRoots,
-        approvedExternalRoots,
-        ownStateRoots,
-        sourceDefinitionDir
-      )
-    );
+      // 3. Detect line range references (#selection:path:10-20 and #selection:"path with spaces/file":10-20)
+      links.push(
+        ...this.findLineRangeLinks(
+          spanDocument,
+          referenceMatches.filter(
+            (match) => match.type === ATOMIC_REFERENCE_KINDS.LINE_RANGE
+          ),
+          workspaceRoot,
+          namedRoots,
+          trustedRoots,
+          approvedExternalRoots,
+          ownStateRoots,
+          sourceDefinitionDir
+        )
+      );
 
-    // 4. Detect symbol references with encoded line ranges
-    links.push(
-      ...this.findSymbolLinks(
-        document,
-        referenceMatches.filter(
-          (match) => match.type === ATOMIC_REFERENCE_KINDS.SYMBOL
-        ),
-        workspaceRoot,
-        namedRoots,
-        trustedRoots,
-        approvedExternalRoots,
-        ownStateRoots,
-        sourceDefinitionDir
-      )
-    );
+      // 4. Detect symbol references with encoded line ranges
+      links.push(
+        ...this.findSymbolLinks(
+          spanDocument,
+          referenceMatches.filter(
+            (match) => match.type === ATOMIC_REFERENCE_KINDS.SYMBOL
+          ),
+          workspaceRoot,
+          namedRoots,
+          trustedRoots,
+          approvedExternalRoots,
+          ownStateRoots,
+          sourceDefinitionDir
+        )
+      );
 
-    // 5. Detect git change references (~diff, ~staged, ~stash:N, ~<hash>)
-    links.push(...this.findGitChangeLinks(document, text));
+      // 5. Detect git change references (~diff, ~staged, ~stash:N, ~<hash>)
+      links.push(...this.findGitChangeLinks(spanDocument, promptText));
 
-    links.push(
-      ...(await this.findSkillTokenLinks(document, text, workspaceRoot))
-    );
+      links.push(
+        ...(await this.findSkillTokenLinks(
+          spanDocument,
+          promptText,
+          workspaceRoot
+        ))
+      );
+    }
 
     return links;
   }

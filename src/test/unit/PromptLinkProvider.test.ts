@@ -99,7 +99,7 @@ suite("PromptLinkProvider slash-token links", () => {
     const document = new PromptDocumentStub(
       path.join(workspaceRoot, "workflow.ctrlyoke.yaml"),
       "yaml",
-      text
+      `steps:\n  - prompt: "${text}"`
     ).asDocument();
 
     const links = await new PromptLinkProvider().provideDocumentLinks(
@@ -254,6 +254,51 @@ suite("PromptLinkProvider slash-token links", () => {
       links[7].tooltip,
       "Go to get value in src/my utils.ts:31-40"
     );
+  });
+
+  test("scans decoded workflow prompt spans and maps links to source", async () => {
+    const cases = [
+      {
+        file: "w.ctrlyoke.json",
+        language: "json",
+        text: String.raw`{"prompt":"@src/a.ts\nnext and @\"docs/my file.md\""}`,
+        expected: ['@\\"docs/my file.md\\"', "@src/a.ts"],
+      },
+      {
+        file: "w.ctrlyoke.yaml",
+        language: "yaml",
+        text: 'prompt: "Read @\\"my dir/a.ts\\" now"',
+        expected: ['@\\"my dir/a.ts\\"'],
+      },
+      {
+        file: "w.ctrlyoke.yaml",
+        language: "yaml",
+        text: "prompt: Review @src/a.ts # comment @src/b.ts",
+        expected: ["@src/a.ts"],
+      },
+    ];
+
+    for (const { file, language, text, expected } of cases) {
+      const document = new PromptDocumentStub(
+        path.join(workspaceRoot, file),
+        language,
+        text
+      );
+      const links =
+        (await new PromptLinkProvider().provideDocumentLinks(
+          document.asDocument(),
+          {} as vscode.CancellationToken
+        )) ?? [];
+      assert.deepStrictEqual(
+        links.map((link) =>
+          text.slice(
+            document.offsetAt(link.range.start),
+            document.offsetAt(link.range.end)
+          )
+        ),
+        expected
+      );
+    }
   });
 
   test("does not link partial git-change references inside longer tokens", async () => {
