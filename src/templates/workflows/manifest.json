@@ -51,6 +51,14 @@
       "icon": "$(sync)"
     },
     {
+      "id": "large-spec-loop",
+      "label": "Large Spec Loop",
+      "description": "For large specs: each pass reviews the last round of work, records progress in the spec, and queues the next reviewable round",
+      "file": "large-spec-loop.ctrlyoke.yaml",
+      "tags": ["advanced", "loop", "spec"],
+      "icon": "$(sync)"
+    },
+    {
       "id": "feature-driven-loop",
       "label": "Feature-Driven Loop",
       "description": "Describe a feature and get a plan-first self-extending loop that queues and reviews work until the goal is met",

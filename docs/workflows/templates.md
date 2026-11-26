@@ -1,6 +1,6 @@
 # Templates
 
-Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrlyoke ships these built-in templates: Blank, Template Starter, Simple Feature, Parallel Research, Fix Tests, Full Feature Pipeline, Spec-Driven Loop, Feature-Driven Loop, Bug Hunt Loop, and Bug Drain Loop. You can add your own templates under `.ctrlyoke/templates/` in the workspace or under `~/.ctrlyoke/templates/` for your user account. When you run **New Workflow from Template**, ctrlyoke prompts for each variable, substitutes the values, and creates a ready-to-run workflow.
+Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrlyoke ships these built-in templates: Blank, Template Starter, Simple Feature, Parallel Research, Fix Tests, Full Feature Pipeline, Spec-Driven Loop, Large Spec Loop, Feature-Driven Loop, Bug Hunt Loop, and Bug Drain Loop. You can add your own templates under `.ctrlyoke/templates/` in the workspace or under `~/.ctrlyoke/templates/` for your user account. When you run **New Workflow from Template**, ctrlyoke prompts for each variable, substitutes the values, and creates a ready-to-run workflow.
 
 Choose **Spec-Driven Loop** when you already have a spec or design document. **Feature-Driven Loop** starts from a description, writes an implementation plan to `.ctrlyoke/plans/plan.md`, then uses the same self-extending orchestration pattern.
 
@@ -8,13 +8,27 @@ Spec-Driven Loop asks for a `testCommand` (default `npm test`), which every queu
 
 Feature-Driven Loop asks for the same `testCommand` and the same two harness and model pairs, with the same defaults. Its orchestrator also runs the step that writes the plan, interactively like the plan and review steps.
 
+### Large Spec Loop {#large-spec-loop}
+
+Choose **Large Spec Loop** for a spec too large to plan and review in one go. Spec-Driven Loop queues the whole spec up front and reviews it all in one session, so a big spec can leave that review facing 20 or more steps. Large Spec Loop works in rounds instead. It has no steps up front, only a final step, and every pass of that final step is a fresh headless session that:
+
+1. reviews the round of steps queued before it, and fixes small problems itself;
+2. updates the spec, keeping a `## Progress` section at its end with what has landed, a roadmap of the remaining rounds, and the decisions it made or needs from you;
+3. queues only the next round, sized by how much one pass can review.
+
+Only the orchestrator edits the spec, so the Progress section always reflects reviewed work. Because the plan lives in the spec rather than in a session, you can stop the workflow and run it again later: the next run's first pass picks up from the Progress section. When the roadmap is empty, the orchestrator checks the whole spec against the code before it ends the workflow by queueing nothing. It also queues nothing when every remaining piece of work needs a decision from you; answer under **Decisions** in the spec and run the workflow again.
+
+The orchestrator decides how big each round is. It aims for about 4 to 6 steps, fewer when they are large and more when they are small. Each pass runs headless, so it needs no attention, but you can still follow its output and use [Send Steer Message](/workflows/error-handling#steer) to redirect it while it plans.
+
+It asks for the same `testCommand` and harness and model pairs as Spec-Driven Loop, with the same defaults. Its spec must be a Markdown or text file, because the orchestrator writes the Progress section into it.
+
 Full Feature Pipeline asks for a harness and model for its two review steps, which give a second opinion on the plan and on the implementation. The default is `gpt-6.1-sol` on Codex CLI. Pick a different harness from the one that runs the rest of the workflow, so the reviewer is not the model that wrote the work.
 
 ### Loops commit every step {#loops-commit-every-step}
 
-Spec-Driven Loop, Feature-Driven Loop, Bug Hunt Loop, and Bug Drain Loop need a git repository, because each step commits its own work. The commits are how a review sees what each step did, and how you roll back a step that went wrong.
+Spec-Driven Loop, Large Spec Loop, Feature-Driven Loop, Bug Hunt Loop, and Bug Drain Loop need a git repository, because each step commits its own work. The commits are how a review sees what each step did, and how you roll back a step that went wrong.
 
-- **Before it starts**, the loop checks that the working tree is clean and stops if it isn't, or if the folder isn't a git repository. Commit or stash your own changes first, or run `git init` to start a repository. The bug loops repeat this check at the start of every pass.
+- **Before it starts**, the loop checks that the working tree is clean and stops if it isn't, or if the folder isn't a git repository. Commit or stash your own changes first, or run `git init` to start a repository. Large Spec Loop and the bug loops repeat this check at the start of every pass.
 - **After each planning, review, or bug-hunting step**, an [end condition](/workflows/end-conditions) checks `git status --porcelain`. If anything is uncommitted, ctrlyoke resumes that step's session and asks it to finish and commit. After two failed retries, the workflow stops.
 - **After each step the loop queues for itself**, the same check runs when the orchestrator attaches it. Each loop declares it as the `committed` [condition preset](/workflows/end-conditions#condition-presets), and the orchestrator attaches it to every queued step that runs on its own. It leaves the check off steps it queues to run in parallel, because those steps share one working tree: one would fail the check on the other's unfinished edits. Steps in a parallel group still commit their own files, and the step after the group or the next review catches anything they left behind.
 

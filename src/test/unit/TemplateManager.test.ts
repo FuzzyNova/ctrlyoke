@@ -1641,6 +1641,43 @@ suite("TemplateManager variable metadata", () => {
       );
     });
 
+    // Large Spec Loop keeps no session between passes: every pass is a fresh
+    // headless orchestrator, and the spec's Progress section carries the plan.
+    test("runs large-spec-loop as fresh headless final-step passes", async () => {
+      const tm = makeManager();
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: makeTempDir() } });
+      tm.getBuiltInTemplatesPath = () =>
+        path.resolve(__dirname, "../../templates/workflows");
+
+      const workflow = await tm.createWorkflow("large-spec-loop", {
+        specFile: "docs/spec.md",
+        testCommand: "make check",
+        orchestratorHarness: "codex-cli",
+        orchestratorModel: "gpt-6-luna",
+        implementerHarness: "opencode-cli",
+        implementerModel: "opencode/big-pickle",
+      });
+      const finalStep = workflow.finalStep!;
+
+      assert.deepStrictEqual(workflow.steps, []);
+      assert.strictEqual(workflow.harness, "opencode-cli");
+      assert.strictEqual(workflow.model, "opencode/big-pickle");
+      assert.strictEqual(workflow.executionMode, "headless");
+      assert.strictEqual(finalStep.harness, "codex-cli");
+      assert.strictEqual(finalStep.model, "gpt-6-luna");
+      assert.strictEqual(finalStep.executionMode, undefined);
+      assert.strictEqual(finalStep.resumeSession, false);
+      assert.strictEqual(finalStep.sessionId, undefined);
+      assert.strictEqual(finalStep.priorContext, "finalStepPrevious");
+      assert.deepStrictEqual(finalStep.mcpServers, ["ctrlyoke"]);
+      assert.ok(finalStep.prompt.includes("@docs/spec.md"));
+      assert.ok(finalStep.prompt.includes("`make check`"));
+      assert.ok(
+        !/\{[a-z][a-zA-Z0-9]*\}/.test(finalStep.prompt),
+        finalStep.prompt
+      );
+    });
+
     // Each loop commits per step, but the clean-tree gate is never
     // workflow-level: parallel steps share one working tree, so an inherited
     // gate would fail a member on its sibling's unfinished edits. The steps
@@ -1654,6 +1691,7 @@ suite("TemplateManager variable metadata", () => {
     const gatedSteps: Record<string, string[]> = {
       "spec-driven-loop": ["plan", "review"],
       "feature-driven-loop": ["plan", "review"],
+      "large-spec-loop": ["next-round"],
       "bug-hunt-loop": ["hunt-bugs"],
       "bug-drain-loop": ["drain-backlog"],
     };

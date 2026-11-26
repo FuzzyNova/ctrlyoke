@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Large Spec Loop** built-in template for specs too large for Spec-Driven Loop. It has only a final step, and every pass is a fresh headless session that reviews the last round of queued steps, records progress in a `## Progress` section of the spec, and queues only as much next work as one pass can review, so no single review faces the whole spec. Because the plan lives in the spec, a stopped run can be started again and picks up where it left off.
+
 ### Changed
 
 - Claude Code's 5-hour and weekly quota now updates after headless steps too. Headless Claude Code never runs its status line, which was ctrlyoke's only source for the quota, so a run of headless Claude steps left **Stats & Usage** and the harness picker showing the value from your last interactive step. ctrlyoke now reads the quota that Claude Code includes in its headless output. This works with the Claude status line turned off.

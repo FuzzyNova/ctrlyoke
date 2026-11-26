@@ -216,15 +216,16 @@ adding another step to the queue. Type the message in the prompt editor, open
 the **Run** button's menu, and choose **Send Steer Message**. When several
 sessions are live, such as in a parallel group, the menu lists one
 **Steer Step N** item per session; you can also choose **Send Steer to Step**
-on the step's own menu. Headless Claude receives it in the current turn; headless Qwen and
-Copilot CLI 1.0.112+ queue it after the current prompt. Prompt properties set
-in the editor are ignored.
+on the step's own menu. Headless Claude, Codex and OpenCode 2.3.0+ receive it in the
+current turn; headless Qwen, Antigravity and Copilot CLI 1.0.112+ queue it after the
+current turn. Prompt properties set in the editor are ignored.
 
 ![The Run menu open in the prompt editor footer during an interactive step, showing Send Steer Message, Run in Parallel and Run in New Workflow](/screenshots/run-menu-steer-1125x231.png)
 
-Steering needs a live interactive session or an open headless Claude, Qwen, or
-Copilot control channel. Copilot uses ACP on 1.0.112 and later, except in
-`auto` permission mode. Otherwise the menu item is disabled and its tooltip
+Steering needs a live interactive session or a running headless step. Headless
+steering works on every harness, with two version limits: Copilot CLI needs
+1.0.112 or later and not `auto` permission mode, and OpenCode needs 2.3.0 or
+later. Otherwise the menu item is disabled and its tooltip
 says why, for example _No live harness session for this workflow_. Steering
 is only available for prompt steps.
 

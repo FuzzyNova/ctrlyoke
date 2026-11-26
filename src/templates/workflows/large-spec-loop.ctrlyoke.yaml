@@ -1,0 +1,173 @@
+schemaVersion: 1
+_templateMeta:
+  name: Large Spec Loop
+  description: "Final-step-only loop for large specs. Each pass is a fresh session that reviews the last round of work, records progress in the spec, and queues the next round, sized so one pass can review it. Needs a git repository: every step commits its own work."
+  variables:
+    specFile:
+      type: file
+      required: true
+      fileFilter:
+        - "**/*.md"
+        - "**/*.txt"
+      autoFillFilename: true
+    testCommand:
+      type: text
+      default: npm test
+      description: Your test suite. Every queued step must pass it, and each review uses it as the main gate.
+    orchestratorHarness:
+      type: harness
+      default: claude-cli
+      description: Runs the orchestrator (the final step) that reviews each round and queues the next.
+    orchestratorModel:
+      type: model
+      harness: orchestratorHarness
+      default: opus
+      description: Use your most capable model; reviewing a round and deciding the next one take judgment.
+    implementerHarness:
+      type: harness
+      default: claude-cli
+      description: Runs every step the orchestrator queues.
+    implementerModel:
+      type: model
+      harness: implementerHarness
+      default: sonnet
+      description: Each queued step gets a self-contained chunk of the spec, so a faster, cheaper model is often enough.
+
+# Spec-Driven Loop plans once and reviews everything in one resumed session,
+# so a large spec leaves a single review facing dozens of steps. This loop
+# keeps every review small instead: each pass is a fresh session that reviews
+# only the round queued before it, and the spec's Progress section, not a
+# session, carries the plan from one pass to the next. Because that state lives
+# in the repo, you can stop the workflow and run it again later; the first pass
+# of the new run picks up from the Progress section.
+#
+# Queued steps inherit these workflow defaults; the final step overrides the
+# harness and model. Every queued step runs in a fresh, self-contained session.
+resumeSession: false
+priorContext: none
+harness: "{implementerHarness}"
+model: "{implementerModel}"
+executionMode: headless
+
+# No up-front steps: the first pass finds no history, plans the rounds in the
+# spec, and queues the first one. The loop ends on the first pass that queues
+# nothing, which the prompt reserves for a spec that is fully implemented or
+# blocked on you.
+steps: []
+
+finalStep:
+  name: next-round
+  harness: "{orchestratorHarness}"
+  model: "{orchestratorModel}"
+  agent: workflow-orchestrator
+  mcpServers:
+    - ctrlyoke
+  # A summary of the previous pass (its files changed and closing text) is
+  # attached so it can see what was queued last time; read_output has the full
+  # record.
+  resumeSession: false
+  priorContext: finalStepPrevious
+  priorContextDetail: summary
+  # Each pass starts only in a git repository with a clean tree: otherwise the
+  # commit gate below would fail on changes that aren't the agent's, and its
+  # retry would push the agent to commit them.
+  preCondition:
+    script: git status --porcelain 2>&1
+    compareSource: stdout
+    operator: isEmpty
+    onFail: stopWorkflow
+  prompt: |
+    Your goal is to implement this specification one reviewable round at a time:
+    @{file:specFile}
+
+    You run as this workflow's final step. Each pass reviews the round of steps queued
+    before it, updates the spec, and queues the next round. Every pass is a new session
+    with no memory of earlier passes, so the spec's `## Progress` section is the plan's
+    memory. A summary of the previous pass (if any) is attached above; use
+    workflow_status and read_output for more detail.
+
+    ## 1. Review the last round
+
+    The last round is every commit since the spec's Progress section was last updated
+    (`git log` on the spec shows when). If the spec has no Progress section yet, this is
+    the first pass: read the code the spec touches, then skip to section 2. Use
+    workflow_status and read_output to see what each step was asked to do and what it
+    reported, including anything it found that contradicts the spec or that it deferred.
+
+    Review the actual diffs, not the step summaries. Confirm each step did what it was
+    queued to do, matches the spec and the codebase's existing patterns, has test
+    coverage, and didn't break earlier rounds. Run `{testCommand}`. Fix small problems
+    yourself and commit them. Anything larger becomes the first steps of the next round.
+
+    ## 2. Update the spec
+
+    Only you edit the spec, so it always reflects reviewed work. Fix any part of it that
+    the last round proved wrong or incomplete. Then keep a `## Progress` section at the
+    end of the spec, creating it on the first pass:
+    - **Done**: what has landed and passed your review, with its commits.
+    - **Next**: a coarse roadmap of the remaining work, grouped into rounds. Re-plan it
+      every pass with what you learned; it is a forecast, not a queue.
+    - **Decisions**: choices you made where the spec was silent, and open questions
+      that need me.
+
+    Commit the spec update before you queue anything. That commit marks where the next
+    round starts.
+
+    ## 3. Queue the next round
+
+    Use append_step to queue only the next round. Size it by what you can review
+    thoroughly in one pass, not by how much work is left; the rest waits on the roadmap.
+    That is usually about 4 to 6 steps, but use your judgment: two large steps or ten
+    small ones can be the right round. Prefer a round that leaves
+    the codebase coherent and testable at its end. If the next part needs more design
+    than you can give it here, make finalizing that part of the spec the round's first
+    step. Every queued step must:
+    - be self-contained (it runs in a fresh session with none of your reasoning), and
+      say what earlier rounds built that it relies on
+    - name the spec section(s) it implements
+    - add or update tests and pass `{testCommand}`
+    - leave the spec alone, and say in its final summary anything it found that
+      contradicts the spec, or that it deferred
+    - commit its own work before finishing
+
+    When the roadmap is empty, don't stop on the strength of the last round alone.
+    Review the whole spec against the code, requirement by requirement, and queue a
+    round for any gaps. Once everything is satisfied, mark the spec complete in its
+    Progress section, commit, and queue nothing; that ends the workflow.
+
+    If some work needs my decision, record the question under Decisions, queue the work
+    that doesn't depend on it, and flag it in your summary. If nothing can proceed
+    without me, queue nothing; once I answer in the spec, running the workflow again
+    picks up from the Progress section.
+
+    End with a short summary: what you reviewed and fixed, how the spec changed, what you
+    queued for this round, what's left on the roadmap, and anything that needs my input.
+
+    You are running headless, so you can't ask questions. Use your best judgment, and if
+    you truly need my input, say so in your summary. When your turn ends your process
+    stops and kills any subprocesses you started, so don't end your turn to wait on a
+    task; block on long-running commands such as `{testCommand}` instead, and stop any
+    server you started before you end your turn.
+  # The final step never runs alongside other steps, so each pass can require a
+  # clean tree when it ends. A dirty tree resumes the step's session to finish
+  # and commit; after two retries the workflow stops. stderr is folded into
+  # stdout so a git error fails the check instead of leaving stdout empty and
+  # passing it. This sits after the prompt so the template dialog keeps its
+  # field order.
+  endCondition: &committed
+    script: git status --porcelain 2>&1
+    compareSource: stdout
+    operator: isEmpty
+    maxRetries: 2
+    retryPrompt: |
+      You left uncommitted changes. Finish the work, make sure `{testCommand}`
+      passes, and commit your own files with a plain conventional commit message.
+      $endCondition:stdout
+
+# The final step's clean-tree gate, offered to the orchestrator as the
+# `committed` preset. It attaches the preset (`endCondition: { use:
+# "committed" }`) to each queued step that runs on its own. This is not a
+# workflow-level endCondition: parallel steps share one working tree, so a
+# member would fail it on a sibling's unfinished edits.
+conditions:
+  committed: *committed

@@ -166,6 +166,7 @@ export class TemplateManager {
     "fix-tests",
     "full-feature",
     "spec-driven-loop",
+    "large-spec-loop",
     "feature-driven-loop",
     "bug-hunt-loop",
     "bug-drain-loop",

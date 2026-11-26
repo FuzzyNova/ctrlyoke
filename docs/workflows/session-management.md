@@ -33,7 +33,7 @@ steps:
     prompt: Review the implementation against @docs/feature-plan.md and fix any issues.
 ```
 
-The built-in loop templates (Bug Hunt Loop, Bug Drain Loop, Spec-Driven Loop, Feature-Driven Loop) set `resumeSession: false` at the workflow level for this reason. Steps a workflow appends to itself with `append_step` inherit the workflow's value like any other property, so the `workflow-orchestrator` agent sets `resumeSession: false` on each step it queues, which shows as a **no resume** chip on the step.
+The built-in loop templates (Bug Hunt Loop, Bug Drain Loop, Spec-Driven Loop, Large Spec Loop, Feature-Driven Loop) set `resumeSession: false` at the workflow level for this reason. Steps a workflow appends to itself with `append_step` inherit the workflow's value like any other property, so the `workflow-orchestrator` agent sets `resumeSession: false` on each step it queues, which shows as a **no resume** chip on the step.
 
 The written artifact is the shared memory: it survives across fresh sessions and keeps each step focused on its slice.
 
