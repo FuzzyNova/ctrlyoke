@@ -1142,6 +1142,20 @@ export function isPromptStep<T extends object>(
   );
 }
 
+/** Prompt and script steps carry the shared execution-property contract. */
+export function isExecutionStep(
+  step: WorkflowStep
+): step is PromptStep | ScriptStep {
+  return step.type === STEP_TYPES.PROMPT || step.type === STEP_TYPES.SCRIPT;
+}
+
+/** Return prompt execution metadata where present; workflow steps have lifecycle metadata only. */
+export function getExecutionRuntime(
+  step: WorkflowStep
+): PromptRuntimeMetadata | undefined {
+  return isExecutionStep(step) ? step._runtime : undefined;
+}
+
 /** Fail at runtime when an exhaustive discriminated union gains an unhandled case. */
 export function assertNever(value: never, context?: string): never {
   throw new Error(
