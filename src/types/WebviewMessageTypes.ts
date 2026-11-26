@@ -1224,15 +1224,21 @@ export interface WorkflowPropertiesUpdateMessage {
 /**
  * Open new workflow modal message (extension -> webview)
  */
+export interface TemplateCatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  variables?: Record<string, any>;
+  isBuiltIn: boolean;
+  /** Where a custom template was discovered; undefined for built-ins. */
+  source?: "user" | "workspace";
+  /** Community catalog filename identifying an installed community template. */
+  communityInstallFile?: string;
+}
+
 export interface OpenNewWorkflowModalMessage {
   type: typeof MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL;
-  templates: Array<{
-    id: string;
-    name: string;
-    description: string;
-    variables?: Record<string, any>;
-    isBuiltIn: boolean;
-  }>;
+  templates: TemplateCatalogItem[];
   defaultTemplateId?: string;
   defaultTemplateSource: TemplateVariableDefaultSource;
   /** Open the inline custom-template form when the modal is first shown. */

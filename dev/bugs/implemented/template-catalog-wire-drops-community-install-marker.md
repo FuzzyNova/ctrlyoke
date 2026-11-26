@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step
 - **Area:** `src/ui/WorkflowLibraryHandlers.ts` (`toWireTemplates` ~845), `src/types/WebviewMessageTypes.ts` (`OpenNewWorkflowModalMessage["templates"]` ~1229), `src/ui/webview-react/components/settings/CommunityTemplatesPage.tsx` (~228-243)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

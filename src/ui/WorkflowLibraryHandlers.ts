@@ -850,6 +850,9 @@ export class WorkflowLibraryHandlers {
       variables: t.variables,
       isBuiltIn: t.isBuiltIn,
       source: t.source,
+      ...(t.communityInstallFile
+        ? { communityInstallFile: t.communityInstallFile }
+        : {}),
     }));
   }
 
