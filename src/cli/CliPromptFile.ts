@@ -1,6 +1,6 @@
 import { PromptFileParser } from "../core/PromptFileParser";
 import {
-  isScriptStep,
+  isPromptStep,
   type ParsedPromptFile,
   type WorkflowStep,
 } from "../types/CtrlYokeTypes";
@@ -36,7 +36,7 @@ export function applyCliAppendOverrides(
   model?: string
 ): WorkflowStep[] {
   return steps.map((step) => {
-    if (isScriptStep(step)) return step;
+    if (!isPromptStep(step)) return step;
     return {
       ...step,
       ...(step.harness === undefined && harness ? { harness } : {}),

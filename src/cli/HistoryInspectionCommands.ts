@@ -34,7 +34,13 @@ import type {
   WorkflowKey,
   WorkflowLineageDescriptor,
 } from "../types/CtrlYokeTypes";
-import { isScriptStep } from "../types/CtrlYokeTypes";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+} from "../types/CtrlYokeTypes";
+import { STEP_TYPES } from "../types/DashboardConstants";
 import {
   promptFirstLinePreview,
   STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
@@ -1920,7 +1926,15 @@ function historyAttemptPrompt(attempt: ResolvedRunAttemptValue): string {
   if (recorded) return recorded;
   const step = attempt.definition?.step;
   if (!step) return "";
-  return isScriptStep(step) ? step.script : step.prompt;
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return isScriptStep(step) ? step.script : "";
+    case STEP_TYPES.PROMPT:
+      return isPromptStep(step) ? step.prompt : "";
+    default:
+      return assertNever(stepType);
+  }
 }
 
 /** The prompt actually recorded for the attempt. */

@@ -46,6 +46,7 @@ import {
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import {
+  isPromptStep,
   isScriptStep,
   type PromptFile,
   type RunRef,
@@ -874,7 +875,7 @@ function getCliPromptExecutionDetails(
 ): { harness?: HarnessId; model?: string } {
   const workflow = instance.promptQueue.getWorkflowFile();
   const step = instance.promptQueue.getState().steps[stepIndex];
-  const promptStep = step && !isScriptStep(step) ? step : undefined;
+  const promptStep = step && isPromptStep(step) ? step : undefined;
   return resolveStepHarnessAndModel(promptStep ?? {}, workflow, {
     ...defaults,
     modelForHarness: (harness) =>
@@ -2271,10 +2272,8 @@ function collectWorkflowHarnesses(
   const values = [
     defaultHarness,
     workflow.harness,
-    ...(workflow.steps ?? [])
-      .filter((step) => !isScriptStep(step))
-      .map((step) => step.harness),
-    ...(workflow.finalStep && !isScriptStep(workflow.finalStep)
+    ...(workflow.steps ?? []).filter(isPromptStep).map((step) => step.harness),
+    ...(workflow.finalStep && isPromptStep(workflow.finalStep)
       ? [workflow.finalStep.harness]
       : []),
   ].filter((value): value is HarnessId => value !== undefined);

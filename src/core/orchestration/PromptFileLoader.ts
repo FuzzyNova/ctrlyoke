@@ -6,6 +6,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   PromptFile,
   EXECUTION_STATES,
+  isPromptStep,
   type WorkflowValidationWarning,
 } from "../../types/CtrlYokeTypes";
 import type { ParsedPromptFile } from "../../types/CtrlYokeTypes";
@@ -18,7 +19,6 @@ import {
   WORKFLOW_PROPERTY_KEYS,
   STATUS_MESSAGE_SEVERITY,
   PROMPT_FILE_RELOAD_MODES,
-  STEP_TYPES,
   type PromptFileReloadMode,
 } from "../../types/DashboardConstants";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
@@ -475,9 +475,8 @@ export class PromptFileLoader {
     promptTexts.push(
       ...(workflow.steps ?? [])
         .filter(
-          (
-            step
-          ): step is Exclude<typeof step, { type: typeof STEP_TYPES.SCRIPT }> =>
+          (step): step is Extract<typeof step, { type?: "prompt" }> =>
+            isPromptStep(step) &&
             typeof step === "object" &&
             step !== null &&
             "prompt" in step &&

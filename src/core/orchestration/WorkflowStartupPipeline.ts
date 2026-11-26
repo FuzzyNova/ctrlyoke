@@ -1,7 +1,7 @@
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import type { WorkflowExecutionContext } from "../WorkflowExecutor";
-import { isScriptStep } from "../../types/CtrlYokeTypes";
+import { isPromptStep } from "../../types/CtrlYokeTypes";
 import type { PromptQueue } from "../PromptQueue";
 import type { OutputHistoryManager } from "./OutputHistoryManager";
 import type { StatusMessageReporter } from "./StatusMessageReporter";
@@ -1222,7 +1222,7 @@ export class WorkflowStartupPipeline {
     const queuedAttempts = queueState.steps
       .slice(startIndex)
       .filter((step, offset): step is PromptStep => {
-        if (step.enabled === false || isScriptStep(step)) return false;
+        if (step.enabled === false || !isPromptStep(step)) return false;
         const absoluteIndex = startIndex + offset;
         if (restartFromBeginning) return true;
         const status = queueState.results[absoluteIndex]?.status;
@@ -1244,7 +1244,7 @@ export class WorkflowStartupPipeline {
     const finalStepStillQueued =
       finalStep !== undefined &&
       finalStep.enabled !== false &&
-      !isScriptStep(finalStep) &&
+      isPromptStep(finalStep) &&
       (restartFromBeginning ||
         !finalStepRuntime ||
         finalStepRuntime.phase === FINAL_STEP_PHASES.QUEUE ||

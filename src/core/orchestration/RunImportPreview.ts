@@ -29,7 +29,11 @@ import type { RunImportPreview } from "../../types/RunImportPreviewTypes";
 import { REDACTION_MARKER } from "../../types/PreviewRedactor";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
-import { isScriptStep } from "../../types/CtrlYokeTypes";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+} from "../../types/CtrlYokeTypes";
 import {
   getDeclaredSecretGrants,
   findUnapprovedSecretGrants,
@@ -201,12 +205,19 @@ export class RunImportPreviewService {
     };
     const previewSteps = await Promise.all(
       pendingEntries.map(async ({ step, index: actualIndex }) => {
-        const isScript = isScriptStep(step);
-        const resolved = isScript
-          ? undefined
-          : SettingsPropertyResolver.resolve(step as PromptStep, workflow, {
+        const stepType = getStepType(step);
+        switch (stepType) {
+          case STEP_TYPES.SCRIPT:
+          case STEP_TYPES.PROMPT:
+            break;
+          default:
+            assertNever(stepType);
+        }
+        const resolved = isPromptStep(step)
+          ? SettingsPropertyResolver.resolve(step, workflow, {
               hostCanProvidePty: false,
-            });
+            })
+          : undefined;
         const grants = getDeclaredSecretGrants(step, workflow);
         const unapproved = new Set(
           findUnapprovedSecretGrants(grants, workspaceRoot)
@@ -221,7 +232,7 @@ export class RunImportPreviewService {
         const provenanceStep = header.manifest.provenance.steps.find(
           (item) => item.stepIndex === actualIndex
         );
-        if (!isScript && resolved) {
+        if (isPromptStep(step) && resolved) {
           const harness = resolved.harness ?? HARNESS_IDS.COPILOT_CLI;
           const provider = (
             dependencies.createProvider ??
@@ -290,8 +301,8 @@ export class RunImportPreviewService {
         return {
           stepIndex: actualIndex,
           ...(step.name ? { name: step.name } : {}),
-          kind: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
-          ...(!isScript
+          kind: stepType,
+          ...(isPromptStep(step)
             ? { promptPreview: (step as PromptStep).prompt }
             : {
                 script: {
@@ -300,10 +311,10 @@ export class RunImportPreviewService {
                   shell: step.shell,
                 },
               }),
-          ...(!isScript && resolved?.preCondition
+          ...(isPromptStep(step) && resolved?.preCondition
             ? { preCondition: resolved.preCondition }
             : {}),
-          ...(!isScript && resolved?.endCondition
+          ...(isPromptStep(step) && resolved?.endCondition
             ? { endCondition: resolved.endCondition }
             : {}),
           ...(resolved?.additionalArgs

@@ -40,8 +40,41 @@ import type {
   WorkingFile,
   CoordinationParticipant,
 } from "./types/CtrlYokeTypes";
-import { isScriptStep } from "./types/CtrlYokeTypes";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+} from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
+
+function stepContentPreview(step: WorkflowStep, preview: string) {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return isScriptStep(step)
+        ? { type: STEP_TYPES.SCRIPT, script: preview }
+        : {};
+    case STEP_TYPES.PROMPT:
+      return isPromptStep(step) ? { prompt: preview } : {};
+    default:
+      return assertNever(stepType);
+  }
+}
+
+function stepOutputContent(step: WorkflowStep) {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return isScriptStep(step)
+        ? { type: STEP_TYPES.SCRIPT, script: step.script }
+        : {};
+    case STEP_TYPES.PROMPT:
+      return isPromptStep(step) ? { prompt: step.prompt } : {};
+    default:
+      return assertNever(stepType);
+  }
+}
 import {
   CTRLYOKE_SETTINGS_DEFAULTS,
   type RunHistoryLocation,
@@ -532,7 +565,7 @@ function executionModeWarnings(
   workingFile: WorkingFile
 ): string[] {
   const hasCodexInteractiveStep = steps.some((step) => {
-    if (isScriptStep(step)) return false;
+    if (!isPromptStep(step)) return false;
     return (
       SettingsPropertyResolver.resolveHarnessValue(
         step.harness,
@@ -1332,30 +1365,34 @@ export class CtrlYokeMCPServer {
     // read_output call away.
     const steps = allSteps.map((p, index) => {
       const scriptStep = isScriptStep(p);
-      const effective = isScriptStep(p)
-        ? undefined
-        : resolveEffectiveStepSettings(p, queueData);
-      const prompt = scriptStep ? p.script : p.prompt;
+      const effective = isPromptStep(p)
+        ? resolveEffectiveStepSettings(p, queueData)
+        : undefined;
+      const prompt = isScriptStep(p)
+        ? p.script
+        : isPromptStep(p)
+          ? p.prompt
+          : "";
       const preview = promptFirstLinePreview(
         prompt,
         STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
       );
       return {
         index,
-        ...(scriptStep
-          ? { type: STEP_TYPES.SCRIPT, script: preview }
-          : { prompt: preview }),
+        ...stepContentPreview(p, preview),
         ...(p.name?.trim() ? { name: p.name.trim() } : {}),
         ...(preview !== prompt
-          ? scriptStep
+          ? isScriptStep(p)
             ? { scriptTruncated: true }
-            : { promptTruncated: true }
+            : isPromptStep(p)
+              ? { promptTruncated: true }
+              : {}
           : {}),
         status: stepStatuses[index],
         ...((stepStatuses[index] === STEP_STATUS.COMPLETED ||
           stepStatuses[index] === STEP_STATUS.FAILED ||
           stepStatuses[index] === STEP_STATUS.CANCELLED) &&
-        !scriptStep &&
+        isPromptStep(p) &&
         workspaceSnapshots.get(index)?.gitOutcome
           ? { gitOutcome: workspaceSnapshots.get(index)?.gitOutcome }
           : {}),
@@ -1614,7 +1651,7 @@ export class CtrlYokeMCPServer {
     response.effectiveSettings = requestedSteps.map((requested, offset) => {
       const index = response!.insertIndex + offset;
       const addedStep = updatedWorkingFile!.steps?.[index];
-      if (!addedStep || isScriptStep(addedStep)) {
+      if (!addedStep || !isPromptStep(addedStep)) {
         throw new Error(
           `Failed to resolve effective settings for appended step at index ${index}`
         );
@@ -1945,7 +1982,7 @@ export class CtrlYokeMCPServer {
     const capabilities = await this.readCapabilities();
 
     for (const step of steps) {
-      if (isScriptStep(step)) continue;
+      if (!isPromptStep(step)) continue;
       const effectiveHarness = SettingsPropertyResolver.resolveHarnessValue(
         (step as PromptStep).harness,
         workflowHarness
@@ -1960,7 +1997,7 @@ export class CtrlYokeMCPServer {
     if (!capabilities) return;
 
     for (const step of steps) {
-      if (isScriptStep(step)) continue;
+      if (!isPromptStep(step)) continue;
       const promptStep = step as PromptStep;
       const effectiveHarness = SettingsPropertyResolver.resolveHarnessValue(
         promptStep.harness,
@@ -2115,9 +2152,7 @@ export class CtrlYokeMCPServer {
           : null;
         const baseOutput = {
           index: i,
-          ...(isScriptStep(p)
-            ? { type: STEP_TYPES.SCRIPT, script: p.script }
-            : { prompt: p.prompt }),
+          ...stepOutputContent(p),
           status: stepStatuses[i],
           responseText: fullResponseText,
         };

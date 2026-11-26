@@ -4,7 +4,7 @@ import type {
   ScriptVerdict,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import { isScriptStep } from "../../types/CtrlYokeTypes";
+import { isPromptStep, isScriptStep } from "../../types/CtrlYokeTypes";
 import {
   CLI_EVENT_TYPES,
   DIFF_CHANGE_TYPES,
@@ -1404,7 +1404,7 @@ export class RunOutputResolver {
           ? [
               {
                 ...common,
-                ...(step && !isScriptStep(step) ? { prompt: step.prompt } : {}),
+                ...(step && isPromptStep(step) ? { prompt: step.prompt } : {}),
                 ...(transcript?.length ? { transcript } : {}),
                 ...(text ? { text } : {}),
               },

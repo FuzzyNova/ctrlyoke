@@ -25,9 +25,9 @@ import { isWorkflowRelativeReferencePath } from "./promptPathUtils";
 import {
   BUNDLE_MANIFEST_FILE_NAME,
   PROMPT_FILE_RESOLUTION_STATUSES,
-  STEP_TYPES,
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
+import { isPromptStep, type WorkflowStep } from "../types/CtrlYokeTypes";
 import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
@@ -260,7 +260,7 @@ function collectPromptFields(workflow: Record<string, unknown>): PromptField[] {
     workflow.steps.forEach((step, index) => {
       if (
         !isRecord(step) ||
-        step.type === STEP_TYPES.SCRIPT ||
+        !isPromptStep(step as unknown as WorkflowStep) ||
         typeof step.prompt !== "string"
       ) {
         return;

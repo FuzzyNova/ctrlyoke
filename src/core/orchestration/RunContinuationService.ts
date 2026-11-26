@@ -8,6 +8,12 @@ import type {
   WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+} from "../../types/CtrlYokeTypes";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   EXECUTION_STATES,
@@ -1503,14 +1509,28 @@ function assertClearablePropertiesAreEditable(
 }
 
 function assertStepHasRequiredContent(step: WorkflowStep): void {
-  if (step.type === STEP_TYPES.SCRIPT) {
-    if (typeof step.script !== "string" || step.script.trim().length === 0) {
-      throw new Error("A script step must keep a non-empty script");
-    }
-    return;
-  }
-  if (typeof step.prompt !== "string" || step.prompt.trim().length === 0) {
-    throw new Error("A prompt step must keep a non-empty prompt");
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      if (
+        !isScriptStep(step) ||
+        typeof step.script !== "string" ||
+        step.script.trim().length === 0
+      ) {
+        throw new Error("A script step must keep a non-empty script");
+      }
+      return;
+    case STEP_TYPES.PROMPT:
+      if (
+        !isPromptStep(step) ||
+        typeof step.prompt !== "string" ||
+        step.prompt.trim().length === 0
+      ) {
+        throw new Error("A prompt step must keep a non-empty prompt");
+      }
+      return;
+    default:
+      return assertNever(stepType);
   }
 }
 

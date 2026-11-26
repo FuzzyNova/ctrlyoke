@@ -6,6 +6,7 @@ import { foldPathForCompare } from "../../utils/PathCasing";
 import {
   frozenActiveExecutionMs,
   projectWorktreeRuntime,
+  isPromptStep,
 } from "../../types/CtrlYokeTypes";
 import { resolveStepHarnessAndModel } from "../../types/ExecutionPropertyResolver";
 import type {
@@ -34,7 +35,6 @@ import {
   HARNESS_IDS,
   HISTORY_TRASH_ENTRY_KINDS,
   OUTPUT_ACTIVITY_KINDS,
-  STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
@@ -1584,7 +1584,7 @@ export class OutputHistoryManager {
       const models = new Map<string, number>();
       const defaultHarness = ConfigurationUtils.getIntegrationMode();
       for (const step of workingFile.steps ?? []) {
-        if (step.type === STEP_TYPES.SCRIPT) {
+        if (!isPromptStep(step)) {
           continue;
         }
         const { harness, model } = resolveStepHarnessAndModel(

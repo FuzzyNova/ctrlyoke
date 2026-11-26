@@ -29,7 +29,12 @@ import type {
   WorkflowStopReason,
   WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
-import { getFinalStepPassCount } from "../types/CtrlYokeTypes";
+import {
+  assertNever,
+  getFinalStepPassCount,
+  getStepType,
+  isScriptStep,
+} from "../types/CtrlYokeTypes";
 import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
   type RunAttemptProjection,
@@ -335,7 +340,8 @@ function buildStepResult(
   input: CliJsonResultInput,
   projection: RunAttemptProjection | undefined
 ): CliJsonStepResult {
-  const isScript = step.type === STEP_TYPES.SCRIPT;
+  const stepType = getCliStepType(step);
+  const isScript = stepType === STEP_TYPES.SCRIPT;
   const enabled = step.enabled !== false;
   const status = result?.status ?? STEP_STATUS.PENDING;
   const runtime = step._runtime;
@@ -358,7 +364,7 @@ function buildStepResult(
       input.promptFile?.parallelGroups?.find(
         (group) => index >= group.startIndex && index <= group.endIndex
       )?.id ?? null,
-    type: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
+    type: stepType,
     enabled,
     ...metadata,
     status,
@@ -383,7 +389,7 @@ function buildStepResult(
     ...(isScript
       ? {
           script: buildScriptOutput(
-            step.script,
+            isScriptStep(step) ? step.script : "",
             scriptOutput?.stdout ?? result?.scriptOutput,
             scriptOutput?.stderr,
             scriptOutput?.exitCode
@@ -393,6 +399,20 @@ function buildStepResult(
     failureKind: runtime?.failureKind ?? null,
     error: getStepError(result, runtime),
   };
+}
+
+function getCliStepType(
+  step: WorkflowStep
+): (typeof STEP_TYPES)[keyof typeof STEP_TYPES] {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return STEP_TYPES.SCRIPT;
+    case STEP_TYPES.PROMPT:
+      return STEP_TYPES.PROMPT;
+    default:
+      return assertNever(stepType);
+  }
 }
 
 function buildFinalStep(
@@ -405,7 +425,8 @@ function buildFinalStep(
     return null;
   }
 
-  const isScript = step.type === STEP_TYPES.SCRIPT;
+  const stepType = getCliStepType(step);
+  const isScript = stepType === STEP_TYPES.SCRIPT;
   const stepRuntime = step._runtime;
   const status = runtime?.status ?? null;
   const passCount = projection?.passCount ?? getFinalStepPassCount(runtime);
@@ -426,7 +447,7 @@ function buildFinalStep(
   const latestScriptOutput = projection?.latestPass?.scriptOutput;
 
   return {
-    type: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
+    type: stepType,
     ...metadata,
     status,
     success: getNullableStepSuccess(status),
@@ -442,7 +463,7 @@ function buildFinalStep(
     ...(isScript
       ? {
           script: buildScriptOutput(
-            step.script,
+            isScriptStep(step) ? step.script : "",
             latestScriptOutput?.stdout,
             latestScriptOutput?.stderr,
             latestScriptOutput?.exitCode
@@ -460,7 +481,8 @@ function buildFinalPass(
   runtime: FinalStepRuntimeState | undefined,
   projection: RunAttemptProjection
 ): CliJsonFinalPass {
-  const isScript = step.type === STEP_TYPES.SCRIPT;
+  const stepType = getCliStepType(step);
+  const isScript = stepType === STEP_TYPES.SCRIPT;
   const stepRuntime = step._runtime;
   const status = runtime?.status ?? null;
   const scriptOutput = projection.scriptOutput;
@@ -483,7 +505,7 @@ function buildFinalPass(
     ...(isScript
       ? {
           script: buildScriptOutput(
-            step.script,
+            isScriptStep(step) ? step.script : "",
             scriptOutput?.stdout,
             scriptOutput?.stderr,
             scriptOutput?.exitCode

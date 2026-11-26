@@ -79,12 +79,7 @@ export function parseWorkflowStatusResultText(
           isRecord(step) &&
           Number.isInteger(step.index) &&
           (step.name === undefined || typeof step.name === "string") &&
-          (step.type === undefined ||
-            step.type === STEP_TYPES.PROMPT ||
-            step.type === STEP_TYPES.SCRIPT) &&
-          (step.type === STEP_TYPES.SCRIPT
-            ? typeof step.script === "string"
-            : typeof step.prompt === "string") &&
+          hasStepContent(step) &&
           (step.promptTruncated === undefined ||
             typeof step.promptTruncated === "boolean") &&
           (step.scriptTruncated === undefined ||
@@ -103,6 +98,18 @@ export function parseWorkflowStatusResultText(
     return value as unknown as WorkflowStatusResult;
   } catch {
     return undefined;
+  }
+}
+
+function hasStepContent(step: Record<string, unknown>): boolean {
+  switch (step.type) {
+    case STEP_TYPES.SCRIPT:
+      return typeof step.script === "string";
+    case undefined:
+    case STEP_TYPES.PROMPT:
+      return typeof step.prompt === "string";
+    default:
+      return false;
   }
 }
 
@@ -129,9 +136,14 @@ export function workflowStatusStepName(step: WorkflowStatusStep): string {
 }
 
 function workflowStatusStepText(step: WorkflowStatusStep): string {
-  return step.type === STEP_TYPES.SCRIPT
-    ? (step.script ?? "")
-    : (step.prompt ?? "");
+  switch (step.type ?? STEP_TYPES.PROMPT) {
+    case STEP_TYPES.SCRIPT:
+      return step.script ?? "";
+    case STEP_TYPES.PROMPT:
+      return step.prompt ?? "";
+    default:
+      return "";
+  }
 }
 
 /** Hover text for a step's row, when the row hides part of its prompt. */
