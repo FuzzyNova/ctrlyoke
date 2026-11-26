@@ -1149,7 +1149,11 @@ async function runCommand(
   // dev/implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md. User-scope roots
   // need no such gate (the user already approved them by editing their own
   // settings).
-  await exitUnlessTrustDecided(workspaceExternalRootsTrustRequest(workingDir));
+  await exitUnlessTrustDecided(
+    workspaceExternalRootsTrustRequest(workingDir),
+    options.json === true,
+    workingDir
+  );
 
   // Workspace settings that choose a program to run (shell, hooks, MCP
   // servers, harness flags, default scripts) need a decision before the
@@ -1159,6 +1163,16 @@ async function runCommand(
     createCliTrustIo()
   );
   if (workspaceSettingsExitCode !== undefined) {
+    if (options.json) {
+      process.stdout.write(
+        JSON.stringify(
+          buildCliJsonResult({
+            workspaceRoot: workingDir,
+            error: `Run \`ctrlyoke ${TRUST_WORKSPACE_SETTINGS_COMMAND}\` to review them.`,
+          })
+        ) + "\n"
+      );
+    }
     if (returnExitCode) {
       process.exitCode = workspaceSettingsExitCode;
       return workspaceSettingsExitCode;
@@ -1588,7 +1602,9 @@ async function runCommand(
               preflightWorkflow,
               workingDir,
               resolvedFile
-            )
+            ),
+            options.json === true,
+            workingDir
           );
           mergeCliVarsIntoWorkflow(preflightWorkflow, config.vars);
           await exitUnlessTrustDecided(
@@ -1596,7 +1612,9 @@ async function runCommand(
               preflightWorkflow,
               workingDir,
               resolvedFile
-            )
+            ),
+            options.json === true,
+            workingDir
           );
           applyCliPropertyOverrides(
             structuredClone(preflightWorkflow),
@@ -1972,9 +1990,23 @@ function mergeCliVarsIntoWorkflow(
  * Run one of the `run` family's trust gates: ask in a terminal, or exit 2
  * when there is none (see {@link ensureCliTrustDecided}).
  */
-async function exitUnlessTrustDecided(request: CliTrustRequest): Promise<void> {
+async function exitUnlessTrustDecided(
+  request: CliTrustRequest,
+  json = false,
+  workspaceRoot = process.cwd()
+): Promise<void> {
   const exitCode = await ensureCliTrustDecided(request, createCliTrustIo());
   if (exitCode !== undefined) {
+    if (json) {
+      process.stdout.write(
+        JSON.stringify(
+          buildCliJsonResult({
+            workspaceRoot,
+            error: `Run \`${request.reviewCommand}\` to review them.`,
+          })
+        ) + "\n"
+      );
+    }
     process.exit(exitCode);
   }
 }
@@ -2115,7 +2147,9 @@ async function dryRunCommand(
 
     if (resolvedFile) {
       await exitUnlessTrustDecided(
-        workflowExternalRootsTrustRequest(workflow, workingDir, resolvedFile)
+        workflowExternalRootsTrustRequest(workflow, workingDir, resolvedFile),
+        options.json === true,
+        workingDir
       );
     }
 
@@ -2127,7 +2161,9 @@ async function dryRunCommand(
       "run-start"
     );
     await exitUnlessTrustDecided(
-      secretGrantsTrustRequest(workflow, workingDir, resolvedFile)
+      secretGrantsTrustRequest(workflow, workingDir, resolvedFile),
+      options.json === true,
+      workingDir
     );
 
     const previewWorkflow = runStartView;

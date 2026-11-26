@@ -531,6 +531,12 @@ suite("CLI dry-run process", () => {
       ),
       result.stderr
     );
+    const report = JSON.parse(result.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(report.success, false);
+    assert.match(report.error.message, /trust-secret-grants/u);
   });
 
   test("fails closed on pending workflow roots, then allows a trusted workflow to run", async function () {
@@ -567,6 +573,12 @@ suite("CLI dry-run process", () => {
       ),
       blocked.stderr
     );
+    const blockedReport = JSON.parse(blocked.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(blockedReport.success, false);
+    assert.match(blockedReport.error.message, /trust-workflow-external-roots/u);
 
     const trusted = await runCli(
       ["trust-workflow-external-roots", workflow, "--cwd", root, "--yes"],
@@ -580,6 +592,64 @@ suite("CLI dry-run process", () => {
       root
     );
     assert.strictEqual(allowed.code, 0, allowed.stderr);
+  });
+
+  test("reports pending workspace roots and settings in JSON run results", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-trust-json-")
+    );
+    const externalRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-trust-outside-")
+    );
+    temporaryRoots.push(root, externalRoot);
+    const workflow = path.join(root, "workflow.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({ steps: [{ prompt: "This must not execute" }] }),
+      "utf8"
+    );
+    await fs.mkdir(path.join(root, ".ctrlyoke"), { recursive: true });
+    const settingsPath = path.join(root, ".ctrlyoke", "settings.json");
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ permissions: { trustedExternalRoots: [externalRoot] } }),
+      "utf8"
+    );
+
+    const workspaceRoots = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(workspaceRoots.code, 2, workspaceRoots.stderr);
+    const rootsReport = JSON.parse(workspaceRoots.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(rootsReport.success, false);
+    assert.match(rootsReport.error.message, /trust-external-roots/u);
+
+    const trustRoots = await runCli(
+      ["trust-external-roots", "--cwd", root, "--yes"],
+      root
+    );
+    assert.strictEqual(trustRoots.code, 0, trustRoots.stderr);
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ defaults: { hooks: [{ command: "echo pending" }] } }),
+      "utf8"
+    );
+    const workspaceSettings = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(workspaceSettings.code, 2, workspaceSettings.stderr);
+    const settingsReport = JSON.parse(workspaceSettings.stdout) as {
+      success: boolean;
+      error: { message: string };
+    };
+    assert.strictEqual(settingsReport.success, false);
+    assert.match(settingsReport.error.message, /trust-workspace-settings/u);
   });
 
   test("does not gate workflows with null or omitted trustedExternalRoots", async function () {

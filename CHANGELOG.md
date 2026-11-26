@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- JSON run-family results now include an error envelope when a trust or workspace-settings approval is pending.
 - Streamed line-length checks no longer count a held-back carriage return at a chunk boundary.
 - Unranked file and prompt-file completions now sort paths by numeric depth.
 - Prompt-token completions now open after JSON-style character escapes in JSON strings and YAML double-quoted scalars.
