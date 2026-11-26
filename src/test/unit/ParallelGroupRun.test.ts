@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionStepText } from "../helpers/stepAssertions";
 import { suite, test } from "mocha";
 import { ParallelGroupRun } from "../../core/ParallelGroupRun";
 import {
@@ -128,8 +129,7 @@ function makeRun(options: {
       };
     },
     executeMember: async (target, memberStep) => {
-      const stepId =
-        "prompt" in memberStep ? memberStep.prompt : memberStep.script;
+      const stepId = executionStepText(memberStep);
       return (
         (await options.execute?.(stepId, target)) ?? {
           target,

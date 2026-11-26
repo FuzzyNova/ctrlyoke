@@ -18,7 +18,7 @@ import type { UserFeedback } from "../../core/UserFeedbackSink";
 import {
   PromptFile,
   WorkflowStep,
-  isScriptStep,
+  isPromptStep,
 } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -771,8 +771,8 @@ suite("PromptFileLoader Tests", () => {
     function assertPromptStep(
       step: WorkflowStep,
       message: string
-    ): asserts step is Exclude<WorkflowStep, { type: "script" }> {
-      assert.ok(!isScriptStep(step), message);
+    ): asserts step is Extract<WorkflowStep, { type?: "prompt" }> {
+      assert.ok(isPromptStep(step), message);
     }
 
     test("should load all explicit properties from the manual property sync workflow into memory and the working file", async () => {

@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { asPromptStep, executionRuntime } from "../helpers/stepAssertions";
 import { spawnSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -2545,7 +2546,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const status = responseJson(await server.invokeTool("workflow_status", {}));
 
     assert.strictEqual(
-      persisted.steps?.[1].executionMode,
+      asPromptStep(persisted.steps![1]).executionMode,
       EXECUTION_MODES.INTERACTIVE
     );
     assert.strictEqual(
@@ -3157,7 +3158,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     assert.strictEqual(result.stepsAdded, 2);
     assert.strictEqual(
-      persisted.steps?.[1].executionMode,
+      asPromptStep(persisted.steps![1]).executionMode,
       EXECUTION_MODES.INTERACTIVE
     );
     assert.strictEqual(persisted.parallelGroups?.length, 1);
@@ -3887,7 +3888,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(result.descriptorRevision, 3);
     assert.strictEqual(persisted.steps?.length, 2);
     assert.strictEqual(
-      persisted.steps?.[0]._runtime?.sessionId,
+      executionRuntime(persisted.steps?.[0])?.sessionId,
       "session-append"
     );
     assert.ok(persisted.steps?.[1]._runtime?.stepId);

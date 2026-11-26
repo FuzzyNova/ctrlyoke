@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionStepText } from "./helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -579,9 +580,7 @@ suite("PromptFileParser Tests", () => {
 
         assert.ok(result);
         assert.deepStrictEqual(
-          result.steps?.map((step) =>
-            "prompt" in step ? step.prompt : step.script
-          ),
+          result.steps?.map((step) => executionStepText(step)),
           ["before", "parallel prompt", "echo parallel script", "after"]
         );
         assert.strictEqual(result.parallelGroups?.length, 1);

@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionStepText } from "../helpers/stepAssertions";
 import * as path from "path";
 import { suite, test } from "mocha";
 
@@ -614,7 +615,7 @@ function promptResult(
   overrides: Partial<PromptResult> = {}
 ): PromptResult {
   return {
-    prompt: "prompt" in step ? step.prompt : step.script,
+    prompt: executionStepText(step),
     status,
     timestamp: new Date(1_000),
     ...overrides,

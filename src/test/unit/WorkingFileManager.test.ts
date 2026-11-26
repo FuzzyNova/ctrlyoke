@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionRuntime } from "../helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -393,7 +394,7 @@ suite("WorkingFileManager", () => {
       await fs.readFile(workingFilePath, "utf-8")
     ) as WorkingFile;
     assert.strictEqual(
-      persisted.finalStep?._runtime?.sessionId,
+      executionRuntime(persisted.finalStep)?.sessionId,
       "final-session-id"
     );
     assert.strictEqual(persisted.finalStep?._runtime?.startedAt, undefined);
@@ -2751,11 +2752,11 @@ suite("WorkingFileManager", () => {
         undefined
       );
       assert.strictEqual(
-        restored.workingFile.steps![1]._runtime?.sessionId,
+        executionRuntime(restored.workingFile.steps![1])?.sessionId,
         undefined
       );
       assert.strictEqual(
-        restored.workingFile.steps![2]._runtime?.sessionId,
+        executionRuntime(restored.workingFile.steps![2])?.sessionId,
         undefined
       );
 

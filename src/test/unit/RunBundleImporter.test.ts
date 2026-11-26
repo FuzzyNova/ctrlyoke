@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionRuntime } from "../helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
@@ -676,7 +677,7 @@ suite("RunBundleImporter", () => {
     );
     assert.strictEqual(queue.getState().currentIndex, 0);
     assert.strictEqual(
-      queue.getState().steps[0]?._runtime?.rewoundFailure,
+      executionRuntime(queue.getState().steps[0])?.rewoundFailure,
       true
     );
   });

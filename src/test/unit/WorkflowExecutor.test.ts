@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionRuntime } from "../helpers/stepAssertions";
 import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -2884,7 +2885,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
       assert.strictEqual(queue.getState().currentIndex, 0);
       assert.strictEqual(
-        queue.getState().steps[1]._runtime?.rewoundFailure,
+        executionRuntime(queue.getState().steps[1])?.rewoundFailure,
         true
       );
       await assert.rejects(
@@ -3591,7 +3592,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     try {
       await makeExecutor(queue).execute(integration, makeContext(integration));
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
-      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, []);
+      assert.deepStrictEqual(
+        executionRuntime(queue.getState().steps[0])?.secrets,
+        []
+      );
     } finally {
       configService.setCliOverlay({});
       if (previousValue === undefined) {
@@ -3616,9 +3620,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         new MockHarnessIntegration(undefined, false),
         makeContext(new MockHarnessIntegration(undefined, false))
       );
-      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, [
-        secretName,
-      ]);
+      assert.deepStrictEqual(
+        executionRuntime(queue.getState().steps[0])?.secrets,
+        [secretName]
+      );
     } finally {
       configService.setCliOverlay({});
       if (previousValue === undefined) delete process.env[secretName];
@@ -4903,11 +4908,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(runtime?.status, STEP_STATUS.COMPLETED);
     assert.ok(runtime?.completedAt);
     assert.strictEqual(
-      queue.getWorkflowFile().finalStep?._runtime?.harness,
+      executionRuntime(queue.getWorkflowFile().finalStep)?.harness,
       HARNESS_IDS.CODEX_CLI
     );
     assert.strictEqual(
-      queue.getWorkflowFile().finalStep?._runtime?.model,
+      executionRuntime(queue.getWorkflowFile().finalStep)?.model,
       "gpt-5.4-mini"
     );
   });
@@ -6316,7 +6321,7 @@ suite("WorkflowExecutor variable substitution of inherited fields", () => {
     });
     assert.strictEqual(dispatched[0]?.executionMode, EXECUTION_MODES.HEADLESS);
     assert.strictEqual(
-      queue.getState().steps[0]?._runtime?.executionMode,
+      executionRuntime(queue.getState().steps[0])?.executionMode,
       EXECUTION_MODES.HEADLESS
     );
     assert.strictEqual(queue.getWorkflowFile().executionMode, "{{mode}}");
@@ -6494,11 +6499,11 @@ suite("WorkflowExecutor variable substitution of inherited fields", () => {
       queue.getFinalStepRuntime(),
     ];
     assert.strictEqual(
-      state.steps[0]?._runtime?.harness,
+      executionRuntime(state.steps[0])?.harness,
       HARNESS_IDS.CLAUDE_CLI
     );
     assert.strictEqual(
-      state.steps[1]?._runtime?.executionMode,
+      executionRuntime(state.steps[1])?.executionMode,
       EXECUTION_MODES.HEADLESS
     );
     for (const runtime of runtimes)
@@ -6578,7 +6583,7 @@ suite("WorkflowExecutor run-start view", () => {
       "{{h}}"
     );
     assert.strictEqual(
-      queue.getState().steps[0]?._runtime?.harness,
+      executionRuntime(queue.getState().steps[0])?.harness,
       HARNESS_IDS.CODEX_CLI
     );
   });

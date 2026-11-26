@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionRuntime } from "./helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -1872,7 +1873,7 @@ suite("PromptQueue State Machine Tests", () => {
         "edited failed prompt"
       );
       assert.strictEqual(
-        queue.getState().steps[0]._runtime?.rewoundFailure,
+        executionRuntime(queue.getState().steps[0])?.rewoundFailure,
         true
       );
     });
@@ -1884,7 +1885,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       await assert.rejects(() => queue.deletePrompts([0]), /recorded history/i);
       assert.strictEqual(
-        queue.getState().steps[0]._runtime?.rewoundFailure,
+        executionRuntime(queue.getState().steps[0])?.rewoundFailure,
         true
       );
     });
@@ -2448,7 +2449,7 @@ suite("PromptQueue State Machine Tests", () => {
         baseDefinitionRevision: 4,
       });
       assert.strictEqual(
-        queue.getState().steps[0]._runtime?.sessionId,
+        executionRuntime(queue.getState().steps[0])?.sessionId,
         "prefix-session"
       );
       assert.ok(queue.getState().steps[1]._runtime?.stepId);
@@ -3166,7 +3167,7 @@ suite("PromptQueue State Machine Tests", () => {
         "should have 2 prompts after merge"
       );
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "b52bceab-9c03-49b3-8324-4220292e9acb",
         "session ID must be preserved from memory, not lost to disk replacement"
       );
@@ -3203,7 +3204,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(state.steps[0].enabled, false);
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(executionRuntime(state.steps[0])?.sessionId, "s0");
       assert.strictEqual((state.steps[1] as PromptStep).prompt, "prompt-1-mcp");
     });
 
@@ -3234,14 +3235,17 @@ suite("PromptQueue State Machine Tests", () => {
         state.steps.map((step) => (step as PromptStep).prompt),
         ["repeat", "repeat", "repeat"]
       );
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "first-session");
+      assert.strictEqual(
+        executionRuntime(state.steps[0])?.sessionId,
+        "first-session"
+      );
       assert.strictEqual(
         state.steps[0]._runtime?.completedAt,
         2000,
         "runtime must stay attached to the first index"
       );
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "second-session",
         "identical prompts must not share a session ID"
       );
@@ -3302,11 +3306,11 @@ suite("PromptQueue State Machine Tests", () => {
 
       let state = queue.getState();
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "member-0-session"
       );
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "member-1-session"
       );
       assert.strictEqual(state.results[0].preCondition?.stdout, "gate-0");
@@ -3322,11 +3326,11 @@ suite("PromptQueue State Machine Tests", () => {
       state = queue.getState();
       assert.strictEqual(state.steps.length, 3);
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "member-0-session"
       );
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "member-1-session"
       );
       assert.strictEqual(state.results[0].preCondition?.stdout, "gate-0");
@@ -3358,8 +3362,14 @@ suite("PromptQueue State Machine Tests", () => {
       ]);
 
       const state = queue.getState();
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "second-session");
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "first-session");
+      assert.strictEqual(
+        executionRuntime(state.steps[0])?.sessionId,
+        "second-session"
+      );
+      assert.strictEqual(
+        executionRuntime(state.steps[1])?.sessionId,
+        "first-session"
+      );
     });
 
     test("should use the shorter disk/memory immutable boundary", () => {
@@ -3386,7 +3396,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "completed-session"
       );
       assert.ok(
@@ -3432,7 +3442,7 @@ suite("PromptQueue State Machine Tests", () => {
       const state = queue.getState();
       assert.strictEqual(newSteps.length, 1, "the append must be detected");
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "running-session",
         "a mid-run merge must not drop the running step's session ID"
       );
@@ -3681,7 +3691,7 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual((state.steps[0] as any).status, undefined);
       assert.strictEqual((state.steps[1] as any).status, undefined);
       assert.strictEqual((state.steps[1] as any).details, undefined);
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
+      assert.strictEqual(executionRuntime(state.steps[1])?.sessionId, "s1");
       assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
     });
 
@@ -3740,7 +3750,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(state.steps.length, 2);
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(executionRuntime(state.steps[0])?.sessionId, "s0");
       assert.strictEqual(state.currentIndex, 1);
       await queue.deletePrompts([1]);
       assert.strictEqual(queue.getState().steps.length, 1);
@@ -3849,8 +3859,14 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.steps[1]._runtime?.startedAt, undefined);
       assert.strictEqual(state.steps[1]._runtime?.completedAt, undefined);
       assert.strictEqual(state.steps[1]._runtime?.elapsed, undefined);
-      assert.strictEqual(state.steps[1]._runtime?.contextWindowUsed, undefined);
-      assert.strictEqual(state.steps[1]._runtime?.contextWindowSize, undefined);
+      assert.strictEqual(
+        executionRuntime(state.steps[1])?.contextWindowUsed,
+        undefined
+      );
+      assert.strictEqual(
+        executionRuntime(state.steps[1])?.contextWindowSize,
+        undefined
+      );
       assert.strictEqual(state.currentIndex, 0);
       assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
     });

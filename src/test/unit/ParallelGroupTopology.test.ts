@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionStepText } from "../helpers/stepAssertions";
 import { suite, test } from "mocha";
 import { getEffectiveParallelGroupWidth } from "../../types/DashboardConstants";
 import {
@@ -72,9 +73,7 @@ function ranges(value: ParallelGroupTopology): string {
 }
 
 function names(value: ParallelGroupTopology): string[] {
-  return value.steps.map((item) =>
-    "prompt" in item ? item.prompt : item.script
-  );
+  return value.steps.map((item) => executionStepText(item));
 }
 
 suite("ParallelGroupTopology", () => {

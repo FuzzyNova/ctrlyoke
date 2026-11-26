@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionStepText, executionRuntime } from "../helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -1544,7 +1545,7 @@ suite("RunContinuationService addressed step mutations", () => {
       repository
     );
     assert.strictEqual(
-      edited.workingFile.steps![1]._runtime?.rewoundFailure,
+      executionRuntime(edited.workingFile.steps![1])?.rewoundFailure,
       true
     );
     await assert.rejects(
@@ -1590,7 +1591,7 @@ suite("RunContinuationService addressed step mutations", () => {
       repository
     );
     assert.strictEqual(
-      stillFirst.workingFile.steps![1]._runtime?.rewoundFailure,
+      executionRuntime(stillFirst.workingFile.steps![1])?.rewoundFailure,
       true
     );
     const claimed = await RunContinuationService.claimStepAtRun(
@@ -1602,7 +1603,10 @@ suite("RunContinuationService addressed step mutations", () => {
       repository
     );
     assert.strictEqual(claimed.stepIndex, 1);
-    assert.strictEqual(claimed.step?._runtime?.rewoundFailure, undefined);
+    assert.strictEqual(
+      executionRuntime(claimed.step)?.rewoundFailure,
+      undefined
+    );
 
     await seedRun(EXECUTION_STATES.ERROR, 2, [
       { prompt: "done", _runtime: { completedAt: 5 } },
@@ -1628,7 +1632,7 @@ suite("RunContinuationService addressed step mutations", () => {
       repository
     );
     assert.strictEqual(
-      toggled.workingFile.steps![1]._runtime?.rewoundFailure,
+      executionRuntime(toggled.workingFile.steps![1])?.rewoundFailure,
       true
     );
     await assert.rejects(
@@ -1705,7 +1709,7 @@ suite("RunContinuationService addressed step mutations", () => {
       const steps = edited.workingFile.steps!;
       assert.strictEqual(edited.workingFile._runtime?.currentIndex, 0);
       assert.strictEqual((steps[1] as { prompt: string }).prompt, "fixed");
-      assert.strictEqual(steps[1]._runtime?.rewoundFailure, true);
+      assert.strictEqual(executionRuntime(steps[1])?.rewoundFailure, true);
       assert.strictEqual(steps[1]._runtime?.completedAt, undefined);
       // Succeeded members keep their settlement.
       assert.strictEqual(steps[0]._runtime?.completedAt, 5);
@@ -2299,9 +2303,7 @@ suite("RunContinuationService addressed step mutations", () => {
 
     assert.strictEqual(appended.placement.insertedIndex, 2);
     assert.deepStrictEqual(
-      appended.workingFile.steps?.map((step) =>
-        "prompt" in step ? step.prompt : step.script
-      ),
+      appended.workingFile.steps?.map((step) => executionStepText(step)),
       [
         "completed zero",
         "completed one",
