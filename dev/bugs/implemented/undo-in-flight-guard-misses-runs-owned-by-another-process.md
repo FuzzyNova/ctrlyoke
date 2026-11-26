@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/WorkflowOrchestrator.ts` (`isRunInFlight`), `src/ui/UndoRedoCoordinator.ts` (`applySnapshotEntries`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -36,3 +36,9 @@ runner lock names that `runRef` (the `WorkflowLockInspector` /
 `ExternalExecutionResolver` check). Add an orchestrator unit test with a
 retired instance plus an active external lock, and a `UndoRedoCoordinator`
 test that refuses in that case.
+
+## Decision
+
+**No decision needed; fix as suggested** (2026-11-26). The fix only tightens an
+internal safety guard to match what the UI already shows, so there is no
+trade-off to choose between.

@@ -94,6 +94,11 @@ import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import {
+  isActiveLock,
+  isSelfOwnedLock,
+  readWorkflowLockOwnershipInspection,
+} from "../utils/WorkflowLockInspector";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import {
   WorkflowScheduler,
@@ -3134,18 +3139,61 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Whether this host is executing a step of `address` right now (running,
-   * pausing or cancelling). Undo/redo is refused for such a run: the harness
-   * may still be writing the files, and the step's snapshot is not final.
+   * Whether a step of `address` is executing right now (running, pausing or
+   * cancelling), in this host or in another process. Undo/redo is refused for
+   * such a run: the harness may still be writing the files, and the step's
+   * snapshot is not final.
+   *
+   * When a CLI or another window owns the run, the local instance is retired
+   * and only the runner lock and run file show it, so a live lock held by
+   * anyone else that names the run is judged by the run file's execution
+   * state, the same state the dashboard shows for a watched run.
    */
-  isRunInFlight(address: WorkflowRunAddress): boolean {
+  async isRunInFlight(address: WorkflowRunAddress): Promise<boolean> {
     const state = this.workflowInstanceRegistry
       .findInstanceForLineage(address.workflowKey)
       ?.getQueueState();
-    return (
+    if (
       state?.runRef === address.runRef &&
       IN_FLIGHT_EXECUTION_STATES.has(state.status)
+    ) {
+      return true;
+    }
+    const workspaceRoot = this.currentWorkspaceFolderPath;
+    if (!workspaceRoot) return false;
+    const inspection = await readWorkflowLockOwnershipInspection(
+      workspaceRoot,
+      address.workflowKey,
+      this.runnerHostIdentity
     );
+    if (
+      !isActiveLock(inspection) ||
+      isSelfOwnedLock(inspection) ||
+      inspection.lock.runRef !== address.runRef
+    ) {
+      return false;
+    }
+    try {
+      const runFile = JSON.parse(
+        await fs.promises.readFile(
+          WorkflowPaths.runFilePath(
+            workspaceRoot,
+            address.workflowKey,
+            address.runRef
+          ),
+          "utf8"
+        )
+      ) as WorkingFile;
+      const executionState = runFile._runtime?.executionState;
+      // An owner that has not written a state yet is starting the run.
+      return (
+        executionState === undefined ||
+        IN_FLIGHT_EXECUTION_STATES.has(executionState)
+      );
+    } catch {
+      // Unreadable mid-write: another process holds the run, so refuse.
+      return true;
+    }
   }
 
   async getWorkspaceSnapshotFileContent(

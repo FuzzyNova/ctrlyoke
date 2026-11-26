@@ -20,6 +20,8 @@ import type {
 import type {
   PromptStep,
   QueueState,
+  RunRef,
+  WorkflowKey,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
@@ -482,6 +484,67 @@ suite("WorkflowOrchestrator running workflow count", () => {
     ];
 
     assert.strictEqual(orchestrator.countRunningWorkflows(), 2);
+  });
+});
+
+suite("WorkflowOrchestrator run in flight", () => {
+  test("a run another process holds is in flight while its run file says so", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-in-flight-")
+    );
+    const workflowKey = "external-in-flight" as WorkflowKey;
+    const runRef = "run-2026-11-26T00-00-00-000Z" as RunRef;
+    const ownerToken = "external-in-flight-owner";
+    try {
+      const orchestrator = createTestOrchestrator();
+      (orchestrator as any).currentWorkspaceFolderPath = workspace;
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspace,
+        workflowKey,
+        runRef
+      );
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      const writeState = (executionState: string) =>
+        fs.writeFile(
+          runFilePath,
+          JSON.stringify({ steps: [], _runtime: { executionState } }),
+          "utf8"
+        );
+      await writeState(EXECUTION_STATES.RUNNING);
+      const address = { workflowKey, runRef };
+
+      // No lock and no local instance: nothing is executing it.
+      assert.strictEqual(await orchestrator.isRunInFlight(address), false);
+
+      // The local instance was retired, so only the lock shows the owner.
+      await WorkflowLockManager.acquireLock(workspace, workflowKey, {
+        schemaVersion: 2,
+        workflowKey,
+        runRef,
+        runner: RUNNER_IDS.CLI,
+        pid: process.ppid,
+        ownerToken,
+        hostInstanceId: "another-process",
+        executionInstanceId: "another-instance",
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      });
+      assert.strictEqual(await orchestrator.isRunInFlight(address), true);
+      assert.strictEqual(
+        await orchestrator.isRunInFlight({
+          workflowKey,
+          runRef: "run-2026-11-25T00-00-00-000Z" as RunRef,
+        }),
+        false
+      );
+
+      // A paused worktree run keeps its lock, but no step is in flight.
+      await writeState(EXECUTION_STATES.PAUSED);
+      assert.strictEqual(await orchestrator.isRunInFlight(address), false);
+    } finally {
+      await WorkflowLockManager.releaseLock(workspace, workflowKey, ownerToken);
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 });
 

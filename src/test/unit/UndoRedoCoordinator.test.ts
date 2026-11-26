@@ -75,7 +75,7 @@ suite("UndoRedoCoordinator", function () {
       const orchestrator = {
         getOutputHistoryManager: () => undefined,
         getWorkspaceSnapshotFileContent: async () => undefined,
-        isRunInFlight: (address: unknown) => {
+        isRunInFlight: async (address: unknown) => {
           inFlightAddresses.push(address);
           return true;
         },
@@ -299,7 +299,7 @@ suite("UndoRedoCoordinator", function () {
           contentToRestore: "authoritative history content",
         }),
         getOutputHistoryManager: () => undefined,
-        isRunInFlight: () => false,
+        isRunInFlight: async () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,
@@ -386,7 +386,7 @@ suite("UndoRedoCoordinator", function () {
               ],
             }),
           }),
-          isRunInFlight: () => false,
+          isRunInFlight: async () => false,
         }) as unknown as WorkflowOrchestrator;
 
       const undo = async (
@@ -510,7 +510,7 @@ suite("UndoRedoCoordinator", function () {
         getWorkspaceSnapshotFileContent: async () => ({
           contentToRestore: "before\n",
         }),
-        isRunInFlight: () => false,
+        isRunInFlight: async () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,
@@ -631,7 +631,7 @@ suite("UndoRedoCoordinator", function () {
         getWorkspaceSnapshotFileContent: async () => ({
           contentToRestore: "base\n",
         }),
-        isRunInFlight: () => false,
+        isRunInFlight: async () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,
@@ -816,7 +816,7 @@ suite("UndoRedoCoordinator", function () {
         getWorkspaceSnapshotFileContent: async () => ({
           contentToRestore: "base\n",
         }),
-        isRunInFlight: () => false,
+        isRunInFlight: async () => false,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,

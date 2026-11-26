@@ -278,7 +278,7 @@ export class UndoRedoCoordinator {
 
     // The dashboard already disables the action mid-run; this keeps a stale
     // dialog or another client from restoring files under a live step.
-    if (this.getOrchestrator()?.isRunInFlight({ workflowKey, runRef })) {
+    if (await this.getOrchestrator()?.isRunInFlight({ workflowKey, runRef })) {
       failedFiles.push(
         ...this.createFailedUndoFiles(
           writableEntries.flatMap((entry) => entry.files),
