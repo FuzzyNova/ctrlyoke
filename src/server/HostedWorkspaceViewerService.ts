@@ -3241,21 +3241,20 @@ export class HostedWorkspaceViewerService {
                 sources.baseRef,
                 oldGitPath
               );
-        const newBytes = sources.targetIsWorkingTree
-          ? file.status === "D"
+        const newBytes =
+          file.status === "D"
             ? null
-            : await this.readWorkingTreeDiffBytes(
-                repoRoot,
-                file.path,
-                changeType
-              )
-          : file.status === "D"
-            ? null
-            : await this.readGitDiffBytes(
-                repoRoot,
-                sources.targetRef ?? "HEAD",
-                file.path
-              );
+            : sources.targetIsWorkingTree
+              ? await this.readWorkingTreeDiffBytes(
+                  repoRoot,
+                  file.path,
+                  changeType
+                )
+              : await this.readGitDiffBytes(
+                  repoRoot,
+                  sources.targetRef ?? "HEAD",
+                  file.path
+                );
         const viewerPath = this.relativePath(absolutePath);
         const viewerOldPath = file.oldPath
           ? this.relativePath(path.resolve(repoRoot, file.oldPath))

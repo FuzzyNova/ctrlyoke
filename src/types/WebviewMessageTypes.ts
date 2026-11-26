@@ -1221,9 +1221,7 @@ export interface WorkflowPropertiesUpdateMessage {
   workflowProperties: Record<string, any>;
 }
 
-/**
- * Open new workflow modal message (extension -> webview)
- */
+/** One template as listed to the webview by every template-catalog message. */
 export interface TemplateCatalogItem {
   id: string;
   name: string;
@@ -1236,6 +1234,9 @@ export interface TemplateCatalogItem {
   communityInstallFile?: string;
 }
 
+/**
+ * Open new workflow modal message (extension -> webview)
+ */
 export interface OpenNewWorkflowModalMessage {
   type: typeof MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL;
   templates: TemplateCatalogItem[];
