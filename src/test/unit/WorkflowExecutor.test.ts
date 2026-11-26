@@ -1554,6 +1554,87 @@ suite("WorkflowExecutor condition shell reporting", () => {
 });
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("clears the previous pass summaries when the next pass starts", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    queue.loadPrompts({ finalStep: { prompt: "next pass" } });
+    await queue.setFinalStepRuntime({
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      loopCount: 0,
+      status: STEP_STATUS.COMPLETED,
+      preCondition: {
+        ...shellEvaluationResult(true),
+        script: "pre",
+        durationMs: 1,
+      },
+      endCondition: {
+        ...shellEvaluationResult(true),
+        script: "end",
+        durationMs: 1,
+      },
+    });
+    integration.onSend = async () => {
+      const runtime = queue.getFinalStepRuntime();
+      assert.strictEqual(runtime?.preCondition, undefined);
+      assert.strictEqual(runtime?.endCondition, undefined);
+      return { responseText: "done" };
+    };
+
+    await makeExecutor(queue).execute(integration, makeContext(integration));
+  });
+
+  test("retains final-step condition summaries after a completed pass", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      { ...shellEvaluationResult(true), actual: "pre", stdout: "pre" },
+      { ...shellEvaluationResult(true), actual: "end", stdout: "end" },
+    ]);
+    queue.loadPrompts({
+      finalStep: {
+        prompt: "final",
+        preCondition: { script: "pre" },
+        endCondition: { script: "end" },
+      },
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    const runtime = queue.getFinalStepRuntime();
+    assert.strictEqual(runtime?.status, STEP_STATUS.COMPLETED);
+    assert.strictEqual(runtime?.preCondition?.stdout, "pre");
+    assert.strictEqual(runtime?.endCondition?.stdout, "end");
+  });
+
+  test("retains final-step condition summaries after a failed pass", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      { ...shellEvaluationResult(true), actual: "pre", stdout: "pre" },
+      { ...shellEvaluationResult(false), actual: "end", stdout: "end" },
+    ]);
+    queue.loadPrompts({
+      finalStep: {
+        prompt: "final",
+        preCondition: { script: "pre" },
+        endCondition: { script: "end" },
+      },
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    const runtime = queue.getFinalStepRuntime();
+    assert.strictEqual(runtime?.status, STEP_STATUS.FAILED);
+    assert.strictEqual(runtime?.preCondition?.stdout, "pre");
+    assert.strictEqual(runtime?.endCondition?.stdout, "end");
+  });
+
   test("claims each sequential step before sending it to the harness", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

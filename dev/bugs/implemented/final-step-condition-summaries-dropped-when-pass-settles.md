@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (subagent code review, reproduced)
 - **Area:** `src/core/WorkflowExecutor.ts`, `src/core/PromptQueue.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

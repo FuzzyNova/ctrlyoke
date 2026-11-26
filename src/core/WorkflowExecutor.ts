@@ -976,7 +976,7 @@ export class WorkflowExecutor {
             break;
           }
 
-          await this.setFinalStepRuntime(context, {
+          await this.settleFinalStepRuntime(context, {
             phase: FINAL_STEP_PHASES.QUEUE,
             loopCount: loopIndex + 1,
             status: STEP_STATUS.COMPLETED,
@@ -996,7 +996,7 @@ export class WorkflowExecutor {
           continue;
         }
 
-        await this.setFinalStepRuntime(context, {
+        await this.settleFinalStepRuntime(context, {
           phase: FINAL_STEP_PHASES.FINAL_STEP,
           loopCount: loopIndex,
           status: STEP_STATUS.COMPLETED,
@@ -2058,7 +2058,7 @@ export class WorkflowExecutor {
         PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
       );
     } else {
-      await this.setFinalStepRuntime(context!, {
+      await this.settleFinalStepRuntime(context!, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.NO_TURN_STARTED,
@@ -2213,7 +2213,7 @@ export class WorkflowExecutor {
           message: failureReason,
         });
       } else {
-        await this.setFinalStepRuntime(context, {
+        await this.settleFinalStepRuntime(context, {
           phase: FINAL_STEP_PHASES.FINAL_STEP,
           loopCount: target.loopIndex,
           status: STEP_STATUS.FAILED,
@@ -3015,7 +3015,7 @@ export class WorkflowExecutor {
     }
 
     // finalStep — skip = loop exits cleanly (the condition we were fixing is resolved)
-    await this.setFinalStepRuntime(context, {
+    await this.settleFinalStepRuntime(context, {
       phase: FINAL_STEP_PHASES.FINAL_STEP,
       loopCount: target.loopIndex,
       status: STEP_STATUS.SKIPPED,
@@ -4478,7 +4478,7 @@ export class WorkflowExecutor {
       }
       await this.promptQueue.failStep(target.stepIndex, reason, failureKind);
     } else {
-      await this.setFinalStepRuntime(context, {
+      await this.settleFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
@@ -6153,7 +6153,7 @@ export class WorkflowExecutor {
         return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
       }
 
-      await this.setFinalStepRuntime(context, {
+      await this.settleFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
@@ -6210,7 +6210,7 @@ export class WorkflowExecutor {
         failureSource
       );
     } else {
-      await this.setFinalStepRuntime(context, {
+      await this.settleFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
@@ -6339,5 +6339,15 @@ export class WorkflowExecutor {
       runtime.loopCount,
       runtime.phase
     );
+  }
+
+  private async settleFinalStepRuntime(
+    context: WorkflowExecutionContext,
+    patch: FinalStepRuntimeState
+  ): Promise<void> {
+    await this.setFinalStepRuntime(context, {
+      ...(this.promptQueue.getFinalStepRuntime() ?? {}),
+      ...patch,
+    });
   }
 }

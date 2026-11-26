@@ -476,6 +476,7 @@ suite("CliJsonResultBuilder", () => {
         status: STEP_STATUS.COMPLETED,
         startedAt: 5_000,
         completedAt: 8_000,
+        preCondition: condition(true, CONDITION_ACTIONS.CONTINUE),
         endCondition: condition(true),
       },
       outputProjection: projection,
@@ -486,6 +487,10 @@ suite("CliJsonResultBuilder", () => {
     assert.strictEqual(output.finalStep.passCount, 2);
     assert.strictEqual(output.finalStep.attempts, 3);
     assert.strictEqual(output.finalStep.lastPass?.sessionId, "final-session");
+    assert.deepStrictEqual(
+      output.finalStep.lastPass?.preCondition,
+      conditionJson(true, CONDITION_ACTIONS.CONTINUE)
+    );
     assert.deepStrictEqual(
       output.finalStep.lastPass?.endCondition,
       conditionJson(true, null)
