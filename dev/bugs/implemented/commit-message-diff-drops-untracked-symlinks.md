@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/git/CommitMessageGenerator.ts` (`getDiff`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -37,7 +37,7 @@ if (!stat.isFile()) {
 ```
 
 The `lstat` guard was added by `commit-message-untracked-files-read-unbounded`
-so that ctrlyoke never reads *through* a link or a special file. That is
+so that ctrlyoke never reads _through_ a link or a special file. That is
 correct, but skipping the entry entirely records nothing for it, so a diff made
 up only of such entries is empty and `getDiff` returns `null` at
 `if (!diff.trim()) return null;` (line ~638). Git itself lists a new symlink as

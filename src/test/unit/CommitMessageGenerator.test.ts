@@ -432,6 +432,44 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
+  test("lists only commands actually run for unborn and committed repositories", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-commands-"));
+    try {
+      const runGit = async (args: string[]): Promise<void> => {
+        await execFileAsync("git", args, { cwd, encoding: "utf8" });
+      };
+      const generator = new CommitMessageGenerator();
+      await runGit(["init"]);
+      await fs.writeFile(path.join(cwd, "staged.txt"), "staged\n");
+      await runGit(["add", "staged.txt"]);
+
+      const unborn = await generator.getDiff(cwd, { includeUnstaged: true });
+      assert.ok(unborn);
+      assert.deepStrictEqual(unborn.commands, [
+        "git diff --cached --no-ext-diff --no-color",
+        "git diff --no-ext-diff --no-color",
+        "git ls-files --others --exclude-standard -z",
+      ]);
+
+      await runGit(["config", "user.email", "test@example.com"]);
+      await runGit(["config", "user.name", "CtrlYoke Test"]);
+      await runGit(["commit", "-m", "initial"]);
+      await fs.writeFile(path.join(cwd, "staged.txt"), "changed\n");
+      await runGit(["add", "staged.txt"]);
+      const committed = await generator.getDiff(cwd, { includeUnstaged: true });
+      assert.ok(committed);
+      assert.deepStrictEqual(committed.commands, [
+        "git diff --cached --no-ext-diff --no-color",
+        "git diff HEAD --no-ext-diff --no-color",
+        "git ls-files --others --exclude-standard -z",
+      ]);
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
   test("carries the persisted run address on generation errors", () => {
     const workflowKey =
       "commit-message-generation-20260824-120000" as WorkflowKey;
@@ -663,6 +701,36 @@ suite("CommitMessageGenerator", () => {
     } finally {
       await fs
         .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
+  test("includes an untracked symlink target without reading its destination", async function () {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-symlink-"));
+    const cwd = path.join(root, "repo");
+    try {
+      await fs.mkdir(cwd);
+      await execFileAsync("git", ["init"], { cwd });
+      const targetName = "target.txt";
+      await fs.writeFile(
+        path.join(root, targetName),
+        "private target contents\n"
+      );
+      try {
+        await fs.symlink(`../${targetName}`, path.join(cwd, "link"));
+      } catch {
+        this.skip();
+      }
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.ok(result.diff.includes("new file mode 120000"), result.diff);
+      assert.ok(result.diff.includes(`+../${targetName}`), result.diff);
+      assert.ok(!result.diff.includes("private target contents"), result.diff);
+    } finally {
+      await fs
+        .rm(root, { recursive: true, force: true, maxRetries: 5 })
         .catch(() => {});
     }
   });

@@ -481,10 +481,7 @@ export class CommitMessageGenerator {
         truncated = true;
       }
     };
-    const commands = [
-      stagedCommand,
-      gitDiffCommand(...(options.includeUnstaged ? ["HEAD"] : [])),
-    ];
+    const commands = [stagedCommand];
     let includesUntrackedFiles = false;
     let hasStagedChanges = false;
     if (stagedDiff.trim()) {
@@ -508,6 +505,7 @@ export class CommitMessageGenerator {
         }
       }
       if (hasHead) {
+        commands.push(gitDiffCommand("HEAD"));
         const { stdout: headDiff } = await execFileAsync(
           "git",
           gitDiffArgs("HEAD"),
@@ -537,6 +535,7 @@ export class CommitMessageGenerator {
         }
       }
     } else {
+      commands.push(gitDiffCommand());
       const { stdout: trackedDiff } = await execFileAsync(
         "git",
         gitDiffArgs(),
@@ -572,11 +571,27 @@ export class CommitMessageGenerator {
       try {
         const absolutePath = path.join(repositoryRoot, filePath);
         const stat = await fs.lstat(absolutePath);
+        const header = `diff --git a/${filePath} b/${filePath}\n`;
+        if (stat.isSymbolicLink()) {
+          const target = await fs.readlink(absolutePath);
+          const content =
+            `${header}new file mode 120000\n` +
+            `--- /dev/null\n` +
+            `+++ b/${filePath}\n` +
+            `@@ -0,0 +1 @@\n` +
+            `+${target}\n` +
+            `\\ No newline at end of file\n`;
+          append(content);
+          continue;
+        }
+        if (stat.isDirectory()) {
+          append(`${header}new file mode 160000\n`);
+          continue;
+        }
         if (!stat.isFile()) {
           continue;
         }
 
-        const header = `diff --git a/${filePath} b/${filePath}\n`;
         const binaryHeader = `${header}new file mode 100644\nBinary file b/${filePath} added\n`;
         const sample = await readFilePrefix(
           absolutePath,
