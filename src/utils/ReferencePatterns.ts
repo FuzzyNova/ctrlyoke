@@ -16,6 +16,12 @@ export const UNQUOTED_AT_REFERENCE_PATH_LAZY =
 /** End of an unquoted token, allowing runtime-stripped prose punctuation. */
 export const UNQUOTED_REFERENCE_END = String.raw`(?=$|[\s:"]|[^\p{L}\p{N}/\\\s:"]+(?:[\s:"]|$)|\]\()`;
 
+/** Runtime and editor rule for whether an unquoted @ token names a path. */
+export function hasUnquotedAtReferencePathMarker(path: string): boolean {
+  const strippedPath = path.replace(/[^\p{L}\p{N}/\\]+$/u, "");
+  return /[/.\\]/u.test(strippedPath);
+}
+
 /**
  * Build the shared inline prior-context pattern for parsing and decoration.
  * Capture 1 = the body after `$`; `parseInlinePriorContextBody` validates it.

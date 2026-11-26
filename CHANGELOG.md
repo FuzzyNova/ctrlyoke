@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Prompt editors now ignore prose punctuation when deciding whether an `@` mention has a file path marker, matching runtime reference parsing.
 - Commit-message diffs now include untracked symbolic links without reading through them.
 - Workspace secrets now resolve through symlinked workspace paths, and existing path-based secret keys migrate on read.
 - Headless Qwen usage now includes the process-wide stdout result total and correctly prices cached input tokens.

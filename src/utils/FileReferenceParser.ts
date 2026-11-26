@@ -35,6 +35,7 @@ import {
   createInlinePriorContextReferencePattern,
   UNQUOTED_AT_REFERENCE_PATH_LAZY,
   UNQUOTED_REFERENCE_END,
+  hasUnquotedAtReferencePathMarker,
 } from "./ReferencePatterns";
 
 export const LITERAL_FENCE_INFO = "text";
@@ -753,10 +754,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
     // root-level extensionless filename such as @"Makefile".
     if (
       filePath &&
-      (quotedPath !== undefined ||
-        filePath.includes("/") ||
-        filePath.includes("\\") ||
-        filePath.includes("."))
+      (quotedPath !== undefined || hasUnquotedAtReferencePathMarker(filePath))
     ) {
       // Check if this is a directory reference (trailing slash)
       const isDirectory = filePath.endsWith("/") || filePath.endsWith("\\");
