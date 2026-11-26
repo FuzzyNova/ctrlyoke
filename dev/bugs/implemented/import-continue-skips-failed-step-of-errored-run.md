@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/orchestration/RunBundleImporter.ts` (`normalizeImportedRuntime`, `materialize` call), `src/core/orchestration/RunBundleExporter.ts` (`getNextStep`), `src/core/PromptQueue.ts` (`rewindTerminalFailureForContinuation`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

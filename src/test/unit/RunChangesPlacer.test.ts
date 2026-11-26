@@ -151,6 +151,25 @@ suite("RunChangesPlacer", function () {
     assert.match(result.warning ?? "", /does not appear to contain/);
   });
 
+  test("treats an empty patch as placed for every changes target", async () => {
+    await fs.writeFile(patchFile, " \n\t");
+
+    const checkout = await placer().place(options("checkout", "none"));
+    assert.strictEqual(checkout.applied, true);
+    assert.strictEqual(checkout.warning, undefined);
+    await checkout.rollback?.();
+
+    const worktree = await placer().place(options("worktree", "managed"));
+    assert.strictEqual(worktree.applied, true);
+    assert.ok(worktree.worktreePath);
+    assert.strictEqual(worktree.warning, undefined);
+    await worktree.rollback?.();
+
+    const skip = await placer().place(options("skip", "none"));
+    assert.strictEqual(skip.applied, false);
+    assert.strictEqual(skip.warning, undefined);
+  });
+
   test("missing base commit produces a view-only fetch instruction", async () => {
     const result = await placer().place({
       ...options("checkout", "none"),

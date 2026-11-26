@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Run bundle imports now accept empty change patches and retry errored runs from the failed step, with matching export and preview positions.
 - Headless Codex and Copilot control handshakes now fail promptly when the child exits, and failed queued Copilot steers release the ACP session.
 - Interactive script processes killed by an external signal now follow `errorBehavior`, while user Stop records the attempt as cancelled.
 - Fresh execution starts now clear stale live context-window readings.

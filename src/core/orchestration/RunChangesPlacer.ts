@@ -138,6 +138,34 @@ export class RunChangesPlacer {
     try {
       const patch = await fs.readFile(options.patchPath, "utf8");
       await validatePatchPaths(targetRoot, patch);
+      if (!patch.trim()) {
+        if (options.target === RUN_CHANGES_TARGETS.SKIP)
+          return { target: options.target, applied: false };
+        let rolledBack = false;
+        const rollback = async (): Promise<void> => {
+          if (rolledBack) return;
+          rolledBack = true;
+          if (worktreeInfo) {
+            await releaseWorktreeHandles();
+            await this.worktreeManager.removeImportedManagedWorktree(
+              worktreeInfo
+            );
+            return;
+          }
+          await rollbackTree(targetRoot, options.baseCommit);
+        };
+        return {
+          target: options.target,
+          applied: true,
+          rollback,
+          ...(worktreeInfo
+            ? {
+                worktreePath: worktreeInfo.worktreePath,
+                worktreeRuntime: runtimeFor(worktreeInfo),
+              }
+            : {}),
+        };
+      }
       if (options.target === RUN_CHANGES_TARGETS.SKIP) {
         try {
           await execGit([

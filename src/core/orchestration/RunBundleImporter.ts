@@ -209,7 +209,7 @@ export class RunBundleImporter {
         ...(runFile ? { workingFile: runFile } : {}),
         events: drafts(),
         executionState: header.manifest.continuation
-          ? EXECUTION_STATES.STOPPED
+          ? header.manifest.continuation.executionState
           : header.runManifest.executionState,
         currentIndex: (definition.steps as unknown[] | undefined)?.length ?? 0,
         startedAt: header.runManifest.startedAt,
@@ -512,7 +512,8 @@ function normalizeImportedRuntime(
   delete normalized.stopReason;
   delete normalized.worktreeNotice;
   delete normalized.pendingRewind;
-  normalized.executionState = EXECUTION_STATES.STOPPED;
+  normalized.executionState =
+    manifest.continuation?.executionState ?? EXECUTION_STATES.STOPPED;
   normalized.currentIndex =
     typeof normalized.currentIndex === "number"
       ? normalized.currentIndex

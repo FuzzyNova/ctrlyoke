@@ -212,6 +212,39 @@ suite("RunBundleExporter secrets", () => {
     );
   });
 
+  test("exports a failed terminal step as the next continuation step", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.ERROR,
+      currentIndex: 1,
+      steps: [
+        {
+          prompt: "failed",
+          _runtime: {
+            startedAt: 110,
+            completedAt: 120,
+            terminalStatus: "failed",
+            terminalFailure: true,
+          },
+        },
+        { prompt: "second" },
+        { prompt: "third" },
+      ],
+    });
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "failed-continuation.ctrlyokerun"),
+      exportedByVersion: "test",
+    });
+
+    assert.deepStrictEqual(exported.continuation?.nextStep, {
+      kind: "queue",
+      stepIndex: 0,
+    });
+    assert.strictEqual(exported.continuation?.pendingStepCount, 3);
+  });
+
   test("exports a patch unaffected by repository diff settings", async () => {
     const run = await createRun({
       state: EXECUTION_STATES.STOPPED,

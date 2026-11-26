@@ -53,6 +53,7 @@ import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { analyzeWorkflowBundle } from "../../utils/WorkflowBundleAnalyzer";
 import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
+import { getTerminalFailureRetry } from "../../utils/StepStatusDerivation";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -341,20 +342,14 @@ async function collectWorkspaceChanges(
 
 function getPendingStepCount(workingFile: WorkingFile): number {
   const steps = workingFile.steps ?? [];
-  const currentIndex = Math.min(
-    workingFile._runtime?.currentIndex ?? 0,
-    steps.length
-  );
+  const currentIndex = getContinuationQueueIndex(workingFile);
   return steps.length - currentIndex + (workingFile.finalStep ? 1 : 0);
 }
 
 function getNextStep(
   workingFile: WorkingFile
 ): RunBundleContinuation["nextStep"] {
-  const currentIndex = Math.min(
-    workingFile._runtime?.currentIndex ?? 0,
-    (workingFile.steps ?? []).length
-  );
+  const currentIndex = getContinuationQueueIndex(workingFile);
   const runtimeFinalStep = workingFile._runtime?.finalStep;
   if (
     currentIndex >= (workingFile.steps ?? []).length &&
@@ -370,6 +365,21 @@ function getNextStep(
     kind: RUN_BUNDLE_CONTINUATION_KINDS.QUEUE,
     stepIndex: currentIndex,
   };
+}
+
+function getContinuationQueueIndex(workingFile: WorkingFile): number {
+  const steps = workingFile.steps ?? [];
+  const currentIndex = Math.min(
+    workingFile._runtime?.currentIndex ?? 0,
+    steps.length
+  );
+  const retry = getTerminalFailureRetry({
+    executionState: workingFile._runtime?.executionState,
+    currentIndex,
+    steps,
+    parallelGroups: workingFile.parallelGroups,
+  });
+  return retry?.headIndex ?? currentIndex;
 }
 
 async function writeChangesPatch(
