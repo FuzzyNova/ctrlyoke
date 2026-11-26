@@ -424,6 +424,74 @@ suite("CliTransportCoordinator", () => {
     }
   });
 
+  test("keeps the failure kind of a classified handshake error", async () => {
+    const channel: IHeadlessControlChannel = {
+      spawnShape: {},
+      steerDelivery: HEADLESS_STEER_DELIVERIES.QUEUE,
+      async start() {
+        throw new CliTransportError(
+          "thread not found",
+          FAILURE_KINDS.SESSION_REJECTED
+        );
+      },
+      async sendUserMessage() {},
+      observe: () => [],
+      async answerApproval() {},
+      close() {},
+    };
+    const provider = {
+      ...createHeadlessProvider(),
+      createHeadlessControlChannel: () => channel,
+    } as unknown as IHarnessAdapter;
+    let finishSpawn!: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => void;
+    const coordinator = new CliTransportCoordinator({
+      provider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: { onStdinReady?: (writer: any) => void }
+        ) => {
+          options.onStdinReady?.({
+            write: (
+              _text: string,
+              _encoding: string,
+              callback?: (error?: Error | null) => void
+            ) => {
+              callback?.();
+              return true;
+            },
+            end: (callback?: () => void) => callback?.(),
+          });
+          return new Promise((resolve) => (finishSpawn = resolve));
+        },
+        cancel: async () =>
+          finishSpawn({ stdout: "", stderr: "", exitCode: 1 }),
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await assert.rejects(
+      coordinator.executeHeadless([], "prompt", [], async () => true),
+      (error: unknown) => {
+        assert.ok(error instanceof CliTransportError, String(error));
+        assert.strictEqual(error.failureKind, FAILURE_KINDS.SESSION_REJECTED);
+        assert.strictEqual(error.message, "thread not found");
+        return true;
+      }
+    );
+  });
+
   test("does not warn for an approval-capable ask channel with a dashboard", async () => {
     const channel: IHeadlessControlChannel = {
       spawnShape: {},

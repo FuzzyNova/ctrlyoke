@@ -1119,6 +1119,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           try {
             await controlReady;
           } catch (error) {
+            // A classified handshake failure (for example SESSION_REJECTED,
+            // which drives the retry-without-resume fallback) keeps its kind.
+            if (error instanceof CliTransportError) throw error;
             const stderr = result.stderr.trim();
             throw new CliTransportError(
               `Headless control handshake failed after the process exited with code ${result.exitCode}: ${getErrorMessage(error)}${stderr ? `; stderr: ${stderr}` : ""}`,
