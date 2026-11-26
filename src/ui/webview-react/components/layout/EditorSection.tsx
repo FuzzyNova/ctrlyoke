@@ -37,6 +37,8 @@ import { formatSessionIdPreview } from "@utils/stepOverrideChips";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 import { Icon } from "../shared/Icon";
 import { WorkflowVariableValue } from "../shared/WorkflowVariableValue";
+import { isPromptStep } from "@root/types/CtrlYokeTypes";
+import { isScriptEditorStepType } from "@utils/stepDraftContent";
 
 /** Width tiers for the editor header row, from the section's own content width. */
 const EDITOR_HEADER_TIERS = {
@@ -126,7 +128,10 @@ const EditorSectionInner: React.FC = () => {
     bulkGates.harnessScopedDisabledReason !== undefined;
   const promptsSelected =
     isBulkMode &&
-    selectedIndices.every((index) => steps[index]?.type !== STEP_TYPES.SCRIPT);
+    selectedIndices.every((index) => {
+      const step = steps[index];
+      return step === undefined || isPromptStep(step);
+    });
   const bulkPlaceholder = !isBulkMode
     ? undefined
     : bulkHasLocked
@@ -212,7 +217,7 @@ const EditorSectionInner: React.FC = () => {
     else if (e.key === KEYBOARD_KEYS.ESCAPE) cancelNameEdit();
   };
 
-  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  const isScriptMode = isScriptEditorStepType(stepType);
 
   // Below EDITOR_HEADER_COMPACT_THRESHOLD the name + token count no longer
   // fit on one line without the token count truncating away, so stack them.

@@ -11,6 +11,11 @@ import {
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { PromptStep, ScriptStep } from "@root/types/CtrlYokeTypes";
+import {
+  assertNever,
+  isPromptStep,
+  isScriptStep,
+} from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
 import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
 
@@ -55,46 +60,52 @@ export function getExecutionPreviewEditorSnapshot():
       ? workflow.steps[stepIndex]
       : undefined;
 
-  if (editor.stepType === STEP_TYPES.SCRIPT) {
-    const base: ScriptStep =
-      existingStep?.type === STEP_TYPES.SCRIPT
-        ? existingStep
-        : { type: STEP_TYPES.SCRIPT, script: "" };
-    const { properties, clearProperties } = getScriptStepPropertyUpdate({
-      env: editor.scriptEnv,
-      secrets: editor.properties.secrets,
-      errorBehavior: editor.properties.errorBehavior,
-      timeoutSec: editor.scriptTimeoutSec,
-      onPass: editor.scriptOnPass,
-      onFail: editor.scriptOnFail,
-      compareSource: editor.scriptCompareSource,
-      operator: editor.scriptOperator,
-      expected: editor.scriptExpected,
-      ignoreCase: editor.scriptIgnoreCase,
-      executionMode: editor.scriptExecutionMode,
-      shell: editor.scriptShell,
-      color: editor.properties.color,
-      enabled: editor.stepEnabled,
-      promptName: editor.promptName,
-    });
-    const step: ScriptStep = {
-      ...base,
-      ...properties,
-      script: editor.scriptCommand,
-      ...(editor.promptName.trim() ? { name: editor.promptName.trim() } : {}),
-    };
-    for (const property of clearProperties) {
-      delete step[property as keyof ScriptStep];
+  switch (editor.stepType) {
+    case STEP_TYPES.SCRIPT: {
+      const base: ScriptStep =
+        existingStep && isScriptStep(existingStep)
+          ? existingStep
+          : { type: STEP_TYPES.SCRIPT, script: "" };
+      const { properties, clearProperties } = getScriptStepPropertyUpdate({
+        env: editor.scriptEnv,
+        secrets: editor.properties.secrets,
+        errorBehavior: editor.properties.errorBehavior,
+        timeoutSec: editor.scriptTimeoutSec,
+        onPass: editor.scriptOnPass,
+        onFail: editor.scriptOnFail,
+        compareSource: editor.scriptCompareSource,
+        operator: editor.scriptOperator,
+        expected: editor.scriptExpected,
+        ignoreCase: editor.scriptIgnoreCase,
+        executionMode: editor.scriptExecutionMode,
+        shell: editor.scriptShell,
+        color: editor.properties.color,
+        enabled: editor.stepEnabled,
+        promptName: editor.promptName,
+      });
+      const step: ScriptStep = {
+        ...base,
+        ...properties,
+        script: editor.scriptCommand,
+        ...(editor.promptName.trim() ? { name: editor.promptName.trim() } : {}),
+      };
+      for (const property of clearProperties) {
+        delete step[property as keyof ScriptStep];
+      }
+      return {
+        step,
+        ...(isFinalStep ? { isFinalStep: true } : { stepIndex }),
+      };
     }
-    return {
-      step,
-      ...(isFinalStep ? { isFinalStep: true } : { stepIndex }),
-    };
+    case STEP_TYPES.PROMPT:
+      break;
+    default:
+      assertNever(editor.stepType);
   }
 
   const base: PromptStep =
-    existingStep?.type !== STEP_TYPES.SCRIPT
-      ? ((existingStep as PromptStep | undefined) ?? { prompt: "" })
+    existingStep && isPromptStep(existingStep)
+      ? (existingStep as PromptStep)
       : { prompt: "" };
   const step: PromptStep = {
     ...base,

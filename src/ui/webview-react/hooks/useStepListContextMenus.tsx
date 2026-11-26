@@ -9,7 +9,7 @@ import {
   MESSAGE_TYPES,
   STEP_STATUS,
 } from "@/types/messages";
-import { isScriptStep } from "@root/types/CtrlYokeTypes";
+import { isPromptStep } from "@root/types/CtrlYokeTypes";
 import { buildWorkflowStepEnabledState } from "@utils/stepEnabledToggle";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { sendMessage } from "@messaging/sendMessage";
@@ -130,7 +130,7 @@ export function useStepListContextMenus() {
     onToggleEnabled: handleToggleFinalStepEnabled,
     latestOutput: finalStepLatestOutput,
     runtimeMeta:
-      finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
+      finalStep && isPromptStep(finalStep) ? finalStep._runtime : undefined,
     status: finalStepStatus,
     phase: finalStepPhase,
   });

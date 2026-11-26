@@ -1,6 +1,7 @@
 import { WorkflowVariableValue } from "@components/shared/WorkflowVariableValue";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
+import { getStepDraftContent } from "@utils/stepDraftContent";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import {
@@ -43,7 +44,6 @@ import {
   ERROR_BEHAVIOR_ACTIONS,
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
-  STEP_TYPES,
   type ExecutionMode,
 } from "../../../../types/DashboardConstants";
 import {
@@ -223,10 +223,10 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
     : properties;
   const harnessScopedTooltip = bulkGates.harnessScopedDisabledReason;
   const harnessScopedOptionsDisabled = harnessScopedTooltip !== undefined;
-  const hasEditorContent = useEditorStore((s) =>
-    s.stepType === STEP_TYPES.SCRIPT
-      ? s.scriptCommand.trim().length > 0
-      : s.promptText.trim().length > 0
+  const hasEditorContent = useEditorStore(
+    (s) =>
+      getStepDraftContent(s.stepType, s.promptText, s.scriptCommand).trim()
+        .length > 0
   );
   const promptText = useEditorStore((s) => s.promptText);
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =

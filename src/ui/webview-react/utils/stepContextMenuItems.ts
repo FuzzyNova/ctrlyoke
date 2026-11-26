@@ -7,6 +7,7 @@ import { selectionTargetKey, useEditorStore } from "@store/editorStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
+  isPromptStep,
   type ParallelGroupDefinition,
 } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
@@ -14,11 +15,11 @@ import {
   EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
   STEER_ORIGIN_KINDS,
-  STEP_TYPES,
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
-import { executionOwnsCurrentStep } from "./status";
+import { isScriptEditorStepType } from "@utils/stepDraftContent";
+import { executionOwnsCurrentStep, getStepKindLabel } from "./status";
 import { getStepAssistantTextForCopy } from "./outputUtils";
 import {
   getTargetKey,
@@ -87,7 +88,7 @@ export function buildStepCopyMenuItems({
     ? getStepAssistantTextForCopy(latestOutput)
     : undefined;
   const isScript = isScriptStep(step);
-  const copyContentLabel = isScript ? "Copy Script" : "Copy Prompt";
+  const copyContentLabel = `Copy ${getStepKindLabel(step.type)}`;
   const copyLabels = getStepCopyLabels(isScript);
 
   return [
@@ -312,7 +313,9 @@ export function buildQueuedStepHandoffMenuItems({
       ? editorState
       : editorState.savedNewPromptState;
   const scriptDraftWouldBeReplaced =
-    replacedDraft?.stepType === STEP_TYPES.SCRIPT &&
+    replacedDraft !== null &&
+    replacedDraft !== undefined &&
+    isScriptEditorStepType(replacedDraft.stepType) &&
     replacedDraft.scriptCommand.trim().length > 0;
   const moveDisabledReason =
     removeDisabledReason ??
@@ -343,12 +346,12 @@ export function buildQueuedStepHandoffMenuItems({
   const queuedPrompt = isSelectedStep
     ? editorState.promptText
     : (queuedEdit?.promptText ?? savedPrompt);
-  const steerText = isScriptStep(step) ? "" : queuedPrompt.trim();
+  const steerText = isPromptStep(step) ? queuedPrompt.trim() : "";
   // A step's own session never steers it: it has not started yet.
   const destinations = steerTargets.filter(
     (target) => target.stepIndex !== stepIndex
   );
-  const steerDisabledReason = isScriptStep(step)
+  const steerDisabledReason = !isPromptStep(step)
     ? STEER_PROMPT_ONLY
     : (removeDisabledReason ??
       (steerText.length === 0
@@ -361,7 +364,7 @@ export function buildQueuedStepHandoffMenuItems({
     sendSteerText(workflowId, target.sessionId, steerText, {
       kind: STEER_ORIGIN_KINDS.QUEUED_STEP,
       stepIndex,
-      step: isScriptStep(step) ? step : { ...step, prompt: steerText },
+      step: isPromptStep(step) ? { ...step, prompt: steerText } : step,
     });
     removeStep();
   };

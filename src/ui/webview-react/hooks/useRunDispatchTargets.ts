@@ -3,7 +3,6 @@ import {
   EDITOR_TARGET_KINDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
-  STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import { useSteerTargets } from "@hooks/useSteerTargets";
 import {
@@ -19,6 +18,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { getStepDraftContent } from "@utils/stepDraftContent";
 
 const NO_STEP_RUNNING = "No step is running";
 const FINAL_STEP_UNSUPPORTED = "The final step can't run in parallel";
@@ -80,9 +80,8 @@ export function useRunDispatchTargets(
   return useMemo(() => {
     const isNewPrompt = selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT;
     const hasContent =
-      stepType === STEP_TYPES.SCRIPT
-        ? scriptCommand.trim().length > 0
-        : promptText.trim().length > 0;
+      getStepDraftContent(stepType, promptText, scriptCommand).trim().length >
+      0;
     const isExternallyManaged = loadedWorkflows.some(
       (workflow) => workflow.id === workflowId && workflow.externalOwner
     );

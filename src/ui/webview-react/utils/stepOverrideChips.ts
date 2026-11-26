@@ -9,7 +9,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import {
-  isScriptStep,
+  isPromptStep,
   type PromptStep as CorePromptStep,
 } from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
@@ -286,7 +286,7 @@ export function buildStepOverrideChips(
   workflowProperties: WorkflowProperties,
   globalSettings: GlobalSettings
 ): StepOverrideChip[] {
-  if (isScriptStep(step)) {
+  if (!isPromptStep(step)) {
     return step.executionMode ? [executionModeChip(step.executionMode)] : [];
   }
 

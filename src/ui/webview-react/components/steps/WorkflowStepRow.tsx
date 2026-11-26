@@ -1,8 +1,18 @@
 import React, { useCallback } from "react";
 import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
 import { useSortable } from "@dnd-kit/sortable";
-import { EXECUTION_STATES, STEP_STATUS } from "@root/types/DashboardConstants";
-import { isScriptStep } from "@root/types/CtrlYokeTypes";
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  type PromptStep,
+  type ScriptStep,
+} from "@root/types/CtrlYokeTypes";
 import type { ExecutionState, StepStatus } from "../../types/messages";
 import {
   WorkflowStepItem,
@@ -96,7 +106,15 @@ export type WorkflowStepRowProps = {
 };
 
 function getStepText(step: WorkflowStep): string {
-  return isScriptStep(step) ? step.script : step.prompt;
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.PROMPT:
+      return (step as PromptStep).prompt;
+    case STEP_TYPES.SCRIPT:
+      return (step as ScriptStep).script;
+    default:
+      return assertNever(stepType);
+  }
 }
 
 /**
@@ -185,7 +203,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
           isExecutionTargetLocked,
           direction: startPositionDirection,
           latestOutput,
-          runtimeMeta: !isScriptStep(step) ? step._runtime : undefined,
+          runtimeMeta: isPromptStep(step) ? step._runtime : undefined,
           liveContextWindow,
         }),
       [
@@ -232,7 +250,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         hideBorderBottom={hideBorderBottom}
         dimmed={dimmed}
         dragHandleProps={dragHandleProps}
-        isScript={isScriptStep(step)}
+        isScript={!isPromptStep(step)}
       />
     );
   }

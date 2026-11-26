@@ -61,6 +61,7 @@ import type {
   RunRef,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
+import { assertNever } from "@root/types/CtrlYokeTypes";
 import {
   DateRangeFilterControls,
   LiveDot,
@@ -122,10 +123,6 @@ interface PendingDelete {
 
 const RECENTLY_DELETED_DETAIL =
   "It moves to Recently deleted, where you can restore it from Settings → General → Run History.";
-
-function assertNever(value: never): never {
-  throw new Error(`Unexpected pending delete scope: ${String(value)}`);
-}
 
 function roundMetric(value: number): number {
   return Math.round(value * 10) / 10;

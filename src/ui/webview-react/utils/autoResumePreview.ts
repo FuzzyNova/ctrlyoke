@@ -1,4 +1,4 @@
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { isPromptStep } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "../store/workflowStore";
 
 /** Preview of what auto-resume would do for a blank Session ID field. */
@@ -26,7 +26,7 @@ export function getAutoResumePreview(
   const start = Math.min(beforeIndex, steps.length);
   for (let i = start - 1; i >= 0; i--) {
     const step = steps[i];
-    if (step.type === STEP_TYPES.SCRIPT) {
+    if (!isPromptStep(step)) {
       continue;
     }
     const runtime = step._runtime;

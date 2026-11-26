@@ -11,13 +11,11 @@ import type { DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
-import {
-  BULK_EDIT_DISABLED_REASONS,
-  STEP_TYPES,
-} from "@root/types/DashboardConstants";
+import { BULK_EDIT_DISABLED_REASONS } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { SplitButton } from "../shared/SplitButton";
+import { isScriptEditorStepType } from "@utils/stepDraftContent";
 import type {
   RunDispatchTarget,
   SteerDispatchTarget,
@@ -129,7 +127,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
     [footerRef, footerRefSmall]
   );
   const stepType = useEditorStore((s) => s.stepType);
-  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  const isScriptMode = isScriptEditorStepType(stepType);
   // Model, agent, skills and permissions all draw their options from the
   // effective harness, so they share one gate.
   const harnessScopedPickerDisabled =

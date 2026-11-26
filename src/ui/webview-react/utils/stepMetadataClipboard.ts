@@ -2,7 +2,7 @@ import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
-import { isScriptStep, type PriorContext } from "@root/types/CtrlYokeTypes";
+import { isPromptStep, type PriorContext } from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
 import {
   PRIOR_CONTEXT_DETAILS,
@@ -12,6 +12,7 @@ import {
   sandboxValueLabel,
 } from "@root/types/DashboardConstants";
 import { formatClockDuration } from "./time";
+import { getStepKindLabel } from "./status";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
 export interface StepRuntimeMetaSnapshot {
@@ -196,8 +197,7 @@ export function buildStepMetadataClipboardText({
     getEffectiveSecrets,
   } = useSettingsStore.getState();
 
-  const isScript = isScriptStep(step);
-  const stepKind = isScript ? "Script" : "Prompt";
+  const stepKind = getStepKindLabel(step.type);
   const headerLabel = isFinalStep
     ? `Final ${stepKind.toLowerCase()} step`
     : `${stepKind} step ${slotNumber}`;
@@ -213,7 +213,7 @@ export function buildStepMetadataClipboardText({
     ),
   ];
 
-  if (!isScript) {
+  if (isPromptStep(step)) {
     const stepHarness = isHarnessId(step.harness) ? step.harness : undefined;
     const resolvedSandbox = resolveSandboxRequest(
       step.sandbox,

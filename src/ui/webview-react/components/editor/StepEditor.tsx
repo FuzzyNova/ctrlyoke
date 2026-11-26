@@ -35,6 +35,7 @@ import { StepColorField } from "./StepColorField";
 import { EditorFooter } from "./EditorFooter";
 import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import { ScriptConditionEditor } from "../shared/ScriptConditionEditor";
+import { isScriptEditorStepType } from "@utils/stepDraftContent";
 import type { ScriptConditionValue } from "../shared/ScriptConditionEditor";
 import {
   CustomSelect,
@@ -332,7 +333,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       : isFinalStep
         ? finalStep?._runtime?.stepId
         : undefined;
-  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  const isScriptMode = isScriptEditorStepType(stepType);
   const inheritedScriptSecrets =
     workflowProperties.secrets !== undefined
       ? (workflowProperties.secrets ?? [])

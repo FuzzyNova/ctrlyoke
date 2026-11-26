@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { PROMPT_PROPERTIES, STEP_TYPES } from "@root/types/DashboardConstants";
+import { PROMPT_PROPERTIES } from "@root/types/DashboardConstants";
 import {
   getBulkDisplayValue,
   MIXED_VALUE,
@@ -11,6 +11,7 @@ import { getInheritedStepColor } from "../../utils/stepColor";
 import { Icon } from "../shared/Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
+import { isScriptEditorStepType } from "@utils/stepDraftContent";
 
 interface StepColorInputState {
   color: string;
@@ -35,7 +36,7 @@ export function useStepColorInput(): StepColorInputState {
   const { steps } = useWorkflowStore();
   const { globalSettings, getEffectiveHarness } = useSettingsStore();
   const inheritedColor = getInheritedStepColor(
-    stepType === STEP_TYPES.SCRIPT ? undefined : getEffectiveHarness(),
+    isScriptEditorStepType(stepType) ? undefined : getEffectiveHarness(),
     globalSettings.harnessColors,
     globalSettings.stepColorMode,
     selectedPromptIndex ?? steps.length

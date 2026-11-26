@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import { isScriptStep } from "@root/types/CtrlYokeTypes";
+import { isPromptStep } from "@root/types/CtrlYokeTypes";
 import {
   DOCS_URLS,
   KEYBOARD_KEYS,
@@ -920,7 +920,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const getStepHarnessModel = useCallback(
     (step: (typeof steps)[0], status?: StepStatus) => {
-      if (isScriptStep(step))
+      if (!isPromptStep(step))
         return {
           harnessId: undefined,
           harnessLabel: undefined,
@@ -1334,7 +1334,7 @@ const WorkflowStepsPanelInner: React.FC<{
   // Compute resolved harness/model for the final step using the same
   // three-tier logic as regular steps, so defaults are shown correctly.
   const getFinalStepHarnessModel = () => {
-    if (!finalStep || isScriptStep(finalStep)) return {};
+    if (!finalStep || !isPromptStep(finalStep)) return {};
     if (finalStep._runtime?.harness ?? finalStep._runtime?.model) {
       const h = finalStep._runtime!.harness;
       const m = finalStep._runtime!.model;

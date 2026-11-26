@@ -1,7 +1,11 @@
 import {
-  isScriptStep,
+  assertNever,
+  getStepType,
+  type PromptStep,
+  type ScriptStep,
   type WorkflowStep as PersistedWorkflowStep,
 } from "@root/types/CtrlYokeTypes";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 import {
   parseClipboardWorkflowStep,
   serializeWorkflowStepForClipboard,
@@ -10,7 +14,15 @@ import type { WorkflowStep } from "@store/workflowStore";
 import { readClipboardText } from "./clipboard";
 
 export function getWorkflowStepRawText(step: WorkflowStep): string {
-  return isScriptStep(step) ? step.script : step.prompt;
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.PROMPT:
+      return (step as PromptStep).prompt;
+    case STEP_TYPES.SCRIPT:
+      return (step as ScriptStep).script;
+    default:
+      return assertNever(stepType);
+  }
 }
 
 export function serializeWorkflowStepText(step: WorkflowStep): string {

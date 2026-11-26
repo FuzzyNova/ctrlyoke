@@ -1,5 +1,10 @@
 import { STEP_TYPES } from "@root/types/DashboardConstants";
-import { isScriptStep } from "@root/types/CtrlYokeTypes";
+import {
+  assertNever,
+  getStepType,
+  type ScriptStep,
+  type PromptStep,
+} from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   parseWorkflowStepClipboardText,
@@ -17,24 +22,32 @@ export function buildWorkflowStepEnabledUpdate(
   step: WorkflowStep,
   enabled: boolean
 ): WorkflowStepUpdateRequest {
-  if (isScriptStep(step)) {
-    return {
-      text: step.script,
-      promptName: step.name ?? "",
-      properties: {
-        type: STEP_TYPES.SCRIPT,
-        ...(!enabled && { enabled: false }),
-      },
-      ...(enabled ? { clearProperties: ["enabled"] } : {}),
-    };
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT: {
+      const scriptStep = step as ScriptStep;
+      return {
+        text: scriptStep.script,
+        promptName: scriptStep.name ?? "",
+        properties: {
+          type: STEP_TYPES.SCRIPT,
+          ...(!enabled && { enabled: false }),
+        },
+        ...(enabled ? { clearProperties: ["enabled"] } : {}),
+      };
+    }
+    case STEP_TYPES.PROMPT: {
+      const promptStep = step as PromptStep;
+      return {
+        text: promptStep.prompt,
+        promptName: promptStep.name ?? "",
+        properties: { ...(!enabled && { enabled: false }) },
+        ...(enabled ? { clearProperties: ["enabled"] } : {}),
+      };
+    }
+    default:
+      return assertNever(stepType);
   }
-
-  return {
-    text: step.prompt,
-    promptName: step.name ?? "",
-    properties: { ...(!enabled && { enabled: false }) },
-    ...(enabled ? { clearProperties: ["enabled"] } : {}),
-  };
 }
 
 export function buildWorkflowStepEnabledState(

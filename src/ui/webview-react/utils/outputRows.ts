@@ -37,6 +37,7 @@ import {
   type StepType,
   type WorkflowTokenCoverage,
 } from "@root/types/DashboardConstants";
+import { getStepType, isPromptStep } from "@root/types/CtrlYokeTypes";
 import type {
   StepOutput,
   UndoRecord,
@@ -628,9 +629,7 @@ export function getStepName(
  * classification used by the core `isScriptStep` guard.
  */
 function getStepKind(step: WorkflowStep | null | undefined): StepType {
-  return step?.type === STEP_TYPES.SCRIPT
-    ? STEP_TYPES.SCRIPT
-    : STEP_TYPES.PROMPT;
+  return step ? getStepType(step) : STEP_TYPES.PROMPT;
 }
 
 /** How an output target names itself: its step, label and authored name. */
@@ -682,7 +681,7 @@ function getEffectiveStepHarness(
 ): HarnessId | undefined {
   // Runtime metadata is authoritative for started steps: changing workflow
   // defaults while viewing a run must not recolor its existing output.
-  if (step.type === STEP_TYPES.SCRIPT) return undefined;
+  if (!isPromptStep(step)) return undefined;
   return (step._runtime?.harness ?? step.harness ?? effectiveHarness) as
     HarnessId | undefined;
 }
