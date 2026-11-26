@@ -5,6 +5,7 @@ import type {
   FileWatcher,
   FileWatcherFactory,
 } from "../core/HostPorts";
+import { pathsEqual } from "../utils/PathCasing";
 
 function normalizeAbsolutePath(filePath: string): string {
   return path.normalize(path.resolve(filePath));
@@ -60,12 +61,7 @@ class VsCodeFileWatcher implements FileWatcher {
 
     const subscription = event((uri) => {
       const filePath = normalizeAbsolutePath(uri.fsPath);
-      if (
-        this.exactPath &&
-        (process.platform === "win32"
-          ? filePath.toLowerCase() !== this.exactPath.toLowerCase()
-          : filePath !== this.exactPath)
-      ) {
+      if (this.exactPath && !pathsEqual(filePath, this.exactPath)) {
         return;
       }
       listener(filePath);
@@ -88,9 +84,12 @@ export class VsCodeFileWatcherFactory implements FileWatcherFactory {
 
   createForFile(absolutePath: string): FileWatcher {
     const normalizedPath = normalizeAbsolutePath(absolutePath);
+    // `*` keeps the watch to the file's own directory (VS Code globs match
+    // dotfiles); events are then filtered to the exact path, so glob
+    // metacharacters in the basename are never interpreted.
     return new VsCodeFileWatcher(
       path.dirname(normalizedPath),
-      "**/*",
+      "*",
       normalizedPath
     );
   }

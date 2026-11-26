@@ -167,7 +167,7 @@ export function registerFileWatcherContractTests(
       });
     });
 
-    for (const fileName of ["[id].tsx", "{a,b}.md"]) {
+    for (const fileName of ["[id].tsx", "{a,b}.md", ".env.local"]) {
       test(`createForFile watches ${fileName} literally`, async () => {
         const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-file-watch-literal-"));
         const targetPath = path.join(root, fileName);

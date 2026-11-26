@@ -9,6 +9,7 @@ import type {
 } from "../core/HostPorts";
 import { Log } from "../utils/Log";
 import { getErrnoCode, getErrorMessage } from "../utils/ErrorUtils";
+import { pathsEqual } from "../utils/PathCasing";
 
 /** chokidar's `watch`, injectable so tests can reach the underlying watcher. */
 export type ChokidarWatch = typeof watch;
@@ -37,9 +38,14 @@ class NodeFileWatcher implements FileWatcher {
     const isLiteralBasename =
       segments.length === 1 &&
       ![...glob].some((character) => "*?[]{}".includes(character));
-    const depth = hasRecursiveGlob
-      ? undefined
-      : Math.max(0, segments.length - 1);
+    // A single-file watch targets the exact path at depth 0: watching its
+    // directory recursively would walk every sibling subtree (a workflow at
+    // the workspace root would watch the whole repository).
+    const depth = exactPath
+      ? 0
+      : hasRecursiveGlob
+        ? undefined
+        : Math.max(0, segments.length - 1);
     const excluded = (relativePath: string): boolean =>
       DEFAULT_FILE_WATCHER_EXCLUDES.some(
         (pattern) =>
@@ -47,9 +53,10 @@ class NodeFileWatcher implements FileWatcher {
           minimatch(`${relativePath}/sentinel`, pattern, { dot: true })
       );
     this.watcher = watchFn(
-      isLiteralBasename
-        ? path.join(normalizedBasePath, glob)
-        : normalizedBasePath,
+      exactPath ??
+        (isLiteralBasename
+          ? path.join(normalizedBasePath, glob)
+          : normalizedBasePath),
       {
         ignoreInitial: true,
         ...(depth === undefined ? {} : { depth }),
@@ -76,7 +83,7 @@ class NodeFileWatcher implements FileWatcher {
       if (
         !relativePath ||
         (exactPath
-          ? !pathEqual(absolutePath, exactPath)
+          ? !pathsEqual(absolutePath, exactPath)
           : !minimatch(relativePath, glob, { dot: true }))
       ) {
         return;
@@ -151,12 +158,6 @@ class NodeFileWatcher implements FileWatcher {
   }
 }
 
-function pathEqual(left: string, right: string): boolean {
-  return process.platform === "win32"
-    ? left.toLowerCase() === right.toLowerCase()
-    : left === right;
-}
-
 export class NodeFileWatcherFactory implements FileWatcherFactory {
   constructor(private readonly watchFn: ChokidarWatch = watch) {}
 
@@ -168,7 +169,7 @@ export class NodeFileWatcherFactory implements FileWatcherFactory {
     const normalizedPath = normalizeAbsolutePath(absolutePath);
     return new NodeFileWatcher(
       path.dirname(normalizedPath),
-      "**/*",
+      path.basename(normalizedPath),
       this.watchFn,
       normalizedPath
     );
