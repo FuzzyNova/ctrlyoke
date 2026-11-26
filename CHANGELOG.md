@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fresh execution starts now clear stale live context-window readings.
 - Run bundle exports now rewrite workspace and home paths when runs and exports use different symlink spellings.
 - JSON run-family results now include an error envelope when a trust or workspace-settings approval is pending.
 - Streamed line-length checks no longer count a held-back carriage return at a chunk boundary.

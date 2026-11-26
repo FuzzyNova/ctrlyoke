@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/ui/webview-react/store/workflowStore.ts`, `src/ui/webview-react/messaging/inboundMessageRouter.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

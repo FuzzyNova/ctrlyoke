@@ -394,6 +394,16 @@ describe("clearRuntimeStateFromStep", () => {
   });
 });
 
+describe("clearAllRuntimeState", () => {
+  it("clears live context-window readings", () => {
+    store().updateLiveContextWindow(0, 150000, 200000);
+
+    store().clearAllRuntimeState();
+
+    expect(store().liveContextWindow).toEqual({});
+  });
+});
+
 describe("appendStreamingEvents", () => {
   it("collapses duplicate tool lifecycle events into one semantic event", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
