@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/config/CtrlYokeConfigService.ts` (`approveNewWorkspaceSensitiveValues`), `src/ui/webview-react/components/settings/defaults/DefaultsPermissionsPage.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

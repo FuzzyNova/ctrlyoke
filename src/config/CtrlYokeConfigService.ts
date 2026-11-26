@@ -674,10 +674,21 @@ export class CtrlYokeConfigService {
       before.map((request) => workspaceSensitiveSettingRequestKey(request))
     );
     const added = this.getWorkspaceSensitiveSettingRequests().filter(
-      (request) =>
-        !previousKeys.has(workspaceSensitiveSettingRequestKey(request)) &&
-        (request.settingPath === writtenPath ||
-          request.settingPath.startsWith(`${writtenPath}.`))
+      (request) => {
+        const writeIsInsideWholeValue = writtenPath.startsWith(
+          `${request.settingPath}.`
+        );
+        return (
+          !previousKeys.has(workspaceSensitiveSettingRequestKey(request)) &&
+          (request.settingPath === writtenPath ||
+            request.settingPath.startsWith(`${writtenPath}.`) ||
+            (writeIsInsideWholeValue &&
+              !before.some(
+                (previous) =>
+                  previous.settingPath === request.settingPath
+              )))
+        );
+      }
     );
     await this.workspaceSettingsTrust.setDecisions(
       identity,
