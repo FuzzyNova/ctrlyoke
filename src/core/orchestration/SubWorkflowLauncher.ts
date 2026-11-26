@@ -19,6 +19,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
   async launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle> {
     const instance = this.createInstance({
       concurrent: request.concurrent ?? false,
+      ancestorPaths: request.ancestorPaths ?? [],
     });
     let parentStopped = false;
 
@@ -37,22 +38,27 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       return this.createFailedToLoadHandle(instance, errorMessage(error));
     }
 
-    const initialState = instance.promptQueue.getState();
-    if (!initialState.workflowKey || !initialState.runRef) {
+    // A real instance promotes its loaded draft when execution starts, so the
+    // runRef may not exist until executeLoadedPromptFile has begun.
+    const execution = instance.executeLoadedPromptFile();
+    const initialState = await this.waitForRunIdentity(instance, execution);
+    if (!initialState?.workflowKey || !initialState.runRef) {
       return this.createFailedToLoadHandle(
         instance,
-        "Sub-workflow did not create a run identity after loading"
+        "Sub-workflow did not create a run identity after starting"
       );
     }
 
     const workflowKey = initialState.workflowKey;
     const runRef = initialState.runRef;
-    const done = this.executeAndCollect(instance, () => parentStopped).catch(
-      (error): SubWorkflowResult => ({
-        status: PROMPT_TERMINAL_STATUS.FAILED,
-        failureMessage: errorMessage(error),
-      })
-    );
+    const done = this.collectExecution(
+      instance,
+      execution,
+      () => parentStopped
+    ).catch((error): SubWorkflowResult => ({
+      status: PROMPT_TERMINAL_STATUS.FAILED,
+      failureMessage: errorMessage(error),
+    }));
     const handle: SubWorkflowHandle = {
       workflowKey,
       runRef,
@@ -67,12 +73,13 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     return handle;
   }
 
-  private async executeAndCollect(
+  private async collectExecution(
     instance: SubWorkflowInstance,
+    execution: Promise<void>,
     wasStoppedByParent: () => boolean
   ): Promise<SubWorkflowResult> {
     try {
-      await instance.executeLoadedPromptFile();
+      await execution;
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
     }
@@ -104,6 +111,47 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
     }
+  }
+
+  private async waitForRunIdentity(
+    instance: SubWorkflowInstance,
+    execution: Promise<void>
+  ): Promise<
+    ReturnType<SubWorkflowInstance["promptQueue"]["getState"]> | undefined
+  > {
+    const current = instance.promptQueue.getState();
+    if (current.workflowKey && current.runRef) return current;
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const subscription = instance.promptQueue.onDidChangeState((state) => {
+        if (state.workflowKey && state.runRef) {
+          settled = true;
+          subscription.dispose();
+          resolve(state);
+        }
+      });
+      execution.then(
+        () => {
+          if (settled) return;
+          settled = true;
+          subscription.dispose();
+          resolve(undefined);
+        },
+        (error) => {
+          if (settled) return;
+          settled = true;
+          subscription.dispose();
+          reject(error);
+        }
+      );
+      const afterSubscribe = instance.promptQueue.getState();
+      if (!settled && afterSubscribe.workflowKey && afterSubscribe.runRef) {
+        settled = true;
+        subscription.dispose();
+        resolve(afterSubscribe);
+      }
+    });
   }
 
   private createFailedToLoadHandle(

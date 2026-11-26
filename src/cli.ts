@@ -15,6 +15,11 @@ import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/NodePlatformAdapter";
 import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
+import { SubWorkflowLauncher } from "./core/orchestration/SubWorkflowLauncher";
+import {
+  createCliSubWorkflowInstance,
+  createCliWorkflowInstance,
+} from "./cli/CliWorkflowInstanceFactory";
 import { rebaseWorkflowStepPaths } from "./core/WorkflowStepPathRebaser";
 import {
   EXECUTION_STATES,
@@ -1292,25 +1297,28 @@ async function runCommand(
   // Create a cached detector integration (pre-marked as ready, used for pre-flight checks)
   const detectorIntegration = factory.createForExecution(harness);
 
-  const instance = new WorkflowInstance(
+  const instanceDependencies = {
     platform,
-    undefined, // no dashboard sink in CLI
-    factory,
-    (_harnessOverride?: HarnessId) => detectorIntegration,
-    (_name: string | undefined) => {}, // no tab management
-    () => {}, // no status bar update
-    workingDir,
+    integrationFactory: factory,
+    detectorIntegration,
+    workspaceFolderPath: workingDir,
     hostCanProvidePty,
     supportsConcurrentInteractiveSessions,
-    undefined,
     userFeedbackSink,
-    undefined,
-    undefined,
-    undefined,
-    cliRunnerHostIdentity,
-    undefined,
-    options.sessionId !== undefined
+    runnerHostIdentity: cliRunnerHostIdentity,
+    workflowSessionIdFromOverride: options.sessionId !== undefined,
+  };
+  let subWorkflowLauncher: SubWorkflowLauncher;
+  subWorkflowLauncher = new SubWorkflowLauncher((options) =>
+    createCliSubWorkflowInstance(
+      instanceDependencies,
+      options,
+      subWorkflowLauncher
+    )
   );
+  const instance = createCliWorkflowInstance(instanceDependencies, {
+    subWorkflowHost: subWorkflowLauncher,
+  });
 
   // Stream output to the terminal as events arrive. Subscriptions go on the
   // instance (not detectorIntegration) because WorkflowInstance creates a fresh

@@ -73,15 +73,10 @@ export interface SubWorkflowResult {
 /** Narrow instance surface needed by SubWorkflowLauncher. */
 export interface SubWorkflowInstance {
   readonly promptQueue: {
-    getState(): {
-      status: string;
-      workflowKey?: WorkflowKey;
-      runRef?: RunRef;
-      results: Array<{ status: string }>;
-      steps: Array<{
-        _runtime?: { startedAt?: number; failureMessage?: string };
-      }>;
-    };
+    getState(): import("./CtrlYokeTypes").QueueState;
+    onDidChangeState(
+      listener: (state: import("./CtrlYokeTypes").QueueState) => void
+    ): { dispose(): void };
     getWorkflowFile(): PromptFile & {
       _runtime?: { worktree?: WorkingFileWorktreeRuntime };
     };
@@ -95,4 +90,5 @@ export interface SubWorkflowInstance {
 
 export type SubWorkflowInstanceFactory = (options: {
   concurrent: boolean;
+  ancestorPaths: readonly string[];
 }) => SubWorkflowInstance;

@@ -7,6 +7,7 @@ import type {
 } from "../../types/SubWorkflowTypes";
 import type {
   PromptFile,
+  QueueState,
   RunRef,
   WorkflowKey,
 } from "../../types/CtrlYokeTypes";
@@ -26,9 +27,17 @@ class FakeChild implements SubWorkflowInstance {
   loadError?: Error;
   executeCalls = 0;
   stopCalls = 0;
-  status: string = EXECUTION_STATES.IDLE;
-  steps: Array<{ _runtime?: { startedAt?: number } }> = [{ _runtime: {} }];
-  results: Array<{ status: string }> = [{ status: STEP_STATUS.PENDING }];
+  status: QueueState["status"] = EXECUTION_STATES.IDLE;
+  steps: QueueState["steps"] = [
+    { prompt: "child", _runtime: {} } as QueueState["steps"][number],
+  ];
+  results: QueueState["results"] = [
+    {
+      prompt: "child",
+      status: STEP_STATUS.PENDING,
+      timestamp: new Date(0),
+    },
+  ];
   worktree?: PromptFile & {
     _runtime?: {
       worktree?: {
@@ -51,13 +60,22 @@ class FakeChild implements SubWorkflowInstance {
   };
 
   readonly promptQueue = {
-    getState: () => ({
+    getState: (): QueueState => ({
       status: this.status,
+      stopped: false,
+      totalPausedDuration: 0,
+      currentIndex: 0,
+      parallelGroups: [],
+      completedIndices: new Set(),
+      totalExecutionTime: 0,
+      queueExtensions: 0,
+      definitionRevision: 0,
       workflowKey: "child-key" as WorkflowKey,
       runRef: "run-child" as RunRef,
       results: this.results,
       steps: this.steps,
     }),
+    onDidChangeState: () => ({ dispose: () => {} }),
     getWorkflowFile: () => this.worktree ?? ({ steps: [] } as PromptFile),
   };
 
@@ -68,6 +86,7 @@ class FakeChild implements SubWorkflowInstance {
 
   async executeLoadedPromptFile(): Promise<void> {
     this.executeCalls += 1;
+    if (this.executionGate) await this.executionGate;
     await Promise.resolve();
     if (this.status === EXECUTION_STATES.STOPPED) return;
     if (this.nextScenario === "completed") {
@@ -86,6 +105,8 @@ class FakeChild implements SubWorkflowInstance {
   }
 
   nextScenario: Scenario = "completed";
+  executionGate?: Promise<void>;
+  releaseExecution?: () => void;
   async pause(): Promise<void> {}
   async cancelPause(): Promise<void> {}
   async stop(): Promise<void> {
@@ -96,8 +117,11 @@ class FakeChild implements SubWorkflowInstance {
 
 class FakeFactory {
   readonly child = new FakeChild();
-  options?: { concurrent: boolean };
-  create = (options: { concurrent: boolean }): SubWorkflowInstance => {
+  options?: { concurrent: boolean; ancestorPaths: readonly string[] };
+  create = (options: {
+    concurrent: boolean;
+    ancestorPaths: readonly string[];
+  }): SubWorkflowInstance => {
     this.options = options;
     return this.child;
   };
@@ -106,6 +130,7 @@ class FakeFactory {
 function request(): SubWorkflowLaunchRequest {
   return {
     source: { kind: "file", resolvedPath: "/tmp/child.ctrlyoke.yaml" },
+    ancestorPaths: ["/tmp/root.ctrlyoke.yaml", "/tmp/child.ctrlyoke.yaml"],
     parent: {
       workflowKey: "parent-key" as WorkflowKey,
       runRef: "run-parent" as RunRef,
@@ -155,6 +180,10 @@ suite("SubWorkflowLauncher", () => {
       },
     });
     assert.equal(factory.options?.concurrent, false);
+    assert.deepEqual(factory.options?.ancestorPaths, [
+      "/tmp/root.ctrlyoke.yaml",
+      "/tmp/child.ctrlyoke.yaml",
+    ]);
   });
 
   test("marks a child that fails mid-run as started", async () => {
@@ -193,10 +222,14 @@ suite("SubWorkflowLauncher", () => {
 
   test("classifies stop through the handle as parent cancellation", async () => {
     const factory = new FakeFactory();
+    factory.child.executionGate = new Promise<void>((resolve) => {
+      factory.child.releaseExecution = resolve;
+    });
     const handle = await new SubWorkflowLauncher(factory.create).launch(
       request()
     );
     await handle.stop();
+    factory.child.releaseExecution?.();
     const result = await handle.done;
     assert.equal(result.status, PROMPT_TERMINAL_STATUS.CANCELLED);
     assert.equal(result.cancelledBy, SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT);

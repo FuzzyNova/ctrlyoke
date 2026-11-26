@@ -65,6 +65,7 @@ import {
 import type {
   SubWorkflowHandle,
   SubWorkflowHost,
+  SubWorkflowInstance,
 } from "../types/SubWorkflowTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
@@ -290,7 +291,8 @@ export class WorkflowInstance
   implements
     RunLifecycleInstancePort,
     RunViewPublisherInstance,
-    ExternalRunWatchInstance
+    ExternalRunWatchInstance,
+    SubWorkflowInstance
 {
   private readonly lineageRepository = new WorkflowLineageRepository();
   /** Unique identifier — stable for this instance's lifetime */

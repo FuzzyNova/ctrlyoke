@@ -2,7 +2,11 @@ import * as path from "path";
 import { HarnessCapabilityRegistry } from "../HarnessCapabilityRegistry";
 import { HarnessIntegration } from "../HarnessIntegration";
 import { IntegrationFactory } from "../IntegrationFactory";
-import { WorkflowInstance } from "../WorkflowInstance";
+import {
+  WorkflowInstance,
+  type WorkflowInstanceExecutionOptions,
+} from "../WorkflowInstance";
+import { SubWorkflowLauncher } from "./SubWorkflowLauncher";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type {
   QueueState,
@@ -144,6 +148,7 @@ export interface WorkflowInstanceRegistryHost extends WorkflowInstanceRegistryBu
 export class WorkflowInstanceRegistry
   implements RunViewPublisherRegistryPort, RunLifecycleRegistryPort
 {
+  private readonly subWorkflowLauncher: SubWorkflowLauncher;
   private readonly instances = new Map<string, WorkflowInstance>();
   private readonly retiredInstances = new Map<string, WorkflowInstance>();
   private readonly viewerRegistry = new Map<string, string | null>();
@@ -165,6 +170,12 @@ export class WorkflowInstanceRegistry
 
   constructor(private readonly host: WorkflowInstanceRegistryHost) {
     this.viewerRegistry.set(this.host.panelClientId, null);
+    this.subWorkflowLauncher = new SubWorkflowLauncher(({ ancestorPaths }) =>
+      this.createExternalWorkflowInstance({
+        subWorkflowHost: this.subWorkflowLauncher,
+        ancestorPaths,
+      })
+    );
   }
 
   private get panelClientId(): string {
@@ -207,8 +218,12 @@ export class WorkflowInstanceRegistry
     return this.announcedExternalWorkflowIds;
   }
 
-  createExternalWorkflowInstance(): WorkflowInstance {
-    const instance = this.buildWorkflowInstanceForHost();
+  createExternalWorkflowInstance(
+    executionOptions: WorkflowInstanceExecutionOptions = {
+      subWorkflowHost: this.subWorkflowLauncher,
+    }
+  ): WorkflowInstance {
+    const instance = this.buildWorkflowInstanceForHost(executionOptions);
     this.instances.set(instance.id, instance);
     this.externallyCreatedInstanceIds.add(instance.id);
     return instance;
@@ -565,7 +580,11 @@ export class WorkflowInstanceRegistry
     }
   }
 
-  buildWorkflowInstanceForHost(): WorkflowInstance {
+  buildWorkflowInstanceForHost(
+    executionOptions: WorkflowInstanceExecutionOptions = {
+      subWorkflowHost: this.subWorkflowLauncher,
+    }
+  ): WorkflowInstance {
     const host = this.host;
     const instance = new WorkflowInstance(
       host.platform,
@@ -588,7 +607,8 @@ export class WorkflowInstanceRegistry
       host.runnerHostIdentity,
       host.fileWatcherFactory,
       false,
-      host.dashboardHostActions
+      host.dashboardHostActions,
+      executionOptions
     );
     Log.debug(
       `[WorkflowOrchestrator] buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`
