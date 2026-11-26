@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/harness/PtyProcessManager.ts`, `src/core/WorkflowInstance.ts` (`spawnScriptPty`), `src/core/WorkflowExecutor.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -32,15 +32,30 @@ node-pty reports a signal death as `{ exitCode: 0, signal: N }`:
 Against ctrlyoke's compiled manager (after `npm run compile:extension`):
 
 ```js
-const { initPtyProcessManager } = require(root + "/out/core/harness/PtyProcessManager.js");
+const { initPtyProcessManager } = require(
+  root + "/out/core/harness/PtyProcessManager.js"
+);
 const mgr = initPtyProcessManager(() => {});
 mgr.spawnPty({
-  workflowId: "wf", stepName: "probe", stepIndex: 0, kind: "ai-cli", sessionId: "s1",
-  command: "/bin/bash", args: ["-c", "sleep 32; exit 1"], cwd: "/tmp", env: process.env,
+  workflowId: "wf",
+  stepName: "probe",
+  stepIndex: 0,
+  kind: "ai-cli",
+  sessionId: "s1",
+  command: "/bin/bash",
+  args: ["-c", "sleep 32; exit 1"],
+  cwd: "/tmp",
+  env: process.env,
   onData: () => {},
-  onExit: (_s, exitCode) => { console.log("exitCode =", exitCode); process.exit(0); },
+  onExit: (_s, exitCode) => {
+    console.log("exitCode =", exitCode);
+    process.exit(0);
+  },
 });
-setTimeout(() => require("child_process").execSync("pkill -KILL -f 'sleep 32; exit 1'"), 500);
+setTimeout(
+  () => require("child_process").execSync("pkill -KILL -f 'sleep 32; exit 1'"),
+  500
+);
 // prints: exitCode = 0   (the script would otherwise have exited 1)
 ```
 

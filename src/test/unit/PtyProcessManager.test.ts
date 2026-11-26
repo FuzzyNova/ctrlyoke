@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as os from "os";
 import { suite, test } from "mocha";
 import type { IEvent, IPty } from "node-pty";
 import {
@@ -372,6 +373,44 @@ suite("PtyProcessManager intentional kills", () => {
     assert.strictEqual(manager.spawnCwds[1], manager.spawnCwds[0]);
     assert.strictEqual(restarted?.cwd, manager.spawnCwds[0]);
   });
+});
+
+suite("PtyProcessManager exit signals", () => {
+  (process.platform === "win32" ? test.skip : test)(
+    "reports SIGKILL from a spawned sleep process",
+    async function () {
+      const manager = new PtyProcessManager();
+      let finish!: (value: { code: number; signal?: number }) => void;
+      const exited = new Promise<{ code: number; signal?: number }>(
+        (resolve) => {
+          finish = resolve;
+        }
+      );
+      let session: PtySession | undefined;
+      try {
+        session = manager.spawnPty({
+          workflowId: "wf-signal",
+          stepName: "sleep",
+          stepIndex: 0,
+          kind: SESSION_KINDS.AI_CLI,
+          command: "/bin/sh",
+          args: ["-c", "sleep 30"],
+          cwd: os.tmpdir(),
+          onData: () => {},
+          onExit: (_session, exitCode, signal) =>
+            finish({ code: exitCode, signal }),
+        });
+        process.kill(session.pty.pid, "SIGKILL");
+        const result = await exited;
+        assert.strictEqual(result.signal, 9);
+        assert.strictEqual(result.code, 0);
+      } finally {
+        if (session)
+          manager.killSession(session.id, TERMINAL_END_REASONS.CLOSED);
+        manager.dispose();
+      }
+    }
+  );
 });
 
 suite("PtyProcessManager terminal tabs", () => {

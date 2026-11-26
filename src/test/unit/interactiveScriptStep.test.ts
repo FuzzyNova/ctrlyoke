@@ -326,6 +326,35 @@ suite("interactive script steps", () => {
     assert.strictEqual(queue.getState().status, "completed");
   });
 
+  test("routes an externally signalled interactive script through errorBehavior", async () => {
+    const queue = new PromptQueue();
+    const executor = makeExecutor(queue);
+    const context = makeContext(undefined, async () => ({
+      exitCode: 137,
+      errored: true,
+      error: "Process terminated by SIGKILL",
+    }));
+    queue.loadPrompts({
+      errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+      steps: [
+        {
+          type: STEP_TYPES.SCRIPT,
+          script: "sleep 30",
+          executionMode: EXECUTION_MODES.INTERACTIVE,
+        },
+        { prompt: "continued after externally killed script" },
+      ],
+    });
+
+    await executor.execute(
+      new MockHarnessIntegration(undefined, false),
+      context
+    );
+
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.FAILED);
+    assert.strictEqual(queue.getState().status, "completed");
+  });
+
   test("matches headless verdicts across the comparison matrix", async () => {
     for (const comparisonCase of cases) {
       const headless = await runCase(comparisonCase, "headless");

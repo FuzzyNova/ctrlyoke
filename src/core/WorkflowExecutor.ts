@@ -434,7 +434,13 @@ export interface WorkflowExecutionContext {
     onSessionCreated?: (sessionId: string) => void;
     onSessionEnded?: () => void;
   }) => Promise<
-    number | { exitCode: number; errored?: boolean; error?: string }
+    | number
+    | {
+        exitCode: number;
+        errored?: boolean;
+        error?: string;
+        cancelled?: boolean;
+      }
   >;
   targetRunIndices?: Map<string, number>;
   /**
@@ -3227,6 +3233,7 @@ export class WorkflowExecutor {
       let ptyErrored = false;
       let ptyError: string | undefined;
       let ptyTimedOut = false;
+      let ptyCancelled = false;
 
       const evaluation = async (onOutput: (chunk: string) => void) => {
         if (isInteractive && context.spawnScriptPty) {
@@ -3275,6 +3282,7 @@ export class WorkflowExecutor {
             ptyExitCode = ptyResult.exitCode;
             ptyErrored = ptyResult.errored === true;
             ptyError = ptyResult.error;
+            ptyCancelled = ptyResult.cancelled === true;
           }
         }
 
@@ -3291,6 +3299,25 @@ export class WorkflowExecutor {
         }
 
         const exitCode = ptyExitCode ?? 1;
+        if (ptyCancelled) {
+          const cancelledResult =
+            await this.endConditionEvaluator.evaluateResult(
+              {
+                result: outputChunks.join(""),
+                stdout: outputChunks.join(""),
+                stderr: "",
+                success: false,
+                exitCode,
+              },
+              resolvedProperties
+            );
+          return {
+            ...cancelledResult,
+            cancelled: true,
+            errored: cancelledResult.errored ?? false,
+            duration: Date.now() - timestampMs,
+          };
+        }
         const comparison = await this.endConditionEvaluator.evaluateResult(
           {
             result: outputChunks.join(""),

@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as os from "os";
 import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
@@ -4073,7 +4074,15 @@ export class WorkflowInstance
     options: Parameters<
       NonNullable<WorkflowExecutionContext["spawnScriptPty"]>
     >[0]
-  ): Promise<number | { exitCode: number; errored?: boolean; error?: string }> {
+  ): Promise<
+    | number
+    | {
+        exitCode: number;
+        errored?: boolean;
+        error?: string;
+        cancelled?: boolean;
+      }
+  > {
     return new Promise((resolve) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager) {
@@ -4143,11 +4152,25 @@ export class WorkflowInstance
             });
             options.onOutput(chunk);
           },
-          onExit: (session, exitCode) => {
+          onExit: (session, exitCode, signal) => {
             if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
             options.onSessionEnded?.();
             ptyPostMessage(buildTerminalEndedMessage(session, exitCode));
-            resolve(exitCode);
+            if (session.endReason === TERMINAL_END_REASONS.STOPPED) {
+              resolve({ exitCode, cancelled: true });
+            } else if (signal && !session.endReason) {
+              const signalName =
+                Object.entries(os.constants.signals).find(
+                  ([, number]) => number === signal
+                )?.[0] ?? String(signal);
+              resolve({
+                exitCode: 128 + signal,
+                errored: true,
+                error: `Process terminated by ${signalName}`,
+              });
+            } else {
+              resolve(exitCode);
+            }
           },
         });
         if (options.timeout > 0) {
