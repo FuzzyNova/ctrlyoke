@@ -18,6 +18,7 @@ suite("RunImportCommand", () => {
   let workspaceRoot: string;
   let bundleDir: string;
   let output: string[];
+  let errors: string[];
   let workspace: CliWorkspaceBootstrap;
 
   setup(async () => {
@@ -34,6 +35,7 @@ suite("RunImportCommand", () => {
       createLineageRepository: () => lineageRepository,
     };
     output = [];
+    errors = [];
   });
 
   teardown(() => removeTempDir(root));
@@ -154,6 +156,57 @@ suite("RunImportCommand", () => {
     });
   });
 
+  test("reports continuation errors to stderr after the JSON result", async () => {
+    await importRunCommand(
+      { bundleDir, continue: true, changes: "skip", json: true },
+      io(),
+      dependencies({
+        bootstrapCliWorkspace: async () => ({
+          ...workspace,
+          createLineageRepository: () =>
+            ({
+              listLineageKeys: async () => [],
+              tryReadDescriptor: async () => undefined,
+              readDescriptor: async () => ({
+                workflowName: "Imported fixture",
+                latestRunRef: "run-imported" as never,
+              }),
+            }) as never,
+        }),
+        readBundleHeader: async (dir, root, opts) => {
+          const header = await readRunBundleHeader(dir, root, opts);
+          return {
+            ...header,
+            manifest: {
+              ...header.manifest,
+              continuation: {
+                executionState: "stopped",
+                nextStep: { kind: "queue", stepIndex: 0 },
+                pendingStepCount: 1,
+                worktreeMode: "none",
+                workspace: { baseCommit: "a".repeat(40), branch: "main" },
+              },
+            },
+          };
+        },
+        importer: {
+          importRun: async () => ({
+            status: "imported",
+            workflowKey: "imported" as never,
+            runRef: "run-imported" as never,
+            placement: { target: "skip", applied: false },
+          }),
+        },
+        continueRun: async () => {
+          throw new Error("lock held");
+        },
+      })
+    );
+    assert.strictEqual(output.length, 1);
+    assert.strictEqual(JSON.parse(output[0]).success, true);
+    assert.deepStrictEqual(errors, ["Error: lock held"]);
+  });
+
   test("history-only bundles warn and ignore continuation flags", async () => {
     let continued = false;
     await importRunCommand(
@@ -222,6 +275,7 @@ suite("RunImportCommand", () => {
   function io(): RunImportCommandIo {
     return {
       writeOut: (message) => output.push(message),
+      writeErr: (message) => errors.push(message),
     };
   }
 

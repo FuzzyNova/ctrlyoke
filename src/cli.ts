@@ -493,6 +493,7 @@ registerImportCommand(program, async (options) => {
       options,
       {
         writeOut: (message) => console.log(message),
+        writeErr: (message) => console.error(message),
       },
       {
         continueRun: async (workflowKey, runRef, cwd, outputOptions) => {
@@ -1750,8 +1751,7 @@ async function runCommand(
   } catch (err) {
     releaseLiveOutputState();
     reportCliError(err, {
-      json: options.json,
-      ...(!emitJsonResult && options.json ? { writeOut: () => {} } : {}),
+      json: options.json && emitJsonResult,
       ...(returnExitCode
         ? { exit: (code: number) => (process.exitCode = code) }
         : {}),

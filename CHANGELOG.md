@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Final-step pass condition summaries are retained in run files and `ctrlyoke run --json` results.
+- `import --continue --json` reports continuation errors on stderr while keeping its single stdout result line.
 - Workflow `maxSteps` placeholders now enforce the run-wide limit on appended steps and report numeric limits in MCP status.
 - Run bundle imports refuse newer workflow definition, run file, and timeline schemas before creating history.
 - Prompt-file resolution follows symbolic links only when their targets remain inside trusted workspace, state, or approved external roots.

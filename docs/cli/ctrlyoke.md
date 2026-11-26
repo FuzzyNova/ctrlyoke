@@ -982,6 +982,9 @@ target and apply result, `continued`, warnings, and the same workspace-specific
 preview under `preview`. Invalid bundle data emits the standard error envelope
 and exits with code `2`.
 
+When `--continue` fails after the import result is written, ctrlyoke keeps that
+single JSON line on stdout and writes the redacted continuation error to stderr.
+
 ## `ctrlyoke step`
 
 These commands edit a persisted run without starting or resuming a harness.

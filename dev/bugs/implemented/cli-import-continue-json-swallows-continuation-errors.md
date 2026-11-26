@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (review of d797f93ed)
 - **Area:** `src/cli/RunImportCommand.ts`, `src/cli.ts` (`runCommand`, import registration)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

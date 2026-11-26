@@ -8,7 +8,7 @@ import {
   bootstrapCliWorkspace,
   type CliWorkspaceBootstrap,
 } from "./CliWorkspaceBootstrap";
-import { CLI_USAGE_EXIT_CODE } from "./CliExitCode";
+import { CLI_USAGE_EXIT_CODE, reportCliError } from "./CliExitCode";
 import { STEP_TYPES } from "../types/DashboardConstants";
 import {
   RUN_CHANGES_TARGETS,
@@ -29,6 +29,7 @@ export interface RunImportOptions {
 
 export interface RunImportCommandIo {
   writeOut(message: string): void;
+  writeErr?(message: string): void;
 }
 
 export interface RunImportCommandDependencies {
@@ -215,7 +216,16 @@ export async function importRunCommand(
   } catch (error) {
     if (!options.json) throw error;
     const message = getErrorMessage(error);
-    if (!jsonResultWritten) {
+    if (jsonResultWritten) {
+      reportCliError(error, {
+        json: false,
+        writeErr: io.writeErr,
+        exit: (code) =>
+          (dependencies.setExitCode ?? ((value) => (process.exitCode = value)))(
+            code
+          ),
+      });
+    } else {
       io.writeOut(
         JSON.stringify({
           schemaVersion: 1,
@@ -223,11 +233,11 @@ export async function importRunCommand(
           error: { message },
         })
       );
+      // Invalid bundle data is user input, and follows the CLI usage error code.
+      (dependencies.setExitCode ?? ((code) => (process.exitCode = code)))(
+        CLI_USAGE_EXIT_CODE
+      );
     }
-    // Invalid bundle data is user input, and follows the CLI usage error code.
-    (dependencies.setExitCode ?? ((code) => (process.exitCode = code)))(
-      CLI_USAGE_EXIT_CODE
-    );
   }
 }
 
