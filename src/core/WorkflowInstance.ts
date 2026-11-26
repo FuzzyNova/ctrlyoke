@@ -169,6 +169,7 @@ import {
 } from "./orchestration/ScriptExecutionReporter";
 import {
   ScriptProcessRunner,
+  buildScriptProcessEnv,
   resolveScriptInvocation,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
@@ -4131,7 +4132,7 @@ export class WorkflowInstance
           command: shell,
           args: toPtySpawnArgs(shellArgs, windowsVerbatimArguments),
           cwd: options.cwd,
-          env: { ...process.env, ...(options.env ?? {}) },
+          env: buildScriptProcessEnv(process.env, options.vars, options.env),
           streamingSecretRedaction: true,
           onData: (session, chunk) => {
             ptyPostMessage({

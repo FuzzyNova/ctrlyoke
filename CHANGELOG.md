@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Interactive script PTYs now receive workflow variables as `CTRLYOKE_VAR_*` and run without inherited VS Code environment variables.
 - Prompt links in workflow files now scan decoded prompt values, so escaped, quoted, and comment-contained references match runtime prompt text.
 
 - Prompt editors now ignore prose punctuation when deciding whether an `@` mention has a file path marker, matching runtime reference parsing.

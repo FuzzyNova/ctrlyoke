@@ -172,7 +172,10 @@ import {
   createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
-import type { ScriptProcessRunner } from "./orchestration/ScriptProcessRunner";
+import {
+  buildScriptProcessEnv,
+  type ScriptProcessRunner,
+} from "./orchestration/ScriptProcessRunner";
 import {
   getSignedStepIndex as getSignedWorkflowStepIndex,
   toOutputExecutionTarget as toWorkflowOutputExecutionTarget,
@@ -420,6 +423,8 @@ export interface WorkflowExecutionContext {
     cwd: string;
     /** Environment overrides for the script process. */
     env?: Record<string, string>;
+    /** Workflow variables exposed as CTRLYOKE_VAR_<NAME>. */
+    vars?: Record<string, string>;
     /** Called for each output chunk — used to stream text to the CliOutput panel. */
     onOutput: (chunk: string) => void;
     /** Maximum runtime in milliseconds before the PTY is killed. */
@@ -3227,11 +3232,16 @@ export class WorkflowExecutor {
             script: effectiveStep.script,
             shell: effectiveStep.shell,
             cwd: context.executionWorkspace.executionRoot,
-            env: await this.resolveScriptEnvironment(
-              effectiveStep.env,
-              secretNames,
-              context
+            env: buildScriptProcessEnv(
+              process.env,
+              scriptVars,
+              await this.resolveScriptEnvironment(
+                effectiveStep.env,
+                secretNames,
+                context
+              )
             ),
+            vars: scriptVars,
             onOutput: (chunk) => {
               outputChunks.push(chunk);
               onOutput(chunk);

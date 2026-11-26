@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli, via subagent)
 - **Area:** `src/core/WorkflowExecutor.ts` (interactive script-step branch), `src/core/WorkflowInstance.ts` (`spawnScriptPty`), `src/core/orchestration/ScriptProcessRunner.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

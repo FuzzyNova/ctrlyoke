@@ -108,6 +108,8 @@ function makeContext(
     timeout: number;
     onOutput: (chunk: string) => void;
     onTimeout?: () => void;
+    vars?: Record<string, string>;
+    env?: Record<string, string>;
   }) => Promise<
     number | { exitCode: number; errored?: boolean; error?: string }
   >,
@@ -169,6 +171,8 @@ function makeContext(
         timeout: options.timeout,
         onOutput: options.onOutput,
         onTimeout: options.onTimeout,
+        vars: options.vars,
+        env: options.env,
       });
   }
 
@@ -262,6 +266,37 @@ async function runCase(
 }
 
 suite("interactive script steps", () => {
+  test("passes workflow variables to the interactive script PTY", async () => {
+    const queue = new PromptQueue();
+    const executor = makeExecutor(queue);
+    let receivedVars: Record<string, string> | undefined;
+    let receivedEnv: Record<string, string> | undefined;
+    const context = makeContext(undefined, async (options) => {
+      receivedVars = options.vars;
+      receivedEnv = options.env;
+      return 0;
+    });
+    queue.loadPrompts({
+      vars: { module: "src/parser" },
+      steps: [
+        {
+          type: STEP_TYPES.SCRIPT,
+          script: "echo $CTRLYOKE_VAR_MODULE",
+          executionMode: EXECUTION_MODES.INTERACTIVE,
+        },
+      ],
+    });
+
+    await executor.execute(
+      new MockHarnessIntegration(undefined, false),
+      context
+    );
+
+    assert.strictEqual(receivedVars?.module, "src/parser");
+    assert.strictEqual(receivedEnv?.CTRLYOKE_VAR_MODULE, "src/parser");
+    assert.strictEqual(receivedEnv?.ELECTRON_RUN_AS_NODE, undefined);
+  });
+
   test("routes a PTY spawn failure through errorBehavior and leaves the step failed", async () => {
     const queue = new PromptQueue();
     const executor = makeExecutor(queue);

@@ -9,11 +9,32 @@ import {
   SpawnResult,
 } from "../../utils/CliProcessManager";
 import {
+  buildScriptProcessEnv,
   resolveScriptInvocation,
   ScriptProcessRunner,
 } from "../../core/orchestration/ScriptProcessRunner";
 
 suite("ScriptProcessRunner", () => {
+  test("builds an isolated script environment with workflow vars and step overrides", () => {
+    const env = buildScriptProcessEnv(
+      {
+        PATH: "/bin",
+        ELECTRON_RUN_AS_NODE: "1",
+        VSCODE_PID: "42",
+        KEEP_ME: "yes",
+      },
+      { module: "src/parser", mixedCase: "value" },
+      { KEEP_ME: "overridden", EXTRA: "step" }
+    );
+
+    assert.strictEqual(env.ELECTRON_RUN_AS_NODE, undefined);
+    assert.strictEqual(env.VSCODE_PID, undefined);
+    assert.strictEqual(env.CTRLYOKE_VAR_MODULE, "src/parser");
+    assert.strictEqual(env.CTRLYOKE_VAR_MIXEDCASE, "value");
+    assert.strictEqual(env.KEEP_ME, "overridden");
+    assert.strictEqual(env.EXTRA, "step");
+  });
+
   test("reports an unrequested signal death as a script failure", async () => {
     class SignalledProcessManager implements Pick<
       CliProcessManager,

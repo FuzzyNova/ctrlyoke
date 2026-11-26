@@ -46,6 +46,34 @@ export interface ScriptProcessRunnerOptions {
   windowsVerbatimArguments?: boolean;
 }
 
+const VSCODE_SCRIPT_ENV_VARS = [
+  "VSCODE_INJECTION",
+  "VSCODE_HANDLES_UNCAUGHT_ERRORS",
+  "VSCODE_NLS_CONFIG",
+  "VSCODE_PID",
+  "ELECTRON_RUN_AS_NODE",
+] as const;
+
+/** Build the isolated environment shared by headless and interactive scripts. */
+export function buildScriptProcessEnv(
+  baseEnv: NodeJS.ProcessEnv,
+  vars?: Record<string, string>,
+  env?: Record<string, string>
+): Record<string, string> {
+  const cleanEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(baseEnv)) {
+    if (value !== undefined) cleanEnv[key] = value;
+  }
+  for (const key of VSCODE_SCRIPT_ENV_VARS) {
+    delete cleanEnv[key];
+  }
+  for (const [key, value] of Object.entries(vars ?? {})) {
+    cleanEnv[`CTRLYOKE_VAR_${key.toUpperCase()}`] = value;
+  }
+  Object.assign(cleanEnv, env ?? {});
+  return cleanEnv;
+}
+
 export interface ScriptProcessResult {
   success: boolean;
   result: string;
@@ -99,30 +127,14 @@ export class ScriptProcessRunner {
     );
     Log.debug(`[ScriptProcessRunner] Working directory: ${options.cwd}`);
 
-    const cleanEnv = { ...process.env };
-    const vsCodeEnvVars = [
-      "VSCODE_INJECTION",
-      "VSCODE_HANDLES_UNCAUGHT_ERRORS",
-      "VSCODE_NLS_CONFIG",
-      "VSCODE_PID",
-      "ELECTRON_RUN_AS_NODE",
-    ];
-    for (const key of vsCodeEnvVars) {
-      delete cleanEnv[key];
-    }
-    Log.trace(
-      `[ScriptProcessRunner] Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
+    const cleanEnv = buildScriptProcessEnv(
+      process.env,
+      options.vars,
+      options.env
     );
-
-    if (options.vars && Object.keys(options.vars).length > 0) {
-      for (const [key, value] of Object.entries(options.vars)) {
-        cleanEnv[`CTRLYOKE_VAR_${key.toUpperCase()}`] = value;
-      }
-    }
-
-    if (options.env) {
-      Object.assign(cleanEnv, options.env);
-    }
+    Log.trace(
+      `[ScriptProcessRunner] Cleaned ${VSCODE_SCRIPT_ENV_VARS.length} VS Code env vars for isolated execution`
+    );
 
     try {
       const result = await this.processManager.spawn(executable, args, {
