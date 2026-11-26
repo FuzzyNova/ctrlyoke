@@ -9,6 +9,7 @@ import {
   EXECUTION_MODES,
   type ExecutionMode,
   PROMPT_PROPERTIES,
+  SUB_WORKFLOW_STEP_COPY_FIELDS,
   WORKFLOW_PROPERTY_KEYS,
   isSandboxMode,
   isSandboxRequest,
@@ -30,6 +31,8 @@ import {
   type PriorContext,
   type PromptStep,
   type ScriptStep,
+  type ScriptStepAction,
+  type SubWorkflowStep,
   type ToolPermissionsOverride,
   type UserHookConfig,
   type WorkingFile,
@@ -41,6 +44,13 @@ import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes"
 import { normalizeParallelGroupTopology } from "./ParallelGroupTopology";
 
 const BULK_EDITABLE_SCRIPT_STEP_KEYS = ["enabled", "color"] as const;
+
+function isScriptStepAction(value: unknown): value is ScriptStepAction {
+  return (
+    value === CONDITION_ACTIONS.CONTINUE ||
+    value === CONDITION_ACTIONS.STOP_WORKFLOW
+  );
+}
 
 /** Reject property patches unsupported by any selected step kind. */
 export function assertBulkWorkflowStepUpdateAllowed(
@@ -64,6 +74,8 @@ export function assertBulkWorkflowStepUpdateAllowed(
           return BULK_EDITABLE_SCRIPT_STEP_KEYS;
         case STEP_TYPES.PROMPT:
           return BULK_EDITABLE_PROMPT_STEP_KEYS;
+        case STEP_TYPES.WORKFLOW:
+          return [];
         default:
           return assertNever(stepType);
       }
@@ -155,6 +167,7 @@ const AUTHORED_STEP_FIELDS = [
   PROMPT_PROPERTIES.STEP_TYPE,
   PROMPT_PROPERTIES.PROMPT,
   PROMPT_PROPERTIES.SCRIPT,
+  PROMPT_PROPERTIES.WORKFLOW_REF,
   PROMPT_PROPERTIES.ENV,
   PROMPT_PROPERTIES.TIMEOUT,
   PROMPT_PROPERTIES.ON_PASS,
@@ -166,6 +179,7 @@ const AUTHORED_STEP_FIELDS = [
   PROMPT_PROPERTIES.SHELL,
   PROMPT_PROPERTIES.SANDBOX,
   PROMPT_PROPERTIES.SANDBOX_MODE,
+  ...SUB_WORKFLOW_STEP_COPY_FIELDS,
   ...EXECUTION_PROPERTY_KEYS,
 ] as const;
 
@@ -671,8 +685,18 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
   };
 
   const stepType = getStepType(step);
-  if (stepType !== STEP_TYPES.SCRIPT && stepType !== STEP_TYPES.PROMPT) {
-    assertNever(stepType);
+  if (stepType === STEP_TYPES.WORKFLOW) {
+    if (typeof step.workflow !== "string" || !step.workflow.trim()) {
+      throw new Error("Clipboard workflow step is missing a workflow path");
+    }
+    return {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: step.workflow,
+      ...commonFields,
+      ...(step.onFail === "continue" || step.onFail === "stopWorkflow"
+        ? { onFail: step.onFail }
+        : {}),
+    } as SubWorkflowStep;
   }
 
   if (stepType === STEP_TYPES.SCRIPT) {
@@ -823,6 +847,17 @@ export function buildFinalStepUpdate(finalStep: WorkflowStep): WorkflowStep {
           ...(finalStep.name ? { name: finalStep.name } : {}),
           ...buildPromptStepProperties(finalStep),
         };
+      case STEP_TYPES.WORKFLOW:
+        return {
+          type: STEP_TYPES.WORKFLOW,
+          workflow: (finalStep as SubWorkflowStep).workflow,
+          ...(finalStep.name ? { name: finalStep.name } : {}),
+          ...(finalStep.enabled === false ? { enabled: false } : {}),
+          ...(finalStep.color ? { color: finalStep.color } : {}),
+          ...((finalStep as SubWorkflowStep).onFail
+            ? { onFail: (finalStep as SubWorkflowStep).onFail }
+            : {}),
+        };
       default:
         return assertNever(finalStepType);
     }
@@ -931,6 +966,17 @@ export function buildWorkflowStepFromProperties(
         prompt: text,
         ...(promptName?.trim() ? { name: promptName.trim() } : {}),
         ...buildPromptStepProperties(properties),
+      };
+    case STEP_TYPES.WORKFLOW:
+      return {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: text,
+        ...(promptName?.trim() ? { name: promptName.trim() } : {}),
+        ...(typeof props.enabled === "boolean"
+          ? { enabled: props.enabled }
+          : {}),
+        ...(typeof props.color === "string" ? { color: props.color } : {}),
+        ...(isScriptStepAction(props.onFail) ? { onFail: props.onFail } : {}),
       };
     default:
       return assertNever(stepType);

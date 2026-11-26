@@ -948,6 +948,10 @@ export const useEditorStore = create<
         });
         break;
       }
+      case STEP_TYPES.WORKFLOW:
+        throw new Error(
+          "Sub-workflow steps are not editable in the step editor"
+        );
       default:
         assertNever(stepType);
     }
@@ -1317,6 +1321,10 @@ export const useEditorStore = create<
         // Switching to prompt: just flip the type flag, preserve scriptCommand for round-trip
         set({ stepType: STEP_TYPES.PROMPT, isDirty: true });
         break;
+      case STEP_TYPES.WORKFLOW:
+        throw new Error(
+          "Sub-workflow steps cannot be created in the step editor"
+        );
       default:
         assertNever(type);
     }
@@ -1792,6 +1800,10 @@ export const useEditorStore = create<
           break;
         case STEP_TYPES.SCRIPT:
           errors.scriptCommand = "Script command is required";
+          break;
+        case STEP_TYPES.WORKFLOW:
+          errors.promptText =
+            "Sub-workflow steps cannot be created in this editor";
           break;
         default:
           assertNever(stepType);

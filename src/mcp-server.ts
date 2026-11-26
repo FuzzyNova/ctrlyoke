@@ -45,6 +45,7 @@ import {
   getStepType,
   isPromptStep,
   isScriptStep,
+  isSubWorkflowStep,
 } from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
 
@@ -56,6 +57,10 @@ function stepContentPreview(step: WorkflowStep, preview: string) {
       return { type: STEP_TYPES.SCRIPT, script: preview };
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? { prompt: preview } : {};
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step)
+        ? { type: STEP_TYPES.WORKFLOW, workflow: preview }
+        : {};
     default:
       return assertNever(stepType);
   }
@@ -69,6 +74,8 @@ function stepOutputContent(step: WorkflowStep) {
       return { type: STEP_TYPES.SCRIPT, script: step.script };
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? { prompt: step.prompt } : {};
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step) ? { workflow: step.workflow } : {};
     default:
       return assertNever(stepType);
   }
@@ -83,6 +90,8 @@ function getWorkflowStatusStepText(step: WorkflowStep): string {
     case STEP_TYPES.PROMPT:
       if (!isPromptStep(step)) return "";
       return step.prompt;
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step) ? step.workflow : "";
     default:
       return assertNever(stepType);
   }
@@ -98,6 +107,8 @@ function getWorkflowStatusTruncation(
       return { scriptTruncated: true };
     case STEP_TYPES.PROMPT:
       return { promptTruncated: true };
+    case STEP_TYPES.WORKFLOW:
+      return {};
     default:
       return assertNever(stepType);
   }

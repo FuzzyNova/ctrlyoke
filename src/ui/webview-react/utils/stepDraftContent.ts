@@ -12,6 +12,8 @@ export function getStepDraftContent(
       return promptText;
     case STEP_TYPES.SCRIPT:
       return scriptCommand;
+    case STEP_TYPES.WORKFLOW:
+      return "";
     default:
       return assertNever(stepType);
   }
@@ -24,6 +26,8 @@ export function isScriptEditorStepType(stepType: WorkflowStepType): boolean {
       return false;
     case STEP_TYPES.SCRIPT:
       return true;
+    case STEP_TYPES.WORKFLOW:
+      return false;
     default:
       return assertNever(stepType);
   }

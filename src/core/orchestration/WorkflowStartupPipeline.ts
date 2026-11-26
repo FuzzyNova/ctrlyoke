@@ -1,7 +1,7 @@
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import type { WorkflowExecutionContext } from "../WorkflowExecutor";
-import { isPromptStep } from "../../types/CtrlYokeTypes";
+import { isExecutionStep, isPromptStep } from "../../types/CtrlYokeTypes";
 import type { PromptQueue } from "../PromptQueue";
 import type { OutputHistoryManager } from "./OutputHistoryManager";
 import type { StatusMessageReporter } from "./StatusMessageReporter";
@@ -936,6 +936,7 @@ export class WorkflowStartupPipeline {
   private resolveAnnouncedExecutionMode(
     step: QueueState["steps"][number]
   ): ExecutionMode | undefined {
+    if (!isExecutionStep(step)) return undefined;
     const workflow = this.port.queue.getWorkflowFile();
     const vars = this.runStartView?.vars ?? workflow.vars ?? {};
     const stepIndex = this.port.queue.getState().currentIndex;

@@ -4,7 +4,11 @@ import type {
   ScriptVerdict,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import { isPromptStep, isScriptStep } from "../../types/CtrlYokeTypes";
+import {
+  getWorkflowStepText,
+  isPromptStep,
+  isScriptStep,
+} from "../../types/CtrlYokeTypes";
 import {
   CLI_EVENT_TYPES,
   DIFF_CHANGE_TYPES,
@@ -1314,7 +1318,7 @@ export class RunOutputResolver {
               {
                 index,
                 name: step.name,
-                prompt: step.prompt,
+                prompt: getWorkflowStepText(step),
                 detail:
                   merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
                 filesChanged:

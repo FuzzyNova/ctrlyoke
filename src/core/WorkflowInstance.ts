@@ -1,4 +1,5 @@
 import * as path from "path";
+import { getWorkflowStepText } from "../types/CtrlYokeTypes";
 import * as os from "os";
 import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
@@ -1584,7 +1585,7 @@ export class WorkflowInstance
     return {
       fileName: path.basename(this.currentPromptFile.filePath),
       steps: this.currentPromptFile.promptFile.steps.map((p) => ({
-        prompt: isPromptStep(p) ? p.prompt : p.script,
+        prompt: getWorkflowStepText(p),
       })),
     };
   }
@@ -3318,7 +3319,7 @@ export class WorkflowInstance
     }
 
     Log.debug(
-      `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${isPromptStep(sanitizedStep) ? sanitizedStep.prompt.substring(0, 50) : sanitizedStep.script.substring(0, 50)}...`
+      `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${getWorkflowStepText(sanitizedStep).substring(0, 50)}...`
     );
     return warning;
   }
@@ -5902,7 +5903,7 @@ export class WorkflowInstance
     switch (transition.command) {
       case WORKFLOW_ATTEMPT_COMMANDS.BEGIN:
         if (step) {
-          const command = isPromptStep(step) ? step.prompt : step.script;
+          const command = getWorkflowStepText(step);
           const harness = isPromptStep(step)
             ? (step._runtime?.harness ??
               SettingsPropertyResolver.resolve(

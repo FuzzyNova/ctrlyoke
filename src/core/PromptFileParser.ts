@@ -1040,6 +1040,8 @@ export class PromptFileParser {
       }
       case STEP_TYPES.PROMPT:
         break;
+      case STEP_TYPES.WORKFLOW:
+        throw new Error("Sub-workflow steps are not supported by this parser");
       default:
         assertNever(rootStepType);
     }
@@ -1230,7 +1232,8 @@ export class PromptFileParser {
     if (
       source.type !== undefined &&
       source.type !== STEP_TYPES.PROMPT &&
-      source.type !== STEP_TYPES.SCRIPT
+      source.type !== STEP_TYPES.SCRIPT &&
+      source.type !== STEP_TYPES.WORKFLOW
     ) {
       return false;
     }
@@ -1240,6 +1243,8 @@ export class PromptFileParser {
         return true;
       case STEP_TYPES.PROMPT:
         return typeof source.prompt === "string";
+      case STEP_TYPES.WORKFLOW:
+        return false;
       default:
         return assertNever(sourceType);
     }
@@ -1253,6 +1258,8 @@ export class PromptFileParser {
     switch (sourceType) {
       case STEP_TYPES.SCRIPT:
         return this.buildScriptStep(source);
+      case STEP_TYPES.WORKFLOW:
+        throw new Error("Sub-workflow steps are not supported by this parser");
       case STEP_TYPES.PROMPT: {
         const promptValue = await this.validatePromptReference(
           source.prompt,
@@ -1572,6 +1579,8 @@ function stepSchemaIndex(step: Record<string, unknown>): number {
       return 0;
     case STEP_TYPES.SCRIPT:
       return 1;
+    case STEP_TYPES.WORKFLOW:
+      return 0;
     default:
       return assertNever(stepType);
   }

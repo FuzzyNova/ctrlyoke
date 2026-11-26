@@ -9,6 +9,7 @@ import {
   getStepType,
   isPromptStep,
   isScriptStep,
+  isExecutionStep,
   type WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import type { CliExecutionOptions } from "./CliRunCommandDefinitions";
@@ -258,7 +259,10 @@ function applyForcedFlagToStep(
       return;
     case ForceableFlag.HEADLESS:
     case ForceableFlag.INTERACTIVE:
-      if (overrides.workflow.executionMode !== undefined) {
+      if (
+        isExecutionStep(step) &&
+        overrides.workflow.executionMode !== undefined
+      ) {
         step.executionMode = overrides.workflow.executionMode;
       }
       return;
@@ -287,6 +291,8 @@ function applyForcedFlagToStep(
               if (step.endCondition)
                 step.endCondition.timeoutSec = overrides.scriptTimeout;
             }
+            break;
+          case STEP_TYPES.WORKFLOW:
             break;
           default:
             assertNever(stepType);

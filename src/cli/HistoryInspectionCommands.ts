@@ -1933,6 +1933,8 @@ function historyAttemptPrompt(attempt: ResolvedRunAttemptValue): string {
       return step.script;
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? step.prompt : "";
+    case STEP_TYPES.WORKFLOW:
+      return step.name ?? ("workflow" in step ? step.workflow : "");
     default:
       return assertNever(stepType);
   }

@@ -2065,6 +2065,7 @@ export const PREVIEW_RAIL_SELECTIONS = {
 export const PREVIEW_STEP_TYPES = {
   PROMPT: "prompt",
   SCRIPT: "script",
+  WORKFLOW: "workflow",
 } as const;
 
 export const PREVIEW_PERMISSION_ACTIONS = {
@@ -4526,6 +4527,7 @@ export type UndoDialogIntent =
 export const STEP_TYPES = {
   PROMPT: "prompt",
   SCRIPT: "script",
+  WORKFLOW: "workflow",
 } as const;
 
 // ============================================================================
@@ -4811,6 +4813,7 @@ export const PROMPT_PROPERTIES = {
 
   // Script step properties
   SCRIPT: "script",
+  WORKFLOW_REF: "workflow",
   ENV: "env",
   TIMEOUT: "timeoutSec",
   COMPARE_SOURCE: "compareSource",
@@ -4922,6 +4925,15 @@ export const SCRIPT_STEP_COPY_FIELDS = [
   PROMPT_PROPERTIES.SHELL,
   PROMPT_PROPERTIES.ERROR_BEHAVIOR,
   PROMPT_PROPERTIES.ON_PASS,
+  PROMPT_PROPERTIES.ON_FAIL,
+] as const;
+
+/** Sub-workflow step fields copied from authored workflow files into normalized steps. */
+export const SUB_WORKFLOW_STEP_COPY_FIELDS = [
+  PROMPT_PROPERTIES.NAME,
+  PROMPT_PROPERTIES.ENABLED,
+  PROMPT_PROPERTIES.COLOR,
+  PROMPT_PROPERTIES.WORKFLOW_REF,
   PROMPT_PROPERTIES.ON_FAIL,
 ] as const;
 

@@ -1,4 +1,5 @@
 import { extractWorkflowName } from "../utils/WorkflowName";
+import { getWorkflowStepText } from "../types/CtrlYokeTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import { isDeepStrictEqual } from "util";
 import { isUnlimited } from "../utils/LimitUtils";
@@ -14,8 +15,9 @@ import {
   StepExecutionOutcome,
   EXECUTION_STATES,
   WorkflowStep,
-  isPromptStep,
   isScriptStep,
+  isExecutionStep,
+  getExecutionRuntime,
   PromptRuntimeMetadata,
   ActiveParallelGroupRuntime,
   ParallelGroupDefinition,
@@ -422,7 +424,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: [...prompts],
       parallelGroups: topology.parallelGroups,
       results: prompts.map((step) => ({
-        prompt: isPromptStep(step) ? step.prompt : step.script,
+        prompt: getWorkflowStepText(step),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       })),
@@ -633,7 +635,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // Rebuild results array with proper status based on completion state
       this.state.results = prompts.map((prompt, index) => {
         return {
-          prompt: isPromptStep(prompt) ? prompt.prompt : prompt.script,
+          prompt: getWorkflowStepText(prompt),
           status: this.getResultStatusFromRuntime(
             prompt,
             index,
@@ -690,7 +692,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
     // Reset all results to pending
     this.state.results = this.state.steps.map((step) => ({
-      prompt: isPromptStep(step) ? step.prompt : step.script,
+      prompt: getWorkflowStepText(step),
       status: STEP_STATUS.PENDING,
       timestamp: new Date(),
     }));
@@ -786,7 +788,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       Array.from({ length: boundary }, (_, index) => String(index))
     );
     this.state.results = this.state.steps.map((step, index) => ({
-      prompt: isPromptStep(step) ? step.prompt : step.script,
+      prompt: getWorkflowStepText(step),
       status: this.getResultStatusFromRuntime(step, index, boundary),
       timestamp: new Date(),
     }));
@@ -1462,7 +1464,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     metadata?: Partial<PromptRuntimeMetadata>
   ): void {
     const prompt = this.state.steps[index];
-    if (prompt) {
+    if (prompt && isExecutionStep(prompt)) {
       const now = Date.now();
       const startedAt =
         prompt._runtime?.startedAt ?? metadata?.startedAt ?? now;
@@ -1482,13 +1484,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const isScript = isScriptStep(prompt);
       reportPromptCompleted({
         harness: SettingsPropertyResolver.resolveHarnessValue(
-          prompt._runtime.harness ?? (isScript ? undefined : prompt.harness),
+          prompt._runtime?.harness ?? (isScript ? undefined : prompt.harness),
           workflowFile.harness
         ),
         executionMode: SettingsPropertyResolver.resolveExecutionMode(
           {
             executionMode:
-              prompt._runtime.executionMode ??
+              prompt._runtime?.executionMode ??
               (isScript ? undefined : prompt.executionMode),
           },
           workflowFile
@@ -1498,14 +1500,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         outcome,
         failureKind:
           outcome === PROMPT_TERMINAL_STATUS.FAILED
-            ? prompt._runtime.failureKind
+            ? prompt._runtime?.failureKind
             : undefined,
         endConditionUsed:
           !isScript &&
           prompt.endCondition != null &&
           outcome !== PROMPT_TERMINAL_STATUS.NO_TURN_STARTED,
         resumeSession: Boolean(
-          prompt._runtime.resumeSession ??
+          prompt._runtime?.resumeSession ??
           (isScript ? false : prompt.resumeSession)
         ),
         reuseRunningTerminal:
@@ -1808,7 +1810,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     sessionId: string
   ): Promise<void> {
     const step = this.getRuntimeStep(promptIndex);
-    if (!step || step._runtime?.sessionId === sessionId) {
+    if (!step || getExecutionRuntime(step)?.sessionId === sessionId) {
       return;
     }
     await this.persistRuntimeMetadata(promptIndex, { sessionId });
@@ -1929,10 +1931,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         if (memoryMatch?.result && !options.authoritativeRuntime) {
           return {
             ...memoryMatch.result,
-            prompt: isPromptStep(step) ? step.prompt : step.script,
+            prompt: getWorkflowStepText(step),
           };
         }
-        const content = isPromptStep(step) ? step.prompt : step.script;
+        const content = getWorkflowStepText(step);
         return {
           prompt: content,
           status: STEP_STATUS.PENDING,
@@ -2058,7 +2060,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.activeParallelGroupRuntime = runtime?.activeParallelGroup;
     this.restoreStateMachineFromRuntime(executionState, runtime);
     this.state.results = this.state.steps.map((step, index) => ({
-      prompt: isPromptStep(step) ? step.prompt : step.script,
+      prompt: getWorkflowStepText(step),
       status: this.getResultStatusFromRuntime(step, index, currentIndex),
       timestamp: new Date(),
     }));
@@ -2204,7 +2206,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
       // Create new results for the inserted steps
       const newResults: PromptResult[] = steps.map((step) => ({
-        prompt: isPromptStep(step) ? step.prompt : step.script,
+        prompt: getWorkflowStepText(step),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       }));
@@ -2362,9 +2364,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.state.steps = nextTopology.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
-        prompt: isPromptStep(identifiedStep)
-          ? identifiedStep.prompt
-          : identifiedStep.script,
+        prompt: getWorkflowStepText(identifiedStep),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       });
@@ -2474,9 +2474,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.state.steps = nextTopology.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
-        prompt: isPromptStep(identifiedStep)
-          ? identifiedStep.prompt
-          : identifiedStep.script,
+        prompt: getWorkflowStepText(identifiedStep),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       });
@@ -3491,7 +3489,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
 
       this.state.results = this.state.steps.map((step, index) => ({
-        prompt: isPromptStep(step) ? step.prompt : step.script,
+        prompt: getWorkflowStepText(step),
         status: this.getResultStatusFromRuntime(
           step,
           index,
@@ -3652,7 +3650,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private getStepIdentityKey(step: WorkflowStep): string {
     const type = step.type ?? "prompt";
     const name = step.name ?? "";
-    const text = isPromptStep(step) ? step.prompt : step.script;
+    const text = getWorkflowStepText(step);
     return `${type}\0${name}\0${text}`;
   }
 

@@ -2,7 +2,12 @@ import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
-import { isPromptStep, type PriorContext } from "@root/types/CtrlYokeTypes";
+import {
+  getExecutionRuntime,
+  isPromptStep,
+  isScriptStep,
+  type PriorContext,
+} from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
 import {
   PRIOR_CONTEXT_DETAILS,
@@ -44,17 +49,18 @@ export function getStepSessionDetails(
     };
   }
 
+  const executionRuntime = getExecutionRuntime(step);
   const runtimeSessionId = runtimeMeta?.sessionId;
   if (typeof runtimeSessionId === "string" && runtimeSessionId.length > 0) {
     return {
       sessionId: runtimeSessionId,
-      harness: runtimeMeta?.harness ?? step._runtime?.harness,
+      harness: runtimeMeta?.harness ?? executionRuntime?.harness,
     };
   }
 
-  const stepSessionId = step._runtime?.sessionId;
+  const stepSessionId = executionRuntime?.sessionId;
   if (typeof stepSessionId === "string" && stepSessionId.length > 0) {
-    return { sessionId: stepSessionId, harness: step._runtime?.harness };
+    return { sessionId: stepSessionId, harness: executionRuntime?.harness };
   }
 
   return {};
@@ -198,6 +204,8 @@ export function buildStepMetadataClipboardText({
   } = useSettingsStore.getState();
 
   const stepKind = getStepKindLabel(step.type);
+  const executionStep =
+    isPromptStep(step) || isScriptStep(step) ? step : undefined;
   const headerLabel = isFinalStep
     ? `Final ${stepKind.toLowerCase()} step`
     : `${stepKind} step ${slotNumber}`;
@@ -207,7 +215,7 @@ export function buildStepMetadataClipboardText({
     "Execution properties:",
     resolvedLine(
       "executionMode",
-      step.executionMode,
+      executionStep?.executionMode,
       getEffectiveExecutionMode(),
       fmtString
     ),
@@ -330,7 +338,7 @@ export function buildStepMetadataClipboardText({
   lines.push(
     resolvedLine(
       "errorBehavior",
-      step.errorBehavior,
+      executionStep?.errorBehavior,
       workflowProperties.errorBehavior ?? globalSettings.defaultErrorBehavior,
       fmtErrorBehavior
     )

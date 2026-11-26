@@ -61,6 +61,7 @@ export function getStatusIconClass(status: StepStatus): string {
 export const STEP_KIND_ICONS: Record<StepType, string> = {
   [STEP_TYPES.PROMPT]: "codicon-comment",
   [STEP_TYPES.SCRIPT]: "codicon-terminal-powershell",
+  [STEP_TYPES.WORKFLOW]: "codicon-list-tree",
 };
 
 /**
@@ -74,6 +75,8 @@ export function getStepKindIconClass(stepType: StepType | undefined): string {
       return STEP_KIND_ICONS[STEP_TYPES.PROMPT];
     case STEP_TYPES.SCRIPT:
       return STEP_KIND_ICONS[STEP_TYPES.SCRIPT];
+    case STEP_TYPES.WORKFLOW:
+      return STEP_KIND_ICONS[STEP_TYPES.WORKFLOW];
     default:
       return assertNever(resolvedStepType);
   }
@@ -87,6 +90,8 @@ export function getStepKindLabel(stepType: StepType | undefined): string {
       return "Prompt";
     case STEP_TYPES.SCRIPT:
       return "Script";
+    case STEP_TYPES.WORKFLOW:
+      return "Workflow";
     default:
       return assertNever(resolvedStepType);
   }

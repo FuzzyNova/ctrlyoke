@@ -10,6 +10,7 @@ import {
   assertNever,
   getStepType,
   isPromptStep,
+  isSubWorkflowStep,
   type PromptStep,
   type ScriptStep,
 } from "@root/types/CtrlYokeTypes";
@@ -112,6 +113,8 @@ function getStepText(step: WorkflowStep): string {
       return (step as PromptStep).prompt;
     case STEP_TYPES.SCRIPT:
       return (step as ScriptStep).script;
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step) ? step.workflow : "";
     default:
       return assertNever(stepType);
   }

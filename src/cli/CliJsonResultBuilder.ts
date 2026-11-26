@@ -1,4 +1,5 @@
 import * as path from "path";
+import { getExecutionRuntime } from "../types/CtrlYokeTypes";
 import { relativePathEscapes } from "../utils/PathSecurity";
 
 import {
@@ -21,6 +22,7 @@ import type {
   ConditionEvaluationSummary,
   FinalStepRuntimeState,
   PromptFile,
+  PromptRuntimeMetadata,
   PromptResult,
   QueueState,
   RunRef,
@@ -344,7 +346,7 @@ function buildStepResult(
   const isScript = stepType === STEP_TYPES.SCRIPT;
   const enabled = step.enabled !== false;
   const status = result?.status ?? STEP_STATUS.PENDING;
-  const runtime = step._runtime;
+  const runtime = getExecutionRuntime(step);
   const hasRun =
     projection?.attempts !== undefined
       ? projection.attempts > 0
@@ -410,6 +412,8 @@ function getCliStepType(
       return STEP_TYPES.SCRIPT;
     case STEP_TYPES.PROMPT:
       return STEP_TYPES.PROMPT;
+    case STEP_TYPES.WORKFLOW:
+      return STEP_TYPES.WORKFLOW;
     default:
       return assertNever(stepType);
   }
@@ -427,7 +431,7 @@ function buildFinalStep(
 
   const stepType = getCliStepType(step);
   const isScript = stepType === STEP_TYPES.SCRIPT;
-  const stepRuntime = step._runtime;
+  const stepRuntime = getExecutionRuntime(step);
   const status = runtime?.status ?? null;
   const passCount = projection?.passCount ?? getFinalStepPassCount(runtime);
   const filesChanged = shapeFileChanges(
@@ -483,7 +487,7 @@ function buildFinalPass(
 ): CliJsonFinalPass {
   const stepType = getCliStepType(step);
   const isScript = stepType === STEP_TYPES.SCRIPT;
-  const stepRuntime = step._runtime;
+  const stepRuntime = getExecutionRuntime(step);
   const status = runtime?.status ?? null;
   const scriptOutput = projection.scriptOutput;
   return {
@@ -516,7 +520,7 @@ function buildFinalPass(
 }
 
 function getEffectiveMetadata(
-  runtime: WorkflowStep["_runtime"],
+  runtime: PromptRuntimeMetadata | undefined,
   input: CliJsonResultInput,
   hasRun: boolean,
   isScript: boolean

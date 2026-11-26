@@ -9,6 +9,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import {
+  isScriptStep,
   isPromptStep,
   type PromptStep as CorePromptStep,
 } from "@root/types/CtrlYokeTypes";
@@ -81,7 +82,7 @@ function shorten(text: string, maxLength: number): string {
 }
 
 function executionModeChip(
-  mode: NonNullable<WorkflowStep["executionMode"]>
+  mode: NonNullable<PromptStep["executionMode"]>
 ): StepOverrideChip {
   const interactive = mode === EXECUTION_MODES.INTERACTIVE;
   return {
@@ -286,8 +287,11 @@ export function buildStepOverrideChips(
   workflowProperties: WorkflowProperties,
   globalSettings: GlobalSettings
 ): StepOverrideChip[] {
-  if (!isPromptStep(step)) {
+  if (isScriptStep(step)) {
     return step.executionMode ? [executionModeChip(step.executionMode)] : [];
+  }
+  if (!isPromptStep(step)) {
+    return [];
   }
 
   const workflow = toCoreWorkflow([], null, workflowProperties);

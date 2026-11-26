@@ -10,6 +10,7 @@ import { StepOutputTextMode } from "../../../../types/DashboardConstants";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { getExecutionRuntime } from "@root/types/CtrlYokeTypes";
 import {
   NOTIFICATION_SEVERITY,
   OUTPUT_TABS,
@@ -4083,8 +4084,8 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
 
     const store = useWorkflowStore.getState();
     expect(store.liveContextWindow[1]).toBeUndefined();
-    expect(store.steps[1]._runtime?.contextWindowUsed).toBe(152797);
-    expect(store.steps[1]._runtime?.contextWindowSize).toBe(200000);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowUsed).toBe(152797);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowSize).toBe(200000);
   });
 
   it("keeps the previous step live context until durable tokens arrive", () => {
@@ -4136,8 +4137,8 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
 
     const store = useWorkflowStore.getState();
     expect(store.liveContextWindow[1]).toBeUndefined();
-    expect(store.steps[1]._runtime?.contextWindowUsed).toBe(152797);
-    expect(store.steps[1]._runtime?.contextWindowSize).toBe(200000);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowUsed).toBe(152797);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowSize).toBe(200000);
   });
 
   it("stores live context for the active final-step pass and ignores terminal updates", () => {

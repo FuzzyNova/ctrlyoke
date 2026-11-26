@@ -1102,8 +1102,23 @@ export interface ScriptStep extends ScriptProperties, StepDisplayProperties {
   _runtime?: PromptRuntimeMetadata; // Reuse for startedAt/completedAt/terminalStatus
 }
 
+/** A step that executes another workflow as a child run. */
+export interface SubWorkflowStep extends StepDisplayProperties {
+  type: typeof STEP_TYPES.WORKFLOW;
+  workflow: string;
+  onFail?: ScriptStepAction;
+  _runtime?: SubWorkflowRuntimeMetadata;
+}
+
+/** Runtime link to the child run launched by a sub-workflow step. */
+export interface SubWorkflowRuntimeMetadata extends StepLifecycleRuntime {
+  childWorkflowKey?: WorkflowKey;
+  childRunRef?: RunRef;
+  resolvedWorkflowPath?: string;
+}
+
 /** Union type for all workflow steps */
-export type WorkflowStep = PromptStep | ScriptStep;
+export type WorkflowStep = PromptStep | ScriptStep | SubWorkflowStep;
 
 /**
  * Normalized topology for one authored `parallel:` item.
@@ -1121,6 +1136,13 @@ export function isScriptStep<T extends object>(
   step: T
 ): step is Extract<T, { type: typeof STEP_TYPES.SCRIPT }> {
   return "type" in step && step.type === STEP_TYPES.SCRIPT;
+}
+
+/** Type guard: returns true if the step is a SubWorkflowStep. */
+export function isSubWorkflowStep<T extends object>(
+  step: T
+): step is Extract<T, { type: typeof STEP_TYPES.WORKFLOW }> {
+  return "type" in step && step.type === STEP_TYPES.WORKFLOW;
 }
 
 /** Return the authored step kind, treating an omitted discriminator as prompt. */
@@ -1146,14 +1168,34 @@ export function isPromptStep<T extends object>(
 export function isExecutionStep(
   step: WorkflowStep
 ): step is PromptStep | ScriptStep {
-  return step.type === STEP_TYPES.PROMPT || step.type === STEP_TYPES.SCRIPT;
+  return isPromptStep(step) || isScriptStep(step);
 }
 
 /** Return prompt execution metadata where present; workflow steps have lifecycle metadata only. */
 export function getExecutionRuntime(
-  step: WorkflowStep
+  step:
+    | {
+        type?: string;
+        _runtime?: PromptRuntimeMetadata | SubWorkflowRuntimeMetadata;
+      }
+    | undefined
 ): PromptRuntimeMetadata | undefined {
-  return isExecutionStep(step) ? step._runtime : undefined;
+  if (
+    !step ||
+    (step.type !== undefined &&
+      step.type !== STEP_TYPES.PROMPT &&
+      step.type !== STEP_TYPES.SCRIPT)
+  ) {
+    return undefined;
+  }
+  return step._runtime as PromptRuntimeMetadata | undefined;
+}
+
+/** Return the text represented by an authored workflow step. */
+export function getWorkflowStepText(step: WorkflowStep): string {
+  if (isPromptStep(step)) return step.prompt;
+  if (isScriptStep(step)) return step.script;
+  return step.workflow;
 }
 
 /** Fail at runtime when an exhaustive discriminated union gains an unhandled case. */
@@ -1251,14 +1293,16 @@ export interface StepLifecycleRuntime {
   elapsed?: number;
   /** Human-readable message describing the last harness/session failure. */
   failureMessage?: string;
+  /** Structured runtime failure classification for this step. */
+  failureKind?: FailureKind;
+  /** Preserves queue-index history ownership after a failed step is rewound. */
+  rewoundFailure?: boolean;
   /** False when the failed step was resolved by its per-step continue policy. */
   terminalFailure?: boolean;
 }
 
 export interface PromptRuntimeMetadata
   extends ExecutionProperties, StepLifecycleRuntime {
-  /** Preserves queue-index history ownership after an edited failure is rewound. */
-  rewoundFailure?: boolean;
   /** Retry count if applicable */
   retryCount?: number;
 
@@ -1268,9 +1312,6 @@ export interface PromptRuntimeMetadata
   /** Context window usage captured from the last completed output. */
   contextWindowUsed?: number;
   contextWindowSize?: number;
-
-  /** Structured runtime failure classification for this prompt attempt. */
-  failureKind?: FailureKind;
 
   /** Source that detected the failure, when known. */
   failureSource?: import("./DashboardConstants").FailureSource;

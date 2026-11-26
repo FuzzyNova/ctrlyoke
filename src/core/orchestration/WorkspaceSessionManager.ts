@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { getExecutionRuntime } from "../../types/CtrlYokeTypes";
 import { PromptFileParser } from "../PromptFileParser";
 import { Log } from "../../utils/Log";
 import type {
@@ -327,7 +328,7 @@ export class WorkspaceSessionManager {
           // Phase 4: Count prompts with session IDs (per-prompt _runtime metadata)
           const promptsWithSessions =
             workingFile.steps?.filter(
-              (p: WorkflowStep) => p._runtime?.sessionId
+              (p: WorkflowStep) => getExecutionRuntime(p)?.sessionId
             ).length || 0;
 
           // Format timestamp

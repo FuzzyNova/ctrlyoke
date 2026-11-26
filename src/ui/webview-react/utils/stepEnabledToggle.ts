@@ -2,6 +2,7 @@ import { STEP_TYPES } from "@root/types/DashboardConstants";
 import {
   assertNever,
   getStepType,
+  isSubWorkflowStep,
   type ScriptStep,
   type PromptStep,
 } from "@root/types/CtrlYokeTypes";
@@ -45,6 +46,19 @@ export function buildWorkflowStepEnabledUpdate(
         ...(enabled ? { clearProperties: ["enabled"] } : {}),
       };
     }
+    case STEP_TYPES.WORKFLOW:
+      if (!isSubWorkflowStep(step)) {
+        throw new Error("Invalid workflow step kind");
+      }
+      return {
+        text: step.workflow,
+        promptName: step.name ?? "",
+        properties: {
+          type: STEP_TYPES.WORKFLOW,
+          ...(!enabled && { enabled: false }),
+        },
+        ...(enabled ? { clearProperties: ["enabled"] } : {}),
+      };
     default:
       return assertNever(stepType);
   }

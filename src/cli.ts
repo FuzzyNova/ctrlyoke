@@ -48,6 +48,7 @@ import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import {
   isPromptStep,
   isScriptStep,
+  isExecutionStep,
   type PromptFile,
   type RunRef,
   type WorkflowKey,
@@ -964,8 +965,9 @@ function warnAboutClampedInteractiveSteps(
     .map((step, index) => ({ step, index }))
     .filter(
       ({ step }) =>
+        isExecutionStep(step) &&
         (step.executionMode ?? workflow.executionMode ?? settingsMode) ===
-        EXECUTION_MODES.INTERACTIVE
+          EXECUTION_MODES.INTERACTIVE
     )
     .map(({ step, index }) => step.name?.trim() || `step ${index + 1}`);
 

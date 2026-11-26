@@ -18,9 +18,11 @@ import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
 import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import {
   assertNever,
+  getExecutionRuntime,
   getStepType,
   isPromptStep,
   isScriptStep,
+  isSubWorkflowStep,
   type PromptStep,
   type ScriptStep,
 } from "@root/types/CtrlYokeTypes";
@@ -44,6 +46,8 @@ function getStepDisplayText(step: WorkflowStep): string {
       return step.name ?? (step as PromptStep).prompt;
     case STEP_TYPES.SCRIPT:
       return (step as ScriptStep).script;
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step) ? (step.name ?? step.workflow) : "";
     default:
       return assertNever(stepType);
   }
@@ -129,7 +133,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     isCurrent: isWorkflowRunningForFinalStep(status, phase),
     liveContextWindow,
     latestOutput,
-    runtimeContextWindow: finalStep?._runtime,
+    runtimeContextWindow: getExecutionRuntime(finalStep ?? undefined),
   });
   // The details panel and the bar are one selectable unit, so hovering either
   // highlights both (matching how selection already highlights both).

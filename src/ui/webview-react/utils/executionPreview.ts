@@ -99,6 +99,8 @@ export function getExecutionPreviewEditorSnapshot():
     }
     case STEP_TYPES.PROMPT:
       break;
+    case STEP_TYPES.WORKFLOW:
+      return undefined;
     default:
       assertNever(editor.stepType);
   }

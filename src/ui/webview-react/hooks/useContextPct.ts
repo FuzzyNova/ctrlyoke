@@ -2,6 +2,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { calcContextPct } from "@utils/tokenUtils";
 import { getOutputContextWindow } from "@root/utils/OutputContextWindow";
+import { getExecutionRuntime } from "@root/types/CtrlYokeTypes";
 import type { OrderedCliHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   OUTPUT_HISTORY_KINDS,
@@ -72,7 +73,7 @@ export function useContextPct() {
       return completedPct;
     }
 
-    const runtime = steps[index]?._runtime;
+    const runtime = getExecutionRuntime(steps[index]);
     const runtimePct = calcContextPct(
       runtime?.contextWindowUsed,
       runtime?.contextWindowSize

@@ -9,6 +9,7 @@ import type {
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../types/CompatibilityTypes";
 import { formatComparison } from "../utils/ScriptComparison";
 import { relativePathEscapes } from "../utils/PathSecurity";
+import { getExecutionRuntime } from "../types/CtrlYokeTypes";
 import { foldPathForCompare } from "../utils/PathCasing";
 import {
   CONDITION_ACTIONS,
@@ -45,6 +46,7 @@ import type {
   PromptFile,
   PromptStep,
   ScriptStep,
+  SubWorkflowStep,
   WorkflowStep,
   WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
@@ -57,6 +59,7 @@ import {
   getStepType,
   isPromptStep,
   isScriptStep,
+  isSubWorkflowStep,
   type DynamicQueueConfig,
 } from "../types/CtrlYokeTypes";
 import type {
@@ -363,8 +366,8 @@ export class ExecutionPreviewService {
             worktreeExecutionWorkspace
           );
         },
-        finalStepSessionId: preparedWorkflow.finalStep?._runtime?.sessionId as
-          string | undefined,
+        finalStepSessionId: getExecutionRuntime(preparedWorkflow.finalStep)
+          ?.sessionId as string | undefined,
       });
       parallelGroupPreflights.push({
         parallelGroupId: group.id,
@@ -993,12 +996,23 @@ export class ExecutionPreviewService {
           this.promptFileResolver,
           sourceDefinitionPath
         ).then((prompt) => ({ ...step, prompt }));
+      case STEP_TYPES.WORKFLOW:
+        if (!isSubWorkflowStep(step)) {
+          return Promise.reject(new Error("Invalid workflow step"));
+        }
+        return Promise.resolve(step);
       default:
         return assertNever(stepType);
     }
   }
 
-  private scriptAsPrompt(step: ScriptStep): PromptStep {
+  private scriptAsPrompt(step: ScriptStep | SubWorkflowStep): PromptStep {
+    if (!isScriptStep(step)) {
+      return {
+        prompt: step.workflow,
+        ...(step.name ? { name: step.name } : {}),
+      };
+    }
     return {
       prompt: "",
       ...(step.executionMode !== undefined
@@ -1020,10 +1034,10 @@ export class ExecutionPreviewService {
       if (!properties.resumeSession) return undefined;
       for (let index = groupStartBoundary - 1; index >= 0; index -= 1) {
         const previous = allSteps[index];
-        const sessionId = previous?._runtime?.sessionId;
+        const sessionId = getExecutionRuntime(previous)?.sessionId;
         if (
           typeof sessionId === "string" &&
-          previous?._runtime?.harness === properties.harness &&
+          getExecutionRuntime(previous)?.harness === properties.harness &&
           SessionValidator.validate(sessionId, properties.harness)
         ) {
           return sessionId;
@@ -1040,7 +1054,9 @@ export class ExecutionPreviewService {
       ) {
         return undefined;
       }
-      const referenced = allSteps[referencedIndex]?._runtime?.sessionId;
+      const referenced = getExecutionRuntime(
+        allSteps[referencedIndex]
+      )?.sessionId;
       return typeof referenced === "string" &&
         SessionValidator.validate(referenced, properties.harness)
         ? referenced

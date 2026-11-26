@@ -133,7 +133,8 @@ class ParallelGroupPreflightError extends Error {
 }
 
 function promptProjection(step: WorkflowStep): PromptStep {
-  if (!isScriptStep(step)) return step;
+  if (isPromptStep(step)) return step;
+  if (!isScriptStep(step)) return { prompt: "" };
   return {
     prompt: "",
     ...(step.executionMode !== undefined

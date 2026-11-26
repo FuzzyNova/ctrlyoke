@@ -8,6 +8,7 @@ import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
   isPromptStep,
+  isSubWorkflowStep,
   type ParallelGroupDefinition,
 } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
@@ -180,19 +181,22 @@ export function buildReplyToStepMenuItem({
   sourceLabel,
 }: ReplyToStepMenuItemInput): ContextMenuItem {
   const isScript = isScriptStep(step);
+  const isWorkflow = isSubWorkflowStep(step);
   const hasSession = typeof sessionId === "string" && sessionId.length > 0;
 
   return {
     label: "Reply to Step",
     icon: "codicon-reply",
-    disabled: isScript || !hasSession,
+    disabled: isScript || isWorkflow || !hasSession,
     disabledTitle: isScript
       ? "Script steps have no AI session to reply to"
-      : !hasSession
-        ? "This step has no session to resume yet"
-        : undefined,
+      : isWorkflow
+        ? "Only prompt steps have an AI session to reply to"
+        : !hasSession
+          ? "This step has no session to resume yet"
+          : undefined,
     onClick: () => {
-      if (isScriptStep(step) || !sessionId) return;
+      if (!isPromptStep(step) || !sessionId) return;
       startReplyFromStep(
         step,
         sessionId,
@@ -360,11 +364,12 @@ export function buildQueuedStepHandoffMenuItems({
           ? NO_LIVE_HARNESS
           : undefined));
   const steerTo = (target: SteerTarget) => () => {
-    if (steerDisabledReason !== undefined || !workflowId) return;
+    if (steerDisabledReason !== undefined || !workflowId || !isPromptStep(step))
+      return;
     sendSteerText(workflowId, target.sessionId, steerText, {
       kind: STEER_ORIGIN_KINDS.QUEUED_STEP,
       stepIndex,
-      step: isPromptStep(step) ? { ...step, prompt: steerText } : step,
+      step: { ...step, prompt: steerText },
     });
     removeStep();
   };

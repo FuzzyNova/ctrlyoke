@@ -11,6 +11,9 @@ import {
   WorkflowStep,
   isScriptStep,
   isPromptStep,
+  isExecutionStep,
+  isSubWorkflowStep,
+  getExecutionRuntime,
   getStepType,
   assertNever,
   DynamicQueueConfig,
@@ -1140,7 +1143,7 @@ export class WorkflowExecutor {
             stepIndex: member.stepIndex,
           }
         ),
-      finalStepSessionId: workflow.finalStep?._runtime?.sessionId as
+      finalStepSessionId: getExecutionRuntime(workflow.finalStep)?.sessionId as
         string | undefined,
       workflowSessionIdFromOverride: context.workflowSessionIdFromOverride,
     };
@@ -1592,7 +1595,7 @@ export class WorkflowExecutor {
         )}`,
       };
     }
-    const liveAnchorSessionId = anchor._runtime?.sessionId;
+    const liveAnchorSessionId = getExecutionRuntime(anchor)?.sessionId;
     if (typeof liveAnchorSessionId === "string") {
       anchorReservation = {
         ...anchorReservation,
@@ -2178,7 +2181,8 @@ export class WorkflowExecutor {
       target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : steps.length,
       steps,
       resolvedProperties,
-      workflowFile.finalStep?._runtime?.sessionId as string | undefined,
+      getExecutionRuntime(workflowFile.finalStep)?.sessionId as
+        string | undefined,
       undefined,
       false
     );
@@ -2389,6 +2393,8 @@ export class WorkflowExecutor {
         );
       case STEP_TYPES.PROMPT:
         break;
+      case STEP_TYPES.WORKFLOW:
+        throw new Error("Sub-workflow steps are not supported in this host");
       default:
         return assertNever(authoredStepType);
     }
@@ -2806,8 +2812,8 @@ export class WorkflowExecutor {
               }
             : {}),
           secretEnvironment: resolvedSecrets.values,
-          finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-            string | undefined,
+          finalStepSessionId: getExecutionRuntime(workflowFile.finalStep)
+            ?.sessionId as string | undefined,
         },
         async () => {
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
@@ -3031,6 +3037,10 @@ export class WorkflowExecutor {
           return (step as PromptStep).name || "prompt";
         case STEP_TYPES.SCRIPT:
           return (step as ScriptStep).script.split(/\s+/)[0];
+        case STEP_TYPES.WORKFLOW:
+          return (
+            step.name || (isSubWorkflowStep(step) ? step.workflow : "workflow")
+          );
         default:
           return assertNever(stepType);
       }
@@ -4476,7 +4486,7 @@ export class WorkflowExecutor {
     vars: Readonly<Record<string, string>>
   ): ErrorBehavior | undefined {
     const levels = [
-      step.errorBehavior,
+      isExecutionStep(step) ? step.errorBehavior : undefined,
       this.getRunStartWorkflow(context).errorBehavior,
       SettingsPropertyResolver.createContext({
         hostCanProvidePty: context.hostCanProvidePty,
@@ -5357,8 +5367,8 @@ export class WorkflowExecutor {
       let result: { duration: number } | null;
       const resumedSessionId =
         target.kind === FINAL_STEP_PHASES.QUEUE
-          ? state.steps[target.stepIndex]?._runtime?.sessionId
-          : workflowFile.finalStep?._runtime?.sessionId;
+          ? getExecutionRuntime(state.steps[target.stepIndex])?.sessionId
+          : getExecutionRuntime(workflowFile.finalStep)?.sessionId;
       while (true) {
         const retryAttemptProperties =
           sendAttemptIndex === retryAttemptIndex
@@ -5422,8 +5432,8 @@ export class WorkflowExecutor {
                 }
               : {}),
             secretEnvironment: retrySecrets.values,
-            finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-              string | undefined,
+            finalStepSessionId: getExecutionRuntime(workflowFile.finalStep)
+              ?.sessionId as string | undefined,
           },
           undefined,
           TIMELINE_ATTEMPT_START_REASONS.RETRY
@@ -5775,6 +5785,9 @@ export class WorkflowExecutor {
     }
     if (isScriptStep(nextStep)) {
       return "next target: script";
+    }
+    if (isSubWorkflowStep(nextStep)) {
+      return "next target: workflow";
     }
 
     // `harness` is a run-start field, so the run-start view alone resolves

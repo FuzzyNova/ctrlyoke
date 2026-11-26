@@ -19,7 +19,6 @@ import { resolveExecutionProperties } from "@root/types/ExecutionPropertyResolve
 import type {
   PromptFile,
   PromptStep as CorePromptStep,
-  ScriptStep as CoreScriptStep,
 } from "@root/types/CtrlYokeTypes";
 import { isPromptStep } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
@@ -87,12 +86,10 @@ function isConsumedBy(
 }
 
 function applyPromptProperties(
-  step: WorkflowStep,
+  step: Extract<WorkflowStep, { prompt: string }>,
   properties: PropertyValues
 ): CorePromptStep {
-  const coreStep = toCorePromptStep(
-    step as Exclude<WorkflowStep, CoreScriptStep>
-  );
+  const coreStep = toCorePromptStep(step);
   return {
     ...coreStep,
     harness: properties.harness as HarnessId | undefined,
@@ -157,7 +154,7 @@ export function useCompatibilityDiagnostics(
         workflow = {
           ...workflow,
           steps: (workflow.steps ?? []).map((step, index) =>
-            index === promptTarget.index && isPromptStep(step)
+            index === promptTarget.index && isPromptStep(steps[index])
               ? applyPromptProperties(steps[index], promptProperties)
               : step
           ),
