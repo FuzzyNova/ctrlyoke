@@ -41,6 +41,56 @@ suite("RunBundlePaths", () => {
     }
   });
 
+  test("preserves JSON escapes immediately after POSIX and Windows paths", () => {
+    const posix = createPortablePathRewriter({
+      workspaceRoot: "/Users/alex/dev/app",
+    });
+    const resolve = createWorkspacePathResolver("/srv/imported-app");
+    const cases: Array<[string, string, string]> = [
+      [
+        "newline",
+        "/Users/alex/dev/app/src/a.ts\\n@@\\n-old",
+        "/srv/imported-app/src/a.ts\\n@@\\n-old",
+      ],
+      ["quote", '/Users/alex/dev/app/b.txt\\"', '/srv/imported-app/b.txt\\"'],
+      [
+        "doubly escaped quote",
+        '/Users/alex/dev/app/b.txt\\\\\\"',
+        '/srv/imported-app/b.txt\\\\\\"',
+      ],
+    ];
+    for (const [label, source, expected] of cases) {
+      const nestedJson = JSON.stringify({ value: source });
+      const outer = JSON.stringify({ input: nestedJson });
+      const rewritten = posix(outer);
+      const parsedOuter = JSON.parse(rewritten) as { input: string };
+      const parsedInner = JSON.parse(parsedOuter.input) as { value: string };
+      assert.strictEqual(
+        parsedInner.value,
+        source.replace("/Users/alex/dev/app", "${workspaceFolder}"),
+        label
+      );
+      const resolved = JSON.parse(resolve(rewritten)) as { input: string };
+      assert.strictEqual(
+        (JSON.parse(resolved.input) as { value: string }).value,
+        expected,
+        label
+      );
+    }
+
+    const windowsJson = JSON.stringify({
+      q: 'type "C:\\dev\\demo-app\\b.txt\\"',
+    });
+    const rewrittenWindows = windows(windowsJson);
+    assert.deepStrictEqual(JSON.parse(rewrittenWindows), {
+      q: 'type "${workspaceFolder}/b.txt\\"',
+    });
+    assert.deepStrictEqual(
+      JSON.parse(createWorkspacePathResolver("D:/imported")(rewrittenWindows)),
+      { q: 'type "D:/imported/b.txt\\"' }
+    );
+  });
+
   test("stops at the delimiters that end a path in prose and Markdown", () => {
     assert.strictEqual(
       windows(

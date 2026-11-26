@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Run bundle path rewriting now preserves JSON escape sequences immediately following workspace and home paths.
 - Pending rewind operations now leave run files and snapshots untouched when the lineage descriptor or run file was written by a newer ctrlyoke.
 - Final-step pass condition summaries are retained in run files and `ctrlyoke run --json` results.
 - `import --continue --json` reports continuation errors on stderr while keeping its single stdout result line.
