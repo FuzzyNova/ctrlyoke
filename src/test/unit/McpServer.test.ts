@@ -4734,6 +4734,66 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
   }
 
+  // A worktree run keeps its runner lock while paused. No step is in flight,
+  // so every queue change is accepted and takes effect on Resume, exactly as
+  // for a paused run without a lock.
+  test("accepts queue changes on a paused run that still holds its runner lock", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("paused-locked");
+    try {
+      const file = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      file.steps = [
+        { prompt: "completed", _runtime: { completedAt: 2 } },
+        {
+          prompt: "also completed",
+          _runtime: { startedAt: 3, completedAt: 4 },
+        },
+        { prompt: "pending-a" },
+        { prompt: "pending-b" },
+      ] as WorkflowStep[];
+      file._runtime = {
+        ...file._runtime!,
+        currentIndex: 2,
+        executionState: EXECUTION_STATES.PAUSED,
+      };
+      await writeTrustedRunFile(run.runFilePath, file);
+
+      for (const [toolName, args] of [
+        [
+          MCP_APPEND_STEP_TOOL_NAME,
+          { position: "end", steps: [{ prompt: "appended" }] },
+        ],
+        [
+          MCP_EDIT_STEP_TOOL_NAME,
+          { index: 2, updates: { prompt: "pending-a (edited)" } },
+        ],
+        [MCP_REMOVE_STEP_TOOL_NAME, { index: 4 }],
+        [MCP_REORDER_STEPS_TOOL_NAME, { indices: [3, 2] }],
+      ] as const) {
+        assert.strictEqual(
+          responseJson(await server.invokeTool(toolName, args)).success,
+          true,
+          toolName
+        );
+      }
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "also completed", "pending-b", "pending-a (edited)"]
+      );
+      assert.strictEqual(
+        persisted._runtime?.executionState,
+        EXECUTION_STATES.PAUSED
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("rejects an append while another run in the lineage holds the lock", async () => {
     const server = await setup();
     const run = await createRun("busy", "2026-01-01T00-00-00-000Z", {

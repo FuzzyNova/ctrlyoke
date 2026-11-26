@@ -2422,7 +2422,7 @@ suite(
             new WorkflowLineageRepository(),
             "continue"
           ),
-          /executing/i,
+          /another process holds this paused run/i,
           "a paused run with a live owner must not be stolen"
         );
       } finally {

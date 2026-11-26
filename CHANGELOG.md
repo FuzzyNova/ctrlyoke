@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The MCP tools `append_step`, `edit_step`, `remove_step` and `reorder_steps` now work on a paused worktree run. A worktree run keeps its runner lock while paused, and these calls were refused with `Cannot append while this run is executing (state paused)`; the same calls already worked on a paused run without a worktree. The changes take effect on Resume.
 - Run bundle imports now accept empty change patches and retry errored runs from the failed step, with matching export and preview positions.
 - Headless Codex and Copilot control handshakes now fail promptly when the child exits, and failed queued Copilot steers release the ACP session.
 - Interactive script processes killed by an external signal now follow `errorBehavior`, while user Stop records the attempt as cancelled.

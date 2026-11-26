@@ -7,7 +7,7 @@ ctrlyoke's built-in MCP server gives a harness tools to inspect and adjust the r
 - **One run per server.** ctrlyoke starts the server for each harness launch and pins it to the executing run. No tool takes a workflow or run address, so a tool can never act on another workflow by mistake. Responses still report the resolved `workflowKey` and `runRef`.
 - **No lifecycle control.** No tool starts, stops, pauses, or resumes a run.
 - **Every call does what it says or returns an error.** An error result (`isError: true`, text starting `Error:`) means nothing was changed.
-- **Queue changes need a live run.** `append_step`, `edit_step`, `remove_step`, and `reorder_steps` are refused unless the run is running, pausing, paused, or cancelling.
+- **Queue changes need a live run.** `append_step`, `edit_step`, `remove_step`, and `reorder_steps` are refused unless the run is running, pausing, or paused. They are refused while a run is cancelling, because Stop discards the current step's outcome.
 - All responses are a single text block containing JSON.
 
 ## Tool list

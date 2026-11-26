@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli subagent)
 - **Area:** `src/core/orchestration/RunContinuationService.ts`, `src/core/WorkflowInstance.ts`
-- **Severity:** low (low confidence on real-world reach; the code path is certain)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -51,3 +51,25 @@ is in flight, and appended steps run on Resume), or keep the refusal and fix
 `docs/reference/mcp-tools.md` and the error message to say "paused". In
 either case, drop `cancelling` from the docs' accepted list. Add a
 `McpServer.test.ts` case: a paused run plus a live lock naming it.
+
+## Decision
+
+**Allow queue changes on a paused run that still holds its lock** (2026-11-26).
+In `validateContinuationTarget`, a `PAUSED` target named by an active runner lock
+counts as an allowed target for `append_step`, `edit_step`, `remove_step` and
+`reorder_steps`. No step is in flight, and the changes take effect on Resume.
+This matches what `docs/reference/mcp-tools.md` already promises. Also drop
+`cancelling` from that doc's accepted list, because cancelling stays refused on
+purpose. Add the `McpServer.test.ts` case (a paused run plus a live lock naming
+it, mutation accepted), and confirm that the owning process (the VS Code
+instance holding the paused worktree run) picks up the externally written
+change before Resume, not only that the validator accepts it.
+
+Owner pickup, confirmed by reading the code rather than by a live VS Code run:
+the owning instance's prompt-file watcher reloads a non-idle (here paused) queue
+in merge mode (`PromptFileLoader.reloadFromWorkingFile`), and
+`PromptQueue.mergeDiskSteps` takes order and topology from disk, so edits,
+removals and reorders are adopted, not only appends. Resume's first write
+(`commitRuntimeTransition`) also merges disk under the working-file lock
+before the next step starts, so a change inside the watcher's 1 s poll window
+is not lost either.

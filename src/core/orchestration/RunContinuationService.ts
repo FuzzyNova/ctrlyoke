@@ -257,8 +257,12 @@ export class RunContinuationService {
     // The executing step of a live run may still shape its own queue. Pause
     // means "let the current step finish, then pause", and queuing follow-up
     // work can be part of that step, so PAUSING keeps the exception: appended
-    // steps are merged when the step ends and run on Resume. CANCELLING does
-    // not — Stop discards the step's outcome.
+    // steps are merged when the step ends and run on Resume. A PAUSED run
+    // whose owner still holds the lock (a worktree run keeps its reservation
+    // while paused) has no step in flight; the owner's watcher merges the
+    // change, and Resume's first write merges disk under the working-file
+    // lock before the next step starts. CANCELLING does not — Stop discards
+    // the step's outcome.
     const activeTargetOperation =
       allowActiveTargetOperation &&
       (action === RUN_CONTINUATION_ACTIONS.APPEND ||
@@ -266,7 +270,8 @@ export class RunContinuationService {
       activeLock !== undefined &&
       lockNamesTarget &&
       (executionState === EXECUTION_STATES.RUNNING ||
-        executionState === EXECUTION_STATES.PAUSING);
+        executionState === EXECUTION_STATES.PAUSING ||
+        executionState === EXECUTION_STATES.PAUSED);
 
     // A self-owned lock without the resident execution object is an invariant
     // failure, not an orphan. Treating it as external or adoptable would let a
@@ -310,7 +315,9 @@ export class RunContinuationService {
       if (action !== RUN_CONTINUATION_ACTIONS.EDIT || lockNamesTarget) {
         if (lockNamesTarget) {
           throw new Error(
-            `Cannot ${action} while this run is executing (state ${executionState})`
+            executionState === EXECUTION_STATES.PAUSED
+              ? `Cannot ${action} while another process holds this paused run (state ${executionState})`
+              : `Cannot ${action} while this run is executing (state ${executionState})`
           );
         }
         if (
