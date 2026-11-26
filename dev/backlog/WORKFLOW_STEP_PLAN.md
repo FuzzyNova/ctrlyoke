@@ -35,8 +35,11 @@ Shipped:
   resolve by own property only (`getDeclaredConditionPreset`, `src/utils/McpConditionPresetResolver.ts`).
   D14's `worktreePresets` copies all three.
 
-Not shipped (everything else in this plan): `STEP_TYPES.WORKFLOW`, `subWorkflowStep`, Phase 0's
-`getStepType`/`isPromptStep`, `SubWorkflowHost`/`SubWorkflowLauncher`, the D4 worktree and lease
+- **Phase 0 and the schema `$defs` extraction** landed in this plan's round 1 (see
+  [Progress](#progress)).
+
+Not shipped (everything else in this plan): `STEP_TYPES.WORKFLOW`, `subWorkflowStep`,
+`SubWorkflowHost`/`SubWorkflowLauncher`, the D4 worktree and lease
 rules, D6/D7 reattach and `parentRun`, the workflow arm of D12a (`SubWorkflowOutput` + the `subWorkflowSettled` event), D12c's
 `run` argument on MCP `read_output`/`workflow_status` (`McpReadOutputArguments` in
 `src/utils/McpToolDefinitions.ts` still has only `indices`/`cursor`/`limit`/`tail`; an earlier
@@ -147,7 +150,7 @@ Each item names the question, what the code says today, and the decision.
 | R11 | Does `PREVIEW_STEP_TYPES` get `WORKFLOW`?                                                        | `PREVIEW_STEP_TYPES` (`DashboardConstants.ts:2065`) is `{ PROMPT, SCRIPT }`.                                                                                                                                                                                                                                                     | **Yes**, because the preview renders a "Runs _<file>_" entry ([Execution preview](#execution-preview)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | R12 | Should the new Large Spec Loop template (`47007a675`) get lanes too?                             | `large-spec-loop.ctrlyoke.yaml` is a finalStep-only loop that appends rounds of sequential steps; it never authors parallel steps.                                                                                                                                                                                               | **Not in v1.** Only `spec-driven-loop` declares `worktreePresets.lane`. Adding lanes to the large loop is a follow-up once lanes are proven in the smaller template.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | R13 | Where does `spec-driven-loop`'s `laneSetup` variable live?                                       | The template has no root `vars:`. Its variables are `_templateMeta.variables` entries (`:5`), used as `{placeholder}`. An empty `setup` is already "no setup" (`WorktreeManager.ts`, `options.setup?.trim()`).                                                                                                                   | `laneSetup` is a `_templateMeta.variables` text entry, default `npm ci`, substituted at template instantiation. Left blank, it renders `setup: ""`, which needs no special case.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| R14 | Agents queuing lanes on a **paused** worktree parent.                                            | Bug [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/implemented/mcp-queue-mutations-refused-on-paused-worktree-run.md): MCP appends were refused on a paused run that keeps its runner lock, which worktree runs do.                                                                                             | **Resolved:** fixed in `ffc623b4f` (2026-11-26), so it no longer gates step 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| R14 | Agents queuing lanes on a **paused** worktree parent.                                            | Bug [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/implemented/mcp-queue-mutations-refused-on-paused-worktree-run.md): MCP appends were refused on a paused run that keeps its runner lock, which worktree runs do.                                                                                              | **Resolved:** fixed in `ffc623b4f` (2026-11-26), so it no longer gates step 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | R15 | Does `getValidKeysAtPointer` need a change for the root arm?                                     | Partly. Unknown-key warnings use `defs.singleStepRoot` (`PromptFileParser.ts:694`) and pick up the new arm. Suggestion candidates hard-code `type === script ? oneOf[1] : oneOf[0]` (`:684-692`).                                                                                                                                | Replace that ternary with a lookup keyed by step type, so `type: workflow` gets `oneOf[2]`. This corrects the earlier "no change" claim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
@@ -927,6 +930,13 @@ The orchestrator guidance (`workflow-orchestrator.agent.md`, `<parallelSteps>`) 
 ---
 
 ## Phase 0 — Prerequisite: make step-kind branching exhaustive
+
+> **Done in round 1** (`d1b4765a1`, `1b40f353f`, `5f3a93d27`, `af172c7a2`). `getStepType`,
+> `isPromptStep` and `assertNever` live in `CtrlYokeTypes.ts`; `StepKindBranchGuard.test.ts` is
+> the guard. Note for the new kind: the guard flags only ternaries and `if`/`else` pairs, so
+> early-return checks (`if (isScriptStep(s)) return …;` followed by prompt-only code) and
+> negative checks (`!isScriptStep(s)`, `step as PromptStep` casts) are **not** compiler-guided.
+> Adding `STEP_TYPES.WORKFLOW` must sweep those by hand. The text below is the original brief.
 
 About 62 non-test files (counted 2026-11-26, about 204 sites) branch on `isScriptStep(...)` /
 `STEP_TYPES.SCRIPT` with an implicit "otherwise it's a prompt". The heaviest are
@@ -1918,49 +1928,73 @@ summaries instead.
 
 ### Done
 
-- Nothing from this plan's own landing order yet (first pass, 2026-11-26). The prerequisites
-  listed under [Status](#status-2026-11-26) shipped before this workflow started, and R14's bug
-  was fixed in `ffc623b4f`.
+- **Round 1 (reviewed 2026-11-26): Phase 0 and the schema extraction.** No behaviour change;
+  `npm test` green (8421 extension, 4917 UI).
+  - `d1b4765a1`: `getStepType`, `isPromptStep`, `assertNever` in `CtrlYokeTypes.ts`; `src/core/*.ts`
+    and `src/types/` converted.
+  - `1b40f353f`: orchestration, CLI, MCP, utils, completions, git converted.
+  - `5f3a93d27`: webview converted; the shared `assertNever` replaced `WorkflowSwitcher`'s copy.
+  - `af172c7a2`: `StepKindBranchGuard.test.ts` (AST guard; allow-list keyed by file, function and
+    condition text; stale entries fail) and a `types-core.instructions.md` bullet.
+  - `3212e3294`: `stepDisplayProperties`, `stepLifecycleRuntime`, `stepOnFail` and
+    `managedWorktreeConfig` `$defs`; `StepLifecycleRuntime` interface.
+  - `cc8b84914` (review fix): `managedWorktreeConfig` had been given the named-branch _string_
+    shorthand instead of the managed _object_ arm D14 needs; moved, with a pinning test. The
+    shared `name` description now matches `VAR_SUBSTITUTION_POLICY` (`steps[].name` is
+    substituted at dispatch; the old prompt copy wrongly said "Not substituted").
 
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 1 (queued 2026-11-26): Phase 0 plus the schema extraction.** No behaviour change.
-  1. `getStepType`/`isPromptStep`/`assertNever` in `CtrlYokeTypes.ts`; convert `src/core/*.ts` and
-     `src/types/`.
-  2. Convert `src/core/orchestration/`, `src/cli*`, `src/mcp-server.ts`, `src/utils/`,
-     `src/completions/`, `src/git/`.
-  3. Convert `src/ui/webview-react/`.
-  4. The binary-ternary guard test with its allow-list, plus any sites it still finds.
-  5. Schema-only extraction: `stepDisplayProperties`, `stepLifecycleRuntime`, `stepOnFail`,
-     `managedWorktreeConfig`; `PromptRuntimeMetadata extends StepLifecycleRuntime`.
-- **Round 2: sequential core, part 1.** `STEP_TYPES.WORKFLOW` + `subWorkflowStep` schema arm
-  (steps, finalStep, root `rootWorkflowStep`; parallel members still rejected by the parser),
-  types, parser (`buildSubWorkflowStep`, R15 lookup), compiler-guided `case` arms with
-  "not yet executable" behaviour where needed; `SubWorkflowHost` port + `SubWorkflowLauncher`
-  (D1, R2) + executor arm + D9 outcome mapping + D10 cycle detection, against a fake host.
-- **Round 3: sequential core, part 2.** D2/D3 stop and pause forwarding; host factories
-  (VS Code via `createExternalWorkflowInstance`, CLI, MCP); D4a + D4d rule 1 (R1); D7 `parentRun`;
-  D12a workflow arm (`subWorkflowSettled`, R3; nested rendering; workflow summary budget); docs
-  guide page and CHANGELOG.
+- **Round 2 (queued 2026-11-26): sequential core, part 1.**
+  1. `STEP_TYPES.WORKFLOW`, `SubWorkflowStep` types and constants, and a `case` arm in every
+     step-kind switch repo-wide (minimal behaviour; executor arm a placeholder failure), plus a
+     hand sweep of early-return/negative/cast sites.
+  2. Schema `subWorkflowStep` (string `workflow` only), `subWorkflowRuntimeMetadata`, the
+     `workflowStep` arm, `rootWorkflowStep` (R9); parser `buildSubWorkflowStep` for steps,
+     finalStep and root, D5 parse-time existence check, R15 lookup; parallel members still
+     rejected by the parser.
+  3. `SubWorkflowHost` port types and `SubWorkflowLauncher` (D1, R2) with a `createInstance`
+     factory, tested against fake instances.
+  4. `subWorkflowHost`/`ancestorPaths` on `WorkflowExecutionContext` through
+     `WorkflowStartupPipeline`; `executeSubWorkflowStep` with D9 mapping, D10 cycle check, runtime
+     linkage persisted at launch, `settleNonHarnessStep` factored out of `executeScriptStep`;
+     fake-host executor tests.
+- **Round 3: sequential core, part 2.** D2/D3 stop and pause forwarding (`ActiveTargetResources.subWorkflow`,
+  detector-fallback rule); host factories (VS Code via `createExternalWorkflowInstance`, CLI
+  instance-construction helper, MCP if it executes); D4a + D4d rule 1 (R1); D7 `parentRun` on the
+  manifest; D12a workflow arm (`subWorkflowSettled`, R3, nested rendering, workflow summary
+  budget); docs guide page and CHANGELOG (first round where the step is usable end to end).
 - **Round 4: D12c** (`run` on `read_output`/`workflow_status`), **D6 reattach**, minimal dashboard
   row + "Open run" link, CLI progress + `subWorkflowRuns` JSON.
-- **Rounds 5–6: isolated lanes (landing step 3).** D13 inline definitions (R10 exclusions),
-  parallel member acceptance + preflight branch, D4c dirty check, `MERGE_INTO_SHARED_ROOT`,
-  user-cancelled-lane join rule, D4d sibling merge wait (R4), R5 CLI headless children, D14
-  `worktreePresets` + `append_step`/`edit_step`/`workflow_status`, orchestrator agent and
-  `spec-driven-loop` template.
+- **Rounds 5–6: isolated lanes (landing step 3).** D13 inline definitions (widens
+  `SubWorkflowStep.workflow` to `string | InlineSubWorkflowDefinition`, adds the schema's inline
+  arm, R10 exclusions), parallel member acceptance + preflight branch, D4c dirty check,
+  `MERGE_INTO_SHARED_ROOT`, user-cancelled-lane join rule, D4d sibling merge wait (R4), R5 CLI
+  headless children, D14 `worktreePresets` + `append_step`/`edit_step`/`workflow_status`,
+  orchestrator agent and `spec-driven-loop` template.
 - **Round 7: landing steps 4–5.** D4b, D4d rule 2, nested fan-out, inheriting members,
   `WORKTREE_COLLISION`, named-worktree members.
 - **Round 8: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
-  "Started by" label, editor mode + preview + completions polish.
+  "Started by" label, editor mode + preview + completions polish, and the
+  `schemaUiPropertyRoundTrip` UI-control coverage for `subWorkflowStep` (the editor control is
+  what that suite checks, so it lands with the editor mode, never as an opt-out).
 
 ### Decisions
 
-- **Phase 0 is split by directory into sequential steps**, not run in parallel: the steps share
-  `CtrlYokeTypes.ts` helpers, and the guard test (step 4) can only pass once every area is done.
-- **The schema `$defs` extraction lands in round 1**, ahead of the new step kind, because it is
-  a behaviour-neutral refactor that the round-2 schema arm builds on, and reviewing it apart from
-  the new arm keeps the round-2 schema diff small.
+- **Phase 0 was split by directory into sequential steps** (round 1), because the steps shared
+  `CtrlYokeTypes.ts` helpers and the guard could only pass once every area was done.
+- **The schema `$defs` extraction landed in round 1**, ahead of the new step kind, so the round-2
+  schema diff stays small.
+- **`SubWorkflowStep.workflow` is `string` until D13's round.** The inline arm is added then, in
+  schema and type together, so every consumer of `workflow` is compiler-guided at that point
+  instead of half-handling an object form nothing can produce yet.
+- **Rounds 2–3 leave the step reachable from YAML before any host provides `subWorkflowHost`.**
+  Between round 2's schema step and round 3's host factories, a workflow step fails with "Sub-workflow
+  steps are not supported in this host" (the documented missing-host behaviour). This is a
+  development branch, so the CHANGELOG entry and docs page wait for round 3, when it works.
+- **D6 is deferred to round 4.** Until then a re-executed sub-workflow step whose `_runtime`
+  already names a child launches fresh and overwrites the linkage (the D6 "missing directory"
+  branch).
 - No open questions need Nathan yet.
