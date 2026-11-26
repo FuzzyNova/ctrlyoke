@@ -1927,17 +1927,6 @@ $defs:
             type: number
             description: Context window size in tokens, captured from the last completed output
             title: Context Window Size
-          failureKind:
-            type: string
-            enum:
-              - userCancelled
-              - processExit
-              - harnessError
-              - harnessNotInstalled
-              - timeout
-              - unknown
-            description: Structured classification of the last harness/session failure for this prompt.
-            title: Failure Kind
     unevaluatedProperties: false
   runtimeMetadata:
     type: object
@@ -2942,6 +2931,23 @@ $defs:
         type: string
         description: Human-readable message describing the last harness/session failure.
         title: Failure Message
+      failureKind:
+        type: string
+        enum:
+          - userCancelled
+          - processExit
+          - harnessError
+          - harnessNotInstalled
+          - timeout
+          - unknown
+        description: Structured classification of the last failure for this step.
+        title: Failure Kind
+      rewoundFailure:
+        type: boolean
+        description: >-
+          Set when a failed step was rewound to pending, so its earlier history stays owned by this
+          queue position.
+        title: Rewound Failure
       terminalFailure:
         type: boolean
         description: >-

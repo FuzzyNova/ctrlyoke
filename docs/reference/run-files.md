@@ -470,6 +470,18 @@ Completed prompt duration in seconds
 
 Human-readable message describing the last harness/session failure.
 
+### `failureKind` {#step-runtime-failurekind}
+
+- **Type:** `"userCancelled" | "processExit" | "harnessError" | "harnessNotInstalled" | "timeout" | "unknown"`
+
+Structured classification of the last failure for this step.
+
+### `rewoundFailure` {#step-runtime-rewoundfailure}
+
+- **Type:** `boolean`
+
+Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.
+
 ### `terminalFailure` {#step-runtime-terminalfailure}
 
 - **Type:** `boolean`
@@ -493,12 +505,6 @@ Context window tokens in use, captured from the last completed output
 - **Type:** `number`
 
 Context window size in tokens, captured from the last completed output
-
-### `failureKind` {#step-runtime-failurekind}
-
-- **Type:** `"userCancelled" | "processExit" | "harnessError" | "harnessNotInstalled" | "timeout" | "unknown"`
-
-Structured classification of the last harness/session failure for this prompt.
 
 ### `childWorkflowKey` {#step-runtime-childworkflowkey}
 

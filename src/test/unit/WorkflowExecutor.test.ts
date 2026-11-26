@@ -6373,6 +6373,49 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     );
   });
 
+  test("a cancelled child stops the parent before its next step", async () => {
+    const run = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+      },
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+      },
+    ]);
+    let launches = 0;
+    run.context.subWorkflowHost = fakeHost(
+      Promise.resolve({ status: PROMPT_TERMINAL_STATUS.CANCELLED }),
+      () => (launches += 1)
+    );
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(launches, 1);
+    assert.strictEqual(run.queue.getState().status, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(
+      run.queue.getState().results[1]?.status,
+      STEP_STATUS.PENDING
+    );
+  });
+
+  test("a launch that throws before the child exists is a start failure", async () => {
+    const run = await setupRun();
+    run.context.subWorkflowHost = {
+      launch: async () => {
+        throw new Error("Failed to parse child.ctrlyoke.yaml");
+      },
+    } satisfies SubWorkflowHost;
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(
+      run.queue.getState().results[0]?.status,
+      STEP_STATUS.FAILED
+    );
+    assert.strictEqual(
+      run.queue.getState().steps[0]?._runtime?.failureMessage,
+      "Sub-workflow could not start: Failed to parse child.ctrlyoke.yaml"
+    );
+  });
+
   test("fails cleanly without a host or when the workflow path cannot resolve", async () => {
     const missingHost = await setupRun();
     await missingHost.executor.execute(

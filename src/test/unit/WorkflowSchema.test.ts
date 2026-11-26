@@ -65,6 +65,32 @@ suite("Workflow template schema", () => {
     }
   });
 
+  test("accepts queue lifecycle fields on every step kind's runtime", () => {
+    // `failureKind` and `rewoundFailure` live on StepLifecycleRuntime, which
+    // PromptQueue writes for prompt, script and workflow steps alike.
+    const lifecycle = {
+      stepId: "s1",
+      terminalStatus: "failed",
+      failureKind: "unknown",
+      rewoundFailure: true,
+    };
+    for (const step of [
+      { prompt: "x", _runtime: lifecycle },
+      { type: "script", script: "exit 1", _runtime: lifecycle },
+      {
+        type: "workflow",
+        workflow: "child.ctrlyoke.yaml",
+        _runtime: { ...lifecycle, childRunRef: "run-1" },
+      },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [step] }),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
   test("rejects invalid workflow step fields and runtime metadata", () => {
     for (const document of [
       { steps: [{ type: "workflow", workflow: "child", worktree: true }] },

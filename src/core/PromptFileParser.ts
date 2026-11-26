@@ -1298,8 +1298,18 @@ export class PromptFileParser {
       promptFilePath
     );
     if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+      const reason = (() => {
+        switch (resolution.status) {
+          case PROMPT_FILE_RESOLUTION_STATUSES.MISSING:
+            return "could not be found";
+          case PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE:
+            return `could not be read: ${getErrorMessage(resolution.error)}`;
+          default:
+            return assertNever(resolution);
+        }
+      })();
       throw new Error(
-        `Sub-workflow file reference "${source.workflow}" ${resolution.status === "missing" ? "could not be found" : `could not be read: ${getErrorMessage(resolution.error)}`}`
+        `Sub-workflow file reference "${source.workflow}" ${reason}`
       );
     }
     const step = {

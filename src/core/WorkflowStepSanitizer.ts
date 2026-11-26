@@ -43,7 +43,7 @@ import {
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
 import { normalizeParallelGroupTopology } from "./ParallelGroupTopology";
 
-const BULK_EDITABLE_SCRIPT_STEP_KEYS = ["enabled", "color"] as const;
+const BULK_EDITABLE_DISPLAY_STEP_KEYS = ["enabled", "color"] as const;
 
 function isScriptStepAction(value: unknown): value is ScriptStepAction {
   return (
@@ -71,11 +71,11 @@ export function assertBulkWorkflowStepUpdateAllowed(
     (() => {
       switch (stepType) {
         case STEP_TYPES.SCRIPT:
-          return BULK_EDITABLE_SCRIPT_STEP_KEYS;
+          return BULK_EDITABLE_DISPLAY_STEP_KEYS;
         case STEP_TYPES.PROMPT:
           return BULK_EDITABLE_PROMPT_STEP_KEYS;
         case STEP_TYPES.WORKFLOW:
-          return [];
+          return BULK_EDITABLE_DISPLAY_STEP_KEYS;
         default:
           return assertNever(stepType);
       }
@@ -693,10 +693,8 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       type: STEP_TYPES.WORKFLOW,
       workflow: step.workflow,
       ...commonFields,
-      ...(step.onFail === "continue" || step.onFail === "stopWorkflow"
-        ? { onFail: step.onFail }
-        : {}),
-    } as SubWorkflowStep;
+      ...(isScriptStepAction(step.onFail) ? { onFail: step.onFail } : {}),
+    } satisfies SubWorkflowStep;
   }
 
   if (stepType === STEP_TYPES.SCRIPT) {

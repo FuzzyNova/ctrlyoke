@@ -3138,7 +3138,7 @@ export class WorkflowExecutor {
         attemptFailureMessage: message,
         queueFailureMessage: message,
         runtimeFailureMessage: message,
-        recordContinuingFailure: false,
+        continueResolvesFailure: true,
       });
     };
 
@@ -3180,18 +3180,28 @@ export class WorkflowExecutor {
 
     let handle: SubWorkflowHandle | undefined;
     try {
-      handle = await host.launch({
-        source: { kind: "file", resolvedPath },
-        parent: {
-          workflowKey: queueState.workflowKey,
-          runRef: queueState.runRef,
-          stepId,
-          ...(target.kind === FINAL_STEP_PHASES.FINAL_STEP
-            ? { loopIndex: target.loopIndex }
-            : {}),
-        },
-        ancestorPaths: [...ancestors, resolvedPath],
-      });
+      try {
+        handle = await host.launch({
+          source: { kind: "file", resolvedPath },
+          parent: {
+            workflowKey: queueState.workflowKey,
+            runRef: queueState.runRef,
+            stepId,
+            ...(target.kind === FINAL_STEP_PHASES.FINAL_STEP
+              ? { loopIndex: target.loopIndex }
+              : {}),
+          },
+          ancestorPaths: [...ancestors, resolvedPath],
+        });
+      } catch (error) {
+        // No child run exists yet (e.g. the file failed to load before the
+        // child allocated its identity), so this is a start failure.
+        return settleFailure(
+          `Sub-workflow could not start: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
       context.registerActiveTarget?.(target, attemptIndex, handle);
       const runtimeIndex =
         target.kind === FINAL_STEP_PHASES.QUEUE
@@ -3654,7 +3664,8 @@ export class WorkflowExecutor {
     attemptFailureMessage?: string;
     queueFailureMessage?: string;
     runtimeFailureMessage?: string;
-    recordContinuingFailure?: boolean;
+    /** `onFail: continue` resolved the failure, so the queue step is not failed. */
+    continueResolvesFailure?: boolean;
   }): Promise<boolean> {
     const {
       context,
@@ -3678,8 +3689,9 @@ export class WorkflowExecutor {
         await this.promptQueue.cancelStep(target.stepIndex);
       }
       if (options.stopWorkflowOnCancel) {
+        // CANCELLING only: the outcome coordinator confirms STOPPED and
+        // commits the transition, as it does for a user stop.
         runtime.requestStop();
-        runtime.confirmStopped();
       }
       return false;
     }
@@ -3706,9 +3718,9 @@ export class WorkflowExecutor {
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? target.stepIndex
           : this.promptQueue.getState().steps.length;
-      const updates: Record<string, unknown> = {};
-      updates.failureMessage = options.runtimeFailureMessage;
-      await this.promptQueue.persistRuntimeMetadata(runtimeIndex, updates);
+      await this.promptQueue.persistRuntimeMetadata(runtimeIndex, {
+        failureMessage: options.runtimeFailureMessage,
+      });
     }
     if (context.dashboardProvider && stepIndex >= 0 && options.terminalStatus) {
       context.dashboardProvider.updateStepStatus(stepIndex, {
@@ -3721,14 +3733,10 @@ export class WorkflowExecutor {
     if (!attemptCompleted && target.kind === FINAL_STEP_PHASES.QUEUE) {
       const reason =
         options.queueFailureMessage ?? failureMessage ?? "Step failed";
-      if (shouldContinue && options.recordContinuingFailure !== false) {
-        await this.promptQueue.persistStepOutcome({
-          target,
-          status: PROMPT_TERMINAL_STATUS.FAILED,
-          failureReason: reason,
-          terminalFailure: false,
-        });
-      } else if (!shouldContinue) {
+      // A script that errored under `onError: continue` still fails its queue
+      // step (long-standing script behaviour); an `onFail: continue` that
+      // resolves the failure leaves the outcome to the coordinator.
+      if (!(shouldContinue && options.continueResolvesFailure)) {
         await this.promptQueue.failStep(target.stepIndex, reason);
       }
     }
