@@ -95,8 +95,12 @@ export interface SubWorkflowInstance {
   stop(): Promise<void>;
 }
 
-export type SubWorkflowInstanceFactory = (options: {
+export interface SubWorkflowInstanceOptions {
   concurrent: boolean;
   ancestorPaths: readonly string[];
   delegationChain: readonly string[];
-}) => SubWorkflowInstance;
+}
+
+export type SubWorkflowInstanceFactory = (
+  options: SubWorkflowInstanceOptions
+) => SubWorkflowInstance;
