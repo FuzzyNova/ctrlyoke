@@ -95,7 +95,10 @@ export function legacyWorkspaceSecretMetadataKeyForRoot(
   workspaceRoot: string,
   name: string
 ): string {
-  return workspaceSecretMetadataKey(legacyWorkspaceSecretHash(workspaceRoot), name);
+  return workspaceSecretMetadataKey(
+    legacyWorkspaceSecretHash(workspaceRoot),
+    name
+  );
 }
 
 /** Return whether a SecretStore key belongs to a managed secret or its metadata. */

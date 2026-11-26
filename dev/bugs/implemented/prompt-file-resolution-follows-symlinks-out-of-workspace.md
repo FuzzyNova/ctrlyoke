@@ -26,8 +26,13 @@ ws/linkdir      -> /tmp/outside                # directory link
 ```
 
 ```js
-const r = new PromptFileResolver({ workspaceRoot: ws, namedRoots: [], trustedRoots: [ws], approvedExternalRoots: [] });
-await r.resolve("prompts/x.md");      // { status: "resolved", content: "SECRET\n" }
+const r = new PromptFileResolver({
+  workspaceRoot: ws,
+  namedRoots: [],
+  trustedRoots: [ws],
+  approvedExternalRoots: [],
+});
+await r.resolve("prompts/x.md"); // { status: "resolved", content: "SECRET\n" }
 await r.resolve("linkdir/secret.md"); // { status: "resolved", content: "SECRET\n" }
 ```
 

@@ -83,8 +83,11 @@ suite("Workflow template schema", () => {
         const target = schemaNode.$ref
           .slice(2)
           .split("/")
-          .reduce<unknown>((current, key) =>
-            (current as Record<string, unknown> | undefined)?.[key], schema);
+          .reduce<unknown>(
+            (current, key) =>
+              (current as Record<string, unknown> | undefined)?.[key],
+            schema
+          );
         if (canReachVarPlaceholder(target)) return true;
       }
       return ["oneOf", "anyOf"].some((composition) =>

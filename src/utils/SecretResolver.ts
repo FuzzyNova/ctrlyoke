@@ -217,10 +217,16 @@ export async function resolveSecretValues(
 
     if (context.secretStore) {
       try {
-        const workspaceKey = workspaceSecretKeyForRoot(context.workspaceRoot, name);
+        const workspaceKey = workspaceSecretKeyForRoot(
+          context.workspaceRoot,
+          name
+        );
         let workspaceValue = await context.secretStore.get(workspaceKey);
         if (workspaceValue === undefined) {
-          const legacyKey = legacyWorkspaceSecretKeyForRoot(context.workspaceRoot, name);
+          const legacyKey = legacyWorkspaceSecretKeyForRoot(
+            context.workspaceRoot,
+            name
+          );
           if (legacyKey !== workspaceKey) {
             workspaceValue = await context.secretStore.get(legacyKey);
             if (workspaceValue !== undefined) {

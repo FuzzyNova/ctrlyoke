@@ -8,7 +8,7 @@
 
 `WorkflowLockManager.normalizeStaleLocks` reclaims a dead runner's
 `runner.json` and then marks that run `stopped`. If another host (VS Code
-window, CLI `continue`/`append`, MCP server) resumes the *same* run between
+window, CLI `continue`/`append`, MCP server) resumes the _same_ run between
 the reclaim and the rewrite, normalization overwrites the successor's live run
 file: `executionState` becomes `stopped`, `currentIndex` moves past the
 running step, and that step's `_runtime` gets `terminalStatus: "cancelled"`,
@@ -60,7 +60,7 @@ and before `unlink`, and do the read, settle and write there. A successor's
 `acquireLock` takes the same `runner.json` mutex, so it cannot start until the
 settle is written. Keep the existing newer-run-file and paused/inactive
 guards. Add a regression test where the successor acquires the lock for the
-*same* `runRef` during normalization (e.g. by stubbing the run-file read as
+_same_ `runRef` during normalization (e.g. by stubbing the run-file read as
 above, or by calling `acquireLock` from the callback hook) and assert the
 successor's run file is untouched, or that the successor's acquire waits until
 the settle is written.

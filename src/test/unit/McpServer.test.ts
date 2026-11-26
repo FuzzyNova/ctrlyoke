@@ -3988,10 +3988,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("workflow_status resolves a templated maxSteps cap", async () => {
     const server = await setup();
-    const run = await createRun("templated-status-cap", "2026-01-01T00-00-00-000Z", {
-      stepCount: 2,
-      executionState: EXECUTION_STATES.RUNNING,
-    });
+    const run = await createRun(
+      "templated-status-cap",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 2,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
     const workingFile = JSON.parse(
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;

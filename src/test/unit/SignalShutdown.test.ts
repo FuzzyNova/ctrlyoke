@@ -25,7 +25,9 @@ suite("Two-stage signal shutdown", () => {
       },
       isInteractive: false,
       countRunningWorkflows: () => 1,
-      dispose: async () => { disposed = true; },
+      dispose: async () => {
+        disposed = true;
+      },
       deadlineMs: 5000,
       confirmationMessage: () => "confirm",
       shutdownMessage: () => "shutdown",

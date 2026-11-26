@@ -139,9 +139,7 @@ export async function uninstallCommand(
     }
     return CLI_USAGE_EXIT_CODE;
   }
-  const info = buildCliUninstallInfo(
-    await uninstallIntegration(packageRoot)
-  );
+  const info = buildCliUninstallInfo(await uninstallIntegration(packageRoot));
   const output =
     info.failedHarnesses.length > 0 && options.json
       ? {
@@ -150,7 +148,9 @@ export async function uninstallCommand(
           error: { message: formatCliUninstallFailures(info) },
         }
       : info;
-  writeOut(options.json ? JSON.stringify(output) : formatCliUninstallInfo(info));
+  writeOut(
+    options.json ? JSON.stringify(output) : formatCliUninstallInfo(info)
+  );
   if (info.failedHarnesses.length > 0) {
     if (!options.json) {
       writeErr(formatCliUninstallFailures(info));

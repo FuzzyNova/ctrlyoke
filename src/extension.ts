@@ -494,7 +494,8 @@ export async function activate(context: vscode.ExtensionContext) {
       ...(workspaceConfigBackend ? [workspaceConfigBackend.filePath] : []),
     ];
     for (const settingsFilePath of new Set(settingsFilePaths)) {
-      const settingsWatcher = fileWatcherFactory.createForFile(settingsFilePath);
+      const settingsWatcher =
+        fileWatcherFactory.createForFile(settingsFilePath);
       const notifySettingsChanged = (): void => configService.notify();
       settingsWatcher.onDidCreate(notifySettingsChanged);
       settingsWatcher.onDidChange(notifySettingsChanged);

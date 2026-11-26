@@ -161,7 +161,10 @@ suite("CliProcessManager teardown", () => {
         killedPids.push(pid);
       }
     );
-    const closed = await manager.spawn(process.execPath, ["-e", "process.exit(0)"]);
+    const closed = await manager.spawn(process.execPath, [
+      "-e",
+      "process.exit(0)",
+    ]);
     assert.strictEqual(closed.exitCode, 0);
 
     const livePromise = manager.spawn(process.execPath, [

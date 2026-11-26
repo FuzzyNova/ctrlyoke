@@ -521,7 +521,8 @@ suite("Run replay (bundle -> live engine)", function () {
           schemaVersion:
             CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
           _runtime: {
-            schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE] + 1,
+            schemaVersion:
+              CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE] + 1,
           },
         },
       ],
@@ -540,7 +541,10 @@ suite("Run replay (bundle -> live engine)", function () {
       await writeBundle(bundleDir);
       await fs.writeFile(path.join(bundleDir, file), JSON.stringify(record));
       await assert.rejects(
-        new RunBundleImporter().importRun({ workspaceRoot: workspace, bundleDir }),
+        new RunBundleImporter().importRun({
+          workspaceRoot: workspace,
+          bundleDir,
+        }),
         (error: unknown) =>
           error instanceof NewerSchemaError && error.store === store
       );

@@ -45,7 +45,9 @@ class TestFileWatcherFactory implements FileWatcherFactory {
     this.created.push({ basePath, glob, watcher });
     return watcher;
   }
-  createForFile(absolutePath: string): FileWatcher { return this.create(path.dirname(absolutePath), path.basename(absolutePath)); }
+  createForFile(absolutePath: string): FileWatcher {
+    return this.create(path.dirname(absolutePath), path.basename(absolutePath));
+  }
 }
 
 suite("ScriptCommandCompletionHelpers", () => {

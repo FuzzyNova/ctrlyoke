@@ -158,8 +158,16 @@ export function registerFileWatcherContractTests(
       await withWatcher(factory, "**/*", async (root, watcher) => {
         const dotfile = path.join(root, ".env.example");
         const nestedDotfile = path.join(root, ".github", "ci.yml");
-        const dotfileCreated = waitForPathEvent((listener) => watcher.onDidCreate(listener), "create", dotfile);
-        const nestedCreated = waitForPathEvent((listener) => watcher.onDidCreate(listener), "create", nestedDotfile);
+        const dotfileCreated = waitForPathEvent(
+          (listener) => watcher.onDidCreate(listener),
+          "create",
+          dotfile
+        );
+        const nestedCreated = waitForPathEvent(
+          (listener) => watcher.onDidCreate(listener),
+          "create",
+          nestedDotfile
+        );
         await fs.writeFile(dotfile, "env");
         await fs.mkdir(path.dirname(nestedDotfile));
         await fs.writeFile(nestedDotfile, "ci");
@@ -169,9 +177,14 @@ export function registerFileWatcherContractTests(
 
     for (const fileName of ["[id].tsx", "{a,b}.md", ".env.local"]) {
       test(`createForFile watches ${fileName} literally`, async () => {
-        const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-file-watch-literal-"));
+        const root = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-file-watch-literal-")
+        );
         const targetPath = path.join(root, fileName);
-        const siblingPath = path.join(root, fileName === "[id].tsx" ? "i.tsx" : "a.md");
+        const siblingPath = path.join(
+          root,
+          fileName === "[id].tsx" ? "i.tsx" : "a.md"
+        );
         const watcher = factory.createForFile(targetPath);
         let siblingEvents = 0;
         watcher.onDidCreate((filePath) => {
@@ -179,7 +192,11 @@ export function registerFileWatcherContractTests(
         });
         try {
           await new Promise((resolve) => setTimeout(resolve, 150));
-          const targetCreated = waitForPathEvent((listener) => watcher.onDidCreate(listener), "create", targetPath);
+          const targetCreated = waitForPathEvent(
+            (listener) => watcher.onDidCreate(listener),
+            "create",
+            targetPath
+          );
           await fs.writeFile(siblingPath, "sibling");
           await fs.writeFile(targetPath, "target");
           await targetCreated;

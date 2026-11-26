@@ -81,7 +81,9 @@ class TestFileWatcherFactory implements FileWatcherFactory {
   create(_basePath: string, _glob: string): FileWatcher {
     return new TestFileWatcher();
   }
-  createForFile(_absolutePath: string): FileWatcher { return new TestFileWatcher(); }
+  createForFile(_absolutePath: string): FileWatcher {
+    return new TestFileWatcher();
+  }
 }
 
 class TestDisposableRegistry implements DisposableRegistry {

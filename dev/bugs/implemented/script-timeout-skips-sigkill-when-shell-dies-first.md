@@ -31,7 +31,7 @@ shell. A later `cancel()` then signals a dead PID.
 
 `CliProcessManager.ts:465-478`: the escalation timer only sends SIGKILL when
 `child.exitCode === null && child.signalCode === null`. These fields describe
-the *direct* child (the shell). Once the shell dies of the SIGTERM,
+the _direct_ child (the shell). Once the shell dies of the SIGTERM,
 `signalCode === "SIGTERM"` and the escalation is skipped. Even if it ran,
 `tree-kill` on the dead shell's PID can no longer find the reparented
 descendants. The liveness guard came from

@@ -80,7 +80,9 @@ class TestFileWatcherFactory implements FileWatcherFactory {
     this.watchers.push(watcher);
     return watcher;
   }
-  createForFile(): FileWatcher { return this.create(); }
+  createForFile(): FileWatcher {
+    return this.create();
+  }
 }
 
 class TestBroadcast implements ExternalRunWatchBroadcast {

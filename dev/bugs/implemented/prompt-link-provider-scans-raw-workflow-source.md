@@ -24,7 +24,7 @@ runtime and the diagnostics see:
 ```ts
 import { findContextReferenceMatches } from "src/utils/PromptReferenceScanner";
 const raw = String.raw`{"steps":[{"prompt":"Review @\"docs/my file.md\" and @src/a.ts\nnext"}]}`;
-console.log(findContextReferenceMatches(raw));           // one match: path "src/a.ts\\nnext"
+console.log(findContextReferenceMatches(raw)); // one match: path "src/a.ts\\nnext"
 console.log(findContextReferenceMatches(JSON.parse(raw).steps[0].prompt)); // docs/my file.md, src/a.ts
 ```
 

@@ -46,7 +46,7 @@ Run it with `npx tsx`. Each line shows one `file` match from the scanner and
 
 - `fullFile` in `src/utils/ReferencePatterns.ts:128-131` checks for a path
   marker with the lookahead `(?=(?:[A-Za-z]:)?[^\s:"]*[/.\\])`. The lookahead
-  runs over the raw token *before* trailing prose punctuation is excluded, so
+  runs over the raw token _before_ trailing prose punctuation is excluded, so
   the sentence-ending `.` satisfies it. The lazy body then stops before the
   `.`, and the match is `team`.
 - The runtime (`parseAtReferences`, `src/utils/FileReferenceParser.ts:747-759`)

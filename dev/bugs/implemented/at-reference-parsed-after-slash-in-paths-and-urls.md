@@ -20,7 +20,9 @@ a path are common in prompts.
 
 ```js
 const P = require("./out/utils/FileReferenceParser");
-P.parseAtReferences("check node_modules/@types/node/index.d.ts please").map(r => r.path);
+P.parseAtReferences("check node_modules/@types/node/index.d.ts please").map(
+  (r) => r.path
+);
 // ["types/node/index.d.ts"] — expected []
 ```
 

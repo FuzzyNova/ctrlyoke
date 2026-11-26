@@ -935,11 +935,7 @@ export const useEditorStore = create<
     }
   },
 
-  moveStepToNewStepDraft: (
-    index,
-    step,
-    restorePendingEdit = true
-  ) => {
+  moveStepToNewStepDraft: (index, step, restorePendingEdit = true) => {
     const before = get();
     const replacedDraft =
       before.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT

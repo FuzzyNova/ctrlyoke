@@ -9,13 +9,13 @@
 `quoteReferencePath` emits a path unquoted, and the parser then strips its
 last characters:
 
-| Path | Inserted | Parsed as |
-| --- | --- | --- |
-| `lib/foo.c++` | `@lib/foo.c++` | `lib/foo.c` |
-| `src/x.ts~` | `@src/x.ts~` | `src/x.ts` |
+| Path          | Inserted       | Parsed as    |
+| ------------- | -------------- | ------------ |
+| `lib/foo.c++` | `@lib/foo.c++` | `lib/foo.c`  |
+| `src/x.ts~`   | `@src/x.ts~`   | `src/x.ts`   |
 | `docs/notes_` | `@docs/notes_` | `docs/notes` |
 | `src/file(1)` | `@src/file(1)` | `src/file(1` |
-| `src/a-` | `@src/a-` | `src/a` |
+| `src/a-`      | `@src/a-`      | `src/a`      |
 
 The quoted form (`@"lib/foo.c++"`) parses correctly. Every insertion path
 goes through the builder: `@` completion (`src/completions/CompletionCore.ts`),
@@ -27,7 +27,9 @@ template `@{file:…}` substitution (`src/core/TemplateManager.ts`).
 ```js
 const B = require("./out/utils/ContextReferenceBuilder");
 const P = require("./out/utils/FileReferenceParser");
-P.parseAtReferences("see " + B.buildFileReference("lib/foo.c++") + " now").map(r => r.path);
+P.parseAtReferences("see " + B.buildFileReference("lib/foo.c++") + " now").map(
+  (r) => r.path
+);
 // ["lib/foo.c"] — expected ["lib/foo.c++"]
 ```
 

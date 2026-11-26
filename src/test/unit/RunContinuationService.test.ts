@@ -711,14 +711,21 @@ suite("RunContinuationService topology append transaction", () => {
     );
     await seedRun([{ prompt: "existing" }]);
     const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
-    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    const source = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
     source.maxSteps = "{{cap}}" as unknown as number;
     source.vars = { cap: "1" };
     await writeTrustedRunFile(runPath, source);
 
     await assert.rejects(
       RunContinuationService.appendStepsToRun(
-        workspace, workflowKey, runRef, [{ prompt: "over cap" }], 1, 100,
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "over cap" }],
+        1,
+        100,
         new WorkflowLineageRepository()
       ),
       /this run has 1\/1 steps \(workflow maxSteps: 1\)/
@@ -741,7 +748,12 @@ suite("RunContinuationService topology append transaction", () => {
     await writeTrustedRunFile(runPath, source);
     await assert.rejects(
       RunContinuationService.appendStepsToActiveParallelGroup(
-        workspace, workflowKey, runRef, [{ prompt: "over cap" }], 1, 100,
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "over cap" }],
+        1,
+        100,
         new WorkflowLineageRepository(),
         QUEUE_POSITION.PARALLEL_WITH_CURRENT,
         3

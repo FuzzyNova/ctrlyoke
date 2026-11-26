@@ -124,14 +124,21 @@ suite("SecretResolver", () => {
   });
 
   test("migrates a legacy workspace key when resolving through a symlink", async () => {
-    const parent = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-secret-migrate-"));
+    const parent = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-migrate-")
+    );
     const target = path.join(parent, "target");
     const alias = path.join(parent, "alias");
     await fs.mkdir(target);
     try {
-      await fs.symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+      await fs.symlink(
+        target,
+        alias,
+        process.platform === "win32" ? "junction" : "dir"
+      );
       const store = new InMemorySecretStore({
-        [legacyWorkspaceSecretKeyForRoot(alias, "LEGACY_TOKEN")]: "secret-value",
+        [legacyWorkspaceSecretKeyForRoot(alias, "LEGACY_TOKEN")]:
+          "secret-value",
       });
       const resolved = await resolveSecretEnvironment(["LEGACY_TOKEN"], {
         workspaceRoot: alias,

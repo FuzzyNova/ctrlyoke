@@ -522,12 +522,14 @@ export class SecretRegistryService {
     for (const name of missing) {
       const valueKey = this.secretKey(scope, name);
       const metadataKey = this.metadataKey(scope, name);
-      const legacyValueKey = scope === SETTING_SCOPES.WORKSPACE
-        ? this.legacySecretKey(name)
-        : valueKey;
-      const legacyMetadataKey = scope === SETTING_SCOPES.WORKSPACE
-        ? this.legacyMetadataKey(name)
-        : metadataKey;
+      const legacyValueKey =
+        scope === SETTING_SCOPES.WORKSPACE
+          ? this.legacySecretKey(name)
+          : valueKey;
+      const legacyMetadataKey =
+        scope === SETTING_SCOPES.WORKSPACE
+          ? this.legacyMetadataKey(name)
+          : metadataKey;
       let value = values.get(valueKey);
       let metadataValue = values.get(metadataKey);
       if (value === undefined && legacyValueKey !== valueKey) {
