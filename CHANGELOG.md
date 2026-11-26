@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Changes dialogs stay read-only and clear their selection after a run starts while they are open.
 - Detached headless CLI and script process groups are killed when ctrlyoke exits, and `ctrlyoke run` shuts down gracefully on SIGHUP.
 - Timed out shell scripts now escalate SIGTERM to SIGKILL for surviving POSIX descendants.
 - Interactive script PTYs now receive workflow variables as `CTRLYOKE_VAR_*` and run without inherited VS Code environment variables.

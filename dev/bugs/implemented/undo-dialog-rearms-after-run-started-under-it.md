@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt final step (claude-cli)
 - **Area:** `src/ui/webview-react/components/output/UndoChangesDialog.tsx`, `src/ui/webview-react/hooks/useOutputUndoActions.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
