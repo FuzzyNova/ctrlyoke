@@ -8,6 +8,7 @@ import type { UserFeedbackSink } from "./UserFeedbackSink";
 import {
   PromptStep,
   ScriptStep,
+  SubWorkflowStep,
   WorkflowStep,
   isScriptStep,
   isPromptStep,
@@ -67,6 +68,7 @@ import {
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
   PROMPT_TERMINAL_STATUS,
+  PROMPT_FILE_RESOLUTION_STATUSES,
   STEP_CLAIM_OUTCOMES,
   getEffectiveParallelGroupWidth,
   SNAPSHOT_STRATEGIES,
@@ -137,6 +139,11 @@ import {
   type SecretGrantsTrustStore,
 } from "../config/SecretGrantsTrustStore";
 import { PromptFileResolver } from "./PromptFileResolver";
+import type {
+  SubWorkflowHandle,
+  SubWorkflowHost,
+  SubWorkflowResult,
+} from "../types/SubWorkflowTypes";
 import {
   resolvePromptFileTextWithVariables,
   resolvePromptTextWithVariables,
@@ -245,6 +252,10 @@ export interface WorkflowExecutionContext {
   currentPromptFilePath: string | undefined;
   /** Authored workflow definition used as the semantic base for prompt-file refs. */
   sourceDefinitionPath?: string;
+  /** Host port for launching nested workflow runs. */
+  subWorkflowHost?: SubWorkflowHost;
+  /** Resolved active workflow chain, root first. */
+  ancestorPaths?: readonly string[];
   statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
@@ -271,7 +282,8 @@ export interface WorkflowExecutionContext {
   targetKeyedExecution?: boolean;
   registerActiveTarget?: (
     target: ExecutionTarget,
-    attemptIndex: number
+    attemptIndex: number,
+    subWorkflow?: SubWorkflowHandle | null
   ) => void;
   registerTargetPtySession?: (
     target: ExecutionTarget,
@@ -2394,7 +2406,12 @@ export class WorkflowExecutor {
       case STEP_TYPES.PROMPT:
         break;
       case STEP_TYPES.WORKFLOW:
-        throw new Error("Sub-workflow steps are not supported in this host");
+        return this.executeSubWorkflowStep(
+          authoredStep as SubWorkflowStep,
+          viewIndex,
+          context,
+          target
+        );
       default:
         return assertNever(authoredStepType);
     }
@@ -3079,6 +3096,148 @@ export class WorkflowExecutor {
     return false;
   }
 
+  private async executeSubWorkflowStep(
+    authoredStep: SubWorkflowStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget
+  ): Promise<boolean> {
+    if (context.dashboardProvider && stepIndex >= 0) {
+      context.dashboardProvider.updateStepStatus(stepIndex, {
+        state: STEP_STATUS.RUNNING,
+      });
+    }
+    const attemptIndex = 0;
+    this.getRuntime().beginAttempt(target, attemptIndex, Date.now());
+    const resolvedStep = VarSubstitutor.substituteStepView(
+      authoredStep,
+      this.getRunStartView(context).vars,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
+      stepIndex
+    ) as SubWorkflowStep;
+    const onFail = resolvedStep.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+
+    const settleFailure = async (message: string): Promise<boolean> => {
+      const shouldContinue = onFail === CONDITION_ACTIONS.CONTINUE;
+      if (shouldContinue) {
+        Log.warn(
+          `[WorkflowExecutor] Sub-workflow step failed but onFail=continue, continuing: ${message}`
+        );
+      }
+      const status = shouldContinue
+        ? STEP_STATUS.COMPLETED
+        : STEP_STATUS.FAILED;
+      return this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        shouldContinue,
+        attemptCompleted: false,
+        terminalStatus: status,
+        attemptFailureMessage: message,
+        queueFailureMessage: message,
+        runtimeFailureMessage: message,
+        recordContinuingFailure: false,
+      });
+    };
+
+    const host = context.subWorkflowHost;
+    if (!host) {
+      return settleFailure("Sub-workflow steps are not supported in this host");
+    }
+    const { promptFileResolver, sourceDefinitionPath } =
+      this.getPromptFileResolutionOptions(context);
+    const resolution = await promptFileResolver.resolvePath(
+      resolvedStep.workflow,
+      sourceDefinitionPath
+    );
+    if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+      return settleFailure(
+        `Sub-workflow could not resolve '${resolvedStep.workflow}'`
+      );
+    }
+    const resolvedPath = path.resolve(resolution.path);
+    const ancestors = context.ancestorPaths ?? [];
+    const comparisonPath = (candidate: string) =>
+      process.platform === "win32" ? candidate.toLowerCase() : candidate;
+    const cycleIndex = ancestors.findIndex(
+      (ancestor) =>
+        comparisonPath(path.resolve(ancestor)) === comparisonPath(resolvedPath)
+    );
+    if (cycleIndex >= 0) {
+      const chain = [...ancestors, resolvedPath]
+        .map((candidate) => path.basename(candidate))
+        .join(" → ");
+      return settleFailure(`Sub-workflow cycle detected: ${chain}`);
+    }
+
+    const queueState = this.promptQueue.getState();
+    const stepId = authoredStep._runtime?.stepId;
+    if (!queueState.workflowKey || !queueState.runRef || !stepId) {
+      return settleFailure("Sub-workflow parent run identity is unavailable");
+    }
+
+    let handle: SubWorkflowHandle | undefined;
+    try {
+      handle = await host.launch({
+        source: { kind: "file", resolvedPath },
+        parent: {
+          workflowKey: queueState.workflowKey,
+          runRef: queueState.runRef,
+          stepId,
+          ...(target.kind === FINAL_STEP_PHASES.FINAL_STEP
+            ? { loopIndex: target.loopIndex }
+            : {}),
+        },
+        ancestorPaths: [...ancestors, resolvedPath],
+      });
+      context.registerActiveTarget?.(target, attemptIndex, handle);
+      const runtimeIndex =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.stepIndex
+          : queueState.steps.length;
+      await this.promptQueue.persistRuntimeMetadata(runtimeIndex, {
+        childWorkflowKey: handle.workflowKey,
+        childRunRef: handle.runRef,
+        resolvedWorkflowPath: resolvedPath,
+      });
+      const result: SubWorkflowResult = await handle.done;
+      if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
+        return this.settleNonHarnessStep({
+          context,
+          target,
+          stepIndex,
+          attemptIndex,
+          cancelled: true,
+          stopWorkflowOnCancel: true,
+        });
+      }
+      if (result.status === PROMPT_TERMINAL_STATUS.FAILED) {
+        const prefix = result.failedToStart
+          ? "Sub-workflow could not start: "
+          : "";
+        return settleFailure(
+          `${prefix}${result.failureMessage ?? "Sub-workflow failed"}`
+        );
+      }
+      return this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        shouldContinue: true,
+        terminalStatus: STEP_STATUS.COMPLETED,
+      });
+    } catch (error) {
+      return settleFailure(
+        error instanceof Error ? error.message : String(error)
+      );
+    } finally {
+      if (handle) context.registerActiveTarget?.(target, attemptIndex, null);
+    }
+  }
+
   /**
    * Execute a script step — runs a shell command with no AI harness interaction.
    *
@@ -3397,17 +3556,13 @@ export class WorkflowExecutor {
       const evalResult = report.evaluationResult;
 
       if (evalResult.cancelled) {
-        runtime.cancelAttempt(target, attemptIndex);
-        await this.recordAttemptTerminal(
+        return this.settleNonHarnessStep({
           context,
           target,
+          stepIndex,
           attemptIndex,
-          TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED
-        );
-        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-          await this.promptQueue.cancelStep(target.stepIndex);
-        }
-        return false;
+          cancelled: true,
+        });
       }
 
       if (evalResult.errored) {
@@ -3468,51 +3623,116 @@ export class WorkflowExecutor {
         );
       }
 
-      // Complete or fail the attempt in the state machine
-      if (shouldContinue && !evalResult.errored) {
-        runtime.completeAttempt(target, attemptIndex);
-      } else {
-        runtime.failAttempt(
-          target,
-          attemptIndex,
-          `Script exited with code ${evalResult.exitCode}`
-        );
-      }
+      return this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        shouldContinue,
+        attemptCompleted: shouldContinue && !evalResult.errored,
+        terminalStatus,
+        durationSeconds: evalResult.duration / 1000,
+        attemptFailureMessage: `Script exited with code ${evalResult.exitCode}`,
+        queueFailureMessage: evalResult.errored
+          ? (evalResult.error ?? "Script could not run")
+          : `Script exited with code ${evalResult.exitCode}`,
+      });
+    }
+  }
+
+  private async settleNonHarnessStep(options: {
+    context: WorkflowExecutionContext;
+    target: ExecutionTarget;
+    stepIndex: number;
+    attemptIndex: number;
+    shouldContinue?: boolean;
+    attemptCompleted?: boolean;
+    cancelled?: boolean;
+    stopWorkflowOnCancel?: boolean;
+    terminalStatus?: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
+    durationSeconds?: number;
+    attemptFailureMessage?: string;
+    queueFailureMessage?: string;
+    runtimeFailureMessage?: string;
+    recordContinuingFailure?: boolean;
+  }): Promise<boolean> {
+    const {
+      context,
+      target,
+      stepIndex,
+      attemptIndex,
+      cancelled = false,
+      shouldContinue = false,
+    } = options;
+    const attemptCompleted = options.attemptCompleted ?? shouldContinue;
+    const runtime = this.getRuntime();
+    if (cancelled) {
+      runtime.cancelAttempt(target, attemptIndex);
       await this.recordAttemptTerminal(
         context,
         target,
         attemptIndex,
-        shouldContinue && !evalResult.errored
-          ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
-          : TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
-        shouldContinue && !evalResult.errored
-          ? undefined
-          : `Script exited with code ${evalResult.exitCode}`
+        TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED
       );
-
-      // Update dashboard step status
-      if (context.dashboardProvider && stepIndex >= 0) {
-        context.dashboardProvider.updateStepStatus(stepIndex, {
-          state: terminalStatus,
-          duration: evalResult.duration / 1000,
-        });
-      }
-
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        if (shouldContinue && !evalResult.errored) {
-          // The coordinator commits the target outcome and advances at join.
-        } else {
-          await this.promptQueue.failStep(
-            target.stepIndex,
-            evalResult.errored
-              ? (evalResult.error ?? "Script could not run")
-              : `Script exited with code ${evalResult.exitCode}`
-          );
-        }
+        await this.promptQueue.cancelStep(target.stepIndex);
       }
-
-      return shouldContinue;
+      if (options.stopWorkflowOnCancel) {
+        runtime.requestStop();
+        runtime.confirmStopped();
+      }
+      return false;
     }
+
+    const failureMessage = options.attemptFailureMessage;
+    if (attemptCompleted) runtime.completeAttempt(target, attemptIndex);
+    else
+      runtime.failAttempt(
+        target,
+        attemptIndex,
+        failureMessage ?? "Step failed"
+      );
+    await this.recordAttemptTerminal(
+      context,
+      target,
+      attemptIndex,
+      attemptCompleted
+        ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+        : TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+      attemptCompleted ? undefined : failureMessage
+    );
+    if (options.runtimeFailureMessage) {
+      const runtimeIndex =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.stepIndex
+          : this.promptQueue.getState().steps.length;
+      const updates: Record<string, unknown> = {};
+      updates.failureMessage = options.runtimeFailureMessage;
+      await this.promptQueue.persistRuntimeMetadata(runtimeIndex, updates);
+    }
+    if (context.dashboardProvider && stepIndex >= 0 && options.terminalStatus) {
+      context.dashboardProvider.updateStepStatus(stepIndex, {
+        state: options.terminalStatus,
+        ...(options.durationSeconds === undefined
+          ? {}
+          : { duration: options.durationSeconds }),
+      });
+    }
+    if (!attemptCompleted && target.kind === FINAL_STEP_PHASES.QUEUE) {
+      const reason =
+        options.queueFailureMessage ?? failureMessage ?? "Step failed";
+      if (shouldContinue && options.recordContinuingFailure !== false) {
+        await this.promptQueue.persistStepOutcome({
+          target,
+          status: PROMPT_TERMINAL_STATUS.FAILED,
+          failureReason: reason,
+          terminalFailure: false,
+        });
+      } else if (!shouldContinue) {
+        await this.promptQueue.failStep(target.stepIndex, reason);
+      }
+    }
+    return shouldContinue;
   }
 
   /**

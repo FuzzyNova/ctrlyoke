@@ -27,6 +27,7 @@ import {
   type RunRef,
   type WorkflowLineageCreationOptions,
 } from "../types/CtrlYokeTypes";
+import type { SubWorkflowRuntimeMetadata } from "../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -1677,7 +1678,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   async persistRuntimeMetadata(
     promptIndex: number,
-    updates: Partial<PromptRuntimeMetadata>
+    updates: Partial<PromptRuntimeMetadata & SubWorkflowRuntimeMetadata>
   ): Promise<void> {
     const step = this.getRuntimeStep(promptIndex);
     if (!step) {

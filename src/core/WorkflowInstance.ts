@@ -62,6 +62,10 @@ import {
   type RunnerHostIdentity,
   type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
+import type {
+  SubWorkflowHandle,
+  SubWorkflowHost,
+} from "../types/SubWorkflowTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
@@ -274,6 +278,12 @@ interface ActiveTargetResources {
   integration?: HarnessIntegration;
   processRunner?: ScriptProcessRunner;
   ptySessionId?: string;
+  subWorkflow?: SubWorkflowHandle;
+}
+
+export interface WorkflowInstanceExecutionOptions {
+  subWorkflowHost?: SubWorkflowHost;
+  ancestorPaths?: readonly string[];
 }
 
 export class WorkflowInstance
@@ -641,7 +651,8 @@ export class WorkflowInstance
     /** Host file watcher for the working file; headless hosts poll instead. */
     fileWatcherFactory?: FileWatcherFactory,
     private readonly workflowSessionIdFromOverride: boolean = false,
-    private readonly dashboardHostActions?: DashboardHostActions
+    private readonly dashboardHostActions?: DashboardHostActions,
+    private readonly executionOptions: WorkflowInstanceExecutionOptions = {}
   ) {
     const resolvedRunnerHostIdentity = runnerHostIdentity ?? {
       runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
@@ -2190,6 +2201,15 @@ export class WorkflowInstance
       get sourceDefinitionPath() {
         return instance.sourceDefinitionPath;
       },
+      subWorkflowHost: this.executionOptions.subWorkflowHost,
+      get ancestorPaths() {
+        if (instance.executionOptions.ancestorPaths) {
+          return instance.executionOptions.ancestorPaths;
+        }
+        const rootPath =
+          instance.sourceDefinitionPath ?? instance.currentPromptFile?.filePath;
+        return rootPath ? [path.resolve(rootPath)] : [];
+      },
       statusReporter: this.statusMessageReporter,
       reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
         this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
@@ -2226,8 +2246,8 @@ export class WorkflowInstance
       getScriptProcessRunner: (target) => this.getScriptProcessRunner(target),
       ensureHarnessReady: (harnessId) =>
         this.getHarnessReadinessError(harnessId),
-      registerActiveTarget: (target, attemptIndex) =>
-        this.registerActiveTarget(target, attemptIndex),
+      registerActiveTarget: (target, attemptIndex, subWorkflow) =>
+        this.registerActiveTarget(target, attemptIndex, subWorkflow),
       registerTargetPtySession: (target, sessionId) =>
         this.registerTargetPtySession(target, sessionId),
       clearTargetPtySession: (target) => this.clearTargetPtySession(target),
@@ -4264,11 +4284,14 @@ export class WorkflowInstance
 
   private registerActiveTarget(
     target: WorkflowAttemptTarget,
-    attemptIndex: number
+    attemptIndex: number,
+    subWorkflow?: SubWorkflowHandle | null
   ): void {
     const targetKey = this.getExecutionTargetRunKey(target);
     const resource = this.activeTargetResources.get(targetKey) ?? { target };
     resource.attemptIndex = attemptIndex;
+    if (subWorkflow !== undefined)
+      resource.subWorkflow = subWorkflow ?? undefined;
     this.activeTargetResources.set(targetKey, resource);
   }
 
