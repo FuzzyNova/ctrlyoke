@@ -3875,8 +3875,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
             script: `node -e "process.stdout.write('0')" # {{unknownEndScript}}`,
             env: { END_VALUE: "{{unknownEndEnv}}" },
             expected: "0",
-            retryPrompt: "Retry {{unknownRetryPrompt}}",
-            passRetryPrompt: "Pass {{unknownPassRetryPrompt}}",
+            retryPrompt:
+              "Retry {{unknownRetryPrompt}}\n```\n{{fencedRetryPrompt}}\n```",
+            passRetryPrompt:
+              "Pass {{unknownPassRetryPrompt}}\n```\n{{fencedPassRetryPrompt}}\n```",
           },
         },
       ],
@@ -3927,6 +3929,15 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
     assert.ok(diagnosticText.includes('step 1 ("Document variables")'));
     assert.ok(diagnosticText.includes("{{unknownFencedScript}}"));
+    for (const fenced of [
+      "{{fencedRetryPrompt}}",
+      "{{fencedPassRetryPrompt}}",
+    ]) {
+      assert.ok(
+        !diagnosticText.includes(fenced),
+        `fenced prompt placeholder ${fenced} must not be reported`
+      );
+    }
     assert.strictEqual(
       variableAdvisories.some((diagnostic) =>
         isContextResolutionDiagnostic(diagnostic.code)

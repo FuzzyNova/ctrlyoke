@@ -561,6 +561,18 @@ function getAttemptStartReason(
 }
 
 /**
+ * A field checked for unresolved `{{var}}` placeholders. `fencedCodeProtected`
+ * must match that field's entry in `VarSubstitutionPolicy` (prompt bodies and
+ * retry prompts): substitution leaves fenced placeholders literal there, so
+ * the check must skip them too.
+ */
+interface VariableCheckField {
+  field: string;
+  value: string | undefined;
+  fencedCodeProtected?: boolean;
+}
+
+/**
  * Drives the sequential execution loop for a ctrlyoke workflow.
  *
  * The outer loop has two phases:
@@ -2603,7 +2615,11 @@ export class WorkflowExecutor {
       this.reportUnresolvedVariables(
         this.getResolvedPropertyVariableFields(resolvedProperties, {
           includePreCondition: false,
-        }).concat({ field: "prompt text", value: effectivePromptText }),
+        }).concat({
+          field: "prompt text",
+          value: effectivePromptText,
+          fencedCodeProtected: true,
+        }),
         vars ?? {},
         resolvedProperties.harness,
         context,
@@ -5230,6 +5246,7 @@ export class WorkflowExecutor {
         this.getResolvedPropertyVariableFields(resolvedProperties).concat({
           field: "retry prompt text",
           value: effectiveRetryPrompt.prompt,
+          fencedCodeProtected: true,
         }),
         retryVars,
         resolvedProperties.harness,
@@ -5471,8 +5488,8 @@ export class WorkflowExecutor {
   private getResolvedPropertyVariableFields(
     properties: ResolvedProperties,
     options: { includePreCondition?: boolean } = {}
-  ): Array<{ field: string; value: string | undefined }> {
-    const fields: Array<{ field: string; value: string | undefined }> = [
+  ): VariableCheckField[] {
+    const fields: VariableCheckField[] = [
       { field: "model", value: properties.model },
       { field: "additionalArgs", value: properties.additionalArgs },
     ];
@@ -5507,17 +5524,19 @@ export class WorkflowExecutor {
       {
         field: "endCondition.retryPrompt",
         value: properties.endCondition?.retryPrompt,
+        fencedCodeProtected: true,
       },
       {
         field: "endCondition.passRetryPrompt",
         value: properties.endCondition?.passRetryPrompt,
+        fencedCodeProtected: true,
       }
     );
     return fields;
   }
 
   private reportUnresolvedVariables(
-    fields: ReadonlyArray<{ field: string; value: string | undefined }>,
+    fields: ReadonlyArray<VariableCheckField>,
     vars: Record<string, string>,
     harnessId: HarnessId,
     context: WorkflowExecutionContext,
@@ -5525,13 +5544,13 @@ export class WorkflowExecutor {
     step: WorkflowStep,
     phase?: string
   ): void {
-    const findings = fields.flatMap(({ field, value }) =>
+    const findings = fields.flatMap(({ field, value, fencedCodeProtected }) =>
       value === undefined
         ? []
         : VarSubstitutor.findUnresolvedVariables(
             value,
             vars,
-            /prompt text/i.test(field)
+            fencedCodeProtected === true
           ).map((placeholder) => ({ field, placeholder }))
     );
     if (findings.length === 0) {
