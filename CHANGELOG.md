@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Sub-workflow steps used as `finalStep` now launch successfully. Child run manifests identify their parent by the final-step pass index; queue-step links continue to use the queue step ID.
 - The MCP tools `append_step`, `edit_step`, `remove_step` and `reorder_steps` now work on a paused worktree run. A worktree run keeps its runner lock while paused, and these calls were refused with `Cannot append while this run is executing (state paused)`; the same calls already worked on a paused run without a worktree. The changes take effect on Resume.
 - Undo and redo are now refused for a run that a CLI or another VS Code window is executing, as they already were for a run this window executes. Before, a stale dialog or a hosted tab that had not caught up could restore files under a step that was still running.
 - Run bundle imports now accept empty change patches and retry errored runs from the failed step, with matching export and preview positions.

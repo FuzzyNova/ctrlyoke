@@ -139,6 +139,7 @@ function request(): SubWorkflowLaunchRequest {
     parent: {
       workflowKey: "parent-key" as WorkflowKey,
       runRef: "run-parent" as RunRef,
+      phase: "queue",
       stepId: "step-1",
     },
     parentExecution: { executionRoot: "/tmp", executionCheckoutRoot: "/tmp" },

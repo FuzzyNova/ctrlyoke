@@ -3176,7 +3176,11 @@ export class WorkflowExecutor {
 
     const queueState = this.promptQueue.getState();
     const stepId = authoredStep._runtime?.stepId;
-    if (!queueState.workflowKey || !queueState.runRef || !stepId) {
+    if (
+      !queueState.workflowKey ||
+      !queueState.runRef ||
+      (target.kind === FINAL_STEP_PHASES.QUEUE && !stepId)
+    ) {
       return settleFailure("Sub-workflow parent run identity is unavailable");
     }
 
@@ -3188,10 +3192,12 @@ export class WorkflowExecutor {
           parent: {
             workflowKey: queueState.workflowKey,
             runRef: queueState.runRef,
-            stepId,
-            ...(target.kind === FINAL_STEP_PHASES.FINAL_STEP
-              ? { loopIndex: target.loopIndex }
-              : {}),
+            ...(target.kind === FINAL_STEP_PHASES.QUEUE
+              ? { phase: FINAL_STEP_PHASES.QUEUE, stepId: stepId! }
+              : {
+                  phase: FINAL_STEP_PHASES.FINAL_STEP,
+                  loopIndex: target.loopIndex,
+                }),
           },
           parentExecution: {
             executionRoot: context.executionWorkspace.executionRoot,

@@ -87,7 +87,7 @@ suite("RunBundleExporter secrets", () => {
     const parentRun = {
       workflowKey: "parent-workflow" as never,
       runRef: "parent-run" as never,
-      stepId: "parent-step",
+      phase: "finalStep" as const,
       loopIndex: 1,
     };
     await recorder.updateManifest(manifestPath, (manifest) => ({

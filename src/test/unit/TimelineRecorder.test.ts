@@ -116,7 +116,7 @@ suite("TimelineRecorder", () => {
     const parentRun: SubWorkflowParentLink = {
       workflowKey: "parent-workflow" as WorkflowKey,
       runRef: "parent-run" as RunRef,
-      stepId: "step-1",
+      phase: "finalStep",
       loopIndex: 0,
     };
     const parentPath = await recorder.initializeRunAt(

@@ -110,7 +110,7 @@ suite("RunBundleImporter", () => {
     const sourceParent = {
       workflowKey: "missing-parent" as never,
       runRef: "missing-run" as never,
-      stepId: "child-step",
+      phase: "finalStep" as const,
       loopIndex: 2,
     };
     const bundleManifestPath = path.join(bundle, "manifest.json");

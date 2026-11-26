@@ -6295,6 +6295,12 @@ suite("WorkflowExecutor sub-workflow steps", () => {
       context.currentPromptFilePath,
       childPath,
     ]);
+    assert.deepStrictEqual(request?.parent, {
+      workflowKey: "parent-key",
+      runRef: "run-parent",
+      phase: FINAL_STEP_PHASES.QUEUE,
+      stepId: queue.getState().steps[0]?._runtime?.stepId,
+    });
   });
 
   test("records one settled event payload for each launched child outcome", async () => {
@@ -6554,7 +6560,7 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     assert.strictEqual(count, 2);
   });
 
-  test("persists child linkage before done resolves and includes finalStep loopIndex", async () => {
+  test("persists child linkage before done resolves with finalStep phase and loopIndex", async () => {
     let resolvePending!: (result: SubWorkflowResult) => void;
     const pending = new Promise<SubWorkflowResult>((resolve) => {
       resolvePending = resolve;
@@ -6563,7 +6569,6 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     const finalStep = {
       type: STEP_TYPES.WORKFLOW,
       workflow: run.childPath,
-      _runtime: { stepId: "final-step-workflow" },
     } as PromptFile["finalStep"];
     run.queue.loadPrompts({ steps: [], finalStep });
     const queueState = run.queue as unknown as {
@@ -6572,7 +6577,12 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     queueState.state.workflowKey = "parent-key";
     queueState.state.runRef = "run-parent";
     run.context.subWorkflowHost = fakeHost(pending, (request) => {
-      assert.strictEqual(request.parent.loopIndex, 0);
+      assert.deepStrictEqual(request.parent, {
+        workflowKey: "parent-key",
+        runRef: "run-parent",
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: 0,
+      });
     });
     const dispatch = run.executor as unknown as {
       executeTargetContract: (

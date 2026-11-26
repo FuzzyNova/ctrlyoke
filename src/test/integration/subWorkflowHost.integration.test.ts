@@ -11,11 +11,45 @@ import {
   MockPlatform,
 } from "../helpers/mockHarness";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
-import { STEP_STATUS } from "../../types/DashboardConstants";
+import { FINAL_STEP_PHASES, STEP_STATUS } from "../../types/DashboardConstants";
 import { isSubWorkflowStep } from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 
 suite("Sub-workflow host end to end", () => {
+  function buildInstance(
+    workspace: string,
+    platform: MockPlatform,
+    integrationFactory: MockIntegrationFactory,
+    detector: MockHarnessIntegration,
+    launcher: SubWorkflowLauncher,
+    childOptions?: {
+      ancestorPaths: readonly string[];
+      delegationChain: readonly string[];
+    }
+  ): WorkflowInstance {
+    return new WorkflowInstance(
+      platform,
+      undefined,
+      integrationFactory,
+      () => detector,
+      () => {},
+      () => {},
+      workspace,
+      false,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      { subWorkflowHost: launcher, ...childOptions }
+    );
+  }
+
   test("inherits a managed parent's worktree when worktree is absent and honors false", async () => {
     const workspace = makeTempDir("ctrlyoke-subworkflow-inherit-");
     const instances: WorkflowInstance[] = [];
@@ -37,29 +71,21 @@ suite("Sub-workflow host end to end", () => {
       const integrationFactory = new MockIntegrationFactory(platform);
       const detector = new MockHarnessIntegration(undefined, false);
       let launcher: SubWorkflowLauncher;
+      const createInstance = (childOptions?: {
+        ancestorPaths: readonly string[];
+        delegationChain: readonly string[];
+      }) =>
+        buildInstance(
+          workspace,
+          platform,
+          integrationFactory,
+          detector,
+          launcher,
+          childOptions
+        );
       launcher = new SubWorkflowLauncher(
         ({ ancestorPaths, delegationChain }) => {
-          const instance = new WorkflowInstance(
-            platform,
-            undefined,
-            integrationFactory,
-            () => detector,
-            () => {},
-            () => {},
-            workspace,
-            false,
-            false,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            false,
-            undefined,
-            { subWorkflowHost: launcher, ancestorPaths, delegationChain }
-          );
+          const instance = createInstance({ ancestorPaths, delegationChain });
           instances.push(instance);
           return instance;
         }
@@ -93,27 +119,7 @@ suite("Sub-workflow host end to end", () => {
         "parent.ctrlyoke.json",
       ]);
       execFileSync("git", ["-C", workspace, "commit", "-m", "add workflows"]);
-      const parent = new WorkflowInstance(
-        platform,
-        undefined,
-        integrationFactory,
-        () => detector,
-        () => {},
-        () => {},
-        workspace,
-        false,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        false,
-        undefined,
-        { subWorkflowHost: launcher }
-      );
+      const parent = createInstance();
       instances.push(parent);
       await parent.loadPromptFile(parentPath);
       await parent.executeLoadedPromptFile();
@@ -160,27 +166,7 @@ suite("Sub-workflow host end to end", () => {
         "-m",
         "disable child worktree",
       ]);
-      const secondParent = new WorkflowInstance(
-        platform,
-        undefined,
-        integrationFactory,
-        () => detector,
-        () => {},
-        () => {},
-        workspace,
-        false,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        false,
-        undefined,
-        { subWorkflowHost: launcher }
-      );
+      const secondParent = createInstance();
       instances.push(secondParent);
       await secondParent.loadPromptFile(parentPath);
       await secondParent.executeLoadedPromptFile();
@@ -206,29 +192,24 @@ suite("Sub-workflow host end to end", () => {
       const integrationFactory = new MockIntegrationFactory(platform);
       const detector = new MockHarnessIntegration(undefined, false);
       let launcher: SubWorkflowLauncher;
+      const createInstance = (childOptions?: {
+        ancestorPaths: readonly string[];
+        delegationChain: readonly string[];
+      }) =>
+        buildInstance(
+          workspace,
+          platform,
+          integrationFactory,
+          detector,
+          launcher,
+          childOptions
+        );
       launcher = new SubWorkflowLauncher(
         ({ ancestorPaths, delegationChain }) => {
-          const child: WorkflowInstance = new WorkflowInstance(
-            platform,
-            undefined,
-            integrationFactory,
-            () => detector,
-            () => {},
-            () => {},
-            workspace,
-            false,
-            false,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            false,
-            undefined,
-            { subWorkflowHost: launcher, ancestorPaths, delegationChain }
-          );
+          const child: WorkflowInstance = createInstance({
+            ancestorPaths,
+            delegationChain,
+          });
           instances.push(child);
           return child;
         }
@@ -248,27 +229,7 @@ suite("Sub-workflow host end to end", () => {
       await writeWorkflow(root, [
         { type: "workflow", workflow: "child.ctrlyoke.json" },
       ]);
-      const parent = new WorkflowInstance(
-        platform,
-        undefined,
-        integrationFactory,
-        () => detector,
-        () => {},
-        () => {},
-        workspace,
-        false,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        false,
-        undefined,
-        { subWorkflowHost: launcher }
-      );
+      const parent = createInstance();
       instances.push(parent);
       assert.strictEqual(await parent.loadPromptFile(root), true);
       await parent.executeLoadedPromptFile();
@@ -292,32 +253,61 @@ suite("Sub-workflow host end to end", () => {
         childManifest.parentRun?.runRef,
         parent.getExecutionRunRef()
       );
-      assert.ok(childManifest.parentRun?.stepId);
+      assert.deepStrictEqual(childManifest.parentRun, {
+        workflowKey: parent.promptQueue.getState().workflowKey,
+        runRef: parent.getExecutionRunRef(),
+        phase: FINAL_STEP_PHASES.QUEUE,
+        stepId: childRuntime?.stepId,
+      });
+
+      await writeWorkflow(child, [
+        { type: "script", script: 'node -e "process.exit(0)"' },
+      ]);
+      await fs.writeFile(
+        root,
+        JSON.stringify({
+          steps: [{ type: "script", script: 'node -e "process.exit(0)"' }],
+          finalStep: {
+            type: "workflow",
+            workflow: "child.ctrlyoke.json",
+          },
+        })
+      );
+      const finalStepParent = createInstance();
+      instances.push(finalStepParent);
+      assert.strictEqual(await finalStepParent.loadPromptFile(root), true);
+      await finalStepParent.executeLoadedPromptFile();
+      assert.strictEqual(
+        finalStepParent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(finalStepParent.promptQueue.getState().results)
+      );
+      const finalRuntime = finalStepParent.promptQueue.getWorkflowFile()
+        .finalStep as {
+        _runtime?: { childWorkflowKey?: string; childRunRef?: string };
+      };
+      assert.ok(finalRuntime._runtime?.childWorkflowKey);
+      assert.ok(finalRuntime._runtime?.childRunRef);
+      const finalChildManifest = await new TimelineRecorder().readManifest(
+        instances[instances.length - 1].outputHistoryManager.getHistoryFilePath(
+          finalRuntime._runtime!.childWorkflowKey! as never,
+          finalRuntime._runtime!.childRunRef! as never
+        )
+      );
+      assert.deepStrictEqual(finalChildManifest.parentRun, {
+        workflowKey: finalStepParent.promptQueue.getState().workflowKey,
+        runRef: finalStepParent.getExecutionRunRef(),
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: 0,
+      });
+      await writeWorkflow(root, [
+        { type: "workflow", workflow: "child.ctrlyoke.json" },
+      ]);
 
       await writeWorkflow(child, [
         { type: "script", script: 'node -e "process.exit(1)"' },
       ]);
-      const failingParent = new WorkflowInstance(
-        platform,
-        undefined,
-        integrationFactory,
-        () => detector,
-        () => {},
-        () => {},
-        workspace,
-        false,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        false,
-        undefined,
-        { subWorkflowHost: launcher }
-      );
+      const failingParent = createInstance();
       instances.push(failingParent);
       await failingParent.loadPromptFile(root);
       await failingParent.executeLoadedPromptFile();
@@ -336,27 +326,7 @@ suite("Sub-workflow host end to end", () => {
       await writeWorkflow(grandchild, [
         { type: "workflow", workflow: "root.ctrlyoke.json" },
       ]);
-      const cyclicParent = new WorkflowInstance(
-        platform,
-        undefined,
-        integrationFactory,
-        () => detector,
-        () => {},
-        () => {},
-        workspace,
-        false,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        false,
-        undefined,
-        { subWorkflowHost: launcher }
-      );
+      const cyclicParent = createInstance();
       instances.push(cyclicParent);
       await cyclicParent.loadPromptFile(root);
       await cyclicParent.executeLoadedPromptFile();

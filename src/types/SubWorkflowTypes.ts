@@ -9,6 +9,7 @@ import type {
   PromptTerminalStatus,
   SubWorkflowCancellationSource,
 } from "./DashboardConstants";
+import { FINAL_STEP_PHASES } from "./DashboardConstants";
 
 /** Host boundary used by the shared workflow executor to launch child runs. */
 export interface SubWorkflowHost {
@@ -33,12 +34,13 @@ export interface SubWorkflowLaunchRequest {
 }
 
 /** Durable identity of the parent step requesting the child run. */
-export interface SubWorkflowParentLink {
+export type SubWorkflowParentLink = {
   workflowKey: WorkflowKey;
   runRef: RunRef;
-  stepId: string;
-  loopIndex?: number;
-}
+} & (
+  | { phase: typeof FINAL_STEP_PHASES.QUEUE; stepId: string }
+  | { phase: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number }
+);
 
 /** Control surface and run identity for a launched child. */
 export interface SubWorkflowHandle {
