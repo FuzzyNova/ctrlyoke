@@ -206,6 +206,28 @@ suite("CliProcessManager teardown", () => {
     assert.strictEqual(result.terminationSignal, PROCESS_SIGNALS.TERMINATE);
   });
 
+  test("disposeProcess terminates an interactive child with the default kill path", async () => {
+    // spawnInteractive children are not detached, so they share this process
+    // group; a `-pid` group kill would fail with ESRCH and leave them running.
+    const manager = new CliProcessManager(process.cwd());
+    const exit = manager.spawnInteractive(
+      process.execPath,
+      ["-e", "setTimeout(() => {}, 10000)"],
+      process.cwd()
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const started = Date.now();
+    manager.disposeProcess();
+    const result = await exit;
+
+    assert.strictEqual(result.terminatedByManager, true);
+    assert.ok(
+      Date.now() - started < 2000,
+      "SIGTERM should end the child before SIGKILL escalation"
+    );
+  });
+
   test("escalates a timed-out child after another child becomes current", async () => {
     const killCalls: Array<{ pid: number; signal: string | number }> = [];
     const manager = new CliProcessManager(
@@ -317,10 +339,7 @@ suite("CliProcessManager teardown", () => {
   test("escalates a shell descendant after the shell exits on SIGTERM", async function () {
     if (process.platform === "win32") this.skip();
 
-    const markerPath = path.join(
-      makeTempDir("cy-cli-descendant-"),
-      "survived"
-    );
+    const markerPath = path.join(makeTempDir("cy-cli-descendant-"), "survived");
     const manager = new CliProcessManager(process.cwd());
     const script = [
       "process.on('SIGTERM', () => {});",
@@ -338,10 +357,7 @@ suite("CliProcessManager teardown", () => {
         /Process timeout/
       );
       await new Promise((resolve) => setTimeout(resolve, 4800));
-      assert.ok(
-        !fs.existsSync(markerPath),
-        "descendant should be SIGKILLed"
-      );
+      assert.ok(!fs.existsSync(markerPath), "descendant should be SIGKILLed");
     } finally {
       fs.rmSync(path.dirname(markerPath), { recursive: true, force: true });
       await manager.cancel();

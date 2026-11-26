@@ -119,6 +119,12 @@ export class CliProcessManager {
    * Recording our own request is the portable way to tell the two apart.
    */
   private readonly requestedKills = new WeakMap<ChildProcess, NodeJS.Signals>();
+  /**
+   * Children spawned `detached` on POSIX, which therefore lead their own
+   * process group. Only these may be signalled as `-pid`: an interactive child
+   * shares ctrlyoke's group, so `-pid` names no group and fails with ESRCH.
+   */
+  private readonly processGroupLeaders = new WeakSet<ChildProcess>();
 
   constructor(
     private workspaceRoot: string,
@@ -153,6 +159,7 @@ export class CliProcessManager {
       // different roots — `npm test` as a pre/end-condition failed all 114
       // Vitest suites with "failed to find the runner" purely because of this.
       const cwd = canonicalizeDriveLetter(options.cwd || this.workspaceRoot);
+      const leadsProcessGroup = process.platform !== "win32";
       const child = spawn(command, args, {
         cwd,
         shell: options.shell ?? false,
@@ -173,9 +180,12 @@ export class CliProcessManager {
         windowsHide: true,
         windowsVerbatimArguments: options.windowsVerbatimArguments,
         // Descendants remain signalable as a group after a wrapping shell exits.
-        detached: process.platform !== "win32",
+        detached: leadsProcessGroup,
       });
 
+      if (leadsProcessGroup) {
+        this.processGroupLeaders.add(child);
+      }
       this.currentProcess = child;
 
       if (
@@ -324,7 +334,7 @@ export class CliProcessManager {
 
     this.requestedKills.set(child, PROCESS_SIGNALS.KILL);
     this.logger?.("📤 Sending SIGKILL to process tree (immediate termination)");
-    this.signalProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
+    this.signalProcessTree(child, child.pid, PROCESS_SIGNALS.KILL, (err) => {
       if (err) {
         this.logger?.(`⚠️ SIGKILL failed: ${err.message}`);
       }
@@ -457,11 +467,16 @@ export class CliProcessManager {
     this.logger?.(
       "📤 Sending SIGTERM to process tree (graceful shutdown requested)"
     );
-    this.signalProcessTree(child.pid, PROCESS_SIGNALS.TERMINATE, (err) => {
-      if (err) {
-        this.logger?.(`⚠️ SIGTERM failed: ${err.message}`);
+    this.signalProcessTree(
+      child,
+      child.pid,
+      PROCESS_SIGNALS.TERMINATE,
+      (err) => {
+        if (err) {
+          this.logger?.(`⚠️ SIGTERM failed: ${err.message}`);
+        }
       }
-    });
+    );
 
     // Escalate to forceful kill after delay if process hasn't exited
     const killTimeout = setTimeout(() => {
@@ -471,17 +486,23 @@ export class CliProcessManager {
         this.logger?.(
           "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL"
         );
-        this.signalProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
-          if (err) {
-            this.logger?.(`❌ SIGKILL failed: ${err.message}`);
+        this.signalProcessTree(
+          child,
+          child.pid,
+          PROCESS_SIGNALS.KILL,
+          (err) => {
+            if (err) {
+              this.logger?.(`❌ SIGKILL failed: ${err.message}`);
+            }
           }
-        });
+        );
       }
     }, KILL_ESCALATION_DELAY_MS);
     this.killTimeouts.set(child, killTimeout);
   }
 
   private signalProcessTree(
+    child: ChildProcess,
     pid: number,
     signal: NodeJS.Signals,
     callback: (error?: Error | null) => void
@@ -491,7 +512,9 @@ export class CliProcessManager {
       return;
     }
 
-    if (process.platform !== "win32") {
+    // A group kill still reaches descendants after a wrapping shell exits,
+    // which a ppid walk (tree-kill) cannot.
+    if (this.processGroupLeaders.has(child)) {
       try {
         process.kill(-pid, signal);
         callback();
