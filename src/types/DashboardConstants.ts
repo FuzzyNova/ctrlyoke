@@ -5409,6 +5409,7 @@ export const OUTPUT_HISTORY_KINDS = {
   CLI: "cli",
   STATUS: "status",
   RUNTIME: "runtime",
+  SUB_WORKFLOW: "subWorkflow",
 } as const;
 
 export const OUTPUT_ACTIVITY_KINDS = {
@@ -5431,6 +5432,7 @@ export type OutputMessageType =
 // RUN OUTPUT RESOLVER EVENT KINDS - Events emitted while reducing a run timeline
 // ============================================================================
 export const RUN_OUTPUT_RESOLVER_EVENT_KINDS = {
+  SUB_WORKFLOW_SETTLED: "subWorkflowSettled",
   ATTEMPT_SETTLED: "attemptSettled",
   ATTEMPT_STARTED: "attemptStarted",
   STREAMING_CHUNK: "streamingChunk",

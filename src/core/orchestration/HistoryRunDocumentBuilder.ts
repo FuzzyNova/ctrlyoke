@@ -116,6 +116,14 @@ export class HistoryRunDocumentBuilder {
           event.payload,
           event.phase
         );
+      case TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED:
+        return this.candidateExtractor.collectScriptExecutionCandidates(
+          {
+            stdout: `Sub-workflow settled: ${event.payload.outcome.status}`,
+            stderr: "",
+          },
+          event.phase
+        );
       case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
         return this.candidateExtractor.collectStatusCandidates(
           event.payload.statusMessage.message

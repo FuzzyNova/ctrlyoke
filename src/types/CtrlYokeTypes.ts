@@ -1232,6 +1232,30 @@ export interface ScriptRuntimeOutput {
   exitCode?: number;
 }
 
+/** Durable metadata for a settled child workflow run. */
+export interface SubWorkflowOutput {
+  resolvedWorkflowPath?: string;
+  childWorkflowKey: WorkflowKey;
+  childRunRef: RunRef;
+  outcome: {
+    status: import("./DashboardConstants").PromptTerminalStatus;
+    failedToStart?: boolean;
+    cancelledBy?: import("./DashboardConstants").SubWorkflowCancellationSource;
+    failureMessage?: string;
+  };
+  worktree?: Pick<
+    WorkingFileWorktreeRuntime,
+    | "mode"
+    | "branchName"
+    | "baseCommit"
+    | "finalBranchTip"
+    | "changedFileCount"
+    | "landingOutcome"
+    | "mergeOutcome"
+    | "conflictFiles"
+  >;
+}
+
 export interface ScriptVerdict {
   compareSource: CompareSource;
   /** The comparison the author configured. Never inferred from the output. */

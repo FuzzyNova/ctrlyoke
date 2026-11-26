@@ -6297,6 +6297,81 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     ]);
   });
 
+  test("records one settled event payload for each launched child outcome", async () => {
+    const results: SubWorkflowResult[] = [
+      {
+        status: PROMPT_TERMINAL_STATUS.COMPLETED,
+        worktree: {
+          mode: "managed" as never,
+          branchName: "child-branch",
+          baseCommit: "base",
+          finalBranchTip: "tip",
+          changedFileCount: 2,
+          landingOutcome: "merged" as never,
+          mergeOutcome: "merged" as never,
+          conflictFiles: [],
+        },
+      },
+      { status: PROMPT_TERMINAL_STATUS.FAILED, failureMessage: "failed" },
+      {
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failedToStart: true,
+        failureMessage: "bad child",
+      },
+      { status: PROMPT_TERMINAL_STATUS.CANCELLED, cancelledBy: "parent" },
+    ];
+    for (const result of results) {
+      const run = await setupRun();
+      const recorded: unknown[] = [];
+      run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+      run.context.outputHistoryManager = new Proxy(
+        {
+          recordSubWorkflowSettled: async (...args: unknown[]) => {
+            recorded.push(args);
+          },
+        },
+        {
+          get: (target, property) =>
+            Reflect.get(target, property) ?? (async () => undefined),
+        }
+      ) as never;
+      run.context.subWorkflowHost = fakeHost(Promise.resolve(result));
+      await run.executor.execute(run.integration, run.context);
+      assert.strictEqual(recorded.length, 1);
+      const payload = (recorded[0] as unknown[])[4] as {
+        resolvedWorkflowPath: string;
+        childWorkflowKey: string;
+        childRunRef: string;
+        outcome: SubWorkflowResult;
+        worktree?: SubWorkflowResult["worktree"];
+      };
+      assert.strictEqual(payload.resolvedWorkflowPath, run.childPath);
+      assert.strictEqual(payload.childWorkflowKey, "child-key");
+      assert.strictEqual(payload.childRunRef, "run-child");
+      const { worktree: _worktree, ...expectedOutcome } = result;
+      assert.deepStrictEqual(payload.outcome, expectedOutcome);
+      assert.deepStrictEqual(payload.worktree, result.worktree);
+    }
+  });
+
+  test("does not record a settlement when failure happens before child launch", async () => {
+    const run = await setupRun();
+    const recorded: unknown[] = [];
+    run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    run.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          recorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(recorded.length, 0);
+  });
+
   test("fails by default for a failed child and continues with failure metadata when requested", async () => {
     const stopped = await setupRun();
     stopped.context.subWorkflowHost = fakeHost(

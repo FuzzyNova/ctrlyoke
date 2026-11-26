@@ -1,6 +1,7 @@
 import {
   PromptStep,
   ScriptRuntimeOutput,
+  SubWorkflowOutput,
   type FailureKind,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
@@ -84,6 +85,8 @@ export type PriorContextItem = {
   importedRun?: boolean;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
+  /** Workflow child metadata; nested rendering is handled by a later layer. */
+  subWorkflowOutput?: SubWorkflowOutput;
   /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
   scriptVerdict?: ScriptVerdict;
   summaryPrompt?: PriorContextText;

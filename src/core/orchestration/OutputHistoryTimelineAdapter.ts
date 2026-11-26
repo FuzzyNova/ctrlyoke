@@ -370,6 +370,15 @@ export class OutputHistoryTimelineAdapter {
             event.payload
           );
           break;
+        case TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED:
+          orderedEntries.push({
+            kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+            target: event.target,
+            subWorkflowOutput: event.payload,
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+          });
+          break;
         // SCRIPT_EXECUTION_RECORDED carries display output on read but is not
         // projected into activityEntries: the same text was already streamed
         // as chunk deltas, which would duplicate it on every history reload.

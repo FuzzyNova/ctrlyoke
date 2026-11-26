@@ -8,6 +8,7 @@ import {
   type OutputActivityKind,
   type SnapshotBaseSource,
 } from "./DashboardConstants";
+import type { SubWorkflowOutput } from "./CtrlYokeTypes";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
@@ -62,6 +63,12 @@ export interface OrderedRuntimeHistoryEntry extends OrderedHistoryEntryBase {
   };
 }
 
+export interface OrderedSubWorkflowHistoryEntry extends OrderedHistoryEntryBase {
+  kind: typeof OUTPUT_HISTORY_KINDS.SUB_WORKFLOW;
+  target: OutputExecutionTarget;
+  subWorkflowOutput: SubWorkflowOutput;
+}
+
 export interface OutputActivityEntry {
   timestampMs: number;
   sequence: number;
@@ -90,7 +97,8 @@ export interface OutputActivityEntry {
 export type OrderedHistoryEntry =
   | OrderedCliHistoryEntry
   | OrderedStatusHistoryEntry
-  | OrderedRuntimeHistoryEntry;
+  | OrderedRuntimeHistoryEntry
+  | OrderedSubWorkflowHistoryEntry;
 
 /**
  * Complete output history for a single workflow run.

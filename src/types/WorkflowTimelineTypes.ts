@@ -18,6 +18,7 @@ import type {
   WorktreeConfig,
   WorktreeRunProjection,
   WorkflowStopReason,
+  SubWorkflowOutput,
 } from "./CtrlYokeTypes";
 import type { SubWorkflowParentLink } from "./SubWorkflowTypes";
 import type {
@@ -49,6 +50,7 @@ export const TIMELINE_EVENT_TYPES = {
   ATTEMPT_STARTED: "attemptStarted",
   ATTEMPT_TERMINATED: "attemptTerminated",
   SCRIPT_EXECUTION_RECORDED: "scriptExecutionRecorded",
+  SUB_WORKFLOW_SETTLED: "subWorkflowSettled",
   RETRY_SCHEDULED: "retryScheduled",
   FOLLOW_UP_RESPONSE_APPENDED: "followUpResponseAppended",
   RUN_TERMINATED: "runTerminated",
@@ -413,6 +415,15 @@ export interface ScriptExecutionRecordedEventDraft extends TargetedTimelineEvent
   };
 }
 
+export interface SubWorkflowSettledEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+  definitionRevision: number;
+  payload: SubWorkflowOutput;
+}
+
 /** Captures the exact retry prompt before the next attempt is constructed/sent. */
 export interface RetryScheduledEventDraft extends TargetedTimelineEventDraftBase {
   eventType: typeof TIMELINE_EVENT_TYPES.RETRY_SCHEDULED;
@@ -514,6 +525,7 @@ export type WorkflowTimelineEventDraft =
   | AttemptStartedEventDraft
   | AttemptTerminatedEventDraft
   | ScriptExecutionRecordedEventDraft
+  | SubWorkflowSettledEventDraft
   | RetryScheduledEventDraft
   | FollowUpResponseAppendedEventDraft
   | RunTerminatedEventDraft
@@ -585,6 +597,15 @@ export interface ScriptExecutionRecordedEvent extends TargetedTimelineEventBase 
   phase?: ExecutionPhase;
   definitionRevision: number;
   payload: ScriptExecutionRecordedEventDraft["payload"];
+}
+
+export interface SubWorkflowSettledEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+  definitionRevision: number;
+  payload: SubWorkflowOutput;
 }
 
 export interface RetryScheduledEvent extends TargetedTimelineEventBase {
@@ -689,6 +710,7 @@ export type WorkflowTimelineEvent =
   | AttemptStartedEvent
   | AttemptTerminatedEvent
   | ScriptExecutionRecordedEvent
+  | SubWorkflowSettledEvent
   | RetryScheduledEvent
   | FollowUpResponseAppendedEvent
   | RunTerminatedEvent

@@ -706,6 +706,31 @@ export class OutputHistoryManager {
     ]);
   }
 
+  /** Persist a settled child workflow projection on its parent step. */
+  async recordSubWorkflowSettled(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    output: import("../../types/CtrlYokeTypes").SubWorkflowOutput,
+    definitionContext?: DefinitionRevisionContext,
+    phase?: ExecutionPhase
+  ): Promise<void> {
+    if (!historyFilePath) return;
+    await this.timelineRecorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: Date.now(),
+        target,
+        runIndex,
+        attemptIndex,
+        phase,
+        definitionRevision: definitionContext?.definitionRevision ?? 1,
+        payload: output,
+      },
+    ]);
+  }
+
   /** Persist the exact retry input before the retry attempt is sent. */
   async recordRetryScheduled(
     historyFilePath: string,

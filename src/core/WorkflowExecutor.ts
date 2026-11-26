@@ -3227,6 +3227,34 @@ export class WorkflowExecutor {
         resolvedWorkflowPath: resolvedPath,
       });
       const result: SubWorkflowResult = await handle.done;
+      if (context.historyFilePath && context.outputHistoryManager) {
+        await context.outputHistoryManager.recordSubWorkflowSettled(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          this.getRunIndexForTarget(context, target),
+          attemptIndex,
+          {
+            resolvedWorkflowPath: resolvedPath,
+            childWorkflowKey: handle.workflowKey,
+            childRunRef: handle.runRef,
+            outcome: {
+              status: result.status,
+              ...(result.failedToStart !== undefined
+                ? { failedToStart: result.failedToStart }
+                : {}),
+              ...(result.cancelledBy
+                ? { cancelledBy: result.cancelledBy }
+                : {}),
+              ...(result.failureMessage
+                ? { failureMessage: result.failureMessage }
+                : {}),
+            },
+            ...(result.worktree ? { worktree: result.worktree } : {}),
+          },
+          context.getDefinitionRevisionContext?.(),
+          undefined
+        );
+      }
       if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
         return this.settleNonHarnessStep({
           context,

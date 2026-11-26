@@ -169,6 +169,36 @@ suite("OutputHistoryTimelineAdapter", () => {
     });
   });
 
+  test("projects settled sub-workflow metadata as an ordered history item", () => {
+    const payload = {
+      resolvedWorkflowPath: "/work/child.yaml",
+      childWorkflowKey: "child-key" as never,
+      childRunRef: "child-run" as never,
+      outcome: { status: "completed" as const },
+    };
+    const history = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        workflowId: "workflow",
+        runId: 1,
+        sequence: 1,
+        timestampMs: 1,
+        target: TARGET,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload,
+      },
+    ]);
+    assert.deepStrictEqual(history.orderedEntries[0], {
+      kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+      target: TARGET,
+      subWorkflowOutput: payload,
+      timestampMs: 1,
+      sequence: 1,
+    });
+  });
+
   test("deduplicates CLI entries by execution phase while preserving prompt keys", () => {
     const adapter = new OutputHistoryTimelineAdapter();
     const history = adapter.project(MANIFEST, [

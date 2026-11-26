@@ -1,6 +1,7 @@
 import * as path from "path";
 import type {
   ScriptRuntimeOutput,
+  SubWorkflowOutput,
   ScriptVerdict,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
@@ -8,6 +9,7 @@ import {
   getWorkflowStepText,
   isPromptStep,
   isScriptStep,
+  isSubWorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import {
   CLI_EVENT_TYPES,
@@ -102,6 +104,7 @@ interface ResolvedRunAttemptOutput extends ResolvedRunAttempt {
 
 export interface ResolvedRunAttemptValue
   extends ResolvedRunAttempt, StepOutputSource {
+  subWorkflowOutput?: SubWorkflowOutput;
   prompt?: string;
   kind?: TimelineAttemptKind;
   startReason?: TimelineAttemptStartReason;
@@ -217,6 +220,11 @@ interface OpenAttemptState {
  * preview consumers, while script and terminal facts remain explicit.
  */
 export type RunOutputResolverEvent =
+  | {
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED;
+      attempt: ResolvedRunAttempt;
+      subWorkflowOutput: SubWorkflowOutput;
+    }
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED;
       attempt: ResolvedRunAttempt;
@@ -478,6 +486,20 @@ export class RunOutputResolver {
             scriptOutput: event.payload,
           };
           break;
+        case TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED:
+          yield {
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED,
+            attempt: this.createAttemptReference(
+              event.target,
+              event.runIndex,
+              event.attemptIndex,
+              event.definitionRevision,
+              activeDefinition,
+              event.phase
+            ),
+            subWorkflowOutput: event.payload,
+          };
+          break;
         case TIMELINE_EVENT_TYPES.RETRY_SCHEDULED:
           yield {
             kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.RETRY_SCHEDULED,
@@ -605,6 +627,10 @@ export class RunOutputResolver {
           if (event.attempt.phase !== undefined) {
             state.terminated = true;
           }
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED:
+          state.value.subWorkflowOutput = event.subWorkflowOutput;
+          state.terminated = true;
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
           state.value.terminalState = event.terminalState;
@@ -1401,6 +1427,13 @@ export class RunOutputResolver {
         };
         if (step && isScriptStep(step) && value.scriptOutput)
           return [{ ...common, scriptOutput: value.scriptOutput }];
+        if (step && isSubWorkflowStep(step) && value.subWorkflowOutput)
+          return [
+            {
+              ...common,
+              subWorkflowOutput: value.subWorkflowOutput,
+            } as PriorContextItem,
+          ];
         const projected = latestValues.get(targetKey);
         const transcript = projected?.transcript;
         const text = projected?.legacyText ?? "";
