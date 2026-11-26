@@ -363,6 +363,60 @@ async function markQueueCompleted(instance: WorkflowInstance): Promise<void> {
 }
 
 suite("WorkflowInstance target resources", () => {
+  test("forwards stop and pause controls to a registered sub-workflow", async () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const calls: string[] = [];
+    const handle = {
+      workflowKey: "child",
+      runRef: "run-child",
+      done: new Promise(() => {}),
+      async stop() {
+        calls.push("stop");
+      },
+      async pause() {
+        calls.push("pause");
+      },
+      async cancelPause() {
+        calls.push("cancelPause");
+      },
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    try {
+      (instance as any).registerActiveTarget(target, 0, handle);
+      const runtime = instance.promptQueue.getRuntimeStateMachine();
+      runtime.startExecution();
+      await instance.pause();
+      assert.strictEqual(runtime.status, EXECUTION_STATES.PAUSING);
+      await instance.resume();
+      assert.strictEqual(runtime.status, EXECUTION_STATES.RUNNING);
+      await instance.pause();
+      await instance.cancelPause();
+      assert.ok(calls.includes("pause"));
+      assert.ok(calls.includes("cancelPause"));
+      (instance as any).registerActiveTarget(target, 0, null);
+      const forwardedBeforeClearCheck = calls.length;
+      await instance.pause();
+      await instance.cancelPause();
+      assert.strictEqual(calls.length, forwardedBeforeClearCheck);
+      (instance as any).registerActiveTarget(target, 0, handle);
+      const stopStartedAt = Date.now();
+      await instance.stop();
+      assert.ok(Date.now() - stopStartedAt < 8000);
+      assert.ok(calls.includes("stop"));
+    } finally {
+      instance.dispose();
+    }
+  });
+
   test("gives same-harness target-keyed executions isolated integrations", () => {
     const platform = new MockPlatform();
     const instance = new WorkflowInstance(

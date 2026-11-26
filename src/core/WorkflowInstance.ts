@@ -1014,6 +1014,7 @@ export class WorkflowInstance
     const processRunner =
       resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
     processRunner?.dispose();
+    await this.forwardSubWorkflowControl(resource?.subWorkflow, "stop");
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -1097,6 +1098,7 @@ export class WorkflowInstance
     const processRunner =
       resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
     await processRunner?.cancel();
+    await this.forwardSubWorkflowControl(resource?.subWorkflow, "stop");
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -2607,6 +2609,8 @@ export class WorkflowInstance
       return;
     }
 
+    await this.forwardSubWorkflowControlToActiveTargets("pause");
+
     await this.promptQueue.commitRuntimeTransition();
   }
 
@@ -2618,6 +2622,8 @@ export class WorkflowInstance
       return;
     }
 
+    await this.forwardSubWorkflowControlToActiveTargets("cancelPause");
+
     await this.promptQueue.commitRuntimeTransition();
   }
 
@@ -2628,6 +2634,11 @@ export class WorkflowInstance
     historyFilePath?: string,
     targetRunIndices?: Map<string, number>
   ): Promise<void> {
+    if (this.workflowRuntime.status === EXECUTION_STATES.PAUSING) {
+      await this.cancelPause();
+      return;
+    }
+
     // IDLE with currentIndex > 0 = user stopped, then used "set start position" to reposition.
     // Treat as a continuation from the set position so existing outputs are preserved.
     if (
@@ -2883,11 +2894,16 @@ export class WorkflowInstance
     };
 
     const integrations = new Set<HarnessIntegration>();
+    let hasSubWorkflow = false;
     for (const resource of this.activeTargetResources.values()) {
       if (resource.integration) {
         integrations.add(resource.integration);
       }
       void resource.processRunner?.cancel();
+      if (resource.subWorkflow) {
+        hasSubWorkflow = true;
+        await this.forwardSubWorkflowControl(resource.subWorkflow, "stop");
+      }
       if (resource.ptySessionId) {
         getPtyProcessManager()?.killSession(
           resource.ptySessionId,
@@ -2895,8 +2911,14 @@ export class WorkflowInstance
         );
       }
     }
-    if (integrations.size === 0) {
+    if (integrations.size === 0 && !hasSubWorkflow) {
       integrations.add(this.getDetectorIntegration());
+    }
+
+    if (integrations.size === 0 && hasSubWorkflow) {
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
     }
 
     const responseDisposables: Array<{ dispose(): void }> = [];
@@ -4295,6 +4317,31 @@ export class WorkflowInstance
     if (subWorkflow !== undefined)
       resource.subWorkflow = subWorkflow ?? undefined;
     this.activeTargetResources.set(targetKey, resource);
+  }
+
+  private async forwardSubWorkflowControl(
+    handle: SubWorkflowHandle | undefined,
+    action: "pause" | "cancelPause" | "stop"
+  ): Promise<void> {
+    if (!handle) return;
+    try {
+      await handle[action]();
+    } catch (error) {
+      Log.warn(
+        `[WorkflowInstance] Failed to forward ${action} to sub-workflow:`,
+        error
+      );
+    }
+  }
+
+  private async forwardSubWorkflowControlToActiveTargets(
+    action: "pause" | "cancelPause"
+  ): Promise<void> {
+    await Promise.all(
+      [...this.activeTargetResources.values()].map((resource) =>
+        this.forwardSubWorkflowControl(resource.subWorkflow, action)
+      )
+    );
   }
 
   private registerTargetProcessRunner(
