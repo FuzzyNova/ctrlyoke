@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (subagent, reproduced against a scratch repo)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (~2566-2572, ~3113-3119), `src/utils/GitUtils.ts` (`getChangedFilesWithBinaryStatus` ~1055-1072)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

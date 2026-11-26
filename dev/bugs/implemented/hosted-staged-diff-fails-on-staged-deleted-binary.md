@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-25 by bug-hunt workflow final step (subagent; git message confirmed with git 2.56)
 - **Area:** `src/utils/GitUtils.ts` (`getBlobBytes` ~955-970), `src/server/HostedWorkspaceViewerService.ts` (`buildNonTextDiffEntries` ~3236-3247, staged sources ~3078)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

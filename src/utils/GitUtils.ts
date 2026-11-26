@@ -965,7 +965,8 @@ export async function getBlobBytes(
         : "";
     const missingPath =
       stderr.includes("does not exist in") ||
-      stderr.includes("exists on disk, but not in");
+      stderr.includes("exists on disk, but not in") ||
+      stderr.includes("does not exist (neither on disk nor in the index)");
     const missingRootCommitParent =
       ref.endsWith("^") && stderr.includes("invalid object name");
     if (missingPath || missingRootCommitParent) return null;
@@ -1029,8 +1030,13 @@ export async function getChangedFilesWithBinaryStatus(
   gitArgs: readonly string[]
 ): Promise<GitChangedFile[]> {
   const outputOptions = ["--raw", "--numstat", "-z", "--find-renames"];
-  const boundaryIndex = gitArgs.indexOf("--end-of-options");
-  const stashRevisionIndex = gitArgs.findIndex((arg) =>
+  const safeGitArgs =
+    (gitArgs[0] === "show" || gitArgs[0] === "log") &&
+    !gitArgs.includes(GIT_NO_SHOW_SIGNATURE_OPTION)
+      ? [gitArgs[0], GIT_NO_SHOW_SIGNATURE_OPTION, ...gitArgs.slice(1)]
+      : [...gitArgs];
+  const boundaryIndex = safeGitArgs.indexOf("--end-of-options");
+  const stashRevisionIndex = safeGitArgs.findIndex((arg) =>
     arg.startsWith("stash@{")
   );
   const insertionIndex =
@@ -1038,15 +1044,15 @@ export async function getChangedFilesWithBinaryStatus(
       ? boundaryIndex
       : stashRevisionIndex >= 0
         ? stashRevisionIndex
-        : gitArgs.length;
+        : safeGitArgs.length;
   const args =
     insertionIndex >= 0
       ? [
-          ...gitArgs.slice(0, insertionIndex),
+          ...safeGitArgs.slice(0, insertionIndex),
           ...outputOptions,
-          ...gitArgs.slice(insertionIndex),
+          ...safeGitArgs.slice(insertionIndex),
         ]
-      : [...gitArgs, ...outputOptions];
+      : [...safeGitArgs, ...outputOptions];
   const { stdout } = await execGit(["-C", repoRoot, ...args]);
   const tokens = stdout.split("\0");
   const statusByPath = new Map<string, { status: string; oldPath?: string }>();

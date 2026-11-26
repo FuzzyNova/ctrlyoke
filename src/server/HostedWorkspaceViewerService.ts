@@ -3233,18 +3233,29 @@ export class HostedWorkspaceViewerService {
                 media: media.media!,
               };
         }
-        const oldBytes = await this.readGitDiffBytes(
-          repoRoot,
-          sources.baseRef,
-          oldGitPath
-        );
+        const oldBytes =
+          file.status === "A"
+            ? null
+            : await this.readGitDiffBytes(
+                repoRoot,
+                sources.baseRef,
+                oldGitPath
+              );
         const newBytes = sources.targetIsWorkingTree
-          ? await this.readWorkingTreeDiffBytes(repoRoot, file.path, changeType)
-          : await this.readGitDiffBytes(
-              repoRoot,
-              sources.targetRef ?? "HEAD",
-              file.path
-            );
+          ? file.status === "D"
+            ? null
+            : await this.readWorkingTreeDiffBytes(
+                repoRoot,
+                file.path,
+                changeType
+              )
+          : file.status === "D"
+            ? null
+            : await this.readGitDiffBytes(
+                repoRoot,
+                sources.targetRef ?? "HEAD",
+                file.path
+              );
         const viewerPath = this.relativePath(absolutePath);
         const viewerOldPath = file.oldPath
           ? this.relativePath(path.resolve(repoRoot, file.oldPath))

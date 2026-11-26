@@ -484,6 +484,21 @@ suite("GitUtils.gitRefExists", function () {
     );
   });
 
+  test("returns null for an index blob after the path is removed", async () => {
+    await fs.writeFile(
+      path.join(workspaceRoot, "deleted.bin"),
+      Buffer.from([0, 1])
+    );
+    runGit(["add", "deleted.bin"]);
+    runGit(["commit", "-m", "Add binary"]);
+    runGit(["rm", "deleted.bin"]);
+
+    assert.strictEqual(
+      await getBlobBytes(workspaceRoot, ":", "deleted.bin"),
+      null
+    );
+  });
+
   test("returns null for a missing blob under a translated Git locale", async () => {
     await writeWorkspaceFile("present.txt", "content\n");
     runGit(["add", "present.txt"]);
@@ -642,6 +657,29 @@ suite("GitUtils.gitRefExists", function () {
     const diff = await getCommitDiff(workspaceRoot, "HEAD");
     assert.ok(diff.includes("Signed second"));
     assert.ok(!diff.includes('Good "git" signature'));
+
+    runGit(["rm", "tracked.txt"]);
+    runGit([
+      "-c",
+      "user.email=ctrlyoke-tests",
+      "commit",
+      "-m",
+      "Signed deletion",
+    ]);
+    const deletedFiles = await getChangedFilesWithBinaryStatus(workspaceRoot, [
+      "show",
+      "--format=",
+      "--no-ext-diff",
+      "--end-of-options",
+      "HEAD",
+    ]);
+    assert.deepStrictEqual(
+      deletedFiles.map(({ path: filePath, status }) => ({
+        path: filePath,
+        status,
+      })),
+      [{ path: "tracked.txt", status: "D" }]
+    );
   });
 
   test("searches commit subjects with literal grep strings", async () => {
