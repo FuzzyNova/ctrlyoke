@@ -50,6 +50,121 @@ suite("Sub-workflow host end to end", () => {
     );
   }
 
+  async function waitForFile(filePath: string): Promise<void> {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      try {
+        await fs.access(filePath);
+        return;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+    assert.fail("Timed out waiting for " + filePath);
+  }
+
+  function makeInstanceFactory(workspace: string) {
+    const platform = new MockPlatform(workspace);
+    const integrationFactory = new MockIntegrationFactory(platform);
+    const detector = new MockHarnessIntegration(undefined, false);
+    const instances: WorkflowInstance[] = [];
+    let launcher: SubWorkflowLauncher;
+    const createInstance = (childOptions?: {
+      ancestorPaths: readonly string[];
+      delegationChain: readonly string[];
+    }) =>
+      buildInstance(
+        workspace,
+        platform,
+        integrationFactory,
+        detector,
+        launcher,
+        childOptions
+      );
+    launcher = new SubWorkflowLauncher(({ ancestorPaths, delegationChain }) => {
+      const child = createInstance({ ancestorPaths, delegationChain });
+      instances.push(child);
+      return child;
+    });
+    return { createInstance, instances };
+  }
+
+  test("stops a plain script promptly without waiting for the detector fallback", async () => {
+    const workspace = makeTempDir("ctrlyoke-script-stop-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      const marker = path.join(workspace, "started");
+      const workflow = path.join(workspace, "plain.ctrlyoke.json");
+      const script =
+        "node -e \"require('fs').writeFileSync('" +
+        marker.replace(/\\/g, "\\\\") +
+        "','started');setTimeout(()=>{},60000)\"";
+      await fs.writeFile(
+        workflow,
+        JSON.stringify({ steps: [{ type: "script", script }] })
+      );
+      const instance = createInstance();
+      instances.push(instance);
+      assert.strictEqual(await instance.loadPromptFile(workflow), true);
+      const execution = instance.executeLoadedPromptFile();
+      await waitForFile(marker);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await instance.stop();
+      await execution;
+      assert.strictEqual(instance.promptQueue.getState().status, "stopped");
+    } finally {
+      for (const instance of instances) {
+        await instance.outputHistoryManager.flushPendingIndexRefresh();
+        instance.dispose();
+      }
+      removeTempDir(workspace);
+    }
+  });
+
+  test("stopping a parent stops its live child script", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-stop-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      const marker = path.join(workspace, "child-started");
+      const childPath = path.join(workspace, "child.ctrlyoke.json");
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      const script =
+        "node -e \"require('fs').writeFileSync('" +
+        marker.replace(/\\/g, "\\\\") +
+        "','yes');setTimeout(()=>{},60000)\"";
+      await fs.writeFile(
+        childPath,
+        JSON.stringify({ steps: [{ type: "script", script }] })
+      );
+      await fs.writeFile(
+        parentPath,
+        JSON.stringify({
+          steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+        })
+      );
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(marker);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await parent.stop();
+      await execution;
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      assert.strictEqual(instances[0].promptQueue.getState().status, "stopped");
+      assert.strictEqual(
+        parent.promptQueue.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
+    } finally {
+      for (const instance of instances) {
+        await instance.outputHistoryManager.flushPendingIndexRefresh();
+        instance.dispose();
+      }
+      removeTempDir(workspace);
+    }
+  });
+
   test("inherits a managed parent's worktree when worktree is absent and honors false", async () => {
     const workspace = makeTempDir("ctrlyoke-subworkflow-inherit-");
     const instances: WorkflowInstance[] = [];

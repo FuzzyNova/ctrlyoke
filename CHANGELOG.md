@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Stopping a long-running script now waits for its process runner to shut down instead of waiting for the detector's 10-second fallback.
+
 ### Added
 
 - **Sub-workflow steps** run another workflow file to completion as a child run, with its own harness, variables, final step, and run history. The parent waits for the child and can use its nested output in later steps. A run bundle containing a sub-workflow step cannot be imported by an earlier ctrlyoke version.

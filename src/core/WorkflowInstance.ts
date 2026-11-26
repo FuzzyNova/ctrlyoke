@@ -2940,11 +2940,13 @@ export class WorkflowInstance
 
     const integrations = new Set<HarnessIntegration>();
     let hasSubWorkflow = false;
+    const processRunners = new Set(this.targetScriptProcessRunners.values());
     for (const resource of this.activeTargetResources.values()) {
       if (resource.integration) {
         integrations.add(resource.integration);
       }
       void resource.processRunner?.cancel();
+      if (resource.processRunner) processRunners.add(resource.processRunner);
       if (resource.subWorkflow) {
         hasSubWorkflow = true;
         await this.forwardSubWorkflowControl(resource.subWorkflow, "stop");
@@ -2955,6 +2957,21 @@ export class WorkflowInstance
           TERMINAL_END_REASONS.STOPPED
         );
       }
+    }
+    if (!hasSubWorkflow && processRunners.size > 0) {
+      // Script steps have no harness integration to emit onResponseComplete.
+      // Their process runner is the cancellation boundary; waiting on the
+      // detector here would force every stopped script through the 10s timer.
+      await Promise.allSettled(
+        [...processRunners].map(async (runner) => {
+          await runner.cancel();
+          await runner.waitForProcessShutdown();
+        })
+      );
+      await confirmStopped();
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
     }
     if (integrations.size === 0 && !hasSubWorkflow) {
       integrations.add(this.getDetectorIntegration());
