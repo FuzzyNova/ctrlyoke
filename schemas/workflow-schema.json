@@ -1190,9 +1190,11 @@
           "description": "Marks this step as a sub-workflow step."
         },
         "workflow": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The workflow file to run. The path is resolved like a prompt file reference and is not variable-substituted in v1."
+          "description": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "$ref": "#/$defs/inlineSubWorkflowDefinition" }
+          ]
         },
         "onFail": {
           "$ref": "#/$defs/stepOnFail",
@@ -1204,6 +1206,32 @@
         }
       },
       "required": ["type", "workflow"]
+    },
+    "inlineSubWorkflowDefinition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/promptStep" },
+            {
+              "type": "object",
+              "properties": { "worktree": { "$ref": "#/$defs/worktreeConfig" } }
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/scriptStep" },
+            {
+              "type": "object",
+              "properties": { "worktree": { "$ref": "#/$defs/worktreeConfig" } }
+            }
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
     },
     "subWorkflowRuntimeMetadata": {
       "type": "object",

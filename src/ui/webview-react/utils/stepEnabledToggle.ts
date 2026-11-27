@@ -3,6 +3,7 @@ import {
   assertNever,
   getStepType,
   isSubWorkflowStep,
+  getWorkflowStepText,
   type ScriptStep,
   type PromptStep,
 } from "@root/types/CtrlYokeTypes";
@@ -51,10 +52,11 @@ export function buildWorkflowStepEnabledUpdate(
         throw new Error("Invalid workflow step kind");
       }
       return {
-        text: step.workflow,
+        text: getWorkflowStepText(step),
         promptName: step.name ?? "",
         properties: {
           type: STEP_TYPES.WORKFLOW,
+          workflow: step.workflow,
           ...(!enabled && { enabled: false }),
         },
         ...(enabled ? { clearProperties: ["enabled"] } : {}),

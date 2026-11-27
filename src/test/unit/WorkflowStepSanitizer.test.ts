@@ -11,6 +11,21 @@ import {
 } from "../../core/WorkflowStepSanitizer";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
+  test("round-trips an authored inline sub-workflow definition", () => {
+    const step = {
+      type: STEP_TYPES.WORKFLOW,
+      name: "Lane",
+      workflow: {
+        prompt: "Implement the task",
+        worktree: true,
+      },
+    } as import("../../types/CtrlYokeTypes").WorkflowStep;
+    assert.deepStrictEqual(
+      parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(step)),
+      step
+    );
+  });
+
   test("preserves sandbox booleans and leaves an absent override absent", () => {
     for (const sandbox of [true, false]) {
       assert.strictEqual(

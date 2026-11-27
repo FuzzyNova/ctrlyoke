@@ -8,12 +8,15 @@ import {
   PromptFile,
   ParsedPromptFile,
   PromptStep,
+  InlineSubWorkflowDefinition,
   WorkflowStep,
   ScriptStep,
+  SubWorkflowStep,
   StepDisplayProperties,
   EXECUTION_PROPERTY_KEYS,
   isScriptStep,
   isPromptStep,
+  isSubWorkflowStep,
   getStepType,
   assertNever,
   hasExecutableSteps,
@@ -41,6 +44,7 @@ import {
 } from "./UserFeedbackSink";
 import {
   STEP_TYPES,
+  FINAL_STEP_PHASES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
@@ -112,6 +116,50 @@ class WorkflowStructureValidationError extends Error {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+/** References that would address the parent run cannot be used by a child run. */
+function inlineRunBoundaryErrors(
+  step: SubWorkflowStep,
+  label: string
+): string[] {
+  const inline = step.workflow;
+  if (typeof inline === "string") return [];
+  const errors: string[] = [];
+  const boundary = `${label}: Inline sub-workflow starts a new run boundary`;
+  if (
+    "sessionId" in inline &&
+    (typeof inline.sessionId === "number" ||
+      inline.sessionId === FINAL_STEP_PHASES.FINAL_STEP)
+  ) {
+    errors.push(
+      `${boundary}; numeric and final-pass sessionId references select parent-run sessions`
+    );
+  }
+  const priorContext =
+    "priorContext" in inline ? inline.priorContext : undefined;
+  if (
+    Array.isArray(priorContext) ||
+    priorContext === "previous" ||
+    (priorContext !== null &&
+      typeof priorContext === "object" &&
+      "previous" in priorContext)
+  ) {
+    errors.push(
+      `${boundary}; numeric or relative priorContext selectors cannot cross into the child run`
+    );
+  }
+  if (
+    "prompt" in inline &&
+    new RegExp(
+      `\\$(?:previous\\b|step:|all\\b|${FINAL_STEP_PHASES.FINAL_STEP}\\b)`
+    ).test(inline.prompt)
+  ) {
+    errors.push(
+      `${boundary}; $previous, $step:, $all, and the final-step reference cannot select parent-run output`
+    );
+  }
+  return errors;
 }
 
 /** A step's `name` is capped at this length by the workflow schema. */
@@ -537,6 +585,51 @@ export class PromptFileParser {
         message: warning.message,
         severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       });
+    }
+    if (isObject(parsed)) {
+      const inlineCandidates: Array<{
+        step: Record<string, unknown>;
+        pointer: string;
+        label: string;
+      }> = [];
+      if (Array.isArray(parsed.steps)) {
+        parsed.steps.forEach((step, index) => {
+          if (isObject(step) && step.type === STEP_TYPES.WORKFLOW) {
+            inlineCandidates.push({
+              step,
+              pointer: `/steps/${index}/workflow`,
+              label: `Step ${index + 1}`,
+            });
+          }
+        });
+      }
+      if (
+        isObject(parsed.finalStep) &&
+        parsed.finalStep.type === STEP_TYPES.WORKFLOW
+      ) {
+        inlineCandidates.push({
+          step: parsed.finalStep,
+          pointer: "/finalStep/workflow",
+          label: "Final step",
+        });
+      }
+      if (parsed.type === STEP_TYPES.WORKFLOW) {
+        inlineCandidates.push({
+          step: parsed,
+          pointer: "/workflow",
+          label: "Root workflow step",
+        });
+      }
+      for (const candidate of inlineCandidates) {
+        const step = candidate.step as unknown as SubWorkflowStep;
+        for (const message of inlineRunBoundaryErrors(step, candidate.label)) {
+          issues.push({
+            instancePath: candidate.pointer,
+            message,
+            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+          });
+        }
+      }
     }
     const uniqueIssues = new Map<string, WorkflowTextValidationIssue>();
     for (const issue of issues) {
@@ -1290,7 +1383,70 @@ export class PromptFileParser {
     source: Record<string, unknown>,
     promptFilePath: string
   ): Promise<WorkflowStep> {
-    if (typeof source.workflow !== "string" || source.workflow.trim() === "") {
+    if (typeof source.workflow !== "string") {
+      if (
+        !source.workflow ||
+        typeof source.workflow !== "object" ||
+        Array.isArray(source.workflow)
+      ) {
+        throw new Error(
+          "Sub-workflow step requires a workflow path or inline step"
+        );
+      }
+      const inline = source.workflow as Record<string, unknown>;
+      if (
+        inline.type === STEP_TYPES.WORKFLOW ||
+        "steps" in inline ||
+        "finalStep" in inline ||
+        "parallel" in inline
+      ) {
+        throw new Error(
+          "Inline sub-workflow definitions must contain one prompt or script step; use a workflow file across run boundaries"
+        );
+      }
+      const inlineStep = source.workflow as InlineSubWorkflowDefinition;
+      switch (getStepType(inlineStep)) {
+        case STEP_TYPES.SCRIPT: {
+          const script = inlineStep as ScriptStep;
+          if (typeof script.script !== "string" || !script.script.trim()) {
+            throw new Error(
+              "Inline sub-workflow script step requires a non-empty script"
+            );
+          }
+          break;
+        }
+        case STEP_TYPES.PROMPT: {
+          const prompt = inlineStep as PromptStep;
+          if (typeof prompt.prompt !== "string" || !prompt.prompt.trim()) {
+            throw new Error(
+              "Inline sub-workflow prompt step requires non-empty prompt text"
+            );
+          }
+          await this.validatePromptReference(prompt.prompt, promptFilePath);
+          break;
+        }
+        case STEP_TYPES.WORKFLOW:
+          throw new Error(
+            "Inline sub-workflow definitions cannot contain another workflow step"
+          );
+        default:
+          throw new Error(
+            "Inline sub-workflow definitions must be prompt or script steps"
+          );
+      }
+      const step = {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: source.workflow,
+      } as Extract<WorkflowStep, { type: typeof STEP_TYPES.WORKFLOW }>;
+      for (const key of SUB_WORKFLOW_STEP_COPY_FIELDS) {
+        const value = source[key];
+        if (value !== undefined) Object.assign(step, { [key]: value });
+      }
+      if (source._runtime !== undefined)
+        step._runtime = source._runtime as typeof step._runtime;
+      return step;
+    }
+    if (source.workflow.trim() === "") {
       throw new Error("Sub-workflow step requires a non-empty workflow path");
     }
     const resolution = await this.createPromptFileResolver().resolvePath(
@@ -1553,6 +1709,11 @@ export class PromptFileParser {
         )
       );
 
+      if (isSubWorkflowStep(item) && typeof item.workflow !== "string") {
+        errors.push(...inlineRunBoundaryErrors(item, `Step ${index + 1}`));
+        return;
+      }
+
       // Script steps only require a non-empty script field
       if (isScriptStep(item)) {
         if (!item.script || item.script.trim().length === 0) {
@@ -1590,6 +1751,14 @@ export class PromptFileParser {
           "Final step"
         )
       );
+      if (
+        isSubWorkflowStep(options.finalStep) &&
+        typeof options.finalStep.workflow !== "string"
+      ) {
+        errors.push(
+          ...inlineRunBoundaryErrors(options.finalStep, "Final step")
+        );
+      }
     }
 
     return {

@@ -2,6 +2,7 @@ import {
   assertNever,
   getStepType,
   isSubWorkflowStep,
+  getWorkflowStepText,
   type PromptStep,
   type ScriptStep,
   type WorkflowStep as PersistedWorkflowStep,
@@ -22,7 +23,7 @@ export function getWorkflowStepRawText(step: WorkflowStep): string {
     case STEP_TYPES.SCRIPT:
       return (step as ScriptStep).script;
     case STEP_TYPES.WORKFLOW:
-      return isSubWorkflowStep(step) ? step.workflow : "";
+      return isSubWorkflowStep(step) ? getWorkflowStepText(step) : "";
     default:
       return assertNever(stepType);
   }

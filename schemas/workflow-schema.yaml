@@ -1363,11 +1363,13 @@ $defs:
         description: Marks this step as a sub-workflow step.
         title: Type
       workflow:
-        type: string
-        minLength: 1
         description: >-
-          The workflow file to run. The path is resolved like a prompt file reference and is not
-          variable-substituted in v1.
+          A workflow file path (not variable-substituted in v1), or an inline single prompt or
+          script step.
+        oneOf:
+          - type: string
+            minLength: 1
+          - $ref: '#/$defs/inlineSubWorkflowDefinition'
         title: Workflow
       onFail:
         $ref: '#/$defs/stepOnFail'
@@ -1385,6 +1387,26 @@ $defs:
     required:
       - type
       - workflow
+  inlineSubWorkflowDefinition:
+    oneOf:
+      - type: object
+        allOf:
+          - $ref: '#/$defs/promptStep'
+          - type: object
+            properties:
+              worktree:
+                $ref: '#/$defs/worktreeConfig'
+                title: Worktree
+        unevaluatedProperties: false
+      - type: object
+        allOf:
+          - $ref: '#/$defs/scriptStep'
+          - type: object
+            properties:
+              worktree:
+                $ref: '#/$defs/worktreeConfig'
+                title: Worktree
+        unevaluatedProperties: false
   subWorkflowRuntimeMetadata:
     type: object
     description: Runtime linkage to the child run this step started (added automatically during execution).

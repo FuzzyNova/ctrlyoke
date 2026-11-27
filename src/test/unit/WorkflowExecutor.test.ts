@@ -6490,6 +6490,37 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     );
   });
 
+  test("inline sub-workflows fail through onFail until child materialization is implemented", async () => {
+    const failed = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "inline child" },
+      },
+    ]);
+    await failed.executor.execute(failed.integration, failed.context);
+    assert.strictEqual(
+      failed.queue.getState().results[0]?.status,
+      STEP_STATUS.FAILED
+    );
+    assert.match(
+      failed.queue.getState().steps[0]?._runtime?.failureMessage ?? "",
+      /^Sub-workflow could not start: inline definitions are not executable/
+    );
+
+    const continued = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "inline child" },
+        onFail: CONDITION_ACTIONS.CONTINUE,
+      },
+    ]);
+    await continued.executor.execute(continued.integration, continued.context);
+    assert.strictEqual(
+      continued.queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
   test("a cancelled child stops the parent before its next step", async () => {
     const run = await setupRun([
       {

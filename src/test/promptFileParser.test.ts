@@ -4,9 +4,14 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { PromptFileParser } from "../core/PromptFileParser";
-import type { PromptStep, WorkflowStep } from "../types/CtrlYokeTypes";
+import {
+  isSubWorkflowStep,
+  type PromptStep,
+  type WorkflowStep,
+} from "../types/CtrlYokeTypes";
 import {
   CTRLYOKE_FILE_KINDS,
+  FINAL_STEP_PHASES,
   WORKFLOW_VALIDATION_WARNING_CODES,
 } from "../types/DashboardConstants";
 
@@ -291,6 +296,79 @@ suite("PromptFileParser Tests", () => {
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }
+    });
+
+    test("retains inline sub-workflow definitions verbatim through parse and save shape", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-inline-subworkflow-")
+      );
+      try {
+        const inline = {
+          prompt: "Implement the requested change",
+          name: "Implementation lane",
+          worktree: true,
+        };
+        const filePath = path.join(tempDir, "parent.ctrlyoke.json");
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({
+            steps: [{ type: "workflow", workflow: inline }],
+          }),
+          "utf8"
+        );
+        const result = await parser.parsePromptFile(filePath);
+        assert.ok(result, parser.lastParseError?.message ?? "Parse failed");
+        const parsedStep = result.steps?.[0];
+        assert.ok(parsedStep && isSubWorkflowStep(parsedStep));
+        assert.deepStrictEqual(parsedStep.workflow, inline);
+        assert.deepStrictEqual(
+          JSON.parse(JSON.stringify(result.steps?.[0])).workflow,
+          inline
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("rejects inline references that cross the child run boundary", async () => {
+      const cases = [
+        { prompt: "child", sessionId: 2 },
+        { prompt: "child", sessionId: FINAL_STEP_PHASES.FINAL_STEP },
+        { prompt: "child", priorContext: [1] },
+        { prompt: "child", priorContext: "previous" },
+        {
+          prompt: `use $previous and $step:1 and $all and $${FINAL_STEP_PHASES.FINAL_STEP}`,
+        },
+      ];
+      for (const workflow of cases) {
+        const result = parser.validateWorkflowText(
+          JSON.stringify({ steps: [{ type: "workflow", workflow }] }),
+          CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+        );
+        assert.ok(
+          result.issues.some((issue) => /run boundary/i.test(issue.message)),
+          JSON.stringify(result.issues)
+        );
+      }
+      const allowedRunAddress = parser.validateWorkflowText(
+        JSON.stringify({
+          steps: [
+            {
+              type: "workflow",
+              workflow: {
+                prompt: "child",
+                priorContext: { workflow: "release", run: 2 },
+              },
+            },
+          ],
+        }),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+      );
+      assert.ok(
+        !allowedRunAddress.issues.some((issue) =>
+          /run boundary/i.test(issue.message)
+        )
+      );
     });
 
     test("reports a missing sub-workflow file", async () => {

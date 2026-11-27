@@ -484,4 +484,16 @@ export const VAR_SUBSTITUTION_EXCLUDED_FIELDS = [
     reason: "Preset definitions and parameter names are author-only contracts.",
   },
   { path: "vars", reason: "Variables are not recursively expanded." },
+  {
+    path: "steps[].workflow",
+    reason: "substituted by the child run after materialization",
+  },
+  {
+    path: "finalStep.workflow",
+    reason: "substituted by the child run after materialization",
+  },
+  {
+    path: "workflow",
+    reason: "substituted by the child run after materialization",
+  },
 ] as const;

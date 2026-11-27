@@ -45,7 +45,7 @@ say what it does.
 | [Execution properties](#execution-properties) | Shared execution configuration properties used across workflow-level defaults, prompt-level overrides, and runtime metadata |
 | [Prompt step](#prompt-step) | A step that sends a prompt to a harness. |
 | [Script step](#script-step) | A workflow step that runs a shell script/command with no AI interaction. |
-| [Sub-workflow step](#sub-workflow-step) | A step that runs a referenced workflow file as a child run. |
+| [Sub-workflow step](#sub-workflow-step) | A step that runs a referenced workflow file or an inline single step as a child run. |
 | [Parallel group](#parallel-group) | An authored group of prompt or script steps. |
 | [Pre-condition](#pre-condition) | Script gate that runs before the prompt. |
 | [End condition](#end-condition) | Validation that runs after the prompt completes. |
@@ -584,11 +584,10 @@ Marks this step as a sub-workflow step.
 
 ### `workflow` {#sub-workflow-step-workflow}
 
-- **Type:** `string`
+- **Type:** `string` or [Sub-workflow step](#sub-workflow-step)
 - **Required:** yes
-- **Constraints:** at least 1 character(s)
 
-The workflow file to run. The path is resolved like a prompt file reference and is not variable-substituted in v1.
+A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.
 
 ### `onFail` {#sub-workflow-step-onfail}
 

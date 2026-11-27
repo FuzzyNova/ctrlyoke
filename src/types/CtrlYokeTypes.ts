@@ -1106,16 +1106,33 @@ export interface ScriptStep extends ScriptProperties, StepDisplayProperties {
 /** A step that executes another workflow as a child run. */
 export interface SubWorkflowStep extends StepDisplayProperties {
   type: typeof STEP_TYPES.WORKFLOW;
-  workflow: string;
+  workflow: string | InlineSubWorkflowDefinition;
   onFail?: ScriptStepAction;
   _runtime?: SubWorkflowRuntimeMetadata;
 }
+
+/** A single prompt or script step authored inline as a child workflow. */
+export type InlineSubWorkflowDefinition = (PromptStep | ScriptStep) & {
+  worktree?: WorktreeConfig;
+};
 
 /** Runtime link to the child run launched by a sub-workflow step. */
 export interface SubWorkflowRuntimeMetadata extends StepLifecycleRuntime {
   childWorkflowKey?: WorkflowKey;
   childRunRef?: RunRef;
   resolvedWorkflowPath?: string;
+}
+
+/** Type guard for an inline sub-workflow definition. */
+export function isInlineSubWorkflowDefinition(
+  value: unknown
+): value is InlineSubWorkflowDefinition {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (isPromptStep(value as object) || isScriptStep(value as object))
+  );
 }
 
 /** Union type for all workflow steps */
@@ -1196,7 +1213,16 @@ export function getExecutionRuntime(
 export function getWorkflowStepText(step: WorkflowStep): string {
   if (isPromptStep(step)) return step.prompt;
   if (isScriptStep(step)) return step.script;
-  return step.workflow;
+  return getSubWorkflowDisplayName(step);
+}
+
+/** Display a child by its authored name, or the inner prompt/script text. */
+export function getSubWorkflowDisplayName(step: SubWorkflowStep): string {
+  if (step.name) return step.name;
+  if (typeof step.workflow === "string") return step.workflow;
+  return isPromptStep(step.workflow)
+    ? step.workflow.prompt
+    : step.workflow.script;
 }
 
 /** Fail at runtime when an exhaustive discriminated union gains an unhandled case. */

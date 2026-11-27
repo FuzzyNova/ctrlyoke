@@ -87,6 +87,7 @@ const STRUCTURAL_WORKFLOW_DEFINITIONS = new Set([
   "toolPermissions",
   "workflowStep",
   "managedWorktreeConfig",
+  "inlineSubWorkflowDefinition",
   "stepDisplayProperties",
   "stepOnFail",
 ]);
@@ -146,8 +147,13 @@ const WORKFLOW_PAGES = [
       {
         id: "sub-workflow-step",
         title: "Sub-workflow step",
-        summary: "A step that runs a referenced workflow file as a child run.",
-        refs: ["#/$defs/subWorkflowStep", "#/$defs/rootWorkflowStep"],
+        summary:
+          "A step that runs a referenced workflow file or an inline single step as a child run.",
+        refs: [
+          "#/$defs/subWorkflowStep",
+          "#/$defs/rootWorkflowStep",
+          "#/$defs/inlineSubWorkflowDefinition",
+        ],
         properties: [
           { pointer: "#/$defs/subWorkflowStep/properties" },
           { pointer: "#/$defs/stepDisplayProperties/properties" },

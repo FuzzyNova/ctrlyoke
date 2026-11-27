@@ -13,6 +13,8 @@ import {
   getStepType,
   isPromptStep,
   isSubWorkflowStep,
+  getWorkflowStepText,
+  getSubWorkflowDisplayName,
   type PromptStep,
   type ScriptStep,
 } from "@root/types/CtrlYokeTypes";
@@ -37,7 +39,6 @@ import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
-import { getWorkflowNameFromPath } from "@utils/workflowDisplayName";
 import { type WorkflowStepDragHandleProps } from "@utils/dndKit";
 import {
   IN_OUTPUT_VIEW_TITLE,
@@ -119,7 +120,7 @@ function getStepText(step: WorkflowStep): string {
     case STEP_TYPES.SCRIPT:
       return (step as ScriptStep).script;
     case STEP_TYPES.WORKFLOW:
-      return isSubWorkflowStep(step) ? step.workflow : "";
+      return isSubWorkflowStep(step) ? getWorkflowStepText(step) : "";
     default:
       return assertNever(stepType);
   }
@@ -304,7 +305,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
                 runRef: step._runtime.childRunRef,
                 workflowName:
                   childWorkflow?.workflowName ??
-                  getWorkflowNameFromPath(step.workflow),
+                  getSubWorkflowDisplayName(step),
               }
             : undefined
         }

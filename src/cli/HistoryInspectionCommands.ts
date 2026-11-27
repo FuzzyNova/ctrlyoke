@@ -39,6 +39,7 @@ import {
   getStepType,
   isPromptStep,
   isScriptStep,
+  getWorkflowStepText,
 } from "../types/CtrlYokeTypes";
 import { STEP_TYPES } from "../types/DashboardConstants";
 import {
@@ -1934,7 +1935,11 @@ function historyAttemptPrompt(attempt: ResolvedRunAttemptValue): string {
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? step.prompt : "";
     case STEP_TYPES.WORKFLOW:
-      return step.name ?? ("workflow" in step ? step.workflow : "");
+      return "workflow" in step
+        ? getWorkflowStepText(
+            step as import("../types/CtrlYokeTypes").WorkflowStep
+          )
+        : "";
     default:
       return assertNever(stepType);
   }

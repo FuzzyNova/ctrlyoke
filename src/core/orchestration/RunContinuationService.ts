@@ -14,6 +14,7 @@ import {
   isPromptStep,
   isScriptStep,
   isSubWorkflowStep,
+  isInlineSubWorkflowDefinition,
 } from "../../types/CtrlYokeTypes";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
@@ -1534,11 +1535,20 @@ function assertStepHasRequiredContent(step: WorkflowStep): void {
       if (!isSubWorkflowStep(step)) {
         throw new Error("A workflow step must keep its workflow kind");
       }
-      if (
-        typeof step.workflow !== "string" ||
-        step.workflow.trim().length === 0
+      if (typeof step.workflow === "string") {
+        if (step.workflow.trim().length === 0) {
+          throw new Error(
+            "A workflow step must keep a non-empty workflow path"
+          );
+        }
+      } else if (
+        !isInlineSubWorkflowDefinition(step.workflow) ||
+        ("prompt" in step.workflow && !step.workflow.prompt.trim()) ||
+        ("script" in step.workflow && !step.workflow.script.trim())
       ) {
-        throw new Error("A workflow step must keep a non-empty workflow path");
+        throw new Error(
+          "A workflow step must keep a valid inline prompt or script"
+        );
       }
       return;
     default:

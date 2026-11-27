@@ -56,11 +56,47 @@ suite("Workflow template schema", () => {
         workflow: "child.ctrlyoke.yaml",
         worktree: true,
       },
+      { type: "workflow", workflow: { prompt: "root inline" } },
     ]) {
       assert.strictEqual(
         validate(document),
         true,
         JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("accepts inline prompt and script definitions with optional worktree", () => {
+    for (const workflow of [
+      { prompt: "implement this" },
+      { prompt: "implement this", worktree: true },
+      { type: "script", script: "npm test" },
+      { type: "script", script: "npm test", worktree: { mode: "managed" } },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [{ type: "workflow", workflow }] }),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("rejects workflow-only and nested step shapes inside inline definitions", () => {
+    for (const workflow of [
+      { prompt: "x", steps: [{ prompt: "nested" }] },
+      { prompt: "x", finalStep: { prompt: "nested" } },
+      { prompt: "x", parallel: [] },
+      { type: "workflow", workflow: "nested.ctrlyoke.yaml" },
+      { prompt: "x", vars: {} },
+      { prompt: "x", maxSteps: 3 },
+      { prompt: "x", trustedExternalRoots: [] },
+      { prompt: "x", conditions: {} },
+      { prompt: "x", additionalWorkflowKey: true },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [{ type: "workflow", workflow }] }),
+        false,
+        JSON.stringify(workflow)
       );
     }
   });
@@ -96,7 +132,6 @@ suite("Workflow template schema", () => {
       { steps: [{ type: "workflow", workflow: "child", worktree: true }] },
       { steps: [{ type: "workflow", workflow: "child", unexpected: true }] },
       { steps: [{ type: "workflow", workflow: "" }] },
-      { steps: [{ type: "workflow", workflow: { prompt: "child" } }] },
       {
         steps: [
           {

@@ -60,6 +60,7 @@ import {
   isPromptStep,
   isScriptStep,
   isSubWorkflowStep,
+  getWorkflowStepText,
   type DynamicQueueConfig,
 } from "../types/CtrlYokeTypes";
 import type {
@@ -1009,7 +1010,7 @@ export class ExecutionPreviewService {
   private scriptAsPrompt(step: ScriptStep | SubWorkflowStep): PromptStep {
     if (!isScriptStep(step)) {
       return {
-        prompt: step.workflow,
+        prompt: getWorkflowStepText(step),
         ...(step.name ? { name: step.name } : {}),
       };
     }

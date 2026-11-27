@@ -162,6 +162,27 @@ suite("VarSubstitutionPolicy documentation", () => {
     assert.strictEqual(resolved.sessionId, 1);
   });
 
+  test("leaves workflow paths literal and leaves inline definitions for the child run", () => {
+    for (const authoredWorkflow of [
+      "{{childPath}}.ctrlyoke.yaml",
+      {
+        prompt: "Run {{task}}",
+        worktree: { mode: "managed", branch: "{{branch}}" },
+      },
+    ]) {
+      const authored = {
+        type: "workflow" as const,
+        workflow: authoredWorkflow,
+      } as unknown as WorkflowStep;
+      const resolved = VarSubstitutor.substituteStepView(
+        authored,
+        { childPath: "child", task: "build", branch: "topic" },
+        "dispatch"
+      ) as WorkflowStep & { workflow: unknown };
+      assert.deepStrictEqual(resolved.workflow, authoredWorkflow);
+    }
+  });
+
   test("reports unresolved strict fields with their indexed schema path", () => {
     assert.throws(
       () =>
@@ -307,7 +328,7 @@ suite("VarSubstitutionPolicy documentation", () => {
     }
     for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS)
       assert.ok(
-        !POLICY_ENTRIES.some(([, entry]) => entry.path.includes(excluded)),
+        !POLICY_ENTRIES.some(([, entry]) => entry.path.join(".") === excluded),
         `${excluded} is excluded but has a policy entry`
       );
   });

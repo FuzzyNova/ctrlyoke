@@ -18,6 +18,7 @@
 import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
 import { toError } from "./utils/ErrorUtils";
 import { queueTargetKey } from "./utils/OutputTargetKeys";
+import { getWorkflowStepText } from "./types/CtrlYokeTypes";
 ensureMinFsThreadpoolSize(64);
 
 // Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
@@ -80,7 +81,9 @@ function stepOutputContent(step: WorkflowStep) {
     case STEP_TYPES.PROMPT:
       return isPromptStep(step) ? { prompt: step.prompt } : {};
     case STEP_TYPES.WORKFLOW:
-      return isSubWorkflowStep(step) ? { workflow: step.workflow } : {};
+      return isSubWorkflowStep(step)
+        ? { workflow: getWorkflowStepText(step) }
+        : {};
     default:
       return assertNever(stepType);
   }
@@ -96,7 +99,7 @@ function getWorkflowStatusStepText(step: WorkflowStep): string {
       if (!isPromptStep(step)) return "";
       return step.prompt;
     case STEP_TYPES.WORKFLOW:
-      return isSubWorkflowStep(step) ? step.workflow : "";
+      return isSubWorkflowStep(step) ? getWorkflowStepText(step) : "";
     default:
       return assertNever(stepType);
   }

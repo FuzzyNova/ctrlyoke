@@ -362,8 +362,12 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
       },
       "workflow": {
-        "valueKind": "string",
-        "description": "The workflow file to run. The path is resolved like a prompt file reference and is not variable-substituted in v1."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "string",
+          "object"
+        ],
+        "description": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step."
       },
       "steps": {
         "valueKind": "array",

@@ -23,6 +23,8 @@ import {
   assertNever,
   getStepType,
   isPriorContextRunSource,
+  isInlineSubWorkflowDefinition,
+  type InlineSubWorkflowDefinition,
   type ErrorBehavior,
   type EndCondition,
   type HarnessId,
@@ -686,12 +688,20 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
 
   const stepType = getStepType(step);
   if (stepType === STEP_TYPES.WORKFLOW) {
-    if (typeof step.workflow !== "string" || !step.workflow.trim()) {
-      throw new Error("Clipboard workflow step is missing a workflow path");
+    if (
+      !(typeof step.workflow === "string" && step.workflow.trim()) &&
+      !isInlineSubWorkflowDefinition(step.workflow)
+    ) {
+      throw new Error(
+        "Clipboard workflow step requires a path or inline definition"
+      );
     }
     return {
       type: STEP_TYPES.WORKFLOW,
-      workflow: step.workflow,
+      workflow:
+        typeof step.workflow === "string"
+          ? step.workflow
+          : (structuredClone(step.workflow) as InlineSubWorkflowDefinition),
       ...commonFields,
       ...(isScriptStepAction(step.onFail) ? { onFail: step.onFail } : {}),
     } satisfies SubWorkflowStep;

@@ -16,6 +16,7 @@ import {
   isSubWorkflowStep,
   getExecutionRuntime,
   getStepType,
+  getSubWorkflowDisplayName,
   assertNever,
   DynamicQueueConfig,
   FinalStepRuntimeState,
@@ -3073,9 +3074,9 @@ export class WorkflowExecutor {
         case STEP_TYPES.SCRIPT:
           return (step as ScriptStep).script.split(/\s+/)[0];
         case STEP_TYPES.WORKFLOW:
-          return (
-            step.name || (isSubWorkflowStep(step) ? step.workflow : "workflow")
-          );
+          return isSubWorkflowStep(step)
+            ? getSubWorkflowDisplayName(step)
+            : "workflow";
         default:
           return assertNever(stepType);
       }
@@ -3161,6 +3162,11 @@ export class WorkflowExecutor {
     };
 
     const host = context.subWorkflowHost;
+    if (typeof resolvedStep.workflow !== "string") {
+      return settleFailure(
+        "Sub-workflow could not start: inline definitions are not executable until D13 materialization support is available"
+      );
+    }
     if (!host) {
       return settleFailure("Sub-workflow steps are not supported in this host");
     }
