@@ -338,9 +338,10 @@ suite("Sub-workflow host end to end", () => {
 
   async function waitFor(
     description: string,
-    predicate: () => boolean
+    predicate: () => boolean,
+    timeoutMs = 10000
   ): Promise<void> {
-    const deadline = Date.now() + 10000;
+    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (predicate()) return;
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -6389,10 +6390,16 @@ suite("Sub-workflow host end to end", () => {
       );
       const execution = parent.executeLoadedPromptFile();
 
-      await waitFor("the stopped lane to start settling its worktree", () =>
-        log.lines.some((line) =>
-          line.message.includes("Settling managed worktree")
-        )
+      // Reaching settlement takes a real `git worktree add` and the setup
+      // command, which the raised git timeouts above already allow for, so
+      // the default 10 s would be the tightest bound in this test.
+      await waitFor(
+        "the stopped lane to start settling its worktree",
+        () =>
+          log.lines.some((line) =>
+            line.message.includes("Settling managed worktree")
+          ),
+        60_000
       );
       const lane = laneChildOf(instances, parent, 0);
       assert.ok(lane, "the lane has a child instance");
@@ -6749,11 +6756,13 @@ suite("Sub-workflow host end to end", () => {
         git(workspace, "log", "-1", "--format=%s"),
         "merge wave and fix"
       );
+      // The merge step reads branches in settlement order, and the two lanes
+      // run concurrently, so either may have settled first.
       assert.deepStrictEqual(
-        (await fs.readFile(path.join(workspace, "fix.txt"), "utf8")).split(
-          "\n"
-        ),
-        wave1.map((lane) => lane.branchName)
+        (await fs.readFile(path.join(workspace, "fix.txt"), "utf8"))
+          .split("\n")
+          .sort(),
+        wave1.map((lane) => lane.branchName).sort()
       );
       for (const name of ["w1a", "w1b"]) {
         await fs.access(path.join(workspace, `${name}.txt`));
@@ -6822,12 +6831,19 @@ suite("Sub-workflow host end to end", () => {
         );
         assert.strictEqual(childRunRefOf(state.steps[index]), undefined);
       }
-      assert.strictEqual(
-        git(workspace, "log", "-1", "--format=%s"),
-        "Merge branch '" +
-          (await worktreeRuntimeOf(launchedChild(instances, parent, 1)))
-            .branchName +
-          "'",
+      // The lanes settle in either order, so the merge step's last commit
+      // merges whichever lane's branch it read second.
+      const wave1Merges = await Promise.all(
+        [0, 1].map(
+          async (index) =>
+            "Merge branch '" +
+            (await worktreeRuntimeOf(launchedChild(instances, parent, index)))
+              .branchName +
+            "'"
+        )
+      );
+      assert.ok(
+        wave1Merges.includes(git(workspace, "log", "-1", "--format=%s")),
         "ctrlyoke commits nothing to the user's checkout"
       );
       assert.strictEqual(git(workspace, "status", "--porcelain"), "?? fix.txt");

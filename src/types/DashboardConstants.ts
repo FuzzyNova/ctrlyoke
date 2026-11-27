@@ -5469,7 +5469,7 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
     "The lane's branch conflicts with the parent's checkout. Its branch is kept for a later step to merge.",
   mergeBlocked: "Merge blocked",
   mergeBlockedReason:
-    "The parent's checkout was busy, so the lane did not merge. Its branch and worktree are kept.",
+    "The parent's checkout was busy, so the lane did not merge. Its branch is kept for a later step to merge.",
   mergeAbortFailed: "Merge abort failed",
   mergeAbortFailedReason:
     "The lane's conflicting merge could not be aborted. Check the parent's checkout.",
