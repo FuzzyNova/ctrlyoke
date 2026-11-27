@@ -87,6 +87,26 @@ export function isMainWorktree(
   return pathsEqual(entry.worktreePath, path.dirname(commonDirectory));
 }
 
+/**
+ * The checkout worktree placement is resolved from: the repository's main
+ * checkout, so worktrees created from a linked worktree (a sub-workflow
+ * child branching from its parent's worktree) sit beside every other
+ * worktree instead of in a nested `<linked>.worktrees/`. A bare repository
+ * or a submodule has no main checkout entry, so `fallback` (the caller's own
+ * checkout) is used, as before.
+ */
+export function worktreePlacementCheckout(
+  entries: readonly GitWorktreeEntry[],
+  commonDirectory: string,
+  fallback: string
+): string {
+  return (
+    entries.find(
+      (entry) => !entry.bare && isMainWorktree(entry, commonDirectory)
+    )?.worktreePath ?? fallback
+  );
+}
+
 function expandDirectoryPath(value: string): string {
   const home = os.homedir();
   if (value === "~") return path.resolve(home);
@@ -342,6 +362,14 @@ function isFilesystemFailure(error: unknown): boolean {
   ]).has(getErrnoCode(error) ?? "");
 }
 
+/** The default worktrees root beside a checkout: `<dir>/<name>.worktrees`. */
+function siblingWorktreeRoot(checkout: string): string {
+  return path.join(
+    path.dirname(checkout),
+    `${path.basename(checkout)}.worktrees`
+  );
+}
+
 async function createRoot(root: string): Promise<void> {
   await fs.mkdir(root, { recursive: true });
 }
@@ -381,10 +409,7 @@ export async function resolveWorktreeRoot(
 
   const repositoryName =
     options.repositoryName || path.basename(source) || "repository";
-  const sibling = path.join(
-    path.dirname(source),
-    `${path.basename(source)}.worktrees`
-  );
+  const sibling = siblingWorktreeRoot(source);
   try {
     await createDirectory(sibling);
     await assertWorktreePlacement({
@@ -492,9 +517,8 @@ export async function previewWorktreePlacement(
             tier: WORKTREE_ROOT_TIERS.EXPLICIT,
           }
         : {
-            root: path.join(
-              path.dirname(repositoryRoot),
-              `${path.basename(repositoryRoot)}.worktrees`
+            root: siblingWorktreeRoot(
+              worktreePlacementCheckout(entries, common, repositoryRoot)
             ),
             tier: WORKTREE_ROOT_TIERS.SIBLING,
           };
@@ -594,12 +618,14 @@ export async function previewWorktreePlacement(
     };
   }
 
+  const entries = await listWorktrees(repositoryRoot).catch(
+    () => [] as GitWorktreeEntry[]
+  );
   const explicitRoot = ConfigurationUtils.getWorktreeRoot()?.trim();
   const root = explicitRoot
     ? expandExplicitRoot(explicitRoot, os.homedir())
-    : path.join(
-        path.dirname(repositoryRoot),
-        `${path.basename(repositoryRoot)}.worktrees`
+    : siblingWorktreeRoot(
+        worktreePlacementCheckout(entries, commonDirectory, repositoryRoot)
       );
   const directoryName = createWorktreeDirectoryName(
     options.branch,
@@ -607,15 +633,11 @@ export async function previewWorktreePlacement(
     { kind: WORKTREE_IDENTITY_KINDS.NAMED, branchRef: options.branch }
   );
   const directory = path.join(root, directoryName);
-  const collision = await listWorktrees(repositoryRoot)
-    .then((entries) =>
-      entries.find(
-        (entry) =>
-          pathsEqual(entry.worktreePath, directory) &&
-          entry.branchName !== options.branch
-      )
-    )
-    .catch(() => undefined);
+  const collision = entries.find(
+    (entry) =>
+      pathsEqual(entry.worktreePath, directory) &&
+      entry.branchName !== options.branch
+  );
   return {
     directory,
     isExact: false,

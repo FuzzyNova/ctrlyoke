@@ -24,6 +24,8 @@ import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
   isSubWorkflowStep,
+  type WorkingFile,
+  type WorkingFileWorktreeRuntime,
   type WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
@@ -3855,10 +3857,35 @@ suite("Sub-workflow host end to end", () => {
         checkpoint[0]?.hash,
         "the checkpoint was committed before the grandchild started"
       );
-      // Not asserted: that the grandchild's branch starts at the checkpoint.
-      // That needs D4b (the parent's checkout as the child's source checkout),
-      // which is not implemented yet; until then a worktree child branches
-      // from the main checkout's HEAD, as a top-level run does.
+      // D4b: the grandchild's worktree branches from the shared checkout's
+      // checkpoint, targets its branch, and sits beside it under the main
+      // checkout's worktrees root rather than in a nested one.
+      const grandchildWorktree = await worktreeRuntimeOf(
+        launchedChild(instances, child, 1)
+      );
+      assert.strictEqual(grandchildWorktree.baseCommit, checkpoint[0]?.hash);
+      assert.strictEqual(
+        await fs.realpath(grandchildWorktree.sourceCheckoutRoot),
+        sharedCheckout
+      );
+      assert.strictEqual(
+        grandchildWorktree.targetBranch,
+        execFileSync(
+          "git",
+          ["-C", sharedCheckout, "branch", "--show-current"],
+          {
+            encoding: "utf8",
+          }
+        ).trim()
+      );
+      assert.strictEqual(
+        path.dirname(grandchildWorktree.worktreePath),
+        path.dirname(sharedCheckout)
+      );
+      assert.strictEqual(
+        path.dirname(sharedCheckout),
+        await fs.realpath(`${workspace}.worktrees`)
+      );
       assert.strictEqual(
         execFileSync("git", ["-C", workspace, "log", "--format=%s"], {
           encoding: "utf8",
@@ -3871,6 +3898,176 @@ suite("Sub-workflow host end to end", () => {
       await disposeAll(instances, workspace);
       removeTempDir(`${workspace}.worktrees`);
       removeTempDir(recordDir);
+    }
+  });
+
+  /** The worktree runtime a run recorded on disk; fails when it has none. */
+  async function worktreeRuntimeOf(
+    instance: WorkflowInstance
+  ): Promise<WorkingFileWorktreeRuntime> {
+    const workingFilePath = instance.promptQueue.getState().workingFilePath;
+    assert.ok(workingFilePath, "the run has a working file");
+    const workingFile = JSON.parse(
+      await fs.readFile(workingFilePath, "utf8")
+    ) as WorkingFile;
+    const worktree = workingFile._runtime?.worktree;
+    assert.ok(worktree, "the run recorded a worktree");
+    return worktree;
+  }
+
+  /** A lane script that writes `lane.txt` in the directory it runs in. */
+  async function writeMergeLaneScript(workspace: string): Promise<void> {
+    await fs.writeFile(
+      path.join(workspace, "merge-lane.js"),
+      "require('fs').writeFileSync('lane.txt', 'lane');"
+    );
+  }
+
+  test("a managed child of a managed parent merges back into the parent's worktree branch, not main", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-d4b-merge-parent-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeMergeLaneScript(workspace);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Merging parent",
+        worktree: { mode: "managed", keep: true },
+        steps: [
+          inlineLane("Lane", "node merge-lane.js", {
+            worktree: { mode: "managed", merge: true },
+          }),
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      const parentWorktree = await worktreeRuntimeOf(parent);
+      const laneWorktree = await worktreeRuntimeOf(
+        launchedChild(instances, parent)
+      );
+      assert.strictEqual(
+        laneWorktree.mergeOutcome,
+        "fast-forward",
+        String(laneWorktree.message)
+      );
+      assert.strictEqual(laneWorktree.targetBranch, parentWorktree.branchName);
+      assert.strictEqual(
+        path.dirname(laneWorktree.worktreePath),
+        path.dirname(parentWorktree.worktreePath)
+      );
+      assert.strictEqual(
+        execFileSync(
+          "git",
+          [
+            "-C",
+            parentWorktree.worktreePath,
+            "log",
+            "--format=%s",
+            "--",
+            "lane.txt",
+          ],
+          { encoding: "utf8" }
+        ).trim(),
+        buildManagedAutoCommitMessage("Lane"),
+        "the lane's commit is on the parent's worktree branch"
+      );
+      assert.strictEqual(
+        execFileSync("git", ["-C", workspace, "log", "--format=%s"], {
+          encoding: "utf8",
+        }).trim(),
+        "add workflows",
+        "the user's main checkout gets no commit"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a merge: true lane of a main-checkout parent fast-forwards main instead of ending blocked", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-d4d-merge-main-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeMergeLaneScript(workspace);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Main parent",
+        steps: [
+          inlineLane("Lane", "node merge-lane.js", {
+            worktree: { mode: "managed", merge: true },
+          }),
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      const laneWorktree = await worktreeRuntimeOf(
+        launchedChild(instances, parent)
+      );
+      assert.strictEqual(
+        laneWorktree.mergeOutcome,
+        "fast-forward",
+        String(laneWorktree.message)
+      );
+      assert.strictEqual(
+        path.dirname(laneWorktree.worktreePath),
+        await fs.realpath(`${workspace}.worktrees`)
+      );
+      assert.strictEqual(
+        execFileSync("git", ["-C", workspace, "log", "-1", "--format=%s"], {
+          encoding: "utf8",
+        }).trim(),
+        buildManagedAutoCommitMessage("Lane")
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "lane.txt"), "utf8"),
+        "lane"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
     }
   });
 });

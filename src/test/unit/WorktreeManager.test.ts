@@ -255,6 +255,172 @@ suite("WorktreeManager", function () {
     }
   });
 
+  /** A manager that places worktrees beside the main checkout, as by default. */
+  function siblingRootManager(): WorktreeManager {
+    return new WorktreeManager({
+      worktreeRoot: "",
+      updateWorktreeRuntime: async () => undefined,
+    });
+  }
+
+  function gitOutput(directory: string, ...args: string[]): string {
+    return execFileSync("git", ["-C", directory, ...args], {
+      encoding: "utf8",
+    }).trim();
+  }
+
+  test("D4b: a child of a managed worktree branches from it, merges into it, and is placed beside it", async () => {
+    const { repository } = await makeRepository("d4b-child-of-managed");
+    const worktrees = siblingRootManager();
+    const siblingRoot = path.join(
+      await fs.realpath(path.dirname(repository)),
+      "repository.worktrees"
+    );
+    const parentRun = await ensureManaged(worktrees, repository);
+    const child = await (async () => {
+      try {
+        // A top-level run resolves the same root as before.
+        assert.strictEqual(path.dirname(parentRun.worktreePath), siblingRoot);
+        await fs.writeFile(
+          path.join(parentRun.worktreePath, "parent.txt"),
+          "parent\n"
+        );
+        execFileSync("git", [
+          "-C",
+          parentRun.worktreePath,
+          "add",
+          "parent.txt",
+        ]);
+        execFileSync(
+          "git",
+          ["-C", parentRun.worktreePath, "commit", "-m", "parent work"],
+          { stdio: "ignore" }
+        );
+        return await ensureManaged(worktrees, parentRun.worktreePath, {
+          runRef: "run-2" as RunRef,
+          stateRoot: repository,
+          workspaceCheckoutRoot: repository,
+          delegationChain: [parentRun.lease.ownerToken],
+        });
+      } catch (error) {
+        await parentRun.lease.release();
+        throw error;
+      }
+    })();
+    let childLeaseReleased = false;
+    try {
+      assert.strictEqual(
+        path.dirname(child.worktreePath),
+        siblingRoot,
+        "not nested under <parent-worktree>.worktrees"
+      );
+      assert.strictEqual(
+        child.baseCommit,
+        gitOutput(parentRun.worktreePath, "rev-parse", "HEAD")
+      );
+      assert.strictEqual(child.targetBranch, parentRun.branchName);
+      assert.strictEqual(
+        await fs.realpath(child.sourceCheckoutRoot),
+        await fs.realpath(parentRun.worktreePath)
+      );
+      // The window's workspace folder maps into the child's worktree.
+      assert.deepStrictEqual(
+        child.executionWorkspace.namedWorkspaceRoots.map((root) => root.fsPath),
+        [child.worktreePath]
+      );
+      assert.strictEqual(
+        child.executionWorkspace.executionRoot,
+        child.worktreePath
+      );
+
+      await fs.writeFile(path.join(child.worktreePath, "child.txt"), "child\n");
+      execFileSync("git", ["-C", child.worktreePath, "add", "child.txt"]);
+      execFileSync(
+        "git",
+        ["-C", child.worktreePath, "commit", "-m", "child work"],
+        { stdio: "ignore" }
+      );
+
+      // D4d: without the chain, the parent's exclusive lease refuses it.
+      const unchained = await worktrees.mergeManagedWorktree({
+        ...child,
+        delegationChain: undefined,
+      });
+      assert.strictEqual(unchained.mergeOutcome, "blocked");
+
+      // Rule 2 does not apply to merges: an inheriting sibling still editing
+      // the parent's checkout blocks it.
+      const sibling = await ExecutionRootLeaseManager.acquire({
+        mode: "shared-native",
+        stateRoot: repository,
+        executionRoot: parentRun.worktreePath,
+        workflowKey: "sibling" as WorkflowKey,
+        runRef: "sibling-run" as RunRef,
+        runner: "vscode",
+        instanceId: "sibling-instance",
+        delegationChain: [parentRun.lease.ownerToken],
+      });
+      try {
+        const besideSibling = await worktrees.mergeManagedWorktree(child);
+        assert.strictEqual(besideSibling.mergeOutcome, "blocked");
+        assert.match(besideSibling.message ?? "", /sibling/);
+      } finally {
+        await sibling.release();
+      }
+
+      const result = await worktrees.completeManagedRun(child, {
+        merge: true,
+      });
+      childLeaseReleased = true;
+      assert.strictEqual(result.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        gitOutput(parentRun.worktreePath, "log", "-1", "--format=%s"),
+        "child work"
+      );
+      assert.strictEqual(
+        gitOutput(repository, "log", "--format=%s"),
+        "base",
+        "the main checkout is untouched"
+      );
+    } finally {
+      if (!childLeaseReleased) await child.lease.release();
+      await parentRun.lease.release();
+    }
+  });
+
+  test("D4d: a child's merge into the main checkout its parent holds a shared lease on fast-forwards", async () => {
+    const { parent, repository } = await makeRepository("d4d-merge-main");
+    const worktrees = manager(parent);
+    const parentLease = await ExecutionRootLeaseManager.acquire({
+      mode: "shared-native",
+      stateRoot: repository,
+      executionRoot: repository,
+      workflowKey: "parent" as WorkflowKey,
+      runRef: "parent-run" as RunRef,
+      runner: "vscode",
+      instanceId: "parent-instance",
+    });
+    try {
+      const child = await ensureManaged(worktrees, repository, {
+        delegationChain: [parentLease.ownerToken],
+      });
+      await fs.writeFile(path.join(child.worktreePath, "lane.txt"), "lane\n");
+      const result = await worktrees.completeManagedRun(child, {
+        merge: true,
+      });
+      assert.strictEqual(result.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        (await fs.readFile(path.join(repository, "lane.txt"), "utf8")).replace(
+          /\r\n/g,
+          "\n"
+        ),
+        "lane\n"
+      );
+    } finally {
+      await parentLease.release();
+    }
+  });
+
   test("D4c classification: a stale record whose path now holds a user worktree on another branch is not managed", async () => {
     const { parent, repository } = await makeRepository("d4c-stale-record");
     const worktrees = manager(parent);

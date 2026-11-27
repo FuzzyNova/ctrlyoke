@@ -3631,8 +3631,10 @@ export class WorkflowExecutor {
             // The inline step was authored in, and validated against, the
             // parent's file: the child resolves references and trust from it.
             parentDefinition: {
-              sourceDefinitionPath: context.sourceDefinitionPath,
-              sourceCheckoutRoot: context.executionWorkspace.sourceCheckoutRoot,
+              ...this.inlineParentReferenceBase(
+                context,
+                Boolean(materialized.definition.worktree)
+              ),
               trustIdentityPath: context.workflowTrustSourcePath,
             },
           },
@@ -6553,6 +6555,38 @@ export class WorkflowExecutor {
       promptFileResolver,
       sourceDefinitionPath
     );
+  }
+
+  /**
+   * Where an inline child (D13) resolves definition-relative references. An
+   * inheriting child maps the parent's authored file from the parent's source
+   * checkout, as the parent does. A child with its own worktree branches from
+   * the parent's execution checkout (D4b), so it gets the file as the parent
+   * maps it into that checkout, and maps it on into its own worktree from
+   * there. A file the parent cannot map stays as authored.
+   */
+  private inlineParentReferenceBase(
+    context: WorkflowExecutionContext,
+    createsWorktree: boolean
+  ): { sourceDefinitionPath?: string; sourceCheckoutRoot?: string } {
+    const { sourceCheckoutRoot, executionCheckoutRoot } =
+      context.executionWorkspace;
+    const mapped = createsWorktree
+      ? mapSourceDefinitionPathToExecution(
+          context.sourceDefinitionPath,
+          sourceCheckoutRoot,
+          executionCheckoutRoot
+        ).executionPath
+      : undefined;
+    return mapped !== undefined && executionCheckoutRoot
+      ? {
+          sourceDefinitionPath: mapped,
+          sourceCheckoutRoot: executionCheckoutRoot,
+        }
+      : {
+          sourceDefinitionPath: context.sourceDefinitionPath,
+          sourceCheckoutRoot,
+        };
   }
 
   private getPromptFileResolutionOptions(context: WorkflowExecutionContext): {

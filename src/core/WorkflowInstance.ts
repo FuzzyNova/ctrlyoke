@@ -5339,7 +5339,13 @@ export class WorkflowInstance
     }
 
     const state = this.promptQueue.getState();
-    const sourceCheckoutRoot = this.getStateRoot();
+    const workspaceCheckoutRoot = this.getStateRoot();
+    // D4b: a sub-workflow child's worktree branches from, and merges into,
+    // its parent's execution checkout. History stays under the state root.
+    const parentCheckoutRoot = this.loadedParentRun
+      ? this.inheritedParentExecution?.executionCheckoutRoot
+      : undefined;
+    const sourceCheckoutRoot = parentCheckoutRoot ?? workspaceCheckoutRoot;
     if (!sourceCheckoutRoot || !state.workflowKey || !state.runRef) {
       throw new Error(
         "Named worktree execution requires a promoted workflow run and Git workspace."
@@ -5351,6 +5357,9 @@ export class WorkflowInstance
       : 0;
     const sharedOptions = {
       sourceCheckoutRoot,
+      ...(parentCheckoutRoot && workspaceCheckoutRoot
+        ? { workspaceCheckoutRoot }
+        : {}),
       base: config.base,
       stateRoot: this.executionWorkspace.stateRoot,
       workspaceRoots: this.platform.getWorkspaceRoots(),
@@ -5381,6 +5390,7 @@ export class WorkflowInstance
             workflowName:
               this.promptQueue.getState().workflowName || this.workflowName,
             targetBranch: undefined,
+            delegationChain: this.loadedDelegationChain,
           })
         : config.branch
           ? await this.worktreeManager.resolveNamedWorktree({

@@ -42,7 +42,13 @@ export interface SubWorkflowLaunchRequest {
       };
   parent: SubWorkflowParentLink;
   parentExecution: {
+    /** Where a child with no `worktree` key runs (D4a). */
     executionRoot: string;
+    /**
+     * The parent's checkout. An inheriting child runs in it (D4a); a child
+     * with its own worktree uses it as its source checkout (D4b): it branches
+     * from its `HEAD`, targets its branch and `merge: true` lands in it.
+     */
     executionCheckoutRoot: string;
     prepareWorktreeChild?: () => Promise<void>;
   };

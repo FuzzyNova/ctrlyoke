@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Starting a worktree sub-workflow now checkpoint-commits dirty changes in its ctrlyoke managed parent worktree. A dirty main checkout or named worktree fails the child start and follows `onFail`.
+- A sub-workflow child with its own worktree now branches from its parent's checkout instead of the workspace's main checkout: `base` defaults to the parent's `HEAD`, the target branch is the parent's branch, and `merge: true` merges into the parent's checkout, so a child of a managed parent merges into the parent's worktree branch rather than main. A `merge: true` child into the checkout its waiting parent runs in no longer ends `blocked`. Child history stays under the initiating checkout.
+- New worktrees are placed beside the repository's main checkout (`<main>.worktrees/`) even when created from a linked worktree, instead of in a nested `<worktree>.worktrees/`. A run started in the main checkout uses the same folder as before; an explicit `worktrees.root` still wins.
 - MCP `workflow_status` now reports the latest finalStep sub-workflow child and its 1-based pass number.
 - CLI progress from sub-workflow steps is prefixed with the child workflow name, and `run --json` includes the addresses and statuses of a run's direct sub-workflow children in `subWorkflowRuns`.
 - Resuming a parent workflow step reconnects to its recorded child run. A completed child is not run twice; an interrupted child continues from its saved run and re-runs the step its stop interrupted, while a new parent run starts a fresh child. A stopped `finalStep` pass reconnects to that pass's child.

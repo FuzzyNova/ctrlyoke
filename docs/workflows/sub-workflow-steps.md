@@ -96,14 +96,26 @@ resolved using the same workflow and workspace locations as a prompt file path.
 
 The child's own `worktree` setting is honoured:
 
-| Child workflow setting    | Where it runs                                                                      |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `worktree` omitted        | In the parent's execution root, including the parent's worktree when there is one. |
-| `worktree: false`         | In the workspace's main checkout.                                                  |
-| Managed or named worktree | Uses the worktree configuration in the child workflow.                             |
+| Child workflow setting | Where it runs                                                                      | Branches from                    | `merge: true` merges into |
+| ---------------------- | ---------------------------------------------------------------------------------- | -------------------------------- | ------------------------- |
+| `worktree` omitted     | In the parent's execution root, including the parent's worktree when there is one. | —                                | —                         |
+| `worktree: false`      | In the workspace's main checkout.                                                  | —                                | —                         |
+| Managed worktree       | In a new managed worktree.                                                         | `base`, else the parent's `HEAD` | The parent's checkout     |
+| Named worktree         | In the named worktree, created or reused.                                          | `base`, else the parent's `HEAD` | — (named never merges)    |
 
-A managed worktree child follows the same base and merge rules as a top-level
-run. Before a fresh child with a worktree starts, ctrlyoke checks the parent's
+A worktree child treats the parent's checkout as its source checkout, as a
+top-level run treats the workspace's: its branch starts from the parent's
+current commit, its target branch is the parent's branch, and `merge: true`
+merges into the parent's checkout. A child of a managed parent therefore
+merges into the parent's worktree branch, and the parent's own settlement
+carries that work on; a child of a parent in the main checkout merges into
+main. The parent waiting on the child does not block that merge, but another
+child still working in the same checkout does. The child's run history stays
+with the parent's, under the checkout the run was started from. New worktrees
+go in the main checkout's worktrees folder (`<main>.worktrees/`, or
+`worktrees.root` when set), beside the parent's, never inside it.
+
+Before a fresh child with a worktree starts, ctrlyoke checks the parent's
 execution checkout. A clean checkout proceeds. Dirty changes in a ctrlyoke
 managed worktree are checkpoint-committed with the same deterministic message
 used when settling that worktree, so the child starts with those changes. If the

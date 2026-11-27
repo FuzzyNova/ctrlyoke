@@ -47,6 +47,7 @@ import {
   withWorktreeMutationLock,
   resolveWorktreeDirectory,
   isMainWorktree,
+  worktreePlacementCheckout,
   type WorktreeRootResolution,
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
@@ -282,6 +283,12 @@ export interface WorktreeInfo {
   sourceCheckoutDirty?: boolean;
   /** The exclusive lease held for the lifetime of this resolved run. */
   lease?: ExecutionLeaseHandle;
+  /**
+   * In-memory only: the owner tokens of every blocked ancestor of a
+   * sub-workflow child, root first (D4d). Its merge lease carries them, so a
+   * `merge: true` into the checkout its blocked parent holds is not refused.
+   */
+  delegationChain?: readonly string[];
   /** Process-session trust held while this worktree remains discoverable. */
   runtimeTrust?: RuntimeTrustedRootHandle;
   setupOutcome?: "pending" | "running" | "succeeded" | "failed";
@@ -491,6 +498,14 @@ export interface ResolveNamedWorktreeOptions {
   workspaceRoots?: readonly string[];
   /** Open workspace folders as authored, source-side paths. */
   namedWorkspaceRoots: readonly ResolverWorkspaceFolder[];
+  /**
+   * The checkout `stateRoot`, `workspaceRoots` and `namedWorkspaceRoots`
+   * are paths in, when it is not `sourceCheckoutRoot`. A sub-workflow child
+   * branches from its parent's checkout (D4b) while its workspace folders are
+   * still the window's; they are mapped into the source checkout by their
+   * path relative to this checkout's repository root.
+   */
+  workspaceCheckoutRoot?: string;
   /** These roots are carried through for trust decisions, but never become workspace roots. */
   approvedExternalRoots?: readonly string[];
   /** CLI --add-dir and equivalent caller-supplied roots. */
@@ -535,6 +550,8 @@ export interface EnsureManagedWorktreeOptions extends Omit<
     runRef: RunRef;
   }) => Promise<void>;
   targetBranch?: string;
+  /** A sub-workflow child's delegation chain; see `WorktreeInfo.delegationChain`. */
+  delegationChain?: readonly string[];
 }
 
 export interface RecoverManagedWorktreeOptions {
@@ -674,26 +691,40 @@ export class WorktreeManager {
   public async resolveWorktreeRoot(
     sourceCheckoutRoot: string
   ): Promise<string> {
-    return this.resolveWorktreeRootFor(
-      await this.requireRepositoryRoot(
-        sourceCheckoutRoot,
-        new GitLocationMemo()
-      )
-    );
+    const { repositoryRoot, commonDirectory } =
+      await this.resolveRepositoryContext(sourceCheckoutRoot);
+    return this.resolveWorktreeRootFor(repositoryRoot, commonDirectory);
   }
 
-  /** {@link resolveWorktreeRoot} for a caller that already holds the repository root. */
-  private async resolveWorktreeRootFor(sourceRoot: string): Promise<string> {
-    return (await this.resolveWorktreeRootResolutionFor(sourceRoot)).root;
+  /** {@link resolveWorktreeRoot} for a caller that already holds the repository context. */
+  private async resolveWorktreeRootFor(
+    sourceRoot: string,
+    commonDirectory: string
+  ): Promise<string> {
+    return (
+      await this.resolveWorktreeRootResolutionFor(sourceRoot, commonDirectory)
+    ).root;
   }
 
-  /** {@link resolveWorktreeRootFor}, keeping which tier the root came from. */
+  /**
+   * {@link resolveWorktreeRootFor}, keeping which tier the root came from.
+   * The root is resolved from the repository's main checkout, not from
+   * `sourceRoot`: a child branching from its parent's worktree (D4b) would
+   * otherwise get a nested `<parent-worktree>.worktrees/`. For a run started
+   * in the main checkout the two are the same.
+   */
   private async resolveWorktreeRootResolutionFor(
-    sourceRoot: string
+    sourceRoot: string,
+    commonDirectory: string
   ): Promise<WorktreeRootResolution> {
     const worktrees = await listGitWorktrees(sourceRoot);
     return resolveConfiguredRoot({
-      sourceCheckoutRoot: sourceRoot,
+      sourceCheckoutRoot: worktreePlacementCheckout(
+        worktrees,
+        commonDirectory,
+        sourceRoot
+      ),
+      commonDirectory,
       explicitRoot:
         this.options.worktreeRoot ?? ConfigurationUtils.getWorktreeRoot(),
       homeDirectory: this.options.homeDirectory,
@@ -1133,6 +1164,13 @@ export class WorktreeManager {
         runRef: info.runRef,
         runner: info.lease?.runner ?? "vscode",
         instanceId: info.lease?.instanceId ?? crypto.randomUUID(),
+        // D4d rule 1: a child's blocked ancestors' leases on the checkout it
+        // merges into (its parent's) do not refuse the merge. Rule 2 does not
+        // apply, so a sibling still editing that checkout does. No chain (a
+        // top-level run) keeps the fail-fast conflict.
+        ...(info.delegationChain?.length
+          ? { delegationChain: [...info.delegationChain] }
+          : {}),
       });
     } catch (error) {
       return {
@@ -1742,7 +1780,10 @@ export class WorktreeManager {
         const sourceCheckoutDirty = existingRecord
           ? undefined
           : await hasUncommittedChanges(sourceCheckoutRoot);
-        const root = await this.resolveWorktreeRootFor(sourceCheckoutRoot);
+        const root = await this.resolveWorktreeRootFor(
+          sourceCheckoutRoot,
+          commonDirectory
+        );
         const worktreePath =
           existingRecord?.worktreePath ??
           path.join(
@@ -2223,7 +2264,10 @@ export class WorktreeManager {
     }
 
     return {
-      resolvedRoot: await this.resolveWorktreeRootFor(sourceRoot),
+      resolvedRoot: await this.resolveWorktreeRootFor(
+        sourceRoot,
+        commonDirectory
+      ),
       sourceCheckoutRoot: sourceRoot,
       sourceCheckoutBranch: sourceBranch,
       ...(sourceUpstream ? { sourceCheckoutUpstream: sourceUpstream } : {}),
@@ -2515,7 +2559,10 @@ export class WorktreeManager {
     const root =
       initialBranchCheckout && !options.directory
         ? undefined
-        : await this.resolveWorktreeRootResolutionFor(sourceCheckoutRoot);
+        : await this.resolveWorktreeRootResolutionFor(
+            sourceCheckoutRoot,
+            commonDirectory
+          );
     let namedDirectoryPath: string | undefined;
     let previousBranch: string | undefined;
     let directoryLease: ExecutionLeaseHandle | undefined;
@@ -3644,6 +3691,9 @@ export class WorktreeManager {
         ...(args.options.workflowName
           ? { workflowName: args.options.workflowName }
           : {}),
+        ...(args.options.delegationChain?.length
+          ? { delegationChain: [...args.options.delegationChain] }
+          : {}),
         createdAt: args.record.createdAt,
         executionWorkspace,
         dirty,
@@ -3851,6 +3901,7 @@ export class WorktreeManager {
       stateRoot: string;
       namedWorkspaceRoots: readonly ResolverWorkspaceFolder[];
       workspaceRoots?: readonly string[];
+      workspaceCheckoutRoot?: string;
       approvedExternalRoots?: readonly string[];
       additionalRoots?: readonly string[];
       additionalTrustedRoots?: readonly string[];
@@ -3858,13 +3909,17 @@ export class WorktreeManager {
   ): Promise<ResolvedRepositoryInputs> {
     const sourceRoot =
       await resolveThroughNearestExistingAncestor(sourceCheckoutRoot);
-    const stateRoot = await resolveThroughNearestExistingAncestor(
-      options.stateRoot
+    const toSourcePath = await this.workspaceToSourcePathMapper(
+      options.workspaceCheckoutRoot,
+      sourceRoot
+    );
+    const stateRoot = toSourcePath(
+      await resolveThroughNearestExistingAncestor(options.stateRoot)
     );
     const namedWorkspaceRoots: ResolverWorkspaceFolder[] = [];
     for (const root of options.namedWorkspaceRoots) {
-      const resolvedRoot = await resolveThroughNearestExistingAncestor(
-        root.fsPath
+      const resolvedRoot = toSourcePath(
+        await resolveThroughNearestExistingAncestor(root.fsPath)
       );
       if (!isPathWithinDirectory(resolvedRoot, sourceRoot)) {
         throw new Error(
@@ -3878,8 +3933,9 @@ export class WorktreeManager {
     for (const workspaceRoot of options.workspaceRoots ?? [
       ...namedWorkspaceRoots.map((root) => root.fsPath),
     ]) {
-      const resolvedRoot =
-        await resolveThroughNearestExistingAncestor(workspaceRoot);
+      const resolvedRoot = toSourcePath(
+        await resolveThroughNearestExistingAncestor(workspaceRoot)
+      );
       if (isPathWithinDirectory(resolvedRoot, sourceRoot)) {
         repositoryWorkspaceRoots.push(resolvedRoot);
       } else if (!pathsEqual(resolvedRoot, stateRoot)) {
@@ -3915,6 +3971,31 @@ export class WorktreeManager {
       approvedExternalRoots: dedupePaths(options.approvedExternalRoots ?? []),
       executionRoot,
     };
+  }
+
+  /**
+   * Map a path in `workspaceCheckoutRoot` to the same repository-relative
+   * path in `sourceRoot` (D4b). Identity when there is no workspace checkout,
+   * when it is the source checkout, or for a path outside it.
+   */
+  private async workspaceToSourcePathMapper(
+    workspaceCheckoutRoot: string | undefined,
+    sourceRoot: string
+  ): Promise<(resolvedPath: string) => string> {
+    if (!workspaceCheckoutRoot) return (resolvedPath) => resolvedPath;
+    const workspaceRoot = await resolveThroughNearestExistingAncestor(
+      await this.requireRepositoryRoot(
+        workspaceCheckoutRoot,
+        new GitLocationMemo()
+      )
+    );
+    if (pathsEqual(workspaceRoot, sourceRoot)) {
+      return (resolvedPath) => resolvedPath;
+    }
+    return (resolvedPath) =>
+      isPathWithinDirectory(resolvedPath, workspaceRoot)
+        ? path.resolve(sourceRoot, path.relative(workspaceRoot, resolvedPath))
+        : resolvedPath;
   }
 
   private buildRuntime(
