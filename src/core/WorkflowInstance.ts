@@ -415,7 +415,7 @@ export class WorkflowInstance
    */
   private resumeEnteringSetup = false;
   /**
-   * The `stop()` ending a paused run (`stopPausedRun`), while it runs. A
+   * The `stop()` ending a paused run (`stopIdlePausedRun`), while it runs. A
    * second stop joins it instead of driving the run through the
    * cancellation path, and `resume()` leaves the run alone meanwhile.
    */
@@ -2992,7 +2992,7 @@ export class WorkflowInstance
     // RUNNING from here, but nothing is in setup until this try ends: a stop
     // in between (even one landing after beginPreDispatchStartup has marked
     // the startup) is a stop of the paused run, which settles the paused
-    // reservation (`stopPausedRun`), and this resume ends.
+    // reservation (`stopIdlePausedRun`), and this resume ends.
     this.resumeEnteringSetup = true;
     let startup: NonNullable<WorkflowInstance["preDispatchStartup"]>;
     let resolvedHistoryFilePath: string;
@@ -3036,7 +3036,7 @@ export class WorkflowInstance
     try {
       // Stopped while beginPreDispatchStartup was marking this startup:
       // resumeEnteringSetup was still set, so that stop took the paused-run
-      // branch (`stopPausedRun`) and settled the reservation itself.
+      // branch (`stopIdlePausedRun`) and settled the reservation itself.
       if (this.isResumeSuperseded(stopRequestBaseline)) {
         return;
       }

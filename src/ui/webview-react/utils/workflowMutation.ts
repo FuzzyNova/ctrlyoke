@@ -52,15 +52,25 @@ export function clearedWorkflowPropertyKeys(
 
 /**
  * Attach the shared mutation context for controls that post directly to VS
- * Code. `mutation` defaults to the displayed view's; pass one captured earlier
- * when the user chose the action before a modal step, so a workflow switch in
- * between cannot redirect it.
+ * Code, read from the displayed view at the moment of posting.
  */
 export function postWorkflowDefinitionMutation(
   target: MessageTarget,
+  message: Record<string, unknown>
+): void {
+  postWithMutation(target, message, getWorkflowDefinitionMutation());
+}
+
+/**
+ * Post `message` with exactly `mutation`, never re-reading the displayed view:
+ * an explicit `undefined` (captured while nothing was displayed) posts none.
+ * A default parameter would not do: JavaScript applies it to an explicit
+ * `undefined` too.
+ */
+function postWithMutation(
+  target: MessageTarget,
   message: Record<string, unknown>,
-  mutation:
-    WorkflowDefinitionMutation | undefined = getWorkflowDefinitionMutation()
+  mutation: WorkflowDefinitionMutation | undefined
 ): void {
   target.postMessage({ ...message, ...(mutation ? { mutation } : {}) });
 }
@@ -135,7 +145,7 @@ export function postSubWorkflowAppend(
   target: MessageTarget,
   options: SubWorkflowAppendOptions = {}
 ): void {
-  postWorkflowDefinitionMutation(
+  postWithMutation(
     target,
     {
       type: MESSAGE_TYPES.APPEND_FILE,

@@ -421,14 +421,20 @@ suite("Sub-workflow host end to end", () => {
   async function waitFor(
     description: string,
     predicate: () => boolean,
-    timeoutMs = 10000
+    timeoutMs = 10000,
+    /** Describes the observed state, so a timeout under load says why. */
+    observe?: () => string
   ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (predicate()) return;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
-    assert.fail("Timed out waiting for " + description);
+    assert.fail(
+      "Timed out waiting for " +
+        description +
+        (observe ? " (observed: " + observe() + ")" : "")
+    );
   }
 
   function countStoppedTransitions(instance: WorkflowInstance): () => number {
@@ -7121,11 +7127,29 @@ suite("Sub-workflow host end to end", () => {
         assert.strictEqual(await parent.loadPromptFile(parentPath), true);
         const execution = parent.executeLoadedPromptFile();
         await waitForFile(path.join(gates, "holder-runs"));
+        // The holder's script is already running here, so this wait is only
+        // for the parent to record the lane's childRunRef. It once timed out
+        // under a full `npm test` and passed alone; a longer budget and the
+        // observed state below are what the next failure needs.
         await waitFor(
           "the holder lane running",
           () =>
             laneChildOf(instances, parent, 0)?.promptQueue.getState().status ===
-            EXECUTION_STATES.RUNNING
+            EXECUTION_STATES.RUNNING,
+          25000,
+          () => {
+            const holderStep = parent.promptQueue.getState().steps[0];
+            return JSON.stringify({
+              parentStatus: parent.promptQueue.getState().status,
+              childRunRef: childRunRefOf(holderStep) ?? null,
+              childRunRefs: instances
+                .filter((instance) => instance !== parent)
+                .map((instance) => ({
+                  runRef: instance.promptQueue.getState().runRef ?? null,
+                  status: instance.promptQueue.getState().status,
+                })),
+            });
+          }
         );
         const launchesBeforeJoin = instances.length;
 
