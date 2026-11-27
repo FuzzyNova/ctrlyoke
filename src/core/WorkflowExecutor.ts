@@ -3572,10 +3572,22 @@ export class WorkflowExecutor {
         const resumeChildRun =
           recorded && !recorded.completed ? recorded.run : undefined;
         if (recorded?.completed) {
+          // Settles from the child's run file like a launched child does, so
+          // its worktree and ran-with metadata survive the reattach.
+          const completedResult: Promise<SubWorkflowResult> =
+            host.readCompletedChild
+              ? host
+                  .readCompletedChild({
+                    stateRoot: context.executionWorkspace.stateRoot,
+                    workflowKey: recorded.run.workflowKey,
+                    runRef: recorded.run.runRef,
+                  })
+                  .catch(() => ({ status: PROMPT_TERMINAL_STATUS.COMPLETED }))
+              : Promise.resolve({ status: PROMPT_TERMINAL_STATUS.COMPLETED });
           handle = {
             workflowKey: recorded.run.workflowKey,
             runRef: recorded.run.runRef,
-            done: Promise.resolve({ status: PROMPT_TERMINAL_STATUS.COMPLETED }),
+            done: completedResult,
             pause: async () => undefined,
             cancelPause: async () => undefined,
             stop: async () => undefined,
@@ -3665,6 +3677,7 @@ export class WorkflowExecutor {
               : {}),
           },
           ...(result.worktree ? { worktree: result.worktree } : {}),
+          ...(result.ranWith ? { ranWith: result.ranWith } : {}),
         };
         const eventAddress =
           await context.outputHistoryManager.recordSubWorkflowSettled(

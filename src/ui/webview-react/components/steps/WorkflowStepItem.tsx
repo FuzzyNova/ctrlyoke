@@ -358,10 +358,22 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       case STEP_TYPES.WORKFLOW:
         return (
           <>
-            <div className="flex items-center gap-1 min-w-0">
+            {/* The title row is a size container so its badges answer to the
+                row's own width, which a parallel group narrows well below
+                the panel's. Below 240px the "Workflow" badge collapses into
+                the kind icon, which already says it (and carries it as a
+                tooltip); the badge stays screen-reader text, so the row's
+                accessible name does not change with its width. That leaves a
+                lane's name most of the row beside the collapsed worktree
+                icon. */}
+            <div
+              className="@container/step-title flex items-center gap-1 min-w-0"
+              data-testid="workflow-step-title-row"
+            >
               <Icon
                 name={getStepKindIconClass(STEP_TYPES.WORKFLOW)}
                 className="text-xs opacity-60 shrink-0"
+                title={SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
               />
               <span
                 className={`text-xs leading-relaxed truncate ${titleTextClass}`}
@@ -369,8 +381,13 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                 {(workflowIsInline ? inlineWorkflowTitle : name) ||
                   SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
               </span>
-              <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
-                {SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
+              <span
+                className="sr-only shrink-0 @min-[240px]/step-title:not-sr-only"
+                data-testid="workflow-step-kind-badge"
+              >
+                <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg">
+                  {SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
+                </span>
               </span>
               {/* The worktree badge gives way first: its very high shrink
                   factor takes the row's whole shortfall before the name

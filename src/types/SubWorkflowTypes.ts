@@ -21,6 +21,23 @@ export const SUB_WORKFLOW_SOURCE_KINDS = {
 /** Host boundary used by the shared workflow executor to launch child runs. */
 export interface SubWorkflowHost {
   launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle>;
+  /**
+   * The outcome of a child that already COMPLETED, for a parent step that
+   * reattaches to it (D6) without launching it again: read from the child's
+   * run file exactly as a settlement after a launch is, so it carries the
+   * same worktree and ran-with metadata. A host without it settles the step
+   * with the bare COMPLETED status.
+   */
+  readCompletedChild?(
+    request: SubWorkflowCompletedChildRequest
+  ): Promise<SubWorkflowResult>;
+}
+
+/** The recorded child run a reattaching parent step settles on. */
+export interface SubWorkflowCompletedChildRequest {
+  stateRoot: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
 }
 
 /** Input needed to create or resume a child workflow run. */
@@ -187,6 +204,22 @@ export interface SubWorkflowResult {
     | "mergeOutcome"
     | "conflictFiles"
   >;
+  /**
+   * What the child actually ran with, read from its run file when it settles.
+   * Optional in the persisted `subWorkflowSettled` payload: absent on events
+   * written before it existed, and for a child with no prompt step that ran.
+   */
+  ranWith?: SubWorkflowRanWith;
+}
+
+/**
+ * The harness and model of the child's last queue prompt step that started:
+ * an inline lane's one step, or a file child's latest prompt step. A child
+ * that switches harness between steps reports only the last one.
+ */
+export interface SubWorkflowRanWith {
+  harness?: string;
+  model?: string;
 }
 
 /** Narrow instance surface needed by SubWorkflowLauncher. */

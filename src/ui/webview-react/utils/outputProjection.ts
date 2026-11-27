@@ -4,6 +4,7 @@ import type {
   OutputActivityEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
+import type { SubWorkflowOutput } from "@root/types/CtrlYokeTypes";
 import type { CliOutput, OutputStatusMessage } from "../types/messages";
 import type { CliEvent } from "../types/cliEvents";
 import {
@@ -49,6 +50,8 @@ export interface OutputMessage {
    * same target ever stands in for it.
    */
   isSubWorkflowSettlement?: boolean;
+  /** The settlement a sub-workflow settlement block renders. */
+  subWorkflowOutput?: SubWorkflowOutput;
   activityKey?: string;
   activityKind?: OutputActivityEntry["kind"];
   activityText?: string;
@@ -274,6 +277,7 @@ export function mapOrderedHistoryEntriesToMessages(
           timestamp: entry.timestampMs,
           sequence: entry.sequence,
           isSubWorkflowSettlement: true,
+          subWorkflowOutput: output,
           data: {
             message: details.join(" · "),
             // A clean merge is reported quietly; a merge that did not land

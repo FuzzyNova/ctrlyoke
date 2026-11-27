@@ -385,13 +385,17 @@ child outcome and any worktree branch, merge result and conflicting files.
 An inline step is titled by its `name`, or else by its prompt or script, with
 the prompt or script below a name. An inline prompt shows the harness and model
 it inherits, as an ordinary step in its place would, and is coloured by that
-harness in the steps list, the chip rail and the output. Once its child run
-exists, the harness and model are marked **(expected)**: they come from the
-current settings, and the child's own run (**Open run →**) shows what it used.
+harness in the steps list, the chip rail and the output. While its child runs,
+the harness and model are marked **(expected)**, because they come from the
+current settings. Once the child settles, the row shows the harness and model
+the child actually ran with, unmarked, and is coloured by that harness. A
+child that never started a prompt step keeps the expected values.
 A lane, an inline step with its own `worktree`, also has a worktree badge,
 which names the branch: a named worktree's from the definition, a managed
-one's once the child creates it. On a narrow steps panel the badge shrinks to
-its icon so the step's title keeps the room; hover it for the branch. A lane
+one's once the child creates it. On a narrow row, such as a lane inside a
+`parallel` group, the worktree badge shrinks to its icon and the Workflow badge
+folds into the step's workflow icon, so the title keeps most of the row; hover
+the badge for the branch and the icon for the step kind. A lane
 that completes but whose
 `merge: true` ends `conflict` or `blocked` keeps its completed status and gets a
 **Merge conflict** or **Merge blocked** badge; hover it for the reason and any

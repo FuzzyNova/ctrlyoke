@@ -46,6 +46,7 @@ import {
 } from "../../utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { resolveEffectiveStepHarness } from "@utils/subWorkflowDisplay";
+import { useSubWorkflowRanWithIndex } from "@hooks/useSubWorkflowRanWithIndex";
 import {
   calcContextPct,
   resolveEffectiveContextWindow,
@@ -432,6 +433,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
 
   const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
 
+  const recordedRanWith = useSubWorkflowRanWithIndex();
   const getChipHarnessId = (
     step: WorkflowStep,
     status: StepStatus
@@ -440,7 +442,8 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
     return resolveEffectiveStepHarness(
       step,
       (workflowProperties.harness as HarnessId | undefined) ??
-        globalSettings.harness
+        globalSettings.harness,
+      recordedRanWith
     );
   };
 

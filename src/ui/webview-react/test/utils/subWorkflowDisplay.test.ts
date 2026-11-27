@@ -3,17 +3,35 @@ import {
   getInlinePromptStep,
   getInlineWorktreeDefinedBranch,
   getSubWorkflowMergeWarning,
+  getRecordedLaneRanWith,
   hasInlineWorktree,
+  indexSubWorkflowRanWith,
   resolveEffectiveStepHarness,
 } from "@utils/subWorkflowDisplay";
 import {
   HARNESS_IDS,
+  PROMPT_TERMINAL_STATUS,
   STEP_TYPES,
   SUB_WORKFLOW_DASHBOARD_LABELS,
   WORKTREE_MERGE_OUTCOMES,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
-import type { SubWorkflowStep } from "@root/types/CtrlYokeTypes";
+import type {
+  SubWorkflowOutput,
+  SubWorkflowStep,
+} from "@root/types/CtrlYokeTypes";
+
+function settled(
+  childRunRef: string,
+  ranWith?: SubWorkflowOutput["ranWith"]
+): SubWorkflowOutput {
+  return {
+    childWorkflowKey: "child" as SubWorkflowOutput["childWorkflowKey"],
+    childRunRef: childRunRef as SubWorkflowOutput["childRunRef"],
+    outcome: { status: PROMPT_TERMINAL_STATUS.COMPLETED },
+    ...(ranWith ? { ranWith } : {}),
+  };
+}
 
 const lane: SubWorkflowStep = {
   type: STEP_TYPES.WORKFLOW,
@@ -154,5 +172,59 @@ describe("subWorkflowDisplay", () => {
       label: SUB_WORKFLOW_DASHBOARD_LABELS.mergeConflict,
       reason: `${SUB_WORKFLOW_DASHBOARD_LABELS.mergeConflictReason} ${SUB_WORKFLOW_DASHBOARD_LABELS.conflictFiles}: src/a.ts`,
     });
+  });
+
+  it("indexes what each child ran with, the latest settlement winning", () => {
+    const index = indexSubWorkflowRanWith([
+      settled("run-1", { harness: HARNESS_IDS.CLAUDE_CLI }),
+      settled("run-1", { harness: HARNESS_IDS.CODEX_CLI, model: "m" }),
+      settled("run-2", { harness: HARNESS_IDS.CLAUDE_CLI }),
+      // A later settlement that recorded nothing replaces the earlier one.
+      settled("run-2"),
+    ]);
+    expect([...index]).toEqual([
+      ["run-1", { harness: HARNESS_IDS.CODEX_CLI, model: "m" }],
+    ]);
+  });
+
+  it("applies a recorded harness to an inline prompt child's current run only", () => {
+    const index = indexSubWorkflowRanWith([
+      settled("run-1", { harness: HARNESS_IDS.CLAUDE_CLI }),
+    ]);
+    const started = (step: SubWorkflowStep, childRunRef: string) =>
+      ({
+        ...step,
+        _runtime: { childWorkflowKey: "child", childRunRef },
+      }) as SubWorkflowStep;
+
+    expect(getRecordedLaneRanWith(started(lane, "run-1"), index)).toEqual({
+      harness: HARNESS_IDS.CLAUDE_CLI,
+    });
+    expect(
+      resolveEffectiveStepHarness(
+        started(lane, "run-1"),
+        HARNESS_IDS.COPILOT_CLI,
+        index
+      )
+    ).toBe(HARNESS_IDS.CLAUDE_CLI);
+    // Another run of the same step, a file child and an inline script keep
+    // their own resolution.
+    expect(
+      resolveEffectiveStepHarness(
+        started(lane, "run-2"),
+        HARNESS_IDS.COPILOT_CLI,
+        index
+      )
+    ).toBe(HARNESS_IDS.CODEX_CLI);
+    expect(
+      getRecordedLaneRanWith(started(fileReference, "run-1"), index)
+    ).toBeUndefined();
+    expect(
+      resolveEffectiveStepHarness(
+        started(inlineScript, "run-1"),
+        HARNESS_IDS.COPILOT_CLI,
+        index
+      )
+    ).toBeUndefined();
   });
 });

@@ -1,9 +1,11 @@
 import type {
+  SubWorkflowCompletedChildRequest,
   SubWorkflowHandle,
   SubWorkflowHost,
   SubWorkflowInstance,
   SubWorkflowInstanceFactory,
   SubWorkflowLaunchRequest,
+  SubWorkflowRanWith,
   SubWorkflowResult,
 } from "../../types/SubWorkflowTypes";
 import {
@@ -16,13 +18,15 @@ import {
   PROMPT_TERMINAL_STATUS,
   SUB_WORKFLOW_CANCELLATION_SOURCES,
 } from "../../types/DashboardConstants";
-import { manifestPath } from "../../utils/WorkflowPaths";
+import { manifestPath, runFilePath } from "../../utils/WorkflowPaths";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { Log } from "../../utils/Log";
 import { WorkingFileManager } from "../WorkingFileManager";
-import type {
-  WorkingFile,
-  WorkingFileWorktreeRuntime,
+import {
+  isPromptStep,
+  type WorkflowStep,
+  type WorkingFile,
+  type WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
 import { forwardSubWorkflowControl } from "./SubWorkflowControlRelay";
 
@@ -106,6 +110,15 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     ) => Promise<WorkingFile> = (workingFilePath) =>
       WorkingFileManager.readWorkingFileFromDisk(workingFilePath)
   ) {}
+
+  async readCompletedChild(
+    request: SubWorkflowCompletedChildRequest
+  ): Promise<SubWorkflowResult> {
+    return this.withRecordedRun(
+      runFilePath(request.stateRoot, request.workflowKey, request.runRef),
+      { status: PROMPT_TERMINAL_STATUS.COMPLETED }
+    );
+  }
 
   async launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle> {
     const instance = this.createInstance({
@@ -316,7 +329,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
         // Settled before the run-file read below: a parent stop or fail-fast
         // in that window must not stop the finished child again.
         settled = true;
-        return this.withRecordedWorktree(instance, result);
+        return this.withRecordedChildRun(instance, result);
       })
       .finally(() => {
         settled = true;
@@ -647,31 +660,50 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
   }
 
   /**
-   * `result` with the worktree its child's run file records. Worktree
-   * lifecycle metadata is disk-authoritative and kept out of the queue's
-   * in-memory projection (`WorkingFileManager.updateWorktreeRuntime`), so a
-   * child loaded from a file never holds it in memory: read it from the run
-   * file once the run has settled, and fall back to memory only when the
-   * file cannot be read.
+   * `result` with what its child's run file records: the worktree and what
+   * the child ran with. Worktree lifecycle metadata is disk-authoritative and
+   * kept out of the queue's in-memory projection
+   * (`WorkingFileManager.updateWorktreeRuntime`), so a child loaded from a
+   * file never holds it in memory: read it from the run file once the run has
+   * settled, and fall back to memory only when the file cannot be read.
    */
-  private async withRecordedWorktree(
+  private async withRecordedChildRun(
     instance: SubWorkflowInstance,
     result: SubWorkflowResult
   ): Promise<SubWorkflowResult> {
+    const fallback = withRanWith(
+      result,
+      recordedRanWith(instance.promptQueue.getState().steps)
+    );
     const workingFilePath = instance.promptQueue.getState().workingFilePath;
-    if (!workingFilePath) return result;
-    let recorded: WorkingFileWorktreeRuntime | undefined;
+    if (!workingFilePath) return fallback;
+    return this.withRecordedRun(workingFilePath, result, fallback);
+  }
+
+  /**
+   * `result` with the worktree and ran-with metadata the run file at
+   * `workingFilePath` records; `fallback` (default `result`) when it cannot
+   * be read. The single read behind every settlement, launched or reattached.
+   */
+  private async withRecordedRun(
+    workingFilePath: string,
+    result: SubWorkflowResult,
+    fallback: SubWorkflowResult = result
+  ): Promise<SubWorkflowResult> {
+    let runFile: WorkingFile;
     try {
-      recorded = (await this.readRunFile(workingFilePath))._runtime?.worktree;
+      runFile = await this.readRunFile(workingFilePath);
     } catch (error) {
       Log.warn(
-        `[${LOG_SOURCE}] Could not read the child's worktree from ${workingFilePath}: ${errorMessage(error)}`
+        `[${LOG_SOURCE}] Could not read the child's run file ${workingFilePath}: ${errorMessage(error)}`
       );
-      return result;
+      return fallback;
     }
-    return recorded
-      ? { ...result, worktree: projectWorktree(recorded) }
-      : result;
+    const recorded = runFile._runtime?.worktree;
+    return withRanWith(
+      recorded ? { ...result, worktree: projectWorktree(recorded) } : result,
+      recordedRanWith(runFile.steps)
+    );
   }
 
   private worktree(
@@ -680,6 +712,32 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     const worktree = instance.promptQueue.getWorkflowFile()._runtime?.worktree;
     return worktree ? projectWorktree(worktree) : undefined;
   }
+}
+
+/**
+ * The harness and model of the last queue prompt step that started
+ * (`_runtime.harness` set): an inline lane's one step, or a file child's
+ * latest. A final step is not consulted.
+ */
+export function recordedRanWith(
+  steps: readonly WorkflowStep[] | undefined
+): SubWorkflowRanWith | undefined {
+  for (let i = (steps?.length ?? 0) - 1; i >= 0; i--) {
+    const step = steps![i];
+    if (!isPromptStep(step) || !step._runtime?.harness) continue;
+    return {
+      harness: step._runtime.harness,
+      ...(step._runtime.model ? { model: step._runtime.model } : {}),
+    };
+  }
+  return undefined;
+}
+
+function withRanWith(
+  result: SubWorkflowResult,
+  ranWith: SubWorkflowRanWith | undefined
+): SubWorkflowResult {
+  return ranWith ? { ...result, ranWith } : result;
 }
 
 /** The worktree fields a settled child reports (D12a). */

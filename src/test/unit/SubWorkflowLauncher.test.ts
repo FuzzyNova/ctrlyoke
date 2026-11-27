@@ -102,6 +102,9 @@ class FakeChild implements SubWorkflowInstance {
     this.stateEmitter.fire(this.promptQueue.getState());
   }
 
+  /** Extra `_runtime` the step records when a completed scenario runs it. */
+  completedRuntime: { harness?: string; model?: string } = {};
+
   /** The child's run file, when a test puts one on disk. */
   workingFilePath?: string;
 
@@ -164,7 +167,7 @@ class FakeChild implements SubWorkflowInstance {
     await Promise.resolve();
     if (this.status === EXECUTION_STATES.STOPPED) return;
     if (this.nextScenario === "completed") {
-      this.steps[0]._runtime = { startedAt: 1 };
+      this.steps[0]._runtime = { startedAt: 1, ...this.completedRuntime };
       this.status = EXECUTION_STATES.COMPLETED;
       this.results[0].status = STEP_STATUS.COMPLETED;
     } else if (this.nextScenario === "mid-run-error") {
@@ -461,6 +464,150 @@ suite("SubWorkflowLauncher", () => {
       });
     } finally {
       removeTempDir(directory);
+    }
+  });
+
+  test("records what the child's last started prompt step ran with, from its run file", async () => {
+    const directory = makeTempDir("ctrlyoke-launcher-ran-with-");
+    try {
+      const factory = new FakeFactory();
+      factory.child.workingFilePath = path.join(
+        directory,
+        "workflow.ctrlyoke.json"
+      );
+      await fs.writeFile(
+        factory.child.workingFilePath,
+        JSON.stringify({
+          steps: [
+            {
+              prompt: "plan",
+              _runtime: { harness: "codex-cli", model: "gpt-early" },
+            },
+            {
+              prompt: "build",
+              _runtime: { harness: "claude-cli", model: "opus" },
+            },
+            { type: "script", script: "true", _runtime: {} },
+            // Never started: not what the child ran with.
+            { prompt: "skipped", _runtime: {} },
+          ],
+          _runtime: {
+            currentIndex: 4,
+            executionState: EXECUTION_STATES.COMPLETED,
+          },
+        })
+      );
+
+      const result = await (
+        await new SubWorkflowLauncher(factory.create).launch(request())
+      ).done;
+
+      assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.COMPLETED);
+      assert.deepStrictEqual(result.ranWith, {
+        harness: "claude-cli",
+        model: "opus",
+      });
+    } finally {
+      removeTempDir(directory);
+    }
+  });
+
+  test("falls back to the in-memory steps for what the child ran with when its run file cannot be read", async () => {
+    const factory = new FakeFactory();
+    factory.child.workingFilePath = "/tmp/missing/workflow.ctrlyoke.json";
+    factory.child.completedRuntime = { harness: "claude-cli" };
+    const launcher = new SubWorkflowLauncher(
+      factory.create,
+      undefined,
+      async () => {
+        throw new Error("ENOENT");
+      }
+    );
+
+    const result = await (await launcher.launch(request())).done;
+
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.COMPLETED);
+    assert.deepStrictEqual(result.ranWith, { harness: "claude-cli" });
+  });
+
+  test("reads a reattached COMPLETED child's worktree and ran-with from its run file", async () => {
+    const stateRoot = makeTempDir("ctrlyoke-launcher-completed-");
+    try {
+      const workflowKey = "child-key" as WorkflowKey;
+      const runRef = WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 27, 12));
+      const runFile = WorkflowPaths.runFilePath(stateRoot, workflowKey, runRef);
+      await fs.mkdir(path.dirname(runFile), { recursive: true });
+      await fs.writeFile(
+        runFile,
+        JSON.stringify({
+          steps: [
+            {
+              prompt: "lane",
+              _runtime: { harness: "claude-cli", model: "opus" },
+            },
+          ],
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.COMPLETED,
+            worktree: {
+              schemaVersion: 1,
+              mode: WORKTREE_MODES.MANAGED,
+              origin: "created",
+              branchName: "ctrlyoke/lane/run-1",
+              worktreePath: "/tmp/worktree",
+              executionRoot: "/tmp/worktree",
+              executionCheckoutRoot: "/tmp/worktree",
+              sourceCheckoutRoot: "/tmp/source",
+              namedWorkspaceRoots: [],
+              baseCommit: "abc",
+              finalBranchTip: "def",
+              mergeOutcome: "merged",
+              lifecycleOwner: "ctrlyoke",
+              lifecycleState: "settled",
+              directoryState: "removed",
+              branchState: "present",
+              updatedAt: 1,
+            },
+          },
+        })
+      );
+      const factory = new FakeFactory();
+      const launcher = new SubWorkflowLauncher(factory.create);
+
+      const result = await launcher.readCompletedChild({
+        stateRoot,
+        workflowKey,
+        runRef,
+      });
+
+      assert.deepStrictEqual(result, {
+        status: PROMPT_TERMINAL_STATUS.COMPLETED,
+        worktree: {
+          mode: WORKTREE_MODES.MANAGED,
+          branchName: "ctrlyoke/lane/run-1",
+          baseCommit: "abc",
+          finalBranchTip: "def",
+          changedFileCount: undefined,
+          landingOutcome: undefined,
+          mergeOutcome: "merged",
+          conflictFiles: undefined,
+        },
+        ranWith: { harness: "claude-cli", model: "opus" },
+      });
+      // Reading a settled child creates no instance.
+      assert.strictEqual(factory.options, undefined);
+
+      // An unreadable run file still settles the step COMPLETED.
+      assert.deepStrictEqual(
+        await launcher.readCompletedChild({
+          stateRoot,
+          workflowKey,
+          runRef: WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 27, 13)),
+        }),
+        { status: PROMPT_TERMINAL_STATUS.COMPLETED }
+      );
+    } finally {
+      removeTempDir(stateRoot);
     }
   });
 

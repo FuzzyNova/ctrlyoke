@@ -1325,8 +1325,10 @@ export type SubWorkflowOutput = {
   resolvedWorkflowPath?: string;
   childWorkflowKey: WorkflowKey;
   childRunRef: RunRef;
-  outcome: Omit<SubWorkflowResult, "worktree">;
+  outcome: Omit<SubWorkflowResult, "worktree" | "ranWith">;
   worktree?: SubWorkflowResult["worktree"];
+  /** Optional and read tolerantly: older events omit it (no format bump). */
+  ranWith?: SubWorkflowResult["ranWith"];
 };
 
 export interface ScriptVerdict {

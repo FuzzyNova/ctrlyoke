@@ -26,6 +26,7 @@ import { StatusMessageReporter } from "../../core/orchestration/StatusMessageRep
 import type { UserFeedbackSink } from "../../core/UserFeedbackSink";
 import {
   PromptFile,
+  type SubWorkflowOutput,
   PromptStep,
   type ScriptProperties,
   type WorkflowKey,
@@ -66,6 +67,7 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { getExitCode } from "../../cli/CliExitCode";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -7359,6 +7361,66 @@ suite("WorkflowExecutor sub-workflow steps", () => {
           force: true,
         });
       }
+    });
+
+    test("a recorded COMPLETED child's settlement carries the worktree and ran-with its run file records", async () => {
+      const run = await setupRecordedRun();
+      await writeChildManifest(EXECUTION_STATES.COMPLETED, run.queueParent);
+      await fs.writeFile(
+        WorkflowPaths.runFilePath(tempRoot, childKey, childRunRef),
+        JSON.stringify({
+          steps: [
+            {
+              prompt: "lane",
+              _runtime: { harness: "claude-cli", model: "opus" },
+            },
+          ],
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.COMPLETED,
+            worktree: {
+              schemaVersion: 1,
+              mode: WORKTREE_MODES.MANAGED,
+              origin: "created",
+              branchName: "ctrlyoke/lane/run-1",
+              worktreePath: "/tmp/worktree",
+              executionRoot: "/tmp/worktree",
+              executionCheckoutRoot: "/tmp/worktree",
+              sourceCheckoutRoot: "/tmp/source",
+              namedWorkspaceRoots: [],
+              baseCommit: "abc",
+              finalBranchTip: "def",
+              mergeOutcome: "merged",
+              lifecycleOwner: "ctrlyoke",
+              lifecycleState: "settled",
+              directoryState: "removed",
+              branchState: "present",
+              updatedAt: 1,
+            },
+          },
+        })
+      );
+      // The real launcher, whose factory must never be asked for an
+      // instance: a COMPLETED child is read, not relaunched.
+      run.context.subWorkflowHost = new SubWorkflowLauncher(() => {
+        throw new Error("a COMPLETED child must not be launched");
+      });
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(
+        run.queue.getState().results[0]?.status,
+        STEP_STATUS.COMPLETED
+      );
+      const settled = await settledEvents(run.context.historyFilePath);
+      assert.strictEqual(settled.length, 1);
+      const payload = settled[0]!.payload as SubWorkflowOutput;
+      assert.strictEqual(payload.worktree?.branchName, "ctrlyoke/lane/run-1");
+      assert.strictEqual(payload.worktree?.mergeOutcome, "merged");
+      assert.deepStrictEqual(payload.ranWith, {
+        harness: "claude-cli",
+        model: "opus",
+      });
     });
 
     test("a recorded STOPPED or ERROR child is continued with the same launch request a fresh launch gets", async () => {

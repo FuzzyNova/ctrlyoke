@@ -12,6 +12,7 @@ import {
   type SubWorkflowOutput,
   type SubWorkflowStep,
 } from "@root/types/CtrlYokeTypes";
+import type { SubWorkflowRanWith } from "@root/types/SubWorkflowTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   classifySubWorkflowWorktree,
@@ -66,18 +67,55 @@ export function getInlinePromptStep(
     : undefined;
 }
 
+/** What each settled child ran with, keyed by its `childRunRef`. */
+export type SubWorkflowRanWithIndex = ReadonlyMap<string, SubWorkflowRanWith>;
+
+/**
+ * Index the ran-with metadata of settled children by child run. A continued
+ * child settles once per execution; the latest settlement wins.
+ */
+export function indexSubWorkflowRanWith(
+  outputs: Iterable<SubWorkflowOutput>
+): Map<string, SubWorkflowRanWith> {
+  const index = new Map<string, SubWorkflowRanWith>();
+  for (const output of outputs) {
+    if (output.ranWith) index.set(output.childRunRef, output.ranWith);
+    else index.delete(output.childRunRef);
+  }
+  return index;
+}
+
+/**
+ * What an inline prompt child (a lane) recorded it ran with, once its
+ * current child run has settled; `undefined` while it runs, for a file
+ * child or an inline script, and for a settlement written before the field
+ * existed.
+ */
+export function getRecordedLaneRanWith(
+  step: WorkflowStep,
+  recorded: SubWorkflowRanWithIndex | undefined
+): SubWorkflowRanWith | undefined {
+  if (!recorded || !isSubWorkflowStep(step) || !getInlinePromptStep(step)) {
+    return undefined;
+  }
+  const childRunRef = step._runtime?.childRunRef;
+  return childRunRef ? recorded.get(childRunRef) : undefined;
+}
+
 /**
  * The harness a step runs on, for every surface that colours or labels a step
  * by harness (the steps list, the chip rail and the output blocks), so a step
  * is painted the same on all three. A prompt step that has started reports the
  * harness its `_runtime` recorded; otherwise its own `harness` beats the
- * inherited one. An inline prompt child (a lane) runs with what its inner
- * prompt step would (D13). A script, a file-referenced child or an inline
- * script has no harness of its own.
+ * inherited one. An inline prompt child (a lane) reports the harness its
+ * settled child recorded (`recorded`), else what its inner prompt step would
+ * run with (D13). A script, a file-referenced child or an inline script has no
+ * harness of its own.
  */
 export function resolveEffectiveStepHarness(
   step: WorkflowStep,
-  inheritedHarness: HarnessId | undefined
+  inheritedHarness: HarnessId | undefined,
+  recorded?: SubWorkflowRanWithIndex
 ): HarnessId | undefined {
   if (isPromptStep(step)) {
     return (step._runtime?.harness ?? step.harness ?? inheritedHarness) as
@@ -86,9 +124,10 @@ export function resolveEffectiveStepHarness(
   const inlinePrompt = isSubWorkflowStep(step)
     ? getInlinePromptStep(step)
     : undefined;
-  return inlinePrompt
-    ? ((inlinePrompt.harness ?? inheritedHarness) as HarnessId | undefined)
-    : undefined;
+  if (!inlinePrompt) return undefined;
+  return (getRecordedLaneRanWith(step, recorded)?.harness ??
+    inlinePrompt.harness ??
+    inheritedHarness) as HarnessId | undefined;
 }
 
 /** True when an inline definition declares its own worktree (a lane). */

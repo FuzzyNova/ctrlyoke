@@ -18,6 +18,7 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useSubWorkflowRanWithIndex } from "@hooks/useSubWorkflowRanWithIndex";
 import {
   useStepStatus,
   useStepClickHandler,
@@ -92,6 +93,7 @@ import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 import { buildStepOverrideChips } from "@utils/stepOverrideChips";
 import {
   getInlinePromptStep,
+  getRecordedLaneRanWith,
   resolveEffectiveStepHarness,
 } from "@utils/subWorkflowDisplay";
 import {
@@ -922,6 +924,7 @@ const WorkflowStepsPanelInner: React.FC<{
     [globalSettings, workflowProperties, getEffectiveModel]
   );
 
+  const recordedRanWith = useSubWorkflowRanWithIndex();
   const getStepHarnessModel = useCallback(
     (step: (typeof steps)[0], status?: StepStatus) => {
       // The row rail, the chip rail and the output blocks all colour a step
@@ -929,18 +932,30 @@ const WorkflowStepsPanelInner: React.FC<{
       const harnessId = resolveEffectiveStepHarness(
         step,
         (workflowProperties.harness ?? globalSettings.harness) as
-          HarnessId | undefined
+          HarnessId | undefined,
+        recordedRanWith
       );
       // An inline prompt child (a lane) runs with the same defaults an
       // ordinary step here would (D13), so it shows what its inner prompt
-      // step would. What the child actually ran with is recorded only in the
-      // child's own run, which this view does not load, so once the child
-      // exists the values are labelled as expected rather than presented as
-      // what it used.
+      // step would. Once its child settles, the settlement records what it
+      // actually ran with, shown as a started prompt step's runtime values
+      // are. Until then, a child that exists marks the values as expected.
       const inlinePrompt = isSubWorkflowStep(step)
         ? getInlinePromptStep(step)
         : undefined;
       if (inlinePrompt && isSubWorkflowStep(step)) {
+        const ranWith = getRecordedLaneRanWith(step, recordedRanWith);
+        if (ranWith) {
+          return {
+            harnessId,
+            harnessLabel: ranWith.harness
+              ? getHarnessDisplayName(ranWith.harness)
+              : undefined,
+            harnessIsDefault: false,
+            modelLabel: ranWith.model,
+            modelIsDefault: false,
+          };
+        }
         return {
           ...getPendingHarnessModel(inlinePrompt),
           harnessId,
@@ -978,7 +993,12 @@ const WorkflowStepsPanelInner: React.FC<{
       // Pending / queued — reflect live settings with default indicators
       return { ...getPendingHarnessModel(step), harnessId };
     },
-    [getPendingHarnessModel, globalSettings, workflowProperties]
+    [
+      getPendingHarnessModel,
+      globalSettings,
+      recordedRanWith,
+      workflowProperties,
+    ]
   );
 
   // Step-level property overrides to surface as chips. Recomputed whenever

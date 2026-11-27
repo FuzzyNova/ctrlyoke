@@ -10,6 +10,8 @@ import {
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
   OUTPUT_ACTIVITY_KINDS,
+  OUTPUT_HISTORY_KINDS,
+  PROMPT_TERMINAL_STATUS,
   STEP_COLOR_MODES,
   STEP_TYPES,
   SUB_WORKFLOW_DASHBOARD_LABELS,
@@ -18,6 +20,8 @@ import {
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import { FINAL_STEP_PHASES } from "@/types/messages";
+import type { OrderedSubWorkflowHistoryEntry } from "@root/types/OutputHistoryTypes";
+import type { SubWorkflowRanWith } from "@root/types/SubWorkflowTypes";
 import { mapOrderedHistoryEntriesToMessages } from "@utils/outputProjection";
 import { buildOutputRows } from "@utils/outputRows";
 
@@ -104,21 +108,42 @@ function asStyleColor(color: string): string {
   return probe.style.backgroundColor;
 }
 
-function outputRowColor(steps: WorkflowStep[], index: number) {
-  const allMessages = mapOrderedHistoryEntriesToMessages(
-    [],
-    [
-      {
-        timestampMs: 1000,
-        sequence: 1,
-        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index },
-        runIndex: 0,
-        attemptIndex: 0,
-        kind: OUTPUT_ACTIVITY_KINDS.TEXT,
-        text: "lane output",
-      },
-    ]
-  );
+/** A settled child's `subWorkflowSettled` entry, as the live store holds it. */
+function settlement(
+  index: number,
+  childRunRef: string,
+  ranWith?: SubWorkflowRanWith
+): OrderedSubWorkflowHistoryEntry {
+  return {
+    kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+    target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index },
+    timestampMs: 2000 + index,
+    sequence: 10 + index,
+    subWorkflowOutput: {
+      childWorkflowKey: "child" as never,
+      childRunRef: childRunRef as never,
+      outcome: { status: PROMPT_TERMINAL_STATUS.COMPLETED },
+      ...(ranWith ? { ranWith } : {}),
+    },
+  };
+}
+
+function outputRowColor(
+  steps: WorkflowStep[],
+  index: number,
+  entries: OrderedSubWorkflowHistoryEntry[] = []
+) {
+  const allMessages = mapOrderedHistoryEntriesToMessages(entries, [
+    {
+      timestampMs: 1000,
+      sequence: 1,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index },
+      runIndex: 0,
+      attemptIndex: 0,
+      kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+      text: "lane output",
+    },
+  ]);
   const result = buildOutputRows({
     allMessages,
     steps,
@@ -243,6 +268,120 @@ describe("WorkflowStepsPanel lane rows", () => {
       pending.queryByText(`(${SUB_WORKFLOW_DASHBOARD_LABELS.expected})`)
     ).toBeNull();
     expect(pending.getAllByText("(default)").length).toBeGreaterThan(0);
+  });
+
+  it("shows what a settled lane's child recorded it ran with, unmarked", () => {
+    loadSteps([
+      lane("Settled", {}, { childWorkflowKey: "child", childRunRef: "run-1" }),
+      lane("Running", {}, { childWorkflowKey: "child", childRunRef: "run-2" }),
+    ]);
+    setSettings(WORKFLOW_HARNESS, "workflow-model");
+    useWorkflowStore
+      .getState()
+      .appendLiveEntry(
+        settlement(0, "run-1", { harness: LANE_HARNESS, model: "ran-model" })
+      );
+
+    render(<WorkflowStepsPanel />);
+
+    const settled = within(row(0));
+    expect(
+      settled.getByText(getHarnessDisplayName(LANE_HARNESS))
+    ).toBeVisible();
+    expect(settled.getByText("ran-model")).toBeVisible();
+    expect(settled.queryByText("workflow-model")).toBeNull();
+    expect(
+      settled.queryByText(`(${SUB_WORKFLOW_DASHBOARD_LABELS.expected})`)
+    ).toBeNull();
+    expect(settled.queryByText("(default)")).toBeNull();
+
+    // A child still running has no settlement: still marked expected.
+    expect(
+      within(row(1)).getByText(`(${SUB_WORKFLOW_DASHBOARD_LABELS.expected})`)
+    ).toBeVisible();
+  });
+
+  it("keeps the expected marker for a settlement that recorded nothing", () => {
+    // A settlement written before ranWith existed, or by a child whose
+    // prompt step never started.
+    loadSteps([
+      lane("Old", {}, { childWorkflowKey: "child", childRunRef: "run-1" }),
+    ]);
+    setSettings(WORKFLOW_HARNESS, "workflow-model");
+    useWorkflowStore.getState().appendLiveEntry(settlement(0, "run-1"));
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      within(row(0)).getByText(`(${SUB_WORKFLOW_DASHBOARD_LABELS.expected})`)
+    ).toBeVisible();
+  });
+
+  it("ignores a settlement recorded for an earlier child run", () => {
+    loadSteps([
+      lane("Rerun", {}, { childWorkflowKey: "child", childRunRef: "run-2" }),
+    ]);
+    setSettings(WORKFLOW_HARNESS, "workflow-model");
+    useWorkflowStore
+      .getState()
+      .appendLiveEntry(
+        settlement(0, "run-1", { harness: LANE_HARNESS, model: "ran-model" })
+      );
+
+    render(<WorkflowStepsPanel />);
+
+    const rerun = within(row(0));
+    expect(rerun.queryByText("ran-model")).toBeNull();
+    expect(
+      rerun.getByText(`(${SUB_WORKFLOW_DASHBOARD_LABELS.expected})`)
+    ).toBeVisible();
+  });
+
+  it("colours a settled lane by its recorded harness in the steps list, chip rail and output", () => {
+    const steps = [
+      lane("Settled", {}, { childWorkflowKey: "child", childRunRef: "run-1" }),
+    ];
+    loadSteps(steps);
+    setSettings(WORKFLOW_HARNESS);
+    const entry = settlement(0, "run-1", { harness: LANE_HARNESS });
+    useWorkflowStore.getState().appendLiveEntry(entry);
+    const loaded = useWorkflowStore.getState().steps;
+
+    const panel = render(<WorkflowStepsPanel />);
+    const rail = railColor(0);
+    panel.unmount();
+    const chips = render(<StepChipRail onExpand={vi.fn()} />);
+    const chip = chipColor(0);
+    chips.unmount();
+    const output = asStyleColor(outputRowColor(loaded, 0, [entry]) ?? "");
+
+    expect(rail).toBe(asStyleColor(HARNESS_CHART_COLORS[LANE_HARNESS]));
+    expect(chip).toBe(rail);
+    expect(output).toBe(rail);
+  });
+
+  it("collapses the Workflow badge into the kind icon on a narrow title row", () => {
+    loadSteps([lane("Lane title")]);
+    setSettings(WORKFLOW_HARNESS);
+
+    render(<WorkflowStepsPanel />);
+
+    const titleRow = within(row(0)).getByTestId("workflow-step-title-row");
+    // The row's own width decides, not the panel's: a parallel group
+    // narrows it well below the panel width.
+    expect(titleRow.className).toContain("@container/step-title");
+    const badge = within(titleRow).getByTestId("workflow-step-kind-badge");
+    // Visually hidden below 240px but still read, so the accessible name
+    // does not change with the width.
+    expect(badge.className.split(" ")).toEqual(
+      expect.arrayContaining(["sr-only", "@min-[240px]/step-title:not-sr-only"])
+    );
+    expect(badge).toHaveTextContent(SUB_WORKFLOW_DASHBOARD_LABELS.workflow);
+    // The worktree badge still gives way before the name.
+    expect(
+      within(titleRow).getByTestId("workflow-step-worktree-badge").className
+    ).toContain("shrink-1000");
+    expect(within(titleRow).getByText("Lane title")).toBeInTheDocument();
   });
 
   it("colours a lane by the same harness in the steps list, chip rail and output", () => {

@@ -110,7 +110,10 @@ import {
 } from "./outputLineMetrics";
 import type { DiffRenderPlan } from "./rdvAdapter";
 import { resolveStepColor } from "./stepColor";
-import { resolveEffectiveStepHarness } from "./subWorkflowDisplay";
+import {
+  indexSubWorkflowRanWith,
+  resolveEffectiveStepHarness,
+} from "./subWorkflowDisplay";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 import {
@@ -2403,6 +2406,13 @@ export function buildOutputRows(
       )
       .map((message) => getTargetKey(message.target))
   );
+  // A settled lane is coloured by the harness its child recorded, as in the
+  // steps list and the chip rail.
+  const recordedRanWith = indexSubWorkflowRanWith(
+    input.allMessages.flatMap((message) =>
+      message.subWorkflowOutput ? [message.subWorkflowOutput] : []
+    )
+  );
   const getStepOutputColor = (
     target: OutputMessageTarget
   ): string | undefined => {
@@ -2428,14 +2438,19 @@ export function buildOutputRows(
               step: member,
               harnessId: resolveEffectiveStepHarness(
                 member,
-                input.effectiveHarness
+                input.effectiveHarness,
+                recordedRanWith
               ),
               offsetInGroup,
             }))
         : undefined;
     const color = resolveStepColor({
       step,
-      harnessId: resolveEffectiveStepHarness(step, input.effectiveHarness),
+      harnessId: resolveEffectiveStepHarness(
+        step,
+        input.effectiveHarness,
+        recordedRanWith
+      ),
       stepIndex:
         target.kind === FINAL_STEP_PHASES.FINAL_STEP
           ? input.steps.length
