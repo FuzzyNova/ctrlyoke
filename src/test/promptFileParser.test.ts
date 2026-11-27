@@ -409,6 +409,26 @@ suite("PromptFileParser Tests", () => {
       );
     });
 
+    test("editor validation names a malformed inline definition first", () => {
+      for (const workflow of [null, {}, { name: "lane" }]) {
+        const result = parser.validateWorkflowText(
+          JSON.stringify({
+            steps: [{ prompt: "one" }, { type: "workflow", workflow }],
+          }),
+          CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+        );
+        assert.strictEqual(
+          result.issues[0]?.instancePath,
+          "/steps/1/workflow",
+          JSON.stringify(result.issues)
+        );
+        assert.match(
+          result.issues[0].message,
+          /^Step 2: (A workflow step needs a workflow file path|Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text)/
+        );
+      }
+    });
+
     test("reports a missing sub-workflow file", async () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-subworkflow-missing-")
@@ -1118,6 +1138,26 @@ suite("PromptFileParser Tests", () => {
           ],
         },
         message: /Step 2: Inline sub-workflow starts a new run boundary/i,
+      },
+      {
+        name: "null inline workflow",
+        workflow: { steps: [{ type: "workflow", workflow: null }] },
+        message:
+          /^Error: Validation failed: \/steps\/0\/workflow: Step 1: A workflow step needs a workflow file path or an inline definition/,
+      },
+      {
+        name: "empty inline workflow",
+        workflow: { steps: [{ type: "workflow", workflow: {} }] },
+        message:
+          /^Error: Validation failed: \/steps\/0\/workflow: Step 1: Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text, or type: script with a script/,
+      },
+      {
+        name: "name-only inline workflow",
+        workflow: {
+          steps: [{ type: "workflow", workflow: { name: "lane" } }],
+        },
+        message:
+          /^Error: Validation failed: \/steps\/0\/workflow: Step 1: Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text/,
       },
     ];
 

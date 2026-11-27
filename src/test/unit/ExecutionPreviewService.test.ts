@@ -55,6 +55,8 @@ import {
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
+import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
+import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { pathsEqual } from "../../utils/PathCasing";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 
@@ -667,6 +669,79 @@ suite("ExecutionPreviewService", () => {
     );
     assert.ok(
       !JSON.stringify(preview.steps[0].prompt).includes("{{name}}.prompt.md")
+    );
+  });
+
+  test("previews an inline child with its parent's reference base and trust identity", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-inline-child-")
+    );
+    temporaryRoots.push(workspaceRoot);
+    const flows = path.join(workspaceRoot, "flows");
+    await fsPromises.mkdir(flows, { recursive: true });
+    await fsPromises.writeFile(
+      path.join(flows, "notes.prompt.md"),
+      "FROM-FLOWS",
+      "utf8"
+    );
+    const parentFile = path.join(flows, "parent.ctrlyoke.json");
+    // The child's own working copy lives in run storage, beside nothing.
+    const workingCopy = path.join(
+      workspaceRoot,
+      ".runs",
+      "child",
+      "run-1",
+      "workflow.ctrlyoke.json"
+    );
+    const parentIdentity = path.join(flows, "parent identity");
+
+    const harness = createHarness(workspaceRoot);
+    const contexts: Array<WorkflowContext | undefined> = [];
+    const plan = harness.executionPlanBuilder.plan.bind(
+      harness.executionPlanBuilder
+    );
+    harness.executionPlanBuilder.plan = async (session, options) => {
+      contexts.push(session.workflowContext);
+      return plan(session, options);
+    };
+    const service = new ExecutionPreviewService({
+      defaults: createDefaults(),
+      capabilities: createCapabilities(),
+      getHarness: () => harness,
+      workspaceRoot,
+      workspaceRoots: [workspaceRoot],
+      extensionPath: "extension",
+      hostCanProvidePty: false,
+      platform: "linux",
+    });
+    const workflow: PromptFile = {
+      trustedExternalRoots: ["/shared"],
+      steps: [{ prompt: "./notes.prompt.md" }],
+    };
+    const preview = await service.build({
+      workflow,
+      sourcePath: workingCopy,
+      sourceDefinitionPath: parentFile,
+      workflowTrustSourcePath: parentIdentity,
+      workingFilePath: workingCopy,
+    });
+
+    assert.ok(
+      preview.steps[0].prompt?.sections.some((section) =>
+        section.body?.includes("FROM-FLOWS")
+      ),
+      JSON.stringify(preview.steps[0].prompt)
+    );
+    assert.strictEqual(contexts.length, 1);
+    assert.strictEqual(
+      HarnessAdapterUtils.getWorkflowExternalRootsContext(workspaceRoot, {
+        ...contexts[0],
+        workflowFile: workflow,
+      })?.identity,
+      ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+        workspaceRoot,
+        parentIdentity
+      )
     );
   });
 

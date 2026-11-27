@@ -230,7 +230,10 @@ import {
 } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import { materializeInlineSubWorkflow } from "../utils/InlineSubWorkflowMaterializer";
+import {
+  materializeInlineSubWorkflow,
+  substituteInlineStepName,
+} from "../utils/InlineSubWorkflowMaterializer";
 
 /** Live harness output of one attempt, with the target that produced it. */
 interface TargetStreamingOutput {
@@ -3748,11 +3751,11 @@ export class WorkflowExecutor {
                 : `step ${stepIndex + 1}`,
           },
           this.promptQueue.getState().workflowName,
-          this.substituteStepLabel(
+          substituteInlineStepName(
             authoredStep,
             this.getRunStartView(context).vars,
             target.kind === FINAL_STEP_PHASES.FINAL_STEP ? -1 : stepIndex
-          ).name
+          )
         );
         const worktreePlan = classifySubWorkflowWorktree(
           materialized.definition.worktree

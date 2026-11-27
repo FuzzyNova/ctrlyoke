@@ -53,6 +53,31 @@ export interface ExecutionWorkspace {
   readonly worktree?: WorktreeResolution;
 }
 
+/** The three facts a workflow's trust identity is resolved from. */
+export interface WorkflowTrustSource {
+  /** An identity set explicitly, e.g. the one an inline child inherits. */
+  workflowTrustSourcePath?: string;
+  /** The authored workflow file, when there is one. */
+  sourceDefinitionPath?: string;
+  /** The loaded file (a run's working copy); the fallback when nothing is authored. */
+  filePath?: string;
+}
+
+/**
+ * The path `trustedExternalRoots` approvals are keyed by: an explicit identity,
+ * else the authored file, else the loaded file. The single source of this rule
+ * for `WorkflowInstance.getWorkflowTrustSourcePath` and the harness side.
+ */
+export function resolveWorkflowTrustSourcePath(
+  source: WorkflowTrustSource
+): string | undefined {
+  return (
+    source.workflowTrustSourcePath ??
+    source.sourceDefinitionPath ??
+    source.filePath
+  );
+}
+
 /** Stable identity used to decide whether a retained integration may be reused. */
 export function getExecutionWorkspaceIdentity(
   workspace: ExecutionWorkspace
@@ -147,7 +172,7 @@ export interface WorkflowContext {
   sourceDefinitionPath?: string;
   /**
    * The trust identity `trustedExternalRoots` approvals are keyed by, as
-   * `WorkflowInstance.getWorkflowTrustSourcePath` resolves it. It differs from
+   * {@link resolveWorkflowTrustSourcePath} resolves it. It differs from
    * `sourceDefinitionPath` for a workflow with no authored file and for an
    * inline sub-workflow child, which inherits its parent's identity (D13).
    */

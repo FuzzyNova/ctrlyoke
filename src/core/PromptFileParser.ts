@@ -9,6 +9,7 @@ import {
   ParsedPromptFile,
   PromptStep,
   InlineSubWorkflowDefinition,
+  describeInvalidInlineSubWorkflowDefinition,
   WorkflowStep,
   ScriptStep,
   SubWorkflowStep,
@@ -130,6 +131,8 @@ function inlineRunBoundaryErrors(
 ): string[] {
   const inline = step.workflow;
   if (typeof inline === "string") return [];
+  const invalid = describeInvalidInlineSubWorkflowDefinition(inline);
+  if (invalid) return [`${label}: ${invalid}`];
   const errors: string[] = [];
   const boundary = `${label}: Inline sub-workflow starts a new run boundary`;
   if (
@@ -646,16 +649,24 @@ export class PromptFileParser {
           label: "Root workflow step",
         });
       }
+      // A malformed inline definition fails every arm of the schema's oneOf,
+      // so its own message goes ahead of that noise.
+      const shapeIssues: WorkflowTextValidationIssue[] = [];
       for (const candidate of inlineCandidates) {
         const step = candidate.step as unknown as SubWorkflowStep;
+        const shapeInvalid =
+          typeof step.workflow !== "string" &&
+          describeInvalidInlineSubWorkflowDefinition(step.workflow) !==
+            undefined;
         for (const message of inlineRunBoundaryErrors(step, candidate.label)) {
-          issues.push({
+          (shapeInvalid ? shapeIssues : issues).push({
             instancePath: candidate.pointer,
             message,
             severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
           });
         }
       }
+      issues.unshift(...shapeIssues);
     }
     const uniqueIssues = new Map<string, WorkflowTextValidationIssue>();
     for (const issue of issues) {
@@ -1411,55 +1422,15 @@ export class PromptFileParser {
     promptFilePath: string
   ): Promise<WorkflowStep> {
     if (typeof source.workflow !== "string") {
-      if (
-        !source.workflow ||
-        typeof source.workflow !== "object" ||
-        Array.isArray(source.workflow)
-      ) {
-        throw new Error(
-          "Sub-workflow step requires a workflow path or inline step"
-        );
-      }
-      const inline = source.workflow as Record<string, unknown>;
-      if (
-        inline.type === STEP_TYPES.WORKFLOW ||
-        "steps" in inline ||
-        "finalStep" in inline ||
-        "parallel" in inline
-      ) {
-        throw new Error(
-          "Inline sub-workflow definitions must contain one prompt or script step; use a workflow file across run boundaries"
-        );
+      const invalid = describeInvalidInlineSubWorkflowDefinition(
+        source.workflow
+      );
+      if (invalid) {
+        throw new Error(invalid);
       }
       const inlineStep = source.workflow as InlineSubWorkflowDefinition;
-      switch (getStepType(inlineStep)) {
-        case STEP_TYPES.SCRIPT: {
-          const script = inlineStep as ScriptStep;
-          if (typeof script.script !== "string" || !script.script.trim()) {
-            throw new Error(
-              "Inline sub-workflow script step requires a non-empty script"
-            );
-          }
-          break;
-        }
-        case STEP_TYPES.PROMPT: {
-          const prompt = inlineStep as PromptStep;
-          if (typeof prompt.prompt !== "string" || !prompt.prompt.trim()) {
-            throw new Error(
-              "Inline sub-workflow prompt step requires non-empty prompt text"
-            );
-          }
-          await this.validatePromptReference(prompt.prompt, promptFilePath);
-          break;
-        }
-        case STEP_TYPES.WORKFLOW:
-          throw new Error(
-            "Inline sub-workflow definitions cannot contain another workflow step"
-          );
-        default:
-          throw new Error(
-            "Inline sub-workflow definitions must be prompt or script steps"
-          );
+      if (isPromptStep(inlineStep)) {
+        await this.validatePromptReference(inlineStep.prompt, promptFilePath);
       }
       const step = {
         type: STEP_TYPES.WORKFLOW,

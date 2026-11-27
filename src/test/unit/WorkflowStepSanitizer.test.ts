@@ -13,6 +13,7 @@ import {
 import {
   getSubWorkflowDisplayName,
   getWorkflowStepText,
+  isInlineSubWorkflowDefinition,
   type SubWorkflowStep,
 } from "../../types/CtrlYokeTypes";
 
@@ -78,6 +79,36 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
           workflow: { prompt: "child", _runtime: { sessionId: "parent" } },
         }),
       /cannot contain _runtime/
+    );
+  });
+
+  test("names what is missing for null, an empty object and a name-only object", () => {
+    const cases: Array<[unknown, RegExp]> = [
+      [null, /needs a workflow file path or an inline definition/],
+      [{}, /needs non-empty prompt text, or type: script with a script/],
+      [
+        { name: "x" },
+        /needs non-empty prompt text, or type: script with a script/,
+      ],
+      [{ prompt: "   " }, /needs non-empty prompt text/],
+      [{ type: STEP_TYPES.SCRIPT }, /its script step needs a non-empty script/],
+    ];
+    for (const [workflow, message] of cases) {
+      assert.throws(
+        () =>
+          buildWorkflowStepFromProperties("display text", {
+            type: STEP_TYPES.WORKFLOW,
+            workflow,
+          }),
+        message,
+        JSON.stringify(workflow)
+      );
+      assert.strictEqual(isInlineSubWorkflowDefinition(workflow), false);
+    }
+    assert.strictEqual(isInlineSubWorkflowDefinition({ prompt: "go" }), true);
+    assert.strictEqual(
+      isInlineSubWorkflowDefinition({ type: STEP_TYPES.SCRIPT, script: "ls" }),
+      true
     );
   });
 

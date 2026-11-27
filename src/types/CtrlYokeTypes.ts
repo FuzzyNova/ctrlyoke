@@ -1129,17 +1129,58 @@ export interface SubWorkflowRuntimeMetadata extends StepLifecycleRuntime {
   resolvedWorkflowPath?: string;
 }
 
+function hasNonEmptyText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/**
+ * Why a `workflow` value that is not a path is not an inline sub-workflow
+ * definition (D13), or `undefined` when it is one. An inline definition is a
+ * prompt step with non-empty `prompt` text or a script step with a non-empty
+ * `script`; anything else (`null`, `{}`, `{ name }`) would otherwise fail only
+ * when the child loads. The single source of the shape rule and its messages
+ * for the parser, the dashboard sanitizer and run continuation.
+ */
+export function describeInvalidInlineSubWorkflowDefinition(
+  value: unknown
+): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "A workflow step needs a workflow file path or an inline definition, which must be a single prompt or script step";
+  }
+  if ("_runtime" in value) {
+    return "Inline workflow definition cannot contain _runtime";
+  }
+  const candidate = value as {
+    type?: unknown;
+    prompt?: unknown;
+    script?: unknown;
+  };
+  if (
+    candidate.type === STEP_TYPES.WORKFLOW ||
+    "steps" in candidate ||
+    "finalStep" in candidate ||
+    "parallel" in candidate
+  ) {
+    return "Inline workflow definition must be a single prompt or script step; use a workflow file for anything larger";
+  }
+  if (candidate.type === STEP_TYPES.SCRIPT) {
+    return hasNonEmptyText(candidate.script)
+      ? undefined
+      : "Inline workflow definition must be a single prompt or script step: its script step needs a non-empty script";
+  }
+  if (candidate.type === undefined || candidate.type === STEP_TYPES.PROMPT) {
+    return hasNonEmptyText(candidate.prompt)
+      ? undefined
+      : "Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text, or type: script with a script";
+  }
+  return `Inline workflow definition must be a single prompt or script step, not type ${JSON.stringify(candidate.type)}`;
+}
+
 /** Type guard for an inline sub-workflow definition. */
 export function isInlineSubWorkflowDefinition(
   value: unknown
 ): value is InlineSubWorkflowDefinition {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    !("_runtime" in value) &&
-    (isPromptStep(value as object) || isScriptStep(value as object))
-  );
+  return describeInvalidInlineSubWorkflowDefinition(value) === undefined;
 }
 
 /** Union type for all workflow steps */

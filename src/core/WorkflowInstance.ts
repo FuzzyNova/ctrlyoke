@@ -153,6 +153,7 @@ import {
 } from "../platform/PlatformAdapter";
 import {
   getExecutionWorkspaceIdentity,
+  resolveWorkflowTrustSourcePath,
   type ExecutionWorkspace,
   type HeadlessApprovalRequestContext,
   type HeadlessApprovalResolution,
@@ -1712,11 +1713,20 @@ export class WorkflowInstance
    * it is only the fallback for workflows with no authored file.
    */
   getWorkflowTrustSourcePath(): string | undefined {
-    return (
-      this.inheritedTrustIdentityPath ??
-      this.sourceDefinitionPath ??
-      this.currentPromptFile?.filePath
-    );
+    return resolveWorkflowTrustSourcePath({
+      workflowTrustSourcePath: this.inheritedTrustIdentityPath,
+      sourceDefinitionPath: this.sourceDefinitionPath,
+      filePath: this.currentPromptFile?.filePath,
+    });
+  }
+
+  /**
+   * The authored definition workflow-relative references resolve against.
+   * For an inline child this is the parent's authored file (or none), never
+   * its trust identity.
+   */
+  getSourceDefinitionPath(): string | undefined {
+    return this.sourceDefinitionPath;
   }
 
   /**

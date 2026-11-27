@@ -577,6 +577,73 @@ function createTestOrchestrator(
   return orchestrator;
 }
 
+suite("WorkflowOrchestrator execution preview definition sources", () => {
+  // Reaches the private seam the dry run builds its request from.
+  interface DefinitionSourcesSeam {
+    getViewDefinitionSources(
+      clientId: string,
+      instance: unknown
+    ): Promise<{
+      sourceDefinitionPath?: string;
+      workflowTrustSourcePath?: string;
+    }>;
+  }
+  const childKey = "child-lineage" as WorkflowKey;
+  const childInstance = {
+    getQueueState: () => ({ workflowKey: childKey }),
+    // An inline child: the parent's authored file is its base, and the
+    // parent's identity its trust, though its descriptor records neither.
+    getSourceDefinitionPath: () => "/ws/flows/parent.ctrlyoke.json",
+    getWorkflowTrustSourcePath: () => "/ws/parent identity",
+  };
+
+  function createSeam(viewedKey: WorkflowKey): {
+    seam: DefinitionSourcesSeam;
+    descriptorReads: string[];
+  } {
+    const orchestrator = createTestOrchestrator();
+    const descriptorReads: string[] = [];
+    Object.assign(orchestrator, {
+      getViewAddress: () => ({
+        workflowKey: viewedKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      }),
+      getViewSourceDefinitionPath: async (clientId: string) => {
+        descriptorReads.push(clientId);
+        return "/ws/descriptor.ctrlyoke.json";
+      },
+    });
+    return {
+      seam: orchestrator as unknown as DefinitionSourcesSeam,
+      descriptorReads,
+    };
+  }
+
+  test("takes the base and trust identity from the instance that owns the viewed lineage", async () => {
+    const { seam, descriptorReads } = createSeam(childKey);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", childInstance),
+      {
+        sourceDefinitionPath: "/ws/flows/parent.ctrlyoke.json",
+        workflowTrustSourcePath: "/ws/parent identity",
+      }
+    );
+    assert.deepStrictEqual(descriptorReads, []);
+  });
+
+  test("falls back to the descriptor for a lineage the instance does not own", async () => {
+    const { seam } = createSeam("other-lineage" as WorkflowKey);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", childInstance),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", undefined),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+  });
+});
+
 suite("WorkflowOrchestrator snapshot content requests", () => {
   test("deduplicates concurrent requests for the same address, target, and path", async () => {
     const orchestrator = createTestOrchestrator();

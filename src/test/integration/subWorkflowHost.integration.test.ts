@@ -2748,6 +2748,81 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
+  test("a continued inline child re-resolves its ./ reference from the parent's folder and keeps the parent's trust identity", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-continue-base-");
+    const recorder = new MockHarnessIntegration(undefined, false);
+    // The child's first send fails, so its run ends in ERROR and the parent's
+    // continuation (D6) continues that run, re-running the prompt step.
+    let sends = 0;
+    recorder.onSend = async () => {
+      sends += 1;
+      return sends === 1 ? { success: false } : { success: true };
+    };
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      recorder
+    );
+    try {
+      const flows = path.join(workspace, "flows");
+      await fs.mkdir(flows, { recursive: true });
+      await fs.writeFile(path.join(flows, "notes.prompt.md"), "FROM-FLOWS");
+      // A root decoy: losing the parent's folder as the base finds it.
+      await fs.writeFile(path.join(workspace, "notes.prompt.md"), "WRONG");
+      const parentPath = path.join(flows, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        errorBehavior: { onError: "stopWorkflow" },
+        steps: [
+          { type: "workflow", workflow: { prompt: "./notes.prompt.md" } },
+        ],
+      });
+
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await parent.executeLoadedPromptFile();
+      assert.notStrictEqual(parent.promptQueue.getState().status, "completed");
+      const failedChild = launchedChild(instances, parent);
+      assert.strictEqual(failedChild.promptQueue.getState().status, "error");
+      const childRunRef = failedChild.promptQueue.getState().runRef;
+
+      const state = parent.promptQueue.getState();
+      await parent.executeContinuationAtRun(
+        state.workflowKey!,
+        state.runRef!,
+        state.definitionRevision
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+
+      const continued = instances.filter(
+        (instance) =>
+          instance !== parent &&
+          instance !== failedChild &&
+          instance.promptQueue.getState().runRef === childRunRef
+      );
+      assert.strictEqual(continued.length, 1, "the failed child is continued");
+      const child = continued[0];
+      assert.strictEqual(child.promptQueue.getState().status, "completed");
+      // The re-run step resolved `./` beside the parent's file again.
+      assert.deepStrictEqual(recorder.sentPrompts, [
+        "FROM-FLOWS",
+        "FROM-FLOWS",
+      ]);
+      // Its restored lineage records no source file: both come from the parent.
+      assert.strictEqual(child.getSourceDefinitionPath(), parentPath);
+      assert.ok(parent.getWorkflowTrustSourcePath());
+      assert.strictEqual(
+        child.getWorkflowTrustSourcePath(),
+        parent.getWorkflowTrustSourcePath()
+      );
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
   test("an inline child checks exported assets beside its parent's file", async () => {
     const workspace = makeTempDir("ctrlyoke-inline-assets-");
     const { createInstance, instances } = makeInstanceFactory(workspace);
@@ -2913,6 +2988,50 @@ suite("Sub-workflow host end to end", () => {
       for (const event of settled) {
         assert.ok(!("resolvedWorkflowPath" in (event.payload as object)));
       }
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("an inline step whose name does not substitute fails before any child is named", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-name-error-");
+    const recorder = new MockHarnessIntegration(undefined, false);
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      recorder
+    );
+    try {
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Names parent",
+        steps: [
+          {
+            type: "workflow",
+            // `{{missing}}` is undefined, so the name does not substitute.
+            name: "{{missing}} lane",
+            workflow: { prompt: "hello" },
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await parent.executeLoadedPromptFile();
+      // The step substitutes as a whole before launching, so the undefined
+      // variable fails it and no child takes the `{{…}}` text as its name
+      // (`substituteInlineStepName` covers a caller that names first).
+      const state = parent.promptQueue.getState();
+      assert.notStrictEqual(state.status, "completed");
+      assert.match(
+        state.results[0]?.error ?? "",
+        /variable "missing"/,
+        JSON.stringify(state.results)
+      );
+      assert.deepStrictEqual(
+        instances.filter((instance) => instance !== parent),
+        []
+      );
+      assert.deepStrictEqual(recorder.sentPrompts, []);
     } finally {
       await disposeAll(instances, workspace);
     }

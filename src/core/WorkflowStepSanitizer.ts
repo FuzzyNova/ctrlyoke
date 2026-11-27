@@ -23,6 +23,7 @@ import {
   assertNever,
   getStepType,
   isPriorContextRunSource,
+  describeInvalidInlineSubWorkflowDefinition,
   isInlineSubWorkflowDefinition,
   type InlineSubWorkflowDefinition,
   type ErrorBehavior,
@@ -977,17 +978,15 @@ export function buildWorkflowStepFromProperties(
       };
     case STEP_TYPES.WORKFLOW:
       // Only a path or an inline definition is a workflow reference. Any other
-      // value is an invalid definition, never one to fall back to the text.
-      if (
-        props.workflow !== undefined &&
-        typeof props.workflow !== "string" &&
-        !isInlineSubWorkflowDefinition(props.workflow)
-      ) {
-        throw new Error(
-          isRecord(props.workflow) && "_runtime" in props.workflow
-            ? "Inline workflow definition cannot contain _runtime"
-            : "Inline workflow definition must be a single prompt or script step"
+      // value (`null` included) is an invalid definition, never one to fall
+      // back to the text.
+      if (props.workflow !== undefined && typeof props.workflow !== "string") {
+        const invalid = describeInvalidInlineSubWorkflowDefinition(
+          props.workflow
         );
+        if (invalid) {
+          throw new Error(invalid);
+        }
       }
       return {
         type: STEP_TYPES.WORKFLOW,

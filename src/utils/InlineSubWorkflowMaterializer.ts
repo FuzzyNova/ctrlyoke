@@ -8,6 +8,11 @@ import {
   type WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import { PROMPT_PROPERTIES } from "../types/DashboardConstants";
+import {
+  VarSubstitutionValidationError,
+  VarSubstitutor,
+} from "./VarSubstitutor";
+import { VAR_SUBSTITUTION_PHASES } from "./VarSubstitutionPolicy";
 
 /**
  * Workflow-level execution properties a parent's root never hands to an inline
@@ -34,6 +39,32 @@ const RUN_SCOPED_EXECUTION_KEYS = new Set<keyof ExecutionProperties>([
 export const INLINE_INHERITED_EXECUTION_KEYS = EXECUTION_PROPERTY_KEYS.filter(
   (key) => !RUN_SCOPED_EXECUTION_KEYS.has(key)
 );
+
+/**
+ * The dispatch-substituted `name` an inline child is named from (pass it to
+ * {@link materializeInlineSubWorkflow}). When the step does not substitute,
+ * the authored `{{…}}` text is never a name: the empty string makes the
+ * child take the default label, as a name that substitutes to nothing does.
+ * (The executor substitutes the whole step before launching and fails it on
+ * the same error, so this fallback only guards callers that name first.)
+ */
+export function substituteInlineStepName(
+  step: SubWorkflowStep,
+  vars: Readonly<Record<string, string>>,
+  viewIndex: number
+): string | undefined {
+  try {
+    return VarSubstitutor.substituteStepView(
+      step,
+      vars,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
+      viewIndex
+    ).name;
+  } catch (error) {
+    if (!(error instanceof VarSubstitutionValidationError)) throw error;
+    return "";
+  }
+}
 
 /** Where the inline step sits in the parent, for its default lineage name. */
 export interface InlineSubWorkflowPosition {

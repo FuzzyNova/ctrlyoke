@@ -8,6 +8,7 @@ import {
 import {
   INLINE_INHERITED_EXECUTION_KEYS,
   materializeInlineSubWorkflow,
+  substituteInlineStepName,
 } from "../../utils/InlineSubWorkflowMaterializer";
 
 const STEP_2 = { label: "step 2" };
@@ -195,5 +196,36 @@ suite("InlineSubWorkflowMaterializer", () => {
       ""
     );
     assert.strictEqual(result.displayName, "Parent · step 2");
+  });
+
+  test("a name that cannot substitute gets the default label, never its {{…}} text", () => {
+    const step = inlineStep({ prompt: "child" }, { name: "{{missing}} lane" });
+    const name = substituteInlineStepName(step, {}, 1);
+    assert.strictEqual(name, "");
+    const result = materializeInlineSubWorkflow(
+      { steps: [] },
+      {},
+      step,
+      STEP_2,
+      "Parent",
+      name
+    );
+    assert.strictEqual(result.displayName, "Parent · step 2");
+    assert.strictEqual(result.definition.name, "Parent · step 2");
+  });
+
+  test("a name that substitutes is the child's name, and no name stays unnamed", () => {
+    assert.strictEqual(
+      substituteInlineStepName(
+        inlineStep({ prompt: "child" }, { name: "{{area}} lane" }),
+        { area: "core" },
+        1
+      ),
+      "core lane"
+    );
+    assert.strictEqual(
+      substituteInlineStepName(inlineStep({ prompt: "child" }), {}, 1),
+      undefined
+    );
   });
 });

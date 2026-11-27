@@ -213,6 +213,13 @@ export interface ExecutionPreviewRequest {
   readonly sourceDefinitionPath?: string;
   /** Execution-side semantic definition path; persistence continues to use the field above. */
   readonly executionSourceDefinitionPath?: string;
+  /**
+   * The trust identity `trustedExternalRoots` approvals are keyed by
+   * (`WorkflowInstance.getWorkflowTrustSourcePath`). An inline child's is its
+   * parent's, which no path field above carries; when omitted, the harness
+   * resolves it from `sourceDefinitionPath`, then `sourcePath`.
+   */
+  readonly workflowTrustSourcePath?: string;
   readonly workingFilePath?: string;
   readonly definitionRevision?: number | string;
   /** Higher-precedence variables, such as CLI --var values. */
@@ -808,6 +815,7 @@ export class ExecutionPreviewService {
       allPrompts: allSteps,
       filePath: request.sourcePath,
       sourceDefinitionPath: request.sourceDefinitionPath,
+      workflowTrustSourcePath: request.workflowTrustSourcePath,
       workflowName: request.workflowName,
       workingFilePath: request.workingFilePath,
       resolvedProperties: properties,

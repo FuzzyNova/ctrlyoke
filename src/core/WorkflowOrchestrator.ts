@@ -2675,13 +2675,17 @@ export class WorkflowOrchestrator {
         outputResolver: outputHistoryManager.getRunOutputResolver(),
       }),
     });
+    const definitionSources = await this.getViewDefinitionSources(
+      clientId,
+      instance
+    );
     const preview = await service.build({
       workflow,
       scope,
       workflowName: state?.workflowName ?? "",
       sourcePath: previewSourcePath,
-      sourceDefinitionPath:
-        (await this.getViewSourceDefinitionPath(clientId)) ?? undefined,
+      sourceDefinitionPath: definitionSources.sourceDefinitionPath,
+      workflowTrustSourcePath: definitionSources.workflowTrustSourcePath,
       workingFilePath: previewSourcePath,
       definitionRevision: workflow.definitionRevision,
     });
@@ -2756,6 +2760,38 @@ export class WorkflowOrchestrator {
       );
       return null;
     }
+  }
+
+  /**
+   * The reference base and trust identity a client's addressed workflow
+   * executes with. When `instance` owns the addressed lineage they come from
+   * it, as execution reads them: an inline child (D13) resolves references
+   * against its parent's authored file and is trusted by its parent's
+   * identity, neither of which its lineage descriptor records. Otherwise the
+   * descriptor's `originalFile` is the base, and the harness resolves trust
+   * from it and the previewed file (`resolveWorkflowTrustSourcePath`). A
+   * non-resident inline child (after a restart) previews without its parent's
+   * base, as its descriptor records none.
+   */
+  private async getViewDefinitionSources(
+    clientId: string,
+    instance: WorkflowInstance | null | undefined
+  ): Promise<{
+    sourceDefinitionPath?: string;
+    workflowTrustSourcePath?: string;
+  }> {
+    const address = this.getViewAddress(clientId);
+    const instanceKey = instance?.getQueueState().workflowKey;
+    if (instance && (!address || instanceKey === address.workflowKey)) {
+      return {
+        sourceDefinitionPath: instance.getSourceDefinitionPath(),
+        workflowTrustSourcePath: instance.getWorkflowTrustSourcePath(),
+      };
+    }
+    return {
+      sourceDefinitionPath:
+        (await this.getViewSourceDefinitionPath(clientId)) ?? undefined,
+    };
   }
 
   async approvePendingWorkflowExternalRootsForClient(

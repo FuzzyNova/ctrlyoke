@@ -11,6 +11,7 @@ import { CodexHarnessAdapter } from "../../core/harness/codex/CodexHarnessAdapte
 import { CopilotHarnessAdapter } from "../../core/harness/copilot/CopilotHarnessAdapter";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
+import { resolveWorkflowTrustSourcePath } from "../../types/WorkflowContextTypes";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
@@ -221,6 +222,30 @@ suite("HarnessAdapterUtils", () => {
       ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
         primaryRoot,
         runWorkingCopy
+      )
+    );
+
+    // An explicit identity (an inline child's inherited one) wins over both,
+    // through the same rule `WorkflowInstance.getWorkflowTrustSourcePath` uses.
+    const inheritedIdentity = path.join(primaryRoot, "Review loop");
+    const source = {
+      workflowTrustSourcePath: inheritedIdentity,
+      sourceDefinitionPath: authoredFile,
+      filePath: runWorkingCopy,
+    };
+    assert.strictEqual(
+      resolveWorkflowTrustSourcePath(source),
+      inheritedIdentity
+    );
+    assert.strictEqual(
+      HarnessAdapterUtils.getWorkflowExternalRootsContext(primaryRoot, {
+        ...source,
+        stateRoot: primaryRoot,
+        workflowFile,
+      })?.identity,
+      ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+        primaryRoot,
+        inheritedIdentity
       )
     );
   });
