@@ -142,11 +142,18 @@ steps:
 
 Before the group starts, ctrlyoke resolves and checks every member's child once.
 A missing or invalid child file, or a cycle, fails that member alone, and its
-`onFail` decides whether the parent continues once the group finishes. The
-parent's checkout is checked once for the whole group, using the
+`onFail` decides whether the parent continues once the group finishes. A member
+that waits for a free slot starts from its child file as it is when the member
+starts, so an edit made in the meantime is picked up, as it is for a step that
+runs on its own.
+
+When the group runs members side by side, the parent's checkout is checked once
+for the whole group, using the
 [worktree rule](#execution-directory-and-worktrees) above, so every worktree
 member branches from the same commit. If that check refuses a dirty checkout,
-only the members whose child creates a worktree fail.
+only the members whose child creates a worktree fail. When the group runs one
+member at a time (`queue.maxParallelSteps: 1`), each worktree member is checked
+when it starts instead, because an earlier member may have changed the checkout.
 
 `queue.maxParallelSteps` caps how many children run at once, and each child's
 own parallel groups apply their own limit on top. With `failFast: true` (the

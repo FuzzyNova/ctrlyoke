@@ -1,3 +1,4 @@
+import { promises as fs } from "fs";
 import * as path from "path";
 import {
   PlatformAdapter,
@@ -623,6 +624,26 @@ interface VariableCheckField {
   fencedCodeProtected?: boolean;
 }
 
+/** The child file content a sub-workflow preparation parsed. */
+interface ParsedSubWorkflowFile {
+  readonly path: string;
+  readonly content: string;
+}
+
+/** A sub-workflow preparation, with the file content a parse read. */
+interface SubWorkflowPreparation {
+  readonly launch: PreparedSubWorkflowLaunch;
+  readonly parsedFile?: ParsedSubWorkflowFile;
+}
+
+/** One parallel sub-workflow member's preparation, shared by its preflights. */
+interface PreparedSubWorkflowMemberEntry {
+  /** The authored `workflow` value the entry was prepared from. */
+  readonly fingerprint: string;
+  launch: PreparedSubWorkflowLaunch;
+  readonly parsedFile?: ParsedSubWorkflowFile;
+}
+
 /**
  * Drives the sequential execution loop for a ctrlyoke workflow.
  *
@@ -654,11 +675,16 @@ export class WorkflowExecutor {
    * `stepId`. Group preflight and each member's dispatch preflight share one
    * entry, so a child file is parsed once and the D4c result recorded for the
    * group reaches that member's launch. Keyed with the authored `workflow`
-   * value, so an edit between the two preflights prepares again.
+   * value, so an edit between the two preflights prepares again, and a child
+   * file whose content changed since its parse is parsed again too.
+   *
+   * Scoped to one group dispatch: cleared on every exit from it, including a
+   * group preflight that throws before the group run exists, so a Continue
+   * after the author fixed a child never reuses the earlier parse or failure.
    */
   private readonly preparedSubWorkflowMembers = new Map<
     string,
-    { readonly fingerprint: string; launch: PreparedSubWorkflowLaunch }
+    PreparedSubWorkflowMemberEntry
   >();
   /** Parses sub-workflow members' child files for group preflight. */
   private subWorkflowParser: PromptFileParser | undefined;
@@ -1255,6 +1281,22 @@ export class WorkflowExecutor {
         context
       );
     }
+    try {
+      return await this.dispatchParallelGroup(group, context, snapshotStrategy);
+    } finally {
+      // The prepared members belong to this dispatch alone, whichever way it
+      // ends: a preflight that throws leaves no group run whose `finally`
+      // would clear them, and a Continue must prepare the children afresh.
+      this.preparedSubWorkflowMembers.clear();
+    }
+  }
+
+  /** `executeParallelGroup` for a group no promotion has started. */
+  private async dispatchParallelGroup(
+    group: ParallelGroupDefinition,
+    context: WorkflowExecutionContext,
+    snapshotStrategy: "git" | "filesystem" | undefined
+  ): Promise<ParallelGroupOutcome> {
     const preflight = await this.preflightGroup(group, context);
     await this.prepareParentCheckoutForGroup(preflight, context);
     let groupBeforeState: RawWorkspaceState | undefined;
@@ -1448,7 +1490,10 @@ export class WorkflowExecutor {
             step,
             groupContext,
             memberSnapshotStrategy,
-            member
+            member && {
+              ...member,
+              groupEffectiveWidth: options.effectiveWidth,
+            }
           );
         } finally {
           this.targetExecutionErrors.delete(getExecutionTargetRunKey(target));
@@ -1645,6 +1690,7 @@ export class WorkflowExecutor {
         })
       ).member;
     } catch (error: unknown) {
+      this.preparedSubWorkflowMembers.clear();
       return {
         accepted: false,
         diagnostic: `Parallel-group promotion failed to resolve the running step: ${getErrorMessage(
@@ -1670,6 +1716,8 @@ export class WorkflowExecutor {
         [anchorReservation]
       );
     } catch (error: unknown) {
+      // No group run exists to own the preparations this promotion made.
+      this.preparedSubWorkflowMembers.clear();
       await this.releaseRejectedParallelGroupMemberResources(
         active.context,
         memberIndex
@@ -1682,6 +1730,7 @@ export class WorkflowExecutor {
       };
     }
     if (preflight.issues.length > 0) {
+      this.preparedSubWorkflowMembers.clear();
       await this.releaseRejectedParallelGroupMemberResources(
         active.context,
         memberIndex
@@ -3259,8 +3308,7 @@ export class WorkflowExecutor {
         authoredStep,
         stepIndex,
         target,
-        context,
-        false
+        context
       ));
     if (control.wasStopRequested) return settleCancelled();
     if (!prepared.ok) return settleFailure(prepared.failureMessage);
@@ -3340,13 +3388,11 @@ export class WorkflowExecutor {
             ],
             ancestorPaths:
               filePath === undefined ? ancestors : [...ancestors, filePath],
-            // Siblings run beside each other only when the group fans out.
-            concurrent:
-              preflightMember !== undefined &&
-              getEffectiveParallelGroupWidth(
-                context.dynamicQueueConfig.maxParallelSteps,
-                context.parallelGroupFanOutEnabled
-              ) > 1,
+            // Siblings run beside each other only when the group fans out,
+            // at the width its run was preflighted with: lowering the
+            // setting mid-group must not hand this child the TTY beside a
+            // sibling that is still running.
+            concurrent: (preflightMember?.groupEffectiveWidth ?? 1) > 1,
           });
       } catch (error) {
         if (control.wasStopRequested) return settleCancelled();
@@ -3467,16 +3513,15 @@ export class WorkflowExecutor {
   /**
    * Resolve a sub-workflow step's child before launch: materialize an inline
    * definition (D13), or resolve a file reference (D5) and check it against
-   * the active chain (D10). With `parse`, a file child is also parsed and
-   * validated, so a parallel member fails alone in preflight and its launch
-   * reuses the parse. Never throws: a failure is the step's start failure.
+   * the active chain (D10). A file child stays unparsed here; a parallel
+   * member parses it through `parseSubWorkflowChild`. Never throws: a failure
+   * is the step's start failure.
    */
   private async prepareSubWorkflowLaunch(
     authoredStep: SubWorkflowStep,
     stepIndex: number,
     target: ExecutionTarget,
-    context: WorkflowExecutionContext,
-    parse: boolean
+    context: WorkflowExecutionContext
   ): Promise<PreparedSubWorkflowLaunch> {
     try {
       if (typeof authoredStep.workflow !== "string") {
@@ -3545,22 +3590,59 @@ export class WorkflowExecutor {
           failureMessage: `Sub-workflow cycle detected: ${chain}`,
         };
       }
-      if (!parse) {
-        // The launcher parses the file and runs the D4c check itself.
-        return {
-          ok: true,
-          source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath },
-          resolvedPath,
-          createsWorktree: false,
-        };
-      }
+      // Unparsed: the launcher parses the file and runs the D4c check itself,
+      // unless `parseSubWorkflowChild` parses it first.
+      return {
+        ok: true,
+        source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath },
+        resolvedPath,
+        createsWorktree: false,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        failureMessage: `Sub-workflow could not start: ${getErrorMessage(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Parse and validate a prepared file child, so a parallel member fails alone
+   * in preflight and its launch reuses the parse. The content is read before
+   * the parse, so comparing it later can only over-detect an edit, never miss
+   * one. Never throws: a failure is the step's start failure.
+   */
+  private async parseSubWorkflowChild(
+    launch: PreparedSubWorkflowLaunch
+  ): Promise<SubWorkflowPreparation> {
+    if (!launch.ok || launch.source.kind !== SUB_WORKFLOW_SOURCE_KINDS.FILE) {
+      return { launch };
+    }
+    const resolvedPath = launch.source.resolvedPath;
+    let parsedFile: ParsedSubWorkflowFile | undefined;
+    try {
+      parsedFile = {
+        path: resolvedPath,
+        content: await fs.readFile(resolvedPath, "utf8"),
+      };
+    } catch {
+      // Unreadable: the parse below reports it.
+    }
+    const withFile = (
+      prepared: PreparedSubWorkflowLaunch
+    ): SubWorkflowPreparation => ({
+      launch: prepared,
+      ...(parsedFile ? { parsedFile } : {}),
+    });
+    try {
       this.subWorkflowParser ??= new PromptFileParser(this.platform);
       const parser = this.subWorkflowParser;
       const parsed = await parser.parsePromptFile(resolvedPath);
-      const invalid = (detail: string): PreparedSubWorkflowLaunch => ({
-        ok: false,
-        failureMessage: `Sub-workflow could not start: ${path.basename(resolvedPath)} is invalid: ${detail}`,
-      });
+      const invalid = (detail: string) =>
+        withFile({
+          ok: false,
+          failureMessage: `Sub-workflow could not start: ${path.basename(resolvedPath)} is invalid: ${detail}`,
+        });
       if (!parsed?.steps) {
         return invalid(
           parser.lastNewerSchemaError?.message ??
@@ -3574,23 +3656,45 @@ export class WorkflowExecutor {
         workflowProperties: parsed,
       });
       if (!validation.valid) return invalid(validation.errors.join("; "));
-      return {
+      return withFile({
         ok: true,
         source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath, parsed },
         resolvedPath,
         createsWorktree: Boolean(parsed.worktree),
-      };
+      });
     } catch (error) {
-      return {
+      return withFile({
         ok: false,
         failureMessage: `Sub-workflow could not start: ${getErrorMessage(error)}`,
-      };
+      });
+    }
+  }
+
+  /** Whether a parsed child file's content changed since it was parsed. */
+  private async hasSubWorkflowChildChanged(
+    parsedFile: ParsedSubWorkflowFile | undefined
+  ): Promise<boolean> {
+    if (!parsedFile) return false;
+    try {
+      return (
+        (await fs.readFile(parsedFile.path, "utf8")) !== parsedFile.content
+      );
+    } catch {
+      // Gone or unreadable since: prepare again so the launch reports it.
+      return true;
     }
   }
 
   /**
    * The preparation a group shares between its preflight and each member's
    * dispatch preflight (`preparedSubWorkflowMembers`).
+   *
+   * A member's dispatch preflight runs when it is claimed, which for a member
+   * waiting behind `queue.maxParallelSteps` can be long after the group
+   * preflight. A child file edited in between is parsed again, so a member
+   * launches what its file says when it starts, as a sequential step does.
+   * The new preparation carries no group D4c result: its launch runs the
+   * launcher's own check, as a late joiner's does.
    */
   private async prepareParallelSubWorkflowMember(
     step: SubWorkflowStep,
@@ -3602,16 +3706,30 @@ export class WorkflowExecutor {
     const cached = stepId
       ? this.preparedSubWorkflowMembers.get(stepId)
       : undefined;
-    if (cached && cached.fingerprint === fingerprint) return cached.launch;
-    const launch = await this.prepareSubWorkflowLaunch(
-      step,
-      stepIndex,
-      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-      context,
-      true
+    if (cached && cached.fingerprint === fingerprint) {
+      if (!(await this.hasSubWorkflowChildChanged(cached.parsedFile))) {
+        return cached.launch;
+      }
+      Log.info(
+        `[WorkflowExecutor] Parallel step ${stepIndex + 1}: ${path.basename(
+          cached.parsedFile?.path ?? ""
+        )} changed since group preflight; parsing it again`
+      );
+    }
+    const { launch, parsedFile } = await this.parseSubWorkflowChild(
+      await this.prepareSubWorkflowLaunch(
+        step,
+        stepIndex,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+        context
+      )
     );
     if (stepId) {
-      this.preparedSubWorkflowMembers.set(stepId, { fingerprint, launch });
+      this.preparedSubWorkflowMembers.set(stepId, {
+        fingerprint,
+        launch,
+        ...(parsedFile ? { parsedFile } : {}),
+      });
     }
     return launch;
   }
@@ -3636,11 +3754,16 @@ export class WorkflowExecutor {
    * starts, so every lane branches from one commit. Those members then skip
    * the launcher's own check. A refusal fails each of them under its own
    * `onFail`; members without a worktree are unaffected.
+   *
+   * Only a group that fans out checks once. At width 1 the members run one
+   * after another, so an earlier member can dirty the tree before a later
+   * lane branches; each worktree member keeps the launcher's per-child check.
    */
   private async prepareParentCheckoutForGroup(
     preflight: ParallelGroupPreflightResult,
     context: WorkflowExecutionContext
   ): Promise<void> {
+    if (preflight.effectiveWidth <= 1) return;
     const entries = preflight.members.flatMap((member) => {
       const stepId = member.step._runtime?.stepId;
       const entry = stepId

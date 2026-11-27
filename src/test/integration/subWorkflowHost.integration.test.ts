@@ -29,6 +29,7 @@ import {
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { configService } from "../../config/CtrlYokeConfigService";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 import { PromptFileResolver } from "../../core/PromptFileResolver";
@@ -2275,7 +2276,23 @@ suite("Sub-workflow host end to end", () => {
       const execution = parent.executeLoadedPromptFile();
       await waitForFile(path.join(workspace, "a-started"));
       await waitForFile(path.join(workspace, "b-started"));
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Each lane's script is running; wait until the parent has recorded
+      // both children (their handles are attached) and both are RUNNING.
+      await waitFor("both lanes attached and running", () =>
+        [0, 1].every((stepIndex) => {
+          const childRunRef = childRunRefOf(
+            parent.promptQueue.getState().steps[stepIndex]
+          );
+          return instances.some(
+            (instance) =>
+              instance !== parent &&
+              childRunRef !== undefined &&
+              instance.promptQueue.getState().runRef === childRunRef &&
+              instance.promptQueue.getState().status ===
+                EXECUTION_STATES.RUNNING
+          );
+        })
+      );
       await withoutStopFallback(async () => {
         await parent.stop();
         await execution;
@@ -2497,6 +2514,81 @@ suite("Sub-workflow host end to end", () => {
         "ctrlyoke never commits to a checkout the user owns"
       );
     } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("at width 1 a lane after a member that dirtied the user checkout is refused at its own launch (P6)", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(120_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    configService.setCliOverlay({ queue: { maxParallelSteps: 1 } });
+    const workspace = makeTempDir("ctrlyoke-lanes-width1-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await fs.writeFile(
+        path.join(workspace, "dirty.js"),
+        "require('fs').writeFileSync('dirty.txt', 'unsaved');"
+      );
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        steps: [
+          {
+            parallel: [
+              // Runs first and leaves the user's checkout dirty.
+              { type: "script", script: "node dirty.js" },
+              {
+                ...inlineLane("Worktree lane", "node --version", {
+                  worktree: { mode: "managed" },
+                }),
+                onFail: "continue",
+              },
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      commitAll(workspace, "add parent");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "dirty.txt"), "utf8"),
+        "unsaved"
+      );
+      // The checkout was clean when the group started; the lane's own launch
+      // is what saw the earlier member's edit.
+      assert.match(
+        state.steps[1]?._runtime?.failureMessage ?? "",
+        /Commit or stash the parent's changes before starting worktree sub-workflows/
+      );
+      assert.strictEqual(
+        execFileSync("git", ["-C", workspace, "log", "--format=%s"], {
+          encoding: "utf8",
+        }).trim(),
+        "add parent",
+        "ctrlyoke never commits to a checkout the user owns"
+      );
+    } finally {
+      configService.setCliOverlay({});
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
       removeTempDir(`${workspace}.worktrees`);

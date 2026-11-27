@@ -81,6 +81,13 @@ export interface ParallelGroupPreflightMember {
    * issue: the member fails alone, under its own `onFail`.
    */
   readonly subWorkflowLaunch?: PreparedSubWorkflowLaunch;
+  /**
+   * The effective width of the group run that dispatched this member, fixed
+   * when that run was preflighted. Set by the executor at dispatch, so a
+   * member decides whether it runs beside siblings from the width its group
+   * actually runs at, never from a setting changed since.
+   */
+  readonly groupEffectiveWidth?: number;
 }
 
 export interface ParallelGroupMemberPreflightResult {

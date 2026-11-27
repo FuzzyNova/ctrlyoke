@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { executionRuntime } from "../helpers/stepAssertions";
 import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
+import { writeFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
@@ -6987,6 +6988,175 @@ suite("WorkflowExecutor sub-workflow steps", () => {
       assert.deepStrictEqual(
         requests.map((request) => request.concurrent),
         [false, false]
+      );
+    });
+
+    const parsedPrompt = (request: SubWorkflowLaunchRequest | undefined) =>
+      request?.source.kind === "file"
+        ? (request.source.parsed?.steps?.[0] as PromptStep | undefined)?.prompt
+        : undefined;
+
+    test("a Continue after a failed group preflight prepares every child afresh", async () => {
+      const missingPath = path.join(tempRoot, "missing-lane.ctrlyoke.yaml");
+      const editedPath = await writeLane(
+        "edited-lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: before the fix\n"
+      );
+      const run = await setupRun(
+        [
+          { prompt: "sibling" },
+          { type: STEP_TYPES.WORKFLOW, workflow: missingPath },
+          { type: STEP_TYPES.WORKFLOW, workflow: editedPath },
+        ],
+        group(2)
+      );
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests);
+      // A group issue: the prompt member's harness is not ready, so the
+      // group preflight throws after preparing both sub-workflow members.
+      run.context.ensureHarnessReady = async () => "not installed";
+      await assert.rejects(
+        run.executor.execute(run.integration, run.context),
+        /not ready: not installed/
+      );
+      assert.strictEqual(requests.length, 0);
+
+      // The author installs the harness, creates the missing child and edits
+      // the other, then continues.
+      await writeLane(
+        "missing-lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: created\n"
+      );
+      await writeLane(
+        "edited-lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: after the fix\n"
+      );
+      run.context.ensureHarnessReady = undefined;
+      await run.executor.execute(run.integration, run.context);
+
+      const state = run.queue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(state.results)
+      );
+      const byPath = new Map(
+        requests.map((request) => [
+          request.source.kind === "file" ? request.source.resolvedPath : "",
+          request,
+        ])
+      );
+      assert.strictEqual(parsedPrompt(byPath.get(missingPath)), "created");
+      assert.strictEqual(parsedPrompt(byPath.get(editedPath)), "after the fix");
+    });
+
+    test("a member waiting for a slot launches its child file as it is when it starts", async () => {
+      // Every child creates a worktree, so the group's fan-out check covers
+      // the members as they were prepared.
+      const laneContent = (prompt: string) =>
+        `worktree:\n  mode: managed\nsteps:\n  - prompt: ${prompt}\n`;
+      const lanePaths = await Promise.all(
+        ["a", "b", "c"].map((name) =>
+          writeLane(`${name}.ctrlyoke.yaml`, laneContent(name))
+        )
+      );
+      const run = await setupRun(
+        lanePaths.map((workflow) => ({ type: STEP_TYPES.WORKFLOW, workflow })),
+        group(2)
+      );
+      // Width 2: the third member waits for a slot, long after the group
+      // preflight parsed its file.
+      run.context.dynamicQueueConfig.maxParallelSteps = 2;
+      let groupChecks = 0;
+      run.context.prepareSubWorkflowWorktreeChild = async () => {
+        groupChecks += 1;
+      };
+      const requests: SubWorkflowLaunchRequest[] = [];
+      let edited = false;
+      run.context.subWorkflowHost = recordingHost(requests, () => {
+        if (edited) return;
+        edited = true;
+        writeFileSync(lanePaths[2]!, laneContent("edited"));
+      });
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(
+        run.queue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.strictEqual(groupChecks, 1);
+      const byPath = new Map(
+        requests.map((request) => [
+          request.source.kind === "file" ? request.source.resolvedPath : "",
+          request,
+        ])
+      );
+      assert.strictEqual(parsedPrompt(byPath.get(lanePaths[2]!)), "edited");
+      // Re-prepared after the group's fan-out, it keeps the launcher's own
+      // D4c check, as a late joiner does; the unchanged members rely on the
+      // group's check.
+      assert.strictEqual(
+        byPath.get(lanePaths[2]!)?.parentExecution.prepareWorktreeChild,
+        run.context.prepareSubWorkflowWorktreeChild
+      );
+      for (const unchanged of lanePaths.slice(0, 2)) {
+        assert.strictEqual(
+          byPath.get(unchanged)?.parentExecution.prepareWorktreeChild,
+          undefined
+        );
+      }
+    });
+
+    test("a group at width 1 leaves the D4c check to each worktree member's launch", async () => {
+      const run = await setupRun(
+        [inlineLane("echo one", true), inlineLane("echo two", true)],
+        group(1)
+      );
+      run.context.dynamicQueueConfig.maxParallelSteps = 1;
+      let groupChecks = 0;
+      run.context.prepareSubWorkflowWorktreeChild = async () => {
+        groupChecks += 1;
+      };
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests);
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(
+        run.queue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      // Nothing checked before the first member; every lane is checked at
+      // its own launch (the recording host never runs the check itself).
+      assert.strictEqual(groupChecks, 0);
+      assert.strictEqual(requests.length, 2);
+      for (const request of requests) {
+        assert.strictEqual(
+          request.parentExecution.prepareWorktreeChild,
+          run.context.prepareSubWorkflowWorktreeChild
+        );
+        assert.strictEqual(request.concurrent, false);
+      }
+    });
+
+    test("lowering maxParallelSteps mid-group keeps every member concurrent", async () => {
+      const run = await setupRun(
+        [inlineLane("echo one", false), inlineLane("echo two", false)],
+        group(1)
+      );
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests, () => {
+        // The group already fanned out at width 6; a later member still runs
+        // beside the one launching now.
+        run.context.dynamicQueueConfig.maxParallelSteps = 1;
+      });
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.deepStrictEqual(
+        requests.map((request) => request.concurrent),
+        [true, true]
       );
     });
   });
