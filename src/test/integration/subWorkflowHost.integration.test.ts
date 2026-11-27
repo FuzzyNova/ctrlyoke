@@ -5752,8 +5752,8 @@ suite("Sub-workflow host end to end", () => {
       );
       await parent.stop();
       // Awaited while the lock is still held: with no abort the lane would
-      // wait out WORKTREE_MERGE_LEASE_WAIT_MS (120 s), past this test's
-      // own timeout.
+      // wait out WORKTREE_MERGE_LEASE_WAIT_MS (120 s) and then fail the
+      // /Stopped while waiting/ check below.
       await execution;
 
       assert.strictEqual(

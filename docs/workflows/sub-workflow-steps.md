@@ -213,9 +213,9 @@ siblings' settlements and merges, then merges on top of them: a fast-forward
 or a merge commit, or `conflict` with the conflicting files when both changed
 the same lines. It is reported as `blocked` only if its siblings are still
 settling after that wait, or if something other than a sibling's merge holds
-the parent's checkout. Stopping the run ends the wait at once: the waiting
-lane's merge is reported as `blocked`, and its branch and worktree are kept
-with its work on them. To resolve the lanes together in one place, drop
+the parent's checkout. Stopping the run while a lane waits ends the wait at
+once: the lane's merge is reported as `blocked`, and its branch is kept with
+its work on it. To resolve the lanes together in one place, drop
 `merge` and leave the merge to a step after the group, as in the example.
 
 ### Agent-queued lanes {#agent-queued-lanes}

@@ -2907,8 +2907,8 @@ suite("WorktreeManager", function () {
     await retry.lease.release();
   });
 
-  // spec-driven-loop's `lane` preset renders `setup: ""` when its laneSetup
-  // template variable is left blank; that must mean "no setup", not a failure.
+  // A user who sets spec-driven-loop's `lane` preset to `setup: ""` (a blank
+  // laneSetup falls back to its default) means "no setup", not a failure.
   test("treats a blank managed setup command as no setup", async () => {
     const { parent, repository } = await makeRepository("managed-blank-setup");
     const runner = new RecordingWorktreeSetupRunner({
