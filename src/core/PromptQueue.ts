@@ -3690,7 +3690,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private getStepIdentityKey(step: WorkflowStep): string {
     const type = step.type ?? "prompt";
     const name = step.name ?? "";
-    const text = getWorkflowStepText(step);
+    // An inline child's identity is its whole definition, not only its text.
+    const text =
+      isSubWorkflowStep(step) && typeof step.workflow !== "string"
+        ? JSON.stringify(step.workflow)
+        : getWorkflowStepText(step);
     return `${type}\0${name}\0${text}`;
   }
 

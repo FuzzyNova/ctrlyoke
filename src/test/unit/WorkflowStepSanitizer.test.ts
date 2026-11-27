@@ -8,7 +8,13 @@ import {
   buildPromptStepProperties,
   normalizeAgentSelection,
   stripTimelineDuplicatedWorkingFileOutput,
+  buildWorkflowStepFromProperties,
 } from "../../core/WorkflowStepSanitizer";
+import {
+  getSubWorkflowDisplayName,
+  getWorkflowStepText,
+  type SubWorkflowStep,
+} from "../../types/CtrlYokeTypes";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
   test("round-trips an authored inline sub-workflow definition", () => {
@@ -24,6 +30,30 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(step)),
       step
     );
+  });
+
+  test("an enabled toggle keeps a named sub-workflow step's workflow", () => {
+    // The dashboard toggle sends getWorkflowStepText as `text`; it must carry
+    // the path (or keep the inline object), never the step's display name.
+    const fileStep: SubWorkflowStep = {
+      type: STEP_TYPES.WORKFLOW,
+      name: "Lane",
+      workflow: "lanes/check.ctrlyoke.yaml",
+    };
+    const inlineStep: SubWorkflowStep = {
+      type: STEP_TYPES.WORKFLOW,
+      name: "Lane",
+      workflow: { prompt: "Implement the task", worktree: true },
+    };
+    for (const step of [fileStep, inlineStep]) {
+      const rebuilt = buildWorkflowStepFromProperties(
+        getWorkflowStepText(step),
+        { type: STEP_TYPES.WORKFLOW, workflow: step.workflow, enabled: false },
+        step.name
+      );
+      assert.deepStrictEqual(rebuilt, { ...step, enabled: false });
+    }
+    assert.strictEqual(getSubWorkflowDisplayName(fileStep), "Lane");
   });
 
   test("preserves sandbox booleans and leaves an absent override absent", () => {

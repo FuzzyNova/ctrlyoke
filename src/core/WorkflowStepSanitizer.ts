@@ -978,7 +978,10 @@ export function buildWorkflowStepFromProperties(
     case STEP_TYPES.WORKFLOW:
       return {
         type: STEP_TYPES.WORKFLOW,
-        workflow: text,
+        // An inline definition has no text form, so keep the object itself.
+        workflow: isInlineSubWorkflowDefinition(props.workflow)
+          ? props.workflow
+          : text,
         ...(promptName?.trim() ? { name: promptName.trim() } : {}),
         ...(typeof props.enabled === "boolean"
           ? { enabled: props.enabled }

@@ -1209,20 +1209,24 @@ export function getExecutionRuntime(
   return step._runtime as PromptRuntimeMetadata | undefined;
 }
 
-/** Return the text represented by an authored workflow step. */
+/**
+ * Return the content an authored workflow step carries: the prompt, the script,
+ * or a sub-workflow's path (an inline child's inner prompt or script). This is
+ * content, never a label: editors write it back as the step's `workflow` path,
+ * so use `getSubWorkflowDisplayName` for display.
+ */
 export function getWorkflowStepText(step: WorkflowStep): string {
   if (isPromptStep(step)) return step.prompt;
   if (isScriptStep(step)) return step.script;
-  return getSubWorkflowDisplayName(step);
-}
-
-/** Display a child by its authored name, or the inner prompt/script text. */
-export function getSubWorkflowDisplayName(step: SubWorkflowStep): string {
-  if (step.name) return step.name;
   if (typeof step.workflow === "string") return step.workflow;
   return isPromptStep(step.workflow)
     ? step.workflow.prompt
     : step.workflow.script;
+}
+
+/** Display a child by its authored name, or the inner prompt/script text. */
+export function getSubWorkflowDisplayName(step: SubWorkflowStep): string {
+  return step.name || getWorkflowStepText(step);
 }
 
 /** Fail at runtime when an exhaustive discriminated union gains an unhandled case. */
