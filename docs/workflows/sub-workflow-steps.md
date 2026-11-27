@@ -81,7 +81,8 @@ workflow: workflows/next.ctrlyoke.yaml
 ```
 
 The root-level form starts a one-step workflow that can be extended with later
-steps. Workflow steps are not currently accepted inside `parallel` groups.
+steps. Workflow steps can also be members of a `parallel` group; see
+[Parallel sub-workflow steps](#parallel-sub-workflow-steps).
 
 ## Which workflow settings apply
 
@@ -110,6 +111,52 @@ parent is in the main checkout or a named worktree, startup fails with the dirty
 file count; commit or stash those changes first. `worktree` omitted or
 `worktree: false` does not trigger this check. Reattaching to an existing child
 also skips it because its worktree already exists.
+
+## Parallel sub-workflow steps
+
+A `parallel` group can hold workflow steps beside prompt and script steps. Each
+workflow member is its own child run, so a member whose child sets `worktree`
+works in its own checkout, index and branch, and its siblings never see its
+edits. That makes a whole-tree command such as a test suite or `git add -A`
+safe inside one lane:
+
+```yaml
+steps:
+  - parallel:
+      - type: workflow
+        name: Lint rules
+        workflow:
+          prompt: Implement the lint rules described in the plan, run the tests, then commit.
+          worktree:
+            mode: managed
+      - type: workflow
+        name: Palette
+        workflow:
+          prompt: Implement the command palette described in the plan, run the tests, then commit.
+          worktree:
+            mode: managed
+    failFast: false
+  - name: Integrate
+    prompt: Merge the branches reported in $step:summary:1-2, run the tests, and commit.
+```
+
+Before the group starts, ctrlyoke resolves and checks every member's child once.
+A missing or invalid child file, or a cycle, fails that member alone, and its
+`onFail` decides whether the parent continues once the group finishes. The
+parent's checkout is checked once for the whole group, using the
+[worktree rule](#execution-directory-and-worktrees) above, so every worktree
+member branches from the same commit. If that check refuses a dirty checkout,
+only the members whose child creates a worktree fail.
+
+`queue.maxParallelSteps` caps how many children run at once, and each child's
+own parallel groups apply their own limit on top. With `failFast: true` (the
+default), a failing member stops its running siblings. Stopping the parent stops
+every member's child. In the CLI, children that run beside each other run their
+steps headless, because only one of them could use the terminal.
+
+Two members with `merge: true` that finish at the same moment can leave the
+later merge reported as blocked. Leave the merge to a step after the group, as
+in the example, when lanes finish close together.
 
 ## Outcomes, Stop, and Pause
 
