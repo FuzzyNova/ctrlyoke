@@ -115,6 +115,13 @@ with the parent's, under the checkout the run was started from. New worktrees
 go in the main checkout's worktrees folder (`<main>.worktrees/`, or
 `worktrees.root` when set), beside the parent's, never inside it.
 
+The rule applies at every level, so a worktree child can fan out itself. With a
+parent in the main checkout, a managed child with `merge: true` whose own
+`parallel` group runs lanes with `merge: true` has each lane branch from the
+child's worktree and merge into it. Once the child's steps finish, it merges
+the combined work into the main checkout. All three worktrees sit side by side
+in `<main>.worktrees/`.
+
 Continuing a child run directly, from its own run or with `ctrlyoke continue`,
 keeps the checkout its worktree branched from: it reuses its worktree and base,
 its target branch is still the parent's, and `merge: true` still merges into the
@@ -176,6 +183,12 @@ member its own worktree, or drop `merge` and leave the merge to a step after
 the group.
 Members whose children all have their own worktrees, with or without
 `merge`, can share a group.
+
+Members whose children have no `worktree` share the parent's checkout the way
+prompt and script members do, including the parent's own worktree. Several of
+them can run side by side in a managed or named parent's worktree, and they see
+each other's edits there. A `merge: true` member still cannot join them, for
+the reason above.
 
 When the group runs members side by side, the parent's checkout is checked once
 for the whole group, using the

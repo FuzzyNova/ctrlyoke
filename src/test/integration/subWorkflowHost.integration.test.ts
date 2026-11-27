@@ -179,6 +179,8 @@ suite("Sub-workflow host end to end", () => {
     const instances: WorkflowInstance[] = [];
     /** The `concurrent` flag of every child the launcher asked for, in order. */
     const concurrentLaunches: boolean[] = [];
+    /** The `delegationChain` of every child the launcher asked for, in order. */
+    const launchChains: (readonly string[])[] = [];
     /** Child instances in launch order, keyed by depth (1 = child, 2 = grandchild). */
     const childrenAtDepth = new Map<number, WorkflowInstance[]>();
     let launcher: SubWorkflowLauncher;
@@ -197,6 +199,7 @@ suite("Sub-workflow host end to end", () => {
     launcher = new SubWorkflowLauncher(
       ({ ancestorPaths, delegationChain, concurrent }) => {
         concurrentLaunches.push(concurrent);
+        launchChains.push(delegationChain);
         const child = createInstance({ ancestorPaths, delegationChain });
         trackPausedRunWaits(child);
         instances.push(child);
@@ -227,7 +230,14 @@ suite("Sub-workflow host end to end", () => {
       assert.ok(child, `no child launched at depth ${depth}`);
       return child;
     };
-    return { createInstance, instances, childAt, concurrentLaunches, detector };
+    return {
+      createInstance,
+      instances,
+      childAt,
+      concurrentLaunches,
+      launchChains,
+      detector,
+    };
   }
 
   test("stops a plain script promptly without waiting for the detector fallback", async () => {
@@ -5046,6 +5056,127 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
+  test("nested fan-out: a managed child's merging lanes merge into its worktree, which then merges into main", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(240_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-nested-fan-out-");
+    const { createInstance, instances, childAt, launchChains } =
+      makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await fs.writeFile(
+        path.join(workspace, "named-lane.js"),
+        "require('fs').writeFileSync(process.argv[2] + '.txt', process.argv[2]);"
+      );
+      const mergeLane = { worktree: { mode: "managed", merge: true } };
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        name: "Fan-out child",
+        worktree: { mode: "managed", merge: true },
+        steps: [
+          {
+            parallel: [
+              inlineLane("Lane A", "node named-lane.js a", mergeLane),
+              inlineLane("Lane B", "node named-lane.js b", mergeLane),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Nested parent",
+        steps: [
+          {
+            type: "workflow",
+            name: "Fan out",
+            workflow: "child.ctrlyoke.json",
+          },
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const mainBranch = execFileSync(
+        "git",
+        ["-C", workspace, "branch", "--show-current"],
+        { encoding: "utf8" }
+      ).trim();
+      const parent = createInstance();
+      instances.push(parent);
+      const lines = await runCapturingLog(parent, parentPath);
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        `${JSON.stringify(state.results)}\n${lines.join("\n")}`
+      );
+      const child = childAt(1);
+      const childWorktree = await worktreeRuntimeOf(child);
+      const lanes = [0, 1].map((stepIndex) => {
+        const lane = laneChildOf(instances, child, stepIndex);
+        assert.ok(lane, `lane ${stepIndex + 1} has a child instance`);
+        return lane;
+      });
+      const worktreesRoot = await fs.realpath(`${workspace}.worktrees`);
+      // The child's worktree is every lane's source checkout and target.
+      for (const [index, lane] of lanes.entries()) {
+        const laneWorktree = await worktreeRuntimeOf(lane);
+        assert.ok(
+          laneWorktree.mergeOutcome === "fast-forward" ||
+            laneWorktree.mergeOutcome === "merge-commit",
+          `lane ${index + 1}: ${laneWorktree.mergeOutcome} ${String(laneWorktree.message)}`
+        );
+        assert.strictEqual(laneWorktree.targetBranch, childWorktree.branchName);
+        // Settlement removed both worktrees, so compare the recorded paths.
+        assert.strictEqual(
+          path.resolve(laneWorktree.sourceCheckoutRoot),
+          path.resolve(childWorktree.worktreePath)
+        );
+        // Under the main checkout's worktrees folder, not a nested one.
+        assert.strictEqual(
+          path.dirname(laneWorktree.worktreePath),
+          path.dirname(childWorktree.worktreePath)
+        );
+      }
+      assert.strictEqual(
+        await fs.realpath(path.dirname(childWorktree.worktreePath)),
+        worktreesRoot
+      );
+      // The child carried both lanes' work into the main checkout.
+      assert.strictEqual(childWorktree.targetBranch, mainBranch);
+      assert.ok(
+        childWorktree.mergeOutcome === "fast-forward" ||
+          childWorktree.mergeOutcome === "merge-commit",
+        `child: ${childWorktree.mergeOutcome} ${String(childWorktree.message)}`
+      );
+      for (const lane of ["a", "b"]) {
+        assert.strictEqual(
+          await fs.readFile(path.join(workspace, `${lane}.txt`), "utf8"),
+          lane
+        );
+      }
+      // Lease chains: the child is delegated by the parent; both lanes by
+      // the parent, then by the child, so they share an immediate delegator
+      // (the inner sibling merge wait) that is not the parent.
+      assert.strictEqual(launchChains.length, 3, JSON.stringify(launchChains));
+      const [childChain, ...laneChains] = launchChains;
+      assert.strictEqual(childChain.length, 1, JSON.stringify(childChain));
+      for (const laneChain of laneChains) {
+        assert.strictEqual(laneChain.length, 2, JSON.stringify(laneChain));
+        assert.strictEqual(laneChain[0], childChain[0]);
+        assert.notStrictEqual(laneChain[1], childChain[0]);
+      }
+      assert.strictEqual(laneChains[0][1], laneChains[1][1]);
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
   test("a merge: true lane of a main-checkout parent fast-forwards main instead of ending blocked", async function () {
     // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
     this.timeout(180_000);
@@ -5673,6 +5804,229 @@ suite("Sub-workflow host end to end", () => {
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
       removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  /**
+   * A script that proves two members ran at the same time: it writes
+   * `<me>.ready` in its working directory, then waits for `<other>.ready`
+   * there and fails if the other never appears.
+   */
+  async function writeRendezvousScript(directory: string): Promise<string> {
+    const scriptPath = path.join(directory, "rendezvous.js");
+    await fs.writeFile(
+      scriptPath,
+      [
+        "const fs = require('fs');",
+        "const [me, other] = process.argv.slice(2);",
+        "fs.writeFileSync(me + '.ready', process.cwd());",
+        "const deadline = Date.now() + 60000;",
+        "const t = setInterval(() => {",
+        "  if (fs.existsSync(other + '.ready')) { clearInterval(t); process.exit(0); }",
+        "  if (Date.now() > deadline) { clearInterval(t); process.exit(1); }",
+        "}, 25);",
+      ].join("\n")
+    );
+    return scriptPath;
+  }
+
+  /** The managed worktree `instance`'s run recorded, by real path. */
+  async function realWorktreePathOf(instance: WorkflowInstance) {
+    return fs.realpath((await worktreeRuntimeOf(instance)).worktreePath);
+  }
+
+  test("two inheriting members of a managed parent run side by side in the parent's worktree (D4d rule 2)", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-inheriting-members-");
+    const scriptDir = makeTempDir("ctrlyoke-inheriting-members-script-");
+    const { createInstance, instances, concurrentLaunches } =
+      makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      const rendezvous = JSON.stringify(await writeRendezvousScript(scriptDir));
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Inheriting members",
+        worktree: { mode: "managed", keep: true },
+        steps: [
+          {
+            parallel: [
+              inlineLane("Member A", `node ${rendezvous} a b`),
+              inlineLane("Member B", `node ${rendezvous} b a`),
+            ],
+            failFast: false,
+          },
+          AFTER_SCRIPT_STEP,
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      const lines = await runCapturingLog(parent, parentPath);
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        `${JSON.stringify(state.results)}\n${lines.join("\n")}`
+      );
+      assert.deepStrictEqual(concurrentLaunches, [true, true]);
+      const parentWorktree = await realWorktreePathOf(parent);
+      for (const marker of ["a.ready", "b.ready", "after"]) {
+        await fs.access(path.join(parentWorktree, marker));
+        await assert.rejects(fs.access(path.join(workspace, marker)), marker);
+      }
+      for (const stepIndex of [0, 1]) {
+        const member = launchedChild(instances, parent, stepIndex);
+        assert.strictEqual(
+          await fs.realpath(
+            await fs.readFile(
+              path.join(parentWorktree, `${"ab"[stepIndex]}.ready`),
+              "utf8"
+            )
+          ),
+          parentWorktree,
+          "the member ran in the parent's worktree"
+        );
+        assert.strictEqual(
+          member.promptQueue.getState().status,
+          EXECUTION_STATES.COMPLETED
+        );
+      }
+      assert.deepStrictEqual(
+        gitWorktreePaths(workspace).length,
+        2,
+        "the inheriting members created no worktree of their own"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+      removeTempDir(scriptDir);
+    }
+  });
+
+  test("a window reload mid-group reattaches each inheriting member of a managed parent in the parent's worktree (D6)", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-inheriting-reload-");
+    const recordDir = makeTempDir("ctrlyoke-inheriting-reload-record-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    const member = (lane: string) =>
+      inlineLane(
+        `Member ${lane}`,
+        `node ${JSON.stringify(path.join(recordDir, "gate.js"))} ${JSON.stringify(
+          path.join(recordDir, lane)
+        )} && node -e "require('fs').writeFileSync('${lane}-done','')"`
+      );
+    try {
+      initGitRepository(workspace);
+      await writeGateScript(recordDir);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Reloaded inheriting members",
+        worktree: { mode: "managed", keep: true },
+        steps: [
+          { parallel: [member("a"), member("b")], failFast: false },
+          AFTER_SCRIPT_STEP,
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      const execution = parent.executeLoadedPromptFile();
+      await waitForLanesRunning(recordDir, instances, parent, {
+        0: "a",
+        1: "b",
+      });
+      const memberRunRefs = [0, 1].map((stepIndex) =>
+        childRunRefOf(parent.promptQueue.getState().steps[stepIndex])
+      );
+      assert.ok(memberRunRefs.every(Boolean), "both members recorded a run");
+      const memberKeys = [0, 1].map(
+        (stepIndex) =>
+          laneChildOf(instances, parent, stepIndex)!.promptQueue.getState()
+            .workflowKey!
+      );
+      const parentWorktree = await realWorktreePathOf(parent);
+      const worktreesBefore = gitWorktreePaths(workspace);
+      assert.strictEqual(worktreesBefore.length, 2, worktreesBefore.join("\n"));
+      const { workflowKey, runRef, workingFilePath } =
+        parent.promptQueue.getState();
+
+      await withoutStopFallback(async () => {
+        for (const instance of [...instances]) instance.dispose();
+        await execution;
+      });
+      for (const instance of instances) {
+        await instance.whenExecutionSettled();
+        instance.dispose();
+      }
+      for (const key of [workflowKey!, ...memberKeys]) {
+        await fs.rm(WorkflowPaths.runnerLockPath(workspace, key), {
+          force: true,
+        });
+      }
+      const reloadedFile = JSON.parse(
+        await fs.readFile(workingFilePath!, "utf8")
+      ) as { definitionRevision?: number };
+
+      const reloaded = createInstance();
+      instances.push(reloaded);
+      await fs.writeFile(path.join(recordDir, "a-go"), "");
+      await fs.writeFile(path.join(recordDir, "b-go"), "");
+      await withoutStopFallback(() =>
+        reloaded.executeContinuationAtRun(
+          workflowKey!,
+          runRef!,
+          reloadedFile.definitionRevision ?? 1
+        )
+      );
+
+      const resumed = reloaded.promptQueue.getState();
+      assert.strictEqual(
+        resumed.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(resumed.results)
+      );
+      assert.deepStrictEqual(
+        [0, 1].map((stepIndex) => childRunRefOf(resumed.steps[stepIndex])),
+        memberRunRefs,
+        "each member reattached to its recorded child run"
+      );
+      assert.deepStrictEqual(gitWorktreePaths(workspace), worktreesBefore);
+      for (const lane of ["a", "b"]) {
+        assert.strictEqual(
+          await fs.readFile(path.join(recordDir, `${lane}-runs`), "utf8"),
+          "ran\nran\n",
+          lane
+        );
+        // The continued member ran in the parent's worktree again.
+        await fs.access(path.join(parentWorktree, `${lane}-done`));
+        await assert.rejects(fs.access(path.join(workspace, `${lane}-done`)));
+      }
+      await fs.access(path.join(parentWorktree, "after"));
+    } finally {
+      await fs.writeFile(path.join(recordDir, "a-go"), "").catch(() => {});
+      await fs.writeFile(path.join(recordDir, "b-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+      removeTempDir(recordDir);
     }
   });
 

@@ -582,6 +582,29 @@ suite("ParallelGroupPreflight MERGE_INTO_SHARED_ROOT", () => {
       mergeIssues(result).map((issue) => issue.memberIndices),
       [[0, 1]]
     );
+    // It edits the parent's root wherever the parent runs, so a worktree
+    // parent refuses it too (D4d: rule 2 never admits a merge lease).
+    const inWorktree = await preflight([inheritingMember, mergeLane], {
+      parentRunsInMainCheckout: false,
+    });
+    assert.deepStrictEqual(
+      mergeIssues(inWorktree).map((issue) => issue.memberIndices),
+      [[0, 1]]
+    );
+  });
+
+  test("inheriting members beside each other, or beside a lane without merge, are not an issue", async () => {
+    for (const parentRunsInMainCheckout of [true, false]) {
+      const result = await preflight(
+        [inheritingMember, { ...inheritingMember, name: "second" }, plainLane],
+        { parentRunsInMainCheckout }
+      );
+      assert.deepStrictEqual(
+        result.issues,
+        [],
+        String(parentRunsInMainCheckout)
+      );
+    }
   });
 
   test("a merge lane beside a lane without merge is not an issue", async () => {

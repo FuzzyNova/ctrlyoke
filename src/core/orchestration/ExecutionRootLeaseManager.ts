@@ -206,6 +206,32 @@ async function resolveLeaseScope(
   };
 }
 
+/**
+ * D4d rule 2: two delegated editing leases with the same immediate delegator
+ * are siblings inheriting one root, which share it as parallel prompt members
+ * share their parent's. A merge lease on either side never qualifies: a merge
+ * into a checkout an inheriting sibling is still editing stays blocked.
+ * A lease that owns a worktree (`WorktreeManager`'s managed and named
+ * acquisitions) carries no chain, so two siblings naming one named worktree
+ * still exclude each other here.
+ */
+function isInheritingSibling(
+  request: Pick<ExecutionLeaseRequest, "delegationChain" | "purpose">,
+  existing: Pick<ExecutionLease, "delegationChain" | "purpose">
+): boolean {
+  if (
+    request.purpose === EXECUTION_LEASE_PURPOSES.MERGE ||
+    existing.purpose === EXECUTION_LEASE_PURPOSES.MERGE
+  ) {
+    return false;
+  }
+  const delegator = immediateDelegator(request.delegationChain);
+  return (
+    delegator !== undefined &&
+    immediateDelegator(existing.delegationChain) === delegator
+  );
+}
+
 function isCompatible(
   request: ExecutionLeaseRequest,
   existing: ExecutionLease
@@ -213,7 +239,9 @@ function isCompatible(
   return (
     (request.mode === EXECUTION_LEASE_MODES.SHARED_NATIVE &&
       existing.mode === EXECUTION_LEASE_MODES.SHARED_NATIVE) ||
-    (request.delegationChain?.includes(existing.ownerToken) ?? false)
+    // Rule 1: the existing lease is a blocked ancestor of this request.
+    (request.delegationChain?.includes(existing.ownerToken) ?? false) ||
+    isInheritingSibling(request, existing)
   );
 }
 
