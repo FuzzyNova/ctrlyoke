@@ -965,6 +965,16 @@ export class WorkflowExecutor {
                 snapshotStrategy
               );
               if (
+                groupOutcome.paused &&
+                this.getRuntime().status === EXECUTION_STATES.CANCELLING
+              ) {
+                // A stop that reached the paused run while this loop unwound
+                // deferred to a coordinator that has already returned.
+                if (this.getRuntime().confirmStopped()) {
+                  await this.promptQueue.commitRuntimeTransition();
+                }
+              }
+              if (
                 groupOutcome.paused ||
                 groupOutcome.stopped ||
                 groupOutcome.terminalFailure
@@ -6804,6 +6814,20 @@ export class WorkflowExecutor {
 
   isAwaitingResponse(): boolean {
     return this.waitingResponseTargets.size > 0;
+  }
+
+  /**
+   * Whether this executor is still draining the queue, or a group run it
+   * started is still live. While it is, a stop is confirmed by the queue loop
+   * or the group's coordinator; once it is not (a paused group returned and
+   * `execute()` ended), nothing here will ever confirm one.
+   */
+  hasLiveExecution(): boolean {
+    return (
+      this.activeExecution !== undefined ||
+      this.activeParallelGroupRun !== undefined ||
+      this.promotedParallelGroupRun !== undefined
+    );
   }
 
   private logWorkflowStart(

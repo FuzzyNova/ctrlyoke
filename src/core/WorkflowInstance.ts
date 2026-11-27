@@ -3083,6 +3083,13 @@ export class WorkflowInstance
       return;
     }
 
+    // A pause is confirmed only at a step boundary, so a PAUSED run whose
+    // execution has ended has no step in flight and no response to wait for.
+    const stoppingIdlePause =
+      this.workflowRuntime.status === EXECUTION_STATES.PAUSED &&
+      this.activeTargetResources.size === 0 &&
+      !this.workflowExecutor.hasLiveExecution();
+
     this.promptQueue.markInFlightPromptCancelled();
     const activeAttempts = this.workflowRuntime.getActiveAttempts();
     if (activeAttempts.length > 0) {
@@ -3111,7 +3118,13 @@ export class WorkflowInstance
       }
 
       confirmedStoppedCalled = true;
-      if (this.promptQueue.getCurrentParallelGroup()) {
+      // Only a live execution has a group coordinator to commit member
+      // cancellations. A run paused inside a group has none: its group
+      // returned `paused` and the queue loop ended, so confirm here.
+      if (
+        this.promptQueue.getCurrentParallelGroup() &&
+        this.workflowExecutor.hasLiveExecution()
+      ) {
         Log.info(
           "[WorkflowInstance] Parallel group cancellation requested; coordinator will commit member cancellations before STOPPED"
         );
@@ -3134,6 +3147,13 @@ export class WorkflowInstance
         Log.info("[WorkflowInstance] Queue execution fully stopped");
       }
     };
+
+    if (stoppingIdlePause) {
+      await confirmStopped();
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
+    }
 
     const integrations = new Set<HarnessIntegration>();
     let hasSubWorkflow = false;
@@ -3182,9 +3202,9 @@ export class WorkflowInstance
       await confirmStopped();
       // Its integrations' listeners went with them: wake a step still waiting
       // on a response through the abort path, so it settles as stopped and
-      // the executor finishes. (confirmStopped() defers to a group coordinator
-      // when the head is in a group; group members use the group's own signal,
-      // so this abort reaches only a sequential step.)
+      // the executor finishes. (confirmStopped() defers to a live group
+      // coordinator when the head is in a group; group members use the
+      // group's own signal, so this abort reaches only a sequential step.)
       this.disposedExecutionAbort.abort();
       this.workflowExecutor.clearResponseWaitState();
       this.startPending = false;

@@ -589,25 +589,35 @@ suite("WorkflowOrchestrator execution preview definition sources", () => {
     }>;
   }
   const childKey = "child-lineage" as WorkflowKey;
-  const childInstance = {
-    getQueueState: () => ({ workflowKey: childKey }),
-    // An inline child: the parent's authored file is its base, and the
-    // parent's identity its trust, though its descriptor records neither.
+  const olderRun = "run-2026-11-26T00-00-00-000Z" as RunRef;
+  const liveRun = "run-2026-11-27T00-00-00-000Z" as RunRef;
+  // An inline child: the parent's authored file is its base, and the
+  // parent's identity its trust, though its descriptor records neither.
+  const inlineChildOwning = (runRef?: RunRef) => ({
+    getQueueState: () => ({ workflowKey: childKey, runRef }),
     getSourceDefinitionPath: () => "/ws/flows/parent.ctrlyoke.json",
     getWorkflowTrustSourcePath: () => "/ws/parent identity",
-  };
+  });
+  const childInstance = inlineChildOwning();
 
-  function createSeam(viewedKey: WorkflowKey): {
+  function createSeam(
+    viewedKey: WorkflowKey,
+    viewedRunRef?: RunRef
+  ): {
     seam: DefinitionSourcesSeam;
     descriptorReads: string[];
   } {
     const orchestrator = createTestOrchestrator();
     const descriptorReads: string[] = [];
     Object.assign(orchestrator, {
-      getViewAddress: () => ({
-        workflowKey: viewedKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-      }),
+      getViewAddress: () =>
+        viewedRunRef
+          ? {
+              workflowKey: viewedKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+              runRef: viewedRunRef,
+            }
+          : { workflowKey: viewedKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       getViewSourceDefinitionPath: async (clientId: string) => {
         descriptorReads.push(clientId);
         return "/ws/descriptor.ctrlyoke.json";
@@ -641,6 +651,32 @@ suite("WorkflowOrchestrator execution preview definition sources", () => {
       await seam.getViewDefinitionSources("client", undefined),
       { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
     );
+  });
+
+  test("takes them from the instance only for the exact run it owns", async () => {
+    const { seam, descriptorReads } = createSeam(childKey, liveRun);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", inlineChildOwning(liveRun)),
+      {
+        sourceDefinitionPath: "/ws/flows/parent.ctrlyoke.json",
+        workflowTrustSourcePath: "/ws/parent identity",
+      }
+    );
+    assert.deepStrictEqual(descriptorReads, []);
+  });
+
+  test("an older run of the instance's lineage previews with the stored sources, not the live run's", async () => {
+    const { seam, descriptorReads } = createSeam(childKey, olderRun);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", inlineChildOwning(liveRun)),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+    // A draft-holding instance does not own a run address either.
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", childInstance),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+    assert.deepStrictEqual(descriptorReads, ["client", "client"]);
   });
 });
 

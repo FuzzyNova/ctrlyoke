@@ -1568,6 +1568,95 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
+  test("a paused child released after a failed resume is retired when unviewed, and its pause stays continuable", async () => {
+    const workspace = makeTempDir(
+      "ctrlyoke-subworkflow-registry-release-paused-"
+    );
+    const { registry, parent, residents } = makeRegistry(workspace);
+    const built = trackBuiltInstances(registry);
+    try {
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        ...HEADLESS,
+        steps: [
+          { type: "script", script: sentinelScript("marker", "sentinel") },
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').appendFileSync('after','ran\\n')\"",
+          },
+        ],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        ...HEADLESS,
+        steps: [
+          {
+            type: "workflow",
+            workflow: "child.ctrlyoke.json",
+            onFail: "continue",
+          },
+        ],
+      });
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      const child = built[built.length - 1];
+      assert.notStrictEqual(child, parent, "the launcher created a child");
+
+      // Pause the parent: the child pauses at its step boundary, and the
+      // parent waits PAUSING on it.
+      await parent.pause();
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await waitFor(
+        "the child to pause",
+        () => child.promptQueue.getState().status === EXECUTION_STATES.PAUSED
+      );
+      await child.whenExecutionSettled();
+      const { workflowKey, runRef } = child.promptQueue.getState();
+
+      // Cancelling the parent's pause resumes the child; that resume fails,
+      // so the launcher releases the child still PAUSED.
+      child.resume = async () => {
+        throw new Error("resume failed");
+      };
+      await parent.resume();
+      await settlesWithin("the parent's execution", execution);
+
+      assert.strictEqual(child.isDisposed, true, "the released child retired");
+      assert.strictEqual(registry.getInstances().has(child.id), false);
+      assert.strictEqual(registry.getRetiredInstances().has(child.id), false);
+      assert.strictEqual(
+        await readWorkingFileExecutionState(child),
+        EXECUTION_STATES.PAUSED,
+        "retiring disposed only the instance: the pause is still on disk"
+      );
+      await assert.rejects(fs.access(path.join(workspace, "after")));
+
+      // A fresh instance continues the paused run to completion.
+      const fresh = registry.buildWorkflowInstanceForHost();
+      const childFile = JSON.parse(
+        await fs.readFile(child.promptQueue.getState().workingFilePath!, "utf8")
+      ) as { definitionRevision: number };
+      const revision = childFile.definitionRevision;
+      await withoutStopFallback(() =>
+        fresh.executeContinuationAtRun(workflowKey!, runRef!, revision)
+      );
+      assert.strictEqual(
+        fresh.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(fresh.promptQueue.getState().results)
+      );
+      assert.strictEqual(fresh.promptQueue.getState().runRef, runRef);
+      assert.strictEqual(await countLines(path.join(workspace, "marker")), 1);
+      assert.strictEqual(await countLines(path.join(workspace, "after")), 1);
+    } finally {
+      await fs
+        .writeFile(path.join(workspace, "sentinel"), "go")
+        .catch(() => {});
+      await disposeRegistry(residents, built, workspace);
+    }
+  });
+
   /**
    * Stop `parent` mid-child, then continue it until its reattached child is
    * still loading (restored STOPPED) and launcher-owned; `check` runs there.
@@ -3417,6 +3506,215 @@ suite("Sub-workflow host end to end", () => {
     script: "node -e \"require('fs').writeFileSync('after','')\"",
   };
 
+  /**
+   * Run `members` (a three-member group, then AFTER_SCRIPT_STEP) at width 2
+   * and pause it while the first two (gates `a` and `b`) run: the group stops
+   * dispatching the third and returns `paused` with the head still inside
+   * it. Then stop, and check the stop confirms and a continue re-enters the
+   * group, running only its unstarted member.
+   */
+  async function stopsRunPausedInsideGroup(
+    prefix: string,
+    members: readonly Record<string, unknown>[],
+    waitForMembersRunning: (
+      workspace: string,
+      instances: readonly WorkflowInstance[],
+      parent: WorkflowInstance
+    ) => Promise<void>
+  ): Promise<void> {
+    const workspace = makeTempDir(prefix);
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    configService.setCliOverlay({ queue: { maxParallelSteps: 2 } });
+    try {
+      await writeGateScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ parallel: members, failFast: false }, AFTER_SCRIPT_STEP],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForMembersRunning(workspace, instances, parent);
+
+      await parent.pause();
+      await fs.writeFile(path.join(workspace, "a-go"), "");
+      await fs.writeFile(path.join(workspace, "b-go"), "");
+      await settlesWithin("the paused execution", execution);
+      const paused = parent.promptQueue.getState();
+      assert.strictEqual(
+        paused.status,
+        EXECUTION_STATES.PAUSED,
+        JSON.stringify(paused.results)
+      );
+      assert.strictEqual(paused.currentIndex, 0, "the head stays in the group");
+      assert.deepStrictEqual(
+        paused.results.slice(0, 3).map((result) => result.status),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED, STEP_STATUS.PENDING]
+      );
+
+      await withoutStopFallback(() => settlesWithin("the stop", parent.stop()));
+      const stopped = parent.promptQueue.getState();
+      assert.strictEqual(
+        stopped.status,
+        EXECUTION_STATES.STOPPED,
+        JSON.stringify(stopped.results)
+      );
+      assert.strictEqual(parentStops(), 1);
+      // No executor finalizes this run: the transition reaches the manifest
+      // through the instance's queued history write.
+      const deadline = Date.now() + 10000;
+      let manifestState = await readExecutionState(parent);
+      while (manifestState !== "stopped" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        manifestState = await readExecutionState(parent);
+      }
+      assert.strictEqual(manifestState, "stopped");
+      assert.strictEqual(stopped.currentIndex, 0);
+      await assert.rejects(fs.access(path.join(workspace, "c-ran")));
+
+      // A continue re-enters the group: the settled members are recovered,
+      // only the unstarted one runs, and the run then moves past the group.
+      configService.setCliOverlay({});
+      await withoutStopFallback(() =>
+        settlesWithin("the continue", continueParent(parent))
+      );
+      const resumed = parent.promptQueue.getState();
+      assert.strictEqual(
+        resumed.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(resumed.results)
+      );
+      assert.deepStrictEqual(
+        resumed.results.slice(0, 4).map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+        ]
+      );
+      assert.strictEqual(await countLines(path.join(workspace, "a-runs")), 1);
+      assert.strictEqual(await countLines(path.join(workspace, "b-runs")), 1);
+      await fs.access(path.join(workspace, "c-ran"));
+      await fs.access(path.join(workspace, "after"));
+    } finally {
+      configService.setCliOverlay({});
+      await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
+      await fs.writeFile(path.join(workspace, "b-go"), "").catch(() => {});
+      await disposeAll(instances, workspace);
+    }
+  }
+
+  const WRITE_C_RAN = "node -e \"require('fs').writeFileSync('c-ran','')\"";
+
+  test("stopping a top-level run paused inside a parallel group confirms STOPPED, and a continue re-enters the group", async () => {
+    await stopsRunPausedInsideGroup(
+      "ctrlyoke-paused-group-stop-",
+      [
+        { type: "script", script: "node gate.js a" },
+        { type: "script", script: "node gate.js b" },
+        { type: "script", script: WRITE_C_RAN },
+      ],
+      async (workspace) => {
+        await waitForFile(path.join(workspace, "a-runs"));
+        await waitForFile(path.join(workspace, "b-runs"));
+      }
+    );
+  });
+
+  test("stopping a parent paused inside a group of lanes confirms STOPPED, and a continue re-enters the group", async () => {
+    await stopsRunPausedInsideGroup(
+      "ctrlyoke-paused-lane-group-stop-",
+      [
+        inlineLane("Lane A", "node gate.js a"),
+        inlineLane("Lane B", "node gate.js b"),
+        inlineLane("Lane C", WRITE_C_RAN),
+      ],
+      (workspace, instances, parent) =>
+        waitForLanesRunning(workspace, instances, parent, { 0: "a", 1: "b" })
+    );
+  });
+
+  test("disposing a lane's child paused inside a group stops the parent at the join and keeps the child's pause", async () => {
+    const workspace = makeTempDir("ctrlyoke-paused-lane-dispose-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      await writeGateScript(workspace);
+      // Lane A's child pauses at the boundary after its first step.
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        steps: [
+          { type: "script", script: "node gate.js a" },
+          {
+            type: "script",
+            script: "node -e \"require('fs').writeFileSync('a-after','')\"",
+          },
+        ],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          {
+            parallel: [
+              { type: "workflow", workflow: "child.ctrlyoke.json" },
+              inlineLane("Lane B", "node gate.js b"),
+            ],
+            failFast: false,
+          },
+          AFTER_SCRIPT_STEP,
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForLanesRunning(workspace, instances, parent, {
+        0: "a",
+        1: "b",
+      });
+      const pausedChild = laneChildOf(instances, parent, 0)!;
+
+      await parent.pause();
+      await fs.writeFile(path.join(workspace, "a-go"), "");
+      await fs.writeFile(path.join(workspace, "b-go"), "");
+      await waitForChildPausedCycle(pausedChild);
+      await waitFor(
+        "lane B to settle",
+        () =>
+          parent.promptQueue.getState().results[1]?.status ===
+          STEP_STATUS.COMPLETED
+      );
+      // The paused lane never finishes on its own: the parent waits PAUSING.
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.PAUSING
+      );
+
+      pausedChild.dispose();
+      await withoutStopFallback(() =>
+        settlesWithin("the parent's execution", execution)
+      );
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.STOPPED,
+        JSON.stringify(state.results)
+      );
+      assert.deepStrictEqual(
+        state.results.slice(0, 3).map((result) => result.status),
+        [STEP_STATUS.CANCELLED, STEP_STATUS.COMPLETED, STEP_STATUS.PENDING]
+      );
+      assert.strictEqual(await readExecutionState(pausedChild), "paused");
+      await assert.rejects(fs.access(path.join(workspace, "a-after")));
+      await assert.rejects(fs.access(path.join(workspace, "after")));
+    } finally {
+      await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
+      await fs.writeFile(path.join(workspace, "b-go"), "").catch(() => {});
+      await disposeAll(instances, workspace);
+    }
+  });
+
   test("stopping one lane's child directly lets its sibling finish, stops the parent at the join, and a continue reattaches that lane", async () => {
     const workspace = makeTempDir("ctrlyoke-parallel-lane-user-stop-");
     const { createInstance, instances } = makeInstanceFactory(workspace);
@@ -3970,6 +4268,72 @@ suite("Sub-workflow host end to end", () => {
         [STEP_STATUS.CANCELLED, STEP_STATUS.FAILED]
       );
       await assert.rejects(fs.access(path.join(workspace, "after")));
+    } finally {
+      configService.setCliOverlay({});
+      await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("stopping the parent while a promoted anchor runs with no group run confirms STOPPED when the anchor settles", async () => {
+    const workspace = makeTempDir("ctrlyoke-promoted-anchor-width1-stop-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    // Width 1: the promotion starts no group run, so only the anchor's
+    // sequential settlement is left to confirm the stop.
+    configService.setCliOverlay({ queue: { maxParallelSteps: 1 } });
+    try {
+      await writeGateScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          { type: "script", name: "Anchor", script: "node gate.js a" },
+          AFTER_SCRIPT_STEP,
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "a-runs"));
+      await promoteBesideRunningStep(
+        parent,
+        { type: "script", name: "Sibling", script: WRITE_C_RAN },
+        false
+      );
+
+      await withoutStopFallback(async () => {
+        await settlesWithin("the stop", parent.stop());
+        await settlesWithin("the stopped parent", execution);
+      });
+      const stopped = parent.promptQueue.getState();
+      assert.strictEqual(
+        stopped.status,
+        EXECUTION_STATES.STOPPED,
+        JSON.stringify(stopped.results)
+      );
+      assert.strictEqual(parentStops(), 1);
+      assert.deepStrictEqual(
+        stopped.results.slice(0, 3).map((result) => result.status),
+        [STEP_STATUS.CANCELLED, STEP_STATUS.PENDING, STEP_STATUS.PENDING]
+      );
+      await assert.rejects(fs.access(path.join(workspace, "c-ran")));
+      await assert.rejects(fs.access(path.join(workspace, "after")));
+
+      // A continue at full width re-runs the anchor beside its sibling.
+      configService.setCliOverlay({});
+      await fs.writeFile(path.join(workspace, "a-go"), "");
+      await withoutStopFallback(() =>
+        settlesWithin("the continued parent", continueParent(parent))
+      );
+      const resumed = parent.promptQueue.getState();
+      assert.strictEqual(
+        resumed.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(resumed.results)
+      );
+      await fs.access(path.join(workspace, "c-ran"));
+      await fs.access(path.join(workspace, "after"));
     } finally {
       configService.setCliOverlay({});
       await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});

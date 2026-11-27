@@ -2764,10 +2764,11 @@ export class WorkflowOrchestrator {
 
   /**
    * The reference base and trust identity a client's addressed workflow
-   * executes with. When `instance` owns the addressed lineage they come from
-   * it, as execution reads them: an inline child (D13) resolves references
-   * against its parent's authored file and is trusted by its parent's
-   * identity, neither of which its lineage descriptor records. Otherwise the
+   * executes with. When `instance` owns the exact addressed draft or run
+   * they come from it, as execution reads them: an inline child (D13)
+   * resolves references against its parent's authored file and is trusted by
+   * its parent's identity, neither of which its lineage descriptor records.
+   * An older run of the instance's lineage is not that run. Otherwise the
    * descriptor's `originalFile` is the base, and the harness resolves trust
    * from it and the previewed file (`resolveWorkflowTrustSourcePath`). A
    * non-resident inline child (after a restart) previews without its parent's
@@ -2780,9 +2781,14 @@ export class WorkflowOrchestrator {
     sourceDefinitionPath?: string;
     workflowTrustSourcePath?: string;
   }> {
+    // The same gate as the dry run's in-memory overlay: an older run of the
+    // lineage the instance is executing is read from storage, not from it.
     const address = this.getViewAddress(clientId);
-    const instanceKey = instance?.getQueueState().workflowKey;
-    if (instance && (!address || instanceKey === address.workflowKey)) {
+    if (
+      instance &&
+      (!address ||
+        sameViewAddress(address, lineageAddressOf(instance.getQueueState())))
+    ) {
       return {
         sourceDefinitionPath: instance.getSourceDefinitionPath(),
         workflowTrustSourcePath: instance.getWorkflowTrustSourcePath(),
