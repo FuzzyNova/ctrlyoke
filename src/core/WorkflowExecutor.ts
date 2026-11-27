@@ -71,7 +71,6 @@ import {
   TOKEN_TOTAL_CONFIDENCE,
   PROMPT_TERMINAL_STATUS,
   SUB_WORKFLOW_CANCELLATION_SOURCES,
-  PROMPT_FILE_RESOLUTION_STATUSES,
   STEP_CLAIM_OUTCOMES,
   getEffectiveParallelGroupWidth,
   SNAPSHOT_STRATEGIES,
@@ -230,6 +229,7 @@ import {
   formatParallelStepsLabel,
 } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
+import { resolveSubWorkflowReference } from "./SubWorkflowReferenceStep";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   materializeInlineSubWorkflow,
@@ -1639,6 +1639,21 @@ export class WorkflowExecutor {
           ...runningMembers,
         ]);
       },
+      // A sub-workflow member failing its dispatch preflight (a late joiner's
+      // WORKTREE_COLLISION or MERGE_INTO_SHARED_ROOT) fails through the same
+      // prepared-launch failure a group-preflight failure produces, so its
+      // own `onFail` settles it. Prompt and script members have no such
+      // policy and settle FAILED.
+      failedPreflightMember: (preflight) =>
+        isSubWorkflowStep(preflight.member.step)
+          ? {
+              ...preflight.member,
+              subWorkflowLaunch: {
+                ok: false,
+                failureMessage: preflight.failureMessage,
+              },
+            }
+          : undefined,
       executeMember: async (
         target,
         step,
@@ -3576,13 +3591,11 @@ export class WorkflowExecutor {
           // its worktree and ran-with metadata survive the reattach.
           const completedResult: Promise<SubWorkflowResult> =
             host.readCompletedChild
-              ? host
-                  .readCompletedChild({
-                    stateRoot: context.executionWorkspace.stateRoot,
-                    workflowKey: recorded.run.workflowKey,
-                    runRef: recorded.run.runRef,
-                  })
-                  .catch(() => ({ status: PROMPT_TERMINAL_STATUS.COMPLETED }))
+              ? host.readCompletedChild({
+                  stateRoot: context.executionWorkspace.stateRoot,
+                  workflowKey: recorded.run.workflowKey,
+                  runRef: recorded.run.runRef,
+                })
               : Promise.resolve({ status: PROMPT_TERMINAL_STATUS.COMPLETED });
           handle = {
             workflowKey: recorded.run.workflowKey,
@@ -3806,15 +3819,13 @@ export class WorkflowExecutor {
       const workflowPath = authoredStep.workflow;
       const { promptFileResolver, sourceDefinitionPath } =
         this.getPromptFileResolutionOptions(context);
-      const resolution = await promptFileResolver.resolvePath(
+      const resolution = await resolveSubWorkflowReference(
         workflowPath,
+        promptFileResolver,
         sourceDefinitionPath
       );
-      if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
-        return {
-          ok: false,
-          failureMessage: `Sub-workflow could not resolve '${workflowPath}'`,
-        };
+      if (!resolution.ok) {
+        return { ok: false, failureMessage: resolution.message };
       }
       const resolvedPath = path.resolve(resolution.path);
       const ancestors = context.ancestorPaths ?? [];

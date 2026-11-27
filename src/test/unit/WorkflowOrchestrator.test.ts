@@ -46,6 +46,7 @@ import {
   PtySession,
 } from "../../core/harness/PtyProcessManager";
 import { MockPlatform } from "../helpers/mockHarness";
+import { subWorkflowUnresolvedMessage } from "../../core/SubWorkflowReferenceStep";
 import {
   ACTION_TYPES,
   APPEND_MODES,
@@ -6535,6 +6536,10 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       workspace = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-")
       );
+      // The parse is stubbed, but the reference is resolved on disk as its
+      // launch resolves it, so the file has to exist.
+      await fs.mkdir(path.dirname(childPath()), { recursive: true });
+      await fs.writeFile(childPath(), "steps:\n  - prompt: c\n");
     });
 
     teardown(async () => {
@@ -6627,8 +6632,15 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         APPEND_MODES.SUB_WORKFLOW
       );
 
+      // The orchestrator builds the reference step against the workspace
+      // root a launch resolves it from, so the instance never derives one
+      // from the file's own folder (a bare "child.ctrlyoke.yaml").
       assert.deepStrictEqual(appended, [
-        [childPath(), QUEUE_POSITION.NEXT, APPEND_MODES.SUB_WORKFLOW],
+        [
+          childPath(),
+          QUEUE_POSITION.NEXT,
+          { type: STEP_TYPES.WORKFLOW, workflow: "flows/child.ctrlyoke.yaml" },
+        ],
       ]);
       // The instance parses the file itself; the orchestrator does not.
       assert.deepStrictEqual(parseCalls, []);
@@ -6680,7 +6692,14 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         );
 
         assert.deepStrictEqual(appended, [
-          [childPath(), QUEUE_POSITION.END, APPEND_MODES.SUB_WORKFLOW],
+          [
+            childPath(),
+            QUEUE_POSITION.END,
+            {
+              type: STEP_TYPES.WORKFLOW,
+              workflow: "flows/child.ctrlyoke.yaml",
+            },
+          ],
         ]);
         assert.strictEqual(continued, false);
         assert.strictEqual(
@@ -6738,6 +6757,115 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         );
       });
     }
+    suite("a file outside the workspace", () => {
+      let outside: string;
+
+      setup(async () => {
+        outside = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-outside-")
+        );
+        await fs.writeFile(
+          path.join(outside, "child.ctrlyoke.yaml"),
+          "steps:\n  - prompt: c\n"
+        );
+      });
+
+      teardown(async () => {
+        await fs.rm(outside, { recursive: true, force: true });
+      });
+
+      const outsidePath = () => path.join(outside, "child.ctrlyoke.yaml");
+
+      /** A settled run in a harness whose only workspace root is `workspace`. */
+      async function outsideHarness(approvedExternalRoots: string[] = []) {
+        const run = await createRun(workspace);
+        await patchRun(run.workingFilePath, (file) => {
+          file._runtime.executionState = EXECUTION_STATES.COMPLETED;
+        });
+        const harness = createHarness(workspace, run.workflowKey, run.runRef);
+        harness.internal.platform.getWorkspaceRoots = () => [workspace];
+        harness.internal.platform.getNamedWorkspaceRoots = () => [];
+        harness.internal.platform.getApprovedExternalFileRoots = () =>
+          approvedExternalRoots;
+        stubParser(harness.internal, { steps: [{ prompt: "c" }] });
+        let continued = false;
+        harness.internal.buildWorkflowInstance = () => ({
+          executeContinuationAtRun: async () => {
+            continued = true;
+          },
+        });
+        return { run, ...harness, wasContinued: () => continued };
+      }
+
+      test("is refused at queue time with the message its launch would fail with", async () => {
+        const { run, orchestrator, internal, wasContinued } =
+          await outsideHarness();
+        const appended: unknown[][] = [];
+        internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "draft"]]);
+        internal.instances = new Map([
+          [
+            "draft",
+            {
+              getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+              appendFromFile: async (...args: unknown[]) => {
+                appended.push(args);
+              },
+            },
+          ],
+        ]);
+        const before = await fs.readFile(run.workingFilePath, "utf8");
+        const expected = `${subWorkflowUnresolvedMessage(outsidePath())}; nothing was queued.`;
+        const isExpected = (error: unknown) =>
+          error instanceof Error && error.message === expected;
+
+        // A settled run's continuation, and an unaddressed in-memory append.
+        await assert.rejects(
+          orchestrator.appendFromFileForClient(
+            await runMutation(run),
+            outsidePath(),
+            PANEL_CLIENT_ID,
+            QUEUE_POSITION.END,
+            APPEND_MODES.SUB_WORKFLOW
+          ),
+          isExpected
+        );
+        await assert.rejects(
+          orchestrator.appendFromFileForClient(
+            undefined,
+            outsidePath(),
+            PANEL_CLIENT_ID,
+            QUEUE_POSITION.END,
+            APPEND_MODES.SUB_WORKFLOW
+          ),
+          isExpected
+        );
+
+        assert.strictEqual(wasContinued(), false);
+        assert.deepStrictEqual(appended, []);
+        assert.strictEqual(
+          await fs.readFile(run.workingFilePath, "utf8"),
+          before
+        );
+      });
+
+      test("is queued by its absolute path under an approved external root", async () => {
+        const { run, orchestrator, wasContinued } = await outsideHarness([
+          outside,
+        ]);
+
+        await orchestrator.appendFromFileForClient(
+          await runMutation(run),
+          outsidePath(),
+          PANEL_CLIENT_ID,
+          QUEUE_POSITION.END,
+          APPEND_MODES.SUB_WORKFLOW
+        );
+
+        assert.strictEqual(wasContinued(), true);
+        const written = await readRun(run.workingFilePath);
+        assert.strictEqual(written.steps[1].workflow, outsidePath());
+      });
+    });
 
     test("a settled run refuses a file that does not parse, before writing anything", async () => {
       const run = await createRun(workspace);
@@ -6808,6 +6936,68 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       assert.strictEqual(
         written._runtime.activeParallelGroup.groupId,
         written.parallelGroups[0].id
+      );
+    });
+
+    test("parallelWithCurrent republishes the join's revision to the run's viewers and records its author", async () => {
+      const run = await createRun(workspace);
+      await markRunning(run.workingFilePath);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      stubParser(internal, { steps: [{ prompt: "c" }] });
+      const mutation = await runMutation(run);
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, mutation.address],
+        ["browser:watcher", mutation.address],
+      ]);
+      const operations: string[] = [];
+      const identities: any[] = [];
+      const recordIdentity = (clientId: string) => (message: unknown) => {
+        operations.push(`identity:${clientId}`);
+        identities.push(message);
+      };
+      internal.viewMessageSinks = new Map([
+        [PANEL_CLIENT_ID, recordIdentity(PANEL_CLIENT_ID)],
+        ["browser:watcher", recordIdentity("browser:watcher")],
+      ]);
+      internal.invalidateRunViews = async () => {
+        operations.push("snapshot");
+      };
+
+      await orchestrator.appendFromFileForClient(
+        mutation,
+        childPath(),
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        APPEND_MODES.SUB_WORKFLOW
+      );
+
+      const written = await readRun(run.workingFilePath);
+      assert.ok(written.definitionRevision > 1);
+      assert.deepStrictEqual(operations, [
+        `identity:${PANEL_CLIENT_ID}`,
+        "identity:browser:watcher",
+        "snapshot",
+      ]);
+      for (const identity of identities) {
+        assert.strictEqual(
+          identity.definitionRevision,
+          written.definitionRevision
+        );
+      }
+      // The acting client's next edit, still echoing the revision it saw
+      // before the join, is reconciled to the join's revision.
+      assert.strictEqual(
+        internal.reconcileRunRevisions(
+          mutation.address,
+          PANEL_CLIENT_ID,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision
+        ).expectedDefinitionRevision,
+        written.definitionRevision
       );
     });
 

@@ -6,7 +6,6 @@ import {
 import * as os from "os";
 import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
-import { buildSubWorkflowReferenceStep } from "./SubWorkflowReferenceStep";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
 import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
 import {
@@ -47,6 +46,7 @@ import {
   PromptFile,
   PromptStep,
   WorkflowStep,
+  SubWorkflowStep,
   isPromptStep,
   QueueState,
   HarnessId,
@@ -93,7 +93,6 @@ import {
   PARALLEL_GROUP_ADMISSION,
   getEffectiveParallelGroupWidth,
   QUEUE_POSITION,
-  APPEND_MODES,
   RUNNER_IDS,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
@@ -117,7 +116,6 @@ import {
   type ActionType,
   type ExecutionMode,
   type QueuePosition,
-  type AppendMode,
   type TerminalEndReason,
   type WorkflowTelemetryOutcome,
   type ApprovalDecision,
@@ -3560,19 +3558,21 @@ export class WorkflowInstance
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Append a workflow file to the current queue. `inline` splices the file's
-   * steps in; `subWorkflow` appends one workflow step that runs the file as a
+   * Append a workflow file to the current queue. Without `subWorkflowStep`
+   * the file's steps are spliced in; with it, that one workflow step (the
+   * caller's `buildSubWorkflowReferenceStep` for `filePath`, built against
+   * the workspace root the run resolves it from at launch) runs the file as a
    * child run. The file is parsed either way, so a broken file fails here
    * rather than when its child launches.
    */
   async appendFromFile(
     filePath: string,
     position: QueuePosition = QUEUE_POSITION.END,
-    appendMode: AppendMode = APPEND_MODES.INLINE
+    subWorkflowStep?: SubWorkflowStep
   ): Promise<void> {
     try {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
-      const asSubWorkflow = appendMode === APPEND_MODES.SUB_WORKFLOW;
+      const asSubWorkflow = subWorkflowStep !== undefined;
 
       if (
         !parsed ||
@@ -3590,14 +3590,8 @@ export class WorkflowInstance
         this.getStateRoot() ??
         this.platform.getWorkspaceRoot() ??
         path.dirname(filePath);
-      const tail: WorkflowStep[] = asSubWorkflow
-        ? [
-            buildSubWorkflowReferenceStep(
-              filePath,
-              workspaceRoot,
-              this.platform.getNamedWorkspaceRoots()
-            ),
-          ]
+      const tail: WorkflowStep[] = subWorkflowStep
+        ? [subWorkflowStep]
         : (parsed.steps ?? []);
       const tailGroups = asSubWorkflow ? [] : parsed.parallelGroups;
       const queuedLabel = asSubWorkflow

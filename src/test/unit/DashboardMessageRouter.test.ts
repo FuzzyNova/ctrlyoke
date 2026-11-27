@@ -35,6 +35,7 @@ import {
   EXECUTION_STATES,
   WORKTREE_MERGE_OUTCOMES,
   APPEND_MODES,
+  INLINE_PARALLEL_APPEND_REFUSAL,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
 } from "../../types/DashboardConstants";
@@ -1460,6 +1461,48 @@ suite("DashboardMessageRouter — client workflow file paths", () => {
       "run the workflow alongside the current step"
     );
     assert.match(failure.error ?? "", /Parallel width is 1/);
+  });
+
+  test("APPEND_FILE refuses inline parallelWithCurrent on both branches, before the picker opens", async () => {
+    const calls: AppendCall[] = [];
+    const replies: { type?: string; action?: string; error?: string }[] = [];
+    let picked = 0;
+    const router = buildRouter(appendRecorder(calls), () => {}, undefined, {
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
+      selectWorkspacePath: async () => {
+        picked += 1;
+        return path.resolve("flows/picked.ctrlyoke.yaml");
+      },
+    });
+
+    for (const extra of [
+      {},
+      { filePath: path.resolve("flows/child.ctrlyoke.yaml") },
+    ]) {
+      await router.route(
+        {
+          type: MESSAGE_TYPES.APPEND_FILE,
+          appendMode: APPEND_MODES.INLINE,
+          position: QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+          ...extra,
+        },
+        { clientTag: "browser:3", postMessage: (reply) => replies.push(reply) }
+      );
+    }
+
+    assert.strictEqual(calls.length, 0);
+    assert.strictEqual(picked, 0, "no file is asked for");
+    const failures = replies.filter(
+      (reply) => reply.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+    );
+    assert.strictEqual(failures.length, 2);
+    for (const failure of failures) {
+      assert.strictEqual(
+        failure.action,
+        "run the workflow alongside the current step"
+      );
+      assert.strictEqual(failure.error, INLINE_PARALLEL_APPEND_REFUSAL);
+    }
   });
 
   test("APPEND_FILE refuses an unknown append mode or position without queueing", async () => {

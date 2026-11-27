@@ -394,15 +394,19 @@ the run is running. The step joins the parallel group that is running, or
 turns the running step into a new group with `failFast: false`, and follows
 the [parallel sub-workflow rules](#parallel-sub-workflow-steps): a child that
 sets `merge: true` is refused beside a member that edits the run's checkout,
-and a child naming a named worktree already in use fails when it starts. It is
-unavailable while the run is in its final step, or when
-`queue.maxParallelSteps` is 1.
+and a child naming a named worktree already in use fails when it starts. A
+member that fails like that, or that cannot join for any other reason found
+when it starts, fails alone under its `onFail` and never cancels the members
+already running, even with `failFast: true`. It is unavailable while the run is
+in its final step, or when `queue.maxParallelSteps` is 1.
 
 The step's `workflow` path is relative to the workspace when the file is
 inside it (in a multi-root workspace, prefixed with the folder name when the
-file is outside the first folder), and absolute otherwise. ctrlyoke reads the
-file when you queue it, so a file that does not parse is refused right away
-instead of failing when the step starts.
+file is outside the first folder), and absolute otherwise. A file outside the
+workspace must be in a trusted external root (`permissions.trustedExternalRoots`),
+as the step needs one to start. ctrlyoke reads the file when you queue it, so a
+file that does not parse, or that the step could not start from, is refused
+right away instead of failing when the step starts.
 
 ## Outcomes, Stop, and Pause
 

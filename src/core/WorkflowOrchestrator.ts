@@ -64,16 +64,23 @@ import {
   type HarnessId,
   type QueuePosition,
   type AppendMode,
+  type ExecutionState,
   type ActionType,
   type WorktreeManagementAction,
   type RunDefinitionDecision,
+  ACTIVE_EXECUTION_STATES,
   APPEND_MODES,
+  INLINE_PARALLEL_APPEND_REFUSAL,
   QUEUE_POSITION,
   WORKFLOW_VIEW_ADDRESS_KIND,
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
 } from "../types/DashboardConstants";
-import { buildSubWorkflowReferenceStep } from "./SubWorkflowReferenceStep";
+import {
+  buildSubWorkflowReferenceStep,
+  resolveSubWorkflowReference,
+} from "./SubWorkflowReferenceStep";
+import { PromptFileResolver } from "./PromptFileResolver";
 import { classifySubWorkflowWorktree } from "../utils/WorktreeConfigShape";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -288,14 +295,17 @@ export type ResumableSession = Awaited<
 
 /**
  * States in which a resident instance takes a queued sub-workflow in memory,
- * picking it up at its next step boundary. A settled run is continued through
- * `appendAndContinueAtRun` instead; a stopping one takes neither.
+ * picking it up at its next step boundary: every active execution state but
+ * CANCELLING. A settled run is continued through `appendAndContinueAtRun`
+ * instead. A cancelling run is neither: it takes no in-memory append, and the
+ * request falls through to the continuation path, whose explicit-target
+ * check refuses a run that is still executing.
  */
-const SUB_WORKFLOW_LIVE_APPEND_STATES: ReadonlySet<string> = new Set([
-  EXECUTION_STATES.RUNNING,
-  EXECUTION_STATES.PAUSING,
-  EXECUTION_STATES.PAUSED,
-]);
+const SUB_WORKFLOW_LIVE_APPEND_STATES: ReadonlySet<ExecutionState> = new Set(
+  [...ACTIVE_EXECUTION_STATES].filter(
+    (state) => state !== EXECUTION_STATES.CANCELLING
+  )
+);
 
 const snapshotContentRequests = new Map<
   string,
@@ -2189,9 +2199,7 @@ export class WorkflowOrchestrator {
       );
     }
     if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
-      throw new Error(
-        "Only a workflow queued as a sub-workflow can run alongside the current step; nothing was queued."
-      );
+      throw new Error(INLINE_PARALLEL_APPEND_REFUSAL);
     }
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).appendFromFile(
@@ -2288,14 +2296,14 @@ export class WorkflowOrchestrator {
       await (live ?? this.getInstanceForClient(clientId)).appendFromFile(
         filePath,
         position,
-        APPEND_MODES.SUB_WORKFLOW
+        await this.subWorkflowReferenceStepFor(filePath)
       );
       return;
     }
     await this.parseSubWorkflowChildFile(filePath);
     await this.appendAndContinueAtRun(
       runAddress,
-      [this.subWorkflowReferenceStepFor(filePath)],
+      [await this.subWorkflowReferenceStepFor(filePath)],
       mutation!.expectedDefinitionRevision,
       mutation!.expectedDescriptorRevision,
       clientId
@@ -2342,19 +2350,38 @@ export class WorkflowOrchestrator {
         address.workflowKey,
         address.runRef
       );
-    await RunContinuationService.appendStepsToActiveParallelGroup(
-      workspaceRoot,
+    const joined =
+      await RunContinuationService.appendStepsToActiveParallelGroup(
+        workspaceRoot,
+        address.workflowKey,
+        address.runRef,
+        [await this.subWorkflowReferenceStepFor(filePath)],
+        definitionRevision,
+        ConfigurationUtils.getGlobalMaxSteps(),
+        this.lineageRepository,
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        ConfigurationUtils.getDynamicQueueConfig().maxParallelSteps,
+        resident?.getExecutionRoot(),
+        [classifySubWorkflowWorktree(parsed.worktree)]
+      );
+    // As `appendAndContinueAtRun` does: the join wrote a new definition
+    // revision, so the acting client is recorded as its author (a stale
+    // expectation it echoes next is reconciled, not rejected) and every
+    // viewer of the run learns the revision, cheaply first, then through the
+    // snapshot. Otherwise only the executing instance's watcher merge would
+    // tell anyone, later, and through STEPS_EXTENDED alone, which leaves a
+    // client holding the superseded revision for its next edit.
+    const viewAddress = WorkflowOrchestrator.runViewAddress(address);
+    await this.recordSuccessfulRevisions(viewAddress, clientId, {
+      definitionRevision: joined.definitionRevision,
+      recordDefinition: true,
+      recordDescriptor: false,
+    });
+    await this.publishRunRevisionsToViewers(
       address.workflowKey,
-      address.runRef,
-      [this.subWorkflowReferenceStepFor(filePath)],
-      definitionRevision,
-      ConfigurationUtils.getGlobalMaxSteps(),
-      this.lineageRepository,
-      QUEUE_POSITION.PARALLEL_WITH_CURRENT,
-      ConfigurationUtils.getDynamicQueueConfig().maxParallelSteps,
-      resident?.getExecutionRoot(),
-      [classifySubWorkflowWorktree(parsed.worktree)]
+      address.runRef
     );
+    await this.invalidateRunViews(address.workflowKey, address.runRef);
   }
 
   /** Parse a file about to be queued as a sub-workflow, failing fast. */
@@ -2376,12 +2403,38 @@ export class WorkflowOrchestrator {
     return parsed;
   }
 
-  private subWorkflowReferenceStepFor(filePath: string): SubWorkflowStep {
-    return buildSubWorkflowReferenceStep(
+  /**
+   * The one place the dashboard, explorer and in-memory appends build a
+   * queued file's reference step: relative to the workspace root a launch
+   * resolves it from (D5), never to the file's own folder. The step is
+   * resolved here as its launch resolves it, so a file the launch would
+   * refuse (outside the workspace and its approved external roots) is
+   * refused now, with the launch's message, instead of failing the step.
+   */
+  private async subWorkflowReferenceStepFor(
+    filePath: string
+  ): Promise<SubWorkflowStep> {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const namedRoots = this.platform.getNamedWorkspaceRoots();
+    const step = buildSubWorkflowReferenceStep(
       filePath,
-      this.requireWorkspaceRoot(),
-      this.platform.getNamedWorkspaceRoots()
+      workspaceRoot,
+      namedRoots
     );
+    const resolution = await resolveSubWorkflowReference(
+      step.workflow as string,
+      new PromptFileResolver({
+        workspaceRoot,
+        namedRoots,
+        trustedRoots: this.platform.getWorkspaceRoots(),
+        approvedExternalRoots:
+          this.platform.getApprovedExternalFileRoots?.(workspaceRoot) ?? [],
+      })
+    );
+    if (!resolution.ok) {
+      throw new Error(`${resolution.message}; nothing was queued.`);
+    }
+    return step;
   }
 
   /**

@@ -19,6 +19,7 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   APPEND_MODES,
+  INLINE_PARALLEL_APPEND_REFUSAL,
   isAppendMode,
   isQueuePosition,
   USER_FEEDBACK_SEVERITY,
@@ -1375,11 +1376,24 @@ export class DashboardMessageRouter {
       const appendMode = message.appendMode ?? APPEND_MODES.INLINE;
       const position = message.position ?? QUEUE_POSITION.END;
       const failureAction =
-        appendMode === APPEND_MODES.INLINE
-          ? "append and continue from file"
-          : position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
-            ? "run the workflow alongside the current step"
+        position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
+          ? "run the workflow alongside the current step"
+          : appendMode === APPEND_MODES.INLINE
+            ? "append and continue from file"
             : "queue the workflow as a sub-workflow";
+      // Refused before any file is picked, on either branch: the inline
+      // picker path below has no failure channel of its own.
+      if (
+        appendMode === APPEND_MODES.INLINE &&
+        position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
+      ) {
+        this.mutationCoordinator.showRunActionFailure(
+          ctx,
+          failureAction,
+          new Error(INLINE_PARALLEL_APPEND_REFUSAL)
+        );
+        return;
+      }
       if (message.filePath) {
         const mutation =
           this.mutationCoordinator.asWorkflowDefinitionMutation(message);

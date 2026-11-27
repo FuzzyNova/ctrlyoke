@@ -14,6 +14,8 @@ import type {
   WorkflowOutputHistory,
 } from "../../types/OutputHistoryTypes";
 import type { OrderedCliHistoryEntry } from "../../types/OutputHistoryTypes";
+import type { SubWorkflowOutput } from "../../types/CtrlYokeTypes";
+import { readSubWorkflowRanWith } from "../../types/SubWorkflowTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
 import { outputAttemptKey } from "../../utils/OutputTargetKeys";
@@ -375,7 +377,7 @@ export class OutputHistoryTimelineAdapter {
           orderedEntries.push({
             kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
             target: event.target,
-            subWorkflowOutput: event.payload,
+            subWorkflowOutput: withValidatedRanWith(event.payload),
             timestampMs: event.timestampMs,
             sequence: event.sequence,
           });
@@ -481,4 +483,15 @@ function compareActivityEntries(
   right: OutputActivityEntry
 ): number {
   return left.timestampMs - right.timestampMs || left.sequence - right.sequence;
+}
+
+/**
+ * A persisted settlement with its untrusted `ranWith` validated: an unknown
+ * harness id is dropped (see `readSubWorkflowRanWith`).
+ */
+function withValidatedRanWith(output: SubWorkflowOutput): SubWorkflowOutput {
+  if (output.ranWith === undefined) return output;
+  const { ranWith: persisted, ...rest } = output;
+  const ranWith = readSubWorkflowRanWith(persisted);
+  return ranWith ? { ...rest, ranWith } : rest;
 }

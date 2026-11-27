@@ -10,6 +10,7 @@ import type {
 } from "../../types/SubWorkflowTypes";
 import {
   isSameSubWorkflowParentLink,
+  readSubWorkflowRanWith,
   SUB_WORKFLOW_SOURCE_KINDS,
 } from "../../types/SubWorkflowTypes";
 import {
@@ -114,10 +115,24 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
   async readCompletedChild(
     request: SubWorkflowCompletedChildRequest
   ): Promise<SubWorkflowResult> {
-    return this.withRecordedRun(
-      runFilePath(request.stateRoot, request.workflowKey, request.runRef),
-      { status: PROMPT_TERMINAL_STATUS.COMPLETED }
-    );
+    const completed: SubWorkflowResult = {
+      status: PROMPT_TERMINAL_STATUS.COMPLETED,
+    };
+    let workingFilePath: string;
+    try {
+      // A recorded identity is read from disk, so its path may not build.
+      workingFilePath = runFilePath(
+        request.stateRoot,
+        request.workflowKey,
+        request.runRef
+      );
+    } catch (error) {
+      Log.warn(
+        `[${LOG_SOURCE}] Could not locate the completed child's run file: ${errorMessage(error)}`
+      );
+      return completed;
+    }
+    return this.withRecordedRun(workingFilePath, completed);
   }
 
   async launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle> {
@@ -702,7 +717,9 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     const recorded = runFile._runtime?.worktree;
     return withRanWith(
       recorded ? { ...result, worktree: projectWorktree(recorded) } : result,
-      recordedRanWith(runFile.steps)
+      // A run file with no started prompt step records nothing; what the
+      // instance saw in memory is then the best account, as for a missing file.
+      recordedRanWith(runFile.steps) ?? fallback.ranWith
     );
   }
 
@@ -715,9 +732,11 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
 }
 
 /**
- * The harness and model of the last queue prompt step that started
- * (`_runtime.harness` set): an inline lane's one step, or a file child's
- * latest. A final step is not consulted.
+ * The harness and model of the last queue prompt step that started with a
+ * known harness (`_runtime.harness` set): an inline lane's one step, or a
+ * file child's latest. A final step is not consulted. The steps may come from
+ * disk, so the pair goes through `readSubWorkflowRanWith`; a step whose
+ * recorded harness is unknown does not count as started.
  */
 export function recordedRanWith(
   steps: readonly WorkflowStep[] | undefined
@@ -725,10 +744,11 @@ export function recordedRanWith(
   for (let i = (steps?.length ?? 0) - 1; i >= 0; i--) {
     const step = steps![i];
     if (!isPromptStep(step) || !step._runtime?.harness) continue;
-    return {
+    const ranWith = readSubWorkflowRanWith({
       harness: step._runtime.harness,
-      ...(step._runtime.model ? { model: step._runtime.model } : {}),
-    };
+      model: step._runtime.model,
+    });
+    if (ranWith?.harness) return ranWith;
   }
   return undefined;
 }

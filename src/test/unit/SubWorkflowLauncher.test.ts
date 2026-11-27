@@ -13,6 +13,7 @@ import type {
 } from "../../types/SubWorkflowTypes";
 import {
   isSameSubWorkflowParentLink,
+  readSubWorkflowRanWith,
   SUB_WORKFLOW_SOURCE_KINDS,
 } from "../../types/SubWorkflowTypes";
 import type {
@@ -21,6 +22,7 @@ import type {
   QueueState,
   RunRef,
   WorkflowKey,
+  WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
@@ -528,6 +530,91 @@ suite("SubWorkflowLauncher", () => {
 
     assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.COMPLETED);
     assert.deepStrictEqual(result.ranWith, { harness: "claude-cli" });
+  });
+
+  test("falls back to the in-memory steps when the run file records no started prompt step", async () => {
+    const factory = new FakeFactory();
+    factory.child.workingFilePath = "/tmp/unstarted/workflow.ctrlyoke.json";
+    factory.child.completedRuntime = { harness: "claude-cli" };
+    const launcher = new SubWorkflowLauncher(
+      factory.create,
+      undefined,
+      async () =>
+        ({
+          steps: [{ prompt: "lane", _runtime: {} }],
+          _runtime: { currentIndex: 0 },
+        }) as unknown as WorkingFile
+    );
+
+    const result = await (await launcher.launch(request())).done;
+
+    assert.deepStrictEqual(result.ranWith, { harness: "claude-cli" });
+  });
+
+  test("drops an unknown harness id a run file records", async () => {
+    const factory = new FakeFactory();
+    factory.child.workingFilePath = "/tmp/tampered/workflow.ctrlyoke.json";
+    const launcher = new SubWorkflowLauncher(
+      factory.create,
+      undefined,
+      async () =>
+        ({
+          steps: [
+            {
+              prompt: "earlier",
+              _runtime: { harness: "codex-cli", model: "gpt" },
+            },
+            {
+              prompt: "tampered",
+              _runtime: { harness: "not-a-harness", model: "opus" },
+            },
+          ],
+          _runtime: { currentIndex: 2 },
+        }) as unknown as WorkingFile
+    );
+
+    const result = await (await launcher.launch(request())).done;
+
+    // The step naming an unknown harness does not count as started.
+    assert.deepStrictEqual(result.ranWith, {
+      harness: "codex-cli",
+      model: "gpt",
+    });
+  });
+
+  test("a reattached COMPLETED child whose run path cannot be built settles COMPLETED", async () => {
+    const stateRoot = makeTempDir("ctrlyoke-launcher-bad-ref-");
+    try {
+      const launcher = new SubWorkflowLauncher(new FakeFactory().create);
+
+      assert.deepStrictEqual(
+        await launcher.readCompletedChild({
+          stateRoot,
+          workflowKey: "child-key" as WorkflowKey,
+          runRef: "../escape" as RunRef,
+        }),
+        { status: PROMPT_TERMINAL_STATUS.COMPLETED }
+      );
+    } finally {
+      removeTempDir(stateRoot);
+    }
+  });
+
+  test("readSubWorkflowRanWith keeps only a known harness id and a string model", () => {
+    assert.deepStrictEqual(
+      readSubWorkflowRanWith({ harness: "claude-cli", model: "opus" }),
+      { harness: "claude-cli", model: "opus" }
+    );
+    assert.deepStrictEqual(
+      readSubWorkflowRanWith({ harness: "rogue-cli", model: "opus" }),
+      { model: "opus" }
+    );
+    assert.strictEqual(
+      readSubWorkflowRanWith({ harness: "rogue-cli", model: 3 }),
+      undefined
+    );
+    assert.strictEqual(readSubWorkflowRanWith("claude-cli"), undefined);
+    assert.strictEqual(readSubWorkflowRanWith(null), undefined);
   });
 
   test("reads a reattached COMPLETED child's worktree and ran-with from its run file", async () => {

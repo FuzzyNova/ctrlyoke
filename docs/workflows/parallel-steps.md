@@ -67,6 +67,12 @@ a member cannot point at another member of the same group. If the host cannot ru
 several interactive terminals at once, it also rejects multiple interactive
 members. In that case, set `executionMode: headless` on those members.
 
+A member that joins the group while it runs, or waits for a free slot, is checked
+against the members already running when it starts. If it fails that check (for
+example, it resumes a session a running member holds), that member fails alone:
+it does not cancel the running members, even with `failFast: true`, and the
+group fails once they finish.
+
 Groups cannot be nested, cannot contain a `worktree` or
 `trustedExternalRoots` override, and cannot be used as `finalStep`.
 

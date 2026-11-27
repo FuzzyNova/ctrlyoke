@@ -7,11 +7,12 @@ import type {
   WorkflowKey,
 } from "./CtrlYokeTypes";
 import type {
+  HarnessId,
   PromptTerminalStatus,
   SubWorkflowCancellationSource,
   SubWorkflowWorktreePlacement,
 } from "./DashboardConstants";
-import { FINAL_STEP_PHASES } from "./DashboardConstants";
+import { FINAL_STEP_PHASES, isHarnessId } from "./DashboardConstants";
 
 export const SUB_WORKFLOW_SOURCE_KINDS = {
   FILE: "file",
@@ -25,8 +26,9 @@ export interface SubWorkflowHost {
    * The outcome of a child that already COMPLETED, for a parent step that
    * reattaches to it (D6) without launching it again: read from the child's
    * run file exactly as a settlement after a launch is, so it carries the
-   * same worktree and ran-with metadata. A host without it settles the step
-   * with the bare COMPLETED status.
+   * same worktree and ran-with metadata. Never rejects: a run file that
+   * cannot be located or read settles with the bare COMPLETED status, as a
+   * host without this method does.
    */
   readCompletedChild?(
     request: SubWorkflowCompletedChildRequest
@@ -218,8 +220,27 @@ export interface SubWorkflowResult {
  * that switches harness between steps reports only the last one.
  */
 export interface SubWorkflowRanWith {
-  harness?: string;
+  harness?: HarnessId;
   model?: string;
+}
+
+/**
+ * A ran-with value read from disk (a child's run file, or a persisted
+ * `subWorkflowSettled` payload), which is untrusted: an unknown harness id
+ * and a non-string model are dropped, and nothing left is undefined.
+ */
+export function readSubWorkflowRanWith(
+  value: unknown
+): SubWorkflowRanWith | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { harness, model } = value as Record<string, unknown>;
+  const ranWith: SubWorkflowRanWith = {
+    ...(isHarnessId(harness) ? { harness } : {}),
+    ...(typeof model === "string" && model ? { model } : {}),
+  };
+  return ranWith.harness !== undefined || ranWith.model !== undefined
+    ? ranWith
+    : undefined;
 }
 
 /** Narrow instance surface needed by SubWorkflowLauncher. */

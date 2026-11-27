@@ -3623,6 +3623,13 @@ export function isAppendMode(value: unknown): value is AppendMode {
 }
 
 /**
+ * Why an `inline` append cannot take `parallelWithCurrent`: only one
+ * workflow step can join the running step, and inline splices many.
+ */
+export const INLINE_PARALLEL_APPEND_REFUSAL =
+  "Only a workflow queued as a sub-workflow can run alongside the current step; nothing was queued.";
+
+/**
  * Resolve the array index a queue position splices at, given the execution head
  * and the current step count. Single source for every append path — the
  * in-memory queue, the dashboard queue operation, and the cross-process run

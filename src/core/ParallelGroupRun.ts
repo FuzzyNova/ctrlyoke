@@ -80,6 +80,17 @@ export interface ParallelGroupRunOptions<TContext extends object> {
     readonly stepIndex: number;
     readonly runningMembers: readonly ParallelGroupPreflightMember[];
   }) => Promise<ParallelGroupMemberPreflightResult>;
+  /**
+   * A member whose dispatch preflight failed and that settles through its own
+   * step's failure policy rather than as a bare FAILED: the member to execute
+   * so that policy applies, or undefined to settle it FAILED directly. A
+   * sub-workflow member returns itself carrying the failure as its prepared
+   * launch, the way a group-preflight failure reaches it, so its `onFail`
+   * decides.
+   */
+  readonly failedPreflightMember?: (
+    preflight: ParallelGroupMemberPreflightResult
+  ) => ParallelGroupPreflightMember | undefined;
   readonly executeMember: (
     target: ExecutionTarget,
     step: WorkflowStep,
@@ -530,15 +541,22 @@ export class ParallelGroupRun<TContext extends object> {
         claim.stepIndex
       );
       if (preflight.issues.length > 0) {
-        await this.settleMember(
-          stepId,
-          {
-            target,
-            status: PROMPT_TERMINAL_STATUS.FAILED,
-            failureReason: preflight.failureMessage,
-          },
-          false
-        );
+        // A member that fails its dispatch preflight conflicts with members
+        // already running; group preflight would have refused it before
+        // anything started. It fails alone and never triggers fail-fast, so
+        // its siblings' work is kept. It holds no reservation (it is never
+        // recorded as running with a preflight member).
+        const failing = this.options.failedPreflightMember?.(preflight);
+        const outcome: StepExecutionOutcome = failing
+          ? await this.executeMemberOutcome(target, claim.step, failing)
+          : {
+              target,
+              status: PROMPT_TERMINAL_STATUS.FAILED,
+              failureReason: preflight.failureMessage,
+            };
+        await this.settleMember(stepId, outcome, false, {
+          triggersFailFast: false,
+        });
         return;
       }
 
@@ -548,24 +566,11 @@ export class ParallelGroupRun<TContext extends object> {
         step: claim.step,
         preflightMember: preflight.member,
       });
-      let outcome: StepExecutionOutcome;
-      try {
-        outcome = await this.options.executeMember(
-          target,
-          claim.step,
-          this.groupContext,
-          this.options.effectiveWidth === 1
-            ? this.options.snapshotStrategy
-            : undefined,
-          preflight.member
-        );
-      } catch (error) {
-        outcome = {
-          target,
-          status: PROMPT_TERMINAL_STATUS.FAILED,
-          failureReason: getErrorMessage(error),
-        };
-      }
+      let outcome = await this.executeMemberOutcome(
+        target,
+        claim.step,
+        preflight.member
+      );
       if (
         this.abortController.signal.aborted &&
         this.failFastTriggered &&
@@ -576,6 +581,31 @@ export class ParallelGroupRun<TContext extends object> {
       await this.settleMember(stepId, outcome, true);
     } finally {
       this.running.delete(stepId);
+    }
+  }
+
+  /** Execute one member; a thrown error is its FAILED outcome. */
+  private async executeMemberOutcome(
+    target: ExecutionTarget,
+    step: WorkflowStep,
+    member: ParallelGroupPreflightMember
+  ): Promise<StepExecutionOutcome> {
+    try {
+      return await this.options.executeMember(
+        target,
+        step,
+        this.groupContext,
+        this.options.effectiveWidth === 1
+          ? this.options.snapshotStrategy
+          : undefined,
+        member
+      );
+    } catch (error) {
+      return {
+        target,
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failureReason: getErrorMessage(error),
+      };
     }
   }
 
@@ -609,7 +639,8 @@ export class ParallelGroupRun<TContext extends object> {
   private async settleMember(
     stepId: string,
     outcome: StepExecutionOutcome,
-    captureSnapshot: boolean
+    captureSnapshot: boolean,
+    options: { readonly triggersFailFast?: boolean } = {}
   ): Promise<void> {
     this.running.delete(stepId);
     this.outcomes.set(stepId, outcome);
@@ -636,6 +667,7 @@ export class ParallelGroupRun<TContext extends object> {
     await this.options.releaseTargetResources?.(outcome.target);
 
     if (
+      options.triggersFailFast !== false &&
       outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
       outcome.terminalFailure !== false &&
       this.options.group.failFast &&
