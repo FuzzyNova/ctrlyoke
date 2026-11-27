@@ -3,7 +3,8 @@
 ## Status (2026-11-26)
 
 **In progress. The prerequisites and the step-kind-agnostic prior-context work shipped, and
-the sequential sub-workflow step works end to end (rounds 1–3; see [Progress](#progress)).
+the sequential sub-workflow step works end to end, including as a `finalStep`, with D6 reattach
+and D12c descendant reads (rounds 1–4; see [Progress](#progress)).
 Every open question is settled (see [Revision 5](#revision-5-decisions)).**
 
 Shipped:
@@ -42,9 +43,11 @@ Shipped:
   kind, schema, parser, host factories in every host, stop/pause forwarding, D7 `parentRun`,
   D4a inheritance with D4d rule 1, the `subWorkflowSettled` event, D12a/D12b prior context, and
   the docs page `docs/workflows/sub-workflow-steps.md`.
+- **Round 4:** `finalStep` sub-workflows (phase-discriminated `SubWorkflowParentLink`), prompt
+  stop of script steps, D12c's `run` argument on MCP `read_output`/`workflow_status`, and D6 reattach
+  (its tests and hardening are round 5's first step).
 
-Not shipped (everything else in this plan): a `finalStep` sub-workflow (fails today; see
-Progress), D12c's `run` argument on MCP `read_output`/`workflow_status`, D6 reattach, D4b/D4c,
+Not shipped (everything else in this plan): D4b/D4c,
 parallel members, entry points, dashboard, CLI progress/JSON, D13 inline definitions, D14 agent
 lanes and `worktreePresets`, and sibling merge wait (D4d rule 2).
 
@@ -2003,7 +2006,7 @@ summaries instead.
   - `aee34c9d2` (review fix): a CLI child no longer inherits the parent's `--session-id`
     override flag; its config comes from a pure `resolveCliSubWorkflowInstanceConfig`, so the
     test no longer casts into private fields. `SubWorkflowInstanceOptions` named.
-  - **Found in review, not yet fixed** (round 4 steps 1–3):
+  - **Found in review** (all fixed in round 4, except where round 4 notes otherwise):
     - a `finalStep` sub-workflow always fails with "Sub-workflow parent run identity is
       unavailable": the executor requires `_runtime.stepId`, which only queue steps have. D1's
       `SubWorkflowParentLink` is now a phase-discriminated union;
@@ -2025,25 +2028,70 @@ summaries instead.
       deleted child, preview = live injection), and no bundle or history-document test for the
       event.
 
+- **Round 4 (reviewed 2026-11-26): round-3 gaps, D12c and D6.** `npm test` green (8471
+  extension, 4917 UI) before the review fix. Gaps the review found are round 5's first three
+  steps.
+  - `a1abe6b13`: `SubWorkflowParentLink` is phase-discriminated (`FINAL_STEP_PHASES`); a
+    `finalStep` sub-workflow launches with `{ phase: finalStep, loopIndex }`; real parent/child
+    finalStep test; one instance builder in `subWorkflowHost.integration.test.ts`.
+  - `490c3b0a0`: `stop()` settles a script-only stop when its process runners shut down instead
+    of on the 10 s detector fallback (pre-existing bug; CHANGELOG Fixed). Only two of the
+    requested real-instance tests landed (plain script stop, parent stop → child stop).
+  - `8cd3dca9a`: `subWorkflowSettled` has its own history candidate extraction and real
+    `attemptIndex`; `resolveSubWorkflowChildren` renders `<childRunUnavailable/>` for invalid
+    or unreadable addresses and has a visited-set guard; `workflow=` is the authored path; unset
+    worktree attributes are omitted; `PriorContextItem.stepKind`; `SubWorkflowOutput` derives
+    from `SubWorkflowResult`; resolver-backed three-level, `$previous:2`, deleted/invalid child,
+    preview-parity, bundle and history-document tests.
+  - `a0c91b91f`: D12c `run` argument on `read_output`/`workflow_status` (`resolveSelectedRun`
+    in `src/mcp-server.ts`; ancestry walk bounded at 128 links); docs and CHANGELOG.
+  - `66b970cc2`: D6 reattach (executor checks the recorded child's manifest `parentRun`;
+    completed → settle without launch; otherwise `resumeChildRun` → launcher continues through
+    `executeContinuationAtRun`). **Shipped without any of its requested tests** (the step said so).
+  - `26547a380` (review fix): `490c3b0a0`'s fast path returned before cancelling harness
+    integrations, so stopping a parallel group with a prompt member beside a script member left
+    the prompt harness running; failing test first. Also a missing newline after `<worktree/>`
+    and a `read_output` hint on `<childRunUnavailable/>` that named the unreadable run.
+  - **Found in review, not yet fixed** (round 5 steps 1–3):
+    - D6: no executor branch tests and no real-instance resume test; `parentRun` compared with
+      `JSON.stringify` (key-order dependent); the continuation handle in `SubWorkflowLauncher`
+      duplicates the fresh-launch handle and lacks its `.catch` on `done`; `stateRoot` is an
+      optional request field read with `!`; the executor reads the parent's whole `events.jsonl`
+      on every settle to avoid a duplicate `subWorkflowSettled`; the executor constructs
+      `TimelineRecorder` directly;
+    - propagation tests still missing: child stop → parent STOPPED, three-level root stop,
+      pause/resume with a single child execution, pausing the child directly leaves the parent
+      RUNNING;
+    - D12c: `handleReadOutput` applies the attached run's `groupStartBoundary` to a descendant
+      run's indices; `workflow_status`/`read_output` never expose a workflow step's
+      `childWorkflowKey`/`childRunRef`/outcome, so an agent cannot discover the address the
+      docs tell it to use; the budget stub's `readOutput` hint is dead code (`applySummaryBudget`
+      never positions items inside a child, so `item.subWorkflow` is always unset there);
+    - prior context: `PriorContextItem.stepKind` is optional and rendering still branches on
+      `item.subWorkflow`/`item.scriptOutput`; the resolver's visited set omits the root run, so
+      A→B→A renders A once more; no cycle test; inline `import()` types remain in
+      `SubWorkflowInstance` (`src/types/SubWorkflowTypes.ts`);
+    - MCP tests missing: the attached run passed as `run`, a traversal `workflowKey`, a
+      finalStep-phase child.
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 4 (queued 2026-11-26): round-3 gaps, then D12c and D6.**
-  1. `finalStep` sub-workflows: phase-discriminated `SubWorkflowParentLink`, real-instance test.
-  2. Real-instance stop/pause propagation tests, and a fix for the script-stop wait if it is a
-     real bug.
-  3. Prior-context and history fixes from the round-3 review, with resolver-backed tests.
-  4. D12c: descendant-only `run` argument on MCP `read_output`/`workflow_status`.
-  5. D6 reattach (needs step 1's link shape to match a recorded child to its parent step).
-- **Round 5:** minimal dashboard row + "Open run" link + "Started by", CLI progress +
-  `subWorkflowRuns` JSON, D4c dirty check for sequential worktree children.
+- **Round 5 (queued 2026-11-26): round-4 gaps, then the first user-facing surfaces.**
+  1. D6 tests and hardening.
+  2. Remaining real-instance propagation tests.
+  3. D12c and prior-context fixes from the round-4 review.
+  4. CLI: child progress prefix and `subWorkflowRuns` JSON.
+  5. Dashboard: parent step row variant, "Open run →", child "Started by".
+  6. D4c dirty check for sequential worktree children.
 - **Rounds 6–7: isolated lanes (landing step 3).** D13 inline definitions (widens
   `SubWorkflowStep.workflow` to `string | InlineSubWorkflowDefinition`, adds the schema's inline
   arm, R10 exclusions), parallel member acceptance + preflight branch, D4c once-per-group check,
   `MERGE_INTO_SHARED_ROOT`, user-cancelled-lane join rule, D4d sibling merge wait (R4), R5 CLI
   headless children, D14 `worktreePresets` + `append_step`/`edit_step`/`workflow_status`,
-  orchestrator agent and `spec-driven-loop` template.
+  orchestrator agent and `spec-driven-loop` template. Parallel members make D12c's per-member
+  scope real: a member may read only runs its own step started.
 - **Round 8: landing steps 4–5.** D4b, D4d rule 2, nested fan-out, inheriting members,
   `WORKTREE_COLLISION`, named-worktree members.
 - **Round 9: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
@@ -2064,9 +2112,7 @@ Coarse roadmap; re-planned every pass.
   Between round 2's schema step and round 3's host factories, a workflow step fails with "Sub-workflow
   steps are not supported in this host" (the documented missing-host behaviour). This is a
   development branch, so the CHANGELOG entry and docs page wait for round 3, when it works.
-- **D6 is deferred to round 4.** Until then a re-executed sub-workflow step whose `_runtime`
-  already names a child launches fresh and overwrites the linkage (the D6 "missing directory"
-  branch).
+- **D6 landed in round 4** (it had been deferred from round 3).
 - **Adding a union member is mostly not a switch-arm change (round 2 lesson).** The first
   attempt at round 2 step 1 hit 177 extension and 20 webview type errors and gave up uncommitted.
   Only about 40 were missing `case` arms. The rest were reads that compile only because
@@ -2075,9 +2121,9 @@ Coarse roadmap; re-planned every pass.
   branches, a binary shape that the round-1 guard does not catch. The work is now split so the
   overlap is removed first (with the union widened only temporarily to list the sites), and
   the kind lands last. The `USER_INPUT_STEP_PLAN.md` kind will benefit from the same split.
-- **The D4c dirty check moves to round 4** (it was implicitly round 3). It only matters for a
-  child with its own `worktree`, and D4b (branching from the parent) is round 7, so until then a
-  worktree child branches from the main checkout as a top-level run does today.
+- **The sequential D4c dirty check is round 5** (moved from round 3, then round 4). It only
+  matters for a child with its own `worktree`, and D4b (branching from the parent) is round 8,
+  so until then a worktree child branches from the main checkout as a top-level run does today.
 - **`settleNonHarnessStep` keeps one script quirk on purpose.** An errored script under
   `errorBehavior.onError: continue` fails its queue step and still returns "continue", as before
   round 2. Only `continueResolvesFailure` (sub-workflow `onFail: continue`) skips `failStep`.
@@ -2096,4 +2142,14 @@ Coarse roadmap; re-planned every pass.
 - **`delegationChain` reaches a child twice** (factory `executionOptions` for its own
   executor's requests, `loadPromptFile` options for its lease). Acceptable for now; fold into
   one when D6's continuation path needs the same data.
+- **D6 reattach compares the whole `parentRun` link** (round 4): workflowKey, runRef, phase and
+  stepId/loopIndex must all match, so a finalStep pass never reattaches to an earlier pass's
+  child (D8). Round 5 replaces the `JSON.stringify` comparison with a field-wise helper.
+- **A COMPLETED recorded child settles without relaunching even if the parent's timeline
+  already holds its `subWorkflowSettled`**; the event is written at most once per child run.
+- **`<childRunUnavailable/>` carries no `read_output` hint** (round 4 review): it appears only
+  when the child's history is missing or unreadable, so the call would fail.
+- **The D12c ancestry walk is bounded at 128 links** (round 4; the spec was silent).
+- **The D4c dirty check stays in round 5 for sequential children**; the once-per-group check
+  waits for parallel members (rounds 6–7).
 - No open questions need Nathan yet.
