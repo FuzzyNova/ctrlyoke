@@ -170,8 +170,9 @@ stops the parent. Pausing the parent forwards the pause to the child, which
 pauses at its next step boundary. The parent stays in its pausing state for as
 long as the child is paused, because its current step is the child run.
 Resuming the parent resumes the child, which continues its own run. A stop or
-pause that arrives while the child is still starting reaches it as soon as it
-starts; a child paused that early pauses before its first step. Pausing or
+pause that arrives while the child is still starting, or still reconnecting to
+its saved run, reaches it as soon as it starts; a child paused that early
+pauses before its next step. Pausing or
 resuming a child directly does not pause or resume the parent.
 
 ## In the dashboard

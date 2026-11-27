@@ -69,6 +69,7 @@ import {
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
   PROMPT_TERMINAL_STATUS,
+  SUB_WORKFLOW_CANCELLATION_SOURCES,
   PROMPT_FILE_RESOLUTION_STATUSES,
   STEP_CLAIM_OUTCOMES,
   getEffectiveParallelGroupWidth,
@@ -3197,6 +3198,59 @@ export class WorkflowExecutor {
     if (!host) {
       return settleFailure("Sub-workflow steps are not supported in this host");
     }
+    const settleCancelled = () =>
+      this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        cancelled: true,
+        stopWorkflowOnCancel: true,
+      });
+    // Registered before anything awaits, so a stop or pause that arrives
+    // while the child is still being resolved or loaded reaches it once its
+    // handle exists, and a stop before the launch skips it.
+    const control = new SubWorkflowControlRelay();
+    context.registerActiveTarget?.(target, attemptIndex, control);
+    try {
+      return await this.runSubWorkflowStep(authoredStep, stepIndex, context, {
+        target,
+        attemptIndex,
+        host,
+        control,
+        settleFailure,
+        settleCancelled,
+        preflightMember,
+      });
+    } finally {
+      context.registerActiveTarget?.(target, attemptIndex, null);
+    }
+  }
+
+  /** `executeSubWorkflowStep` once its control is registered. */
+  private async runSubWorkflowStep(
+    authoredStep: SubWorkflowStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext,
+    run: {
+      readonly target: ExecutionTarget;
+      readonly attemptIndex: number;
+      readonly host: SubWorkflowHost;
+      readonly control: SubWorkflowControlRelay;
+      readonly settleFailure: (message: string) => Promise<boolean>;
+      readonly settleCancelled: () => Promise<boolean>;
+      readonly preflightMember: ParallelGroupPreflightMember | undefined;
+    }
+  ): Promise<boolean> {
+    const {
+      target,
+      attemptIndex,
+      host,
+      control,
+      settleFailure,
+      settleCancelled,
+      preflightMember,
+    } = run;
     // A parallel member arrives prepared by its group's preflight, which
     // already parsed (or materialized) the child once.
     const prepared =
@@ -3208,6 +3262,7 @@ export class WorkflowExecutor {
         context,
         false
       ));
+    if (control.wasStopRequested) return settleCancelled();
     if (!prepared.ok) return settleFailure(prepared.failureMessage);
     const { source } = prepared;
     // An inline child has no file, so it records no resolved path.
@@ -3224,19 +3279,6 @@ export class WorkflowExecutor {
       return settleFailure("Sub-workflow parent run identity is unavailable");
     }
 
-    const settleCancelled = () =>
-      this.settleNonHarnessStep({
-        context,
-        target,
-        stepIndex,
-        attemptIndex,
-        cancelled: true,
-        stopWorkflowOnCancel: true,
-      });
-    // Registered before the launch, so a stop or pause that arrives while the
-    // child is still loading reaches it once its handle exists.
-    const control = new SubWorkflowControlRelay();
-    context.registerActiveTarget?.(target, attemptIndex, control);
     let handle: SubWorkflowHandle | undefined;
     let completedChild = false;
     try {
@@ -3326,7 +3368,7 @@ export class WorkflowExecutor {
         childRunRef: handle.runRef,
         ...(filePath !== undefined ? { resolvedWorkflowPath: filePath } : {}),
       });
-      const result: SubWorkflowResult = await handle.done;
+      const result = this.asStepOutcome(await handle.done, control);
       const settlementAlreadyRecorded =
         completedChild && context.historyFilePath
           ? await context.outputHistoryManager?.hasSubWorkflowSettlement(
@@ -3378,11 +3420,7 @@ export class WorkflowExecutor {
           });
         }
       }
-      if (
-        result.status === PROMPT_TERMINAL_STATUS.CANCELLED ||
-        // Stopped while still loading: the child never started, by request.
-        (result.failedToStart && control.wasStopRequested)
-      ) {
+      if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
         return settleCancelled();
       }
       if (result.status === PROMPT_TERMINAL_STATUS.FAILED) {
@@ -3405,9 +3443,25 @@ export class WorkflowExecutor {
       return settleFailure(
         error instanceof Error ? error.message : String(error)
       );
-    } finally {
-      context.registerActiveTarget?.(target, attemptIndex, null);
     }
+  }
+
+  /**
+   * The child outcome the step settles on, and the one its
+   * `subWorkflowSettled` event records. A child stopped while still loading
+   * never started, by the parent's request: that is a cancellation (D9),
+   * not a start failure.
+   */
+  private asStepOutcome(
+    result: SubWorkflowResult,
+    control: SubWorkflowControlRelay
+  ): SubWorkflowResult {
+    if (!(result.failedToStart && control.wasStopRequested)) return result;
+    return {
+      status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT,
+      ...(result.worktree ? { worktree: result.worktree } : {}),
+    };
   }
 
   /**

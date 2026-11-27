@@ -147,6 +147,11 @@ export interface WorkflowStartupExecutionPort {
   readonly setRunStartView?: (view: RunStartView) => void;
   readonly clearOutputBuffers: () => void;
   readonly prepareExecutionWorktree: (historyFilePath: string) => Promise<void>;
+  /**
+   * The cycle is RUNNING inside its startup guard, the first point at which
+   * a stop or pause acts on it (`SubWorkflowInstance.onDidStartExecutionCycle`).
+   */
+  readonly onExecutionCycleStarted?: () => void;
   readonly createIntegrationForMode: (
     modeOverride?: HarnessId
   ) => HarnessIntegration;
@@ -1072,6 +1077,7 @@ export class WorkflowStartupPipeline {
     if (runtime.startExecution()) {
       await this.port.queue.commitRuntimeTransition();
     }
+    this.port.execution.onExecutionCycleStarted?.();
 
     await this.port.execution.prepareExecutionWorktree(this.historyFilePath);
     if (this.stopRequestedSinceStart()) {

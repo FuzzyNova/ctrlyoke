@@ -19,6 +19,67 @@ import {
 import { manifestPath } from "../../utils/WorkflowPaths";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { Log } from "../../utils/Log";
+import { forwardSubWorkflowControl } from "./SubWorkflowControlRelay";
+
+const LOG_SOURCE = "SubWorkflowLauncher";
+
+/** A control the handle holds until the child's execution cycle starts. */
+const HELD_CONTROLS = { PAUSE: "pause", STOP: "stop" } as const;
+type HeldControl = (typeof HELD_CONTROLS)[keyof typeof HELD_CONTROLS];
+
+/** What ended the launcher's wait on a child's run. */
+const RUN_WAIT_OUTCOMES = {
+  CYCLE_ENDED: "cycleEnded",
+  SETTLED: "settled",
+  DISPOSED: "disposed",
+} as const;
+type RunWaitOutcome =
+  (typeof RUN_WAIT_OUTCOMES)[keyof typeof RUN_WAIT_OUTCOMES];
+
+/**
+ * Observes one child from the moment it is created, so neither a dispose
+ * (host shutdown) nor the start of its first execution cycle can happen
+ * before anyone is listening.
+ */
+class LaunchedChildWatch {
+  readonly disposed: Promise<void>;
+  private started = false;
+  private startListener: (() => void) | undefined;
+  private readonly subscriptions: Array<{ dispose(): void }> = [];
+
+  constructor(instance: SubWorkflowInstance) {
+    let markDisposed!: () => void;
+    this.disposed = new Promise<void>((resolve) => {
+      markDisposed = resolve;
+    });
+    this.subscriptions.push(
+      instance.onDidDispose(() => markDisposed()),
+      instance.onDidStartExecutionCycle(() => {
+        if (this.started) return;
+        this.started = true;
+        const listener = this.startListener;
+        this.startListener = undefined;
+        listener?.();
+      })
+    );
+  }
+
+  /** The child has reached the point where stop and pause act on it. */
+  get hasStarted(): boolean {
+    return this.started;
+  }
+
+  /** Call `listener` once the first execution cycle starts. */
+  onFirstStart(listener: () => void): void {
+    this.startListener = listener;
+  }
+
+  dispose(): void {
+    this.startListener = undefined;
+    for (const subscription of this.subscriptions) subscription.dispose();
+    this.subscriptions.length = 0;
+  }
+}
 
 /** Launches child runs without coupling execution to a particular host. */
 export class SubWorkflowLauncher implements SubWorkflowHost {
@@ -30,7 +91,40 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       ancestorPaths: request.ancestorPaths ?? [],
       delegationChain: request.delegationChain,
     });
-    let parentStopped = false;
+    const watch = new LaunchedChildWatch(instance);
+    let handedOver = false;
+    try {
+      const execution = await this.startChild(instance, request);
+      if (!execution.ok) {
+        return this.createFailedToLoadHandle(instance, execution.message);
+      }
+      handedOver = true;
+      return this.executionHandle(
+        instance,
+        execution.execution,
+        execution.identity,
+        watch
+      );
+    } finally {
+      if (!handedOver) watch.dispose();
+    }
+  }
+
+  /**
+   * Load (or bind) the child and start its execution, returning once its
+   * run identity exists. A load failure is reported, not thrown.
+   */
+  private async startChild(
+    instance: SubWorkflowInstance,
+    request: SubWorkflowLaunchRequest
+  ): Promise<
+    | {
+        ok: true;
+        execution: Promise<void>;
+        identity: { workflowKey: string; runRef: string };
+      }
+    | { ok: false; message: string }
+  > {
     const parentDefinition =
       request.source.kind === SUB_WORKFLOW_SOURCE_KINDS.INLINE
         ? request.source.parentDefinition
@@ -67,20 +161,19 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
         );
         const identity = await this.waitForRunIdentity(instance, execution);
         if (!identity?.workflowKey || !identity.runRef) {
-          return this.createFailedToLoadHandle(
-            instance,
-            "Sub-workflow continuation did not bind to a run identity"
-          );
+          return {
+            ok: false,
+            message: "Sub-workflow continuation did not bind to a run identity",
+          };
         }
-        return this.executionHandle(
-          instance,
+        return {
+          ok: true,
           execution,
-          identity as { workflowKey: string; runRef: string },
-          () => parentStopped,
-          () => {
-            parentStopped = true;
-          }
-        );
+          identity: {
+            workflowKey: identity.workflowKey,
+            runRef: identity.runRef,
+          },
+        };
       }
       if (request.source.kind === SUB_WORKFLOW_SOURCE_KINDS.FILE) {
         loaded = await instance.loadPromptFile(
@@ -107,16 +200,13 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
         loaded = !!instance.promptQueue.getWorkflowFile().steps?.length;
       }
       if (!loaded) {
-        return this.createFailedToLoadHandle(
-          instance,
-          "Failed to load sub-workflow file"
-        );
+        return { ok: false, message: "Failed to load sub-workflow file" };
       }
       if (instance.promptQueue.getWorkflowFile().worktree) {
         await request.parentExecution.prepareWorktreeChild?.();
       }
     } catch (error) {
-      return this.createFailedToLoadHandle(instance, errorMessage(error));
+      return { ok: false, message: errorMessage(error) };
     }
 
     // A real instance promotes its loaded draft when execution starts, so the
@@ -124,32 +214,49 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     const execution = instance.executeLoadedPromptFile();
     const initialState = await this.waitForRunIdentity(instance, execution);
     if (!initialState?.workflowKey || !initialState.runRef) {
-      return this.createFailedToLoadHandle(
-        instance,
-        "Sub-workflow did not create a run identity after starting"
-      );
+      return {
+        ok: false,
+        message: "Sub-workflow did not create a run identity after starting",
+      };
     }
-
-    const workflowKey = initialState.workflowKey;
-    const runRef = initialState.runRef;
-    return this.executionHandle(
-      instance,
+    return {
+      ok: true,
       execution,
-      { workflowKey, runRef },
-      () => parentStopped,
-      () => {
-        parentStopped = true;
-      }
-    );
+      identity: {
+        workflowKey: initialState.workflowKey,
+        runRef: initialState.runRef,
+      },
+    };
   }
 
   private executionHandle(
     instance: SubWorkflowInstance,
     execution: Promise<void>,
     identity: { workflowKey: string; runRef: string },
-    wasStoppedByParent: () => boolean,
-    markParentStopped: () => void
+    watch: LaunchedChildWatch
   ): SubWorkflowHandle {
+    let parentStopped = false;
+    // Once `done` has settled the child is no longer the parent's to control:
+    // the parent's own stop, which follows a CANCELLED step, must not stop a
+    // finished child again (that turns its STOPPED back into CANCELLING).
+    let settled = false;
+    // The handle exists from the child's run identity, but its execution
+    // cycle starts later: a fresh child is still IDLE, a continued one is
+    // still STOPPED or PAUSED while it rewinds and reopens its run. A stop
+    // there takes the detector fallback and a pause is rejected, so the
+    // handle holds either until the cycle starts and then replays it. A
+    // stop supersedes a held pause; a cancelPause drops a held pause.
+    let held: HeldControl | undefined;
+    watch.onFirstStart(() => {
+      const action = held;
+      held = undefined;
+      if (!action) return;
+      // Not inside the child's own startup transition.
+      queueMicrotask(() => {
+        void forwardSubWorkflowControl(instance, action, LOG_SOURCE);
+      });
+    });
+
     let rejectResume: (error: unknown) => void = () => undefined;
     const resumeFailure = new Promise<never>((_, reject) => {
       rejectResume = reject;
@@ -158,51 +265,48 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     const done = this.collectExecution(
       instance,
       execution,
-      wasStoppedByParent,
-      resumeFailure
-    ).catch((error): SubWorkflowResult => ({
-      status: PROMPT_TERMINAL_STATUS.FAILED,
-      failureMessage: errorMessage(error),
-    }));
-    // The run identity exists from promotion, while the child is still IDLE
-    // and would reject a pause. A pause that arrives then is held until the
-    // child starts running.
-    let pauseOnStart = false;
-    const startWatch =
-      instance.promptQueue.getState().status === EXECUTION_STATES.IDLE
-        ? instance.promptQueue.onDidChangeState((state) => {
-            if (state.status === EXECUTION_STATES.IDLE) return;
-            startWatch?.dispose();
-            if (!pauseOnStart) return;
-            pauseOnStart = false;
-            // Not inside the child's own state emission.
-            queueMicrotask(() => {
-              instance.pause().catch((error: unknown) => {
-                Log.warn(
-                  `[SubWorkflowLauncher] Pausing sub-workflow ${identity.workflowKey}/${identity.runRef} failed: ${errorMessage(error)}`
-                );
-              });
-            });
-          })
-        : undefined;
-    void done.finally(() => startWatch?.dispose());
+      () =>
+        parentStopped
+          ? SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
+          : SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
+      resumeFailure,
+      watch.disposed
+    )
+      .catch((error): SubWorkflowResult => ({
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failureMessage: errorMessage(error),
+      }))
+      .then((result): SubWorkflowResult =>
+        // A stop still held when the run settles: the child never started
+        // the cycle the parent stopped, so it ended by that request.
+        held === HELD_CONTROLS.STOP
+          ? {
+              status: PROMPT_TERMINAL_STATUS.CANCELLED,
+              cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT,
+              worktree: this.worktree(instance),
+            }
+          : result
+      )
+      .finally(() => {
+        settled = true;
+        watch.dispose();
+      });
     return {
       workflowKey: identity.workflowKey as SubWorkflowHandle["workflowKey"],
       runRef: identity.runRef as SubWorkflowHandle["runRef"],
       done,
       pause: async () => {
-        if (
-          startWatch &&
-          instance.promptQueue.getState().status === EXECUTION_STATES.IDLE
-        ) {
-          pauseOnStart = true;
+        if (settled) return;
+        if (!watch.hasStarted) {
+          if (held !== HELD_CONTROLS.STOP) held = HELD_CONTROLS.PAUSE;
           return;
         }
         await instance.pause();
       },
       cancelPause: async () => {
-        if (pauseOnStart) {
-          pauseOnStart = false;
+        if (settled) return;
+        if (!watch.hasStarted) {
+          if (held === HELD_CONTROLS.PAUSE) held = undefined;
           return;
         }
         // A child that already reached its step boundary is PAUSED, where
@@ -218,13 +322,18 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
         }
         instance.resume().catch((error: unknown) => {
           Log.warn(
-            `[SubWorkflowLauncher] Resuming sub-workflow ${identity.workflowKey}/${identity.runRef} failed: ${errorMessage(error)}`
+            `[${LOG_SOURCE}] Resuming sub-workflow ${identity.workflowKey}/${identity.runRef} failed: ${errorMessage(error)}`
           );
           rejectResume(error);
         });
       },
       stop: async () => {
-        markParentStopped();
+        if (settled) return;
+        parentStopped = true;
+        if (!watch.hasStarted) {
+          held = HELD_CONTROLS.STOP;
+          return;
+        }
         await instance.stop();
       },
     };
@@ -233,97 +342,123 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
   private async collectExecution(
     instance: SubWorkflowInstance,
     execution: Promise<void>,
-    wasStoppedByParent: () => boolean,
-    resumeFailure: Promise<never>
+    cancelledBy: () => SubWorkflowResult["cancelledBy"],
+    resumeFailure: Promise<never>,
+    disposed: Promise<void>
   ): Promise<SubWorkflowResult> {
-    const cancelledBy = () =>
-      wasStoppedByParent()
-        ? SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
-        : SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD;
+    // Host shutdown is not a child failure: CANCELLED stops the parent
+    // whatever its onFail (D9), and the child run stays continuable (D6).
+    // A child that had already settled keeps its own outcome.
+    const cancelled = (): SubWorkflowResult => ({
+      status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      cancelledBy: cancelledBy(),
+      worktree: this.worktree(instance),
+    });
     try {
-      await execution;
+      const cycleEnded = execution.then(() => RUN_WAIT_OUTCOMES.CYCLE_ENDED);
+      cycleEnded.catch(() => undefined);
+      let outcome: RunWaitOutcome = await Promise.race([
+        cycleEnded,
+        disposed.then(() => RUN_WAIT_OUTCOMES.DISPOSED),
+      ]);
       // A cycle that ends with the run still active paused it at a step
       // boundary, or a resume has already begun the next cycle; either way
       // the run has not settled yet.
-      if (ACTIVE_EXECUTION_STATES.has(instance.promptQueue.getState().status)) {
-        const disposed = await this.waitForSettledRun(instance, resumeFailure);
-        if (disposed) {
-          // Host shutdown, not a failure: CANCELLED stops the parent whatever
-          // its onFail (D9), and the paused child run stays continuable (D6).
-          return {
-            status: PROMPT_TERMINAL_STATUS.CANCELLED,
-            cancelledBy: cancelledBy(),
-            worktree: this.worktree(instance),
-          };
-        }
+      if (
+        outcome === RUN_WAIT_OUTCOMES.CYCLE_ENDED &&
+        ACTIVE_EXECUTION_STATES.has(instance.promptQueue.getState().status)
+      ) {
+        outcome = await this.waitForSettledRun(
+          instance,
+          resumeFailure,
+          disposed
+        );
+      }
+      if (outcome === RUN_WAIT_OUTCOMES.DISPOSED) {
+        return this.settledResult(instance, cancelledBy) ?? cancelled();
       }
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
     }
 
     try {
-      const state = instance.promptQueue.getState();
-      switch (state.status) {
-        case EXECUTION_STATES.COMPLETED:
-          return {
-            status: PROMPT_TERMINAL_STATUS.COMPLETED,
-            worktree: this.worktree(instance),
-          };
-        case EXECUTION_STATES.STOPPED:
-          return {
-            status: PROMPT_TERMINAL_STATUS.CANCELLED,
-            cancelledBy: cancelledBy(),
-            worktree: this.worktree(instance),
-          };
-        case EXECUTION_STATES.ERROR:
-          return this.failedResult(instance, this.failureMessage(instance));
-        default:
-          return this.failedResult(
-            instance,
-            `Sub-workflow settled in unexpected state: ${state.status}`
-          );
-      }
+      return (
+        this.settledResult(instance, cancelledBy) ??
+        this.failedResult(
+          instance,
+          `Sub-workflow settled in unexpected state: ${instance.promptQueue.getState().status}`
+        )
+      );
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
     }
   }
 
+  /** The outcome of a child in a terminal state; undefined otherwise. */
+  private settledResult(
+    instance: SubWorkflowInstance,
+    cancelledBy: () => SubWorkflowResult["cancelledBy"]
+  ): SubWorkflowResult | undefined {
+    const state = instance.promptQueue.getState();
+    switch (state.status) {
+      case EXECUTION_STATES.COMPLETED:
+        return {
+          status: PROMPT_TERMINAL_STATUS.COMPLETED,
+          worktree: this.worktree(instance),
+        };
+      case EXECUTION_STATES.STOPPED:
+        return {
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+          cancelledBy: cancelledBy(),
+          worktree: this.worktree(instance),
+        };
+      case EXECUTION_STATES.ERROR:
+        return this.failedResult(instance, this.failureMessage(instance));
+      default:
+        return undefined;
+    }
+  }
+
   /**
-   * Wait until the child no longer owns an executor and its cycle has ended.
-   * Returns true when the instance was disposed first: a disposed child never
-   * leaves PAUSED, so waiting on its state would never end.
+   * Wait until the child no longer owns an executor and its cycle has ended,
+   * or until it is disposed first: a disposed child never leaves PAUSED, so
+   * waiting on its state would never end.
    */
   private async waitForSettledRun(
     instance: SubWorkflowInstance,
-    resumeFailure: Promise<never>
-  ): Promise<boolean> {
+    resumeFailure: Promise<never>,
+    disposed: Promise<void>
+  ): Promise<RunWaitOutcome> {
     const subscriptions: Array<{ dispose(): void }> = [];
     try {
       const outcome = await Promise.race([
-        new Promise<"settled">((resolve) => {
+        new Promise<RunWaitOutcome>((resolve) => {
           const check = () => {
             if (
               !ACTIVE_EXECUTION_STATES.has(
                 instance.promptQueue.getState().status
               )
             ) {
-              resolve("settled");
+              resolve(RUN_WAIT_OUTCOMES.SETTLED);
             }
           };
           subscriptions.push(instance.promptQueue.onDidChangeState(check));
           check();
         }),
-        new Promise<"disposed">((resolve) => {
-          subscriptions.push(instance.onDidDispose(() => resolve("disposed")));
-        }),
+        disposed.then(() => RUN_WAIT_OUTCOMES.DISPOSED),
         resumeFailure,
       ]);
-      if (outcome === "disposed") return true;
+      if (outcome === RUN_WAIT_OUTCOMES.DISPOSED) return outcome;
     } finally {
       for (const subscription of subscriptions) subscription.dispose();
     }
-    await instance.whenExecutionSettled();
-    return false;
+    const cycleSettled = instance
+      .whenExecutionSettled()
+      .then(() => RUN_WAIT_OUTCOMES.SETTLED);
+    return Promise.race([
+      cycleSettled,
+      disposed.then(() => RUN_WAIT_OUTCOMES.DISPOSED),
+    ]);
   }
 
   private async waitForRunIdentity(

@@ -31,6 +31,8 @@ import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
+import { PromptFileResolver } from "../../core/PromptFileResolver";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 suite("Sub-workflow host end to end", () => {
   function buildInstance(
@@ -104,7 +106,9 @@ suite("Sub-workflow host end to end", () => {
     workspace: string,
     executionIntegration?: MockHarnessIntegration,
     /** Awaited inside `host.launch`, before the child loads its definition. */
-    beforeChildLoad?: () => Promise<void>
+    beforeChildLoad?: () => Promise<void>,
+    /** Called with each child instance the launcher creates. */
+    onChildCreated?: (child: WorkflowInstance) => void
   ) {
     const platform = new MockPlatform(workspace);
     const integrationFactory = new MockIntegrationFactory(
@@ -147,6 +151,7 @@ suite("Sub-workflow host end to end", () => {
             return loadInline(...args);
           };
         }
+        onChildCreated?.(child);
         // ancestorPaths lists the root and every workflow above the child.
         const depth = ancestorPaths.length - 1;
         childrenAtDepth.set(depth, [
@@ -759,6 +764,380 @@ suite("Sub-workflow host end to end", () => {
       );
       assert.strictEqual(await countLines(path.join(workspace, "marker")), 1);
       assert.strictEqual(await countLines(path.join(workspace, "after")), 1);
+    } finally {
+      gate.release();
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  /**
+   * Holds a child continued by D6 inside `executeContinuationAtRun` once its
+   * run identity is bound (so the launcher has returned its handle), before
+   * its execution cycle starts. Pass `install` as `onChildCreated`.
+   */
+  function makeContinuationGate() {
+    const gate = makeLoadGate();
+    const install = (child: WorkflowInstance) => {
+      const continueAtRun = child.executeContinuationAtRun.bind(child);
+      child.executeContinuationAtRun = async (...args) => {
+        const history = child.outputHistoryManager;
+        const commit = history.commitDefinitionRevision.bind(history);
+        history.commitDefinitionRevision = async (...commitArgs) => {
+          history.commitDefinitionRevision = commit;
+          await gate.beforeChildLoad();
+          return commit(...commitArgs);
+        };
+        return continueAtRun(...args);
+      };
+    };
+    return { reached: gate.reached, release: gate.release, install };
+  }
+
+  /** Run `parent` until its one-step child is stopped mid-step by the parent. */
+  async function stopParentMidChild(
+    workspace: string,
+    parent: WorkflowInstance
+  ): Promise<void> {
+    await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+      steps: [{ type: "script", script: startFinishScript("sentinel") }],
+    });
+    const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+    await writeJson(parentPath, {
+      steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+    });
+    assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+    const execution = parent.executeLoadedPromptFile();
+    await waitForFile(path.join(workspace, "marker"));
+    await withoutStopFallback(async () => {
+      await parent.stop();
+      await execution;
+    });
+    assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+  }
+
+  function continueParent(parent: WorkflowInstance): Promise<void> {
+    const state = parent.promptQueue.getState();
+    return parent.executeContinuationAtRun(
+      state.workflowKey!,
+      state.runRef!,
+      state.definitionRevision
+    );
+  }
+
+  test("stopping a parent while its reattached child is still continuing stops the child before it runs", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-continue-stop-");
+    const gate = makeContinuationGate();
+    const { createInstance, instances, childAt } = makeInstanceFactory(
+      workspace,
+      undefined,
+      undefined,
+      gate.install
+    );
+    try {
+      const parent = createInstance();
+      instances.push(parent);
+      await stopParentMidChild(workspace, parent);
+      const marker = path.join(workspace, "marker");
+
+      const parentStops = countStoppedTransitions(parent);
+      const continuation = continueParent(parent);
+      await gate.reached;
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        gate.release();
+        await continuation;
+      });
+
+      const parentState = parent.promptQueue.getState();
+      assert.strictEqual(parentState.status, "stopped");
+      assert.strictEqual(parentStops(), 1, "parent confirmed STOPPED once");
+      assert.strictEqual(parentState.results[0].status, STEP_STATUS.CANCELLED);
+      const continued = childAt(1, 1);
+      assert.strictEqual(continued.promptQueue.getState().status, "stopped");
+      // The stop reached the child before it dispatched, so the step its
+      // first stop interrupted is still rewound for the next continue.
+      assert.strictEqual(
+        continued.promptQueue.getState().results[0].status,
+        STEP_STATUS.PENDING
+      );
+      assert.strictEqual(await fs.readFile(marker, "utf8"), "start\n");
+
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await continueParent(parent);
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.strictEqual(
+        await fs.readFile(marker, "utf8"),
+        "start\nstart\ndone\n"
+      );
+    } finally {
+      gate.release();
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("pausing a parent while its reattached child is still continuing pauses the child before it runs", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-continue-pause-");
+    const gate = makeContinuationGate();
+    const { createInstance, instances, childAt } = makeInstanceFactory(
+      workspace,
+      undefined,
+      undefined,
+      gate.install
+    );
+    try {
+      const parent = createInstance();
+      instances.push(parent);
+      await stopParentMidChild(workspace, parent);
+      const marker = path.join(workspace, "marker");
+
+      const continuation = continueParent(parent);
+      await gate.reached;
+      await parent.pause();
+      gate.release();
+
+      const continued = childAt(1, 1);
+      await waitForChildPausedCycle(continued);
+      // D3: the parent waits on its paused child, so it stays PAUSING.
+      assert.strictEqual(parent.promptQueue.getState().status, "pausing");
+      assertStepUnsettled(parent);
+      assert.strictEqual(await fs.readFile(marker, "utf8"), "start\n");
+
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await withoutStopFallback(async () => {
+        await parent.resume();
+        await continuation;
+      });
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.strictEqual(continued.promptQueue.getState().status, "completed");
+      assert.strictEqual(
+        await fs.readFile(marker, "utf8"),
+        "start\nstart\ndone\n"
+      );
+    } finally {
+      gate.release();
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a paused child disposed by a host shutdown stops its parent and continues once when reattached", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-dispose-paused-");
+    const gate = makeContinuationGate();
+    const { createInstance, instances, childAt } = makeInstanceFactory(
+      workspace,
+      undefined,
+      undefined,
+      gate.install
+    );
+    try {
+      await writePausableChild(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      const child = childAt(1);
+      await parent.pause();
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await waitForChildPausedCycle(child);
+
+      // The real dispose(): the step settles CANCELLED (never FAILED), the
+      // parent stops, and the paused child run stays continuable.
+      child.dispose();
+      await withoutStopFallback(async () => {
+        await execution;
+      });
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      assert.strictEqual(
+        parent.promptQueue.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
+      assert.strictEqual(await readExecutionState(child), "paused");
+
+      // A restarted host reclaims the shut-down process's runner lock. This
+      // process is still alive, so remove it the way that reclaim would.
+      const childKey = child.promptQueue.getState().workflowKey!;
+      await fs.rm(WorkflowPaths.runnerLockPath(workspace, childKey), {
+        force: true,
+      });
+
+      const continuation = continueParent(parent);
+      await gate.reached;
+      const continued = childAt(1, 1);
+      assert.strictEqual(continued.promptQueue.getState().status, "paused");
+      await parent.pause();
+      await parent.resume();
+      // Neither the held pause nor its cancellation resumed the child: the
+      // continuation's own resume is the only one.
+      assert.strictEqual(continued.promptQueue.getState().status, "paused");
+      gate.release();
+      await withoutStopFallback(async () => {
+        await continuation;
+      });
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.strictEqual(continued.promptQueue.getState().status, "completed");
+      assert.strictEqual(await countLines(path.join(workspace, "marker")), 1);
+      assert.strictEqual(await countLines(path.join(workspace, "after")), 1);
+    } finally {
+      gate.release();
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a running child disposed by a host shutdown settles its parent step CANCELLED", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-dispose-running-");
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
+    let child: WorkflowInstance | undefined;
+    try {
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        steps: [{ type: "script", script: startFinishScript("sentinel") }],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          {
+            type: "workflow",
+            workflow: "child.ctrlyoke.json",
+            onFail: "continue",
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      child = childAt(1);
+
+      child.dispose();
+      await withoutStopFallback(async () => {
+        await execution;
+      });
+      // CANCELLED stops the parent even under onFail: continue (D9).
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      assert.strictEqual(parentStops(), 1);
+      assert.strictEqual(
+        parent.promptQueue.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
+    } finally {
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await child?.whenExecutionSettled();
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("stopping a parent while its workflow step resolves the child skips the launch", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-resolve-stop-");
+    const gate = makeLoadGate();
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    const resolver = PromptFileResolver.prototype;
+    const resolvePath = resolver.resolvePath;
+    resolver.resolvePath = async function (
+      this: PromptFileResolver,
+      ...args: Parameters<PromptFileResolver["resolvePath"]>
+    ) {
+      // Only the workflow step's own resolution, not the parent's load-time
+      // reference checks of the same path.
+      if (new Error().stack?.includes("prepareSubWorkflowLaunch")) {
+        await gate.beforeChildLoad();
+      }
+      return resolvePath.apply(this, args);
+    };
+    try {
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        steps: [{ type: "script", script: sentinelScript("marker", "never") }],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await gate.reached;
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        gate.release();
+        await execution;
+      });
+
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      assert.strictEqual(parentStops(), 1);
+      assert.strictEqual(
+        parent.promptQueue.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
+      assert.strictEqual(instances.length, 1, "no child was launched");
+    } finally {
+      resolver.resolvePath = resolvePath;
+      gate.release();
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("stopping a parent while its child's launch fails settles the step CANCELLED", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-launch-throw-stop-");
+    const gate = makeLoadGate();
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      undefined,
+      gate.beforeChildLoad
+    );
+    try {
+      // Not a workflow: the child fails to load once the gate opens.
+      await fs.writeFile(
+        path.join(workspace, "child.ctrlyoke.json"),
+        "{ not json"
+      );
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          {
+            type: "workflow",
+            workflow: "child.ctrlyoke.json",
+            onFail: "continue",
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await gate.reached;
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        gate.release();
+        await execution;
+      });
+
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      assert.strictEqual(parentStops(), 1);
+      assert.strictEqual(
+        parent.promptQueue.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
     } finally {
       gate.release();
       await disposeAll(instances, workspace);

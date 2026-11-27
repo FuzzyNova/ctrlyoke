@@ -1,6 +1,30 @@
 import type { SubWorkflowControl } from "../../types/SubWorkflowTypes";
 import { Log } from "../../utils/Log";
 
+export type SubWorkflowControlAction = keyof SubWorkflowControl;
+
+const RELAY_LOG_SOURCE = "SubWorkflowControlRelay";
+
+/**
+ * Forward one control to a child. A failure is logged, never thrown: a
+ * parent's own stop or pause must not fail because its child's did.
+ */
+export async function forwardSubWorkflowControl(
+  control: SubWorkflowControl | undefined,
+  action: SubWorkflowControlAction,
+  logSource: string
+): Promise<void> {
+  if (!control) return;
+  try {
+    await control[action]();
+  } catch (error) {
+    Log.warn(
+      `[${logSource}] Failed to forward ${action} to sub-workflow:`,
+      error
+    );
+  }
+}
+
 /**
  * The control a sub-workflow step registers before its child exists.
  *
@@ -24,14 +48,18 @@ export class SubWorkflowControlRelay implements SubWorkflowControl {
   /** Bind the launched child and replay any stop or pause it missed. */
   async attach(handle: SubWorkflowControl): Promise<void> {
     this.handle = handle;
-    if (this.stopRequested) {
-      await this.forward(handle, "stop");
-    } else if (this.pauseRequested) {
-      await this.forward(handle, "pause");
+    const missed = this.stopRequested
+      ? "stop"
+      : this.pauseRequested
+        ? "pause"
+        : undefined;
+    if (missed) {
+      await forwardSubWorkflowControl(handle, missed, RELAY_LOG_SOURCE);
     }
   }
 
   async pause(): Promise<void> {
+    if (this.stopRequested) return;
     this.pauseRequested = true;
     if (this.handle) await this.handle.pause();
   }
@@ -43,20 +71,8 @@ export class SubWorkflowControlRelay implements SubWorkflowControl {
 
   async stop(): Promise<void> {
     this.stopRequested = true;
+    // A stop supersedes a held pause; only the stop is replayed.
+    this.pauseRequested = false;
     if (this.handle) await this.handle.stop();
-  }
-
-  private async forward(
-    handle: SubWorkflowControl,
-    action: "pause" | "stop"
-  ): Promise<void> {
-    try {
-      await handle[action]();
-    } catch (error) {
-      Log.warn(
-        `[SubWorkflowControlRelay] Failed to replay ${action} on the launched sub-workflow:`,
-        error
-      );
-    }
   }
 }

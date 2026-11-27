@@ -159,6 +159,7 @@ import {
   type McpToolSkillRunContext,
 } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
+import { forwardSubWorkflowControl } from "./orchestration/SubWorkflowControlRelay";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import {
   ExecutionRootLeaseManager,
@@ -540,6 +541,10 @@ export class WorkflowInstance
   private readonly disposeEmitter = new TypedEmitter<void>();
   /** Fires once from `dispose()` (`SubWorkflowInstance`). */
   public readonly onDidDispose = this.disposeEmitter.event;
+  private readonly executionCycleStartedEmitter = new TypedEmitter<void>();
+  /** See `SubWorkflowInstance.onDidStartExecutionCycle`. */
+  public readonly onDidStartExecutionCycle =
+    this.executionCycleStartedEmitter.event;
 
   private readonly _streamingEventsEmitter = new TypedEmitter<CliEvent[]>();
   /** Fires structured CLI events (Claude/Codex) from the active execution integration. */
@@ -1031,7 +1036,11 @@ export class WorkflowInstance
     const processRunner =
       resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
     processRunner?.dispose();
-    await this.forwardSubWorkflowControl(resource?.subWorkflow, "stop");
+    await forwardSubWorkflowControl(
+      resource?.subWorkflow,
+      "stop",
+      "WorkflowInstance"
+    );
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -1115,7 +1124,11 @@ export class WorkflowInstance
     const processRunner =
       resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
     await processRunner?.cancel();
-    await this.forwardSubWorkflowControl(resource?.subWorkflow, "stop");
+    await forwardSubWorkflowControl(
+      resource?.subWorkflow,
+      "stop",
+      "WorkflowInstance"
+    );
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -1333,7 +1346,8 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
       this.activeWorktree = undefined;
     }
-    // Last: a launcher waiting on this paused child settles its parent step.
+    this.executionCycleStartedEmitter.dispose();
+    // Last: a launcher waiting on this child settles its parent step.
     this.disposeEmitter.fire();
     this.disposeEmitter.dispose();
   }
@@ -2045,6 +2059,7 @@ export class WorkflowInstance
         clearOutputBuffers: () => this.clearOutputBuffers(),
         prepareExecutionWorktree: (historyFilePath) =>
           this.prepareExecutionWorktree(historyFilePath),
+        onExecutionCycleStarted: () => this.executionCycleStartedEmitter.fire(),
         createIntegrationForMode: (modeOverride) =>
           this.createIntegrationForMode(modeOverride),
         startWorkflowExecution: (
@@ -2866,6 +2881,8 @@ export class WorkflowInstance
       historyFilePath ?? this.resolveHistoryFilePath();
     const workingFilePath = this.promptQueue.getState().workingFilePath;
     const startup = await this.beginPreDispatchStartup(stopRequestBaseline);
+    // RUNNING inside the startup guard: a stop or pause now acts on this cycle.
+    this.executionCycleStartedEmitter.fire();
     try {
       await this.resumeAfterSetup(
         stopRequestBaseline,
@@ -3069,7 +3086,11 @@ export class WorkflowInstance
       if (resource.processRunner) processRunners.add(resource.processRunner);
       if (resource.subWorkflow) {
         hasSubWorkflow = true;
-        await this.forwardSubWorkflowControl(resource.subWorkflow, "stop");
+        await forwardSubWorkflowControl(
+          resource.subWorkflow,
+          "stop",
+          "WorkflowInstance"
+        );
       }
       if (resource.ptySessionId) {
         getPtyProcessManager()?.killSession(
@@ -4510,27 +4531,16 @@ export class WorkflowInstance
     this.activeTargetResources.set(targetKey, resource);
   }
 
-  private async forwardSubWorkflowControl(
-    handle: SubWorkflowControl | undefined,
-    action: "pause" | "cancelPause" | "stop"
-  ): Promise<void> {
-    if (!handle) return;
-    try {
-      await handle[action]();
-    } catch (error) {
-      Log.warn(
-        `[WorkflowInstance] Failed to forward ${action} to sub-workflow:`,
-        error
-      );
-    }
-  }
-
   private async forwardSubWorkflowControlToActiveTargets(
     action: "pause" | "cancelPause"
   ): Promise<void> {
     await Promise.all(
       [...this.activeTargetResources.values()].map((resource) =>
-        this.forwardSubWorkflowControl(resource.subWorkflow, action)
+        forwardSubWorkflowControl(
+          resource.subWorkflow,
+          action,
+          "WorkflowInstance"
+        )
       )
     );
   }

@@ -215,6 +215,14 @@ export interface SubWorkflowInstance {
   whenExecutionSettled(): Promise<void>;
   /** Fires once when the instance is disposed (host shutdown). */
   onDidDispose(listener: () => void): { dispose(): void };
+  /**
+   * Fires when an execution cycle (a start, a continuation or a resume) is
+   * RUNNING inside its startup guard: the first point at which `stop()` and
+   * `pause()` act on that cycle. Before it, a child being loaded, rewound or
+   * reopened is IDLE, STOPPED or PAUSED, where a stop falls back to the
+   * detector and a pause is rejected.
+   */
+  onDidStartExecutionCycle(listener: () => void): { dispose(): void };
 }
 
 export interface SubWorkflowInstanceOptions {

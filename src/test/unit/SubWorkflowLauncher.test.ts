@@ -77,9 +77,24 @@ class FakeChild implements SubWorkflowInstance {
 
   private readonly stateEmitter = new TypedEmitter<QueueState>();
   private readonly disposeEmitter = new TypedEmitter<void>();
+  private readonly cycleStartEmitter = new TypedEmitter<void>();
   /** Live `onDidChangeState`/`onDidDispose` subscriptions. */
   stateListeners = 0;
   disposeListeners = 0;
+  /** Awaited before an execution cycle reports that it started. */
+  cycleStartGate?: Promise<void>;
+  /** The execution never reaches the point where its cycle starts. */
+  skipCycleStart = false;
+
+  private async startCycle(): Promise<void> {
+    if (this.skipCycleStart) return;
+    if (this.cycleStartGate) await this.cycleStartGate;
+    this.cycleStartEmitter.fire();
+  }
+
+  onDidStartExecutionCycle(listener: () => void): { dispose(): void } {
+    return this.cycleStartEmitter.event(listener);
+  }
 
   setStatus(status: QueueState["status"]): void {
     this.status = status;
@@ -137,6 +152,7 @@ class FakeChild implements SubWorkflowInstance {
 
   async executeLoadedPromptFile(): Promise<void> {
     this.executeCalls += 1;
+    await this.startCycle();
     if (this.executionGate) await this.executionGate;
     await Promise.resolve();
     if (this.status === EXECUTION_STATES.STOPPED) return;
@@ -168,6 +184,7 @@ class FakeChild implements SubWorkflowInstance {
     this.continuationOptions = args[4];
     this.executeCalls += 1;
     this.status = EXECUTION_STATES.RUNNING;
+    await this.startCycle();
     await Promise.resolve();
     if (this.continuationError) throw this.continuationError;
   }
@@ -175,8 +192,14 @@ class FakeChild implements SubWorkflowInstance {
   nextScenario: Scenario = "completed";
   executionGate?: Promise<void>;
   releaseExecution?: () => void;
-  async pause(): Promise<void> {}
-  async cancelPause(): Promise<void> {}
+  pauseCalls = 0;
+  cancelPauseCalls = 0;
+  async pause(): Promise<void> {
+    this.pauseCalls += 1;
+  }
+  async cancelPause(): Promise<void> {
+    this.cancelPauseCalls += 1;
+  }
   resumeCalls = 0;
   /** Holds a resumed run open, as a real resume awaits the remaining run. */
   resumeGate?: Promise<void>;
@@ -647,6 +670,146 @@ suite("SubWorkflowLauncher", () => {
       PROMPT_TERMINAL_STATUS.COMPLETED,
       JSON.stringify(result)
     );
+  });
+
+  test("a child disposed before its paused cycle is collected settles done CANCELLED", async () => {
+    const factory = new FakeFactory();
+    // The dispose lands before the launcher sees the cycle end paused, so a
+    // listener subscribed only for the settle wait would never hear it.
+    factory.child.executeLoadedPromptFile = async () => {
+      factory.child.executeCalls += 1;
+      factory.child.steps[0]._runtime = { startedAt: 1 };
+      factory.child.status = EXECUTION_STATES.PAUSED;
+      factory.child.dispose();
+    };
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    assert.strictEqual(await settlesPromptly(handle.done), true);
+    const result = await handle.done;
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.CANCELLED);
+    assert.strictEqual(factory.child.stateListeners, 0);
+    assert.strictEqual(factory.child.disposeListeners, 0);
+  });
+
+  test("a running child that is disposed settles done CANCELLED without waiting for its run", async () => {
+    const factory = new FakeFactory();
+    factory.child.executionGate = new Promise<void>((resolve) => {
+      factory.child.releaseExecution = resolve;
+    });
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    factory.child.setStatus(EXECUTION_STATES.RUNNING);
+    factory.child.dispose();
+    assert.strictEqual(await settlesPromptly(handle.done), true);
+    assert.deepStrictEqual(await handle.done, {
+      status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
+      worktree: undefined,
+    });
+    assert.strictEqual(factory.child.disposeListeners, 0);
+    factory.child.releaseExecution?.();
+  });
+
+  test("a child that completes and is then disposed still settles COMPLETED", async () => {
+    const factory = new FakeFactory();
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    const result = await handle.done;
+    factory.child.dispose();
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.COMPLETED);
+  });
+
+  test("holds stop, pause and cancelPause until the child's execution cycle starts", async () => {
+    const factory = new FakeFactory();
+    let startCycle!: () => void;
+    factory.child.cycleStartGate = new Promise<void>((resolve) => {
+      startCycle = resolve;
+    });
+    factory.child.status = EXECUTION_STATES.STOPPED;
+    factory.child.nextScenario = "paused";
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+
+    await handle.pause();
+    await handle.cancelPause();
+    await handle.pause();
+    assert.strictEqual(factory.child.pauseCalls, 0);
+    assert.strictEqual(factory.child.cancelPauseCalls, 0);
+    assert.strictEqual(factory.child.resumeCalls, 0);
+
+    factory.child.status = EXECUTION_STATES.RUNNING;
+    startCycle();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(factory.child.pauseCalls, 1, "held pause forwarded");
+    assert.strictEqual(factory.child.cancelPauseCalls, 0);
+    assert.strictEqual(factory.child.resumeCalls, 0);
+    factory.child.dispose();
+    await handle.done;
+  });
+
+  test("a stop held before the cycle starts is the only control replayed", async () => {
+    const factory = new FakeFactory();
+    let startCycle!: () => void;
+    factory.child.cycleStartGate = new Promise<void>((resolve) => {
+      startCycle = resolve;
+    });
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    await handle.pause();
+    await handle.stop();
+    assert.strictEqual(factory.child.stopCalls, 0);
+    startCycle();
+    const result = await handle.done;
+    assert.strictEqual(factory.child.stopCalls, 1);
+    assert.strictEqual(factory.child.pauseCalls, 0);
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.CANCELLED);
+    assert.strictEqual(
+      result.cancelledBy,
+      SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
+    );
+  });
+
+  test("a stop held for a cycle that never starts settles done CANCELLED by the parent", async () => {
+    const factory = new FakeFactory();
+    factory.child.skipCycleStart = true;
+    factory.child.nextScenario = "startup-error";
+    factory.child.executionGate = new Promise<void>((resolve) => {
+      factory.child.releaseExecution = resolve;
+    });
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    await handle.stop();
+    factory.child.releaseExecution?.();
+    const result = await handle.done;
+    assert.strictEqual(factory.child.stopCalls, 0);
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.CANCELLED);
+    assert.strictEqual(
+      result.cancelledBy,
+      SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
+    );
+  });
+
+  test("ignores controls once the child has settled", async () => {
+    const factory = new FakeFactory();
+    factory.child.nextScenario = "stopped";
+    factory.child.status = EXECUTION_STATES.STOPPED;
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    await handle.done;
+    // The parent's own stop, which follows the CANCELLED step it settles.
+    await handle.stop();
+    await handle.pause();
+    await handle.cancelPause();
+    assert.strictEqual(factory.child.stopCalls, 0);
+    assert.strictEqual(factory.child.pauseCalls, 0);
+    assert.strictEqual(factory.child.cancelPauseCalls, 0);
   });
 
   test("never rejects done when execution unexpectedly throws", async () => {

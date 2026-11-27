@@ -43,6 +43,7 @@ import {
   isContextResolutionDiagnostic,
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
+  SUB_WORKFLOW_CANCELLATION_SOURCES,
   CTRLYOKE_ENV_VARS,
   CONDITION_ACTIONS,
   ERROR_BEHAVIOR_ACTIONS,
@@ -89,6 +90,7 @@ import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { RunStartView } from "../../utils/RunStartView";
 import type {
+  SubWorkflowControl,
   SubWorkflowHandle,
   SubWorkflowHost,
   SubWorkflowLaunchRequest,
@@ -6401,6 +6403,54 @@ suite("WorkflowExecutor sub-workflow steps", () => {
       assert.deepStrictEqual(payload.outcome, expectedOutcome);
       assert.deepStrictEqual(payload.worktree, result.worktree);
     }
+  });
+
+  test("records a child stopped while loading as CANCELLED by the parent, as its step settles", async () => {
+    const run = await setupRun();
+    const recorded: unknown[] = [];
+    run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    run.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) => {
+          recorded.push(args);
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    let control: SubWorkflowControl | undefined;
+    run.context.registerActiveTarget = (_target, _attempt, subWorkflow) => {
+      if (subWorkflow) control = subWorkflow;
+    };
+    run.context.subWorkflowHost = {
+      launch: async () => {
+        // The parent's stop arrives while the child loads, and the load then
+        // fails after the child allocated its run identity.
+        await control?.stop();
+        return fakeHandle(
+          Promise.resolve({
+            status: PROMPT_TERMINAL_STATUS.FAILED,
+            failedToStart: true,
+            failureMessage: "load interrupted",
+          })
+        );
+      },
+    };
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(
+      run.queue.getState().results[0]?.status,
+      STEP_STATUS.CANCELLED
+    );
+    assert.strictEqual(recorded.length, 1);
+    const payload = (recorded[0] as unknown[])[4] as {
+      outcome: SubWorkflowResult;
+    };
+    assert.deepStrictEqual(payload.outcome, {
+      status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT,
+    });
   });
 
   test("does not record a settlement when failure happens before child launch", async () => {
