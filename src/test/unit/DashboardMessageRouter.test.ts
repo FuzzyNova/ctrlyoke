@@ -307,6 +307,67 @@ suite("DashboardMessageRouter — run bundle import", () => {
   });
 });
 
+suite("DashboardMessageRouter — sub-workflow step file picker", () => {
+  test("replies with the picked file as a workspace-relative workflow reference", async () => {
+    const root = path.join(os.tmpdir(), "sub-workflow-picker-root");
+    const requests: Array<{ kind: string; title?: string }> = [];
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      {},
+      () => undefined,
+      undefined,
+      {
+        openWorkspaceTarget: async () => ({ status: "unsupported" }),
+        selectWorkspacePath: async (request: {
+          kind: string;
+          title?: string;
+        }) => {
+          requests.push(request);
+          return path.join(root, "workflows", "verify.ctrlyoke.yaml");
+        },
+      },
+      () => [{ name: "workspace", fsPath: root }]
+    );
+
+    await router.route(
+      { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
+      { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+    );
+
+    assert.deepStrictEqual(requests, [
+      {
+        kind: PATH_SELECTION_KINDS.FILE,
+        title: PATH_SELECTION_TITLES.SUB_WORKFLOW_STEP_FILE,
+      },
+    ]);
+    assert.deepStrictEqual(emitted, [
+      {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: "workflows/verify.ctrlyoke.yaml",
+      },
+    ]);
+  });
+
+  test("replies nothing when the picker is cancelled", async () => {
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      {},
+      () => undefined,
+      undefined,
+      {
+        openWorkspaceTarget: async () => ({ status: "unsupported" }),
+        selectWorkspacePath: async () => undefined,
+      },
+      () => [{ name: "workspace", fsPath: os.tmpdir() }]
+    );
+    await router.route(
+      { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
+      { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+    );
+    assert.deepStrictEqual(emitted, []);
+  });
+});
+
 suite("DashboardMessageRouter — run export", () => {
   test("answers a run export preflight on the requesting hosted client", async () => {
     const workspaceRoot = await fs.mkdtemp(

@@ -5,6 +5,8 @@ import {
   getStepType,
   type EndCondition,
   type ErrorBehavior,
+  type InlineSubWorkflowDefinition,
+  type SubWorkflowStep,
   type UserHookConfig,
   type WorkflowStepType,
 } from "@root/types/CtrlYokeTypes";
@@ -25,6 +27,7 @@ import {
   DEFAULT_COMPARE_SOURCE,
   DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
+  SUB_WORKFLOW_EDITOR_LABELS,
   type ExecutionMode,
   type HarnessId,
   type PriorContextDetail,
@@ -36,6 +39,7 @@ import { useUiStore } from "./uiStore";
 import { usePromptHistoryStore } from "./promptHistoryStore";
 import {
   getStepDraftContent,
+  isPromptEditorStepType,
   isScriptEditorStepType,
 } from "@utils/stepDraftContent";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
@@ -291,6 +295,16 @@ interface EditorState {
   scriptExecutionMode: ExecutionMode | undefined;
   scriptShell: string | undefined;
 
+  // Sub-workflow (Workflow mode) step content
+  /** The file-form `workflow` reference; "" for a new or inline step. */
+  subWorkflowPath: string;
+  subWorkflowOnFail: string;
+  /**
+   * The loaded step's inline definition (D13), shown read-only: the editor
+   * has no inline form yet, so a step holding one cannot be saved from here.
+   */
+  subWorkflowInline: InlineSubWorkflowDefinition | null;
+
   // Property values
   properties: PropertyValues;
 
@@ -327,6 +341,9 @@ const NEW_STEP_DRAFT_FIELDS = [
   "scriptEnv",
   "scriptExecutionMode",
   "scriptShell",
+  "subWorkflowPath",
+  "subWorkflowOnFail",
+  "subWorkflowInline",
 ] as const satisfies readonly (keyof EditorState)[];
 
 type NewStepDraftField = (typeof NEW_STEP_DRAFT_FIELDS)[number];
@@ -363,6 +380,7 @@ function isNewStepDraftDirty(draft: SavedNewStepState): boolean {
   return (
     draft.promptText.length > 0 ||
     draft.scriptCommand.length > 0 ||
+    draft.subWorkflowPath.length > 0 ||
     draft.replyContext !== null
   );
 }
@@ -496,6 +514,8 @@ interface EditorActions {
   setScriptEnv: (value: Record<string, string> | undefined) => void;
   setScriptExecutionMode: (value: ExecutionMode | undefined) => void;
   setScriptShell: (value: string | undefined) => void;
+  setSubWorkflowPath: (value: string) => void;
+  setSubWorkflowOnFail: (value: string) => void;
 
   // Content updates
   setPromptText: (text: string) => void;
@@ -575,6 +595,150 @@ interface EditorSelectors {
   hasEndCondition: () => boolean;
 }
 
+/** Fields owned by one step kind; every other kind leaves them at rest. */
+type StepKindField =
+  | "scriptCommand"
+  | "scriptTimeoutSec"
+  | "scriptOnPass"
+  | "scriptOnFail"
+  | "scriptCompareSource"
+  | "scriptOperator"
+  | "scriptExpected"
+  | "scriptIgnoreCase"
+  | "scriptEnv"
+  | "scriptExecutionMode"
+  | "scriptShell"
+  | "subWorkflowPath"
+  | "subWorkflowOnFail"
+  | "subWorkflowInline";
+
+/**
+ * Put the editor in `kind` mode with every kind-specific field at its
+ * default. The single source for those defaults: a load overlays the step's
+ * own values on it, and every reset spreads it.
+ */
+function resetStepKindFields(
+  kind: WorkflowStepType
+): Pick<EditorState, "stepType" | StepKindField> {
+  return {
+    stepType: kind,
+    scriptCommand: "",
+    scriptTimeoutSec: undefined,
+    scriptOnPass: CONDITION_ACTIONS.CONTINUE,
+    scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+    scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+    scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+    scriptExpected: "",
+    scriptIgnoreCase: false,
+    scriptEnv: undefined,
+    scriptExecutionMode: undefined,
+    scriptShell: undefined,
+    subWorkflowPath: "",
+    subWorkflowOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+    subWorkflowInline: null,
+  };
+}
+
+/** The editor fields a saved step loads into (no pending edit involved). */
+type LoadedStepFields = Pick<
+  EditorState,
+  | "stepType"
+  | StepKindField
+  | "stepEnabled"
+  | "promptText"
+  | "promptName"
+  | "properties"
+>;
+
+function loadStepFields(step: WorkflowStep): LoadedStepFields {
+  const shared = {
+    stepEnabled: readStepEnabled(step.enabled),
+    promptName: step.name ?? "",
+  };
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT: {
+      const script = step as Extract<
+        WorkflowStep,
+        { type: typeof STEP_TYPES.SCRIPT }
+      >;
+      return {
+        ...resetStepKindFields(STEP_TYPES.SCRIPT),
+        ...shared,
+        promptText: "",
+        scriptCommand: script.script,
+        scriptTimeoutSec: script.timeoutSec,
+        scriptOnPass: script.onPass ?? CONDITION_ACTIONS.CONTINUE,
+        scriptOnFail: script.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        scriptCompareSource: script.compareSource ?? DEFAULT_COMPARE_SOURCE,
+        scriptOperator: script.operator ?? DEFAULT_SCRIPT_OPERATOR,
+        scriptExpected: String(script.expected ?? ""),
+        scriptIgnoreCase: script.ignoreCase ?? false,
+        scriptEnv: script.env,
+        scriptExecutionMode: script.executionMode,
+        scriptShell: script.shell,
+        properties: {
+          ...PROPERTY_DEFAULTS,
+          color: script.color,
+          secrets: script.secrets,
+          errorBehavior: normalizePromptErrorBehavior(script.errorBehavior),
+        },
+      };
+    }
+    case STEP_TYPES.PROMPT: {
+      const prompt = step as PromptStep;
+      return {
+        ...resetStepKindFields(STEP_TYPES.PROMPT),
+        ...shared,
+        promptText: prompt.prompt,
+        properties: {
+          harness: prompt.harness,
+          model: prompt.model,
+          executionMode: prompt.executionMode,
+          color: prompt.color,
+          agent: prompt.agent,
+          skills: prompt.skills,
+          secrets: prompt.secrets,
+          resumeSession: prompt.resumeSession,
+          sessionId:
+            prompt.sessionId !== undefined ? String(prompt.sessionId) : "",
+          mcpServers: prompt.mcpServers,
+          hooks: prompt.hooks,
+          errorBehavior: normalizePromptErrorBehavior(prompt.errorBehavior),
+          endCondition: prompt.endCondition,
+          preCondition: prompt.preCondition,
+          priorContext: prompt.priorContext,
+          priorContextDetail: prompt.priorContextDetail,
+          additionalArgs: prompt.additionalArgs,
+          toolPermissions: prompt.toolPermissions,
+          sandbox: prompt.sandbox,
+          sandboxMode: prompt.sandboxMode,
+        },
+      };
+    }
+    case STEP_TYPES.WORKFLOW: {
+      const subWorkflow = step as SubWorkflowStep;
+      const isFileReference = typeof subWorkflow.workflow === "string";
+      return {
+        ...resetStepKindFields(STEP_TYPES.WORKFLOW),
+        ...shared,
+        promptText: "",
+        subWorkflowPath: isFileReference
+          ? (subWorkflow.workflow as string)
+          : "",
+        subWorkflowInline: isFileReference
+          ? null
+          : (subWorkflow.workflow as InlineSubWorkflowDefinition),
+        subWorkflowOnFail:
+          subWorkflow.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        properties: { ...PROPERTY_DEFAULTS, color: subWorkflow.color },
+      };
+    }
+    default:
+      return assertNever(stepType);
+  }
+}
+
 const initialState: EditorState = {
   selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
   multiSelection: null,
@@ -586,21 +750,10 @@ const initialState: EditorState = {
   pendingEdits: {},
   replyContext: null,
   hasActiveQueue: false,
-  stepType: STEP_TYPES.PROMPT,
+  ...resetStepKindFields(STEP_TYPES.PROMPT),
   stepEnabled: true,
   promptText: "",
   promptName: "",
-  scriptCommand: "",
-  scriptTimeoutSec: undefined,
-  scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-  scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-  scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-  scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-  scriptExpected: "",
-  scriptIgnoreCase: false,
-  scriptEnv: undefined,
-  scriptExecutionMode: undefined,
-  scriptShell: undefined,
   properties: { ...PROPERTY_DEFAULTS },
   isDirty: false,
   validationErrors: {},
@@ -694,21 +847,10 @@ export const useEditorStore = create<
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
-          stepType: STEP_TYPES.PROMPT,
+          ...resetStepKindFields(STEP_TYPES.PROMPT),
           stepEnabled: true,
           promptText: "",
           promptName: "",
-          scriptCommand: "",
-          scriptTimeoutSec: undefined,
-          scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-          scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-          scriptExpected: "",
-          scriptIgnoreCase: false,
-          scriptEnv: undefined,
-          scriptExecutionMode: undefined,
-          scriptShell: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -723,18 +865,7 @@ export const useEditorStore = create<
           selectedPromptIndex: null,
           originalPromptData: null,
           stepEnabled: true,
-          stepType: STEP_TYPES.PROMPT,
-          scriptCommand: "",
-          scriptTimeoutSec: undefined,
-          scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-          scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-          scriptExpected: "",
-          scriptIgnoreCase: false,
-          scriptEnv: undefined,
-          scriptExecutionMode: undefined,
-          scriptShell: undefined,
+          ...resetStepKindFields(STEP_TYPES.PROMPT),
           savedNewPromptState: null,
         });
       }
@@ -809,151 +940,27 @@ export const useEditorStore = create<
       ? newPendingEdits[selectionTargetKey(newTarget)]
       : undefined;
 
-    const stepType = getStepType(stepData);
-    switch (stepType) {
-      case STEP_TYPES.SCRIPT: {
-        const promptData = stepData as Extract<
-          WorkflowStep,
-          { type: typeof STEP_TYPES.SCRIPT }
-        >;
-        // Script step: populate scriptCommand, set stepType to script (unless pending edit overrides)
-        const propertiesFromScriptData: PropertyValues = {
-          ...PROPERTY_DEFAULTS,
-          color: promptData.color,
-          secrets: promptData.secrets,
-          errorBehavior: normalizePromptErrorBehavior(promptData.errorBehavior),
-        };
-
-        set({
-          multiSelection: null,
-          bulkPatch: {},
-          bulkCascadeCompanions: [],
-          selectionTarget: newTarget,
-          selectedPromptIndex: isFinalStepTarget ? null : index,
-          originalPromptData: promptData,
-          savedNewPromptState,
-          replyContext: null,
-          stepType: pendingEdit?.stepType ?? STEP_TYPES.SCRIPT,
-          stepEnabled:
-            pendingEdit?.stepEnabled ?? readStepEnabled(promptData.enabled),
-          promptText: pendingEdit?.promptText ?? "",
-          promptName: pendingEdit
-            ? pendingEdit.promptName
-            : (promptData.name ?? ""),
-          scriptCommand: pendingEdit
-            ? (pendingEdit.scriptCommand ?? "")
-            : promptData.script,
-          scriptTimeoutSec: pendingEdit
-            ? pendingEdit.scriptTimeoutSec
-            : promptData.timeoutSec,
-          scriptOnPass: pendingEdit
-            ? (pendingEdit.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE)
-            : (promptData.onPass ?? CONDITION_ACTIONS.CONTINUE),
-          scriptOnFail: pendingEdit
-            ? (pendingEdit.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW)
-            : (promptData.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW),
-          scriptCompareSource: pendingEdit
-            ? (pendingEdit.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE)
-            : (promptData.compareSource ?? DEFAULT_COMPARE_SOURCE),
-          scriptOperator: pendingEdit
-            ? (pendingEdit.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR)
-            : (promptData.operator ?? DEFAULT_SCRIPT_OPERATOR),
-          scriptExpected: pendingEdit
-            ? (pendingEdit.scriptExpected ?? "")
-            : String(promptData.expected ?? ""),
-          scriptIgnoreCase: pendingEdit
-            ? (pendingEdit.scriptIgnoreCase ?? false)
-            : (promptData.ignoreCase ?? false),
-          scriptEnv: pendingEdit ? pendingEdit.scriptEnv : promptData.env,
-          scriptExecutionMode: pendingEdit
-            ? pendingEdit.scriptExecutionMode
-            : promptData.executionMode,
-          scriptShell: pendingEdit ? pendingEdit.scriptShell : promptData.shell,
-          properties: pendingEdit
-            ? pendingEdit.properties
-            : propertiesFromScriptData,
-          isDirty: pendingEdit ? true : false,
-          validationErrors: {},
-          pendingEdits: newPendingEdits,
-        });
-        // Close PromptPropertiesDrawer when entering script step edit mode (unless pending edit had prompt mode open)
-        if (!pendingEdit || isScriptEditorStepType(pendingEdit.stepType)) {
-          useUiStore.getState().closePromptPropertiesDrawer();
-        }
-        break;
-      }
-      case STEP_TYPES.PROMPT: {
-        const promptData = stepData as PromptStep;
-        // Prompt step: populate promptText, clear scriptCommand/script properties, set stepType to prompt
-        const propertiesFromData: PropertyValues = {
-          harness: promptData.harness,
-          model: promptData.model,
-          executionMode: promptData.executionMode,
-          color: promptData.color,
-          agent: promptData.agent,
-          skills: promptData.skills,
-          secrets: promptData.secrets,
-          resumeSession: promptData.resumeSession,
-          sessionId:
-            promptData.sessionId !== undefined
-              ? String(promptData.sessionId)
-              : "",
-          mcpServers: promptData.mcpServers,
-          hooks: promptData.hooks,
-          errorBehavior: normalizePromptErrorBehavior(promptData.errorBehavior),
-          endCondition: promptData.endCondition,
-          preCondition: promptData.preCondition,
-          priorContext: promptData.priorContext,
-          priorContextDetail: promptData.priorContextDetail,
-          additionalArgs: promptData.additionalArgs,
-          toolPermissions: promptData.toolPermissions,
-          sandbox: promptData.sandbox,
-          sandboxMode: promptData.sandboxMode,
-        };
-
-        set({
-          multiSelection: null,
-          bulkPatch: {},
-          bulkCascadeCompanions: [],
-          selectionTarget: newTarget,
-          selectedPromptIndex: isFinalStepTarget ? null : index,
-          originalPromptData: promptData,
-          savedNewPromptState,
-          replyContext: null,
-          stepType: pendingEdit?.stepType ?? STEP_TYPES.PROMPT,
-          stepEnabled:
-            pendingEdit?.stepEnabled ?? readStepEnabled(promptData.enabled),
-          promptText: pendingEdit ? pendingEdit.promptText : promptData.prompt,
-          promptName: pendingEdit
-            ? pendingEdit.promptName
-            : (promptData.name ?? ""),
-          scriptCommand: pendingEdit?.scriptCommand ?? "",
-          scriptTimeoutSec: pendingEdit?.scriptTimeoutSec,
-          scriptOnPass: pendingEdit?.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-          scriptOnFail:
-            pendingEdit?.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource:
-            pendingEdit?.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
-          scriptOperator:
-            pendingEdit?.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
-          scriptExpected: pendingEdit?.scriptExpected ?? "",
-          scriptIgnoreCase: pendingEdit?.scriptIgnoreCase ?? false,
-          scriptEnv: pendingEdit?.scriptEnv,
-          scriptExecutionMode: pendingEdit?.scriptExecutionMode,
-          scriptShell: pendingEdit?.scriptShell,
-          properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
-          isDirty: pendingEdit ? true : false,
-          validationErrors: {},
-          pendingEdits: newPendingEdits,
-        });
-        break;
-      }
-      case STEP_TYPES.WORKFLOW:
-        throw new Error(
-          "Sub-workflow steps are not editable in the step editor"
-        );
-      default:
-        assertNever(stepType);
+    set({
+      multiSelection: null,
+      bulkPatch: {},
+      bulkCascadeCompanions: [],
+      selectionTarget: newTarget,
+      selectedPromptIndex: isFinalStepTarget ? null : index,
+      originalPromptData: stepData,
+      savedNewPromptState,
+      // A pending edit is a full draft capture, so it replaces every loaded
+      // field; otherwise the step's own values load over the kind defaults.
+      ...(pendingEdit
+        ? restoreNewStepDraft(pendingEdit)
+        : loadStepFields(stepData)),
+      replyContext: null,
+      isDirty: pendingEdit ? true : false,
+      validationErrors: {},
+      pendingEdits: newPendingEdits,
+    });
+    // The prompt properties drawer belongs to prompt mode alone.
+    if (!isPromptEditorStepType(get().stepType)) {
+      useUiStore.getState().closePromptPropertiesDrawer();
     }
   },
 
@@ -1052,21 +1059,10 @@ export const useEditorStore = create<
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
-          stepType: STEP_TYPES.PROMPT,
+          ...resetStepKindFields(STEP_TYPES.PROMPT),
           stepEnabled: true,
           promptText: "",
           promptName: "",
-          scriptCommand: "",
-          scriptTimeoutSec: undefined,
-          scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-          scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-          scriptExpected: "",
-          scriptIgnoreCase: false,
-          scriptEnv: undefined,
-          scriptExecutionMode: undefined,
-          scriptShell: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -1121,21 +1117,10 @@ export const useEditorStore = create<
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
-          stepType: STEP_TYPES.PROMPT,
+          ...resetStepKindFields(STEP_TYPES.PROMPT),
           stepEnabled: true,
           promptText: "",
           promptName: "",
-          scriptCommand: "",
-          scriptTimeoutSec: undefined,
-          scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-          scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-          scriptExpected: "",
-          scriptIgnoreCase: false,
-          scriptEnv: undefined,
-          scriptExecutionMode: undefined,
-          scriptShell: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -1149,19 +1134,8 @@ export const useEditorStore = create<
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
-          stepType: STEP_TYPES.PROMPT,
+          ...resetStepKindFields(STEP_TYPES.PROMPT),
           stepEnabled: true,
-          scriptCommand: "",
-          scriptTimeoutSec: undefined,
-          scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-          scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-          scriptExpected: "",
-          scriptIgnoreCase: false,
-          scriptEnv: undefined,
-          scriptExecutionMode: undefined,
-          scriptShell: undefined,
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -1311,22 +1285,12 @@ export const useEditorStore = create<
   // ============================================================================
 
   setStepType: (type) => {
-    switch (type) {
-      case STEP_TYPES.SCRIPT:
-        // Switching to script: just flip the type flag, preserve promptText for round-trip
-        set({ stepType: STEP_TYPES.SCRIPT, isDirty: true });
-        useUiStore.getState().closePromptPropertiesDrawer();
-        break;
-      case STEP_TYPES.PROMPT:
-        // Switching to prompt: just flip the type flag, preserve scriptCommand for round-trip
-        set({ stepType: STEP_TYPES.PROMPT, isDirty: true });
-        break;
-      case STEP_TYPES.WORKFLOW:
-        throw new Error(
-          "Sub-workflow steps cannot be created in the step editor"
-        );
-      default:
-        assertNever(type);
+    // Only the kind flips: every kind keeps its own fields, so switching away
+    // and back round-trips the draft.
+    set({ stepType: type, isDirty: true });
+    // The prompt properties drawer belongs to prompt mode alone.
+    if (!isPromptEditorStepType(type)) {
+      useUiStore.getState().closePromptPropertiesDrawer();
     }
   },
 
@@ -1413,6 +1377,19 @@ export const useEditorStore = create<
   setScriptShell: (value) =>
     set({
       scriptShell: value,
+      isDirty: true,
+    }),
+
+  setSubWorkflowPath: (value) =>
+    set((state) => {
+      const { subWorkflowPath: _cleared, ...validationErrors } =
+        state.validationErrors;
+      return { subWorkflowPath: value, isDirty: true, validationErrors };
+    }),
+
+  setSubWorkflowOnFail: (value) =>
+    set({
+      subWorkflowOnFail: value,
       isDirty: true,
     }),
 
@@ -1639,7 +1616,7 @@ export const useEditorStore = create<
     // to promptText/pendingPromptEditorInserts regardless of whether the
     // editor is creating a new step or editing an existing one, so the
     // pending insert should land wherever the user is currently editing.
-    if (isScriptEditorStepType(get().stepType)) {
+    if (!isPromptEditorStepType(get().stepType)) {
       get().setStepType(STEP_TYPES.PROMPT);
     }
 
@@ -1789,10 +1766,11 @@ export const useEditorStore = create<
   clearAllValidationErrors: () => set({ validationErrors: {} }),
 
   validateRequired: () => {
-    const { promptText, scriptCommand, stepType } = get();
+    const state = get();
+    const { stepType } = state;
     const errors: Record<string, string> = {};
 
-    const content = getStepDraftContent(stepType, promptText, scriptCommand);
+    const content = getStepDraftContent(state);
     if (!content.trim()) {
       switch (stepType) {
         case STEP_TYPES.PROMPT:
@@ -1802,8 +1780,10 @@ export const useEditorStore = create<
           errors.scriptCommand = "Script command is required";
           break;
         case STEP_TYPES.WORKFLOW:
-          errors.promptText =
-            "Sub-workflow steps cannot be created in this editor";
+          errors.subWorkflowPath =
+            state.subWorkflowInline !== null
+              ? SUB_WORKFLOW_EDITOR_LABELS.inlineReadOnly
+              : SUB_WORKFLOW_EDITOR_LABELS.fileRequired;
           break;
         default:
           assertNever(stepType);
@@ -1876,21 +1856,10 @@ export const useEditorStore = create<
       savedNewPromptState: null,
       pendingEdits: {},
       replyContext: null,
-      stepType: STEP_TYPES.PROMPT,
+      ...resetStepKindFields(STEP_TYPES.PROMPT),
       stepEnabled: true,
       promptText: "",
       promptName: "",
-      scriptCommand: "",
-      scriptTimeoutSec: undefined,
-      scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-      scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-      scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-      scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-      scriptExpected: "",
-      scriptIgnoreCase: false,
-      scriptEnv: undefined,
-      scriptExecutionMode: undefined,
-      scriptShell: undefined,
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
@@ -1903,21 +1872,10 @@ export const useEditorStore = create<
       bulkPatch: {},
       bulkCascadeCompanions: [],
       pendingEdits: {},
-      stepType: STEP_TYPES.PROMPT,
+      ...resetStepKindFields(STEP_TYPES.PROMPT),
       stepEnabled: true,
       promptText: "",
       promptName: "",
-      scriptCommand: "",
-      scriptTimeoutSec: undefined,
-      scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-      scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-      scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-      scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-      scriptExpected: "",
-      scriptIgnoreCase: false,
-      scriptEnv: undefined,
-      scriptExecutionMode: undefined,
-      scriptShell: undefined,
       properties: { ...PROPERTY_DEFAULTS },
       replyContext: null,
       isDirty: false,
@@ -2041,10 +1999,7 @@ export const useEditorStore = create<
   },
 
   hasContent: () => {
-    const { stepType, promptText, scriptCommand } = get();
-    return (
-      getStepDraftContent(stepType, promptText, scriptCommand).trim().length > 0
-    );
+    return getStepDraftContent(get()).trim().length > 0;
   },
 
   hasEndCondition: () => {

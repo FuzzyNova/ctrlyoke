@@ -72,3 +72,66 @@ describe("getExecutionPreviewEditorSnapshot script steps", () => {
     });
   });
 });
+
+describe("getExecutionPreviewEditorSnapshot sub-workflow steps", () => {
+  const savedWorkflowStep = {
+    type: STEP_TYPES.WORKFLOW,
+    workflow: "workflows/verify.ctrlyoke.yaml",
+    onFail: CONDITION_ACTIONS.CONTINUE,
+    name: "Verify",
+  } as const;
+
+  function selectSavedWorkflowStep(step: object = savedWorkflowStep): void {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "workflow.ctrlyoke.yaml",
+      steps: [step as never],
+    });
+    useEditorStore
+      .getState()
+      .selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index: 0 }, step as never);
+  }
+
+  it("previews the edited file reference over the saved step", () => {
+    selectSavedWorkflowStep();
+    useEditorStore
+      .getState()
+      .setSubWorkflowPath("workflows/checks.ctrlyoke.yaml");
+    useEditorStore
+      .getState()
+      .setSubWorkflowOnFail(CONDITION_ACTIONS.STOP_WORKFLOW);
+
+    const snapshot = getExecutionPreviewEditorSnapshot();
+    expect(snapshot).toMatchObject({
+      stepIndex: 0,
+      step: {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "workflows/checks.ctrlyoke.yaml",
+        name: "Verify",
+      },
+    });
+    expect(snapshot?.step).not.toHaveProperty("onFail");
+  });
+
+  it("previews a new file workflow step at the end of the queue", () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    useEditorStore
+      .getState()
+      .setSubWorkflowPath("workflows/next.ctrlyoke.yaml");
+
+    expect(getExecutionPreviewEditorSnapshot()).toEqual({
+      stepIndex: 0,
+      step: {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "workflows/next.ctrlyoke.yaml",
+      },
+    });
+  });
+
+  it("has no editor snapshot for a read-only inline workflow step", () => {
+    selectSavedWorkflowStep({
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "Inline lane" },
+    });
+    expect(getExecutionPreviewEditorSnapshot()).toBeUndefined();
+  });
+});

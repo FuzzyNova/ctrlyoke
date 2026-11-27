@@ -224,9 +224,7 @@ export const PromptPropertiesDrawer: React.FC<PromptPropertiesDrawerProps> = ({
   const harnessScopedTooltip = bulkGates.harnessScopedDisabledReason;
   const harnessScopedOptionsDisabled = harnessScopedTooltip !== undefined;
   const hasEditorContent = useEditorStore(
-    (s) =>
-      getStepDraftContent(s.stepType, s.promptText, s.scriptCommand).trim()
-        .length > 0
+    (s) => getStepDraftContent(s).trim().length > 0
   );
   const promptText = useEditorStore((s) => s.promptText);
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =

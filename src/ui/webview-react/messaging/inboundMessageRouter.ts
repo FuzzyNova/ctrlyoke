@@ -26,6 +26,7 @@ import {
 } from "@store/settingsStore";
 import { useUiStore, type TemplateInfo } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
+import { isSubWorkflowEditorStepType } from "@utils/stepDraftContent";
 import { useRunSummaryCacheStore } from "@store/runSummaryCacheStore";
 import { useLanguageServerStore } from "@store/languageServerStore";
 import {
@@ -1992,6 +1993,23 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.SAVE_LOCATION_SELECTED] = (message) => {
     const uiStore = useUiStore.getState();
     uiStore.setSaveLocationSelection({ path: message.path });
+  };
+
+  // --------------------------------------------------------------------------
+  // SUB_WORKFLOW_STEP_FILE_SELECTED - native picker result for the step
+  // editor's Workflow mode. Dropped once the editor has left a file-reference
+  // workflow step, so a slow pick cannot land on another kind of step.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED] = (message) => {
+    if (typeof message.path !== "string") return;
+    const editor = useEditorStore.getState();
+    if (
+      !isSubWorkflowEditorStepType(editor.stepType) ||
+      editor.subWorkflowInline !== null
+    ) {
+      return;
+    }
+    editor.setSubWorkflowPath(message.path);
   };
 
   // --------------------------------------------------------------------------

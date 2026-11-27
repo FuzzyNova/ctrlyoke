@@ -410,6 +410,32 @@ as the step needs one to start. ctrlyoke reads the file when you queue it, so a
 file that does not parse, or that the step could not start from, is refused
 right away instead of failing when the step starts.
 
+## In the step editor
+
+Choose **Workflow** in the step editor's **Prompt** / **Script** / **Workflow**
+switch to write a sub-workflow step, or click a workflow step in the steps
+panel to edit it. The editor shows:
+
+- **Workflow file**: the path the step runs. Type it, or use **Browse…** to
+  pick it: VS Code opens its file picker, and the browser dashboard lists the
+  workspace's workflow files. A picked file is written the way **Queue as
+  Sub-workflow** writes it: relative to the workspace when it is inside it,
+  else absolute.
+- **On Fail**: **Stop Workflow** (the default) or **Continue**, as `onFail`
+  above.
+- The step colour, when step colours are on. The step's name and its enable
+  toggle are in the editor header, as for every step.
+
+**Run**, **Queue** and **Update** save the step as
+`{ type: workflow, workflow: <path> }` plus the fields you set. A field you
+set back to its default is removed from the step. The editor does not check
+the file when you save; a file that is missing or does not parse fails the
+step when it starts, under its `onFail`.
+
+A step whose `workflow` is an [inline definition](#inline-definitions) opens
+read-only in the editor, with a note. Edit the workflow file to change it.
+**Move to Editor** is unavailable for such a step.
+
 ## Outcomes, Stop, and Pause
 
 A completed child completes the parent step. If the child fails or cannot

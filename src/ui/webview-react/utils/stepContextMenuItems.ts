@@ -16,6 +16,7 @@ import {
   EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
   STEER_ORIGIN_KINDS,
+  SUB_WORKFLOW_EDITOR_LABELS,
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
@@ -321,11 +322,17 @@ export function buildQueuedStepHandoffMenuItems({
     replacedDraft !== undefined &&
     isScriptEditorStepType(replacedDraft.stepType) &&
     replacedDraft.scriptCommand.trim().length > 0;
+  // The editor has no inline sub-workflow form yet, so moving such a step
+  // would remove it from the queue and leave a draft that cannot be sent.
+  const isInlineSubWorkflow =
+    isSubWorkflowStep(step) && typeof step.workflow !== "string";
   const moveDisabledReason =
     removeDisabledReason ??
-    (scriptDraftWouldBeReplaced
-      ? "Save or clear the script draft before moving a step into the editor"
-      : undefined);
+    (isInlineSubWorkflow
+      ? SUB_WORKFLOW_EDITOR_LABELS.inlineMoveDisabled
+      : scriptDraftWouldBeReplaced
+        ? "Save or clear the script draft before moving a step into the editor"
+        : undefined);
   const moveToEditor: ContextMenuItem = {
     label: "Move to Editor",
     icon: "codicon-edit",

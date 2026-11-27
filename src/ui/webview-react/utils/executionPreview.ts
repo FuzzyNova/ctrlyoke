@@ -10,14 +10,42 @@ import {
   PREVIEW_SCOPES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import type { PromptStep, ScriptStep } from "@root/types/CtrlYokeTypes";
+import type {
+  PromptStep,
+  ScriptStep,
+  SubWorkflowStep,
+} from "@root/types/CtrlYokeTypes";
 import {
   assertNever,
   isPromptStep,
   isScriptStep,
+  isSubWorkflowStep,
 } from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
 import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
+import { getSubWorkflowStepPropertyUpdate } from "@utils/subWorkflowStepProperties";
+
+/**
+ * Overlay a script or sub-workflow step's property update on its saved step,
+ * the way the save merges it: set properties win, cleared ones are removed.
+ */
+function overlayStepUpdate<T extends ScriptStep | SubWorkflowStep>(
+  base: T,
+  update: { properties: Record<string, unknown>; clearProperties: string[] },
+  content: Partial<T>,
+  promptName: string
+): T {
+  const step: T = {
+    ...base,
+    ...update.properties,
+    ...content,
+    ...(promptName.trim() ? { name: promptName.trim() } : {}),
+  };
+  for (const property of update.clearProperties) {
+    delete step[property as keyof T];
+  }
+  return step;
+}
 
 /**
  * Open a whole-workflow Dry Run. The extension previews this client's
@@ -83,15 +111,12 @@ export function getExecutionPreviewEditorSnapshot():
         enabled: editor.stepEnabled,
         promptName: editor.promptName,
       });
-      const step: ScriptStep = {
-        ...base,
-        ...properties,
-        script: editor.scriptCommand,
-        ...(editor.promptName.trim() ? { name: editor.promptName.trim() } : {}),
-      };
-      for (const property of clearProperties) {
-        delete step[property as keyof ScriptStep];
-      }
+      const step = overlayStepUpdate(
+        base,
+        { properties, clearProperties },
+        { script: editor.scriptCommand },
+        editor.promptName
+      );
       return {
         step,
         ...(isFinalStep ? { isFinalStep: true } : { stepIndex }),
@@ -99,8 +124,29 @@ export function getExecutionPreviewEditorSnapshot():
     }
     case STEP_TYPES.PROMPT:
       break;
-    case STEP_TYPES.WORKFLOW:
-      return undefined;
+    case STEP_TYPES.WORKFLOW: {
+      // Only a file reference reaches here: an inline definition has no
+      // editor content, so `hasContent()` above returned for it.
+      const base: SubWorkflowStep =
+        existingStep && isSubWorkflowStep(existingStep)
+          ? existingStep
+          : { type: STEP_TYPES.WORKFLOW, workflow: "" };
+      const step = overlayStepUpdate(
+        base,
+        getSubWorkflowStepPropertyUpdate({
+          onFail: editor.subWorkflowOnFail,
+          color: editor.properties.color,
+          enabled: editor.stepEnabled,
+          promptName: editor.promptName,
+        }),
+        { workflow: editor.subWorkflowPath },
+        editor.promptName
+      );
+      return {
+        step,
+        ...(isFinalStep ? { isFinalStep: true } : { stepIndex }),
+      };
+    }
     default:
       assertNever(editor.stepType);
   }

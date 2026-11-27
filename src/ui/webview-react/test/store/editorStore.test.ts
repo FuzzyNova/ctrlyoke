@@ -1031,3 +1031,120 @@ describe("bulk edit patch", () => {
     expect(store().isDirty).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Workflow (sub-workflow step) mode
+// ---------------------------------------------------------------------------
+
+describe("Workflow mode", () => {
+  beforeEach(() => {
+    store().resetEditor();
+    useUiStore.setState({ promptPropertiesDrawerOpen: false });
+  });
+
+  it("setStepType(WORKFLOW) stores the kind and closes the properties drawer", () => {
+    useUiStore.setState({ promptPropertiesDrawerOpen: true });
+    store().setPromptText("kept for the way back");
+
+    store().setStepType(STEP_TYPES.WORKFLOW);
+
+    expect(store().stepType).toBe(STEP_TYPES.WORKFLOW);
+    expect(useUiStore.getState().promptPropertiesDrawerOpen).toBe(false);
+    store().setStepType(STEP_TYPES.PROMPT);
+    expect(store().promptText).toBe("kept for the way back");
+  });
+
+  it("loads a file workflow step's path, onFail and shared fields", () => {
+    store().enterEditMode(1, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+      onFail: "continue",
+      name: "Verify",
+      color: "#6b8e23",
+      enabled: false,
+    });
+
+    expect(store()).toMatchObject({
+      stepType: STEP_TYPES.WORKFLOW,
+      subWorkflowPath: "workflows/verify.ctrlyoke.yaml",
+      subWorkflowOnFail: "continue",
+      subWorkflowInline: null,
+      promptName: "Verify",
+      stepEnabled: false,
+      promptText: "",
+      scriptCommand: "",
+    });
+    expect(store().properties.color).toBe("#6b8e23");
+    expect(store().hasContent()).toBe(true);
+  });
+
+  it("defaults a loaded workflow step's onFail to stopWorkflow", () => {
+    store().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+    });
+    expect(store().subWorkflowOnFail).toBe("stopWorkflow");
+  });
+
+  it("loads an inline workflow step read-only instead of throwing", () => {
+    const inline = { prompt: "Implement the lane" };
+    store().enterEditMode(0, { type: STEP_TYPES.WORKFLOW, workflow: inline });
+
+    expect(store().stepType).toBe(STEP_TYPES.WORKFLOW);
+    expect(store().subWorkflowInline).toEqual(inline);
+    expect(store().subWorkflowPath).toBe("");
+    expect(store().hasContent()).toBe(false);
+    expect(store().validateRequired()).toBe(false);
+    expect(store().validationErrors.subWorkflowPath).toMatch(/inline/);
+  });
+
+  it("requires a non-empty workflow path", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowPath("   ");
+    expect(store().validateRequired()).toBe(false);
+    expect(store().validationErrors.subWorkflowPath).toBe(
+      "Workflow file is required"
+    );
+
+    store().setSubWorkflowPath("workflows/verify.ctrlyoke.yaml");
+    expect(store().validationErrors.subWorkflowPath).toBeUndefined();
+    expect(store().validateRequired()).toBe(true);
+  });
+
+  it("keeps an unsaved workflow edit across a step switch", () => {
+    const step = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+    } as const;
+    store().enterEditMode(0, step);
+    store().setSubWorkflowPath("workflows/edited.ctrlyoke.yaml");
+    store().enterEditMode(1, makePromptStep());
+    expect(store().subWorkflowPath).toBe("");
+
+    store().enterEditMode(0, step);
+    expect(store().subWorkflowPath).toBe("workflows/edited.ctrlyoke.yaml");
+    expect(store().isDirty).toBe(true);
+  });
+
+  it("resets the workflow fields with every other kind field", () => {
+    store().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "Inline" },
+      onFail: "continue",
+    });
+    store().resetEditor();
+
+    expect(store()).toMatchObject({
+      stepType: STEP_TYPES.PROMPT,
+      subWorkflowPath: "",
+      subWorkflowOnFail: "stopWorkflow",
+      subWorkflowInline: null,
+    });
+  });
+
+  it("switches a prompt-editor insert out of Workflow mode", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().preparePromptEditorForInsert();
+    expect(store().stepType).toBe(STEP_TYPES.PROMPT);
+  });
+});

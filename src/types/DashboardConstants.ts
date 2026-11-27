@@ -201,6 +201,7 @@ export const PATH_SELECTION_KINDS = {
 export const PATH_SELECTION_TITLES = {
   LOAD_WORKFLOW: "Select a prompt file to load",
   APPEND_WORKFLOW: "Select a prompt file to append to queue",
+  SUB_WORKFLOW_STEP_FILE: "Select the workflow file this step runs",
   IMPORT_OFFLINE_LICENSE: "Import Pro License File",
 } as const;
 
@@ -912,6 +913,8 @@ export const MESSAGE_TYPES = {
   WORKFLOW_VARIANT_FAILED: "workflowVariantFailed",
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }
+  SELECT_SUB_WORKFLOW_STEP_FILE: "selectSubWorkflowStepFile", // Webview -> Extension: native file picker for the step editor's workflow file (VS Code panel only)
+  SUB_WORKFLOW_STEP_FILE_SELECTED: "subWorkflowStepFileSelected", // Extension -> Webview: { path } — the picked file as a step's `workflow` reference
   REQUEST_RUN_EXPORT_INFO: "requestRunExportInfo",
   RUN_EXPORT_INFO: "runExportInfo",
   EXPORT_RUN: "exportRun",
@@ -5502,6 +5505,35 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
   mergeAbortFailed: "Merge abort failed",
   mergeAbortFailedReason:
     "The lane's conflicting merge could not be aborted. Check the parent's checkout.",
+} as const;
+
+/**
+ * The step editor's Workflow mode: a file-reference sub-workflow step
+ * (`type: workflow`, `workflow: <path>`). Inline definitions are shown
+ * read-only until the editor gains an inline form.
+ */
+export const SUB_WORKFLOW_EDITOR_LABELS = {
+  mode: "Workflow",
+  modeTitle: "Workflow step — runs another workflow file as a child run",
+  newStep: "New Workflow Step",
+  editing: "Editing: Workflow Step",
+  editingFinal: "Editing: Final Workflow Step",
+  file: "Workflow file",
+  fileTitle:
+    "The workflow file this step runs as a child run. A relative path resolves from the workspace, like a prompt file reference.",
+  filePlaceholder: "path/to/workflow.ctrlyoke.yaml",
+  browse: "Browse…",
+  browseTitle: "Pick a workflow file",
+  pickerTitle: "Select Workflow File",
+  pickerAction: "Use File",
+  onFail: "On Fail",
+  onFailTitle:
+    "What to do when the child run fails or cannot start. A stopped child always stops the parent.",
+  fileRequired: "Workflow file is required",
+  inlineReadOnly:
+    "This step defines its workflow inline. Inline definitions can't be edited in the step editor yet; edit the workflow file to change it.",
+  inlineMoveDisabled:
+    "Steps with an inline workflow definition can't be moved into the editor yet",
 } as const;
 
 /**

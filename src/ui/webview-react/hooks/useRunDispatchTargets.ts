@@ -57,6 +57,7 @@ export function useRunDispatchTargets(
   const selectionTarget = useEditorStore((state) => state.selectionTarget);
   const promptText = useEditorStore((state) => state.promptText);
   const scriptCommand = useEditorStore((state) => state.scriptCommand);
+  const subWorkflowPath = useEditorStore((state) => state.subWorkflowPath);
   const stepType = useEditorStore((state) => state.stepType);
   const executionState = useWorkflowStore((state) => state.executionState);
   const activeStepIndices = useWorkflowStore(
@@ -73,8 +74,12 @@ export function useRunDispatchTargets(
   return useMemo(() => {
     const isNewPrompt = selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT;
     const hasContent =
-      getStepDraftContent(stepType, promptText, scriptCommand).trim().length >
-      0;
+      getStepDraftContent({
+        stepType,
+        promptText,
+        scriptCommand,
+        subWorkflowPath,
+      }).trim().length > 0;
     const isExternallyManaged = loadedWorkflows.some(
       (workflow) => workflow.id === workflowId && workflow.externalOwner
     );
@@ -161,6 +166,7 @@ export function useRunDispatchTargets(
     selectionTarget,
     steerTargets,
     stepType,
+    subWorkflowPath,
     workflowId,
   ]);
 }

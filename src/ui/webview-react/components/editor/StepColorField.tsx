@@ -11,7 +11,7 @@ import { getInheritedStepColor } from "../../utils/stepColor";
 import { Icon } from "../shared/Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
-import { isScriptEditorStepType } from "@utils/stepDraftContent";
+import { isPromptEditorStepType } from "@utils/stepDraftContent";
 
 interface StepColorInputState {
   color: string;
@@ -36,7 +36,9 @@ export function useStepColorInput(): StepColorInputState {
   const { steps } = useWorkflowStore();
   const { globalSettings, getEffectiveHarness } = useSettingsStore();
   const inheritedColor = getInheritedStepColor(
-    isScriptEditorStepType(stepType) ? undefined : getEffectiveHarness(),
+    // Only a prompt step runs on the workflow's harness; a script runs none
+    // and a file sub-workflow runs on its child's own.
+    isPromptEditorStepType(stepType) ? getEffectiveHarness() : undefined,
     globalSettings.harnessColors,
     globalSettings.stepColorMode,
     selectedPromptIndex ?? steps.length

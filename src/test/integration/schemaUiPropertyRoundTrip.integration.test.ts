@@ -63,6 +63,7 @@ const SCHEMA_PATH = path.resolve(
 
 const PROMPT_TEXT = "seeded prompt text";
 const SCRIPT_TEXT = "npm run seeded";
+const WORKFLOW_TEXT = "workflows/seeded.ctrlyoke.yaml";
 
 type SchemaObject = Record<string, unknown>;
 
@@ -130,6 +131,10 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["type", "step-kind discriminator carried by the message"],
   ["prompt", "step content carried by the message's `text`"],
   ["script", "step content carried by the message's `text`"],
+  [
+    "workflow",
+    "a sub-workflow step's content: the file path travels in the message's `text` like a command (its editor control is checked by `CONTENT_CONTROL_IDS`); the inline-definition form has no editor yet",
+  ],
   [
     "name",
     "a step's travels in the message's `promptName`; the workflow's is the lineage descriptor's, edited by the heading-row rename",
@@ -310,8 +315,20 @@ const scriptStepProperties = () =>
     ])
   ).sort();
 
+const subWorkflowStepProperties = () =>
+  Array.from(
+    new Set([
+      ...displayProperties(),
+      ...authorableProperties(definition("subWorkflowStep")),
+    ])
+  ).sort();
+
 const promptStepSeed = () => ({ prompt: PROMPT_TEXT });
 const scriptStepSeed = () => ({ type: "script", script: SCRIPT_TEXT });
+const subWorkflowStepSeed = () => ({
+  type: "workflow",
+  workflow: WORKFLOW_TEXT,
+});
 
 const SURFACES: Surface[] = [
   {
@@ -380,6 +397,29 @@ const SURFACES: Surface[] = [
     }),
   },
   {
+    id: "workflow step",
+    properties: subWorkflowStepProperties(),
+    seed: (head, property, value) => {
+      head.steps = [{ ...subWorkflowStepSeed(), [property]: value }];
+    },
+    read: (head) => head.steps?.[0],
+    saveWithout: (harness) =>
+      harness.routeUpdatePrompt({
+        index: 0,
+        text: WORKFLOW_TEXT,
+        properties: { type: "workflow" },
+      }),
+    saveWith: (harness, property, value) =>
+      harness.routeUpdatePrompt({
+        index: 0,
+        text: WORKFLOW_TEXT,
+        properties: { type: "workflow", [property]: value },
+      }),
+    validationDocument: (seeds) => ({
+      steps: [{ ...subWorkflowStepSeed(), ...seeds }],
+    }),
+  },
+  {
     id: "final step (prompt)",
     properties: promptStepProperties(),
     seed: (head, property, value) => {
@@ -423,6 +463,26 @@ const SURFACES: Surface[] = [
       finalStep: { ...scriptStepSeed(), ...seeds },
     }),
   },
+  {
+    id: "final step (workflow)",
+    properties: subWorkflowStepProperties(),
+    seed: (head, property, value) => {
+      head.finalStep = { ...subWorkflowStepSeed(), [property]: value };
+    },
+    read: (head) => head.finalStep,
+    saveWithout: (harness) =>
+      harness.routeUpdateFinalPrompt({
+        finalStep: subWorkflowStepSeed() as never,
+      }),
+    saveWith: (harness, property, value) =>
+      harness.routeUpdateFinalPrompt({
+        finalStep: { ...subWorkflowStepSeed(), [property]: value } as never,
+      }),
+    validationDocument: (seeds) => ({
+      steps: [promptStepSeed()],
+      finalStep: { ...subWorkflowStepSeed(), ...seeds },
+    }),
+  },
 ];
 
 /**
@@ -446,7 +506,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["mcpServers", ["settings-mcp-servers"]],
   ["maxSteps", ["settings-max-steps"]],
   ["model", ["settings-model"]],
-  ["onFail", ["${idPrefix}-on-fail"]],
+  ["onFail", ["${idPrefix}-on-fail", "sub-workflow-step-on-fail"]],
   ["onPass", ["${idPrefix}-on-pass"]],
   ["preCondition", ["settings-pre-condition-enabled"]],
   ["priorContext", ["settings-prior-context"]],
@@ -481,6 +541,15 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
 ]);
 
 const UI_CONTROL_OPTOUTS = new Map<string, string>();
+
+/**
+ * Editor controls for step content keys, which are `NOT_AUTHORABLE` above
+ * because they travel in the message's `text`. Only the newest content key
+ * is listed; prompt and script content controls predate this guard.
+ */
+const CONTENT_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["workflow", ["sub-workflow-step-file", "sub-workflow-step-browse"]],
+]);
 
 const UI_ENUM_META = [
   { path: "toolPermissions.mode", meta: PERMISSION_MODE_OPTIONS_META },
@@ -740,6 +809,26 @@ suite("Schema -> dashboard property round trip", () => {
       );
     });
 
+    test("every registered step content key has a live editor control", () => {
+      const source = webviewSource();
+      const failures: string[] = [];
+      for (const [contentKey, controlIds] of CONTENT_CONTROL_IDS) {
+        if (!NOT_AUTHORABLE.has(contentKey)) {
+          failures.push(
+            `${contentKey}: not a NOT_AUTHORABLE content key; register it in UI_CONTROL_IDS instead`
+          );
+        }
+        for (const controlId of controlIds) {
+          if (!source.includes(controlId)) {
+            failures.push(
+              `${contentKey}: content control id "${controlId}" is absent from src/ui/webview-react`
+            );
+          }
+        }
+      }
+      assert.deepStrictEqual(failures, []);
+    });
+
     test("workflow enum controls use schema-matched metadata values and labels", () => {
       for (const { path: schemaPath, meta } of UI_ENUM_META) {
         const rows = Object.values(meta);
@@ -969,6 +1058,63 @@ suite("Schema -> dashboard property round trip", () => {
       assert.deepStrictEqual((await harness.readRunDefinition()).steps?.[0], {
         type: "script",
         script: SCRIPT_TEXT,
+      });
+    });
+
+    test("a file workflow step saved from the editor round-trips", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+      await harness.patchRunDefinition((head) => {
+        head.steps = [
+          {
+            type: "workflow",
+            workflow: "workflows/verify.ctrlyoke.yaml",
+            name: "Verify",
+            onFail: "continue",
+            color: "#123456",
+          },
+        ];
+        head.finalStep = {
+          type: "workflow",
+          workflow: "workflows/wrap-up.ctrlyoke.yaml",
+        };
+      });
+
+      // StepEditor.handleUpdate, Workflow mode: the path changed and onFail
+      // went back to its default.
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: "workflows/checks.ctrlyoke.yaml",
+        promptName: "Verify",
+        properties: { type: "workflow", color: "#123456" },
+        clearProperties: ["onFail", "enabled"],
+      });
+      await harness.routeUpdateFinalPrompt({
+        finalStep: {
+          type: "workflow",
+          workflow: "workflows/wrap-up.ctrlyoke.yaml",
+          onFail: "continue",
+        } as never,
+        clearProperties: ["color", "enabled", "name"],
+      });
+
+      const definition = await harness.readRunDefinition();
+      const { _runtime: _stepRuntime, ...step } = definition.steps![0];
+      assert.deepStrictEqual(step, {
+        type: "workflow",
+        workflow: "workflows/checks.ctrlyoke.yaml",
+        name: "Verify",
+        color: "#123456",
+      });
+      const { _runtime: _finalRuntime, ...finalStep } =
+        definition.finalStep as Record<string, unknown>;
+      assert.deepStrictEqual(finalStep, {
+        type: "workflow",
+        workflow: "workflows/wrap-up.ctrlyoke.yaml",
+        onFail: "continue",
       });
     });
 

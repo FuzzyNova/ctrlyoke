@@ -35,7 +35,12 @@ import { StepColorField } from "./StepColorField";
 import { EditorFooter } from "./EditorFooter";
 import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import { ScriptConditionEditor } from "../shared/ScriptConditionEditor";
-import { isScriptEditorStepType } from "@utils/stepDraftContent";
+import {
+  getStepDraftContent,
+  isPromptEditorStepType,
+  isScriptEditorStepType,
+  isSubWorkflowEditorStepType,
+} from "@utils/stepDraftContent";
 import type { ScriptConditionValue } from "../shared/ScriptConditionEditor";
 import {
   CustomSelect,
@@ -86,6 +91,8 @@ import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 
 import { buildPropertyUpdateValues } from "@utils/promptPropertyValues";
 import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
+import { getSubWorkflowStepPropertyUpdate } from "@utils/subWorkflowStepProperties";
+import { SubWorkflowStepFields } from "./SubWorkflowStepFields";
 import { Icon } from "../shared/Icon";
 
 interface StepEditorProps {
@@ -205,6 +212,9 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     scriptEnv,
     scriptExecutionMode,
     scriptShell,
+    subWorkflowPath,
+    subWorkflowOnFail,
+    subWorkflowInline,
     originalPromptData,
     setScriptCommand,
     setStepType,
@@ -334,6 +344,8 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         ? finalStep?._runtime?.stepId
         : undefined;
   const isScriptMode = isScriptEditorStepType(stepType);
+  const isSubWorkflowMode = isSubWorkflowEditorStepType(stepType);
+  const isPromptMode = isPromptEditorStepType(stepType);
   const inheritedScriptSecrets =
     workflowProperties.secrets !== undefined
       ? (workflowProperties.secrets ?? [])
@@ -652,7 +664,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   ]);
 
   const promptFileContent =
-    isFileRef && fileRefValidation?.exists
+    isPromptMode && isFileRef && fileRefValidation?.exists
       ? (fileRefValidation.content ?? null)
       : null;
   useEffect(() => {
@@ -714,7 +726,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
 
   const convertPromptToFile = useCallback(() => {
     if (
-      isScriptMode ||
+      !isPromptMode ||
       isFileRef ||
       isExternallyManaged ||
       isPromptExecutionLocked ||
@@ -750,7 +762,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     isFileRef,
     isPromptExecutionLocked,
     isPromptFileConversionBusy,
-    isScriptMode,
+    isPromptMode,
     promptName,
     promptText,
     vscode,
@@ -814,7 +826,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
   }, []);
 
   const promptFileAction = useMemo<PromptFileAction | null>(() => {
-    if (isScriptMode) return null;
+    if (!isPromptMode) return null;
     if (isFileRef) {
       return {
         icon: "go-to-file",
@@ -843,7 +855,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     isFileRef,
     isPromptExecutionLocked,
     isPromptFileConversionBusy,
-    isScriptMode,
+    isPromptMode,
     openPromptFile,
     promptText,
   ]);
@@ -965,7 +977,21 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     ]
   );
 
-  // Compute the final action based on execution state (shared by prompt and script paths)
+  // The file-reference sub-workflow step's property payload, shared by every
+  // dispatch destination for the same reason as the script one above. Its
+  // `workflow` path travels as the message's `text`.
+  const buildSubWorkflowUpdate = useCallback(
+    () =>
+      getSubWorkflowStepPropertyUpdate({
+        onFail: subWorkflowOnFail,
+        color: properties.color,
+        enabled: stepEnabled,
+        promptName,
+      }),
+    [promptName, properties.color, stepEnabled, subWorkflowOnFail]
+  );
+
+  // Compute the final action based on execution state (shared by every step kind)
   const resolveFinalAction = useCallback(
     (action: string): string => {
       if (action === ACTION_TYPES.RUN && hasPendingPrompts()) {
@@ -999,6 +1025,22 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         return;
       }
 
+      if (isSubWorkflowMode) {
+        const workflowPath = subWorkflowPath.trim();
+        if (!workflowPath || subWorkflowInline !== null) return;
+
+        lastSubmittedTextRef.current = workflowPath;
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.EXECUTE_PROMPT,
+          text: workflowPath,
+          properties: buildSubWorkflowUpdate().properties,
+          action: finalAction,
+          promptName: promptName.trim(),
+        });
+        clearEditorAfterDispatch();
+        return;
+      }
+
       const text = promptText.trim();
       if (!text) return;
 
@@ -1019,8 +1061,12 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     },
     [
       isScriptMode,
+      isSubWorkflowMode,
       scriptCommand,
+      subWorkflowPath,
+      subWorkflowInline,
       buildScriptProperties,
+      buildSubWorkflowUpdate,
       promptText,
       promptName,
       getPropertyValues,
@@ -1057,6 +1103,11 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       if (!text) return;
 
       propertyValues = buildScriptProperties();
+    } else if (isSubWorkflowMode) {
+      text = subWorkflowPath.trim();
+      if (!text || subWorkflowInline !== null) return;
+
+      propertyValues = buildSubWorkflowUpdate().properties;
     } else {
       text = promptText.trim();
       if (!text) return;
@@ -1077,12 +1128,17 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       properties: propertyValues,
       promptName: promptName.trim(),
     });
-    clearEditorAfterDispatch(isScriptMode ? undefined : text);
+    clearEditorAfterDispatch(isPromptMode ? text : undefined);
   }, [
     buildScriptProperties,
+    buildSubWorkflowUpdate,
     fileName,
     getPropertyValues,
+    isPromptMode,
     isScriptMode,
+    isSubWorkflowMode,
+    subWorkflowInline,
+    subWorkflowPath,
     promptName,
     promptText,
     scriptCommand,
@@ -1140,41 +1196,61 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       }
     };
 
-    if (isScriptMode) {
-      const command = scriptCommand.trim();
-      if (!command) return;
+    // Script and file sub-workflow steps carry their content (a command or a
+    // workflow path) as the message's `text` and under one step key.
+    const nonPromptUpdate = isScriptMode
+      ? {
+          contentKey: PROMPT_PROPERTIES.SCRIPT,
+          content: scriptCommand.trim(),
+          ...getScriptStepPropertyUpdate({
+            env: scriptEnv,
+            secrets: properties.secrets,
+            errorBehavior: properties.errorBehavior,
+            timeoutSec: scriptTimeoutSec,
+            onPass: scriptOnPass,
+            onFail: scriptOnFail,
+            compareSource: scriptCompareSource,
+            operator: scriptOperator,
+            expected: scriptExpected,
+            ignoreCase: scriptIgnoreCase,
+            executionMode: scriptExecutionMode,
+            shell: scriptShell,
+            color: properties.color,
+            enabled: stepEnabled,
+            promptName,
+          }),
+        }
+      : isSubWorkflowMode
+        ? {
+            contentKey: PROMPT_PROPERTIES.WORKFLOW_REF,
+            // An inline definition has no editor form yet, so it is not saved.
+            content: subWorkflowInline === null ? subWorkflowPath.trim() : "",
+            ...buildSubWorkflowUpdate(),
+          }
+        : null;
 
-      const { properties: scriptProperties, clearProperties } =
-        getScriptStepPropertyUpdate({
-          env: scriptEnv,
-          secrets: properties.secrets,
-          errorBehavior: properties.errorBehavior,
-          timeoutSec: scriptTimeoutSec,
-          onPass: scriptOnPass,
-          onFail: scriptOnFail,
-          compareSource: scriptCompareSource,
-          operator: scriptOperator,
-          expected: scriptExpected,
-          ignoreCase: scriptIgnoreCase,
-          executionMode: scriptExecutionMode,
-          shell: scriptShell,
-          color: properties.color,
-          enabled: stepEnabled,
-          promptName,
-        });
+    if (nonPromptUpdate) {
+      const {
+        contentKey,
+        content,
+        properties: kindProperties,
+        clearProperties,
+      } = nonPromptUpdate;
+      if (!content) return;
 
+      const named = promptName.trim() ? { name: promptName.trim() } : {};
       const submittedStep = {
-        ...scriptProperties,
-        script: command,
-        ...(promptName.trim() ? { name: promptName.trim() } : {}),
+        ...kindProperties,
+        [contentKey]: content,
+        ...named,
       } as WorkflowStep;
 
       if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         submitQueueUpdate(submittedStep, {
           type: MESSAGE_TYPES.UPDATE_PROMPT,
           index: selectionTarget.index,
-          text: command,
-          properties: scriptProperties,
+          text: content,
+          properties: kindProperties,
           clearProperties,
           promptName: promptName.trim(),
           ...(isPromptCompleted && { rewindCompletedStep: true }),
@@ -1183,9 +1259,9 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
           finalStep: {
-            ...scriptProperties,
-            script: command,
-            ...(promptName.trim() ? { name: promptName.trim() } : {}),
+            ...kindProperties,
+            [contentKey]: content,
+            ...named,
             ...(!stepEnabled && { enabled: false }),
           },
           clearProperties,
@@ -1245,6 +1321,10 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     bulkPatch,
     canBulkUpdate,
     isScriptMode,
+    isSubWorkflowMode,
+    subWorkflowPath,
+    subWorkflowInline,
+    buildSubWorkflowUpdate,
     scriptCommand,
     scriptTimeoutSec,
     scriptOnPass,
@@ -1435,7 +1515,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         className="border-b border-(--vscode-widget-border,var(--vscode-panel-border)) px-2 py-1"
       />
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
-      {!isScriptMode && (
+      {isPromptMode && (
         // overflow-clip (not overflow-hidden): PromptPropertiesDrawer's closed-state
         // `translateY` pushes its transformed box below this wrapper's own
         // bounds, which — per the CSS scrollable-overflow spec — still counts
@@ -1577,8 +1657,17 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         </div>
       )}
 
+      {/* Sub-workflow step fields (Workflow mode only) */}
+      {isSubWorkflowMode && (
+        <div className="flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg">
+          {!isBulkMode && (
+            <SubWorkflowStepFields disabled={isExternallyManaged} />
+          )}
+        </div>
+      )}
+
       {/* File-reference badge — shown when editor contains only a file path (prompt mode only) */}
-      {!isScriptMode && isFileRef && (
+      {isPromptMode && isFileRef && (
         <div
           className="flex items-center gap-1 px-2 py-1 text-xs"
           style={{
@@ -1616,7 +1705,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         </div>
       )}
 
-      {!isScriptMode && (
+      {isPromptMode && (
         <FieldDiagnostic
           id="prompt-image-compatibility"
           diagnostics={imageCompatibilityDiagnostics}
@@ -1638,9 +1727,12 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         isPromptBeingSent={isPromptBeingSent}
         isPromptActivelyRunning={isPromptActivelyRunning}
         hasContent={
-          isScriptMode
-            ? scriptCommand.trim().length > 0
-            : promptText.trim().length > 0
+          getStepDraftContent({
+            stepType,
+            promptText,
+            scriptCommand,
+            subWorkflowPath,
+          }).trim().length > 0
         }
         hasPendingPrompts={hasPendingPrompts()}
         runButtonText={getRunButtonText()}

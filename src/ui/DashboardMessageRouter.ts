@@ -57,6 +57,7 @@ import {
 import { RunBundleImporter } from "../core/orchestration/RunBundleImporter";
 import { RunImportPreviewService } from "../core/orchestration/RunImportPreview";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
+import { buildSubWorkflowReferenceStep } from "../core/SubWorkflowReferenceStep";
 import { CTRLYOKE_VERSION } from "../utils/BuildConfig";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
@@ -1232,6 +1233,32 @@ export class DashboardMessageRouter {
         ctx.clientId
       );
     });
+
+    // The step editor's Workflow mode: pick the file a sub-workflow step
+    // runs and hand back its `workflow` reference, built exactly as the
+    // "queue as sub-workflow" entries build theirs. The hosted browser picks
+    // through its own modal and never sends this.
+    table.set(
+      MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+      async (_message, ctx) => {
+        const selectPath = this.hostDependencies.actions.selectWorkspacePath;
+        if (!selectPath) return;
+        const filePath = await selectPath.call(this.hostDependencies.actions, {
+          kind: PATH_SELECTION_KINDS.FILE,
+          title: PATH_SELECTION_TITLES.SUB_WORKFLOW_STEP_FILE,
+        });
+        if (!filePath) return;
+        const { workflow } = buildSubWorkflowReferenceStep(
+          filePath,
+          this.getWorkspaceRoot(),
+          this.hostDependencies.getNamedRoots()
+        );
+        ctx.emit({
+          type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+          path: workflow,
+        });
+      }
+    );
 
     table.set(MESSAGE_TYPES.SELECT_RUN_BUNDLE, async (_message, ctx) => {
       const selectPath = this.hostDependencies.actions.selectWorkspacePath;

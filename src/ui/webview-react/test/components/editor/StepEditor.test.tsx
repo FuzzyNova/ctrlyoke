@@ -80,6 +80,7 @@ import {
   TERMINAL_SESSION_STATUS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_VALIDATION_WARNING_CODES,
+  SUB_WORKFLOW_EDITOR_LABELS,
 } from "@root/types/DashboardConstants";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
@@ -1710,5 +1711,144 @@ describe("StepEditor — image compatibility feedback", () => {
     expect(
       document.getElementById("prompt-image-compatibility")
     ).not.toBeNull();
+  });
+});
+
+describe("StepEditor — Workflow (sub-workflow step) mode", () => {
+  function findMessage(type: string): Record<string, unknown> | undefined {
+    return postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === type
+    )?.[0] as Record<string, unknown> | undefined;
+  }
+
+  it("shows the workflow file and On Fail fields and hides prompt and script sections", () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    render(<StepEditor />);
+
+    expect(
+      screen.getByRole("textbox", { name: /Workflow file/ })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Browse…" })).toBeInTheDocument();
+    expect(screen.getByText("On Fail")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Script command")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Toggle prompt properties" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("queues a new file workflow step with its path as the text", async () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    useEditorStore.getState().setPromptName("Verify");
+    render(<StepEditor />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: /Workflow file/ }), {
+      target: { value: "workflows/verify.ctrlyoke.yaml" },
+    });
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Queue" }));
+
+    expect(findMessage(MESSAGE_TYPES.EXECUTE_PROMPT)).toMatchObject({
+      text: "workflows/verify.ctrlyoke.yaml",
+      properties: { type: STEP_TYPES.WORKFLOW },
+      promptName: "Verify",
+      action: ACTION_TYPES.QUEUE,
+    });
+    // The draft is cleared once it is sent.
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
+  });
+
+  it("updates an existing file workflow step and clears reset fields", async () => {
+    useEditorStore.getState().selectPrompt(
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "workflows/verify.ctrlyoke.yaml",
+        onFail: "continue",
+        name: "Verify",
+      }
+    );
+    useEditorStore
+      .getState()
+      .setSubWorkflowPath("workflows/checks.ctrlyoke.yaml");
+    useEditorStore.getState().setSubWorkflowOnFail("stopWorkflow");
+    render(<StepEditor />);
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Update" }));
+
+    const message = findMessage(MESSAGE_TYPES.UPDATE_PROMPT);
+    expect(message).toMatchObject({
+      index: 0,
+      text: "workflows/checks.ctrlyoke.yaml",
+      properties: { type: STEP_TYPES.WORKFLOW },
+      promptName: "Verify",
+    });
+    expect(message?.properties).not.toHaveProperty("onFail");
+    expect(message?.clearProperties).toEqual(
+      expect.arrayContaining(["onFail", "color", "enabled"])
+    );
+    expect(message?.clearProperties).not.toContain("name");
+  });
+
+  it("updates a file workflow final step with the workflow key", async () => {
+    useEditorStore.getState().selectFinalStep({
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/wrap-up.ctrlyoke.yaml",
+    });
+    useEditorStore.getState().setSubWorkflowOnFail("continue");
+    render(<StepEditor />);
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Update" }));
+
+    expect(findMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT)).toMatchObject({
+      finalStep: {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "workflows/wrap-up.ctrlyoke.yaml",
+        onFail: "continue",
+      },
+    });
+  });
+
+  it("shows an inline workflow step read-only and never saves it", async () => {
+    useEditorStore.getState().selectPrompt(
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: {
+          prompt: "Implement the lane",
+          worktree: { mode: "managed" },
+        },
+      }
+    );
+    render(<StepEditor />);
+
+    expect(screen.getByRole("note")).toHaveTextContent(
+      SUB_WORKFLOW_EDITOR_LABELS.inlineReadOnly
+    );
+    expect(screen.getByText("Implement the lane")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: /Workflow file/ })
+    ).not.toBeInTheDocument();
+    const update = screen.getByRole("button", { name: "Update" });
+    expect(update).toBeDisabled();
+    fireEvent.click(update);
+    expect(findMessage(MESSAGE_TYPES.UPDATE_PROMPT)).toBeUndefined();
+  });
+
+  it("asks the extension for the native picker from Browse in the panel", async () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    render(<StepEditor />);
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Browse…" }));
+
+    expect(findMessage(MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE)).toEqual({
+      type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+    });
   });
 });

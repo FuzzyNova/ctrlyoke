@@ -21,6 +21,7 @@ import { useTerminalStore } from "@store/terminalStore";
 import { usePromptHistoryStore } from "@store/promptHistoryStore";
 import {
   EDITOR_TARGET_KINDS,
+  SUB_WORKFLOW_EDITOR_LABELS,
   PROMPT_HISTORY_KINDS,
 } from "@root/types/DashboardConstants";
 import { NO_LIVE_HARNESS, STEER_PROMPT_ONLY } from "@utils/steerTargets";
@@ -758,6 +759,34 @@ describe("useStepContextMenu", () => {
         "title",
         "Save or clear the script draft before moving a step into the editor"
       );
+    });
+
+    it("disables Move to Editor for a step with an inline workflow definition", () => {
+      openMenuOnQueuedStep({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "Implement the lane" },
+      } as WorkflowStep);
+
+      const move = screen.getByRole("menuitem", { name: "Move to Editor" });
+      expect(move).toBeDisabled();
+      expect(move).toHaveAttribute(
+        "title",
+        SUB_WORKFLOW_EDITOR_LABELS.inlineMoveDisabled
+      );
+    });
+
+    it("moves a file workflow step into a Workflow-mode draft", () => {
+      openMenuOnQueuedStep({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "workflows/verify.ctrlyoke.yaml",
+      } as WorkflowStep);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Move to Editor" }));
+
+      expect(useEditorStore.getState()).toMatchObject({
+        stepType: STEP_TYPES.WORKFLOW,
+        subWorkflowPath: "workflows/verify.ctrlyoke.yaml",
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+      });
     });
 
     it("steers the step's prompt to the only live session and removes it", () => {

@@ -187,6 +187,35 @@ describe("WORKSPACE_STATS_UPDATED", () => {
   });
 });
 
+describe("SUB_WORKFLOW_STEP_FILE_SELECTED", () => {
+  const handle = (path: unknown) =>
+    createMessageHandlers(false)[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED](
+      { path } as never
+    );
+
+  it("fills the Workflow-mode file field with the picked reference", () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    handle("workflows/verify.ctrlyoke.yaml");
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/verify.ctrlyoke.yaml"
+    );
+  });
+
+  it("drops a pick that lands after the editor left Workflow mode", () => {
+    handle("workflows/verify.ctrlyoke.yaml");
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
+  });
+
+  it("never turns an inline workflow step into a file reference", () => {
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "Inline lane" },
+    });
+    handle("workflows/verify.ctrlyoke.yaml");
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
+  });
+});
+
 describe("WORKFLOW_UNLOADED new-step draft", () => {
   it("persists and restores script fields and disabled state", () => {
     const vscodeState: { current: Record<string, unknown> | null } = {
