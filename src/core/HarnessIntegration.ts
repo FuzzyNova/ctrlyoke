@@ -451,14 +451,16 @@ function renderPriorContextStep(item: PriorContextItem): string {
         ]
           .filter((entry): entry is [string, string] => entry[1] !== undefined)
           .map(([key, value]) => ` ${key}="${escapeXmlAttribute(value)}"`)
-          .join("")}/>`
+          .join("")}/>\n`
       : "";
     const merge = output.worktree?.mergeOutcome
       ? `<merge result="${escapeXmlAttribute(output.worktree.mergeOutcome)}">${(output.worktree.conflictFiles ?? []).map(escapeXmlAttribute).join("\n")}</merge>\n`
       : "";
     const children =
       item.subWorkflow.children?.map(renderPriorContextStep).join("\n") ??
-      `<childRunUnavailable/> <!-- read_output { run: { workflowKey: ${escapeXmlAttribute(output.childWorkflowKey)}, runRef: ${escapeXmlAttribute(output.childRunRef)} } } -->`;
+      // The child's history is gone or unreadable, so no read_output hint:
+      // that call would fail against the same missing run.
+      "<childRunUnavailable/>";
     return `<step ${attributes}${attrs}>\n${worktree}${merge}${children}\n</step>`;
   }
   if (item.scriptOutput) {

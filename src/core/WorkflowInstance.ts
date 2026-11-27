@@ -2968,10 +2968,12 @@ export class WorkflowInstance
         );
       }
     }
-    if (!hasSubWorkflow && processRunners.size > 0) {
+    if (integrations.size === 0 && !hasSubWorkflow && processRunners.size > 0) {
       // Script steps have no harness integration to emit onResponseComplete.
       // Their process runner is the cancellation boundary; waiting on the
       // detector here would force every stopped script through the 10s timer.
+      // A prompt member beside them (parallel group) still needs the
+      // integration path below, which cancels it.
       await Promise.allSettled(
         [...processRunners].map(async (runner) => {
           await runner.cancel();

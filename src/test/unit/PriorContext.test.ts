@@ -132,7 +132,8 @@ suite("prior-context XML", () => {
         },
       },
     ]);
-    assert.ok(xml.includes('<worktree mode="managed"/>'), xml);
+    assert.ok(xml.includes('<worktree mode="managed"/>\n'), xml);
+    assert.ok(!xml.includes("filesChanged="), xml);
     assert.ok(!xml.includes('branch=""'), xml);
     assert.ok(!xml.includes('base=""'), xml);
     assert.ok(!xml.includes('tip=""'), xml);
